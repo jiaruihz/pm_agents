@@ -1,9 +1,12 @@
+import inspect
 from argparse import Namespace
 
 import pytest
 
 from scripts.ops.low_price_yes_lottery_tiny_live import (
     annotate_runtime_decision,
+    build_plan,
+    build_shared_low_price_plan_parity,
     choose_lifecycle_action,
     enforce_live_safety_args,
     execute_non_live_shared_entry_plans,
@@ -16,6 +19,37 @@ from scripts.ops.low_price_yes_lottery_tiny_live import (
     submitted_natural_key,
     validate_candidate,
 )
+
+
+def low_price_legacy_plan() -> dict:
+    return build_plan(
+        {
+            "signal_id": "low-price-signal-1",
+            "city": "Atlanta",
+            "target_date": "2026-07-15",
+            "condition_id": "condition-1",
+            "market_slug": "atlanta-high-temperature-july-15",
+            "event_id": "event-1",
+            "question": "Will Atlanta reach 92F?",
+            "bracket": "92-93",
+            "token_id": "yes-token-1",
+            "limit_price": 0.101,
+            "maker_limit_price": 0.101,
+            "taker_limit_price": 0.110,
+            "planned_shares": 8.0,
+            "planned_notional_usd": 0.808,
+            "model_p_yes": 0.35,
+            "fresh_best_bid": 0.100,
+            "fresh_best_ask": 0.110,
+            "fresh_spread": 0.010,
+            "fee_adjusted_edge": 0.23,
+            "taker_fallback_status": "available",
+            "taker_fallback_notional_usd": 0.404,
+            "sizing_policy": "price_tier_6_8_10_shares",
+            "obs_source": "not_used_forecast_fact_selector",
+        },
+        live_enabled=False,
+    )
 
 
 def test_shadow_would_live_decision_records_fresh_best_ask():
@@ -75,6 +109,55 @@ def test_non_live_plan_uses_shared_order_runtime_and_dedupes(tmp_path, monkeypat
     assert first["authority"] == "shared_order_runtime"
     assert second["deduped"] == 1
     assert second["venue_calls"] == 0
+
+
+def test_shared_low_price_engine_parity_preserves_planned_maker_contract() -> None:
+    legacy = low_price_legacy_plan()
+    legacy_before = dict(legacy)
+
+    shared = build_shared_low_price_plan_parity(legacy)
+
+    assert legacy == legacy_before
+    assert shared.legacy_plan_ids == (legacy["plan_id"],)
+    assert len(shared.intents) == len(shared.children) == 1
+    intent = shared.intents[0]
+    child = shared.children[0]
+    assert child.child_role == legacy["child_order_role"] == "maker_first"
+    assert child.maker_only is legacy["maker_only"] is True
+    assert child.execution_policy == legacy["execution_policy"]
+    assert float(child.requested_shares) == legacy["size"] == 8.0
+    assert intent.execution_profile == "single_side_maker_v1"
+    assert intent.resolved_execution_profile == "single_side_maker_v1"
+    assert intent.venue_side == legacy["order_side"] == "BUY"
+    assert intent.outcome_side == "YES"
+    assert intent.signal_side == legacy["signal_side"] == "BUY_YES"
+    assert intent.metadata["legacy_plan_id"] == legacy["plan_id"]
+    assert intent.metadata["legacy_profile"] == legacy["profile"]
+    assert float(intent.total_shares) == legacy["size"]
+    assert float(intent.constraints.price_cap) == legacy["maker_limit_price"]
+    assert float(intent.strategy_price_cap) == legacy["maker_limit_price"]
+    assert intent.metadata["legacy_taker_fallback_status"] == "available"
+    assert float(intent.metadata["legacy_taker_fallback_notional_usd"]) == 0.404
+    assert intent.constraints.deadline_utc is None
+    assert intent.metadata["legacy_order_ttl_min"] is None
+    assert intent.metadata["legacy_order_lifecycle_policy"] is None
+    assert intent.metadata["legacy_lifecycle_embedded"] is False
+    assert child.order_lifecycle_policy == "legacy_plan_no_embedded_lifecycle_v1"
+
+
+@pytest.mark.parametrize("status", ["blocked", "rejected"])
+def test_shared_low_price_engine_rejects_nonplanned_legacy_plan(status: str) -> None:
+    legacy = {**low_price_legacy_plan(), "status": status}
+
+    with pytest.raises(ValueError, match="requires an accepted legacy plan"):
+        build_shared_low_price_plan_parity(legacy)
+
+
+def test_shared_low_price_parity_bridge_is_not_called_by_normal_run_or_live_path() -> None:
+    from scripts.ops import low_price_yes_lottery_tiny_live as runner
+
+    assert "build_shared_low_price_plan_parity" not in inspect.getsource(runner.run_once)
+    assert "build_shared_low_price_plan_parity" not in inspect.getsource(runner.run_executor)
 
 
 def test_price_tier_6_8_10_boundaries():

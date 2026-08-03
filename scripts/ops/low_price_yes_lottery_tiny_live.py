@@ -39,7 +39,10 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     load_tail_telemetry_resources_soft,
     parse_bracket_bounds,
 )
-from src.strategies.weather_edge_v1.execution.engine import build_low_price_legacy_plan_compatibility
+from src.strategies.weather_edge_v1.execution.engine import (
+    LowPriceLegacyPlanCompatibility,
+    build_low_price_legacy_plan_compatibility,
+)
 from src.strategies.weather_edge_v1.runtime.non_live import (
     execute_legacy_compatibility_paper,
 )
@@ -85,9 +88,13 @@ STRATEGY_ID = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_FAMILY = "forecast_quality.low_price_yes_lottery"
 RULE_ID = "buy_yes_edge20_ask05_20_maker_first_v1"
 LOW_PRICE_EXECUTION_PROFILE = "single_side_maker_v1"
+LOW_PRICE_PARITY_EXECUTION_PROFILE = LOW_PRICE_EXECUTION_PROFILE
 SOURCE_REPORT = "docs/analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md"
 DIST_BRANCH_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-dist-branch-v1.md"
 HEADA_REFINEMENT_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-heada-refinement-v1.md"
+FORECAST_SOURCE_CALIBRATION_REPORT = (
+    "docs/analysis/2026-07/2026-07-08-low-price-yes-forecast-source-calibration-v1.md"
+)
 SIZING_POLICY_CHOICES = (
     "fixed_cash_order_notional",
     "fixed_5_shares",
@@ -1444,6 +1451,7 @@ def validate_candidate(
         "source_report": SOURCE_REPORT,
         "dist_branch_report": DIST_BRANCH_REPORT,
         "heada_refinement_report": HEADA_REFINEMENT_REPORT,
+        "forecast_source_calibration_report": FORECAST_SOURCE_CALIBRATION_REPORT,
         "signal_id": signal_id,
         "candidate_id": safe_str(row.get("candidate_id")),
         "city": safe_str(row.get("city")),
@@ -1890,6 +1898,19 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "hot_tail2_pct_asof": decision.get("hot_tail2_pct_asof"),
         "cold_tail_pct_asof": decision.get("cold_tail_pct_asof"),
         "bias_mae_asof": decision.get("bias_mae_asof"),
+        "forecast_source_calibration_status": safe_str(decision.get("forecast_source_calibration_status")),
+        "forecast_source_best_reliability_bucket_asof": safe_str(
+            decision.get("forecast_source_best_reliability_bucket_asof")
+        ),
+        "forecast_source_best_model_key_asof": safe_str(decision.get("forecast_source_best_model_key_asof")),
+        "forecast_source_best_mae_f_asof": decision.get("forecast_source_best_mae_f_asof"),
+        "forecast_source_model_key_asof": safe_str(decision.get("forecast_source_model_key_asof")),
+        "forecast_source_model_mae_f_asof": decision.get("forecast_source_model_mae_f_asof"),
+        "forecast_source_model_gap_to_best_f_asof": decision.get("forecast_source_model_gap_to_best_f_asof"),
+        "forecast_source_best_D_excluded_v1": bool(decision.get("forecast_source_best_D_excluded_v1")),
+        "forecast_source_calibration_core_AB_gap_le_1F_v1": bool(
+            decision.get("forecast_source_calibration_core_AB_gap_le_1F_v1")
+        ),
         "bracket_low_native": decision.get("bracket_low_native"),
         "bracket_high_native": decision.get("bracket_high_native"),
         "bracket_distance_available": decision.get("bracket_distance_available"),
@@ -1950,6 +1971,19 @@ def execute_non_live_shared_entry_plans(
         "venue_calls": sum(row["venue_calls"] for row in summaries),
         "journal": rel(SHARED_EXECUTION_JOURNAL_OUT),
     }
+
+
+def build_shared_low_price_plan_parity(
+    legacy_plan: dict[str, Any],
+    *,
+    configured_execution_profile: str = LOW_PRICE_PARITY_EXECUTION_PROFILE,
+) -> LowPriceLegacyPlanCompatibility:
+    """Test-only bridge; ``build_plan`` remains the normal runner authority."""
+
+    return build_low_price_legacy_plan_compatibility(
+        legacy_plan=legacy_plan,
+        configured_execution_profile=configured_execution_profile,
+    )
 
 
 def attach_decision_feature_ref(decision: dict[str, Any]) -> dict[str, Any]:
@@ -2571,6 +2605,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         },
         "tail_telemetry_model_artifact": safe_str(decisions[0].get("tail_telemetry_model_artifact")) if decisions else "",
         "tail_telemetry_bias_source": safe_str(decisions[0].get("tail_telemetry_bias_source")) if decisions else "",
+        "forecast_source_calibration_status_counts": {
+            status: sum(1 for row in decisions if safe_str(row.get("forecast_source_calibration_status")) == status)
+            for status in sorted({safe_str(row.get("forecast_source_calibration_status")) for row in decisions})
+        },
         "config": {
             "min_ask": float(args.min_ask),
             "max_ask": float(args.max_ask),
@@ -2645,6 +2683,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "p_cal_city_diag": row.get("p_cal_city_diag"),
                 "bias_p90_asof": row.get("bias_p90_asof"),
                 "hot_tail_pct_asof": row.get("hot_tail_pct_asof"),
+                "forecast_source_calibration_status": row.get("forecast_source_calibration_status"),
+                "forecast_source_best_reliability_bucket_asof": row.get(
+                    "forecast_source_best_reliability_bucket_asof"
+                ),
+                "forecast_source_model_gap_to_best_f_asof": row.get("forecast_source_model_gap_to_best_f_asof"),
+                "forecast_source_best_D_excluded_v1": row.get("forecast_source_best_D_excluded_v1"),
                 "forecast_to_bracket_low_native": row.get("forecast_to_bracket_low_native"),
                 "dist_le0_block_reason": row.get("dist_le0_block_reason"),
             }

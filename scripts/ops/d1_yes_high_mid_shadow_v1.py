@@ -5,11 +5,12 @@ Strategy (frozen v1, see docs/analysis/2026-07/2026-07-15-market-calibration-cur
     When the market prices "final max lands exactly one bracket above the current
     running-max bracket" (the d1 YES) at mid >= 0.80, express the first signal
     as 5 shares taker plus a separate 5-share post-only maker child, then hold
-    fills to settlement.  The maker follows fresh bid improvements during the
-    same observation epoch; after a newer observation it is canceled and its
-    authoritative unfilled remainder becomes a capped taker only if the same
-    d1 token still has fresh mid >= 0.80.  One entry per city-date (first
-    qualifying poll).  No city / hour / weather filter in v1.
+    fills to settlement.  The taker guarantees initial exposure.  The maker is
+    a separate execution-quality observation leg: according to the configured
+    profile it either rests at its initial post-only quote or follows the fresh
+    bid up to a fixed cap.  It never converts to taker and is canceled before
+    the next weather-data update.  One entry per city-date (first qualifying
+    poll).  No city / hour / weather filter in v1.
 
 The default CLI remains zero-notional shadow.  With ``--live --confirm-live`` it
 routes Taipei to shadow and submits split BUY YES taker/maker plans for other
@@ -63,7 +64,12 @@ parse_bracket = _factory.parse_bracket
 round_half_up = _factory.round_half_up
 
 from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
+from src.strategies.weather_edge_v1.execution import (  # noqa: E402
+    build_data_update_lifecycle_fields,
+    get_execution_profile,
+)
 from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
+    D1LegacyPlanCompatibility,
     build_d1_legacy_plan_compatibility,
 )
 from src.strategies.weather_edge_v1.runtime.non_live import (  # noqa: E402
@@ -101,6 +107,7 @@ PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 MAKER_LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
 SHARED_EXECUTION_JOURNAL_OUT = RUNTIME_DIR / "shared_execution_journal.jsonl"
+OBSERVATION_INVARIANTS_OUT = RUNTIME_DIR / "observation_invariants.json"
 
 MID_THRESHOLD = 0.80
 # Parity: the backtest applied NO obs-age filter (it included every trigger; the
@@ -109,6 +116,7 @@ MID_THRESHOLD = 0.80
 # only happen live (a stalled obs feed), which the backtest never contained.
 # obs_age is always recorded; `obs_age_in_backtest_band` flags <= 61 min.
 PATHOLOGICAL_OBS_AGE_MIN = 120.0
+MAX_OBSERVATION_CACHE_AGE_MIN = 10.0
 BACKTEST_OBS_AGE_BAND_MIN = 61.0
 MAX_BOOK_AGE_MIN = 60.0
 FULL_LADDER_MIN_CITIES = 36
@@ -118,6 +126,12 @@ V11_MAX_REMAINING_HEAT = 1.3
 LIVE_SHADOW_CITIES = {"Taipei"}
 ACTIVE_ORDER_STATUSES = {"submitted", "simulated_open"}
 MAX_YES_PARITY_GAP = 0.011
+D1_EXECUTION_PROFILES = (
+    "d1_taker_only_v1",
+    "d1_taker_plus_maker_static_v1",
+    "d1_taker_plus_maker_chase_to_mid_v1",
+)
+DEFAULT_D1_EXECUTION_PROFILE = "d1_taker_plus_maker_chase_to_mid_v1"
 
 
 def now_utc_dt() -> datetime:
@@ -138,6 +152,18 @@ def parse_utc(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def observation_cache_freshness(
+    generated_at_utc: Any,
+    cycle_dt: datetime,
+    max_age_min: float,
+) -> tuple[float, bool]:
+    generated = parse_utc(generated_at_utc)
+    if generated is None:
+        return math.nan, False
+    age_min = (cycle_dt - generated).total_seconds() / 60.0
+    return age_min, bool(0.0 <= age_min <= max_age_min)
 
 
 def to_float(value: Any, default: float = math.nan) -> float:
@@ -183,6 +209,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=PATHOLOGICAL_OBS_AGE_MIN,
                         help="reject only pathologically stale obs (live-only failure); "
                              "the backtest applied no obs-age filter")
+    parser.add_argument(
+        "--max-observation-cache-age-min",
+        type=float,
+        default=MAX_OBSERVATION_CACHE_AGE_MIN,
+        help="reject a stalled observation cache even when row age fields are frozen",
+    )
     parser.add_argument("--max-book-age-min", type=float, default=MAX_BOOK_AGE_MIN,
                         help="reject missing/stale per-token quotes (data-validity guard)")
     parser.add_argument("--interval-seconds", type=float, default=600.0)
@@ -192,6 +224,12 @@ def parse_args() -> argparse.Namespace:
                         help="taker child shares (legacy flag retained for compatibility)")
     parser.add_argument("--maker-shares", type=float, default=5.0,
                         help="post-only maker child shares; set 0 to disable the maker child")
+    parser.add_argument(
+        "--execution-profile",
+        choices=D1_EXECUTION_PROFILES,
+        default=DEFAULT_D1_EXECUTION_PROFILE,
+        help="switch between taker-only, static maker, and capped maker chase",
+    )
     parser.add_argument(
         "--max-city-days-per-day",
         "--max-orders-per-day",
@@ -206,7 +244,13 @@ def parse_args() -> argparse.Namespace:
         "--maker-reprice-refresh-sec",
         type=float,
         default=60.0,
-        help="minimum age before evaluating an unfilled maker child for cancel/reprice",
+        help="minimum age before evaluating an unfilled maker child for an early cancel",
+    )
+    parser.add_argument(
+        "--maker-cancel-buffer-sec",
+        type=int,
+        default=get_execution_profile(DEFAULT_D1_EXECUTION_PROFILE).cancel_buffer_sec,
+        help="cancel the maker this many seconds before the next weather-data update",
     )
     parser.add_argument("--live", action="store_true", help="submit eligible non-Taipei plans")
     parser.add_argument("--confirm-live", action="store_true", help="required with --live")
@@ -217,7 +261,7 @@ def parse_args() -> argparse.Namespace:
 def configure_runtime(args: argparse.Namespace) -> None:
     global STRATEGY_ID, RUNTIME_DIR, JOURNAL_OUT, POSITIONS_OUT, SUMMARY_OUT
     global SUMMARY_HISTORY_OUT, PLAN_OUT, PAPER_OUT, LIVE_OUT, MAKER_LIFECYCLE_OUT
-    global SHARED_EXECUTION_JOURNAL_OUT
+    global SHARED_EXECUTION_JOURNAL_OUT, OBSERVATION_INVARIANTS_OUT
     STRATEGY_ID = str(args.strategy_instance)
     RUNTIME_DIR = Path(args.runtime_dir)
     JOURNAL_OUT = RUNTIME_DIR / "shadow_events.jsonl"
@@ -229,6 +273,7 @@ def configure_runtime(args: argparse.Namespace) -> None:
     LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
     MAKER_LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
     SHARED_EXECUTION_JOURNAL_OUT = RUNTIME_DIR / "shared_execution_journal.jsonl"
+    OBSERVATION_INVARIANTS_OUT = RUNTIME_DIR / "observation_invariants.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -243,10 +288,60 @@ def load_observations(path: Path) -> tuple[dict[str, dict[str, Any]], str | None
     out: dict[str, dict[str, Any]] = {}
     for rec in doc.get("records", []):
         city = rec.get("city")
-        if not city or rec.get("status") in {"error"} or rec.get("error"):
+        if not city or str(rec.get("status") or "") not in {"ok", "reused_after_fetch_error"} or rec.get("error"):
             continue
         out[city] = rec
     return out, generated
+
+
+def advance_observation_invariant(
+    city: str,
+    rec: dict[str, Any],
+    previous: dict[str, Any] | None,
+) -> tuple[str, dict[str, Any], bool]:
+    """Keep the live consumer's station-day running maximum monotone."""
+
+    target_date = str(rec.get("target_date") or "")
+    station = str(rec.get("station") or "")
+    running_max_c = to_float(rec.get("running_max_c"))
+    current_temp_c = to_float(rec.get("current_temp_c"))
+    base = {
+        "city": city,
+        "target_date": target_date,
+        "station": station,
+        "running_max_c": running_max_c if math.isfinite(running_max_c) else None,
+        "last_obs_utc": str(rec.get("last_obs_utc") or ""),
+    }
+    reason = ""
+    if not target_date or not station or not math.isfinite(running_max_c):
+        reason = "invalid_observation_identity_or_running_max"
+    elif math.isfinite(current_temp_c) and running_max_c + 1e-9 < current_temp_c:
+        reason = "running_max_below_current_temperature"
+    elif (
+        previous
+        and str(previous.get("target_date") or "") == target_date
+        and str(previous.get("station") or "") == station
+    ):
+        previous_max = to_float(previous.get("running_max_c"))
+        if math.isfinite(previous_max) and running_max_c + 1e-9 < previous_max:
+            reason = "station_day_running_max_regressed"
+
+    if not reason:
+        base["last_violation_signature"] = ""
+        return "", base, False
+
+    signature = "|".join(
+        (
+            reason,
+            target_date,
+            station,
+            str(rec.get("running_max_c")),
+            str(rec.get("last_obs_utc") or ""),
+        )
+    )
+    preserved = dict(previous or base)
+    preserved["last_violation_signature"] = signature
+    return reason, preserved, signature != str((previous or {}).get("last_violation_signature") or "")
 
 
 def completion_marker(orderbook_file: Path) -> Path | None:
@@ -554,6 +649,46 @@ def live_order_id(row: dict[str, Any]) -> str:
     return ""
 
 
+def exchange_order_states(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract exchange order states embedded in submit/cancel evidence."""
+    states: list[dict[str, Any]] = []
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    cancel_response = row.get("cancel_response") if isinstance(row.get("cancel_response"), dict) else {}
+    nested_cancel = (
+        response.get("pre_place_cancel_response")
+        if isinstance(response.get("pre_place_cancel_response"), dict)
+        else {}
+    )
+    for container in (response, cancel_response, nested_cancel):
+        for key in ("place", "order_after_cancel", "order_before_cancel", "order"):
+            state = container.get(key)
+            if isinstance(state, dict):
+                nested = state.get("order")
+                states.append(nested if isinstance(nested, dict) else state)
+    return states
+
+
+def exchange_state_order_id(state: dict[str, Any]) -> str:
+    for key in ("orderID", "order_id", "id", "clob_order_id"):
+        value = str(state.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def terminal_exchange_state_for_order(
+    rows: list[dict[str, Any]], order_id: str
+) -> dict[str, Any] | None:
+    terminal = {"MATCHED", "CANCELED", "CANCELLED", "EXPIRED"}
+    for row in reversed(rows):
+        for state in exchange_order_states(row):
+            if exchange_state_order_id(state) != order_id:
+                continue
+            if str(state.get("status") or "").upper() in terminal:
+                return state
+    return None
+
+
 def handled_maker_source_order_ids(rows: list[dict[str, Any]]) -> set[str]:
     handled: set[str] = set()
     for row in rows:
@@ -565,7 +700,8 @@ def handled_maker_source_order_ids(rows: list[dict[str, Any]]) -> set[str]:
             "pre_place_cancel_not_confirmed",
             "cancel_only_not_confirmed",
         }:
-            continue
+            if terminal_exchange_state_for_order([row], source_order_id) is None:
+                continue
         handled.add(source_order_id)
     return handled
 
@@ -631,6 +767,100 @@ def apply_live_fill_basis(position: dict[str, Any], order: dict[str, Any]) -> No
     )
 
 
+def aggregate_live_fill_basis(
+    position: dict[str, Any], rows: list[dict[str, Any]]
+) -> bool:
+    """Aggregate unique taker/maker child fills from authoritative CLOB state."""
+    city = str(position.get("city") or "")
+    target_date = str(position.get("target_date") or "")
+    bracket = str(position.get("d1_bracket") or "")
+    submitted: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if str(row.get("status") or "") != "submitted":
+            continue
+        if str(row.get("city") or "") != city or str(row.get("target_date") or "") != target_date:
+            continue
+        if bracket and str(row.get("bracket") or "") != bracket:
+            continue
+        if str(row.get("signal_side") or "").upper() != "BUY_YES":
+            continue
+        order_id = live_order_id(row)
+        if order_id:
+            submitted[order_id] = row
+    if not submitted:
+        return False
+
+    fills: dict[str, tuple[float, float, float, str, float]] = {}
+    for order_id, row in submitted.items():
+        response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+        place = response.get("place") if isinstance(response.get("place"), dict) else {}
+        if str(place.get("status") or "").lower() != "matched":
+            continue
+        shares = to_float(place.get("takingAmount"), 0.0)
+        cost = to_float(place.get("makingAmount"), 0.0)
+        if shares > 0 and cost > 0:
+            price = cost / shares
+            estimated_fee = 0.0 if bool(row.get("maker_only")) else shares * fee(price)
+            fills[order_id] = (shares, cost, price, "immediate_match", estimated_fee)
+
+    for row in rows:
+        for state in exchange_order_states(row):
+            order_id = exchange_state_order_id(state)
+            if order_id not in submitted:
+                continue
+            shares = to_float(
+                state.get("size_matched", state.get("sizeMatched", state.get("matched_size"))),
+                0.0,
+            )
+            price = to_float(state.get("price"), 0.0)
+            if shares > 0 and price > 0:
+                estimated_fee = (
+                    0.0 if bool(submitted[order_id].get("maker_only")) else shares * fee(price)
+                )
+                fills[order_id] = (
+                    shares,
+                    shares * price,
+                    price,
+                    "exchange_order_state",
+                    estimated_fee,
+                )
+
+    if not fills:
+        return False
+    total_shares = sum(item[0] for item in fills.values())
+    total_cost = sum(item[1] for item in fills.values())
+    estimated_fee = sum(item[4] for item in fills.values())
+    order_ids = sorted(fills)
+    before = (
+        to_float(position.get("position_shares"), 0.0),
+        to_float(position.get("entry_cost_usd"), 0.0),
+        tuple(position.get("clob_order_ids") or []),
+    )
+    position.update(
+        {
+            "position_shares": round(total_shares, 6),
+            "fill_price": round(total_cost / total_shares, 6),
+            "entry_cost_usd": round(total_cost, 6),
+            "estimated_fee_usd": round(estimated_fee, 6),
+            "entry_cost_with_fee": round(total_cost + estimated_fee, 6),
+            "fee_source": "weather_fee_curve_estimate_pending_canonical",
+            "clob_order_id": order_ids[0],
+            "clob_order_ids": order_ids,
+            "pnl_basis": (
+                "actual_exchange_order_state"
+                if any(item[3] == "exchange_order_state" for item in fills.values())
+                else "actual_immediate_match_response"
+            ),
+        }
+    )
+    after = (
+        position["position_shares"],
+        position["entry_cost_usd"],
+        tuple(position["clob_order_ids"]),
+    )
+    return after != before
+
+
 def reconcile_live_positions(
     positions: dict[str, Any], rows: list[dict[str, Any]]
 ) -> int:
@@ -639,20 +869,18 @@ def reconcile_live_positions(
         if position.get("execution_mode") not in {
             "tiny_live_taker_5shares",
             "tiny_live_split_5_taker_5_maker",
+            "tiny_live_taker_5shares_maker_blocked",
         }:
             continue
-        order = matching_live_order(
-            city=str(position.get("city") or ""),
-            target_date=str(position.get("target_date") or ""),
-            bracket=str(position.get("d1_bracket") or ""),
-            rows=rows,
-            child_roles={"single", "taker"},
-        )
-        if order is None:
-            continue
-        before = position.get("clob_order_id")
-        apply_live_fill_basis(position, order)
-        updated += int(position.get("clob_order_id") != before)
+        changed = aggregate_live_fill_basis(position, rows)
+        if changed and position.get("settled") and position.get("win") is not None:
+            shares = to_float(position.get("position_shares"), 0.0)
+            position["pnl_at_settlement"] = round(
+                (shares if bool(position.get("win")) else 0.0)
+                - to_float(position.get("entry_cost_with_fee"), 0.0),
+                6,
+            )
+        updated += int(changed)
     return updated
 
 
@@ -665,6 +893,15 @@ def build_live_plan(
 ) -> dict[str, Any]:
     ask = to_float(event.get("d1_yes_direct_ask"))
     bid = to_float(event.get("d1_yes_direct_bid"), 0.0)
+    profile = get_execution_profile(
+        str(getattr(args, "execution_profile", DEFAULT_D1_EXECUTION_PROFILE))
+    )
+    try:
+        leg = next(item for item in profile.legs if item.role == child_order_role)
+    except StopIteration as exc:
+        raise ValueError(
+            f"execution profile {profile.name!r} has no {child_order_role!r} leg"
+        ) from exc
     signal_base = {
         "strategy_instance": STRATEGY_ID,
         "city": event.get("city"),
@@ -673,31 +910,47 @@ def build_live_plan(
         "token_id": event.get("d1_yes_token_id"),
     }
     signal_id = "d1-yes-high-mid-" + stable_hash(signal_base)
-    maker_only = child_order_role == "maker"
+    maker_only = leg.maker_only
     shares = float(args.maker_shares if maker_only else args.shares)
-    minutes_to_next_obs = to_float(event.get("minutes_to_next_obs"))
-    if maker_only and math.isfinite(minutes_to_next_obs):
-        # Keep the maker alive until the actual next observation can be
-        # detected and revalidated.  The extra ten minutes is only a safety
-        # TTL for a stalled observation feed; the lifecycle normally cancels
-        # or replaces it immediately after the new observation epoch.
-        ttl_min = max(float(args.order_ttl_min), minutes_to_next_obs + 10.0)
-    elif maker_only:
-        ttl_min = float(args.order_ttl_min)
-    else:
-        ttl_min = float(args.order_ttl_min)
-    expires_at = cycle_dt + timedelta(minutes=ttl_min)
+    lifecycle_fields: dict[str, Any] = {}
+    expires_at = cycle_dt + timedelta(minutes=float(args.order_ttl_min))
     if maker_only:
         tick = 0.001
+        last_obs = parse_utc(event.get("last_obs_utc"))
+        cadence_min = to_float(event.get("obs_cadence_min"))
+        generated = parse_utc(event.get("obs_generated_at_utc"))
+        minutes_to_next = to_float(event.get("minutes_to_next_obs"))
+        if last_obs is not None and math.isfinite(cadence_min) and cadence_min > 0:
+            next_update_due = last_obs + timedelta(minutes=cadence_min)
+        elif generated is not None and math.isfinite(minutes_to_next):
+            next_update_due = generated + timedelta(minutes=minutes_to_next)
+        else:
+            raise ValueError("maker_missing_absolute_next_data_update")
+        source = str(event.get("obs_source") or "metar")
+        station = str(event.get("obs_station") or event.get("city") or "").lower()
+        lifecycle_fields = build_data_update_lifecycle_fields(
+            data_source=source,
+            data_epoch_ref=f"{source}:{station}:{str(event.get('last_obs_utc') or '')}",
+            data_epoch_ts_utc=str(event.get("last_obs_utc") or ""),
+            next_data_update_due_utc=next_update_due,
+            cancel_buffer_sec=int(
+                getattr(args, "maker_cancel_buffer_sec", profile.cancel_buffer_sec)
+            ),
+            now=cycle_dt,
+        )
+        expires_at = parse_utc(lifecycle_fields["expires_at_utc"]) or expires_at
+        initial_mid = (bid + ask) / 2.0 if bid > 0 and ask > bid else 0.0
+        maker_price_cap = math.floor((initial_mid + 1e-12) / tick) * tick
         limit_price = min(max(bid + tick, bid), max(bid, ask - tick)) if bid > 0 else 0.0
-        execution_policy = "d1_yes_high_mid_maker_v1"
+        limit_price = min(limit_price, maker_price_cap)
         quote_reason = "direct_yes_post_only_improve_bid_one_tick"
         quote_mode = "fresh_d1_mid_post_only_recheck"
     else:
+        maker_price_cap = 0.0
         limit_price = ask
-        execution_policy = "d1_yes_high_mid_taker_v1"
         quote_reason = "direct_yes_top_ask_taker"
         quote_mode = "top_ask_taker_live"
+    ttl_min = max(0.0, (expires_at - cycle_dt).total_seconds() / 60.0)
     spread = max(0.0, ask - bid) if bid > 0 else None
     comparison_group_id = stable_hash(
         {"signal_id": signal_id, "token_id": event.get("d1_yes_token_id")}
@@ -710,7 +963,7 @@ def build_live_plan(
         "signal_id": signal_id,
         "opportunity_id": signal_id,
         "comparison_group_id": comparison_group_id,
-        "execution_profile": "d1_taker_plus_maker_chase_to_mid_v1",
+        "execution_profile": profile.name,
         "created_at_utc": cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "status": "accepted",
         "risk_status": "passed",
@@ -753,12 +1006,11 @@ def build_live_plan(
         "child_order_role": child_order_role,
         "maker_only": maker_only,
         "allow_duplicate_signal_id": True,
-        "data_epoch_ref": (
-            f"metar:{str(event.get('city') or '').lower()}:{str(event.get('last_obs_utc') or '')}"
-        ),
-        "data_epoch_ts_utc": str(event.get("last_obs_utc") or ""),
-        "execution_policy": execution_policy,
-        "order_lifecycle_policy": "d1_maker_reprice_until_observation_v1" if maker_only else "taker_now",
+        "execution_policy": leg.execution_policy,
+        "order_lifecycle_policy": leg.order_lifecycle_policy,
+        "maker_reprice_policy": leg.reprice_policy,
+        "maker_price_cap_policy": leg.price_cap_policy,
+        "maker_max_reprices": int(leg.max_reprices),
         "min_live_mid": float(args.mid_threshold),
         "tick_size": 0.001,
         "sizing_mode": "fixed_shares",
@@ -774,9 +1026,11 @@ def build_live_plan(
         "model_version": "d1_yes_high_mid_v1",
         "expires_at_utc": expires_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "order_ttl_min": round(ttl_min, 6),
+        **lifecycle_fields,
         **(
             {
-                "maker_price_cap": round(ask, 6),
+                "maker_price_cap": round(maker_price_cap, 6),
+                "max_live_price": round(maker_price_cap, 6),
                 "maker_lifecycle_root_observation_utc": str(event.get("last_obs_utc") or ""),
                 "maker_lifecycle_reprice_count": 0,
             }
@@ -796,10 +1050,30 @@ def build_live_plan(
 def build_live_plans(
     event: dict[str, Any], args: argparse.Namespace, cycle_dt: datetime
 ) -> list[dict[str, Any]]:
+    profile = get_execution_profile(
+        str(getattr(args, "execution_profile", DEFAULT_D1_EXECUTION_PROFILE))
+    )
     plans = [build_live_plan(event, args, cycle_dt, child_order_role="taker")]
-    if float(args.maker_shares) > 0:
-        plans.append(build_live_plan(event, args, cycle_dt, child_order_role="maker"))
+    event["maker_plan_status"] = "disabled"
+    event["maker_plan_blocker"] = "maker_shares_zero"
+    if not any(leg.role == "maker" for leg in profile.legs):
+        event["maker_plan_blocker"] = "execution_profile_has_no_maker_leg"
+    elif float(args.maker_shares) > 0:
+        try:
+            plans.append(build_live_plan(event, args, cycle_dt, child_order_role="maker"))
+            event["maker_plan_status"] = "planned"
+            event["maker_plan_blocker"] = ""
+        except ValueError as exc:
+            event["maker_plan_status"] = "blocked"
+            event["maker_plan_blocker"] = str(exc)
     return plans
+
+
+def build_shared_d1_plan_parity(
+    legacy_plans: list[dict[str, Any]], event: dict[str, Any]
+) -> D1LegacyPlanCompatibility:
+    """Test-only pure bridge; legacy ``build_live_plan`` remains the authority."""
+    return build_d1_legacy_plan_compatibility(legacy_plans=legacy_plans, event=event)
 
 
 def build_maker_lifecycle_plan(
@@ -813,6 +1087,17 @@ def build_maker_lifecycle_plan(
     args: argparse.Namespace,
     cycle_dt: datetime,
 ) -> dict[str, Any]:
+    if not maker_only or (not cancel_only and action != "d1_maker_reprice"):
+        raise ValueError("unsupported d1 maker lifecycle action")
+    profile_name = str(
+        order.get("execution_profile")
+        or getattr(args, "execution_profile", DEFAULT_D1_EXECUTION_PROFILE)
+    )
+    try:
+        profile = get_execution_profile(profile_name)
+    except ValueError:
+        profile = get_execution_profile(DEFAULT_D1_EXECUTION_PROFILE)
+    maker_leg = next(leg for leg in profile.legs if leg.role == "maker")
     source_order_id = live_order_id(order)
     shares = to_float(order.get("size"), float(args.maker_shares))
     price_cap = to_float(order.get("maker_price_cap"), to_float(order.get("best_ask"), 0.0))
@@ -826,7 +1111,7 @@ def build_maker_lifecycle_plan(
         "strategy_head": "d1_yes_high_mid",
         "decision_mode": "first_qualifying_city_date_maker_lifecycle",
         "execution_mode": "tiny_live_split_5_taker_5_maker_taipei_shadow",
-        "execution_profile": "d1_taker_plus_maker_chase_to_mid_v1",
+        "execution_profile": profile.name,
         "comparison_group_id": str(order.get("comparison_group_id") or ""),
         "city": str(order.get("city") or ""),
         "city_pool": "all_except_taipei_live",
@@ -850,8 +1135,8 @@ def build_maker_lifecycle_plan(
         "quote_tick_size": 0.001,
         "maker_only": bool(maker_only),
         "allow_duplicate_signal_id": True,
-        "execution_policy": "d1_yes_high_mid_maker_v1" if maker_only else "d1_yes_high_mid_taker_v1",
-        "order_lifecycle_policy": "d1_maker_reprice_until_observation_v1" if maker_only else "taker_now",
+        "execution_policy": maker_leg.execution_policy,
+        "order_lifecycle_policy": maker_leg.order_lifecycle_policy,
         "execution_action": action,
         "cancel_before_order_id": source_order_id,
         "source_order_id": source_order_id,
@@ -881,7 +1166,12 @@ def build_maker_lifecycle_plan(
             or order.get("observation_epoch_utc")
             or ""
         ),
-        "maker_lifecycle_reprice_count": int(to_float(order.get("maker_lifecycle_reprice_count"), 0.0)) + 1,
+        "maker_lifecycle_reprice_count": int(
+            to_float(order.get("maker_lifecycle_reprice_count"), 0.0)
+        ) + (0 if cancel_only else 1),
+        "maker_reprice_policy": maker_leg.reprice_policy,
+        "maker_price_cap_policy": maker_leg.price_cap_policy,
+        "maker_max_reprices": int(maker_leg.max_reprices),
         "observation_epoch_utc": str(state.get("observation_epoch_utc") or ""),
         "data_epoch_ref": str(order.get("data_epoch_ref") or ""),
         "data_epoch_ts_utc": str(
@@ -890,6 +1180,10 @@ def build_maker_lifecycle_plan(
             or order.get("observation_epoch_utc")
             or ""
         ),
+        "next_data_update_due_utc": str(order.get("next_data_update_due_utc") or ""),
+        "cancel_before_data_update_utc": str(order.get("cancel_before_data_update_utc") or ""),
+        "cancel_buffer_sec": int(to_float(order.get("cancel_buffer_sec"), 0.0)),
+        "cancel_reason": str(order.get("cancel_reason") or "pre_data_update"),
         "model_token_probability": round(to_float(state.get("d1_yes_mid"), 0.0), 6),
     }
     created_at = cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -920,12 +1214,11 @@ def maker_lifecycle_plans(
     args: argparse.Namespace,
     cycle_dt: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Manage the unfilled maker half using the latest observation epoch.
+    """Cancel the maker observation leg if its source epoch or signal changes.
 
-    Within the same observation epoch, improve a stale maker upward by one
-    tick, capped at the initial ask.  On the first newer observation, cancel
-    the old maker and either cross the remaining shares (same d1 signal still
-    valid) or stop without replacement.
+    Normal pre-update expiry is handled by the shared execution lifecycle.
+    This watcher only provides an early cancel when a newer epoch arrives
+    sooner than expected or the same-epoch d1 signal becomes invalid.
     """
     handled = handled_maker_source_order_ids(live_rows)
     refresh_sec = float(args.maker_reprice_refresh_sec)
@@ -963,46 +1256,50 @@ def maker_lifecycle_plans(
             and str(state.get("d1_yes_token_id") or "") == str(order.get("token_id") or "")
         )
         signal_still_valid = bool(state and state.get("state_valid") and state.get("triggered") and same_token)
+        profile_name = str(
+            order.get("execution_profile")
+            or getattr(args, "execution_profile", DEFAULT_D1_EXECUTION_PROFILE)
+        )
+        try:
+            profile = get_execution_profile(profile_name)
+        except ValueError:
+            profile = get_execution_profile(DEFAULT_D1_EXECUTION_PROFILE)
+        maker_leg = next((leg for leg in profile.legs if leg.role == "maker"), None)
         posted = to_float(order.get("posted_price"), to_float(order.get("limit_price"), 0.0))
         cap = to_float(order.get("maker_price_cap"), to_float(order.get("best_ask"), 0.0))
         best_bid = to_float((state or {}).get("d1_yes_direct_bid"), 0.0)
         best_ask = to_float((state or {}).get("d1_yes_direct_ask"), 0.0)
-        ask_size = to_float((state or {}).get("d1_yes_ask_size"), 0.0)
+        tick = to_float(order.get("quote_tick_size"), 0.001)
+        reprice_count = int(to_float(order.get("maker_lifecycle_reprice_count"), 0.0))
         next_price = 0.0
         action = ""
         blocker = ""
-        maker_only = True
-        cancel_only = False
-
         if state is None or current_epoch is None or root_epoch is None:
             blocker = "d1_maker_missing_current_or_root_observation_epoch"
         elif new_observation:
-            if signal_still_valid and best_ask > 0 and best_ask <= cap + 1e-9 and ask_size + 1e-9 >= float(args.maker_shares):
-                action = "d1_maker_next_observation_taker_fallback"
-                next_price = best_ask
-                maker_only = False
-            else:
-                action = "d1_maker_cancel_after_observation"
-                cancel_only = True
-                blocker = (
-                    "signal_or_token_changed"
-                    if not signal_still_valid
-                    else "fallback_price_or_depth_not_allowed"
-                )
+            action = "d1_maker_cancel_after_observation"
+            blocker = "data_epoch_changed_no_taker_fallback"
         elif state.get("state_valid") and not signal_still_valid:
             action = "d1_maker_cancel_stale_signal"
-            cancel_only = True
             blocker = "same_epoch_signal_or_token_changed"
-        elif signal_still_valid and best_bid > 0 and best_ask > best_bid and cap > 0:
-            next_price = min(best_bid + 0.001, best_ask - 0.001, cap)
-            if next_price >= posted + 0.001 - 1e-9:
+        elif (
+            maker_leg is not None
+            and maker_leg.reprice_policy == "follow_best_bid"
+            and reprice_count < maker_leg.max_reprices
+            and signal_still_valid
+            and best_bid > 0
+            and best_ask > best_bid
+            and cap > 0
+        ):
+            next_price = min(best_bid + tick, best_ask - tick, cap)
+            if next_price >= posted + tick - 1e-9:
                 action = "d1_maker_reprice"
             else:
-                blocker = "d1_maker_already_at_best_allowed_price"
-        elif not signal_still_valid:
-            blocker = "d1_maker_waiting_for_valid_state"
+                blocker = "d1_maker_chase_already_at_best_allowed_price"
+        elif maker_leg is not None and reprice_count >= maker_leg.max_reprices > 0:
+            blocker = "d1_maker_chase_reprice_limit_reached"
         else:
-            blocker = "d1_maker_no_resting_reprice"
+            blocker = "d1_maker_resting_until_pre_data_update_deadline"
 
         decision = {
             "record_type": "d1_yes_high_mid_maker_lifecycle_decision",
@@ -1027,6 +1324,10 @@ def maker_lifecycle_plans(
             "action": action,
             "blocker": blocker,
             "next_price": round(next_price, 6),
+            "execution_profile": profile.name,
+            "maker_reprice_policy": maker_leg.reprice_policy if maker_leg else "none",
+            "maker_reprice_count": reprice_count,
+            "maker_max_reprices": maker_leg.max_reprices if maker_leg else 0,
         }
         decisions.append(decision)
         if action:
@@ -1034,9 +1335,9 @@ def maker_lifecycle_plans(
                 build_maker_lifecycle_plan(
                     order,
                     action=action,
-                    limit_price=next_price,
-                    maker_only=maker_only,
-                    cancel_only=cancel_only,
+                    limit_price=next_price if action == "d1_maker_reprice" else 0.0,
+                    maker_only=True,
+                    cancel_only=action != "d1_maker_reprice",
                     state=state or {},
                     args=args,
                     cycle_dt=cycle_dt,
@@ -1064,22 +1365,48 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     obs_path = Path(args.observation_cache)
     ob_dirs = [Path(d) for d in (args.orderbook_dir or [str(p) for p in ORDERBOOK_DIRS_DEFAULT])]
     observations, obs_generated = load_observations(obs_path)
+    obs_cache_age_min, obs_cache_valid = observation_cache_freshness(
+        obs_generated,
+        cycle_dt,
+        args.max_observation_cache_age_min,
+    )
     ob_file = latest_orderbook_file(ob_dirs)
     ladder = load_ladder(ob_file) if ob_file else {}
+
+    invariant_doc: dict[str, Any] = {}
+    if OBSERVATION_INVARIANTS_OUT.exists():
+        try:
+            invariant_doc = json.loads(OBSERVATION_INVARIANTS_OUT.read_text())
+        except (OSError, json.JSONDecodeError):
+            invariant_doc = {}
+    raw_invariant_records = invariant_doc.get("records")
+    if not isinstance(raw_invariant_records, dict):
+        raw_invariant_records = {}
+    invariant_records = {
+        str(city): dict(row)
+        for city, row in raw_invariant_records.items()
+        if isinstance(row, dict)
+    }
 
     positions: dict[str, Any] = {}
     if POSITIONS_OUT.exists():
         positions = json.loads(POSITIONS_OUT.read_text())
     all_live_rows = order_runtime.read_jsonl(LIVE_OUT)
+    cancel_rows = order_runtime.read_jsonl(
+        LIVE_OUT.with_name(f"{LIVE_OUT.stem}_cancels.jsonl")
+    )
+    live_evidence_rows = [*all_live_rows, *cancel_rows]
     live_rows = successful_live_orders()
-    reconciled_live_positions = reconcile_live_positions(positions, live_rows)
+    reconciled_live_positions = reconcile_live_positions(positions, live_evidence_rows)
 
     triggers_this_cycle = 0
     new_positions = 0
     cities_scanned = 0
     cities_with_usable_d1_quote = 0
     invalid_obs_age_rows = 0
+    invalid_obs_contract_rows = 0
     invalid_book_age_rows = 0
+    observation_contract_violations: list[dict[str, Any]] = []
     events: list[dict[str, Any]] = []
     plans: list[dict[str, Any]] = []
     paper_entry_groups: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
@@ -1095,6 +1422,31 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         target_date = rec.get("target_date")
         if not target_date:
             continue
+        previous_invariant = invariant_records.get(city)
+        contract_reason, next_invariant, is_new_violation = advance_observation_invariant(
+            city,
+            rec,
+            previous_invariant,
+        )
+        invariant_records[city] = next_invariant
+        if contract_reason:
+            invalid_obs_contract_rows += 1
+            if is_new_violation:
+                observation_contract_violations.append(
+                    {
+                        "cycle_ts_utc": cycle_ts,
+                        "strategy_id": STRATEGY_ID,
+                        "event_type": "observation_data_contract_violation",
+                        "city": city,
+                        "target_date": str(target_date),
+                        "station": str(rec.get("station") or ""),
+                        "reason": contract_reason,
+                        "running_max_c": rec.get("running_max_c"),
+                        "previous_running_max_c": (previous_invariant or {}).get("running_max_c"),
+                        "last_obs_utc": rec.get("last_obs_utc"),
+                        "observation_cache": str(obs_path),
+                    }
+                )
         pos_key = f"{city}|{target_date}"
         latest_states[pos_key] = {
             "city": city,
@@ -1128,7 +1480,12 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         # Trigger CONDITION is identical to the backtest: d1_yes_mid >= 0.80.
         # Missing/pathologically stale observations and missing/stale quotes are
         # data-invalid live states, not strategy filters, so they fail closed.
-        obs_valid = math.isfinite(obs_age) and obs_age <= args.max_obs_age_min
+        obs_valid = (
+            not contract_reason
+            and obs_cache_valid
+            and math.isfinite(obs_age)
+            and 0.0 <= obs_age <= args.max_obs_age_min
+        )
         book_valid = math.isfinite(book_age) and 0.0 <= book_age <= args.max_book_age_min
         if not obs_valid:
             invalid_obs_age_rows += 1
@@ -1208,6 +1565,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             "book_age_min": round(book_age, 2) if math.isfinite(book_age) else None,
             "minutes_since_running_max": rec.get("minutes_since_running_max"),
             "minutes_to_next_obs": rec.get("minutes_to_next_obs"),
+            "obs_cadence_min": rec.get("cadence_min"),
+            "obs_source": rec.get("source"),
+            "obs_station": rec.get("station"),
             "last_obs_utc": rec.get("last_obs_utc") or rec.get("running_max_obs_utc"),
             "running_max_obs_utc": rec.get("running_max_obs_utc"),
             "d_tmpf_1h": rec.get("d_tmpf_1h"),
@@ -1285,7 +1645,12 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                     entry_plans_planned += len(event_plans)
                     city_days_planned += 1
             else:
-                event["execution_mode"] = "tiny_live_split_5_taker_5_maker"
+                if event.get("maker_plan_status") == "planned":
+                    event["execution_mode"] = "tiny_live_split_5_taker_5_maker"
+                elif event.get("maker_plan_blocker") == "execution_profile_has_no_maker_leg":
+                    event["execution_mode"] = "tiny_live_taker_5shares"
+                else:
+                    event["execution_mode"] = "tiny_live_taker_5shares_maker_blocked"
                 plans.extend(event_plans)
                 entry_plans_planned += len(event_plans)
                 city_days_planned += 1
@@ -1304,11 +1669,26 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 "execution_mode": event["execution_mode"],
                 "live_blocker": event["live_blocker"],
                 "planned_taker_shares": float(args.shares),
-                "planned_maker_shares": float(args.maker_shares),
-                "planned_total_shares": float(args.shares) + float(args.maker_shares),
+                "planned_maker_shares": (
+                    float(args.maker_shares)
+                    if event.get("maker_plan_status") == "planned"
+                    else 0.0
+                ),
+                "planned_total_shares": float(args.shares)
+                + (
+                    float(args.maker_shares)
+                    if event.get("maker_plan_status") == "planned"
+                    else 0.0
+                ),
+                "maker_plan_status": str(event.get("maker_plan_status") or ""),
+                "maker_plan_blocker": str(event.get("maker_plan_blocker") or ""),
                 "settled": False,
             }
-            if event["execution_mode"] == "tiny_live_split_5_taker_5_maker":
+            if event["execution_mode"] in {
+                "tiny_live_taker_5shares",
+                "tiny_live_split_5_taker_5_maker",
+                "tiny_live_taker_5shares_maker_blocked",
+            }:
                 # A failed submit must not consume the city-date.  Promote the
                 # position only after the durable live ledger proves success.
                 pending_live_positions[pos_key] = candidate_position
@@ -1317,7 +1697,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 new_positions += 1
 
     lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(
-        live_rows=all_live_rows,
+        live_rows=live_evidence_rows,
         latest_states=latest_states,
         args=args,
         cycle_dt=cycle_dt,
@@ -1330,6 +1710,16 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     if not args.dry_run:
         for decision in lifecycle_decisions:
             append_jsonl(MAKER_LIFECYCLE_OUT, decision)
+        for violation in observation_contract_violations:
+            append_jsonl(JOURNAL_OUT, violation)
+        write_json(
+            OBSERVATION_INVARIANTS_OUT,
+            {
+                "schema_version": "d1_observation_invariants_v1",
+                "updated_at_utc": cycle_ts,
+                "records": invariant_records,
+            },
+        )
 
     # settlement backfill on open positions
     settled_now = 0
@@ -1462,6 +1852,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         write_json(POSITIONS_OUT, positions)
 
     settled_positions = [p for p in positions.values() if p.get("settled")]
+    open_positions = [p for p in positions.values() if not p.get("settled")]
     settled_wins = sum(1 for p in settled_positions if p.get("win"))
     settled_positions_with_local_pnl = [
         p for p in settled_positions if p.get("pnl_at_settlement") is not None
@@ -1484,6 +1875,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "generated_at_utc": cycle_ts,
         "cycle_ts_utc": cycle_ts,
         "obs_generated_at_utc": obs_generated,
+        "obs_cache_age_min": round(obs_cache_age_min, 3) if math.isfinite(obs_cache_age_min) else None,
+        "obs_cache_valid": bool(obs_cache_valid),
         "orderbook_file": rel(ob_file) if ob_file else None,
         "orderbook_complete_marker": rel(completion_marker(ob_file)) if ob_file and completion_marker(ob_file) else None,
         "snapshot_age_min": round(snapshot_age_min, 2) if snapshot_age_min is not None else None,
@@ -1495,6 +1888,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "cities_scanned_with_book": cities_scanned,
         "cities_with_usable_d1_quote": cities_with_usable_d1_quote,
         "invalid_obs_age_rows": invalid_obs_age_rows,
+        "invalid_obs_contract_rows": invalid_obs_contract_rows,
+        "observation_contract_violations_this_cycle": len(observation_contract_violations),
         "invalid_book_age_rows": invalid_book_age_rows,
         "triggers_this_cycle": triggers_this_cycle,
         "candidate_rows": triggers_this_cycle,
@@ -1507,6 +1902,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "taker_shares": float(args.shares),
         "maker_shares": float(args.maker_shares),
         "target_total_shares_per_signal": float(args.shares) + float(args.maker_shares),
+        "execution_profile": str(args.execution_profile),
+        "maker_cancel_buffer_sec": int(args.maker_cancel_buffer_sec),
         "max_city_days_per_day": int(args.max_city_days_per_day),
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
         "live_city_days_before_cycle_today": daily_city_day_count,
@@ -1522,7 +1919,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "legacy_plan_journal": (
             "live_only_legacy_until_phase5" if args.live else "deprecated_read_only"
         ),
-        "open_positions_total": len(positions),
+        "positions_total": len(positions),
+        "open_positions_total": len(open_positions),
         "settled_positions_total": len(settled_positions),
         "settled_positions_pending_canonical_fill_reconcile": (
             len(settled_positions) - len(settled_positions_with_local_pnl)

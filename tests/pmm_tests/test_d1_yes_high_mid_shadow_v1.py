@@ -132,6 +132,65 @@ def test_exact_celsius_current_selects_immediate_higher_bracket() -> None:
     assert d1_yes == ladder["38"]["yes"]
 
 
+def test_observation_invariant_blocks_station_day_running_max_regression() -> None:
+    previous = {
+        "city": "Singapore",
+        "target_date": "2026-07-19",
+        "station": "WSSS",
+        "running_max_c": 32.0,
+        "last_obs_utc": "2026-07-19T07:00:00Z",
+    }
+    rec = {
+        "city": "Singapore",
+        "target_date": "2026-07-19",
+        "station": "WSSS",
+        "current_temp_c": 31.0,
+        "running_max_c": 31.0,
+        "last_obs_utc": "2026-07-19T08:00:00Z",
+    }
+
+    reason, state, is_new = runner.advance_observation_invariant("Singapore", rec, previous)
+
+    assert reason == "station_day_running_max_regressed"
+    assert state["running_max_c"] == 32.0
+    assert is_new is True
+
+
+def test_observation_invariant_resets_on_new_local_date() -> None:
+    previous = {
+        "city": "Singapore",
+        "target_date": "2026-07-19",
+        "station": "WSSS",
+        "running_max_c": 32.0,
+    }
+    rec = {
+        "city": "Singapore",
+        "target_date": "2026-07-20",
+        "station": "WSSS",
+        "current_temp_c": 27.0,
+        "running_max_c": 27.0,
+        "last_obs_utc": "2026-07-19T16:00:00Z",
+    }
+
+    reason, state, is_new = runner.advance_observation_invariant("Singapore", rec, previous)
+
+    assert reason == ""
+    assert state["running_max_c"] == 27.0
+    assert is_new is False
+
+
+def test_observation_cache_freshness_rejects_stalled_or_future_cache() -> None:
+    now = datetime(2026, 7, 20, 2, 0, tzinfo=timezone.utc)
+
+    fresh_age, fresh = runner.observation_cache_freshness("2026-07-20T01:55:00Z", now, 10.0)
+    stale_age, stale = runner.observation_cache_freshness("2026-07-20T01:49:00Z", now, 10.0)
+    future_age, future = runner.observation_cache_freshness("2026-07-20T02:01:00Z", now, 10.0)
+
+    assert fresh_age == 5.0 and fresh is True
+    assert stale_age == 11.0 and stale is False
+    assert future_age == -1.0 and future is False
+
+
 def test_successful_live_orders_excludes_failed_submission(tmp_path: Path) -> None:
     path = tmp_path / "live_orders.jsonl"
     rows = [
@@ -237,8 +296,87 @@ def test_apply_live_fill_basis_does_not_invent_fill_for_resting_order() -> None:
     assert position["pnl_basis"] == "canonical_fill_reconcile_required_non_immediate"
 
 
+def test_reconcile_aggregates_taker_and_delayed_maker_fill_once() -> None:
+    position = {
+        "city": "Madrid",
+        "target_date": "2026-07-18",
+        "d1_bracket": "36",
+        "execution_mode": "tiny_live_split_5_taker_5_maker",
+    }
+    taker = {
+        "status": "submitted",
+        "city": "Madrid",
+        "target_date": "2026-07-18",
+        "bracket": "36",
+        "signal_side": "BUY_YES",
+        "child_order_role": "taker",
+        "exchange_response": {"place": {"status": "matched", "orderID": "taker-1", "takingAmount": "5", "makingAmount": "4.05"}},
+    }
+    maker = {
+        "status": "submitted",
+        "city": "Madrid",
+        "target_date": "2026-07-18",
+        "bracket": "36",
+        "signal_side": "BUY_YES",
+        "child_order_role": "maker",
+        "maker_only": True,
+        "exchange_response": {"place": {"status": "live", "orderID": "maker-1"}},
+    }
+    terminal_probe = {
+        "status": "blocked",
+        "city": "Madrid",
+        "target_date": "2026-07-18",
+        "bracket": "36",
+        "signal_side": "BUY_YES",
+        "execution_action": "d1_maker_cancel_after_observation",
+        "source_order_id": "maker-1",
+        "exchange_response": {
+            "error_classification": "cancel_only_not_confirmed",
+            "pre_place_cancel_response": {
+                "order_after_cancel": {
+                    "id": "maker-1",
+                    "status": "MATCHED",
+                    "original_size": "5",
+                    "size_matched": "5",
+                    "price": "0.8",
+                }
+            },
+        },
+    }
+
+    assert runner.reconcile_live_positions(position_map := {"madrid": position}, [taker, maker, terminal_probe]) == 1
+    assert position_map["madrid"]["position_shares"] == 10.0
+    assert position_map["madrid"]["entry_cost_usd"] == 8.05
+    assert position_map["madrid"]["fill_price"] == 0.805
+    assert position_map["madrid"]["estimated_fee_usd"] == round(5 * runner.fee(0.81), 6)
+    assert position_map["madrid"]["clob_order_ids"] == ["maker-1", "taker-1"]
+    assert runner.reconcile_live_positions(position_map, [taker, maker, terminal_probe]) == 0
+
+
+def test_terminal_maker_cancel_probe_is_handled_not_retried() -> None:
+    row = {
+        "execution_action": "d1_maker_cancel_after_observation",
+        "source_order_id": "maker-1",
+        "exchange_response": {
+            "error_classification": "cancel_only_not_confirmed",
+            "pre_place_cancel_response": {
+                "order_after_cancel": {"id": "maker-1", "status": "MATCHED"}
+            },
+        },
+    }
+
+    assert runner.handled_maker_source_order_ids([row]) == {"maker-1"}
+
+
 def test_live_signal_expands_to_five_taker_plus_five_maker() -> None:
-    args = Namespace(shares=5.0, maker_shares=5.0, order_ttl_min=45.0, mid_threshold=0.80)
+    args = Namespace(
+        shares=5.0,
+        maker_shares=5.0,
+        order_ttl_min=45.0,
+        mid_threshold=0.80,
+        maker_cancel_buffer_sec=90,
+        execution_profile=runner.DEFAULT_D1_EXECUTION_PROFILE,
+    )
     event = {
         "city": "Amsterdam",
         "target_date": "2026-07-16",
@@ -247,10 +385,12 @@ def test_live_signal_expands_to_five_taker_plus_five_maker() -> None:
         "d1_yes_direct_ask": 0.93,
         "d1_yes_direct_bid": 0.90,
         "d1_yes_mid": 0.915,
-        "minutes_to_next_obs": 12.0,
+        "obs_cadence_min": 30.0,
+        "obs_source": "aviationweather_metar",
+        "obs_station": "EHAM",
         "last_obs_utc": "2026-07-16T10:00:00Z",
     }
-    cycle = datetime.now(timezone.utc)
+    cycle = datetime(2026, 7, 16, 10, 5, tzinfo=timezone.utc)
 
     plans = runner.build_live_plans(event, args, cycle)
 
@@ -263,13 +403,170 @@ def test_live_signal_expands_to_five_taker_plus_five_maker() -> None:
     assert plans[0]["plan_id"] != plans[1]["plan_id"]
     assert plans[0]["maker_only"] is False
     assert plans[1]["maker_only"] is True
+    assert plans[0]["execution_profile"] == runner.DEFAULT_D1_EXECUTION_PROFILE
+    assert plans[1]["execution_profile"] == runner.DEFAULT_D1_EXECUTION_PROFILE
     assert plans[1]["execution_policy"] == "d1_yes_high_mid_maker_v1"
     assert plans[1]["limit_price"] == 0.901
-    assert plans[1]["order_ttl_min"] == 45.0
-    assert plans[1]["order_lifecycle_policy"] == "d1_maker_reprice_until_observation_v1"
-    assert plans[1]["maker_price_cap"] == 0.93
+    assert plans[1]["order_ttl_min"] == 23.5
+    assert plans[1]["order_lifecycle_policy"] == "maker_until_data_update"
+    assert plans[1]["maker_price_cap"] == 0.915
+    assert plans[1]["max_live_price"] == 0.915
+    assert plans[1]["maker_reprice_policy"] == "follow_best_bid"
+    assert plans[1]["maker_max_reprices"] == 3
     assert plans[1]["maker_lifecycle_root_observation_utc"] == "2026-07-16T10:00:00Z"
-    assert plans[1]["data_epoch_ts_utc"] == "2026-07-16T10:00:00Z"
+    assert plans[1]["data_epoch_ts_utc"] == "2026-07-16T10:00:00+00:00"
+    assert plans[1]["next_data_update_due_utc"] == "2026-07-16T10:30:00+00:00"
+    assert plans[1]["cancel_before_data_update_utc"] == "2026-07-16T10:28:30+00:00"
+    assert plans[1]["expires_at_utc"] == plans[1]["cancel_before_data_update_utc"]
+    assert event["maker_plan_status"] == "planned"
+
+
+def test_pre_update_blackout_keeps_taker_and_blocks_only_maker() -> None:
+    args = Namespace(
+        shares=5.0,
+        maker_shares=5.0,
+        order_ttl_min=45.0,
+        mid_threshold=0.80,
+        maker_cancel_buffer_sec=90,
+        execution_profile=runner.DEFAULT_D1_EXECUTION_PROFILE,
+    )
+    event = {
+        "city": "Wellington",
+        "target_date": "2026-07-17",
+        "d1_bracket": "15",
+        "d1_yes_token_id": "yes-15",
+        "d1_yes_direct_ask": 0.93,
+        "d1_yes_direct_bid": 0.87,
+        "d1_yes_mid": 0.90,
+        "obs_cadence_min": 30.0,
+        "obs_source": "aviationweather_metar",
+        "obs_station": "NZWN",
+        "last_obs_utc": "2026-07-17T00:30:00Z",
+    }
+
+    plans = runner.build_live_plans(
+        event,
+        args,
+        datetime(2026, 7, 17, 1, 2, tzinfo=timezone.utc),
+    )
+
+    assert [plan["child_order_role"] for plan in plans] == ["taker"]
+    assert event["maker_plan_status"] == "blocked"
+    assert "pre-data-update blackout" in event["maker_plan_blocker"]
+
+
+def test_taker_only_profile_disables_maker_without_changing_taker() -> None:
+    args = Namespace(
+        shares=5.0,
+        maker_shares=5.0,
+        order_ttl_min=45.0,
+        mid_threshold=0.80,
+        maker_cancel_buffer_sec=90,
+        execution_profile="d1_taker_only_v1",
+    )
+    event = {
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "d1_bracket": "25",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_direct_ask": 0.93,
+        "d1_yes_direct_bid": 0.90,
+        "d1_yes_mid": 0.915,
+    }
+
+    plans = runner.build_live_plans(
+        event,
+        args,
+        datetime(2026, 7, 16, 10, 5, tzinfo=timezone.utc),
+    )
+
+    assert [plan["child_order_role"] for plan in plans] == ["taker"]
+    assert event["maker_plan_status"] == "disabled"
+    assert event["maker_plan_blocker"] == "execution_profile_has_no_maker_leg"
+
+
+def test_shared_d1_engine_parity_preserves_split_child_contracts_from_legacy_plans() -> None:
+    args = Namespace(
+        shares=5.0,
+        maker_shares=5.0,
+        order_ttl_min=45.0,
+        mid_threshold=0.80,
+        maker_cancel_buffer_sec=90,
+        execution_profile=runner.DEFAULT_D1_EXECUTION_PROFILE,
+    )
+    event = {
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "d1_bracket": "25",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_direct_ask": 0.93,
+        "d1_yes_direct_bid": 0.90,
+        "d1_yes_mid": 0.915,
+        "obs_cadence_min": 30.0,
+        "obs_source": "aviationweather_metar",
+        "obs_station": "EHAM",
+        "last_obs_utc": "2026-07-16T10:00:00Z",
+    }
+    cycle = datetime(2026, 7, 16, 10, 5, tzinfo=timezone.utc)
+
+    legacy = runner.build_live_plans(event, args, cycle)
+    shared = runner.build_shared_d1_plan_parity(legacy, event)
+
+    assert len(shared.children) == len(legacy) == 2
+    assert shared.legacy_plan_ids == tuple(plan["plan_id"] for plan in legacy)
+    for legacy_plan, intent, child in zip(legacy, shared.intents, shared.children):
+        assert child.child_role == legacy_plan["child_order_role"]
+        assert float(child.requested_shares) == legacy_plan["size"]
+        assert child.maker_only is legacy_plan["maker_only"]
+        assert child.execution_policy == legacy_plan["execution_policy"]
+        assert intent.metadata["legacy_plan_id"] == legacy_plan["plan_id"]
+        assert intent.execution_profile == legacy_plan["execution_profile"]
+        assert intent.resolved_execution_profile == legacy_plan["execution_profile"]
+        assert intent.venue_side == legacy_plan["order_side"] == "BUY"
+        assert intent.outcome_side == "YES"
+        assert float(intent.strategy_price_cap) == (
+            legacy_plan["maker_price_cap"] if legacy_plan["maker_only"] else legacy_plan["limit_price"]
+        )
+        assert intent.constraints.deadline_utc == legacy_plan["expires_at_utc"]
+        assert intent.metadata["legacy_order_ttl_min"] == str(legacy_plan["order_ttl_min"])
+    assert shared.children[1].requested_shares == shared.intents[1].total_shares
+    assert shared.intents[1].data_epoch_ref == legacy[1]["data_epoch_ref"]
+    assert shared.intents[1].next_data_update_due_utc == legacy[1]["next_data_update_due_utc"]
+
+
+def test_shared_d1_engine_parity_keeps_taker_only_and_maker_disabled_legacy_shapes() -> None:
+    event = {
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "d1_bracket": "25",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_direct_ask": 0.93,
+        "d1_yes_direct_bid": 0.90,
+        "d1_yes_mid": 0.915,
+        "obs_cadence_min": 30.0,
+        "obs_source": "aviationweather_metar",
+        "obs_station": "EHAM",
+        "last_obs_utc": "2026-07-16T10:00:00Z",
+    }
+    cycle = datetime(2026, 7, 16, 10, 5, tzinfo=timezone.utc)
+    for execution_profile, maker_shares in (("d1_taker_only_v1", 5.0), (runner.DEFAULT_D1_EXECUTION_PROFILE, 0.0)):
+        args = Namespace(
+            shares=5.0,
+            maker_shares=maker_shares,
+            order_ttl_min=45.0,
+            mid_threshold=0.80,
+            maker_cancel_buffer_sec=90,
+            execution_profile=execution_profile,
+        )
+        legacy_event = dict(event)
+        legacy = runner.build_live_plans(legacy_event, args, cycle)
+        shared = runner.build_shared_d1_plan_parity(legacy, legacy_event)
+
+        assert [child.child_role for child in shared.children] == ["taker"]
+        assert [float(child.requested_shares) for child in shared.children] == [5.0]
+        assert shared.intents[0].strategy_price_cap == shared.intents[0].constraints.price_cap
+        assert shared.intents[0].execution_profile == execution_profile
+        assert shared.intents[0].venue_side == "BUY"
 
 
 def test_d1_non_live_uses_shared_runtime_and_restart_dedupe(tmp_path: Path) -> None:
@@ -282,10 +579,16 @@ def test_d1_non_live_uses_shared_runtime_and_restart_dedupe(tmp_path: Path) -> N
         "d1_yes_direct_ask": 0.93,
         "d1_yes_direct_bid": 0.90,
         "d1_yes_mid": 0.915,
+        "obs_source": "knmi",
+        "obs_cadence_min": 10.0,
         "minutes_to_next_obs": 12.0,
         "last_obs_utc": "2026-07-16T10:00:00Z",
     }
-    plans = runner.build_live_plans(event, args, datetime.now(timezone.utc))
+    plans = runner.build_live_plans(
+        event,
+        args,
+        datetime(2026, 7, 16, 10, 1, tzinfo=timezone.utc),
+    )
     compatibility = build_d1_legacy_plan_compatibility(legacy_plans=plans, event=event)
     kwargs = {
         "compatibility": compatibility,
@@ -320,9 +623,15 @@ def _resting_maker(now: datetime) -> dict:
         "maker_only": True,
         "size": 5.0,
         "posted_price": 0.901,
-        "maker_price_cap": 0.93,
+        "maker_price_cap": 0.915,
+        "execution_profile": runner.DEFAULT_D1_EXECUTION_PROFILE,
+        "order_lifecycle_policy": "maker_until_data_update",
+        "data_epoch_ref": "aviationweather_metar:eham:2026-07-16T10:00:00Z",
         "data_epoch_ts_utc": "2026-07-16T10:00:00Z",
-        "maker_lifecycle_reprice_count": 0,
+        "next_data_update_due_utc": (now + timedelta(minutes=42)).isoformat(),
+        "cancel_before_data_update_utc": (now + timedelta(minutes=40)).isoformat(),
+        "cancel_buffer_sec": 120,
+        "cancel_reason": "pre_data_update",
         "created_at_utc": (now - timedelta(minutes=2)).isoformat(),
         "expires_at_utc": (now + timedelta(minutes=40)).isoformat(),
         "exchange_response": {
@@ -332,10 +641,15 @@ def _resting_maker(now: datetime) -> dict:
 
 
 def _lifecycle_args() -> Namespace:
-    return Namespace(maker_shares=5.0, maker_reprice_refresh_sec=60.0, mid_threshold=0.80)
+    return Namespace(
+        maker_shares=5.0,
+        maker_reprice_refresh_sec=60.0,
+        mid_threshold=0.80,
+        execution_profile=runner.DEFAULT_D1_EXECUTION_PROFILE,
+    )
 
 
-def test_maker_reprices_upward_during_same_observation_epoch() -> None:
+def test_chase_profile_reprices_upward_but_stops_at_initial_mid() -> None:
     now = datetime(2026, 7, 16, 10, 5, tzinfo=timezone.utc)
     state = {
         "state_valid": True,
@@ -356,13 +670,81 @@ def test_maker_reprices_upward_during_same_observation_epoch() -> None:
     )
 
     assert decisions[0]["action"] == "d1_maker_reprice"
-    assert plans[0]["limit_price"] == 0.921
+    assert decisions[0]["next_price"] == 0.915
+    assert plans[0]["limit_price"] == 0.915
     assert plans[0]["maker_only"] is True
-    assert plans[0]["cancel_before_order_id"] == "maker-1"
+    assert plans[0]["cancel_only"] is False
     assert plans[0]["replacement_requires_order_state"] is True
 
 
-def test_new_observation_converts_unfilled_maker_to_capped_taker() -> None:
+def test_static_profile_rests_without_chasing() -> None:
+    now = datetime(2026, 7, 16, 10, 5, tzinfo=timezone.utc)
+    order = _resting_maker(now)
+    order["execution_profile"] = "d1_taker_plus_maker_static_v1"
+    state = {
+        "state_valid": True,
+        "triggered": True,
+        "observation_epoch_utc": "2026-07-16T10:00:00Z",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_mid": 0.925,
+        "d1_yes_direct_bid": 0.92,
+        "d1_yes_direct_ask": 0.93,
+    }
+
+    plans, decisions = runner.maker_lifecycle_plans(
+        live_rows=[order],
+        latest_states={"Amsterdam|2026-07-16": state},
+        args=_lifecycle_args(),
+        cycle_dt=now,
+    )
+
+    assert decisions[0]["action"] == ""
+    assert decisions[0]["maker_reprice_policy"] == "none"
+    assert decisions[0]["blocker"] == "d1_maker_resting_until_pre_data_update_deadline"
+    assert plans == []
+
+
+def test_chase_reprice_cancel_replace_preserves_maker_size(tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    state = {
+        "state_valid": True,
+        "triggered": True,
+        "observation_epoch_utc": "2026-07-16T10:00:00Z",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_mid": 0.925,
+        "d1_yes_direct_bid": 0.92,
+        "d1_yes_direct_ask": 0.93,
+    }
+    plans, _ = runner.maker_lifecycle_plans(
+        live_rows=[_resting_maker(now)],
+        latest_states={"Amsterdam|2026-07-16": state},
+        args=_lifecycle_args(),
+        cycle_dt=now,
+    )
+    plan_path = tmp_path / "plans.jsonl"
+    plan_path.write_text(json.dumps(plans[0]) + "\n", encoding="utf-8")
+    placed: list[dict] = []
+
+    result = execute_trade_plans(
+        plan_path=plan_path,
+        paper_out=tmp_path / "paper.jsonl",
+        live_out=tmp_path / "live.jsonl",
+        config=ExecutorConfig(live=True, confirm_live=True),
+        live_place_fn=lambda child: placed.append(child) or {"order_id": "maker-2"},
+        live_cancel_fn=lambda order_id: {
+            "cancel": {"canceled": [order_id], "not_canceled": {}},
+            "order_after_cancel": {"original_size": "5", "size_matched": "0"},
+        },
+    )
+
+    assert result["live_guard_blocks"] == 0
+    assert len(placed) == 1
+    assert placed[0]["size"] == 5.0
+    assert placed[0]["maker_only"] is True
+    assert placed[0]["execution_action"] == "d1_maker_reprice"
+
+
+def test_new_observation_cancels_unfilled_maker_without_taker_fallback() -> None:
     now = datetime(2026, 7, 16, 10, 35, tzinfo=timezone.utc)
     state = {
         "state_valid": True,
@@ -382,14 +764,15 @@ def test_new_observation_converts_unfilled_maker_to_capped_taker() -> None:
         cycle_dt=now,
     )
 
-    assert decisions[0]["action"] == "d1_maker_next_observation_taker_fallback"
-    assert plans[0]["maker_only"] is False
-    assert plans[0]["limit_price"] == 0.925
-    assert plans[0]["max_live_price"] == 0.93
-    assert plans[0]["replacement_requires_order_state"] is True
+    assert decisions[0]["action"] == "d1_maker_cancel_after_observation"
+    assert decisions[0]["blocker"] == "data_epoch_changed_no_taker_fallback"
+    assert plans[0]["maker_only"] is True
+    assert plans[0]["cancel_only"] is True
+    assert plans[0]["limit_price"] == 0.0
+    assert plans[0]["replacement_requires_order_state"] is False
 
 
-def test_fallback_plan_cancel_replace_uses_authoritative_remaining_shares(tmp_path: Path) -> None:
+def test_new_observation_plan_only_cancels_and_never_places_taker(tmp_path: Path) -> None:
     now = datetime(2026, 7, 16, 10, 35, tzinfo=timezone.utc)
     state = {
         "state_valid": True,
@@ -410,6 +793,7 @@ def test_fallback_plan_cancel_replace_uses_authoritative_remaining_shares(tmp_pa
     plan_path = tmp_path / "plans.jsonl"
     plan_path.write_text(json.dumps(plans[0]) + "\n", encoding="utf-8")
     placed: list[dict] = []
+    cancelled: list[str] = []
 
     result = execute_trade_plans(
         plan_path=plan_path,
@@ -417,16 +801,15 @@ def test_fallback_plan_cancel_replace_uses_authoritative_remaining_shares(tmp_pa
         live_out=tmp_path / "live.jsonl",
         config=ExecutorConfig(live=True, confirm_live=True),
         live_place_fn=lambda child: placed.append(child) or {"order_id": "fallback-1"},
-        live_cancel_fn=lambda order_id: {
-            "cancel": {"canceled": [order_id], "not_canceled": {}},
-            "order_after_cancel": {"original_size": "5", "size_matched": "0"},
-        },
+        live_cancel_fn=lambda order_id: (
+            cancelled.append(order_id)
+            or {"cancel": {"canceled": [order_id], "not_canceled": {}}}
+        ),
     )
 
     assert result["live_guard_blocks"] == 0
-    assert len(placed) == 1
-    assert placed[0]["size"] == 5.0
-    assert placed[0]["child_order_role"] == "d1_maker_next_observation_taker_fallback"
+    assert placed == []
+    assert cancelled == ["maker-1"]
 
 
 def test_new_observation_cancels_without_fallback_when_signal_changes() -> None:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import inspect
 import json
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 from scripts.ops import weather_current_yes_heat_death_tiny_live_v1 as live
 from src.strategies.weather_edge_v1.execution.engine import (
@@ -30,6 +33,11 @@ def _row(*, city: str = "Busan", ask: float = 0.84, ask_size: float = 20.0) -> d
         "city": city,
         "target_date": "2026-07-14",
         "decision_snapshot_ts_utc": "2026-07-14T04:08:00Z",
+        "obs_status": "ok",
+        "source_report_ts_utc": "2026-07-14T04:00:00Z",
+        "obs_age_minutes": 8.0,
+        "expected_report_cadence": 30.0,
+        "station_gap_state": "within_expected_cadence",
         "physical_confirmation_strong": True,
         "current_bracket": "30",
         "current_market_id": "m30",
@@ -162,6 +170,86 @@ def test_h1_builds_five_taker_plus_five_post_only_maker() -> None:
     assert taker["plan_id"] != maker["plan_id"]
     assert taker["allow_duplicate_signal_id"] is True
     assert maker["allow_duplicate_signal_id"] is True
+
+
+def test_shared_heat_death_engine_parity_preserves_split_entry_children() -> None:
+    _select_h1()
+    legacy = live.build_opportunity_plans(
+        _row(ask=0.97),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=False,
+        ttl_min=15,
+        maker_chase_window_min=3,
+    )
+    legacy_before = [dict(plan) for plan in legacy]
+
+    shared = live.build_shared_heat_death_plan_parity(legacy)
+
+    assert legacy == legacy_before
+    assert shared.legacy_plan_ids == tuple(plan["plan_id"] for plan in legacy)
+    assert [child.child_role for child in shared.children] == ["taker", "maker"]
+    assert [float(child.requested_shares) for child in shared.children] == [5.0, 5.0]
+    for legacy_plan, intent, child in zip(legacy, shared.intents, shared.children):
+        assert child.maker_only is legacy_plan["maker_only"]
+        assert child.execution_policy == legacy_plan["execution_policy"]
+        assert child.order_lifecycle_policy == legacy_plan["order_lifecycle_policy"]
+        assert intent.execution_profile == legacy_plan["execution_profile"]
+        assert intent.resolved_execution_profile == legacy_plan["execution_profile"]
+        assert intent.venue_side == legacy_plan["order_side"] == "BUY"
+        assert intent.outcome_side == "YES"
+        assert intent.signal_side == legacy_plan["signal_side"] == "BUY_YES"
+        assert intent.metadata["legacy_plan_id"] == legacy_plan["plan_id"]
+        assert intent.constraints.deadline_utc == legacy_plan["expires_at_utc"]
+    maker_intent = shared.intents[1]
+    assert float(maker_intent.constraints.price_cap) == legacy[1]["maker_price_cap"] == 0.97
+    assert maker_intent.metadata["legacy_maker_lifecycle_deadline_utc"] == legacy[1]["maker_lifecycle_deadline_utc"]
+    assert maker_intent.metadata["legacy_maker_fallback_eligible"] is True
+    assert float(maker_intent.metadata["legacy_maker_fallback_price_cap"]) == 0.97
+    assert shared.intents[0].metadata["legacy_maker_fallback_eligible"] is False
+    assert shared.intents[0].metadata["legacy_maker_fallback_price_cap"] is None
+
+
+def test_shared_heat_death_engine_parity_preserves_taker_only_entry() -> None:
+    _select_h2()
+    legacy = live.build_opportunity_plans(
+        _row(ask=0.84),
+        taker_shares=5,
+        maker_shares=0,
+        live_enabled=False,
+        ttl_min=15,
+    )
+
+    shared = live.build_shared_heat_death_plan_parity(legacy)
+
+    assert len(shared.children) == 1
+    assert shared.children[0].child_role == legacy[0]["child_order_role"] == "single"
+    assert shared.children[0].maker_only is False
+    assert float(shared.children[0].requested_shares) == legacy[0]["size"] == 5.0
+    assert shared.intents[0].execution_profile == "split_taker_maker_chase_v1"
+    assert shared.intents[0].metadata["legacy_maker_fallback_eligible"] is False
+    assert shared.intents[0].metadata["legacy_maker_fallback_price_cap"] is None
+
+
+def test_shared_heat_death_entry_bridge_rejects_lifecycle_replacement_plan() -> None:
+    _select_h1()
+    lifecycle = live.build_h1_maker_lifecycle_plan(
+        _submitted_h1_maker(now=datetime(2026, 7, 16, 6, 0, tzinfo=timezone.utc)),
+        action="h1_maker_reprice",
+        limit_price=0.969,
+        maker_only=True,
+        source_order_id="maker-order-1",
+        live_enabled=False,
+        now=datetime(2026, 7, 16, 6, 0, tzinfo=timezone.utc),
+    )
+
+    with pytest.raises(ValueError, match="rejects lifecycle replacement/cancel plans"):
+        live.build_shared_heat_death_plan_parity([lifecycle])
+
+
+def test_shared_heat_death_parity_bridge_is_not_called_by_normal_runner() -> None:
+    assert "build_shared_heat_death_plan_parity" not in inspect.getsource(live.run_once)
+    assert "build_shared_heat_death_plan_parity" not in inspect.getsource(live.execute_plans)
 
 
 def test_h1_maker_chase_has_no_reprice_count_limit_and_never_exceeds_initial_ask(
@@ -555,3 +643,107 @@ def test_latest_strong_rows_keeps_latest_fresh_city_day(tmp_path: Path) -> None:
     assert [(row["city"], row["decision_snapshot_ts_utc"]) for row in selected] == [
         ("Busan", "2026-07-14T04:08:00Z")
     ]
+
+
+def test_decision_state_index_only_parses_appended_rows(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "decisions.jsonl"
+    first = {**_row(city="Busan"), "decision_snapshot_ts_utc": "2026-07-14T04:08:00Z"}
+    second = {**_row(city="Tokyo"), "decision_snapshot_ts_utc": "2026-07-14T04:09:00Z"}
+    path.write_text(json.dumps(first) + "\n", encoding="utf-8")
+    loads = live.json.loads
+    parsed = 0
+
+    def counting_loads(payload):
+        nonlocal parsed
+        parsed += 1
+        return loads(payload)
+
+    monkeypatch.setattr(live.json, "loads", counting_loads)
+    index = live.DecisionStateIndex()
+    fresh, strong = index.refresh(
+        path,
+        max_snapshot_age_min=20,
+        now=datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc),
+    )
+    assert set(fresh) == {("Busan", "2026-07-14")}
+    assert [row["city"] for row in strong] == ["Busan"]
+    assert parsed == 1
+
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(second) + "\n")
+    fresh, strong = index.refresh(
+        path,
+        max_snapshot_age_min=20,
+        now=datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc),
+    )
+    assert set(fresh) == {("Busan", "2026-07-14"), ("Tokyo", "2026-07-14")}
+    assert sorted(row["city"] for row in strong) == ["Busan", "Tokyo"]
+    assert parsed == 2
+
+
+def test_decision_state_index_restarts_after_file_replacement(tmp_path: Path) -> None:
+    path = tmp_path / "decisions.jsonl"
+    path.write_text(json.dumps(_row(city="Busan")) + "\n", encoding="utf-8")
+    index = live.DecisionStateIndex()
+    index.refresh(
+        path,
+        max_snapshot_age_min=20,
+        now=datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc),
+    )
+
+    replacement = tmp_path / "replacement.jsonl"
+    replacement.write_text(json.dumps(_row(city="Tokyo")) + "\n", encoding="utf-8")
+    replacement.replace(path)
+    fresh, _ = index.refresh(
+        path,
+        max_snapshot_age_min=20,
+        now=datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc),
+    )
+
+    assert set(fresh) == {("Tokyo", "2026-07-14")}
+
+
+def test_latest_strong_rows_rejects_fresh_snapshot_with_stale_observation(tmp_path: Path) -> None:
+    path = tmp_path / "decisions.jsonl"
+    rows = [
+        {**_row(city="Good"), "decision_snapshot_ts_utc": "2026-07-14T04:08:00Z"},
+        {
+            **_row(city="Stale"),
+            "decision_snapshot_ts_utc": "2026-07-14T04:08:00Z",
+            "station_gap_state": "beyond_expected_cadence",
+        },
+        {
+            **_row(city="Failed"),
+            "decision_snapshot_ts_utc": "2026-07-14T04:08:00Z",
+            "obs_status": "fetch_failed",
+        },
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    selected = live.latest_strong_rows(
+        path,
+        max_snapshot_age_min=20,
+        now=datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc),
+    )
+
+    assert [row["city"] for row in selected] == ["Good"]
+
+
+def test_legacy_terminal_cancel_failure_is_handled_once(tmp_path: Path) -> None:
+    path = tmp_path / "live.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "source_order_id": "maker-order-1",
+                "execution_action": "h1_maker_cancel_stale_thesis",
+                "exchange_response": {
+                    "error_classification": "cancel_only_not_confirmed",
+                    "error_reason": "not_canceled:order can't be found - already canceled or matched",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert live.handled_maker_source_order_ids(path) == {"maker-order-1"}

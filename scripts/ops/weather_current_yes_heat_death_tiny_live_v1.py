@@ -30,7 +30,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -38,6 +38,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops import weather_current_yes_heat_death_shadow_v1 as shadow
 from src.strategies.weather_edge_v1.execution.engine import (
+    HeatDeathLegacyPlanCompatibility,
     build_heat_death_legacy_plan_compatibility,
 )
 from src.strategies.weather_edge_v1.runtime.non_live import (
@@ -113,18 +114,23 @@ def stable_hash(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(json.dumps(dict(payload), sort_keys=True).encode("utf-8")).hexdigest()[:24]
 
 
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
+def iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
     if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict):
-            rows.append(row)
-    return rows
+        return
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict):
+                yield row
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Compatibility helper for small files; large scans should use iter_jsonl."""
+
+    return list(iter_jsonl(path))
 
 
 def write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -160,7 +166,7 @@ def signal_id(row: Mapping[str, Any]) -> str:
 def submitted_signal_ids(live_orders: Path) -> set[str]:
     return {
         str(row.get("signal_id"))
-        for row in read_jsonl(live_orders)
+        for row in iter_jsonl(live_orders)
         if str(row.get("status") or "") == "submitted" and str(row.get("signal_id") or "")
     }
 
@@ -169,7 +175,7 @@ def submitted_city_days(live_order_paths: list[Path]) -> set[tuple[str, str]]:
     return {
         (str(row.get("city") or ""), str(row.get("target_date") or ""))
         for path in live_order_paths
-        for row in read_jsonl(path)
+        for row in iter_jsonl(path)
         if str(row.get("status") or "") == "submitted"
         and str(row.get("city") or "")
         and str(row.get("target_date") or "")
@@ -179,7 +185,7 @@ def submitted_city_days(live_order_paths: list[Path]) -> set[tuple[str, str]]:
 def submitted_today_city_day_count(live_order_paths: list[Path], *, now: datetime) -> int:
     city_days: set[tuple[str, str]] = set()
     for path in live_order_paths:
-        for row in read_jsonl(path):
+        for row in iter_jsonl(path):
             if str(row.get("status") or "") != "submitted":
                 continue
             created = parse_utc(row.get("created_at_utc"))
@@ -191,29 +197,131 @@ def submitted_today_city_day_count(live_order_paths: list[Path], *, now: datetim
     return len(city_days)
 
 
+class DecisionStateIndex:
+    """Incremental latest-row index for the append-only shadow decision log."""
+
+    def __init__(self) -> None:
+        self._path: Path | None = None
+        self._identity: tuple[int, int] | None = None
+        self._offset = 0
+        self._latest: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+
+    def _reset(self, path: Path, identity: tuple[int, int]) -> None:
+        self._path = path
+        self._identity = identity
+        self._offset = 0
+        self._latest.clear()
+
+    def refresh(
+        self,
+        decisions_path: Path,
+        *,
+        max_snapshot_age_min: float,
+        now: datetime,
+    ) -> tuple[dict[tuple[str, str], dict[str, Any]], list[dict[str, Any]]]:
+        try:
+            stat = decisions_path.stat()
+        except FileNotFoundError:
+            self._path = decisions_path
+            self._identity = None
+            self._offset = 0
+            self._latest.clear()
+            return {}, []
+
+        identity = (stat.st_dev, stat.st_ino)
+        if self._path != decisions_path or self._identity != identity or stat.st_size < self._offset:
+            self._reset(decisions_path, identity)
+
+        with decisions_path.open("rb") as fh:
+            fh.seek(self._offset)
+            while True:
+                line_start = fh.tell()
+                raw_line = fh.readline()
+                if not raw_line:
+                    break
+                if not raw_line.endswith(b"\n"):
+                    # Do not consume an append that is still in progress.
+                    self._offset = line_start
+                    break
+                self._offset = fh.tell()
+                try:
+                    row = json.loads(raw_line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                city = str(row.get("city") or "")
+                target_date = str(row.get("target_date") or "")
+                snapshot_ts = parse_utc(row.get("decision_snapshot_ts_utc"))
+                if not city or not target_date or snapshot_ts is None:
+                    continue
+                key = (city, target_date)
+                prior = self._latest.get(key)
+                if prior is None or snapshot_ts > prior[0]:
+                    self._latest[key] = (snapshot_ts, row)
+
+        fresh: dict[tuple[str, str], dict[str, Any]] = {}
+        expired: list[tuple[str, str]] = []
+        for key, (snapshot_ts, row) in self._latest.items():
+            age_min = (now - snapshot_ts).total_seconds() / 60.0
+            if age_min > max_snapshot_age_min:
+                expired.append(key)
+            elif age_min >= -1.0:
+                fresh[key] = row
+        for key in expired:
+            del self._latest[key]
+
+        strong = [
+            row
+            for row in fresh.values()
+            if bool(row.get("physical_confirmation_strong")) and observation_evidence_is_valid(row)
+        ]
+        return fresh, strong
+
+
+def latest_decision_rows(
+    decisions_path: Path,
+    *,
+    max_snapshot_age_min: float,
+    now: datetime,
+) -> tuple[dict[tuple[str, str], dict[str, Any]], list[dict[str, Any]]]:
+    return DecisionStateIndex().refresh(
+        decisions_path,
+        max_snapshot_age_min=max_snapshot_age_min,
+        now=now,
+    )
+
+
 def latest_strong_rows(
     decisions_path: Path,
     *,
     max_snapshot_age_min: float,
     now: datetime,
 ) -> list[dict[str, Any]]:
-    latest: dict[tuple[str, str], dict[str, Any]] = {}
-    for row in read_jsonl(decisions_path):
-        if not bool(row.get("physical_confirmation_strong")):
-            continue
-        city = str(row.get("city") or "")
-        target_date = str(row.get("target_date") or "")
-        snapshot_ts = parse_utc(row.get("decision_snapshot_ts_utc"))
-        if not city or not target_date or snapshot_ts is None:
-            continue
-        age_min = (now - snapshot_ts).total_seconds() / 60.0
-        if age_min < -1.0 or age_min > max_snapshot_age_min:
-            continue
-        key = (city, target_date)
-        prior = latest.get(key)
-        if prior is None or str(row.get("decision_snapshot_ts_utc")) > str(prior.get("decision_snapshot_ts_utc")):
-            latest[key] = row
-    return list(latest.values())
+    return latest_decision_rows(
+        decisions_path,
+        max_snapshot_age_min=max_snapshot_age_min,
+        now=now,
+    )[1]
+
+
+def observation_evidence_is_valid(row: Mapping[str, Any]) -> bool:
+    """Validate source evidence, not alpha strength, before live eligibility."""
+
+    if str(row.get("obs_status") or "").strip().lower() != "ok":
+        return False
+    if str(row.get("station_gap_state") or "").strip() != "within_expected_cadence":
+        return False
+    age = finite(row.get("obs_age_minutes") or row.get("obs_age_min"))
+    cadence = finite(row.get("expected_report_cadence") or row.get("observation_cadence_min"))
+    report_ts = parse_utc(row.get("source_report_ts_utc"))
+    return bool(
+        report_ts is not None
+        and age is not None
+        and age >= 0
+        and cadence is not None
+        and cadence > 0
+    )
 
 
 def latest_fresh_rows(
@@ -222,21 +330,11 @@ def latest_fresh_rows(
     max_snapshot_age_min: float,
     now: datetime,
 ) -> dict[tuple[str, str], dict[str, Any]]:
-    latest: dict[tuple[str, str], dict[str, Any]] = {}
-    for row in read_jsonl(decisions_path):
-        city = str(row.get("city") or "")
-        target_date = str(row.get("target_date") or "")
-        snapshot_ts = parse_utc(row.get("decision_snapshot_ts_utc"))
-        if not city or not target_date or snapshot_ts is None:
-            continue
-        age_min = (now - snapshot_ts).total_seconds() / 60.0
-        if age_min < -1.0 or age_min > max_snapshot_age_min:
-            continue
-        key = (city, target_date)
-        prior = latest.get(key)
-        if prior is None or str(row.get("decision_snapshot_ts_utc")) > str(prior.get("decision_snapshot_ts_utc")):
-            latest[key] = row
-    return latest
+    return latest_decision_rows(
+        decisions_path,
+        max_snapshot_age_min=max_snapshot_age_min,
+        now=now,
+    )[0]
 
 
 def live_order_id(row: Mapping[str, Any]) -> str:
@@ -252,16 +350,22 @@ def live_order_id(row: Mapping[str, Any]) -> str:
 
 def handled_maker_source_order_ids(live_orders: Path) -> set[str]:
     handled: set[str] = set()
-    for row in read_jsonl(live_orders):
+    for row in iter_jsonl(live_orders):
         source_order_id = str(row.get("source_order_id") or "")
         action = str(row.get("execution_action") or "")
         if not source_order_id or not action.startswith(("h1_maker_", "h2_maker_")):
             continue
         response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
-        if str(response.get("error_classification") or "") in {
+        error_classification = str(response.get("error_classification") or "")
+        error_reason = str(response.get("error_reason") or "").lower().replace("cancelled", "canceled")
+        terminal = error_classification in {
+            "source_order_terminal_no_cancel_needed",
+            "source_order_terminal_no_replacement",
+        } or "already canceled or matched" in error_reason
+        if error_classification in {
             "pre_place_cancel_not_confirmed",
             "cancel_only_not_confirmed",
-        }:
+        } and not terminal:
             continue
         handled.add(source_order_id)
     return handled
@@ -382,6 +486,25 @@ def build_plan(
         "source_shadow_decision_id": str(row.get("shadow_decision_id") or ""),
         "source_snapshot_file": str(row.get("snapshot_file") or ""),
         "decision_snapshot_ts_utc": str(row.get("decision_snapshot_ts_utc") or ""),
+        "condition_id": str(row.get("current_condition_id") or ""),
+        "forecast_source": str(row.get("forecast_source") or ""),
+        "model_version": str(row.get("model_version") or ""),
+        "forecast_values_hash": str(row.get("forecast_values_hash") or ""),
+        "forecast_peak_hour_local": row.get("forecast_peak_hour_local"),
+        "forecast_peak_source": str(row.get("forecast_peak_source") or ""),
+        "source_profile_id": str(row.get("source_profile_id") or ""),
+        "obs_status": str(row.get("obs_status") or ""),
+        "obs_source": str(row.get("obs_source") or ""),
+        "station": str(row.get("station") or ""),
+        "source_report_ts_utc": str(row.get("source_report_ts_utc") or ""),
+        "fetched_at_utc": str(row.get("fetched_at_utc") or ""),
+        "obs_age_minutes": row.get("obs_age_minutes"),
+        "expected_report_cadence": row.get("expected_report_cadence"),
+        "station_gap_state": str(row.get("station_gap_state") or ""),
+        "current_native": row.get("current_native"),
+        "running_native": row.get("running_native"),
+        "warming_state": str(row.get("warming_state") or ""),
+        "feature_frame_ref": row.get("feature_frame_ref"),
         "fresh_book_fetched_at_utc": str(row.get("fresh_current_yes_book_fetched_at_utc") or ""),
         "physical_support_count": row.get("physical_support_count"),
         "physical_support_reasons": row.get("physical_support_reasons"),
@@ -443,6 +566,14 @@ def build_opportunity_plans(
             )
         )
     return plans
+
+
+def build_shared_heat_death_plan_parity(
+    legacy_plans: list[dict[str, Any]],
+) -> HeatDeathLegacyPlanCompatibility:
+    """Test-only bridge; ``build_opportunity_plans`` remains runner authority."""
+
+    return build_heat_death_legacy_plan_compatibility(legacy_plans=legacy_plans)
 
 
 def build_h1_maker_lifecycle_plan(
@@ -554,7 +685,7 @@ def h1_maker_lifecycle_plans(
     action_prefix = "h1_maker" if ACTIVE_HEAD == "h1_late_carry" else "h2_maker"
     handled = handled_maker_source_order_ids(live_orders)
     candidates: list[dict[str, Any]] = []
-    for row in read_jsonl(live_orders):
+    for row in iter_jsonl(live_orders):
         if str(row.get("status") or "") != "submitted" or not bool(row.get("maker_only")):
             continue
         if str(row.get("strategy_instance") or "") != STRATEGY_INSTANCE:
@@ -773,7 +904,11 @@ def execute_plans(
     }
 
 
-def run_once(args: argparse.Namespace) -> dict[str, Any]:
+def run_once(
+    args: argparse.Namespace,
+    *,
+    decision_index: DecisionStateIndex | None = None,
+) -> dict[str, Any]:
     global STRATEGY_INSTANCE, ACTIVE_HEAD
     if args.live and not args.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
@@ -800,12 +935,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     decisions_path = Path(args.shadow_decisions)
     live_orders = output_dir / "live_orders.jsonl"
     now = datetime.now(timezone.utc)
-    latest_rows = latest_fresh_rows(
-        decisions_path,
-        max_snapshot_age_min=float(args.max_snapshot_age_min),
-        now=now,
-    )
-    rows = latest_strong_rows(
+    latest_rows, rows = (decision_index or DecisionStateIndex()).refresh(
         decisions_path,
         max_snapshot_age_min=float(args.max_snapshot_age_min),
         now=now,
@@ -954,9 +1084,13 @@ def main() -> int:
     if args.command == "run":
         print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True))
         return 0
+    decision_index = DecisionStateIndex()
     while True:
         try:
-            print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True), flush=True)
+            print(
+                json.dumps(run_once(args, decision_index=decision_index), ensure_ascii=False, sort_keys=True),
+                flush=True,
+            )
         except Exception as exc:  # noqa: BLE001
             print(json.dumps({"status": "error", "error": f"{type(exc).__name__}: {exc}"}), flush=True)
         time.sleep(max(10.0, float(args.interval_seconds)))
