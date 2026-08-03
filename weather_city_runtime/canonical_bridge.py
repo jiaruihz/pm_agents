@@ -27,6 +27,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _validate_temporary_db_path(path: Path) -> Path:
     resolved = path.resolve()
+    production_compatibility_path = (ROOT / "runtime" / "weather.db").resolve()
+    if resolved == production_compatibility_path:
+        raise ValueError("Phase 2 canonical bridge may write only research/temp DB")
     allowed_roots = (
         Path(tempfile.gettempdir()).resolve(),
         Path("/tmp").resolve(),
