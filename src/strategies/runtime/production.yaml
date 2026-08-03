@@ -51,7 +51,18 @@ managed_runtimes:
     start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
     max_health_age_sec: 180
-    dependencies: [weather_data_feed_jrs]
+    dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs, weather_knmi_first_seen_ladder_v1]
+    recovery_policy: safe
+
+  - instance_id: weather_knmi_first_seen_ladder_v1
+    tmux_session: weather_knmi_first_seen_ladder_v1
+    role: market_collector
+    execution_mode: collector
+    checkout_root: /Users/deepsleep/projects/pm_agents
+    start_script: scripts/ops/start_weather_knmi_first_seen_ladder_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/state.json
+    max_health_age_sec: 180
+    dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs]
     recovery_policy: safe
 
   - instance_id: current_yes_core_carry_tiny_live_v2

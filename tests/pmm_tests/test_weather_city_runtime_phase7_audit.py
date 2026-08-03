@@ -105,6 +105,9 @@ def test_phase7_audit_accepts_five_city_shadow_without_execution(tmp_path: Path)
     assert report["sections"]["config"]["declared_cities"] == [
         "Amsterdam", "Busan", "Helsinki", "Seoul", "Tokyo"
     ]
+    assert report["sections"]["config"]["coverage_only_cities"] == [
+        "Busan", "Seoul"
+    ]
     assert report["sections"]["raw_runtime"]["intent_rows"] == 1
     assert report["execution_impact"]["orders_created"] == 0
 

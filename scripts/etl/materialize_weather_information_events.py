@@ -179,6 +179,51 @@ def _legacy_high_frequency_event(
     )
 
 
+def _legacy_knmi_event(
+    row: Mapping[str, Any], path: Path
+) -> dict[str, Any] | None:
+    """Rebuild exact KNMI first-seen rows written before event headers existed."""
+    if str(row.get("source") or "") != "knmi":
+        return None
+    observation_time = str(row.get("observation_time_utc") or "")
+    city = str(row.get("city") or "")
+    station = str(
+        row.get("station")
+        or row.get("wigos_station_id")
+        or row.get("knmi_station_code")
+        or ""
+    )
+    first_seen = str(
+        row.get("knmi_first_seen_at_utc")
+        or row.get("source_first_seen_at_utc")
+        or ""
+    )
+    if not observation_time or not city or not station or not first_seen:
+        return None
+    content_key = "|".join((city, station, observation_time))
+    return build_information_event(
+        event_kind="observation",
+        event_role="new_content",
+        source="knmi",
+        city=city,
+        station_id=station,
+        provider_item_id=observation_time,
+        content_key=content_key,
+        normalized_payload=normalized_observation_payload(row),
+        source_event_ts_utc=observation_time,
+        detected_at_utc=first_seen,
+        first_seen_at_utc=first_seen,
+        available_at_utc=str(
+            row.get("available_at_utc")
+            or row.get("fetched_at_utc")
+            or first_seen
+        ),
+        pit_lineage_class="collector_exact",
+        raw_source_path=str(path),
+        raw_row_hash=str(row.get("payload_hash") or canonical_json_hash(row)),
+    )
+
+
 def _events_from_row(row: Mapping[str, Any], path: Path) -> Iterator[tuple[dict[str, Any], Mapping[str, Any]]]:
     if row.get("information_event_id"):
         event = dict(row)
@@ -188,6 +233,7 @@ def _events_from_row(row: Mapping[str, Any], path: Path) -> Iterator[tuple[dict[
         legacy = (
             _legacy_forecast_event(row, path)
             or _legacy_observation_event(row, path)
+            or _legacy_knmi_event(row, path)
             or _legacy_high_frequency_event(row, path)
         )
         if legacy is not None:

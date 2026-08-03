@@ -4,7 +4,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
+DEFAULT_PY="$ROOT/.venv/bin/python"
+if [[ ! -x "$DEFAULT_PY" ]]; then
+  # Production uses a clean strategy checkout and the operational repo's reviewed venv.
+  DEFAULT_PY="/Users/deepsleep/projects/pm_agents/.venv/bin/python"
+fi
+PY="${PYTHON_BIN:-$DEFAULT_PY}"
 CONFIG="${CITY_PROBABILITY_RUNTIME_CONFIG:-$ROOT/configs/weather/city_probability_runtime_v3.json}"
 OUTPUT_DIR="${CITY_PROBABILITY_RUNTIME_OUTPUT_DIR:-$RUNTIME_ROOT/output/city_probability_runtime_v3}"
 SESSION="weather_city_probability_runtime_v3"

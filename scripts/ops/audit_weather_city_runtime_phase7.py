@@ -25,7 +25,7 @@ FRAMEWORK_ID = "weather_city_intraday_runtime_v1"
 STRATEGY_FAMILY = "weather.city_intraday_probability"
 RUNTIME_ID = "weather_city_probability_runtime_v3"
 EXPECTED_CITIES = ("Amsterdam", "Busan", "Helsinki", "Seoul", "Tokyo")
-COVERAGE_ONLY_CITIES = ("Amsterdam", "Busan", "Seoul")
+COVERAGE_ONLY_CITIES = ("Busan", "Seoul")
 FORBIDDEN_EXECUTION_PATTERNS = {
     "direct_clob_client": re.compile(r"\bClobClient\b|\bpy_clob_client(?:_v2)?\b"),
     "legacy_order_executor": re.compile(r"weather_order_executor"),

@@ -17,6 +17,9 @@ from src.strategies.weather_city_probability_shadow import (
     ObservationCoverageAdapter,
     ShadowRuntime,
 )
+from src.strategies.weather_city_probability_shadow.amsterdam import (
+    AmsterdamKnmiRemainingHeatV7Adapter,
+)
 from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
 from src.strategies.weather_city_probability_shadow.tokyo import TokyoMarketAnchorAdapter
 from weather_city_runtime import DecisionContractJournalSink
@@ -34,6 +37,7 @@ def main() -> None:
     runtime = ShadowRuntime(
         config,
         {
+            "amsterdam_knmi_remaining_heat_v7": AmsterdamKnmiRemainingHeatV7Adapter(),
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
             "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),
             "tokyo_overshoot_market_residual_v2": TokyoMarketAnchorAdapter(),
