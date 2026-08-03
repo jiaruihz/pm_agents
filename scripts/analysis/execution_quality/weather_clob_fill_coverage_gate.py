@@ -37,13 +37,14 @@ def load_order_caps(conn: sqlite3.Connection) -> dict[tuple[str, str], dict[str,
           o.posted_price,
           o.cost_usd,
           o.notional,
-          o.exchange_response,
-          sig.city,
-          sig.target_date,
-          sig.bracket
+          json_extract(o.exchange_response, '$.place.makingAmount') AS exchange_cost,
+          json_extract(o.exchange_response, '$.place.takingAmount') AS exchange_shares,
+          json_extract(o.exchange_response, '$.maker_only') AS maker_only,
+          lower(COALESCE(json_extract(o.exchange_response, '$.place.status'), '')) AS place_status,
+          NULL AS city,
+          NULL AS target_date,
+          NULL AS bracket
         FROM orders o
-        JOIN plans p ON p.plan_id = o.plan_id
-        JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN order_execution_aliases alias
           ON alias.alias_execution_id = o.execution_id
         WHERE o.venue='polymarket_clob'
@@ -56,11 +57,9 @@ def load_order_caps(conn: sqlite3.Connection) -> dict[tuple[str, str], dict[str,
         exchange_cost = 0.0
         exchange_shares = 0.0
         try:
-            response = json.loads(row["exchange_response"] or "{}")
-            place = response.get("place") or {}
-            exchange_cost = float(place.get("makingAmount") or 0.0)
-            exchange_shares = float(place.get("takingAmount") or 0.0)
-        except (TypeError, ValueError, json.JSONDecodeError):
+            exchange_cost = float(row["exchange_cost"] or 0.0)
+            exchange_shares = float(row["exchange_shares"] or 0.0)
+        except (TypeError, ValueError):
             exchange_cost = 0.0
             exchange_shares = 0.0
         shares = float(row["shares"] or 0.0)
@@ -79,6 +78,8 @@ def load_order_caps(conn: sqlite3.Connection) -> dict[tuple[str, str], dict[str,
             "city": row["city"],
             "target_date": row["target_date"],
             "bracket": row["bracket"],
+            "maker_only": bool(row["maker_only"]),
+            "place_status": str(row["place_status"] or ""),
         }
     return out
 
@@ -381,13 +382,16 @@ def order_identity_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
-def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
+def fee_lineage_summary(
+    conn: sqlite3.Connection,
+    *,
+    order_caps: dict[tuple[str, str], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     tables = {
         str(row[0])
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     has_adjustments = "fill_fee_adjustments" in tables
-    has_order_aliases = "order_execution_aliases" in tables
     has_validity_adjustments = "fill_validity_adjustments" in tables
     fill_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(fills)").fetchall()
@@ -401,13 +405,6 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
         else "SELECT NULL AS fill_id, 0.0 AS fee_delta_usd, 0 AS adjustment_rows, "
         "NULL AS fee_source, NULL AS fee_evidence_class WHERE 0"
     )
-    alias_join = (
-        "LEFT JOIN order_execution_aliases alias "
-        "ON alias.alias_execution_id = o.execution_id"
-        if has_order_aliases
-        else ""
-    )
-    alias_filter = "AND alias.alias_execution_id IS NULL" if has_order_aliases else ""
     validity_join = (
         "LEFT JOIN fill_validity_adjustments validity ON validity.fill_id = f.fill_id"
         if has_validity_adjustments
@@ -418,6 +415,7 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
         if has_validity_adjustments
         else ""
     )
+    order_caps = order_caps if order_caps is not None else load_order_caps(conn)
     rows = conn.execute(
         f"""
         WITH fee_adj AS ({adjustment_cte})
@@ -425,9 +423,6 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
           f.fill_id,
           f.execution_id,
           f.order_id,
-          sig.city,
-          sig.target_date,
-          o.order_side,
           f.filled_shares,
           f.filled_price,
           f.fees_usd AS base_fee_usd,
@@ -435,20 +430,11 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
           f.fees_usd + COALESCE(fee_adj.fee_delta_usd, 0.0) AS effective_fee_usd,
           COALESCE(fee_adj.adjustment_rows, 0) AS adjustment_rows,
           COALESCE(fee_adj.fee_source, {base_source_expr}) AS effective_fee_source,
-          fee_adj.fee_evidence_class,
-          COALESCE(CAST(json_extract(o.exchange_response, '$.maker_only') AS INTEGER), 0) AS maker_only,
-          lower(COALESCE(json_extract(o.exchange_response, '$.place.status'), '')) AS place_status
+          fee_adj.fee_evidence_class
         FROM fills f
-        JOIN orders o ON o.execution_id = f.execution_id
-        JOIN plans p ON p.plan_id = o.plan_id
-        JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN fee_adj ON fee_adj.fill_id = f.fill_id
-        {alias_join}
         {validity_join}
-        WHERE o.venue='polymarket_clob'
-          AND o.status='submitted'
-          AND f.status IN ('filled', 'partial')
-          {alias_filter}
+        WHERE f.status IN ('filled', 'partial')
           {validity_filter}
         ORDER BY f.filled_at_utc, f.fill_id
         """
@@ -456,6 +442,7 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     counts = {"exact": 0, "maker_zero": 0, "estimate": 0, "unknown": 0}
     unknown_rows: list[dict[str, Any]] = []
     invalid_rows: list[dict[str, Any]] = []
+    eligible_rows = 0
     exact_sources = {
         "authenticated_taker_fee",
         "public_activity_tx_exact",
@@ -463,6 +450,18 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     }
     for raw_row in rows:
         row = dict(raw_row)
+        cap = order_caps.get((str(row.get("execution_id") or ""), str(row.get("order_id") or "")))
+        if cap is None:
+            continue
+        eligible_rows += 1
+        row.update(
+            {
+                "city": cap.get("city"),
+                "target_date": cap.get("target_date"),
+                "maker_only": bool(cap.get("maker_only")),
+                "place_status": str(cap.get("place_status") or ""),
+            }
+        )
         source = str(row.get("effective_fee_source") or "legacy_unknown")
         evidence_class = str(row.get("fee_evidence_class") or "")
         maker_only = bool(row.get("maker_only"))
@@ -482,7 +481,7 @@ def fee_lineage_summary(conn: sqlite3.Connection) -> dict[str, Any]:
         ):
             invalid_rows.append(row)
     return {
-        "rows": len(rows),
+        "rows": eligible_rows,
         "lineage_counts": counts,
         "unknown_fee_lineage_rows": len(unknown_rows),
         "sample_unknown_fee_lineage_rows": unknown_rows[:25],
@@ -516,7 +515,7 @@ def main() -> int:
     db_fill_ids = _fill_id_set(raw_db_rows)
     facts = fact_summary(conn)
     order_identity = order_identity_summary(conn)
-    fee_lineage = fee_lineage_summary(conn)
+    fee_lineage = fee_lineage_summary(conn, order_caps=order_caps)
     cache_filters = load_cache_filters(conn)
     payload: dict[str, Any] = {
         "db": str(args.db),

@@ -46,8 +46,9 @@ def test_fill_gate_requires_fee_or_adjustment_for_known_matched_taker() -> None:
     conn.executescript(
         """
         CREATE TABLE orders (
-          execution_id TEXT, plan_id TEXT, venue TEXT, status TEXT,
-          order_side TEXT, exchange_response TEXT
+          execution_id TEXT, order_id TEXT, plan_id TEXT, venue TEXT, status TEXT,
+          order_side TEXT, exchange_response TEXT, shares REAL,
+          limit_price REAL, posted_price REAL, cost_usd REAL, notional REAL
         );
         CREATE TABLE plans (plan_id TEXT, signal_id TEXT);
         CREATE TABLE signals (signal_id TEXT, city TEXT, target_date TEXT);
@@ -59,11 +60,13 @@ def test_fill_gate_requires_fee_or_adjustment_for_known_matched_taker() -> None:
           adjustment_id TEXT, fill_id TEXT, fee_delta_usd REAL,
           fee_source TEXT, fee_evidence_class TEXT
         );
+        CREATE TABLE order_execution_aliases (alias_execution_id TEXT);
         INSERT INTO signals VALUES ('signal', 'Busan', '2026-07-09');
         INSERT INTO plans VALUES ('plan', 'signal');
         INSERT INTO orders VALUES (
-          'exec', 'plan', 'polymarket_clob', 'submitted', 'BUY_NO',
-          '{"maker_only":false,"place":{"status":"matched"}}'
+          'exec', 'order', 'plan', 'polymarket_clob', 'submitted', 'BUY_NO',
+          '{"maker_only":false,"place":{"status":"matched"}}',
+          5, 0.67, 0.67, 3.35, 3.35
         );
         INSERT INTO fills VALUES ('fill', 'exec', 'order', 5, 0.67, 0, 'filled', '2026-07-09T03:51:47Z');
         """
