@@ -714,6 +714,48 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
     }
 
 
+def _run_restart(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dict[str, Any]:
+    script = runtime.resolved_restart_script()
+    if script is None:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "blocked",
+            "reason": "restart_contract_missing",
+        }
+    if runtime.expected_live and not confirm_live:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "blocked",
+            "reason": "confirm_live_required",
+        }
+    if not script.exists():
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": f"restart_script_missing:{script}",
+        }
+    env = os.environ.copy()
+    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
+    if confirm_live:
+        env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
+    result = subprocess.run(
+        [str(script)],
+        cwd=str(runtime.checkout_root or ROOT),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    return {
+        "instance_id": runtime.instance_id,
+        "status": "restarted" if result.returncode == 0 else "error",
+        "returncode": result.returncode,
+        "output": result.stdout[-2000:].strip(),
+    }
+
+
 def _ordered_start_items(
     spec: WeatherProductionSpec, plan: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -754,6 +796,12 @@ def parse_args() -> argparse.Namespace:
     reconcile.add_argument("--apply", action="store_true")
     reconcile.add_argument("--confirm-live", action="store_true")
     reconcile.add_argument("--reason")
+    restart = sub.add_parser("restart")
+    restart.add_argument("--json", action="store_true")
+    restart.add_argument("--apply", action="store_true")
+    restart.add_argument("--instance", required=True)
+    restart.add_argument("--confirm-live", action="store_true")
+    restart.add_argument("--reason")
     recover = sub.add_parser("recover-jrs-context")
     recover.add_argument("--json", action="store_true")
     recover.add_argument("--apply", action="store_true")
@@ -777,6 +825,47 @@ def main() -> int:
     health["plan"] = build_plan(spec, health)
     health["command"] = args.command
     health["apply"] = bool(getattr(args, "apply", False))
+    if args.command == "restart":
+        specs = {item.instance_id: item for item in spec.managed_runtimes}
+        runtime = specs.get(args.instance)
+        if runtime is None:
+            raise SystemExit(f"unknown managed runtime: {args.instance}")
+        health["target_instance"] = args.instance
+        health["restart_script"] = (
+            str(runtime.resolved_restart_script())
+            if runtime.resolved_restart_script()
+            else None
+        )
+        if args.apply:
+            if not args.reason:
+                raise SystemExit("restart --apply requires --reason")
+            if (health.get("jrs_context_health") or {}).get("status") != "healthy":
+                raise SystemExit("restart blocked: jrs_context_unhealthy")
+            action = _run_restart(
+                runtime, confirm_live=bool(args.confirm_live)
+            )
+            time.sleep(2)
+            after = manifest_tool.collect_manifest(spec)
+            after = manifest_tool.compare_prechange_manifest(after, before)
+            health = evaluate_production_health(spec, after)
+            health = attach_jrs_context_health(
+                health, collect_jrs_context_health(spec)
+            )
+            health = attach_semantic_health(
+                health, collect_data_feed_semantics()
+            )
+            health.update(
+                {
+                    "command": args.command,
+                    "apply": True,
+                    "reason": args.reason,
+                    "target_instance": args.instance,
+                    "actions": [action],
+                }
+            )
+            health["plan"] = build_plan(spec, health)
+            if action.get("status") in {"blocked", "error"}:
+                health["status"] = "critical"
     if args.command in {"reconcile", "recover-jrs-context"} and args.apply:
         if not args.reason:
             raise SystemExit(f"{args.command} --apply requires --reason")

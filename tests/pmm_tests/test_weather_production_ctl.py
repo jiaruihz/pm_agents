@@ -62,6 +62,11 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_knmi_open_data_jrs"].checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_knmi_recovery"
     )
+    assert by_id["weather_knmi_open_data_jrs"].resolved_restart_script() == Path(
+        "/Users/deepsleep/projects/pm_agents_knmi_recovery/scripts/ops/"
+        "start_mac_knmi_open_data_jrs_tmux.sh"
+    )
+    assert by_id["weather_knmi_open_data_jrs"].max_health_age_sec == 900
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_knmi_first_seen_prod"
     )
@@ -485,6 +490,43 @@ def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
         "status": "blocked",
         "reason": "confirm_live_required",
     }
+
+
+def test_restart_requires_explicit_contract(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed",
+        role="collector",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        recovery_policy="safe",
+    )
+
+    assert ctl._run_restart(runtime, confirm_live=False) == {
+        "instance_id": "feed",
+        "status": "blocked",
+        "reason": "restart_contract_missing",
+    }
+
+
+def test_restart_runs_registered_contract(tmp_path):
+    script = tmp_path / "restart.sh"
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed",
+        role="collector",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        restart_script=Path("restart.sh"),
+        recovery_policy="safe",
+    )
+
+    result = ctl._run_restart(runtime, confirm_live=False)
+
+    assert result["status"] == "restarted"
+    assert result["returncode"] == 0
 
 
 def test_data_feed_semantics_separates_coverage_warning_from_critical_chain():

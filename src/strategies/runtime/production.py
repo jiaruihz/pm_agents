@@ -21,6 +21,7 @@ class WeatherManagedRuntimeSpec:
     desired_state: str = "running"
     checkout_root: Path | None = None
     start_script: Path | None = None
+    restart_script: Path | None = None
     health_path: Path | None = None
     max_health_age_sec: float | None = None
     accepted_health_statuses: tuple[str, ...] = ()
@@ -36,6 +37,15 @@ class WeatherManagedRuntimeSpec:
         if self.checkout_root is None:
             return None
         return self.checkout_root / self.start_script
+
+    def resolved_restart_script(self) -> Path | None:
+        if self.restart_script is None:
+            return None
+        if self.restart_script.is_absolute():
+            return self.restart_script
+        if self.checkout_root is None:
+            return None
+        return self.checkout_root / self.restart_script
 
 
 @dataclass(frozen=True)
@@ -102,6 +112,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 start_script=(
                     Path(item["start_script"])
                     if item.get("start_script")
+                    else None
+                ),
+                restart_script=(
+                    Path(item["restart_script"])
+                    if item.get("restart_script")
                     else None
                 ),
                 health_path=(
