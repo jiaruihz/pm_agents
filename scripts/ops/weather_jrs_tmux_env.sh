@@ -48,11 +48,27 @@ weather_jrs_tmux_socket() {
 weather_jrs_tmux() {
   local socket
   local tmux_bin
+  local command_name="${2:-}"
 
   socket="$(weather_jrs_tmux_socket "${1:-}")" || return 1
   shift
   tmux_bin="$(weather_jrs_tmux_bin)" || return 1
-  "$tmux_bin" -L "$socket" "$@"
+  case "$command_name" in
+    new-session|new-window|kill-session|kill-server|start-server)
+      case "${WEATHER_JRS_TMUX_MUTATION_AUTHORITY:-}" in
+        controller|helper-internal|bounded-oneshot) ;;
+        *)
+          echo "refusing persistent JRS tmux mutation outside production controller: command=$command_name" >&2
+          return 1
+          ;;
+      esac
+      ;;
+  esac
+  # Business entrypoints are attach-only.  ``-N`` prevents tmux from
+  # starting a new server if the canonical permission host is absent or dies
+  # between the caller's health check and this command.  Only the production
+  # controller may create/recreate the canonical server.
+  "$tmux_bin" -N -L "$socket" "$@"
 }
 
 weather_jrs_tmux_exec_checked() (
@@ -75,7 +91,8 @@ weather_jrs_tmux_exec_checked() (
   printf -v session_command \
     'set +e; %s; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
     "$command" "$status_bridge"
-  if ! weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"; then
+  if ! WEATHER_JRS_TMUX_MUTATION_AUTHORITY=helper-internal \
+    weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"; then
     echo "failed to start checked JRS tmux command: label=$label" >&2
     return 1
   fi
@@ -83,7 +100,8 @@ weather_jrs_tmux_exec_checked() (
     wait_count=$((wait_count + 1))
     if [[ "$wait_count" -ge 300 ]]; then
       echo "checked JRS tmux command timed out: label=$label" >&2
-      weather_jrs_tmux "$socket" kill-session -t "=$session" 2>/dev/null || true
+      WEATHER_JRS_TMUX_MUTATION_AUTHORITY=helper-internal \
+        weather_jrs_tmux "$socket" kill-session -t "=$session" 2>/dev/null || true
       return 1
     fi
     sleep 0.1
@@ -177,7 +195,8 @@ weather_jrs_tmux_run_oneshot() (
   printf -v session_command \
     'set +e; mkdir -p %q; rm -f %q; %s >> %q 2>&1; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
     "$job_dir" "$status_file" "$job_command" "$log_file" "$status_file"
-  weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"
+  WEATHER_JRS_TMUX_MUTATION_AUTHORITY=bounded-oneshot \
+    weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"
   echo "started JRS tmux one-shot: socket=$socket session=$session log=$log_file"
 
   while weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; do
