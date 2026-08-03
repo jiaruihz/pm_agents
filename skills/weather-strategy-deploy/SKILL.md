@@ -1,6 +1,6 @@
 ---
 name: weather-strategy-deploy
-description: 部署、启停或变更 weather 生产行为，包括 Mac 当前生产 runner、data-feed、city/source policy、strategy instance、entry/sizing/execution policy、live/shadow switch，以及 N100 恢复后的远端部署。必须 git-first、动态核对实例、保留资金安全和显式确认，并分别验证本地代码、进程、raw runtime、API/页面。禁止把旧 N100/mid_price 示例当当前清单或用 scp/rsync 直推代码。
+description: 部署、启停或变更 Mac mini 上的 weather 当前生产行为，包括 runner、data-feed、city/source policy、strategy instance、entry/sizing/execution policy 与 live/shadow switch。必须以 Mac production controller、manifest 和 production.yaml 为当前真相，git-first，保留资金安全和显式确认，并验证代码、进程、raw runtime、exchange、API/页面。本 skill 不部署 N100；不得读取或执行历史 N100/mid_price 运维链路，显式 N100 灾备请求需要独立恢复合同。
 ---
 
 # Weather strategy deploy
@@ -9,12 +9,15 @@ description: 部署、启停或变更 weather 生产行为，包括 Mac 当前�
 
 ## 当前边界
 
-- 当前短期生产主机是 Mac；`/Users/deepsleep/projects/pm_agents` 是控制/开发仓库，不证明 live 进程从该 checkout 运行。实际 checkout、HEAD、loaded SHA 必须由 manifest 和进程核对。
+- 当前生产主机是 Mac mini。所有普通部署、启停、健康检查和 runtime 恢复默认且仅以 Mac mini 为目标；不得为“保险起见”同时检查、同步、修改或重启 N100。
+- `/Users/deepsleep/projects/pm_agents` 是控制/开发仓库，不证明 live 进程从该 checkout 运行。实际 checkout、HEAD、loaded SHA 必须由 manifest 和进程核对。
 - 当前 data-feed runtime：`/Volumes/jrs/weather_data_feed_service_runtime`。
-- N100 在磁盘/备份/服务链恢复验证前只作历史/恢复对象，不是默认部署目标。
+- N100 不属于当前生产拓扑。除非用户明确提出“N100 灾备恢复/迁回”，否则不得 SSH N100、读取其旧 live 配置、运行其 timer/service、把其 raw 当当前真相，或将任何代码部署到 N100。
 - 策略状态以进程 + raw runtime + authenticated exchange evidence 为准；registry 是路由，不是 present-state proof。
 
-先读：`AGENTS.md`、`WEATHER_REPO_BOUNDARY.md`、`WEATHER_STRATEGY_ENTRYPOINT.md`、`WEATHER_STRATEGY_REGISTRY.md`、`OPS_RUNBOOK.md`，以及目标策略 living doc。
+默认只读：`AGENTS.md`、`src/strategies/runtime/production.yaml`、`WEATHER_REPO_BOUNDARY.md` 的当前 Mac 边界、目标策略 living doc，以及与本次参数直接相关的配置/测试。
+
+需要生产接手背景时，只读 `WEATHER_STRATEGY_ENTRYPOINT.md` 的“当前接手口径”且在 `Historical Production Posture` 前停止。需要控制器/JRS 细节时，只读 `OPS_RUNBOOK.md` 的“Mac JRS 常驻进程”当前章节。普通 Mac 部署不得继续读取两个文档中的 N100 历史章节，也不得从旧命令复制部署步骤。策略研究状态仅在本次变更涉及 eligibility/live 授权判断时读取 `WEATHER_STRATEGY_REGISTRY.md`。
 
 ## 先定义部署对象
 
@@ -82,7 +85,7 @@ CLI smoke（至少 account reconcile 与 canonical refresh dry-run/status）。
 3. 复核 diff，只纳入本次范围。
 4. 创建 scoped commit，记录 SHA。
 5. Mac 当前生产从这个已提交 checkout 重载；不得让未提交代码直接成为生产版本。
-6. N100 恢复后使用 `git fetch` + 固定 SHA checkout/fast-forward；不 `scp`/`rsync` 代码文件。
+6. 不向 N100 复制或部署代码；普通 Mac 变更不得顺带触碰 N100。
 
 worktree 已脏时保留用户改动。若目标文件已有无关修改，先分离范围；不能把整棵脏树一并提交。
 
@@ -114,9 +117,9 @@ canonical helper 进入 `weather-data-feed-jrs` tmux server。不使用默认 tm
 7. 若允许 live，确认 caps、pause、`--live/--confirm-live` 等真实状态与 authenticated order 结果。
 8. 失败立即回滚到记录的 SHA/参数/进程状态。
 
-## N100 恢复分支
+## N100 不在本流程内
 
-部署前先验证 `smartctl`、文件系统可写、备份完整性、目标 checkout 状态和服务链。任何一项未过都不恢复生产 timer。成功后分别报告：local verified、pushed、remote checkout SHA、runtime restarted、raw/API/browser reachable。
+本 skill 不包含 N100 的部署或恢复命令。即使用户明确要求恢复或迁回 N100，也先停止 Mac 部署流程，将其作为新的远端生产边界，建立或加载经审核的独立恢复合同，再重新确认授权、磁盘与文件系统健康、备份完整性、代码来源、服务依赖和资金状态。不得沿用历史 runbook 的旧实例清单、timer、mid_price 参数或 raw 路径，也不得临时拼 SSH/scp/rsync 命令。用户没有明确提出 N100 灾备时，不得进入该方向。
 
 ## 修复影响半径
 
