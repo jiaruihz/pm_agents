@@ -333,28 +333,32 @@ def fact_summary(conn: sqlite3.Connection) -> dict[str, Any]:
 def order_identity_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     row = conn.execute(
         """
-        WITH duplicate_orders AS (
-          SELECT order_id, COUNT(*) AS rows
+        WITH ranked_orders AS (
+          SELECT
+            execution_id,
+            order_id,
+            ROW_NUMBER() OVER (
+              PARTITION BY order_id
+              ORDER BY created_at_utc, execution_id
+            ) AS identity_rank,
+            COUNT(*) OVER (PARTITION BY order_id) AS identity_rows
           FROM orders
           WHERE venue='polymarket_clob' AND COALESCE(order_id, '') <> ''
-          GROUP BY order_id
-          HAVING COUNT(*) > 1
+        ),
+        duplicate_orders AS (
+          SELECT DISTINCT order_id
+          FROM ranked_orders
+          WHERE identity_rows > 1
         ),
         unresolved AS (
-          SELECT o.execution_id
-          FROM orders o
-          JOIN duplicate_orders d ON d.order_id=o.order_id
-          WHERE NOT EXISTS (
+          SELECT ranked.execution_id
+          FROM ranked_orders ranked
+          WHERE ranked.identity_rows > 1
+          AND ranked.identity_rank > 1
+          AND NOT EXISTS (
             SELECT 1
             FROM order_execution_aliases a
-            WHERE a.alias_execution_id=o.execution_id
-          )
-          AND o.execution_id <> (
-            SELECT o2.execution_id
-            FROM orders o2
-            WHERE o2.order_id=o.order_id
-            ORDER BY o2.created_at_utc, o2.execution_id
-            LIMIT 1
+            WHERE a.alias_execution_id=ranked.execution_id
           )
         )
         SELECT

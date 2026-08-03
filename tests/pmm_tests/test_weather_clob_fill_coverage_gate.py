@@ -5,6 +5,7 @@ from scripts.analysis.execution_quality.weather_clob_fill_coverage_gate import (
     fee_lineage_summary,
     load_cache_filters,
     load_cache_rows,
+    order_identity_summary,
     summarize_rows,
 )
 from src.strategies.weather_edge_v1.ids import make_fill_id
@@ -109,3 +110,35 @@ def test_cache_loader_keeps_backwards_compatibility_and_uses_canonical_filters(
     assert load_cache_rows(cache, **load_cache_filters(conn)) == [
         {"fill_id": "keep", "execution_id": "canonical"}
     ]
+
+
+def test_order_identity_summary_resolves_duplicate_without_correlated_order_scan() -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE orders (
+          execution_id TEXT PRIMARY KEY, order_id TEXT, venue TEXT,
+          created_at_utc TEXT
+        );
+        CREATE TABLE order_execution_aliases (
+          alias_execution_id TEXT PRIMARY KEY, physical_order_id TEXT
+        );
+        CREATE TABLE fills (
+          execution_id TEXT, filled_shares REAL, filled_price REAL
+        );
+        INSERT INTO orders VALUES
+          ('canonical', 'physical', 'polymarket_clob', '2026-01-01T00:00:00Z'),
+          ('duplicate', 'physical', 'polymarket_clob', '2026-01-02T00:00:00Z'),
+          ('other', 'other-order', 'polymarket_clob', '2026-01-01T00:00:00Z');
+        """
+    )
+
+    unresolved = order_identity_summary(conn)
+    assert unresolved["duplicate_physical_order_ids"] == 1
+    assert unresolved["unresolved_alias_executions"] == 1
+
+    conn.execute(
+        "INSERT INTO order_execution_aliases VALUES ('duplicate', 'physical')"
+    )
+    resolved = order_identity_summary(conn)
+    assert resolved["unresolved_alias_executions"] == 0
