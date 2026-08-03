@@ -122,6 +122,7 @@ def test_shared_helper_pins_full_disk_access_tmux_binary():
     assert "command -v tmux" not in helper_text
     assert "WEATHER_JRS_TMUX_TEST_OVERRIDE" in helper_text
     assert '"$tmux_bin" -N -L "$socket" "$@"' in helper_text
+    assert "weather_jrs_tmux_guarded_replace_session()" in helper_text
 
 
 def test_shared_helper_rejects_tmux_binary_override_outside_tests(tmp_path):

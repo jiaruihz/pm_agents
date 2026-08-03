@@ -222,3 +222,42 @@ weather_jrs_tmux_run_oneshot() (
   fi
   echo "completed JRS tmux one-shot: session=$session returncode=0"
 )
+
+weather_jrs_tmux_guarded_replace_session() {
+  local socket="$1"
+  local session="$2"
+  local command="$3"
+  local startup_wait_sec="${4:-1}"
+  local before_sessions
+  local after_sessions
+  local peer
+
+  socket="$(weather_jrs_tmux_socket "$socket")" || return 1
+  if [[ -z "$session" || ! "$session" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "invalid JRS tmux session name: $session" >&2
+    return 1
+  fi
+
+  before_sessions="$(
+    weather_jrs_tmux "$socket" list-sessions -F '#{session_name}' 2>/dev/null || true
+  )"
+  weather_jrs_tmux "$socket" kill-session -t "=$session" 2>/dev/null || true
+  weather_jrs_tmux "$socket" new-session -d -s "$session" "$command"
+  sleep "$startup_wait_sec"
+
+  if ! weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; then
+    echo "JRS tmux target session exited during startup: $session" >&2
+    return 1
+  fi
+
+  after_sessions="$(
+    weather_jrs_tmux "$socket" list-sessions -F '#{session_name}' 2>/dev/null || true
+  )"
+  while IFS= read -r peer; do
+    [[ -z "$peer" || "$peer" == "$session" ]] && continue
+    if ! grep -Fxq "$peer" <<<"$after_sessions"; then
+      echo "unrelated JRS tmux session disappeared while replacing $session: $peer" >&2
+      return 1
+    fi
+  done <<<"$before_sessions"
+}
