@@ -6,9 +6,11 @@ runtimes declared in production.yaml; it never stops extra processes. Live
 recovery requires both an explicit reason and ``--confirm-live``.
 
 ``recover-jrs-context --apply`` is the bounded exception for a failed canonical
-JRS permission host.  It snapshots every existing pane, rebuilds only the
-canonical tmux server, restores the exact pane commands, and then uses the
-normal desired-state reconcile path for sessions that were already missing.
+JRS permission host. It persists every existing pane to the internal disk,
+proves that a fresh temporary tmux server can write JRS before touching the old
+server, rebuilds only the canonical server, restores the exact pane commands,
+and then uses the normal desired-state reconcile path for sessions that were
+already missing. It cannot grant or repair macOS TCC permissions.
 """
 
 from __future__ import annotations
@@ -277,8 +279,14 @@ def build_plan(
 
 
 def _tmux(spec: WeatherProductionSpec, *args: str) -> subprocess.CompletedProcess[str]:
+    return _tmux_on_socket(spec, spec.canonical_tmux_socket, *args)
+
+
+def _tmux_on_socket(
+    spec: WeatherProductionSpec, socket: str, *args: str
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(spec.canonical_tmux_binary), "-L", spec.canonical_tmux_socket, *args],
+        [str(spec.canonical_tmux_binary), "-L", socket, *args],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -286,6 +294,81 @@ def _tmux(spec: WeatherProductionSpec, *args: str) -> subprocess.CompletedProces
         timeout=30,
         check=False,
     )
+
+
+def persist_recovery_manifest(
+    observed: Mapping[str, Any], *, directory: Path | None = None
+) -> Path:
+    """Atomically save recovery state on the internal disk before disruption."""
+
+    target_dir = directory or ROOT / "runtime/ops/weather_jrs_recovery"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    target = target_dir / f"prechange-{stamp}-{os.getpid()}.json"
+    temporary = target.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(observed, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, target)
+    return target
+
+
+def collect_prospective_jrs_context_health(
+    spec: WeatherProductionSpec,
+) -> dict[str, Any]:
+    """Prove a newly spawned tmux parent can write JRS before killing production."""
+
+    socket = f"{spec.canonical_tmux_socket}-recovery-probe-{os.getpid()}"
+    session = "weather_jrs_recovery_probe"
+    probe_dirs = (
+        spec.data_feed_runtime_root / "loop",
+        spec.canonical_db_path.parent,
+    )
+    started = _tmux_on_socket(
+        spec,
+        socket,
+        "new-session",
+        "-d",
+        "-s",
+        session,
+        "while :; do sleep 3600; done",
+    )
+    output = started.stdout[-2000:].strip()
+    probe_returncode = started.returncode
+    try:
+        if started.returncode == 0:
+            commands = ["set -eu", "umask 077"]
+            for index, probe_dir in enumerate(probe_dirs):
+                probe_path = probe_dir / (
+                    f".prospective_tmux_probe_{os.getpid()}_{index}"
+                )
+                commands.extend(
+                    (
+                        f"mkdir -p {shlex.quote(str(probe_dir))}",
+                        f"printf 'probe\\n' > {shlex.quote(str(probe_path))}",
+                        f"rm -f {shlex.quote(str(probe_path))}",
+                    )
+                )
+            commands.append(
+                "dd "
+                f"if={shlex.quote(str(spec.canonical_db_path))} "
+                "of=/dev/null bs=1 count=1 2>/dev/null"
+            )
+            command = "; ".join(commands)
+            probed = _tmux_on_socket(spec, socket, "run-shell", command)
+            probe_returncode = probed.returncode
+            output = probed.stdout[-2000:].strip()
+    finally:
+        _tmux_on_socket(spec, socket, "kill-server")
+    return {
+        "status": "healthy" if probe_returncode == 0 else "critical",
+        "returncode": probe_returncode,
+        "socket": socket,
+        "runtime_roots": [str(path) for path in probe_dirs],
+        "canonical_db_path": str(spec.canonical_db_path),
+        "output": output,
+    }
 
 
 def _pane_restore_rows(observed: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -326,6 +409,13 @@ def recover_jrs_context(
         raise RuntimeError("recover-jrs-context requires --confirm-live")
     restore_rows = _pane_restore_rows(before)
     actions: list[dict[str, Any]] = []
+    prospective = collect_prospective_jrs_context_health(spec)
+    actions.append({"action": "prospective_jrs_write_probe", **prospective})
+    if prospective["status"] != "healthy":
+        raise RuntimeError(
+            "prospective tmux host cannot write JRS; canonical server preserved: "
+            f"{prospective['output']}"
+        )
     killed = _tmux(spec, "kill-server")
     actions.append(
         {"action": "kill_server", "returncode": killed.returncode, "output": killed.stdout[-1000:].strip()}
@@ -637,17 +727,27 @@ def main() -> int:
         actions: list[dict[str, Any]] = []
         if args.command == "recover-jrs-context":
             recovery_before = before
+            recovery_manifest_path: Path
             if args.restore_manifest is not None:
+                recovery_manifest_path = args.restore_manifest.resolve()
                 recovery_before = json.loads(
-                    args.restore_manifest.read_text(encoding="utf-8")
+                    recovery_manifest_path.read_text(encoding="utf-8")
                 )
-            actions.extend(
-                recover_jrs_context(
-                    spec,
-                    recovery_before,
-                    confirm_live=bool(args.confirm_live),
+            else:
+                recovery_manifest_path = persist_recovery_manifest(before)
+            health["recovery_manifest"] = str(recovery_manifest_path)
+            try:
+                actions.extend(
+                    recover_jrs_context(
+                        spec,
+                        recovery_before,
+                        confirm_live=bool(args.confirm_live),
+                    )
                 )
-            )
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    f"{exc}; recovery_manifest={recovery_manifest_path}"
+                ) from exc
             time.sleep(2)
             interim = manifest_tool.collect_manifest(spec)
             interim_health = evaluate_production_health(spec, interim)
@@ -678,6 +778,8 @@ def main() -> int:
         health["apply"] = True
         health["reason"] = args.reason
         health["actions"] = actions
+        if args.command == "recover-jrs-context":
+            health["recovery_manifest"] = str(recovery_manifest_path)
         health["plan"] = build_plan(spec, health)
         if any(row.get("status") in {"blocked", "error"} for row in actions):
             health["status"] = "critical"

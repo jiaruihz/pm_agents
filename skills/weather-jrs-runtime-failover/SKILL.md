@@ -1,6 +1,6 @@
 ---
 name: weather-jrs-runtime-failover
-description: 在 weather 生产 runtime 因 JRS 外置卷写入失败时安全切到 Mac 本机临时运行，并在 JRS 恢复后把完整 runtime 迁回、分层校验、重启和清理本机副本。用于 JRS Operation not permitted、write probe 失败、临时 local output-dir、JRS repatriation、runtime 单一正本恢复；覆盖 signal/plan/order/fill/dedupe 状态、canonical tmux 权限上下文、关键状态 SHA、bulk 增量校验和影响半径。不要用于普通数据同步或 N100 恢复。
+description: 诊断并恢复 weather 生产的 JRS 外置卷/TCC/canonical tmux permission-host 故障，必要时安全切到 Mac 本机临时运行，并在 JRS 恢复后迁回、分层校验和清理副本。用于 JRS Operation not permitted、write probe 失败、canonical context 丢失、重复权限事故、临时 local output-dir、JRS repatriation、runtime 单一正本恢复；覆盖 controller recovery、历史复发审查、signal/plan/order/fill/dedupe 状态、关键状态 SHA 和影响半径。不要用于普通数据同步或 N100 恢复。
 ---
 
 # Weather JRS runtime failover
@@ -12,13 +12,31 @@ description: 在 weather 生产 runtime 因 JRS 外置卷写入失败时安全�
 - 同一实例任一时刻只有一个可写 runtime 正本；不双写。
 - JRS 常驻进程只用 `tmux -L weather-data-feed-jrs`，并通过
   `scripts/ops/weather_jrs_tmux_env.sh` 在该 tmux server 内执行 write probe。
-- canonical helper 必须使用 macOS「完全磁盘访问权限」已授权且 path/SHA-256
-  固定的 tmux binary。若 pin 缺失或 hash 漂移，先修权限宿主；不要把它误判成
-  数据盘故障或直接进入本机接管。
+- canonical helper 必须使用 path/SHA-256 固定的 tmux binary；pin 只证明程序
+  identity，不能证明当前 parent 仍有 TCC/JRS 权限。即使系统设置显示 Full Disk
+  Access 为 on，也必须以 server 内真实 probe 为准。若 pin 缺失或 hash 漂移，先修
+  identity；若 pin 正确但 probe 失败，按 permission-host 故障处理，不得写成磁盘损坏。
 - 普通 shell 写不进 JRS，不等于 canonical tmux context 写不进。只有后者失败才进入本机接管。
 - live 恢复前必须迁移完整 runtime state，包括 dedupe、plan、order、fill、maker lifecycle 和 pause/state；JRS 不可读或所需校验 profile 失败时不得恢复 live。
 - 只改 storage location 时保持 repo SHA、参数、caps、source/signal/execution policy 完全不变。
 - 删除临时副本需要用户明确授权。用户已要求“清理、不留维护成本”时，完成验证后直接清理，不再二次询问。
+
+## 历史复发与完成口径
+
+开始修复前搜索 `WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`、相关 incident、git log
+和 runtime logs，列出同症状历史的时间窗、当时修复层级和复发原因。不要根据最近一次恢复报告或
+当前提示词推断历史已闭环。
+
+明确区分：
+
+- `contained`：停止错误 writer、临时恢复数据或阻止进一步影响；
+- `entrypoint unified`：入口统一，但 permission host 仍可能失效；
+- `recovery improved`：controller 能保存/恢复拓扑，但故障仍可能复发；
+- `root cause eliminated`：根因有证据并通过真实失效场景验收。
+
+只有 fresh permission host、canonical server death/recreate、锁屏/解锁、reboot/login、controller
+全拓扑恢复以及不 mock 的 Mac/JRS integration smoke 均在维护窗口通过，才可写“永久解决”或
+“一劳永逸”。否则交付必须使用前三种准确状态。
 
 ## 1. 锁定对象和证据
 
@@ -67,6 +85,14 @@ tmux 中的系统 Python 漂移：
 
 ## 2. 判断是否真的需要本机接管
 
+先运行 controller/manifest 保存全局现场，不要直接手拼 tmux：
+
+```bash
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_production_ctl.py plan
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict --json-out "$PRECHANGE_MANIFEST"
+```
+
 加载共享 helper，并从 canonical tmux 权限上下文探测目标 JRS root：
 
 ```bash
@@ -77,9 +103,21 @@ weather_jrs_tmux_write_probe weather-data-feed-jrs "$JRS_RUNTIME_ROOT"
 - probe 成功：不迁移；修正 runner 的 process context。
 - helper 报 tmux path/hash 漂移：不迁移；先按 `OPS_RUNBOOK.md` 给新 binary
   授权 Full Disk Access、更新 pin 并重建 canonical host。
-- probe 失败：记录原始错误，进入临时接管。
+- probe 失败：记录原始错误并判断是 volume、现有 parent 还是 prospective host 故障；不要直接把
+  一次失败等同于数据盘故障或立即迁移。
 - JRS 能读不能写：允许复制完整 state 到本机。
 - JRS 读也失败：不得凭空启动 live；可暂停或只启 zero-notional shadow，并明确 lineage gap。
+
+需要重建 canonical permission host 时，只使用 controller 的有界事务：
+
+```bash
+.venv/bin/python scripts/ops/weather_production_ctl.py recover-jrs-context \
+  --apply --confirm-live --reason "$REASON" --restore-manifest "$PRECHANGE_MANIFEST"
+```
+
+该命令必须先用临时 prospective server 验证新调用上下文能访问 JRS，再杀旧 server；restore
+manifest 必须位于 Mac 内置盘。prospective probe 失败、Mac 锁屏/TCC 阻断或 manifest 不完整时停止，
+不得改用默认 tmux、screen、nohup 或 LaunchAgent 抢建 canonical server。
 
 ## 3. JRS → 本机临时接管
 

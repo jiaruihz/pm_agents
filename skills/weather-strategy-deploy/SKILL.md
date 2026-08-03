@@ -51,12 +51,17 @@ canonical JRS session 由 manifest 和 `weather_production_ctl.py health` 盘点
 
 manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 的 checkout/head/loaded SHA、canonical JRS tmux session、LaunchAgent 退出状态和 DB open handles。`critical` 时不得重启或切 live；先修 identity 根因。manifest 不替代 exchange/order pre-state。
 
+canonical tmux socket、binary path/hash 和系统设置中的 Full Disk Access 只证明期望 identity，不能证明当前 parent 仍能访问 JRS。必须以 server 内真实 read/write probe、canonical DB read 和 producer/downstream freshness 为准。开始处理重复故障前先搜索 incident/governance 与 git history；说明本次是入口统一、恢复自动化还是根因消除。没有 fresh-host、server recreate、锁屏/解锁和 reboot/login 的真实验收，不得称为永久解决。
+
 `src/strategies/runtime/production.yaml.managed_runtimes` 是当前生产 desired state；
 `instances.yaml` 仍是研究/历史 registry，不能代替 active production list。生产启停和恢复优先走
 `scripts/ops/weather_production_ctl.py`。底层 start script 是 controller 的执行合同，不是 AI/操作员的默认直接入口；禁止手拼 tmux/live 命令绕过 desired-state、依赖和后置检查。
 
 当前 controller 的真实边界是：`health/plan` 只读，`reconcile --apply` 只启动 desired-state 中缺失的
-runtime，不停止、替换或重启已存在进程。因此不得把 `reconcile` 说成完整部署事务；对已存在实例的
+runtime，不停止、替换或重启已存在进程；`recover-jrs-context --apply` 是唯一允许重建 canonical
+permission host 的有界事务，必须同时提供 reason、`--confirm-live`、保存的 restore manifest，并在杀旧
+server 前通过 prospective-host JRS probe。它只能验证当前调用上下文，不能授予或修复 macOS TCC，Mac
+锁屏或 prospective probe 失败时必须阻断。因此不得把 `reconcile` 或一次 recovery 成功说成完整部署/永久修复；对已存在实例的
 pause/stop/restart 只能使用该实例在仓库中已登记的精确合同，并必须执行 pre/post manifest 对比。
 若实例只有 `start_script` 而没有可审计的 pause/stop/restart 合同，当次生产重启必须阻断：先补齐控制面合同和测试，
 不允许 AI 手拼 kill/tmux 命令填空。

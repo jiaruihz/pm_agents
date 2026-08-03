@@ -284,6 +284,11 @@ def test_recovery_retries_canonical_server_start(monkeypatch, tmp_path):
     monkeypatch.setattr(ctl, "_tmux", fake_tmux)
     monkeypatch.setattr(
         ctl,
+        "collect_prospective_jrs_context_health",
+        lambda _spec: {"status": "healthy", "returncode": 0},
+    )
+    monkeypatch.setattr(
+        ctl,
         "collect_jrs_context_health",
         lambda _spec: {"status": "healthy", "returncode": 0},
     )
@@ -297,6 +302,48 @@ def test_recovery_retries_canonical_server_start(monkeypatch, tmp_path):
 
     assert sum(1 for call in calls if call[0] == "new-session") == 2
     assert actions[-1]["action"] == "jrs_write_probe"
+
+
+def test_failed_prospective_probe_preserves_canonical_server(monkeypatch, tmp_path):
+    spec = production_spec(tmp_path, ())
+    canonical_calls = []
+    monkeypatch.setattr(
+        ctl,
+        "collect_prospective_jrs_context_health",
+        lambda _spec: {
+            "status": "critical",
+            "returncode": 1,
+            "output": "Operation not permitted",
+        },
+    )
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: canonical_calls.append(args),
+    )
+
+    try:
+        ctl.recover_jrs_context(
+            spec,
+            observed("live"),
+            confirm_live=True,
+        )
+    except RuntimeError as exc:
+        assert "canonical server preserved" in str(exc)
+    else:
+        raise AssertionError("expected prospective permission failure")
+
+    assert canonical_calls == []
+
+
+def test_persist_recovery_manifest_is_complete(tmp_path):
+    snapshot = observed("one", "two")
+
+    target = ctl.persist_recovery_manifest(snapshot, directory=tmp_path)
+
+    assert target.parent == tmp_path
+    assert json.loads(target.read_text(encoding="utf-8")) == snapshot
+    assert list(tmp_path.glob("*.tmp")) == []
 
 
 def test_restore_rows_preserve_every_session_and_pane():

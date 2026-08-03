@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather JRS Runtime Failover"
-  short_description: "安全迁移 JRS runtime 并分层校验清理"
-  default_prompt: "Use $weather-jrs-runtime-failover to move a weather runtime safely, apply the appropriate tiered or exact verification profile, and remove stale copies."
+  short_description: "诊断 JRS 权限故障并安全恢复或迁移 runtime"
+  default_prompt: "Use $weather-jrs-runtime-failover to diagnose recurring JRS permission-host failures, recover through the production controller when safe, or migrate and verify the runtime."

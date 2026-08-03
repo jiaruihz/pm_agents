@@ -45,6 +45,51 @@ def test_deploy_skill_uses_only_canonical_jrs_process_context() -> None:
         assert required in text
 
 
+def test_jrs_prompts_do_not_treat_identity_as_permission_or_overclaim_fix() -> None:
+    for path in (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "skills/weather-strategy-deploy/SKILL.md",
+        "skills/weather-jrs-runtime-failover/SKILL.md",
+    ):
+        text = _read(path)
+        for required in (
+            "不能证明",
+            "TCC",
+            "reboot/login",
+        ):
+            assert required in text, (path, required)
+
+    agents = _read("AGENTS.md")
+    claude = _read("CLAUDE.md")
+    for text in (agents, claude):
+        assert "历史复发优先于“已修好”叙述" in text
+        assert "永久解决的验收标准" in text
+        assert "unit test mock 通过不能替代" in text
+
+    failover = _read("skills/weather-jrs-runtime-failover/SKILL.md")
+    assert "prospective server" in failover
+    assert "canonical server death/recreate" in failover
+    assert "recovery improved" in failover
+
+
+def test_deploy_skill_defaults_to_mac_and_quarantines_n100_history() -> None:
+    text = _read("skills/weather-strategy-deploy/SKILL.md")
+
+    for required in (
+        "当前生产主机是 Mac mini",
+        "src/strategies/runtime/production.yaml",
+        "Historical Production Posture",
+        "用户明确提出“N100 灾备恢复/迁回”",
+        "不得 SSH N100",
+        "本 skill 不包含 N100 的部署或恢复命令",
+        "独立恢复合同",
+    ):
+        assert required in text
+
+    assert "先读：`AGENTS.md`、`WEATHER_REPO_BOUNDARY.md`、`WEATHER_STRATEGY_ENTRYPOINT.md`" not in text
+
+
 def test_wcir_skills_pin_decision_and_canonical_identity() -> None:
     lineage = _read("skills/weather-strategy-lineage/SKILL.md")
     performance = _read("skills/weather-strategy-performance/SKILL.md")
