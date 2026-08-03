@@ -330,14 +330,20 @@ def recover_jrs_context(
     actions.append(
         {"action": "kill_server", "returncode": killed.returncode, "output": killed.stdout[-1000:].strip()}
     )
-    started = _tmux(
-        spec,
-        "new-session",
-        "-d",
-        "-s",
-        "weather_jrs_context_keeper",
-        "while :; do sleep 3600; done",
-    )
+    started: subprocess.CompletedProcess[str] | None = None
+    for _ in range(10):
+        started = _tmux(
+            spec,
+            "new-session",
+            "-d",
+            "-s",
+            "weather_jrs_context_keeper",
+            "while :; do sleep 3600; done",
+        )
+        if started.returncode == 0:
+            break
+        time.sleep(0.2)
+    assert started is not None
     if started.returncode != 0:
         raise RuntimeError(f"failed to start canonical tmux host: {started.stdout}")
     probe = collect_jrs_context_health(spec)
@@ -606,6 +612,11 @@ def parse_args() -> argparse.Namespace:
     recover.add_argument("--apply", action="store_true")
     recover.add_argument("--confirm-live", action="store_true")
     recover.add_argument("--reason")
+    recover.add_argument(
+        "--restore-manifest",
+        type=Path,
+        help="saved pre-change manifest used only when retrying an interrupted recovery",
+    )
     return parser.parse_args()
 
 
@@ -625,10 +636,15 @@ def main() -> int:
         specs = {item.instance_id: item for item in spec.managed_runtimes}
         actions: list[dict[str, Any]] = []
         if args.command == "recover-jrs-context":
+            recovery_before = before
+            if args.restore_manifest is not None:
+                recovery_before = json.loads(
+                    args.restore_manifest.read_text(encoding="utf-8")
+                )
             actions.extend(
                 recover_jrs_context(
                     spec,
-                    before,
+                    recovery_before,
                     confirm_live=bool(args.confirm_live),
                 )
             )
@@ -647,7 +663,12 @@ def main() -> int:
                 )
             )
         after = manifest_tool.collect_manifest(spec)
-        after = manifest_tool.compare_prechange_manifest(after, before)
+        comparison_before = (
+            recovery_before
+            if args.command == "recover-jrs-context"
+            else before
+        )
+        after = manifest_tool.compare_prechange_manifest(after, comparison_before)
         health = evaluate_production_health(spec, after)
         health = attach_jrs_context_health(
             health, collect_jrs_context_health(spec)

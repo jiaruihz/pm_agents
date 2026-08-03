@@ -263,6 +263,42 @@ def test_recovery_requires_live_confirmation(tmp_path):
         raise AssertionError("expected live confirmation failure")
 
 
+def test_recovery_retries_canonical_server_start(monkeypatch, tmp_path):
+    spec = production_spec(tmp_path, ())
+    calls = []
+
+    class Result:
+        def __init__(self, returncode=0, stdout=""):
+            self.returncode = returncode
+            self.stdout = stdout
+
+    def fake_tmux(_spec, *args):
+        calls.append(args)
+        if args == ("kill-server",):
+            return Result()
+        if args[0] == "new-session":
+            attempts = sum(1 for call in calls if call[0] == "new-session")
+            return Result(returncode=1 if attempts == 1 else 0)
+        raise AssertionError(args)
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
+    monkeypatch.setattr(
+        ctl,
+        "collect_jrs_context_health",
+        lambda _spec: {"status": "healthy", "returncode": 0},
+    )
+    monkeypatch.setattr(ctl.time, "sleep", lambda _seconds: None)
+
+    actions = ctl.recover_jrs_context(
+        spec,
+        {"tmux_sessions": []},
+        confirm_live=True,
+    )
+
+    assert sum(1 for call in calls if call[0] == "new-session") == 2
+    assert actions[-1]["action"] == "jrs_write_probe"
+
+
 def test_restore_rows_preserve_every_session_and_pane():
     snapshot = observed("one")
     snapshot["tmux_sessions"][0]["panes"].append(
