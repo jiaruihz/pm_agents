@@ -58,7 +58,7 @@ managed_runtimes:
     tmux_session: weather_knmi_first_seen_ladder_v1
     role: market_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents
+    checkout_root: /Users/deepsleep/projects/pm_agents_knmi_first_seen_prod
     start_script: scripts/ops/start_weather_knmi_first_seen_ladder_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/state.json
     max_health_age_sec: 180
@@ -109,7 +109,7 @@ managed_runtimes:
     tmux_session: weather_knmi_open_data_jrs
     role: collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents
+    checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
     start_script: scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/state.json
     max_health_age_sec: 180

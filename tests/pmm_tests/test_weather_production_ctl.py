@@ -58,6 +58,12 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "weather_live_cross_observations",
     )
     assert "weather_canonical_refresh" in spec.allowed_unmanaged_sessions
+    assert by_id["weather_knmi_open_data_jrs"].checkout_root == Path(
+        "/Users/deepsleep/projects/pm_agents_knmi_recovery"
+    )
+    assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
+        "/Users/deepsleep/projects/pm_agents_knmi_first_seen_prod"
+    )
 
 
 def test_health_checks_session_freshness_status_and_live_flags(tmp_path):
