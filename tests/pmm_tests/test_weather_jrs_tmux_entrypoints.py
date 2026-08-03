@@ -329,7 +329,7 @@ def test_legacy_direct_launchagent_stack_cannot_start_jrs_workloads():
     text = (OPS / "mac_weather_stack.sh").read_text(encoding="utf-8")
     assert (
         "refusing dormant direct-LaunchAgent weather stack; "
-        "use the strategy's canonical JRS tmux start entrypoint"
+        "use scripts/ops/weather_production_ctl.py"
     ) in text
     for command in (
         "install-launchagents",
@@ -343,6 +343,12 @@ def test_legacy_direct_launchagent_stack_cannot_start_jrs_workloads():
         "start-runtime-monitor",
     ):
         assert command in text
+
+    patrol_installer = (
+        OPS / "install_weather_live_runtime_patrol_launchagent.sh"
+    ).read_text(encoding="utf-8")
+    assert "refusing retired weather patrol LaunchAgent installer" in patrol_installer
+    assert patrol_installer.index("exit 2") < patrol_installer.index("launchctl bootstrap")
 
 
 def test_shared_helper_rejects_legacy_socket():

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "refusing retired weather patrol LaunchAgent installer; register and control the runtime through scripts/ops/weather_production_ctl.py" >&2
+exit 2
+
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 TMUX_SOCKET="$(weather_jrs_tmux_socket)"

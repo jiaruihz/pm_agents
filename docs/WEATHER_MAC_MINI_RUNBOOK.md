@@ -1,5 +1,10 @@
 # Weather Mac Mini Runbook
 
+> **状态：`superseded-for-now`，仅保留历史背景。** 本文原先的业务
+> LaunchAgent、`mac_weather_stack.sh start*`、live switch 和外置盘迁移命令不是
+> 当前生产入口。当前事实以 `production.yaml` + `weather_production_ctl.py` +
+> production manifest 为准；JRS runtime 已固定到 `/Volumes/jrs`，不要按本文再次迁盘。
+
 This is the Mac-side fallback runbook for weather data collection and the
 regime-routed NO strategy shadow runner. It exists because N100 normally owns
 the production systemd path, but N100 is currently unsafe for write-heavy
@@ -29,73 +34,18 @@ Mac LaunchAgent `com.pm-agents.weather-data-feed` does not produce
 timer remains historical/recovery context unless a separate Mac source-events
 job is reviewed and installed.
 
-## Standard Commands
-
-Install or refresh LaunchAgents:
+## Current Replacement Commands
 
 ```bash
-scripts/ops/mac_weather_stack.sh install-launchagents
+.venv/bin/python scripts/ops/weather_production_ctl.py health --json
+.venv/bin/python scripts/ops/weather_production_ctl.py plan --json
+.venv/bin/python scripts/ops/weather_production_ctl.py reconcile
+.venv/bin/python scripts/ops/weather_production_ctl.py restart --instance INSTANCE --json
 ```
 
-Start data-feed plus regime-routed shadow:
-
-```bash
-scripts/ops/mac_weather_stack.sh start
-```
-
-Check the whole stack:
-
-```bash
-scripts/ops/mac_weather_stack.sh status
-scripts/ops/mac_weather_stack.sh verify
-```
-
-Stop Mac data-feed plus shadow:
-
-```bash
-scripts/ops/mac_weather_stack.sh stop
-```
-
-Start real live order runner only after explicit approval:
-
-```bash
-scripts/ops/mac_weather_stack.sh start-live --confirm-live
-```
-
-Stop real live order runner:
-
-```bash
-scripts/ops/mac_weather_stack.sh stop-live
-```
-
-Start the low-price YES lottery tiny-live runner only after explicit approval:
-
-```bash
-scripts/ops/mac_weather_stack.sh start-low-price-live --confirm-live
-```
-
-Stop the low-price YES lottery tiny-live runner:
-
-```bash
-scripts/ops/mac_weather_stack.sh stop-low-price-live
-```
-
-Start the low-price YES TP20 exit overlay only after explicit approval:
-
-```bash
-scripts/ops/mac_weather_stack.sh start-low-price-take-profit --confirm-live
-```
-
-Stop the low-price YES TP20 exit overlay:
-
-```bash
-scripts/ops/mac_weather_stack.sh stop-low-price-take-profit
-```
-
-`start` does not place real orders. It starts only:
-
-- `com.pm-agents.weather-data-feed`
-- `com.pm-agents.regime-routed-no-shadow`
+Only `reconcile/restart/recover-jrs-context` with their explicit `--apply`, reason,
+and live confirmation contracts may change production. The old business
+LaunchAgents are disabled at both filename and launchd override layers.
 
 ## Verification Expectations
 
@@ -151,6 +101,11 @@ collector now refuses to write empty paper snapshots by default; existing empty
 files should be quarantined rather than used as latest market state.
 
 ## External Disk Plan
+
+This section is historical only. The canonical physical DB is now
+`/Volumes/jrs/pm_agents/runtime/weather.db`, and the data-feed runtime is
+`/Volumes/jrs/weather_data_feed_service_runtime`. Do not run the migration
+commands below against current production.
 
 The high-write paths are:
 
