@@ -105,7 +105,15 @@ managed_runtimes:
   - {instance_id: weather_fast_source_stale_book, tmux_session: weather_fast_source_stale_book, role: collector, execution_mode: shadow, recovery_policy: manual}
   - {instance_id: weather_full_ladder_capture, tmux_session: weather_full_ladder_capture, role: collector, execution_mode: collector, recovery_policy: manual}
   - {instance_id: weather_helsinki_pre_cross_active_ladder_shadow, tmux_session: weather_helsinki_pre_cross_active_ladder_shadow, role: shadow, execution_mode: shadow, recovery_policy: manual}
-  - {instance_id: weather_knmi_open_data_jrs, tmux_session: weather_knmi_open_data_jrs, role: collector, execution_mode: collector, recovery_policy: manual}
+  - instance_id: weather_knmi_open_data_jrs
+    tmux_session: weather_knmi_open_data_jrs
+    role: collector
+    execution_mode: collector
+    checkout_root: /Users/deepsleep/projects/pm_agents
+    start_script: scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/state.json
+    max_health_age_sec: 180
+    recovery_policy: safe
   - {instance_id: weather_korea_first_seen_state_v1, tmux_session: weather_korea_first_seen_state_v1, role: collector, execution_mode: collector, recovery_policy: manual}
   - {instance_id: weather_runtime_monitor, tmux_session: weather_runtime_monitor, role: monitor, execution_mode: monitor, recovery_policy: manual}
   - {instance_id: weather_source_event_ladder_repricing_shadow, tmux_session: weather_source_event_ladder_repricing_shadow, role: shadow, execution_mode: shadow, recovery_policy: manual}

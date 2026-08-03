@@ -147,6 +147,153 @@ def test_plan_only_starts_missing_runtime_with_recovery_contract(tmp_path):
     ]
 
 
+def test_failed_jrs_context_blocks_all_missing_starts(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed_session",
+        role="data_feed",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        health_path=Path("/Volumes/jrs/feed/latest.json"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    report = ctl.evaluate_production_health(spec, observed(), now_epoch=1000.0)
+    report = ctl.attach_jrs_context_health(
+        report, {"status": "critical", "returncode": 1}
+    )
+
+    assert report["status"] == "critical"
+    assert report["runtimes"][0]["issues"][-1] == "jrs_context_unhealthy"
+    assert ctl.build_plan(spec, report)[0] == {
+        "instance_id": "feed",
+        "action": "manual_recovery_required",
+        "reason": "jrs_context_unhealthy",
+        "recovery_policy": "safe",
+        "expected_live": False,
+        "start_script": str(tmp_path / "start.sh"),
+    }
+
+
+def test_failed_jrs_context_marks_keeper_critical(tmp_path):
+    keeper = WeatherManagedRuntimeSpec(
+        instance_id="weather_jrs_context_keeper",
+        tmux_session="weather_jrs_context_keeper",
+        role="infrastructure",
+        execution_mode="infrastructure",
+        recovery_policy="manual",
+    )
+    spec = production_spec(tmp_path, (keeper,))
+    report = ctl.evaluate_production_health(
+        spec, observed("weather_jrs_context_keeper"), now_epoch=1000.0
+    )
+    report = ctl.attach_jrs_context_health(
+        report, {"status": "critical", "returncode": 1}
+    )
+
+    assert report["runtimes"][0]["status"] == "critical"
+    assert report["runtimes"][0]["issues"] == ["jrs_write_probe_failed"]
+
+
+def test_failed_jrs_context_marks_same_server_manual_runtime_critical(tmp_path):
+    shadow = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        recovery_policy="manual",
+    )
+    spec = production_spec(tmp_path, (shadow,))
+    report = ctl.evaluate_production_health(
+        spec, observed("shadow"), now_epoch=1000.0
+    )
+    report = ctl.attach_jrs_context_health(
+        report, {"status": "critical", "returncode": 1}
+    )
+
+    assert report["runtimes"][0]["issues"] == ["jrs_context_unhealthy"]
+    assert report["runtimes"][0]["status"] == "critical"
+
+
+def test_start_order_respects_runtime_dependencies(tmp_path):
+    feed = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed",
+        role="collector",
+        execution_mode="collector",
+        recovery_policy="safe",
+    )
+    market = WeatherManagedRuntimeSpec(
+        instance_id="market",
+        tmux_session="market",
+        role="collector",
+        execution_mode="collector",
+        dependencies=("feed",),
+        recovery_policy="safe",
+    )
+    model = WeatherManagedRuntimeSpec(
+        instance_id="model",
+        tmux_session="model",
+        role="shadow",
+        execution_mode="shadow",
+        dependencies=("market",),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (model, market, feed))
+    plan = [
+        {"instance_id": "model", "action": "start"},
+        {"instance_id": "market", "action": "start"},
+        {"instance_id": "feed", "action": "start"},
+    ]
+
+    assert [
+        row["instance_id"] for row in ctl._ordered_start_items(spec, plan)
+    ] == ["feed", "market", "model"]
+
+
+def test_recovery_requires_live_confirmation(tmp_path):
+    spec = production_spec(tmp_path, ())
+
+    try:
+        ctl.recover_jrs_context(spec, observed("existing"), confirm_live=False)
+    except RuntimeError as exc:
+        assert str(exc) == "recover-jrs-context requires --confirm-live"
+    else:
+        raise AssertionError("expected live confirmation failure")
+
+
+def test_restore_rows_preserve_every_session_and_pane():
+    snapshot = observed("one")
+    snapshot["tmux_sessions"][0]["panes"].append(
+        {"pane_current_path": "/prod2", "pane_start_command": "python b.py"}
+    )
+
+    assert ctl._pane_restore_rows(snapshot) == [
+        {
+            "session": "one",
+            "panes": [
+                {
+                    "cwd": "/prod",
+                    "command": "python runner.py --live --confirm-live",
+                },
+                {"cwd": "/prod2", "command": "python b.py"},
+            ],
+        }
+    ]
+
+
+def test_restore_rows_decode_tmux_quoted_start_command():
+    snapshot = observed("one")
+    snapshot["tmux_sessions"][0]["panes"][0]["pane_start_command"] = (
+        '"cd \'/tmp\' && exec sleep 60"'
+    )
+
+    assert ctl._pane_restore_rows(snapshot)[0]["panes"][0]["command"] == (
+        "cd '/tmp' && exec sleep 60"
+    )
+
+
 def test_manual_runtime_never_becomes_automatic_start(tmp_path):
     runtime = WeatherManagedRuntimeSpec(
         instance_id="legacy_shadow",

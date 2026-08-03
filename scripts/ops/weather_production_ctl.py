@@ -4,6 +4,11 @@
 The default commands are read-only. ``reconcile --apply`` only starts missing
 runtimes declared in production.yaml; it never stops extra processes. Live
 recovery requires both an explicit reason and ``--confirm-live``.
+
+``recover-jrs-context --apply`` is the bounded exception for a failed canonical
+JRS permission host.  It snapshots every existing pane, rebuilds only the
+canonical tmux server, restores the exact pane commands, and then uses the
+normal desired-state reconcile path for sessions that were already missing.
 """
 
 from __future__ import annotations
@@ -11,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -180,15 +186,74 @@ def evaluate_production_health(
     }
 
 
+def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
+    """Run the canonical helper's effective write probe, not a session check."""
+
+    helper = ROOT / "scripts/ops/weather_jrs_tmux_env.sh"
+    command = (
+        f"source {str(helper)!r}; "
+        "weather_jrs_tmux_write_probe "
+        f"{spec.canonical_tmux_socket!r} {str(spec.data_feed_runtime_root)!r}"
+    )
+    result = subprocess.run(
+        ["/bin/bash", "-lc", command],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    return {
+        "status": "healthy" if result.returncode == 0 else "critical",
+        "returncode": result.returncode,
+        "socket": spec.canonical_tmux_socket,
+        "runtime_root": str(spec.data_feed_runtime_root),
+        "output": result.stdout[-2000:].strip(),
+    }
+
+
+def attach_jrs_context_health(
+    health: dict[str, Any], context: Mapping[str, Any]
+) -> dict[str, Any]:
+    health["jrs_context_health"] = dict(context)
+    if context.get("status") == "healthy":
+        return health
+    health["status"] = "critical"
+    for row in health.get("runtimes", []):
+        if row["instance_id"] == "weather_jrs_context_keeper":
+            row["issues"] = list(row.get("issues") or []) + [
+                "jrs_write_probe_failed"
+            ]
+            row["status"] = "critical"
+        else:
+            row["issues"] = list(row.get("issues") or []) + [
+                "jrs_context_unhealthy"
+            ]
+            row["status"] = "critical"
+    health["critical_runtimes"] = [
+        row["instance_id"]
+        for row in health.get("runtimes", [])
+        if row.get("status") == "critical"
+    ]
+    return health
+
+
 def build_plan(
     spec: WeatherProductionSpec, health: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
     specs = {item.instance_id: item for item in spec.managed_runtimes}
     actions: list[dict[str, Any]] = []
+    jrs_context_healthy = (
+        (health.get("jrs_context_health") or {}).get("status") != "critical"
+    )
     for row in health.get("runtimes", []):
         if row.get("present"):
             action = "inspect" if row.get("status") == "critical" else "none"
             reason = ",".join(row.get("issues") or []) or "healthy"
+        elif not jrs_context_healthy:
+            action = "manual_recovery_required"
+            reason = "jrs_context_unhealthy"
         else:
             runtime = specs[str(row["instance_id"])]
             if runtime.recovery_policy == "manual":
@@ -208,6 +273,104 @@ def build_plan(
                 "start_script": row["start_script"],
             }
         )
+    return actions
+
+
+def _tmux(spec: WeatherProductionSpec, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(spec.canonical_tmux_binary), "-L", spec.canonical_tmux_socket, *args],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+
+def _pane_restore_rows(observed: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for session in observed.get("tmux_sessions", []):
+        if not isinstance(session, Mapping):
+            continue
+        name = str(session.get("session") or "")
+        if not name or name == "weather_jrs_context_keeper":
+            continue
+        panes = []
+        for pane in session.get("panes", []):
+            if not isinstance(pane, Mapping):
+                continue
+            command = str(pane.get("pane_start_command") or "").strip()
+            cwd = str(pane.get("pane_current_path") or ROOT)
+            if not command:
+                raise RuntimeError(f"missing pane_start_command for {name}")
+            decoded = shlex.split(command)
+            if len(decoded) == 1:
+                command = decoded[0]
+            panes.append({"cwd": cwd, "command": command})
+        if not panes:
+            raise RuntimeError(f"no restorable panes for {name}")
+        rows.append({"session": name, "panes": panes})
+    return rows
+
+
+def recover_jrs_context(
+    spec: WeatherProductionSpec,
+    before: Mapping[str, Any],
+    *,
+    confirm_live: bool,
+) -> list[dict[str, Any]]:
+    """Rebuild the canonical permission host and restore the saved topology."""
+
+    if not confirm_live:
+        raise RuntimeError("recover-jrs-context requires --confirm-live")
+    restore_rows = _pane_restore_rows(before)
+    actions: list[dict[str, Any]] = []
+    killed = _tmux(spec, "kill-server")
+    actions.append(
+        {"action": "kill_server", "returncode": killed.returncode, "output": killed.stdout[-1000:].strip()}
+    )
+    started = _tmux(
+        spec,
+        "new-session",
+        "-d",
+        "-s",
+        "weather_jrs_context_keeper",
+        "while :; do sleep 3600; done",
+    )
+    if started.returncode != 0:
+        raise RuntimeError(f"failed to start canonical tmux host: {started.stdout}")
+    probe = collect_jrs_context_health(spec)
+    actions.append({"action": "jrs_write_probe", **probe})
+    if probe["status"] != "healthy":
+        raise RuntimeError(f"new canonical tmux host cannot write JRS: {probe['output']}")
+    for row in restore_rows:
+        session = row["session"]
+        for index, pane in enumerate(row["panes"]):
+            verb = "new-session" if index == 0 else "new-window"
+            target_args = ["-s", session] if index == 0 else ["-t", session]
+            result = _tmux(
+                spec,
+                verb,
+                "-d",
+                *target_args,
+                "-c",
+                pane["cwd"],
+                pane["command"],
+            )
+            actions.append(
+                {
+                    "action": "restore_pane",
+                    "session": session,
+                    "pane_index": index,
+                    "returncode": result.returncode,
+                    "output": result.stdout[-1000:].strip(),
+                }
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"failed restoring {session} pane {index}: {result.stdout}"
+                )
     return actions
 
 
@@ -338,6 +501,8 @@ def attach_semantic_health(
 def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> None:
     print(f"weather production: {str(payload.get('status')).upper()}")
     print(f"manifest: {payload.get('manifest_status')}")
+    context = payload.get("jrs_context_health") or {}
+    print(f"jrs_context: {context.get('status', 'unknown')}")
     for row in payload.get("runtimes", []):
         marker = "OK" if row["status"] == "healthy" else "CRITICAL"
         age = (
@@ -396,6 +561,33 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
     }
 
 
+def _ordered_start_items(
+    spec: WeatherProductionSpec, plan: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Order missing runtimes so producers start before their consumers."""
+
+    specs = {item.instance_id: item for item in spec.managed_runtimes}
+    remaining = {
+        str(item["instance_id"]): item
+        for item in plan
+        if item.get("action") == "start"
+    }
+    ordered: list[dict[str, Any]] = []
+    while remaining:
+        ready = [
+            instance_id
+            for instance_id in remaining
+            if not (set(specs[instance_id].dependencies) & set(remaining))
+        ]
+        if not ready:
+            raise RuntimeError(
+                "cyclic recovery dependencies: " + ",".join(sorted(remaining))
+            )
+        for instance_id in ready:
+            ordered.append(remaining.pop(instance_id))
+    return ordered
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--production-spec", type=Path)
@@ -409,6 +601,11 @@ def parse_args() -> argparse.Namespace:
     reconcile.add_argument("--apply", action="store_true")
     reconcile.add_argument("--confirm-live", action="store_true")
     reconcile.add_argument("--reason")
+    recover = sub.add_parser("recover-jrs-context")
+    recover.add_argument("--json", action="store_true")
+    recover.add_argument("--apply", action="store_true")
+    recover.add_argument("--confirm-live", action="store_true")
+    recover.add_argument("--reason")
     return parser.parse_args()
 
 
@@ -417,18 +614,32 @@ def main() -> int:
     spec = load_production_spec(args.production_spec)
     before = manifest_tool.collect_manifest(spec)
     health = evaluate_production_health(spec, before)
+    health = attach_jrs_context_health(health, collect_jrs_context_health(spec))
     health = attach_semantic_health(health, collect_data_feed_semantics())
     health["plan"] = build_plan(spec, health)
     health["command"] = args.command
     health["apply"] = bool(getattr(args, "apply", False))
-    if args.command == "reconcile" and args.apply:
+    if args.command in {"reconcile", "recover-jrs-context"} and args.apply:
         if not args.reason:
-            raise SystemExit("reconcile --apply requires --reason")
+            raise SystemExit(f"{args.command} --apply requires --reason")
         specs = {item.instance_id: item for item in spec.managed_runtimes}
         actions: list[dict[str, Any]] = []
-        for item in health["plan"]:
-            if item["action"] != "start":
-                continue
+        if args.command == "recover-jrs-context":
+            actions.extend(
+                recover_jrs_context(
+                    spec,
+                    before,
+                    confirm_live=bool(args.confirm_live),
+                )
+            )
+            time.sleep(2)
+            interim = manifest_tool.collect_manifest(spec)
+            interim_health = evaluate_production_health(spec, interim)
+            interim_health = attach_jrs_context_health(
+                interim_health, collect_jrs_context_health(spec)
+            )
+            health["plan"] = build_plan(spec, interim_health)
+        for item in _ordered_start_items(spec, health["plan"]):
             actions.append(
                 _run_start(
                     specs[item["instance_id"]],
@@ -438,6 +649,9 @@ def main() -> int:
         after = manifest_tool.collect_manifest(spec)
         after = manifest_tool.compare_prechange_manifest(after, before)
         health = evaluate_production_health(spec, after)
+        health = attach_jrs_context_health(
+            health, collect_jrs_context_health(spec)
+        )
         health = attach_semantic_health(health, collect_data_feed_semantics())
         health["command"] = args.command
         health["apply"] = True
