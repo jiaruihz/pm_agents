@@ -1,0 +1,1125 @@
+{
+  "city_performance": {
+    "ankara": {
+      "buy_cost": 0.8058,
+      "events": 1,
+      "pnl": 0.21898000000000006,
+      "positive_event_share": 1.0,
+      "target_dates": 1,
+      "turnover_roi": 0.2717547778605114
+    },
+    "atlanta": {
+      "buy_cost": 699.8643400000001,
+      "events": 8,
+      "pnl": 30.778550000000003,
+      "positive_event_share": 0.875,
+      "target_dates": 8,
+      "turnover_roi": 0.043977880056012
+    },
+    "austin": {
+      "buy_cost": 393.31933200000003,
+      "events": 9,
+      "pnl": 46.34764299999997,
+      "positive_event_share": 1.0,
+      "target_dates": 9,
+      "turnover_roi": 0.11783718528231397
+    },
+    "beijing": {
+      "buy_cost": 1.17208,
+      "events": 1,
+      "pnl": 1.22792,
+      "positive_event_share": 1.0,
+      "target_dates": 1,
+      "turnover_roi": 1.047641799194594
+    },
+    "buenos-aires": {
+      "buy_cost": 6796.534451,
+      "events": 10,
+      "pnl": 366.95176900000007,
+      "positive_event_share": 1.0,
+      "target_dates": 10,
+      "turnover_roi": 0.05399101139640498
+    },
+    "cape-town": {
+      "buy_cost": 3633.173329,
+      "events": 7,
+      "pnl": 48.43013099999979,
+      "positive_event_share": 0.5714285714285714,
+      "target_dates": 7,
+      "turnover_roi": 0.01332998087744131
+    },
+    "chengdu": {
+      "buy_cost": 1164.22645,
+      "events": 5,
+      "pnl": 19.225667999999978,
+      "positive_event_share": 0.6,
+      "target_dates": 5,
+      "turnover_roi": 0.016513684257903585
+    },
+    "chicago": {
+      "buy_cost": 24.16782,
+      "events": 3,
+      "pnl": -0.7082699999999984,
+      "positive_event_share": 0.3333333333333333,
+      "target_dates": 3,
+      "turnover_roi": -0.02930632551880966
+    },
+    "chongqing": {
+      "buy_cost": 1569.65947,
+      "events": 3,
+      "pnl": 21.380670000000038,
+      "positive_event_share": 0.6666666666666666,
+      "target_dates": 3,
+      "turnover_roi": 0.013621215562124462
+    },
+    "dallas": {
+      "buy_cost": 0.8058,
+      "events": 1,
+      "pnl": -0.8058,
+      "positive_event_share": 0.0,
+      "target_dates": 1,
+      "turnover_roi": -1.0
+    },
+    "denver": {
+      "buy_cost": 5534.1824240000005,
+      "events": 11,
+      "pnl": 266.1634739999999,
+      "positive_event_share": 0.8181818181818182,
+      "target_dates": 11,
+      "turnover_roi": 0.04809445255106391
+    },
+    "helsinki": {
+      "buy_cost": 738.78261,
+      "events": 1,
+      "pnl": 9.506368000000066,
+      "positive_event_share": 1.0,
+      "target_dates": 1,
+      "turnover_roi": 0.012867612030012545
+    },
+    "hong-kong": {
+      "buy_cost": 813.2117519999999,
+      "events": 7,
+      "pnl": 3.8054979999999765,
+      "positive_event_share": 0.7142857142857143,
+      "target_dates": 7,
+      "turnover_roi": 0.0046795905133451355
+    },
+    "houston": {
+      "buy_cost": 509.87306,
+      "events": 2,
+      "pnl": -12.024970000000017,
+      "positive_event_share": 0.0,
+      "target_dates": 2,
+      "turnover_roi": -0.02358424271327459
+    },
+    "istanbul": {
+      "buy_cost": 322.56091000000004,
+      "events": 1,
+      "pnl": -2.4830610000000775,
+      "positive_event_share": 0.0,
+      "target_dates": 1,
+      "turnover_roi": -0.007697960053498353
+    },
+    "jeddah": {
+      "buy_cost": 306.35057,
+      "events": 4,
+      "pnl": 16.75961,
+      "positive_event_share": 1.0,
+      "target_dates": 4,
+      "turnover_roi": 0.054707291714848116
+    },
+    "kuala-lumpur": {
+      "buy_cost": 300.09874,
+      "events": 1,
+      "pnl": -6.24323000000004,
+      "positive_event_share": 0.0,
+      "target_dates": 1,
+      "turnover_roi": -0.02080391940332718
+    },
+    "london": {
+      "buy_cost": 1396.4145350000001,
+      "events": 5,
+      "pnl": 29.78641600000001,
+      "positive_event_share": 0.6,
+      "target_dates": 5,
+      "turnover_roi": 0.021330640188445195
+    },
+    "los-angeles": {
+      "buy_cost": 11284.349516,
+      "events": 12,
+      "pnl": -155.86584400000055,
+      "positive_event_share": 0.75,
+      "target_dates": 12,
+      "turnover_roi": -0.013812567909120456
+    },
+    "lucknow": {
+      "buy_cost": 3573.324824,
+      "events": 8,
+      "pnl": 93.83378099999987,
+      "positive_event_share": 0.375,
+      "target_dates": 8,
+      "turnover_roi": 0.02625951617098213
+    },
+    "mexico-city": {
+      "buy_cost": 5285.3931250000005,
+      "events": 11,
+      "pnl": 285.1255239999998,
+      "positive_event_share": 0.6363636363636364,
+      "target_dates": 11,
+      "turnover_roi": 0.053945944465578384
+    },
+    "miami": {
+      "buy_cost": 13167.860001,
+      "events": 15,
+      "pnl": 557.3222779999998,
+      "positive_event_share": 0.8,
+      "target_dates": 15,
+      "turnover_roi": 0.04232443828820137
+    },
+    "milan": {
+      "buy_cost": 1492.152133,
+      "events": 6,
+      "pnl": 31.001667000000005,
+      "positive_event_share": 0.6666666666666666,
+      "target_dates": 6,
+      "turnover_roi": 0.02077647869434772
+    },
+    "moscow": {
+      "buy_cost": 256.80102,
+      "events": 1,
+      "pnl": 14.188690000000008,
+      "positive_event_share": 1.0,
+      "target_dates": 1,
+      "turnover_roi": 0.05525168864204671
+    },
+    "nyc": {
+      "buy_cost": 322.22000799999995,
+      "events": 7,
+      "pnl": 21.01029000000003,
+      "positive_event_share": 1.0,
+      "target_dates": 7,
+      "turnover_roi": 0.06520479634523513
+    },
+    "panama-city": {
+      "buy_cost": 665.860178,
+      "events": 2,
+      "pnl": 29.24843199999998,
+      "positive_event_share": 1.0,
+      "target_dates": 2,
+      "turnover_roi": 0.04392578647344785
+    },
+    "paris": {
+      "buy_cost": 1582.273357,
+      "events": 4,
+      "pnl": 94.09570200000002,
+      "positive_event_share": 1.0,
+      "target_dates": 4,
+      "turnover_roi": 0.05946867624593392
+    },
+    "san-francisco": {
+      "buy_cost": 4323.3423,
+      "events": 21,
+      "pnl": 476.822305,
+      "positive_event_share": 0.8095238095238095,
+      "target_dates": 21,
+      "turnover_roi": 0.11029020417837374
+    },
+    "sao-paulo": {
+      "buy_cost": 1064.921318,
+      "events": 3,
+      "pnl": 38.74569200000009,
+      "positive_event_share": 0.6666666666666666,
+      "target_dates": 3,
+      "turnover_roi": 0.03638361947037302
+    },
+    "seattle": {
+      "buy_cost": 5106.781707,
+      "events": 26,
+      "pnl": 524.8179310000003,
+      "positive_event_share": 0.8846153846153846,
+      "target_dates": 26,
+      "turnover_roi": 0.10276882019073158
+    },
+    "seoul": {
+      "buy_cost": 27.333690999999998,
+      "events": 4,
+      "pnl": 5.716529000000002,
+      "positive_event_share": 0.75,
+      "target_dates": 4,
+      "turnover_roi": 0.20913856822336957
+    },
+    "shanghai": {
+      "buy_cost": 6691.363924,
+      "events": 6,
+      "pnl": 239.6878210000001,
+      "positive_event_share": 0.5,
+      "target_dates": 6,
+      "turnover_roi": 0.035820473033951826
+    },
+    "shenzhen": {
+      "buy_cost": 760.879628,
+      "events": 5,
+      "pnl": 9.95914199999994,
+      "positive_event_share": 0.6,
+      "target_dates": 5,
+      "turnover_roi": 0.013088984950455185
+    },
+    "singapore": {
+      "buy_cost": 10.48429,
+      "events": 1,
+      "pnl": -0.7241199999999992,
+      "positive_event_share": 0.0,
+      "target_dates": 1,
+      "turnover_roi": -0.06906714713156535
+    },
+    "taipei": {
+      "buy_cost": 5691.828464,
+      "events": 16,
+      "pnl": 368.02050099999997,
+      "positive_event_share": 0.875,
+      "target_dates": 16,
+      "turnover_roi": 0.06465769362651684
+    },
+    "tel-aviv": {
+      "buy_cost": 6081.197672,
+      "events": 27,
+      "pnl": 366.69934199999994,
+      "positive_event_share": 0.9259259259259259,
+      "target_dates": 27,
+      "turnover_roi": 0.060300513447937125
+    },
+    "tokyo": {
+      "buy_cost": 3921.4565679999996,
+      "events": 6,
+      "pnl": 75.53839100000027,
+      "positive_event_share": 0.5,
+      "target_dates": 6,
+      "turnover_roi": 0.019262840143739232
+    },
+    "toronto": {
+      "buy_cost": 7009.600765,
+      "events": 14,
+      "pnl": 543.2202729999998,
+      "positive_event_share": 0.7857142857142857,
+      "target_dates": 14,
+      "turnover_roi": 0.07749660661308716
+    },
+    "warsaw": {
+      "buy_cost": 1954.435759,
+      "events": 14,
+      "pnl": 78.14974800000006,
+      "positive_event_share": 0.7857142857142857,
+      "target_dates": 14,
+      "turnover_roi": 0.0399858361371703
+    },
+    "wellington": {
+      "buy_cost": 856.710611,
+      "events": 5,
+      "pnl": -763.5786919999999,
+      "positive_event_share": 0.0,
+      "target_dates": 5,
+      "turnover_roi": -0.8912912740846162
+    },
+    "wuhan": {
+      "buy_cost": 6338.294827,
+      "events": 16,
+      "pnl": 192.7414630000001,
+      "positive_event_share": 0.6875,
+      "target_dates": 16,
+      "turnover_roi": 0.03040904032721167
+    }
+  },
+  "coverage": {
+    "all_portfolios": 316,
+    "cashflow_complete_buy_portfolios": 310,
+    "cashflow_complete_resolved_portfolios": 311,
+    "decoded_wallet_orders": 3129,
+    "independent_target_dates": 68,
+    "metadata_missing_events": 0,
+    "public_activity_rows": 3905,
+    "receipts_found": 3841,
+    "trade_transactions": 3841
+  },
+  "execution": {
+    "buy_maker_cash_share": 0.0699509605962229,
+    "buy_taker_cash_share": 0.930049039403777,
+    "public_boundary": "receipts prove wallet-side maker/taker for decoded fills; original post time, cancelled/unfilled orders, queue rank, and live book are unavailable",
+    "sell_event_share": 0.9870967741935484,
+    "sell_maker_cash_share": 0.08098147282195182,
+    "sell_taker_cash_share": 0.9190185271780482,
+    "wallet_side_onchain_roles": {
+      "BUY:passive_maker_order": {
+        "cash": 7665.444467999994,
+        "fill_events": 1007,
+        "orders": 544,
+        "shares": 31309.279955999995
+      },
+      "BUY:taker_order": {
+        "cash": 101917.67494399991,
+        "fill_events": 1416,
+        "orders": 1399,
+        "shares": 300781.1906190001
+      },
+      "SELL:passive_maker_order": {
+        "cash": 9695.609766,
+        "fill_events": 444,
+        "orders": 181,
+        "shares": 23628.345079000002
+      },
+      "SELL:taker_order": {
+        "cash": 110030.6612949999,
+        "fill_events": 1027,
+        "orders": 1005,
+        "shares": 294870.22176700004
+      }
+    }
+  },
+  "generated_at_utc": "2026-08-04T11:29:41.986799+00:00",
+  "grain": "cashflow-complete city_x_target_date_ladder",
+  "performance": {
+    "date_stability": {
+      "all": {
+        "buy_cost": 111674.06915899999,
+        "pnl": 3964.094211999999,
+        "positive_target_date_share": 0.8529411764705882,
+        "target_dates": 68,
+        "turnover_roi": 0.03549699802159064
+      },
+      "early_half": {
+        "buy_cost": 1670.603715,
+        "pnl": 307.36330200000003,
+        "positive_target_date_share": 0.8235294117647058,
+        "target_dates": 34,
+        "turnover_roi": 0.18398337034704848
+      },
+      "largest_loss_dates": [
+        {
+          "buy_cost": 7273.608150999999,
+          "pnl": -710.9522700000002,
+          "roi": -0.09774409828528585,
+          "target_date": "2026-07-06"
+        },
+        {
+          "buy_cost": 6642.317912999999,
+          "pnl": -312.424338,
+          "roi": -0.047035438847113795,
+          "target_date": "2026-07-08"
+        },
+        {
+          "buy_cost": 3553.673965,
+          "pnl": -57.42300500000002,
+          "roi": -0.016158771335118814,
+          "target_date": "2026-07-17"
+        },
+        {
+          "buy_cost": 7.45512,
+          "pnl": -7.45512,
+          "roi": -1.0,
+          "target_date": "2026-06-26"
+        },
+        {
+          "buy_cost": 30.729157999999998,
+          "pnl": -6.461968,
+          "roi": -0.21028783151168673,
+          "target_date": "2026-06-02"
+        }
+      ],
+      "late_half": {
+        "buy_cost": 110003.465444,
+        "pnl": 3656.7309099999993,
+        "positive_target_date_share": 0.8823529411764706,
+        "target_dates": 34,
+        "turnover_roi": 0.03324196101677859
+      },
+      "top_five_pnl_dates": [
+        {
+          "buy_cost": 8256.897155999999,
+          "pnl": 777.6356869999995,
+          "roi": 0.09418013477797998,
+          "target_date": "2026-07-05"
+        },
+        {
+          "buy_cost": 3755.8441590000007,
+          "pnl": 463.36161999999985,
+          "roi": 0.12337083233063924,
+          "target_date": "2026-07-03"
+        },
+        {
+          "buy_cost": 6948.587542,
+          "pnl": 439.9271649999997,
+          "roi": 0.06331173959324922,
+          "target_date": "2026-07-04"
+        },
+        {
+          "buy_cost": 4329.167864999999,
+          "pnl": 304.84278300000017,
+          "roi": 0.07041602277993446,
+          "target_date": "2026-07-02"
+        },
+        {
+          "buy_cost": 3702.5410939999997,
+          "pnl": 288.41644600000006,
+          "roi": 0.07789689261447535,
+          "target_date": "2026-07-23"
+        }
+      ],
+      "without_top_five_pnl_dates": {
+        "buy_cost": 84681.031343,
+        "pnl": 1689.9105109999998,
+        "positive_target_date_share": 0.8412698412698413,
+        "target_dates": 63,
+        "turnover_roi": 0.019956187167289304
+      }
+    },
+    "history_target_date_bootstrap": {
+      "block": "target_date",
+      "ci95": [
+        0.01175790724028948,
+        0.05758577807850722
+      ],
+      "independent_target_dates": 69,
+      "point_turnover_roi": 0.03552164564140721,
+      "positive_target_date_share": 0.855072463768116,
+      "samples": 5000,
+      "seed": 20260729
+    },
+    "largest_loss_events": [
+      {
+        "buy_conditions": 4,
+        "buy_cost": 833.181201,
+        "buy_shares": 4555.025465,
+        "buy_span_minutes": 774.0833333333334,
+        "buy_transactions": 37,
+        "city": "wellington",
+        "entry_price_band": "0.20-0.40",
+        "first_buy_local_hour": "5.673055555555556",
+        "first_buy_to_first_sell_hours": 1.3355555555555556,
+        "first_buy_to_last_sell_hours": 13.644722222222223,
+        "first_entry_day_offset": "0",
+        "has_sell": true,
+        "holding_band": "30m-2h",
+        "largest_buy_transaction_cost": 399.36868,
+        "main_cash_per_share": 0.40622839745029915,
+        "main_condition": "0xd73b63700db3ed55bb84fcf1bc7d315a8e498f1de37584b5c3147708dfa77b90",
+        "main_cost": 827.593257,
+        "main_cost_share": 0.9932932428224578,
+        "main_entry_quote": 0.39507916794712317,
+        "main_outcome": "Yes",
+        "main_shares": 2037.260965,
+        "main_slug": "highest-temperature-in-wellington-on-july-6-2026-14c",
+        "main_title": "Will the highest temperature in Wellington be 14°C on July 6?",
+        "main_yes_condition": "0xd73b63700db3ed55bb84fcf1bc7d315a8e498f1de37584b5c3147708dfa77b90",
+        "main_yes_cost": 827.593257,
+        "main_yes_is_winner": false,
+        "main_yes_shares": 2037.260965,
+        "main_yes_slug": "highest-temperature-in-wellington-on-july-6-2026-14c",
+        "main_yes_title": "Will the highest temperature in Wellington be 14°C on July 6?",
+        "pnl": -745.678912,
+        "roi": -0.8949780805244069,
+        "sell_proceeds": 87.502289,
+        "target_date": "2026-07-06",
+        "winner_label": "13°C",
+        "yes_buy_conditions": 4,
+        "yes_buy_cost_share": 1.0
+      },
+      {
+        "buy_conditions": 1,
+        "buy_cost": 2365.6271,
+        "buy_shares": 5205.22,
+        "buy_span_minutes": 812.9166666666666,
+        "buy_transactions": 29,
+        "city": "los-angeles",
+        "entry_price_band": "0.40-0.60",
+        "first_buy_local_hour": "21.561111111111114",
+        "first_buy_to_first_sell_hours": 0.015,
+        "first_buy_to_last_sell_hours": 23.03361111111111,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "<5m",
+        "largest_buy_transaction_cost": 1196.77111,
+        "main_cash_per_share": 0.4544720684236209,
+        "main_condition": "0xdb14ba96bb69492398f3e5689437da246837fd8e623527d1fc8ca9cb3216f427",
+        "main_cost": 2365.6271,
+        "main_cost_share": 1.0,
+        "main_entry_quote": 0.4422696831385765,
+        "main_outcome": "Yes",
+        "main_shares": 5205.22,
+        "main_slug": "highest-temperature-in-los-angeles-on-july-8-2026-76-77f",
+        "main_title": "Will the highest temperature in Los Angeles be between 76-77°F on July 8?",
+        "main_yes_condition": "0xdb14ba96bb69492398f3e5689437da246837fd8e623527d1fc8ca9cb3216f427",
+        "main_yes_cost": 2365.6271,
+        "main_yes_is_winner": false,
+        "main_yes_shares": 5205.22,
+        "main_yes_slug": "highest-temperature-in-los-angeles-on-july-8-2026-76-77f",
+        "main_yes_title": "Will the highest temperature in Los Angeles be between 76-77°F on July 8?",
+        "pnl": -404.68266500000027,
+        "roi": -0.1710678174932982,
+        "sell_proceeds": 1960.9444349999999,
+        "target_date": "2026-07-08",
+        "winner_label": "74-75°F",
+        "yes_buy_conditions": 1,
+        "yes_buy_cost_share": 1.0
+      },
+      {
+        "buy_conditions": 2,
+        "buy_cost": 694.1839190000001,
+        "buy_shares": 1688.4361279999998,
+        "buy_span_minutes": 250.6,
+        "buy_transactions": 24,
+        "city": "los-angeles",
+        "entry_price_band": "0.20-0.40",
+        "first_buy_local_hour": "20.904999999999998",
+        "first_buy_to_first_sell_hours": 6.224166666666667,
+        "first_buy_to_last_sell_hours": 6.2444444444444445,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "2-8h",
+        "largest_buy_transaction_cost": 591.24157,
+        "main_cash_per_share": 0.4081665483740797,
+        "main_condition": "0x31df18898f6bae2f2952e7740a5249d7a9f947b971dae5a19a198198f86fcf99",
+        "main_cost": 680.5916490000001,
+        "main_cost_share": 0.9804197855525374,
+        "main_entry_quote": 0.39687153104549755,
+        "main_outcome": "Yes",
+        "main_shares": 1667.4361279999998,
+        "main_slug": "highest-temperature-in-los-angeles-on-july-25-2026-80-81f",
+        "main_title": "Will the highest temperature in Los Angeles be between 80-81°F on July 25?",
+        "main_yes_condition": "0x31df18898f6bae2f2952e7740a5249d7a9f947b971dae5a19a198198f86fcf99",
+        "main_yes_cost": 680.5916490000001,
+        "main_yes_is_winner": false,
+        "main_yes_shares": 1667.4361279999998,
+        "main_yes_slug": "highest-temperature-in-los-angeles-on-july-25-2026-80-81f",
+        "main_yes_title": "Will the highest temperature in Los Angeles be between 80-81°F on July 25?",
+        "pnl": -78.7877390000001,
+        "roi": -0.11349692328438984,
+        "sell_proceeds": 615.39618,
+        "target_date": "2026-07-25",
+        "winner_label": "78-79°F",
+        "yes_buy_conditions": 1,
+        "yes_buy_cost_share": 0.9804197855525374
+      },
+      {
+        "buy_conditions": 2,
+        "buy_cost": 1412.183898,
+        "buy_shares": 3488.044075,
+        "buy_span_minutes": 201.13333333333333,
+        "buy_transactions": 15,
+        "city": "miami",
+        "entry_price_band": "0.20-0.40",
+        "first_buy_local_hour": "0.39472222222222225",
+        "first_buy_to_first_sell_hours": 0.20222222222222222,
+        "first_buy_to_last_sell_hours": 8.022222222222222,
+        "first_entry_day_offset": "-1",
+        "has_sell": true,
+        "holding_band": "5-30m",
+        "largest_buy_transaction_cost": 535.67952,
+        "main_cash_per_share": 0.40244032180489697,
+        "main_condition": "0x8bc0b7283469271a338e0360997b3c468408a9b477f36a0bd78b7de082db229f",
+        "main_cost": 1153.333391,
+        "main_cost_share": 0.8167019838091936,
+        "main_entry_quote": 0.39086029986450926,
+        "main_outcome": "No",
+        "main_shares": 2865.84949,
+        "main_slug": "highest-temperature-in-miami-on-july-17-2026-94-95f",
+        "main_title": "Will the highest temperature in Miami be between 94-95°F on July 17?",
+        "main_yes_condition": "0x8bc0b7283469271a338e0360997b3c468408a9b477f36a0bd78b7de082db229f",
+        "main_yes_cost": 1150.933391,
+        "main_yes_is_winner": false,
+        "main_yes_shares": 2862.09949,
+        "main_yes_slug": "highest-temperature-in-miami-on-july-17-2026-94-95f",
+        "main_yes_title": "Will the highest temperature in Miami be between 94-95°F on July 17?",
+        "pnl": -61.493318000000045,
+        "roi": -0.04354483724611909,
+        "sell_proceeds": 1350.69058,
+        "target_date": "2026-07-17",
+        "winner_label": "92-93°F",
+        "yes_buy_conditions": 2,
+        "yes_buy_cost_share": 0.9983005046273371
+      },
+      {
+        "buy_conditions": 1,
+        "buy_cost": 2389.38854,
+        "buy_shares": 4989.65,
+        "buy_span_minutes": 293.71666666666664,
+        "buy_transactions": 35,
+        "city": "los-angeles",
+        "entry_price_band": "0.40-0.60",
+        "first_buy_local_hour": "22.264444444444443",
+        "first_buy_to_first_sell_hours": 0.19444444444444445,
+        "first_buy_to_last_sell_hours": 4.9075,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "5-30m",
+        "largest_buy_transaction_cost": 1072.84817,
+        "main_cash_per_share": 0.47886896676119567,
+        "main_condition": "0xea375977ee539b47800bae67a8c72a9bdb1fc944038173a97f42220c15a85645",
+        "main_cost": 2389.38854,
+        "main_cost_share": 1.0,
+        "main_entry_quote": 0.46656398744925015,
+        "main_outcome": "Yes",
+        "main_shares": 4989.65,
+        "main_slug": "highest-temperature-in-los-angeles-on-july-11-2026-74-75f",
+        "main_title": "Will the highest temperature in Los Angeles be between 74-75°F on July 11?",
+        "main_yes_condition": "0xea375977ee539b47800bae67a8c72a9bdb1fc944038173a97f42220c15a85645",
+        "main_yes_cost": 2389.38854,
+        "main_yes_is_winner": true,
+        "main_yes_shares": 4989.65,
+        "main_yes_slug": "highest-temperature-in-los-angeles-on-july-11-2026-74-75f",
+        "main_yes_title": "Will the highest temperature in Los Angeles be between 74-75°F on July 11?",
+        "pnl": -49.69902000000002,
+        "roi": -0.020799890502529998,
+        "sell_proceeds": 2339.68952,
+        "target_date": "2026-07-11",
+        "winner_label": "74-75°F",
+        "yes_buy_conditions": 1,
+        "yes_buy_cost_share": 1.0
+      }
+    ],
+    "largest_win_events": [
+      {
+        "buy_conditions": 2,
+        "buy_cost": 820.947271,
+        "buy_shares": 3519.16977,
+        "buy_span_minutes": 212.75,
+        "buy_transactions": 30,
+        "city": "shanghai",
+        "entry_price_band": "0.20-0.40",
+        "first_buy_local_hour": "14.268055555555556",
+        "first_buy_to_first_sell_hours": 0.3541666666666667,
+        "first_buy_to_last_sell_hours": 4.004166666666666,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "5-30m",
+        "largest_buy_transaction_cost": 395.87362,
+        "main_cash_per_share": 0.2243803629621102,
+        "main_condition": "0xfb617069a0c78254f147ad3f3a50a5dbb223ce5c50d5485ee334274301bf51cd",
+        "main_cost": 623.142361,
+        "main_cost_share": 0.7590528442112332,
+        "main_entry_quote": 0.21621723580909225,
+        "main_outcome": "Yes",
+        "main_shares": 2777.16977,
+        "main_slug": "highest-temperature-in-shanghai-on-july-5-2026-31c",
+        "main_title": "Will the highest temperature in Shanghai be 31°C on July 5?",
+        "main_yes_condition": "0xfb617069a0c78254f147ad3f3a50a5dbb223ce5c50d5485ee334274301bf51cd",
+        "main_yes_cost": 623.142361,
+        "main_yes_is_winner": true,
+        "main_yes_shares": 2777.16977,
+        "main_yes_slug": "highest-temperature-in-shanghai-on-july-5-2026-31c",
+        "main_yes_title": "Will the highest temperature in Shanghai be 31°C on July 5?",
+        "pnl": 242.9280839999999,
+        "roi": 0.2959119209983949,
+        "sell_proceeds": 1063.875355,
+        "target_date": "2026-07-05",
+        "winner_label": "31°C",
+        "yes_buy_conditions": 2,
+        "yes_buy_cost_share": 1.0
+      },
+      {
+        "buy_conditions": 1,
+        "buy_cost": 1134.18302,
+        "buy_shares": 2311.19,
+        "buy_span_minutes": 15.316666666666666,
+        "buy_transactions": 8,
+        "city": "miami",
+        "entry_price_band": "0.40-0.60",
+        "first_buy_local_hour": "22.5875",
+        "first_buy_to_first_sell_hours": 0.006944444444444444,
+        "first_buy_to_last_sell_hours": 3.248611111111111,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "<5m",
+        "largest_buy_transaction_cost": 1110.86089,
+        "main_cash_per_share": 0.4907355172010955,
+        "main_condition": "0x8ceb001ea4bc396b202979651d0f69ef48e3f346e3fa45f060685d263708c1b2",
+        "main_cost": 1134.18302,
+        "main_cost_share": 1.0,
+        "main_entry_quote": 0.47832099478592766,
+        "main_outcome": "Yes",
+        "main_shares": 2311.19,
+        "main_slug": "highest-temperature-in-miami-on-july-22-2026-92-93f",
+        "main_title": "Will the highest temperature in Miami be between 92-93°F on July 22?",
+        "main_yes_condition": "0x8ceb001ea4bc396b202979651d0f69ef48e3f346e3fa45f060685d263708c1b2",
+        "main_yes_cost": 1134.18302,
+        "main_yes_is_winner": true,
+        "main_yes_shares": 2311.19,
+        "main_yes_slug": "highest-temperature-in-miami-on-july-22-2026-92-93f",
+        "main_yes_title": "Will the highest temperature in Miami be between 92-93°F on July 22?",
+        "pnl": 152.62429999999995,
+        "roi": 0.13456761149536514,
+        "sell_proceeds": 1286.80732,
+        "target_date": "2026-07-22",
+        "winner_label": "92-93°F",
+        "yes_buy_conditions": 1,
+        "yes_buy_cost_share": 1.0
+      },
+      {
+        "buy_conditions": 1,
+        "buy_cost": 1336.741083,
+        "buy_shares": 2662.203332,
+        "buy_span_minutes": 185.23333333333332,
+        "buy_transactions": 15,
+        "city": "miami",
+        "entry_price_band": "0.40-0.60",
+        "first_buy_local_hour": "0.7755555555555556",
+        "first_buy_to_first_sell_hours": 0.02,
+        "first_buy_to_last_sell_hours": 3.144722222222222,
+        "first_entry_day_offset": "-1",
+        "has_sell": true,
+        "holding_band": "<5m",
+        "largest_buy_transaction_cost": 1115.18562,
+        "main_cash_per_share": 0.5021183269257511,
+        "main_condition": "0x20ed7405c72327cdbbcf1ea52f7e53f604c5512ab4fbc16faf2652970e2601e1",
+        "main_cost": 1336.741083,
+        "main_cost_share": 1.0,
+        "main_entry_quote": 0.4898389305444143,
+        "main_outcome": "Yes",
+        "main_shares": 2662.203332,
+        "main_slug": "highest-temperature-in-miami-on-july-8-2026-92-93f",
+        "main_title": "Will the highest temperature in Miami be between 92-93°F on July 8?",
+        "main_yes_condition": "0x20ed7405c72327cdbbcf1ea52f7e53f604c5512ab4fbc16faf2652970e2601e1",
+        "main_yes_cost": 1336.741083,
+        "main_yes_is_winner": true,
+        "main_yes_shares": 2662.203332,
+        "main_yes_slug": "highest-temperature-in-miami-on-july-8-2026-92-93f",
+        "main_yes_title": "Will the highest temperature in Miami be between 92-93°F on July 8?",
+        "pnl": 141.63633700000014,
+        "roi": 0.1059564479623315,
+        "sell_proceeds": 1478.37742,
+        "target_date": "2026-07-08",
+        "winner_label": "92-93°F",
+        "yes_buy_conditions": 1,
+        "yes_buy_cost_share": 1.0
+      },
+      {
+        "buy_conditions": 1,
+        "buy_cost": 380.689449,
+        "buy_shares": 1218.7654069999999,
+        "buy_span_minutes": 18.666666666666668,
+        "buy_transactions": 5,
+        "city": "seattle",
+        "entry_price_band": "0.20-0.40",
+        "first_buy_local_hour": "21.13111111111111",
+        "first_buy_to_first_sell_hours": 0.04833333333333333,
+        "first_buy_to_last_sell_hours": 0.5486111111111112,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "<5m",
+        "largest_buy_transaction_cost": 373.17333,
+        "main_cash_per_share": 0.3123566248381384,
+        "main_condition": "0x59045320094372b4b0ef611258cd8e3ae6283b2ead35665d63cc698ae7809cde",
+        "main_cost": 380.689449,
+        "main_cost_share": 1.0,
+        "main_entry_quote": 0.3018767244838228,
+        "main_outcome": "Yes",
+        "main_shares": 1218.7654069999999,
+        "main_slug": "highest-temperature-in-seattle-on-july-3-2026-72-73f",
+        "main_title": "Will the highest temperature in Seattle be between 72-73°F on July 3?",
+        "main_yes_condition": "0x59045320094372b4b0ef611258cd8e3ae6283b2ead35665d63cc698ae7809cde",
+        "main_yes_cost": 380.689449,
+        "main_yes_is_winner": true,
+        "main_yes_shares": 1218.7654069999999,
+        "main_yes_slug": "highest-temperature-in-seattle-on-july-3-2026-72-73f",
+        "main_yes_title": "Will the highest temperature in Seattle be between 72-73°F on July 3?",
+        "pnl": 139.98099099999996,
+        "roi": 0.367703889266445,
+        "sell_proceeds": 520.67044,
+        "target_date": "2026-07-03",
+        "winner_label": "72-73°F",
+        "yes_buy_conditions": 1,
+        "yes_buy_cost_share": 1.0
+      },
+      {
+        "buy_conditions": 2,
+        "buy_cost": 988.04615,
+        "buy_shares": 3702.02,
+        "buy_span_minutes": 484.6,
+        "buy_transactions": 19,
+        "city": "san-francisco",
+        "entry_price_band": "0.20-0.40",
+        "first_buy_local_hour": "20.879722222222224",
+        "first_buy_to_first_sell_hours": 0.015833333333333335,
+        "first_buy_to_last_sell_hours": 8.105833333333333,
+        "first_entry_day_offset": "-2",
+        "has_sell": true,
+        "holding_band": "<5m",
+        "largest_buy_transaction_cost": 502.03143,
+        "main_cash_per_share": 0.2936010150152818,
+        "main_condition": "0x932610db4f9b0aaa6d9b2868f7b55456383db25e410e13a57ae79f154a147360",
+        "main_cost": 727.19393,
+        "main_cost_share": 0.7359918663718289,
+        "main_entry_quote": 0.283630274438571,
+        "main_outcome": "Yes",
+        "main_shares": 2476.81,
+        "main_slug": "highest-temperature-in-san-francisco-on-june-30-2026-68-69f",
+        "main_title": "Will the highest temperature in San Francisco be between 68-69°F on June 30?",
+        "main_yes_condition": "0x932610db4f9b0aaa6d9b2868f7b55456383db25e410e13a57ae79f154a147360",
+        "main_yes_cost": 727.19393,
+        "main_yes_is_winner": false,
+        "main_yes_shares": 2476.81,
+        "main_yes_slug": "highest-temperature-in-san-francisco-on-june-30-2026-68-69f",
+        "main_yes_title": "Will the highest temperature in San Francisco be between 68-69°F on June 30?",
+        "pnl": 135.85316,
+        "roi": 0.13749677583380088,
+        "sell_proceeds": 1123.89931,
+        "target_date": "2026-06-30",
+        "winner_label": "72-73°F",
+        "yes_buy_conditions": 2,
+        "yes_buy_cost_share": 1.0
+      }
+    ],
+    "negative_event_share": 0.24193548387096775,
+    "pnl_distribution": {
+      "mean": 12.787400683870965,
+      "median": 4.207785,
+      "n": 310,
+      "p10": -6.267457800000035,
+      "p25": 0.13557750000000035,
+      "p75": 21.697009999999977,
+      "p90": 59.640487699999966
+    },
+    "positive_event_share": 0.7580645161290323,
+    "repricing_buy_portfolios": {
+      "buy_cost": 111674.069159,
+      "pnl": 3964.094211999999,
+      "turnover_roi": 0.035496998021590634
+    },
+    "roi_distribution": {
+      "mean": 0.13812222172870395,
+      "median": 0.0645797339127121,
+      "n": 310,
+      "p10": -0.039485310542241,
+      "p25": 0.002602247892798624,
+      "p75": 0.17665149106276104,
+      "p90": 0.44414867928335133
+    },
+    "wallet_cashflow_complete": {
+      "buy_cost": 111674.069159,
+      "pnl": 3966.846711999999,
+      "turnover_roi": 0.0355216456414072
+    }
+  },
+  "schema_version": "lmvm_repricing_profile_v1",
+  "selection": {
+    "by_entry_price_band": {
+      "0.00-0.10": {
+        "buy_cost": 93.396291,
+        "events": 20,
+        "pnl": 18.420048000000005,
+        "positive_event_share": 0.65,
+        "target_dates": 14,
+        "turnover_roi": 0.19722461997982343
+      },
+      "0.10-0.20": {
+        "buy_cost": 1087.00612,
+        "events": 29,
+        "pnl": 96.519768,
+        "positive_event_share": 0.8620689655172413,
+        "target_dates": 21,
+        "turnover_roi": 0.08879413484810922
+      },
+      "0.20-0.40": {
+        "buy_cost": 75399.708042,
+        "events": 206,
+        "pnl": 3082.1648560000003,
+        "positive_event_share": 0.7572815533980582,
+        "target_dates": 65,
+        "turnover_roi": 0.04087767626743512
+      },
+      "0.40-0.60": {
+        "buy_cost": 32200.807287,
+        "events": 50,
+        "pnl": 764.6111499999989,
+        "positive_event_share": 0.78,
+        "target_dates": 32,
+        "turnover_roi": 0.02374509257439285
+      },
+      "0.60+": {
+        "buy_cost": 2893.1514190000003,
+        "events": 5,
+        "pnl": 2.3783899999997584,
+        "positive_event_share": 0.4,
+        "target_dates": 5,
+        "turnover_roi": 0.0008220758804327753
+      }
+    },
+    "main_cost_share_distribution": {
+      "mean": 0.8963754322794196,
+      "median": 1.0,
+      "n": 310,
+      "p10": 0.5296108204855948,
+      "p25": 0.8459038032305027,
+      "p75": 1.0,
+      "p90": 1.0
+    },
+    "main_entry_quote_distribution": {
+      "mean": 0.29435891450881513,
+      "median": 0.2898557559967211,
+      "n": 310,
+      "p10": 0.15,
+      "p25": 0.20446037936978761,
+      "p75": 0.3595997317273274,
+      "p90": 0.4610426845968735
+    },
+    "main_yes_winner_denominator": 301,
+    "main_yes_winner_share": 0.3488372093023256,
+    "single_condition_event_share": 0.6870967741935484,
+    "single_yes_condition_event_share": 0.6838709677419355,
+    "yes_buy_cost_share": 0.9433670615244137
+  },
+  "sizing": {
+    "buy_transactions": {
+      "mean": 7.34516129032258,
+      "median": 4.0,
+      "n": 310,
+      "p10": 1.0,
+      "p25": 2.0,
+      "p75": 9.0,
+      "p90": 17.100000000000023
+    },
+    "event_buy_cost": {
+      "mean": 360.2389327709678,
+      "median": 253.25217500000002,
+      "n": 310,
+      "p10": 3.33184,
+      "p25": 10.4,
+      "p75": 527.9662119999999,
+      "p90": 846.3539529999999
+    },
+    "event_buy_shares": {
+      "mean": 1054.8319618419355,
+      "median": 825.0450000000001,
+      "n": 310,
+      "p10": 15.900000000000002,
+      "p25": 54.0775,
+      "p75": 1593.86169775,
+      "p90": 2408.025666400001
+    },
+    "largest_buy_transaction_cost": {
+      "mean": 284.01666762258066,
+      "median": 215.41208,
+      "n": 310,
+      "p10": 3.2938419999999997,
+      "p25": 6.2549825,
+      "p75": 444.7052775,
+      "p90": 736.949099
+    },
+    "main_condition_cost": {
+      "mean": 334.21634757419355,
+      "median": 248.74780500000003,
+      "n": 310,
+      "p10": 3.3075200000000002,
+      "p25": 7.0985825,
+      "p75": 502.797875,
+      "p90": 811.6471392000001
+    },
+    "main_condition_shares": {
+      "mean": 945.8832816548386,
+      "median": 788.836665,
+      "n": 310,
+      "p10": 13.261,
+      "p25": 39.385,
+      "p75": 1455.42288375,
+      "p90": 2237.7347765000013
+    }
+  },
+  "snapshot": "/Users/deepsleep/projects/pm_agents/runtime/analysis_snapshots/lmvm_20260803",
+  "timing": {
+    "buy_span_minutes": {
+      "mean": 127.23586021505378,
+      "median": 12.875,
+      "n": 310,
+      "p10": 0.0,
+      "p25": 0.2875,
+      "p75": 65.97916666666666,
+      "p90": 249.23500000000004
+    },
+    "by_holding_band": {
+      "2-8h": {
+        "buy_cost": 6987.636626,
+        "events": 46,
+        "pnl": 249.44281999999995,
+        "positive_event_share": 0.782608695652174,
+        "target_dates": 32,
+        "turnover_roi": 0.03569773778330985
+      },
+      "30m-2h": {
+        "buy_cost": 17092.025031,
+        "events": 68,
+        "pnl": -130.48316599999995,
+        "positive_event_share": 0.8088235294117647,
+        "target_dates": 41,
+        "turnover_roi": -0.007634154862477743
+      },
+      "5-30m": {
+        "buy_cost": 28508.420373,
+        "events": 71,
+        "pnl": 820.0315529999998,
+        "positive_event_share": 0.6619718309859155,
+        "target_dates": 39,
+        "turnover_roi": 0.028764538416047855
+      },
+      "8h+": {
+        "buy_cost": 481.611582,
+        "events": 24,
+        "pnl": 73.26990700000002,
+        "positive_event_share": 0.7916666666666666,
+        "target_dates": 16,
+        "turnover_roi": 0.1521348525210509
+      },
+      "<5m": {
+        "buy_cost": 58549.140226,
+        "events": 97,
+        "pnl": 2962.0684189999993,
+        "positive_event_share": 0.7938144329896907,
+        "target_dates": 29,
+        "turnover_roi": 0.05059115142539069
+      },
+      "no_sell": {
+        "buy_cost": 55.235321,
+        "events": 4,
+        "pnl": -10.235320999999997,
+        "positive_event_share": 0.25,
+        "target_dates": 4,
+        "turnover_roi": -0.1853039108797792
+      }
+    },
+    "entry_cost_share_by_local_hour_band": {
+      "00-06": 0.3064994190591742,
+      "06-10": 0.09586750004441331,
+      "10-14": 0.10159710795121614,
+      "14-18": 0.08857102829004705,
+      "18-24": 0.40746494465514976
+    },
+    "entry_cost_share_by_target_day_offset": {
+      "-1": 0.36016904451243387,
+      "-2": 0.6294531622914455,
+      "-3": 0.0018203079999933047,
+      "0": 0.00855748519612755
+    },
+    "entry_cost_share_by_utc_hour_band": {
+      "00-06": 0.5227072579136889,
+      "06-12": 0.36086292706733614,
+      "12-18": 0.11137224390946376,
+      "18-24": 0.005057571109511247
+    },
+    "first_buy_to_first_sell_hours": {
+      "mean": 2.380199709513435,
+      "median": 0.3425,
+      "n": 306,
+      "p10": 0.014305555555555554,
+      "p25": 0.042569444444444444,
+      "p75": 1.8527083333333334,
+      "p90": 6.724861111111111
+    },
+    "first_buy_to_last_sell_hours": {
+      "mean": 5.838659222948438,
+      "median": 1.9129166666666668,
+      "n": 306,
+      "p10": 0.20527777777777778,
+      "p25": 0.5697916666666667,
+      "p75": 7.570972222222222,
+      "p90": 19.22694444444444
+    }
+  },
+  "wallet": "0xc9ded4d5f6eec0a75907ebb924c164a4aea381d9"
+}
