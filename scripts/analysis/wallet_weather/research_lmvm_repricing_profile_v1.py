@@ -74,11 +74,14 @@ def distribution(values: Iterable[float]) -> dict[str, float | int | None]:
     rows = [float(value) for value in values]
     return {
         "n": len(rows),
+        "min": min(rows) if rows else None,
         "p10": percentile(rows, 0.10),
         "p25": percentile(rows, 0.25),
         "median": percentile(rows, 0.50),
         "p75": percentile(rows, 0.75),
         "p90": percentile(rows, 0.90),
+        "p95": percentile(rows, 0.95),
+        "max": max(rows) if rows else None,
         "mean": statistics.fmean(rows) if rows else None,
     }
 
@@ -194,6 +197,7 @@ def main() -> None:
     snapshot = args.snapshot.resolve()
     analysis = snapshot / "analysis" / "full_ladder_history_v1"
     activity = read_jsonl_gz(snapshot / "weather_activity.jsonl.gz")
+    metadata_rows = read_jsonl_gz(snapshot / "event_metadata.jsonl.gz")
     portfolios = read_csv(analysis / "event_portfolios.csv")
     history = json.loads((analysis / "summary.json").read_text(encoding="utf-8"))
 
@@ -210,6 +214,23 @@ def main() -> None:
         key = slug_to_key.get(str(row.get("eventSlug") or ""))
         if key:
             rows_by_key[key].append(row)
+
+    condition_ladder: dict[str, dict[str, Any]] = {}
+    for wrapper in metadata_rows:
+        metadata = wrapper.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        markets = [
+            market
+            for market in metadata.get("markets") or []
+            if isinstance(market, dict) and market.get("conditionId")
+        ]
+        for index, market in enumerate(markets):
+            condition_ladder[str(market["conditionId"])] = {
+                "index": index,
+                "size": len(markets),
+                "position": index / (len(markets) - 1) if len(markets) > 1 else 0.5,
+            }
 
     event_rows: list[dict[str, Any]] = []
     for key, portfolio in portfolio_by_key.items():
@@ -291,6 +312,10 @@ def main() -> None:
             sum(as_float(row.get("price")) * as_float(row.get("size")) for row in main_rows),
             main_shares,
         )
+        main_ladder = condition_ladder.get(main_condition, {})
+        winner_ladder = condition_ladder.get(
+            str(portfolio.get("winner_condition") or ""), {}
+        )
         event_rows.append(
             {
                 "city": key[0],
@@ -311,6 +336,15 @@ def main() -> None:
                 "main_shares": main_shares,
                 "main_cost_share": ratio(main_cost, buy_cost),
                 "main_entry_quote": entry_quote,
+                "main_ladder_index": main_ladder.get("index"),
+                "main_ladder_size": main_ladder.get("size"),
+                "main_ladder_position": main_ladder.get("position"),
+                "main_winner_index_distance": (
+                    int(main_ladder["index"]) - int(winner_ladder["index"])
+                    if main_ladder.get("index") is not None
+                    and winner_ladder.get("index") is not None
+                    else None
+                ),
                 "main_cash_per_share": ratio(main_cost, main_shares),
                 "main_sell_shares": main_sell_shares,
                 "main_sell_proceeds": main_sell_proceeds,
@@ -374,6 +408,7 @@ def main() -> None:
         )
 
     utc_hour_cost: dict[str, float] = defaultdict(float)
+    utc_exact_hour_cost: dict[int, float] = defaultdict(float)
     for row in activity:
         if (
             str(row.get("type") or "").upper() != "TRADE"
@@ -383,6 +418,7 @@ def main() -> None:
         hour = datetime.fromtimestamp(
             int(row.get("timestamp") or 0), timezone.utc
         ).hour
+        utc_exact_hour_cost[hour] += as_float(row.get("usdcSize"))
         label = (
             "00-06" if hour < 6 else "06-12" if hour < 12 else "12-18" if hour < 18 else "18-24"
         )
@@ -491,11 +527,29 @@ def main() -> None:
             "single_yes_condition_event_share": ratio(
                 sum(int(row["yes_buy_conditions"]) == 1 for row in event_rows), len(event_rows)
             ),
+            "buy_condition_count_distribution": dict(
+                sorted(Counter(int(row["buy_conditions"]) for row in event_rows).items())
+            ),
+            "yes_buy_condition_count_distribution": dict(
+                sorted(
+                    Counter(int(row["yes_buy_conditions"]) for row in event_rows).items()
+                )
+            ),
             "main_cost_share_distribution": distribution(
                 as_float(row["main_cost_share"]) for row in event_rows
             ),
             "main_entry_quote_distribution": distribution(
                 as_float(row["main_entry_quote"]) for row in event_rows
+            ),
+            "main_ladder_position_distribution": distribution(
+                as_float(row["main_ladder_position"])
+                for row in event_rows
+                if row["main_ladder_position"] is not None
+            ),
+            "main_winner_index_distance_distribution": distribution(
+                as_float(row["main_winner_index_distance"])
+                for row in event_rows
+                if row["main_winner_index_distance"] is not None
             ),
             "main_yes_winner_share": ratio(
                 sum(row["main_yes_is_winner"] is True for row in main_yes_rows),
@@ -520,6 +574,10 @@ def main() -> None:
             "entry_cost_share_by_utc_hour_band": {
                 label: ratio(cost, sum(utc_hour_cost.values()))
                 for label, cost in sorted(utc_hour_cost.items())
+            },
+            "entry_cost_share_by_utc_hour": {
+                f"{hour:02d}": ratio(cost, sum(utc_exact_hour_cost.values()))
+                for hour, cost in sorted(utc_exact_hour_cost.items())
             },
             "buy_span_minutes": distribution(as_float(row["buy_span_minutes"]) for row in event_rows),
             "first_buy_to_first_sell_hours": distribution(
@@ -553,6 +611,10 @@ def main() -> None:
             "main_exit_return_fully_exited": distribution(
                 as_float(row["main_exit_return"])
                 for row in fully_exited_main_rows
+            ),
+            "main_exit_positive_share_fully_exited": ratio(
+                sum(as_float(row["main_exit_return"]) > 0 for row in fully_exited_main_rows),
+                len(fully_exited_main_rows),
             ),
             "first_main_sell_delay_minutes": distribution(
                 as_float(row["first_main_sell_delay_minutes"])

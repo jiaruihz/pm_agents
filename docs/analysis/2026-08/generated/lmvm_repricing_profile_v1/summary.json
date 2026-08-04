@@ -376,13 +376,16 @@
   },
   "exit_diagnostics": {
     "first_main_sell_delay_minutes": {
+      "max": 2224.866666666667,
       "mean": 159.0607650273224,
       "median": 24.95,
+      "min": 0.2,
       "n": 305,
       "p10": 0.8900000000000001,
       "p25": 2.8,
       "p75": 119.31666666666666,
-      "p90": 459.78666666666663
+      "p90": 459.78666666666663,
+      "p95": 798.9133333333335
     },
     "first_sell_before_last_buy_share": 0.43870967741935485,
     "fully_exited_by_return_band": {
@@ -446,35 +449,45 @@
     "main_condition_fully_exited_events": 283,
     "main_condition_fully_exited_share": 0.9278688524590164,
     "main_condition_with_sell_events": 305,
+    "main_exit_positive_share_fully_exited": 0.7491166077738516,
     "main_exit_return_all_sellers": {
+      "max": 3.5,
       "mean": 0.16310125028013003,
       "median": 0.06805095445567466,
+      "min": -0.6194285714285714,
       "n": 305,
       "p10": -0.043617940742531086,
       "p25": -0.0012142025106299803,
       "p75": 0.21168014457101458,
-      "p90": 0.5084138921824636
+      "p90": 0.5084138921824636,
+      "p95": 0.8233080574001759
     },
     "main_exit_return_fully_exited": {
+      "max": 3.5,
       "mean": 0.15964403076041397,
       "median": 0.06790115971918298,
+      "min": -0.6194285714285714,
       "n": 283,
       "p10": -0.038992227183862305,
       "p25": -1.5719326632523956e-05,
       "p75": 0.20739248383889886,
-      "p90": 0.49384400785705246
+      "p90": 0.49384400785705246,
+      "p95": 0.7714023076923059
     },
     "main_sold_fraction_distribution": {
+      "max": 1.0000000000000002,
       "mean": 0.9566002441810544,
       "median": 1.0,
+      "min": 0.0013085125415989657,
       "n": 305,
       "p10": 0.9993083542857143,
       "p25": 0.9999961208172933,
       "p75": 1.0,
-      "p90": 1.0
+      "p90": 1.0,
+      "p95": 1.0
     }
   },
-  "generated_at_utc": "2026-08-04T11:38:38.495321+00:00",
+  "generated_at_utc": "2026-08-04T12:56:56.164706+00:00",
   "grain": "cashflow-complete city_x_target_date_ladder",
   "performance": {
     "date_stability": {
@@ -609,6 +622,9 @@
         "main_exit_return": 0.07421548977316039,
         "main_exit_return_band": "5%..10%",
         "main_fully_exited": false,
+        "main_ladder_index": 6,
+        "main_ladder_position": 0.6,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.43637683692683915,
         "main_sell_proceeds": 77.116999,
@@ -617,6 +633,7 @@
         "main_slug": "highest-temperature-in-wellington-on-july-6-2026-14c",
         "main_sold_fraction": 0.08674446378547288,
         "main_title": "Will the highest temperature in Wellington be 14°C on July 6?",
+        "main_winner_index_distance": 1,
         "main_yes_condition": "0xd73b63700db3ed55bb84fcf1bc7d315a8e498f1de37584b5c3147708dfa77b90",
         "main_yes_cost": 827.593257,
         "main_yes_is_winner": false,
@@ -656,6 +673,9 @@
         "main_exit_return": -0.03673944329337864,
         "main_exit_return_band": "-5%..0%",
         "main_fully_exited": false,
+        "main_ladder_index": 3,
+        "main_ladder_position": 0.3,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.43777501763734683,
         "main_sell_proceeds": 1960.9444349999999,
@@ -664,6 +684,7 @@
         "main_slug": "highest-temperature-in-los-angeles-on-july-8-2026-76-77f",
         "main_sold_fraction": 0.8605482459915238,
         "main_title": "Will the highest temperature in Los Angeles be between 76-77°F on July 8?",
+        "main_winner_index_distance": 1,
         "main_yes_condition": "0xdb14ba96bb69492398f3e5689437da246837fd8e623527d1fc8ca9cb3216f427",
         "main_yes_cost": 2365.6271,
         "main_yes_is_winner": false,
@@ -703,6 +724,9 @@
         "main_exit_return": -0.113309458444536,
         "main_exit_return_band": "-20%..-5%",
         "main_fully_exited": true,
+        "main_ladder_index": 5,
+        "main_ladder_position": 0.5,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.3619174178226372,
         "main_sell_proceeds": 603.47196,
@@ -711,6 +735,7 @@
         "main_slug": "highest-temperature-in-los-angeles-on-july-25-2026-80-81f",
         "main_sold_fraction": 0.9999963248967101,
         "main_title": "Will the highest temperature in Los Angeles be between 80-81°F on July 25?",
+        "main_winner_index_distance": 1,
         "main_yes_condition": "0x31df18898f6bae2f2952e7740a5249d7a9f947b971dae5a19a198198f86fcf99",
         "main_yes_cost": 680.5916490000001,
         "main_yes_is_winner": false,
@@ -750,6 +775,9 @@
         "main_exit_return": 0.38591149158523463,
         "main_exit_return_band": "10%+",
         "main_fully_exited": false,
+        "main_ladder_index": 4,
+        "main_ladder_position": 0.4,
+        "main_ladder_size": 11,
         "main_outcome": "No",
         "main_sell_cash_per_share": 0.5577466666666666,
         "main_sell_proceeds": 2.09155,
@@ -758,6 +786,7 @@
         "main_slug": "highest-temperature-in-miami-on-july-17-2026-94-95f",
         "main_sold_fraction": 0.0013085125415989657,
         "main_title": "Will the highest temperature in Miami be between 94-95°F on July 17?",
+        "main_winner_index_distance": 1,
         "main_yes_condition": "0x8bc0b7283469271a338e0360997b3c468408a9b477f36a0bd78b7de082db229f",
         "main_yes_cost": 1150.933391,
         "main_yes_is_winner": false,
@@ -797,6 +826,9 @@
         "main_exit_return": -0.02079989050252995,
         "main_exit_return_band": "-5%..0%",
         "main_fully_exited": true,
+        "main_ladder_index": 3,
+        "main_ladder_position": 0.3,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.46890854468750315,
         "main_sell_proceeds": 2339.68952,
@@ -805,6 +837,7 @@
         "main_slug": "highest-temperature-in-los-angeles-on-july-11-2026-74-75f",
         "main_sold_fraction": 1.0,
         "main_title": "Will the highest temperature in Los Angeles be between 74-75°F on July 11?",
+        "main_winner_index_distance": 0,
         "main_yes_condition": "0xea375977ee539b47800bae67a8c72a9bdb1fc944038173a97f42220c15a85645",
         "main_yes_cost": 2389.38854,
         "main_yes_is_winner": true,
@@ -846,6 +879,9 @@
         "main_exit_return": 0.32212802215958214,
         "main_exit_return_band": "10%+",
         "main_fully_exited": true,
+        "main_ladder_index": 4,
+        "main_ladder_position": 0.4,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.2966595654945439,
         "main_sell_proceeds": 823.873815,
@@ -854,6 +890,7 @@
         "main_slug": "highest-temperature-in-shanghai-on-july-5-2026-31c",
         "main_sold_fraction": 0.9999998030368882,
         "main_title": "Will the highest temperature in Shanghai be 31°C on July 5?",
+        "main_winner_index_distance": 0,
         "main_yes_condition": "0xfb617069a0c78254f147ad3f3a50a5dbb223ce5c50d5485ee334274301bf51cd",
         "main_yes_cost": 623.142361,
         "main_yes_is_winner": true,
@@ -893,6 +930,9 @@
         "main_exit_return": 0.1345676114953651,
         "main_exit_return_band": "10%+",
         "main_fully_exited": true,
+        "main_ladder_index": 6,
+        "main_ladder_position": 0.6,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.5567726236267896,
         "main_sell_proceeds": 1286.80732,
@@ -901,6 +941,7 @@
         "main_slug": "highest-temperature-in-miami-on-july-22-2026-92-93f",
         "main_sold_fraction": 1.0,
         "main_title": "Will the highest temperature in Miami be between 92-93°F on July 22?",
+        "main_winner_index_distance": 0,
         "main_yes_condition": "0x8ceb001ea4bc396b202979651d0f69ef48e3f346e3fa45f060685d263708c1b2",
         "main_yes_cost": 1134.18302,
         "main_yes_is_winner": true,
@@ -940,6 +981,9 @@
         "main_exit_return": 0.10595783217346688,
         "main_exit_return_band": "10%+",
         "main_fully_exited": true,
+        "main_ladder_index": 6,
+        "main_ladder_position": 0.6,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.5553216963413719,
         "main_sell_proceeds": 1478.37742,
@@ -948,6 +992,7 @@
         "main_slug": "highest-temperature-in-miami-on-july-8-2026-92-93f",
         "main_sold_fraction": 0.9999987484051424,
         "main_title": "Will the highest temperature in Miami be between 92-93°F on July 8?",
+        "main_winner_index_distance": 0,
         "main_yes_condition": "0x20ed7405c72327cdbbcf1ea52f7e53f604c5512ab4fbc16faf2652970e2601e1",
         "main_yes_cost": 1336.741083,
         "main_yes_is_winner": true,
@@ -987,6 +1032,9 @@
         "main_exit_return": 0.3677099570524973,
         "main_exit_return_band": "10%+",
         "main_fully_exited": true,
+        "main_ladder_index": 5,
+        "main_ladder_position": 0.5,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.4272132659424333,
         "main_sell_proceeds": 520.67044,
@@ -995,6 +1043,7 @@
         "main_slug": "highest-temperature-in-seattle-on-july-3-2026-72-73f",
         "main_sold_fraction": 0.9999955635432637,
         "main_title": "Will the highest temperature in Seattle be between 72-73°F on July 3?",
+        "main_winner_index_distance": 0,
         "main_yes_condition": "0x59045320094372b4b0ef611258cd8e3ae6283b2ead35665d63cc698ae7809cde",
         "main_yes_cost": 380.689449,
         "main_yes_is_winner": true,
@@ -1034,6 +1083,9 @@
         "main_exit_return": 0.12551023356314306,
         "main_exit_return_band": "10%+",
         "main_fully_exited": true,
+        "main_ladder_index": 6,
+        "main_ladder_position": 0.6,
+        "main_ladder_size": 11,
         "main_outcome": "Yes",
         "main_sell_cash_per_share": 0.33045094698422567,
         "main_sell_proceeds": 818.46421,
@@ -1042,6 +1094,7 @@
         "main_slug": "highest-temperature-in-san-francisco-on-june-30-2026-68-69f",
         "main_sold_fraction": 1.0,
         "main_title": "Will the highest temperature in San Francisco be between 68-69°F on June 30?",
+        "main_winner_index_distance": -2,
         "main_yes_condition": "0x932610db4f9b0aaa6d9b2868f7b55456383db25e410e13a57ae79f154a147360",
         "main_yes_cost": 727.19393,
         "main_yes_is_winner": false,
@@ -1059,13 +1112,16 @@
     ],
     "negative_event_share": 0.24193548387096775,
     "pnl_distribution": {
+      "max": 242.9280839999999,
       "mean": 12.787400683870965,
       "median": 4.207785,
+      "min": -745.678912,
       "n": 310,
       "p10": -6.267457800000035,
       "p25": 0.13557750000000035,
       "p75": 21.697009999999977,
-      "p90": 59.640487699999966
+      "p90": 59.640487699999966,
+      "p95": 86.03491045000001
     },
     "positive_event_share": 0.7580645161290323,
     "repricing_buy_portfolios": {
@@ -1074,13 +1130,16 @@
       "turnover_roi": 0.035496998021590634
     },
     "roi_distribution": {
+      "max": 3.5,
       "mean": 0.13812222172870395,
       "median": 0.0645797339127121,
+      "min": -1.0,
       "n": 310,
       "p10": -0.039485310542241,
       "p25": 0.002602247892798624,
       "p75": 0.17665149106276104,
-      "p90": 0.44414867928335133
+      "p90": 0.44414867928335133,
+      "p95": 0.6767981029858299
     },
     "wallet_cashflow_complete": {
       "buy_cost": 111674.069159,
@@ -1090,6 +1149,15 @@
   },
   "schema_version": "lmvm_repricing_profile_v1",
   "selection": {
+    "buy_condition_count_distribution": {
+      "1": 213,
+      "2": 72,
+      "3": 17,
+      "4": 4,
+      "5": 1,
+      "6": 2,
+      "7": 1
+    },
     "by_entry_price_band": {
       "0.00-0.10": {
         "buy_cost": 93.396291,
@@ -1133,95 +1201,156 @@
       }
     },
     "main_cost_share_distribution": {
+      "max": 1.0,
       "mean": 0.8963754322794196,
       "median": 1.0,
+      "min": 0.2825551177657888,
       "n": 310,
       "p10": 0.5296108204855948,
       "p25": 0.8459038032305027,
       "p75": 1.0,
-      "p90": 1.0
+      "p90": 1.0,
+      "p95": 1.0
     },
     "main_entry_quote_distribution": {
+      "max": 0.9907955881,
       "mean": 0.29435891450881513,
       "median": 0.2898557559967211,
+      "min": 0.001507571100397968,
       "n": 310,
       "p10": 0.15,
       "p25": 0.20446037936978761,
       "p75": 0.3595997317273274,
-      "p90": 0.4610426845968735
+      "p90": 0.4610426845968735,
+      "p95": 0.5210599062189353
+    },
+    "main_ladder_position_distribution": {
+      "max": 1.0,
+      "mean": 0.5483870967741935,
+      "median": 0.6,
+      "min": 0.0,
+      "n": 310,
+      "p10": 0.3,
+      "p25": 0.4,
+      "p75": 0.7,
+      "p90": 0.8,
+      "p95": 0.9
+    },
+    "main_winner_index_distance_distribution": {
+      "max": 4.0,
+      "mean": -0.08709677419354839,
+      "median": 0.0,
+      "min": -4.0,
+      "n": 310,
+      "p10": -2.0,
+      "p25": -1.0,
+      "p75": 1.0,
+      "p90": 2.0,
+      "p95": 2.0
     },
     "main_yes_winner_denominator": 301,
     "main_yes_winner_share": 0.3488372093023256,
     "single_condition_event_share": 0.6870967741935484,
     "single_yes_condition_event_share": 0.6838709677419355,
+    "yes_buy_condition_count_distribution": {
+      "0": 9,
+      "1": 212,
+      "2": 65,
+      "3": 16,
+      "4": 4,
+      "5": 2,
+      "6": 1,
+      "7": 1
+    },
     "yes_buy_cost_share": 0.9433670615244137
   },
   "sizing": {
     "buy_transactions": {
+      "max": 47.0,
       "mean": 7.34516129032258,
       "median": 4.0,
+      "min": 1.0,
       "n": 310,
       "p10": 1.0,
       "p25": 2.0,
       "p75": 9.0,
-      "p90": 17.100000000000023
+      "p90": 17.100000000000023,
+      "p95": 24.55000000000001
     },
     "event_buy_cost": {
+      "max": 2908.77518,
       "mean": 360.2389327709678,
       "median": 253.25217500000002,
+      "min": 0.0294,
       "n": 310,
       "p10": 3.33184,
       "p25": 10.4,
       "p75": 527.9662119999999,
-      "p90": 846.3539529999999
+      "p90": 846.3539529999999,
+      "p95": 1135.9498878499999
     },
     "event_buy_shares": {
+      "max": 7269.0508930000005,
       "mean": 1054.8319618419355,
       "median": 825.0450000000001,
+      "min": 0.14,
       "n": 310,
       "p10": 15.900000000000002,
       "p25": 54.0775,
       "p75": 1593.86169775,
-      "p90": 2408.025666400001
+      "p90": 2408.025666400001,
+      "p95": 3318.251500000004
     },
     "largest_buy_transaction_cost": {
+      "max": 1731.01845,
       "mean": 284.01666762258066,
       "median": 215.41208,
+      "min": 0.0294,
       "n": 310,
       "p10": 3.2938419999999997,
       "p25": 6.2549825,
       "p75": 444.7052775,
-      "p90": 736.949099
+      "p90": 736.949099,
+      "p95": 871.1923385000002
     },
     "main_condition_cost": {
+      "max": 2389.38854,
       "mean": 334.21634757419355,
       "median": 248.74780500000003,
+      "min": 0.0294,
       "n": 310,
       "p10": 3.3075200000000002,
       "p25": 7.0985825,
       "p75": 502.797875,
-      "p90": 811.6471392000001
+      "p90": 811.6471392000001,
+      "p95": 1115.15823615
     },
     "main_condition_shares": {
+      "max": 7269.0508930000005,
       "mean": 945.8832816548386,
       "median": 788.836665,
+      "min": 0.14,
       "n": 310,
       "p10": 13.261,
       "p25": 39.385,
       "p75": 1455.42288375,
-      "p90": 2237.7347765000013
+      "p90": 2237.7347765000013,
+      "p95": 2749.9240394000008
     }
   },
   "snapshot": "/Users/deepsleep/projects/pm_agents/runtime/analysis_snapshots/lmvm_20260803",
   "timing": {
     "buy_span_minutes": {
+      "max": 3301.0,
       "mean": 127.23586021505378,
       "median": 12.875,
+      "min": 0.0,
       "n": 310,
       "p10": 0.0,
       "p25": 0.2875,
       "p75": 65.97916666666666,
-      "p90": 249.23500000000004
+      "p90": 249.23500000000004,
+      "p95": 683.2808333333356
     },
     "by_holding_band": {
       "2-8h": {
@@ -1286,6 +1415,30 @@
       "-3": 0.0018203079999933047,
       "0": 0.00855748519612755
     },
+    "entry_cost_share_by_utc_hour": {
+      "00": 9.317100725990993e-07,
+      "01": 0.01954783967016503,
+      "02": 0.06988586785514028,
+      "03": 0.1324609821790421,
+      "04": 0.12476362211063366,
+      "05": 0.17604801438863543,
+      "06": 0.0856344762398124,
+      "07": 0.09017812817117857,
+      "08": 0.018764416482731073,
+      "09": 0.07226618427288305,
+      "10": 0.06475885023689398,
+      "11": 0.029260871663837035,
+      "12": 0.000335628242227312,
+      "13": 0.0007074317126199205,
+      "14": 0.004161993849844468,
+      "15": 0.029262092146233404,
+      "16": 0.008080309442398355,
+      "17": 0.06882478851614018,
+      "18": 0.004909094736594153,
+      "19": 0.0001369164074252584,
+      "20": 1.3975606832691659e-06,
+      "23": 1.016240480855834e-05
+    },
     "entry_cost_share_by_utc_hour_band": {
       "00-06": 0.5227072579136889,
       "06-12": 0.36086292706733614,
@@ -1293,22 +1446,28 @@
       "18-24": 0.005057571109511247
     },
     "first_buy_to_first_sell_hours": {
+      "max": 47.26277777777778,
       "mean": 2.380199709513435,
       "median": 0.3425,
+      "min": 0.0033333333333333335,
       "n": 306,
       "p10": 0.014305555555555554,
       "p25": 0.042569444444444444,
       "p75": 1.8527083333333334,
-      "p90": 6.724861111111111
+      "p90": 6.724861111111111,
+      "p95": 10.225
     },
     "first_buy_to_last_sell_hours": {
+      "max": 50.630833333333335,
       "mean": 5.838659222948438,
       "median": 1.9129166666666668,
+      "min": 0.029166666666666667,
       "n": 306,
       "p10": 0.20527777777777778,
       "p25": 0.5697916666666667,
       "p75": 7.570972222222222,
-      "p90": 19.22694444444444
+      "p90": 19.22694444444444,
+      "p95": 25.54340277777778
     }
   },
   "wallet": "0xc9ded4d5f6eec0a75907ebb924c164a4aea381d9"
