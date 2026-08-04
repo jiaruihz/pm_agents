@@ -102,7 +102,7 @@ managed_runtimes:
     max_health_age_sec: 180
     accepted_health_statuses: [ok]
     expected_live: true
-    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/live_orders.jsonl
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/orders.jsonl
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: guarded_live
 
