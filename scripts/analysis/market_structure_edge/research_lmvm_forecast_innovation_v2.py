@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+"""Historical PIT replay of LMVM single-rung forecast innovation.
+
+At each first-seen forecast-state change, select exactly one YES rung by
+``(P_model_after-P_model_before) - (P_market_after-P_market_before)``. Entry is
+the same-snapshot executable ask; exits are future executable bids with both
+Weather taker fees. Static residual, model mode, and market favorite remain
+same-row controls. This script is research-only and has no production writes.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from collections import Counter, defaultdict
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.market_structure_edge import research_lmvm_single_yes_repricing_v1 as base  # noqa: E402
+
+
+DEFAULT_OUTPUT = ROOT / "docs/analysis/2026-08/generated/lmvm_forecast_innovation_v2"
+DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-04-research-lmvm-forecast-innovation-v2.md"
+SEED = 20260804
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", type=Path, default=base.DEFAULT_DB)
+    parser.add_argument("--snapshot-dir", type=Path, default=base.DEFAULT_SNAPSHOTS)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--draws", type=int, default=5000)
+    parser.add_argument("--max-files", type=int)
+    return parser.parse_args()
+
+
+def paired_rungs(previous: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
+    before = {str(row["condition_id"]): row for row in previous["rungs"]}
+    paired: list[dict[str, Any]] = []
+    for row in current["rungs"]:
+        prior = before.get(str(row["condition_id"]))
+        if prior is None:
+            continue
+        model_delta = float(row["model_prob"]) - float(prior["model_prob"])
+        market_delta = float(row["market_prob"]) - float(prior["market_prob"])
+        paired.append(
+            {
+                **row,
+                "model_probability_before": float(prior["model_prob"]),
+                "model_probability_after": float(row["model_prob"]),
+                "market_probability_before": float(prior["market_prob"]),
+                "market_probability_after": float(row["market_prob"]),
+                "model_probability_delta": model_delta,
+                "market_probability_delta": market_delta,
+                "forecast_innovation_score": model_delta - market_delta,
+            }
+        )
+    return paired
+
+
+def forecast_update_pairs(states: list[dict[str, Any]]) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], Counter[str]]:
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for state in states:
+        grouped[base._stream_key(state)].append(state)
+    output: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    counts: Counter[str] = Counter()
+    for rows in grouped.values():
+        rows.sort(key=lambda row: (row["snapshot_epoch"], row["snapshot_id"]))
+        previous: dict[str, Any] | None = None
+        for current in rows:
+            if previous is None:
+                counts["left_censored_streams"] += 1
+            elif previous["forecast_state_key"] != current["forecast_state_key"]:
+                counts["forecast_update_events"] += 1
+                paired = paired_rungs(previous, current)
+                if len(paired) == len(current["rungs"]):
+                    output.append((previous, current))
+                else:
+                    counts["blocked_unpaired_ladder"] += 1
+            previous = current
+    counts["paired_update_events"] = len(output)
+    return output, counts
+
+
+def _candidate_base(state: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "snapshot_id", "source_path", "snapshot_ts_utc", "snapshot_epoch",
+        "decision_local", "decision_hour_local", "lead_days", "city", "target_date",
+        "event_slug", "market_timezone", "forecast_source", "forecast_model",
+        "model_version", "forecast_state_key", "forecast_state_basis",
+        "model_init_utc_estimated", "forecast_max_f", "rung_count",
+        "model_probability_sum_raw", "market_mid_sum_raw",
+    )
+    return {key: state[key] for key in keys}
+
+
+def build_innovation_candidates(
+    pairs: list[tuple[dict[str, Any], dict[str, Any]]]
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for previous, current in pairs:
+        paired = paired_rungs(previous, current)
+        selected = max(
+            paired,
+            key=lambda row: (
+                float(row["forecast_innovation_score"]),
+                float(row["model_probability_delta"]),
+                float(row["model_probability_after"]),
+                -float(row["yes_ask"]),
+            ),
+        )
+        ask = float(selected["yes_ask"])
+        entry_fee = base.weather_fee_per_share(ask)
+        rows.append(
+            {
+                **_candidate_base(current),
+                "forecast_state_before": previous["forecast_state_key"],
+                "policy": "forecast_innovation_argmax",
+                "condition_id": selected["condition_id"],
+                "bracket": selected["bracket"],
+                "question": selected["question"],
+                "model_prob": selected["model_probability_after"],
+                "market_prob": selected["market_probability_after"],
+                "model_probability_before": selected["model_probability_before"],
+                "market_probability_before": selected["market_probability_before"],
+                "model_probability_delta": selected["model_probability_delta"],
+                "market_probability_delta": selected["market_probability_delta"],
+                "forecast_innovation_score": selected["forecast_innovation_score"],
+                "entry_bid": selected["yes_bid"],
+                "entry_ask": ask,
+                "entry_bid_size": selected["yes_bid_size"],
+                "entry_ask_size": selected["yes_ask_size"],
+                "entry_fee_per_share": entry_fee,
+                "model_edge_after_entry_fee": float(selected["model_prob"]) - ask - entry_fee,
+                "policy_eligible": True,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def assign_period(rows: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:
+    result = rows.copy()
+    dates = sorted(str(value) for value in result["target_date"].dropna().unique())
+    if len(dates) < 3:
+        result["period"] = "all_history"
+        return result, None
+    cutoff = dates[max(1, int(len(dates) * 2 / 3))]
+    result["period"] = np.where(result["target_date"].astype(str) < cutoff, "development", "late_holdout")
+    return result, cutoff
+
+
+def _roi(rows: pd.DataFrame, horizon: int) -> float:
+    prefix = f"h{horizon}"
+    usable = rows[rows[f"{prefix}_net_pnl_usd"].notna()].copy()
+    cost = (usable["entry_ask"] + usable["entry_fee_per_share"]) * usable[f"{prefix}_executable_shares"]
+    return float(usable[f"{prefix}_net_pnl_usd"].sum() / cost.sum()) if float(cost.sum()) else math.nan
+
+
+def markout_summary(rows: pd.DataFrame, draws: int) -> pd.DataFrame:
+    output: list[dict[str, Any]] = []
+    scopes = [("all_history", rows)] + [(name, group) for name, group in rows.groupby("period")]
+    for scope, scoped in scopes:
+        for (policy, lead_days), group in scoped.groupby(["policy", "lead_days"]):
+            eligible = group[group["policy_eligible"]].copy()
+            for horizon in base.HORIZONS_MIN:
+                prefix = f"h{horizon}"
+                usable = eligible[eligible[f"{prefix}_net_pnl_usd"].notna()].copy()
+                usable["entry_cost_usd"] = (
+                    (usable["entry_ask"] + usable["entry_fee_per_share"])
+                    * usable[f"{prefix}_executable_shares"]
+                )
+                point, low, high, date_count = base.block_bootstrap_ratio(
+                    usable,
+                    f"{prefix}_net_pnl_usd",
+                    "entry_cost_usd",
+                    draws,
+                    SEED + horizon + int(lead_days),
+                )
+                output.append(
+                    {
+                        "period": scope,
+                        "policy": policy,
+                        "lead_days": int(lead_days),
+                        "horizon_min": horizon,
+                        "signals": len(eligible),
+                        "covered": len(usable),
+                        "target_dates": date_count,
+                        "positive_rate": float((usable[f"{prefix}_net_pnl_usd"] > 0).mean()) if len(usable) else math.nan,
+                        "turnover_roi": point,
+                        "ci_low": low,
+                        "ci_high": high,
+                    }
+                )
+    return pd.DataFrame(output)
+
+
+def paired_policy_deltas(rows: pd.DataFrame, draws: int) -> pd.DataFrame:
+    output: list[dict[str, Any]] = []
+    controls = ("residual_argmax", "forecast_mode", "market_favorite")
+    scopes = [("all_history", rows)] + [(name, group) for name, group in rows.groupby("period")]
+    rng = np.random.default_rng(SEED + 707)
+    for scope, scoped in scopes:
+        for lead_days in (1, 2):
+            lead = scoped[scoped["lead_days"].eq(lead_days)]
+            for horizon in base.HORIZONS_MIN:
+                pnl = f"h{horizon}_net_pnl_usd"
+                shares = f"h{horizon}_executable_shares"
+                for control in controls:
+                    primary = lead[lead["policy"].eq("forecast_innovation_argmax")][
+                        ["snapshot_id", "target_date", "entry_ask", "entry_fee_per_share", shares, pnl]
+                    ].dropna()
+                    comparator = lead[(lead["policy"].eq(control)) & lead["policy_eligible"]][
+                        ["snapshot_id", "entry_ask", "entry_fee_per_share", shares, pnl]
+                    ].dropna()
+                    paired = primary.merge(comparator, on="snapshot_id", suffixes=("_primary", "_control"))
+                    if paired.empty:
+                        continue
+                    paired["cost_primary"] = (
+                        (paired["entry_ask_primary"] + paired["entry_fee_per_share_primary"])
+                        * paired[f"{shares}_primary"]
+                    )
+                    paired["cost_control"] = (
+                        (paired["entry_ask_control"] + paired["entry_fee_per_share_control"])
+                        * paired[f"{shares}_control"]
+                    )
+                    by_date = paired.groupby("target_date", as_index=False).agg(
+                        pnl_primary=(f"{pnl}_primary", "sum"),
+                        cost_primary=("cost_primary", "sum"),
+                        pnl_control=(f"{pnl}_control", "sum"),
+                        cost_control=("cost_control", "sum"),
+                    )
+                    point = (
+                        by_date["pnl_primary"].sum() / by_date["cost_primary"].sum()
+                        - by_date["pnl_control"].sum() / by_date["cost_control"].sum()
+                    )
+                    boot: list[float] = []
+                    values = by_date[["pnl_primary", "cost_primary", "pnl_control", "cost_control"]].to_numpy(float)
+                    if len(values) >= 3:
+                        for _ in range(draws):
+                            sample = values[rng.integers(0, len(values), size=len(values))]
+                            if sample[:, 1].sum() and sample[:, 3].sum():
+                                boot.append(float(sample[:, 0].sum() / sample[:, 1].sum() - sample[:, 2].sum() / sample[:, 3].sum()))
+                    output.append(
+                        {
+                            "period": scope,
+                            "lead_days": lead_days,
+                            "horizon_min": horizon,
+                            "control": control,
+                            "paired_events": len(paired),
+                            "target_dates": len(by_date),
+                            "roi_delta_primary_minus_control": float(point),
+                            "ci_low": float(np.percentile(boot, 2.5)) if boot else math.nan,
+                            "ci_high": float(np.percentile(boot, 97.5)) if boot else math.nan,
+                        }
+                    )
+    return pd.DataFrame(output)
+
+
+def execution_diagnostics(rows: pd.DataFrame) -> tuple[dict[str, Any], pd.DataFrame]:
+    selected = rows[
+        rows["policy"].eq("forecast_innovation_argmax") & rows["lead_days"].eq(1)
+    ].copy()
+    development = selected[selected["period"].eq("development")]
+    holdout = selected[selected["period"].eq("late_holdout")].copy()
+    _, edges = pd.qcut(
+        development["forecast_innovation_score"], 10, retbins=True, duplicates="drop"
+    )
+    edges[0], edges[-1] = -np.inf, np.inf
+    holdout["innovation_decile"] = (
+        pd.cut(holdout["forecast_innovation_score"], edges, labels=False, include_lowest=True) + 1
+    )
+    rows_out: list[dict[str, Any]] = []
+    for decile, group in holdout.groupby("innovation_decile", observed=True):
+        for horizon in (30, 60, 120):
+            usable = group[group[f"h{horizon}_bid"].notna()].copy()
+            shares = usable[f"h{horizon}_executable_shares"]
+            bid_cost = usable["entry_bid"] * shares
+            no_fee = (usable[f"h{horizon}_bid"] - usable["entry_bid"]) * shares
+            exit_fee = (
+                usable[f"h{horizon}_bid"]
+                - usable[f"h{horizon}_exit_fee_per_share"]
+                - usable["entry_bid"]
+            ) * shares
+            rows_out.append(
+                {
+                    "innovation_decile": int(decile),
+                    "horizon_min": horizon,
+                    "signals": len(group),
+                    "covered": len(usable),
+                    "score_min": float(group["forecast_innovation_score"].min()),
+                    "score_median": float(group["forecast_innovation_score"].median()),
+                    "score_max": float(group["forecast_innovation_score"].max()),
+                    "median_spread": float((group["entry_ask"] - group["entry_bid"]).median()),
+                    "bid_above_entry_ask_rate": float((usable[f"h{horizon}_bid"] > usable["entry_ask"]).mean()),
+                    "conditional_maker_bid_to_bid_roi_no_fee": float(no_fee.sum() / bid_cost.sum()),
+                    "conditional_maker_entry_exit_taker_roi": float(exit_fee.sum() / bid_cost.sum()),
+                }
+            )
+    deciles = pd.DataFrame(rows_out)
+    usable = holdout[holdout["h60_bid"].notna()].copy()
+    shares = usable["h60_executable_shares"]
+    ask_cost = usable["entry_ask"] * shares
+    bid_cost = usable["entry_bid"] * shares
+    top = deciles[(deciles["innovation_decile"].eq(deciles["innovation_decile"].max())) & deciles["horizon_min"].eq(60)].iloc[0]
+    diagnostics = {
+        "d1_late_holdout_median_spread": float((holdout["entry_ask"] - holdout["entry_bid"]).median()),
+        "d1_late_holdout_h60_bid_above_entry_ask_rate": float((usable["h60_bid"] > usable["entry_ask"]).mean()),
+        "d1_late_holdout_h60_ask_to_bid_roi_no_fee": float(((usable["h60_bid"] - usable["entry_ask"]) * shares).sum() / ask_cost.sum()),
+        "d1_late_holdout_h60_bid_to_bid_roi_no_fee_assuming_fill": float(((usable["h60_bid"] - usable["entry_bid"]) * shares).sum() / bid_cost.sum()),
+        "top_decile_score_min": float(top["score_min"]),
+        "top_decile_h60_covered": int(top["covered"]),
+        "top_decile_h60_bid_to_bid_roi_no_fee_assuming_fill": float(top["conditional_maker_bid_to_bid_roi_no_fee"]),
+        "top_decile_h60_entry_maker_exit_taker_roi_assuming_fill": float(top["conditional_maker_entry_exit_taker_roi"]),
+    }
+    return diagnostics, deciles
+
+
+def pct(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "NA"
+    return "NA" if not math.isfinite(number) else f"{number * 100:+.2f}%"
+
+
+def write_report(
+    path: Path,
+    *,
+    generated_at: str,
+    file_count: int,
+    counts: Counter[str],
+    cutoff: str | None,
+    probabilities: pd.DataFrame,
+    summary: pd.DataFrame,
+    paired: pd.DataFrame,
+    diagnostics: dict[str, Any],
+) -> None:
+    probability = base.probability_summary(probabilities)
+    focus = summary[
+        summary["policy"].eq("forecast_innovation_argmax")
+        & summary["horizon_min"].isin([20, 30, 60, 120])
+    ].copy()
+    if focus.empty:
+        focus = summary[
+            summary["policy"].eq("forecast_innovation_argmax")
+            & summary["horizon_min"].isin([30, 60, 120])
+        ].copy()
+    rows = [
+        f"| {row.period} | D-{row.lead_days} | {row.horizon_min}m | {row.covered}/{row.signals} | {pct(row.turnover_roi)} | [{pct(row.ci_low)}, {pct(row.ci_high)}] |"
+        for row in focus.itertuples()
+    ]
+    delta_focus = paired[
+        paired["period"].eq("late_holdout")
+        & paired["horizon_min"].isin([30, 60, 120])
+    ]
+    delta_rows = [
+        f"| D-{row.lead_days} | {row.horizon_min}m | {row.control} | {row.paired_events} | {pct(row.roi_delta_primary_minus_control)} | [{pct(row.ci_low)}, {pct(row.ci_high)}] |"
+        for row in delta_focus.itertuples()
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"""# LMVM forecast innovation 历史回测 v2
+
+> generated_at_utc: `{generated_at}`  
+> research-only；没有 production instance、plan、order 或 fill 写入。
+
+## 固定问题
+
+每次 D-2/D-1 forecast first-seen 改版，在完整 exact-bracket ladder 中只买一档 YES：
+`argmax[(ΔPmodel)−(ΔPmarket)]`。同 snapshot ask 入场，固定 horizon 的首个可用 bid 退出，
+entry/exit 都扣官方 Weather taker fee。静态 residual、forecast mode、market favorite 是同 rows 对照。
+
+- snapshot files: {file_count:,}
+- forecast update events: {counts['forecast_update_events']:,}
+- complete paired ladders: {counts['paired_update_events']:,}
+- blocked unpaired ladders: {counts['blocked_unpaired_ladder']:,}
+- chronological cutoff: `{cutoff}`（前 2/3 development，后 1/3 late holdout；不是事前盲测）
+
+## 旧 forecast probability 本身
+
+| metric | model | same-row market | model-market | target-date 95% CI |
+|---|---:|---:|---:|---:|
+| Brier | {probability.get('model_brier', math.nan):.6f} | {probability.get('market_brier', math.nan):.6f} | {probability.get('brier_delta_model_minus_market', math.nan):+.6f} | [{probability.get('brier_delta_ci_low', math.nan):+.6f}, {probability.get('brier_delta_ci_high', math.nan):+.6f}] |
+| logloss | {probability.get('model_logloss', math.nan):.6f} | {probability.get('market_logloss', math.nan):.6f} | {probability.get('logloss_delta_model_minus_market', math.nan):+.6f} | [{probability.get('logloss_delta_ci_low', math.nan):+.6f}, {probability.get('logloss_delta_ci_high', math.nan):+.6f}] |
+
+## `ΔPmodel−ΔPmarket` 可执行 markout
+
+| period | lead | horizon | covered/signals | turnover ROI | target-date 95% CI |
+|---|---:|---:|---:|---:|---:|
+{chr(10).join(rows)}
+
+## late holdout 相对同 rows 对照
+
+| lead | horizon | control | paired events | ROI delta | target-date 95% CI |
+|---|---:|---|---:|---:|---:|
+{chr(10).join(delta_rows)}
+
+## 边界
+
+- 该 archive 足够回测 forecast innovation 与 taker ask→future bid repricing。
+- 它不含我们自己的真实 maker queue position；`bid touched` 不能当 maker fill，因此 maker 成交率仍需独立 forward paper/quote ledger。
+- `model_prob` 是 capture-time telemetry，能做 PIT replay；但旧概率体系的某些历史研究是 market-anchored bucket model，不能与这里的 raw full-ladder telemetry 混称同一个模型。
+
+## maker 条件诊断
+
+- D-1 late holdout median spread：{diagnostics['d1_late_holdout_median_spread']:.3f}；60m future bid 高于 entry ask：{diagnostics['d1_late_holdout_h60_bid_above_entry_ask_rate']:.2%}。
+- ask→future bid 不计 fee：{diagnostics['d1_late_holdout_h60_ask_to_bid_roi_no_fee']:.2%}。
+- 假设每笔都在 entry best bid maker fill，bid→future bid 不计 fee：{diagnostics['d1_late_holdout_h60_bid_to_bid_roi_no_fee_assuming_fill']:.2%}。
+- development 冻结的最高 innovation decile（score>={diagnostics['top_decile_score_min']:.6f}）late holdout covered={diagnostics['top_decile_h60_covered']}：无 fee bid→bid {diagnostics['top_decile_h60_bid_to_bid_roi_no_fee_assuming_fill']:.2%}；entry maker + exit taker fee {diagnostics['top_decile_h60_entry_maker_exit_taker_roi_assuming_fill']:.2%}。
+
+这些只是 conditional quote return；没有 queue/fill evidence 就不是可实现 maker ROI。D-2 late holdout 为零，不能外推。
+""",
+        encoding="utf-8",
+    )
+
+
+def main() -> int:
+    args = parse_args()
+    files = sorted(args.snapshot_dir.glob("snapshot_*.json"))
+    if args.max_files is not None:
+        files = files[: args.max_files]
+    if not files:
+        raise FileNotFoundError(f"no snapshots under {args.snapshot_dir}")
+    states: list[dict[str, Any]] = []
+    parse_counts: Counter[str] = Counter()
+    with ProcessPoolExecutor(max_workers=max(1, args.workers)) as executor:
+        for parsed, local_counts in executor.map(base.parse_snapshot_file, map(str, files), chunksize=16):
+            states.extend(parsed)
+            parse_counts.update(local_counts)
+
+    annotated = base.annotate_forecast_updates(states)
+    static_candidates, probability_rows = base.build_candidates(annotated)
+    pairs, update_counts = forecast_update_pairs(states)
+    innovation = build_innovation_candidates(pairs)
+    candidates = pd.concat([static_candidates, innovation], ignore_index=True, sort=False)
+    candidates = base.attach_markouts(candidates, base.quote_history(states))
+    candidates, cutoff = assign_period(candidates)
+    probabilities = base.score_probabilities(probability_rows, base.load_winners(args.db))
+    summary = markout_summary(candidates, args.draws)
+    paired = paired_policy_deltas(candidates, args.draws)
+    diagnostics, deciles = execution_diagnostics(candidates)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    candidates.to_csv(args.output_dir / "candidate_markouts.csv", index=False)
+    probabilities.to_csv(args.output_dir / "probability_rows.csv", index=False)
+    summary.to_csv(args.output_dir / "markout_summary.csv", index=False)
+    paired.to_csv(args.output_dir / "paired_policy_deltas.csv", index=False)
+    deciles.to_csv(args.output_dir / "innovation_score_deciles.csv", index=False)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "generated_at_utc": generated_at,
+        "target_metric": "lmvm_forecast_innovation_v2",
+        "snapshot_files": len(files),
+        "parse_counts": dict(parse_counts),
+        "update_counts": dict(update_counts),
+        "chronological_cutoff": cutoff,
+        "probability": base.probability_summary(probabilities),
+        "markout_summary": summary.to_dict("records"),
+        "paired_policy_deltas": paired.to_dict("records"),
+        "execution_diagnostics": diagnostics,
+        "status": "historical_backtest_only",
+    }
+    (args.output_dir / "summary.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=True) + "\n",
+        encoding="utf-8",
+    )
+    write_report(
+        args.report,
+        generated_at=generated_at,
+        file_count=len(files),
+        counts=update_counts,
+        cutoff=cutoff,
+        probabilities=probabilities,
+        summary=summary,
+        paired=paired,
+        diagnostics=diagnostics,
+    )
+    print(json.dumps({"report": str(args.report), "output_dir": str(args.output_dir), **payload}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
