@@ -6,6 +6,11 @@ At each first-seen forecast-state change, select exactly one YES rung by
 the same-snapshot executable ask; exits are future executable bids with both
 Weather taker fees. Static residual, model mode, and market favorite remain
 same-row controls. This script is research-only and has no production writes.
+
+Lineage warning: ``paper_snapshot.model_prob`` is the legacy empirical-error
+probability from ``compute_bracket_probs``. It is not a current market-anchored
+probability artifact. Results from this script are therefore a legacy-input
+baseline unless the probability source is replaced explicitly.
 """
 
 from __future__ import annotations
@@ -471,7 +476,9 @@ def main() -> int:
         "markout_summary": summary.to_dict("records"),
         "paired_policy_deltas": paired.to_dict("records"),
         "execution_diagnostics": diagnostics,
-        "status": "historical_backtest_only",
+        "probability_input": "legacy_paper_snapshot_compute_bracket_probs",
+        "model_input_verdict": "invalid_for_mature_probability_strategy_evaluation",
+        "status": "invalid_model_input_baseline",
     }
     (args.output_dir / "summary.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=True) + "\n",

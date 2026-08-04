@@ -2,6 +2,14 @@
 
 > generated_at_utc: `2026-08-04T15:22:21.145182+00:00`  
 > research-only；没有 production instance、plan、order 或 fill 写入。
+>
+> **2026-08-04 lineage correction — `INVALID_MODEL_INPUT_BASELINE`**：本回放使用的
+> `paper_snapshot.model_prob` 来自 legacy `compute_bracket_probs`（单一 GFS/ECMWF
+> 日最高温 + 城市历史 WU−forecast 无条件误差分布），不是后续
+> `mkt_city_source_blend` / `loo_no_city_source_blend` / full-ladder survival 等
+> market-anchored probability artifact。部分 snapshot 还标记为
+> `cached_forecast_market_snapshot_only`，本版未将其排除。故下文只证明旧 raw telemetry
+> 不能驱动该 selector，不能用于评价成熟天气概率研究或否定 LMVM 机制本身。
 
 ## 固定问题
 
@@ -21,6 +29,8 @@ entry/exit 都扣官方 Weather taker fee。静态 residual、forecast mode、ma
 |---|---:|---:|---:|---:|
 | Brier | 0.085398 | 0.068673 | +0.016725 | [+0.015093, +0.018369] |
 | logloss | 2.701873 | 1.414771 | +1.287102 | [+1.091192, +1.504523] |
+
+这里的“model”仅指上述 legacy raw snapshot telemetry，不代表项目当前最佳 probability family。
 
 ## `ΔPmodel−ΔPmarket` 可执行 markout
 

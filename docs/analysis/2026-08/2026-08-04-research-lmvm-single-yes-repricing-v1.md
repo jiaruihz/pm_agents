@@ -3,6 +3,10 @@
 > 2026-08-04 纠偏：zero-notional collector 已停止并移出 production desired state。
 > 本策略必须先完成历史 `ΔPmodel−ΔPmarket` 同分母回测和 frozen forward；下文保留
 > 先前 collector 启动记录仅作审计，不代表当前运行状态或研究升级。
+>
+> 2026-08-04 probability lineage correction：本文 `model_prob` 是 legacy
+> `paper_snapshot.compute_bracket_probs` raw telemetry，不是后续 market-anchored
+> probability artifact；本文结论只作旧输入 baseline，不评价成熟模型。
 
 ## 数据快照
 
