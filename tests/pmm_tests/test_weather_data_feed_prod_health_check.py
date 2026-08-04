@@ -168,6 +168,46 @@ def test_prod_health_check_warns_for_non_trading_weather_state_gap(tmp_path):
     assert report["missing_required_non_trading_cities"] == ["Denver"]
 
 
+def test_prod_health_check_does_not_treat_supported_registry_as_active_universe(tmp_path):
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "city_pools": {"Tokyo": "t1_trading", "Boston": "t1_trading"},
+                "city_models": {"Tokyo": "gfs", "Boston": "gfs"},
+                "records": [{"city": "Tokyo", "target_date": "2026-08-04"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_city_state_coverage(snapshot)
+
+    assert report["expectation_basis"] == "snapshot_records"
+    assert report["registered_city_count"] == 2
+    assert report["missing_record_cities"] == []
+
+
+def test_prod_health_check_honors_explicit_active_city_contract(tmp_path):
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "active_cities": ["Tokyo", "Boston"],
+                "city_pools": {"Tokyo": "t1_trading", "Boston": "t1_trading"},
+                "records": [{"city": "Tokyo", "target_date": "2026-08-04"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_city_state_coverage(snapshot)
+
+    assert report["expectation_basis"] == "active_cities"
+    assert report["missing_record_cities"] == ["Boston"]
+    assert report["status"] == "missing_record_cities"
+
+
 def test_prod_health_check_requires_current_complete_curve_capture(tmp_path):
     snapshot_ts = "2026-07-11T03:00:00Z"
     snapshot = tmp_path / "snapshot_20260711_1100.json"

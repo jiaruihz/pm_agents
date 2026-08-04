@@ -313,8 +313,21 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
     rows = [row for row in payload.get("records", []) if isinstance(row, dict)]
     city_models = payload.get("city_models") if isinstance(payload.get("city_models"), dict) else {}
     city_pools = payload.get("city_pools") if isinstance(payload.get("city_pools"), dict) else {}
-    expected_cities = set(city_pools) or set(city_models)
+    registered_cities = set(city_pools) or set(city_models)
     record_cities = {str(row.get("city") or "") for row in rows if str(row.get("city") or "").strip()}
+    declared_active_cities = payload.get("active_cities")
+    if isinstance(declared_active_cities, list):
+        expected_cities = {
+            str(city).strip() for city in declared_active_cities if str(city).strip()
+        }
+        expectation_basis = "active_cities"
+    else:
+        # city_pools/city_models are the supported registry, not the current
+        # market universe.  In snapshots without an explicit active-city list,
+        # records define the active universe; source-model/orderbook checks
+        # independently validate city-target completeness.
+        expected_cities = set(record_cities)
+        expectation_basis = "snapshot_records"
     same_local_day_rows = [
         row
         for row in rows
@@ -363,6 +376,8 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
     return {
         "path": str(snapshot_path),
         "status": status,
+        "expectation_basis": expectation_basis,
+        "registered_city_count": len(registered_cities),
         "expected_city_count": len(expected_cities),
         "record_city_count": len(record_cities),
         "same_local_day_city_count": len(same_local_day_cities),
