@@ -33,7 +33,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
    scripts/weather_dashboard/run_stack.sh --rebuild
    ```
 
-无参数 `scripts/weather_dashboard/run_stack.sh` 仅启动或复用 API + FE，保留现有 DB；
+无参数 `scripts/weather_dashboard/run_stack.sh` 只读 controller/DB 状态，不启停 API/FE，保留现有 DB；
 `--rebuild` 是显式、长耗时的全量重建操作。
 
 > 若数据源不可达，在报告“数据快照”段注明，并写明本地缓存的最后覆盖时间；不得用一次全量重建掩盖源缺失。
@@ -42,7 +42,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 | 问题 | 首选证据 | 次选 |
 |---|---|---|
-| 当前 runner / order / trigger / fill | 当前 Mac strategy runtime + exchange response | canonical DB（仅在已同步时） |
+| 当前 runner / order / trigger / fill | `production.yaml`/manifest/进程参数解析出的 Mac active runtime + exchange response | canonical DB（仅在已同步时） |
 | 最新 snapshot / orderbook / forecast / source event | `/Volumes/jrs/weather_data_feed_service_runtime` raw | 本机 market mirror |
 | fill 绩效 / settlement / opportunity alpha | `runtime/weather.db` 的 canonical facts | Dashboard API（同一 DB 的展示层） |
 | 历史 N100 窗口 | 已同步的 N100 mirror | N100 raw（仅历史恢复且可达） |
@@ -88,7 +88,7 @@ evidence funnel: PIT source -> PIT book -> settlement -> executable expression -
 
 ### SQLite 查询可靠性（硬规定）
 
-manifest healthy 后，`runtime/weather.db` 是 JRS physical canonical 的兼容入口，也是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。
+manifest 的 `db_route.status=healthy` 且 storage audit 无 critical 后，`runtime/weather.db` 是 JRS physical canonical 的同 inode 兼容入口，也是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。
 
 CLI 推荐：
 
@@ -328,7 +328,7 @@ missing_bracket: 725 -> 0 after rebuild
 - 重建：`run_stack.sh` 在 ingest 后自动调用 `scripts/etl/build_weather_fact_trades.py`
 - 设计文档：[WEATHER_FACT_TRADES_DESIGN.md](WEATHER_FACT_TRADES_DESIGN.md)
 
-**DB 路径只许 `runtime/weather.db`**（其他路径皆废，已删）。
+**物理 DB 只许 `/Volumes/jrs/pm_agents/runtime/weather.db`**；`runtime/weather.db` 只许作为同 device/inode 兼容入口。先用 `weather_storage_identity_audit.py` 排除独立副本。
 
 #### 取数 quickstart
 
@@ -389,7 +389,7 @@ rows = conn.execute("""
 | `paper` | paper 模拟下单 |
 | `snapshot_replay` | snapshot 快照 replay |
 
-> **不要把 `live_real` 小/空直接解释成没有真实成交。** pipeline 是：N100 `live/*.jsonl` → `orders(venue=polymarket_clob, status=submitted)` → `clob_fill_sync` 查 Polymarket CLOB API / 本地 `clob_fills.jsonl` → `fills(status=filled)` → `fact_trades(trade_class='live_real')`。2026-06-06 重建后 DB 与 raw CLOB fills 已完全对齐（852/852，差异 0），历史 `live_real=0` 是 CLOB sync 网络/恢复事故，不是策略无成交。**不要拿 `live_simulated` 冒充 `live_real`，也不要拿 paper PnL 冒充实盘 PnL。**
+> **不要把 `live_real` 小/空直接解释成没有真实成交。** 当前 pipeline 是：`production.yaml[*].live_order_path` → `orders(venue=polymarket_clob)` → authenticated `clob_fill_sync` / canonical fill cache → `fills(status=filled)` → `fact_trades(trade_class='live_real')`。历史 N100 raw 只属于历史窗口。**不要拿 `live_simulated` 冒充 `live_real`，也不要拿 paper PnL 冒充实盘 PnL。**
 
 > **2026-06-07 补充**：`live_real` 行数会随新增真实成交变化，不是固定基线。判断是否可用于实盘 PnL 的标准是 `weather_clob_fill_coverage_gate.py gate_pass=true`，不是某个历史行数。
 
@@ -481,7 +481,7 @@ rows = conn.execute("""
 ### weather.db（原始规范化表，仅 fact_trades / fact_signal_candidates builder 使用）
 
 - 路径：`runtime/weather.db`
-- 日常刷新：`scripts/ops/weather_dashboard_refresh.sh`（增量 ingest）；全量派生层重算仅在明确需要时使用 `scripts/weather_dashboard/run_stack.sh --rebuild`
+- 日常刷新：`scripts/ops/start_weather_canonical_refresh_tmux.sh`（production-declared live orders/fills 的 bounded one-shot）；全量派生层重算仅在明确需要时使用 `scripts/weather_dashboard/run_stack.sh --rebuild`
 - 覆盖时间：取决于镜像同步时间，详见 `WEATHER_DATA_PIPELINE.md`
 - **直接读原始表的唯一授权场景**：`build_weather_fact_trades.py` 和 `build_weather_signal_candidates.py`（两个 builder）；其他代码禁止绕过这两张底表自己 JOIN 多表算 PnL
 
@@ -503,10 +503,10 @@ rows = conn.execute("""
 > 上面两个脚本只保留给本表未覆盖的研究维度（如多窗口 A/B、城市池假设重组）；
 > 新增标准机会分析以 `fact_signal_candidates` 为准。
 
-### Dashboard API
+### Dashboard API（controller-managed）
 
 - Base URL：`http://localhost:8000`
-- 启动：`scripts/weather_dashboard/run_stack.sh --api-only`
+- 状态/计划：`.venv/bin/python scripts/ops/weather_production_ctl.py health|plan`；启停只能走已登记 controller contract，不直接运行 uvicorn 或 `run_stack --api-only`
 - 常用 endpoints：
   - `GET /api/runs` — 所有 run 列表
   - `GET /api/runs/{run_id}/summary` — 单 run 绩效摘要

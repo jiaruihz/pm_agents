@@ -10,7 +10,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 > 与之配套：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)（口径定义）、[WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md)（脚本职责）、[WEATHER_REPO_BOUNDARY.md](WEATHER_REPO_BOUNDARY.md)（仓库职责）。本文只回答"用哪份数据 / 不要用哪份"。
 
 > **当前前提（2026-07-15）**：
-> - Mac 是短期生产：market/data-feed raw 在 `/Volumes/jrs/weather_data_feed_service_runtime`，执行 raw 在本仓库 `runtime/weather_edge_v1/` 与各策略目录。
+> - Mac 是当前生产：market/data-feed raw 在 `/Volumes/jrs/weather_data_feed_service_runtime`；执行 raw 必须从 `production.yaml`、manifest 与进程参数解析，不能默认在控制仓库。
 > - N100 在磁盘事故恢复完成前仅是历史/抢救源，不是当前 runner、order、source-event 或 snapshot 真相。
 > - 当前状态问题先读 raw + exchange evidence；历史绩效/settlement/opportunity analysis 才以 canonical facts 为首选。
 >
@@ -33,7 +33,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | 历史绩效 / PnL / ROI / 胜率 | `runtime/weather.db` 的 `fact_trades` 表 | `t24_paper_*_summary.json`、raw `paper_orders.jsonl`（这些是 legacy 派生层，跳过 `fact_trades` 直读会得到旧口径） |
 | 全机会 alpha / 成交质量 / 漏单 / 滑点 | `runtime/weather.db` 的 `fact_signal_candidates` 表 | raw paper_snapshots/ JSONL |
 | 单笔血缘 (candidate→signal→plan→order→fill→settle) | 当前策略 raw runtime + exchange response；`fact_trades` 补 settlement/fee/PnL | 为单笔问题无条件全量 rebuild；只读旧 N100 状态冒充当前 |
-| 实盘下单凭证（真金 CLOB 提交记录） | `runtime/weather_edge_v1/live/*.jsonl` + `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` （已被 ingest 到 `orders` 表，venue=`polymarket_clob`） | — |
+| 实盘下单凭证（真金 CLOB 提交记录） | `production.yaml.managed_runtimes[*].live_order_path`；bounded refresh 以 `--active-live-only` ingest 到 `orders` | 旧策略文件名清单、repo-local/N100 路径 fallback |
 | 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
 | 抢单/测速实时天气信号 | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/` 与 high-frequency outputs | 策略脚本默认不要各自拥有 canonical weather fetch；调试绕过必须显式 |
 | live observation feature/cache | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json` | full snapshot 里的旧 `metar_latest_*` 字段只作兼容回退 |
@@ -135,7 +135,7 @@ device/inode，属于 DB split P0，不得任选一份继续分析或重建。�
 | **N100** `/home/jiarui/weather-predict-backups/*.tar.zst` | backup | N100 `backup_data.sh` | 灾难恢复 | 本机镜像 `runtime/_backups_n100/`（2026-06-05 起加入 sync，独立脚本 `sync_n100_backups.sh`） |
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |
 | **本机** `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` | mirror | rsync from N100 | `migrate-live-cycle` → orders | N100 真金 CLOB 提交凭证镜像 |
-| **本机** `runtime/weather.db` | **canonical operational DB** | `weather_dashboard_refresh.sh` 增量 ingest；`run_stack.sh --rebuild` 全量派生层重算 | 所有分析 / API / 前端 | **唯一分析 DB**。无参数 `run_stack.sh` 只启动服务；全量重算只在确认 raw 输入 + CLOB fill cache / 外部 CLOB 同步可用且获得明确同意时执行。 |
+| **JRS** `/Volumes/jrs/pm_agents/runtime/weather.db` | **physical canonical operational DB** | bounded canonical refresh 增量 ingest；`run_stack.sh --rebuild` 显式全量派生层重算 | 所有分析 / API / 前端 | `runtime/weather.db` 必须只是同 inode alias；无参数 `run_stack.sh` 只读状态且不启停服务。 |
 | **本机** `runtime/weather.db.orders` | canonical（订单/执行事件） | strategy runtime/live-cycle ingest | live 下单结果、档位、挂单/吃单、blocked/error、执行版本、score tier、策略原始 payload | grain = 每个 canonical order/execution attempt；未成交不代表现金流 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |
@@ -150,21 +150,20 @@ device/inode，属于 DB split P0，不得任选一份继续分析或重建。�
 
 ## 2.5 日常刷新 vs 全量重建
 
-日常 dashboard/report 刷新用：
+日常 current execution refresh 用唯一 bounded one-shot：
 
 ```bash
-scripts/ops/weather_dashboard_refresh.sh
+scripts/ops/start_weather_canonical_refresh_tmux.sh
 ```
 
-这是**增量流程**：
+这是**增量流程**，active live journal 只从 `production.yaml` 解析：
 
-1. `sync_weather_remote.sh --live-only` 拉 N100 新的 live_cycle / signals / plans / live orders；
-2. `migrate-live-cycle` 对现有 `runtime/weather.db` 做 `INSERT OR IGNORE`，不会删库；
-3. `clob_fill_sync` 先导入本地 CLOB fill cache，再从 Polymarket 补新增真实 fills；
-4. `build_weather_fact_trades.py` / `build_weather_signal_candidates.py` 从 canonical 表重建派生宽表；
-5. `metrics-refresh` 重算 dashboard metrics。
+1. `ingest_strategy_runtime_orders --active-live-only` 增量导入当前 order journals；
+2. coverage check 验证 raw order 没从 canonical 消失；
+3. authenticated `clob_fill_sync` 补新增真实 fills；
+4. 增量物化 `fact_trades` 并运行 fill coverage gate。
 
-所以：**raw/canonical 层是增量积累，fact/metrics 层是每次按当前 DB 重新物化。**
+所以：**raw/canonical 层是增量积累，日常 one-shot 不重建全部 candidate/metrics。**需要 settlement/candidate 分区时走对应增量 materializer；全量才用下述 rebuild。
 
 全量重建用：
 
