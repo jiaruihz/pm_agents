@@ -417,6 +417,9 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         live_city = policy.default_mode == "live_trial"
         base = {
             "schema_version": "fast_source_prev_no_trial_v2",
+            "strategy_id": "metar_cross_prev_no",
+            "strategy_instance": "fast_source_prev_no_trial_v1",
+            "signal_side": "BUY_NO",
             "ts_utc": iso(now),
             "city": city,
             "target_date": target_date,

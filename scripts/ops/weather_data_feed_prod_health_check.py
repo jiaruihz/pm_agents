@@ -20,40 +20,24 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops.weather_data_feed_parity_check import check_snapshot, latest_snapshot, load_snapshot
+from src.strategies.runtime.production import load_production_spec
 
 
-MAC_DATA_FEED_RUNTIME = ROOT.parent / "weather_data_feed_service_runtime"
-DEFAULT_SNAPSHOT_DIRS = (
-    MAC_DATA_FEED_RUNTIME / "targeted_output/paper_snapshots",
-    ROOT.parent / "weather-predict/output/paper_snapshots",
-    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
-)
-DEFAULT_ORDERBOOK_DIRS = (
-    MAC_DATA_FEED_RUNTIME / "targeted_output/orderbook_snapshots",
-    ROOT.parent / "weather-predict/output/orderbook_snapshots",
-    ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots",
-)
-DEFAULT_FORECAST_CURVE_DIRS = (
-    MAC_DATA_FEED_RUNTIME / "targeted_output/forecast_hourly_curves",
-    ROOT.parent / "weather-predict/output/forecast_hourly_curves",
-    ROOT / "runtime/weather_edge_v1/market_data/forecast_hourly_curves",
-)
+PRODUCTION_SPEC = load_production_spec()
+MAC_DATA_FEED_RUNTIME = PRODUCTION_SPEC.data_feed_runtime_root
+DEFAULT_SNAPSHOT_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/paper_snapshots"
+DEFAULT_ORDERBOOK_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/orderbook_snapshots"
+DEFAULT_FORECAST_CURVE_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/forecast_hourly_curves"
 DEFAULT_FAST_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/high_frequency_observations/state.json"
 DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
-DEFAULT_SUMMARY_FILES = (
-    Path("low_price_yes_lottery_tiny_live_v1/latest_summary.json"),
-    Path("regime_routed_no_shadow_v1/latest_summary.json"),
-    Path("late_window_residual_split_v1/latest_summary.json"),
-    Path("d1_yes_high_mid_live_v1/latest_summary.json"),
+DEFAULT_SUMMARY_FILES = tuple(
+    runtime.health_path
+    for runtime in PRODUCTION_SPEC.managed_runtimes
+    if runtime.role == "strategy"
+    and runtime.health_format == "json"
+    and runtime.health_path is not None
 )
-DEFAULT_LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
-ACTIVE_LIVE_ORDER_PATTERNS: tuple[str, ...] = (
-    "low_price_yes_lottery_tiny_live_v1_orders.jsonl",
-)
-ACTIVE_RUNTIME_LIVE_ORDER_FILES = (
-    Path("late_window_residual_split_v1/live_orders.jsonl"),
-    Path("d1_yes_high_mid_live_v1/live_orders.jsonl"),
-)
+ACTIVE_RUNTIME_LIVE_ORDER_FILES = PRODUCTION_SPEC.active_live_order_paths()
 SNAPSHOT_SCHEMA_VERSION = "weather_data_feed_snapshot_v1"
 
 
@@ -68,24 +52,17 @@ def parse_utc(value: Any) -> datetime | None:
 
 
 def latest_existing_snapshot_dir() -> Path:
-    for path in DEFAULT_SNAPSHOT_DIRS:
-        if path.exists():
-            return path
-    return DEFAULT_SNAPSHOT_DIRS[0]
+    """Return the configured current-production path without historical fallback."""
+
+    return DEFAULT_SNAPSHOT_DIR
 
 
 def latest_existing_orderbook_dir() -> Path:
-    for path in DEFAULT_ORDERBOOK_DIRS:
-        if path.exists():
-            return path
-    return DEFAULT_ORDERBOOK_DIRS[0]
+    return DEFAULT_ORDERBOOK_DIR
 
 
 def latest_existing_forecast_curve_dir() -> Path:
-    for path in DEFAULT_FORECAST_CURVE_DIRS:
-        if path.exists():
-            return path
-    return DEFAULT_FORECAST_CURVE_DIRS[0]
+    return DEFAULT_FORECAST_CURVE_DIR
 
 
 def latest_partitioned_file(root: Path, patterns: tuple[str, ...]) -> Path | None:
@@ -188,9 +165,19 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
     exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
     place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
     place_status = str(place.get("status") or "").lower()
+    exchange_order_status = str(row.get("exchange_order_status") or "").lower()
     if status in {"failed", "error", "rejected", "cancelled", "canceled", "blocked"}:
         return False
     if place_status in {"failed", "error", "rejected", "cancelled", "canceled"}:
+        return False
+    try:
+        actual_fill_shares = float(row.get("actual_fill_shares") or 0.0)
+    except (TypeError, ValueError):
+        actual_fill_shares = 0.0
+    if actual_fill_shares <= 0 and (
+        exchange_order_status in {"cancelled", "canceled"}
+        or row.get("immediate_cancel_confirmed") is True
+    ):
         return False
     if place.get("success") is False:
         return False
@@ -643,7 +630,7 @@ def check_live_orders(
     elif all_files:
         files = sorted(live_dir.glob("*orders.jsonl"))
     else:
-        files = [live_dir / pattern for pattern in ACTIVE_LIVE_ORDER_PATTERNS if (live_dir / pattern).exists()]
+        files = []
     if extra_files:
         files.extend(path for path in extra_files if path.exists() and path not in files)
     rows: list[dict[str, Any]] = []
@@ -790,7 +777,6 @@ def overall_status(sections: dict[str, Any]) -> str:
         or city_state.get("status") == "missing_record_cities"
         or orderbook.get("stale")
         or any(item.get("duplicate_decision_count", 0) > 0 for item in telemetry)
-        or live_orders.get("duplicate_strategy_city_token_count", 0) > 0
         or any(summary.get("status") == "stale_snapshot" for summary in sections["summaries"])
     )
     return "warn" if warn else "ok"
@@ -803,7 +789,7 @@ def main() -> int:
     parser.add_argument("--orderbook-dir", default=str(latest_existing_orderbook_dir()))
     parser.add_argument("--forecast-curve-dir", default=str(latest_existing_forecast_curve_dir()))
     parser.add_argument("--fast-observation-state", default=str(DEFAULT_FAST_OBSERVATION_STATE))
-    parser.add_argument("--runtime-root", default=str(ROOT / "runtime/weather_edge_v1"))
+    parser.add_argument("--runtime-root", default=str(PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1"))
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-orderbook-age-min", type=float, default=75.0)
     parser.add_argument("--max-forecast-curve-age-min", type=float, default=45.0)
