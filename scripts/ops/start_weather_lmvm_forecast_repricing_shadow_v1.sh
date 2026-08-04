@@ -30,7 +30,7 @@ cmd=(
   --state "$OUTPUT_DIR/state.json"
   --bootstrap-lookback-files 64
   --follow-minutes "$FOLLOW_MINUTES"
-  --max-snapshot-age-seconds 2700
+  --max-snapshot-age-seconds 5400
   --loop
   --interval-seconds "$INTERVAL_SECONDS"
 )

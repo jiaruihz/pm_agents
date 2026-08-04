@@ -602,7 +602,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--state", type=Path)
     parser.add_argument("--bootstrap-lookback-files", type=int, default=64)
     parser.add_argument("--follow-minutes", type=float, default=180.0)
-    parser.add_argument("--max-snapshot-age-seconds", type=float, default=2700.0)
+    parser.add_argument("--max-snapshot-age-seconds", type=float, default=5400.0)
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-seconds", type=float, default=60.0)
     return parser
