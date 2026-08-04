@@ -7,12 +7,37 @@ from pathlib import Path
 from weather_dashboard.db.apply_schema_canonical import init_db_canonical
 from weather_dashboard.db.connection import get_conn
 from src.strategies.runtime.sync import sync_instance_specs
+from src.strategies.runtime.production import WeatherProductionSpec, load_production_spec
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
     DEFAULT_ROOTS,
     iter_strategy_order_paths,
     migrate_strategy_runtime_orders,
     write_report,
 )
+
+
+def resolve_active_live_order_paths(
+    project_root: str | Path,
+    *,
+    production_spec: WeatherProductionSpec | None = None,
+) -> list[Path]:
+    """Resolve current live journals only from production desired state."""
+
+    root = Path(project_root)
+    spec = production_spec or load_production_spec()
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for runtime in spec.managed_runtimes:
+        if not runtime.expected_live or runtime.live_order_path is None:
+            continue
+        path = runtime.live_order_path
+        if not path.is_absolute():
+            path = root / path
+        if not path.is_file() or str(path) in seen:
+            continue
+        paths.append(path)
+        seen.add(str(path))
+    return paths
 
 
 def resolve_order_paths(
@@ -47,13 +72,32 @@ def main() -> None:
         action="append",
         help="Specific live_orders.jsonl/paper_orders.jsonl to ingest. Can be repeated.",
     )
+    parser.add_argument(
+        "--active-live-only",
+        action="store_true",
+        help="Discover enabled expected-live instance journals from strategy_instance.",
+    )
+    parser.add_argument(
+        "--project-root",
+        default=".",
+        help="Base directory for relative strategy_instance.runtime_dir values.",
+    )
     args = parser.parse_args()
 
     init_db_canonical(args.db_path)
-    paths = resolve_order_paths(args.root, args.order_file)
     conn = get_conn(args.db_path)
     try:
-        sync_instance_specs(conn)
+        if args.active_live_only:
+            paths = resolve_active_live_order_paths(args.project_root)
+            seen = {str(path) for path in paths}
+            for raw_path in args.order_file or []:
+                path = Path(raw_path)
+                if str(path) not in seen:
+                    paths.append(path)
+                    seen.add(str(path))
+        else:
+            sync_instance_specs(conn)
+            paths = resolve_order_paths(args.root, args.order_file)
         reports = [migrate_strategy_runtime_orders(conn, order_path=path) for path in paths]
     finally:
         conn.close()

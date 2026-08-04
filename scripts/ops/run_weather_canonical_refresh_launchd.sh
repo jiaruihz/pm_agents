@@ -26,7 +26,7 @@ MARKET_PROXY="${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7897}"
 export HTTP_PROXY="$MARKET_PROXY" HTTPS_PROXY="$MARKET_PROXY" ALL_PROXY="$MARKET_PROXY"
 export http_proxy="$MARKET_PROXY" https_proxy="$MARKET_PROXY" all_proxy="$MARKET_PROXY"
 
-# Keep this post-trade path deliberately small: active registered live
+# Keep this post-trade path deliberately small: production-declared live
 # instances only, then order -> fill -> fact -> gate.  Registration is the
 # ownership boundary, so future execution modules do not require another
 # hard-coded path here.
@@ -34,9 +34,6 @@ export http_proxy="$MARKET_PROXY" https_proxy="$MARKET_PROXY" all_proxy="$MARKET
 # many minutes, which is unnecessary for closing live execution lineage.
 "$PROJECT_DIR/.venv/bin/python" -c \
   "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$DB_PATH')"
-"$PROJECT_DIR/.venv/bin/python" scripts/ops/weather_strategy_launcher.py \
-  --db-path "$DB_PATH" reconcile \
-  >>"$PROJECT_DIR/runtime/_dashboard_logs/runtime_reconcile.log" 2>&1
 "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders \
   --db-path "$DB_PATH" \
   --active-live-only \

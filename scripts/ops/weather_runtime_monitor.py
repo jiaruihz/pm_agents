@@ -37,6 +37,8 @@ TOKEN_RESOLUTION_BLOCKERS = frozenset(
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
 
 @dataclass(frozen=True)
 class WatchSpec:
@@ -167,10 +169,16 @@ def count_lines(path: Path | None) -> int:
         return sum(1 for _ in handle)
 
 
-def latest_jsonl_record(path: Path | None) -> dict[str, Any] | None:
+def latest_jsonl_record(
+    path: Path | None,
+    *,
+    statuses: frozenset[str] | None = None,
+) -> dict[str, Any] | None:
     if path is None or not path.exists() or path.stat().st_size == 0:
         return None
-    rows = read_recent_jsonl(path, max_lines=20)
+    rows = read_recent_jsonl(path, max_lines=1000)
+    if statuses is not None:
+        rows = [row for row in rows if str(row.get("status") or "").lower() in statuses]
     return rows[-1] if rows else None
 
 
@@ -181,12 +189,16 @@ def resolve_runtime_path(path_text: str | None, fallback: Path | None = None) ->
     return fallback
 
 
-def latest_record_across(paths: list[Path]) -> tuple[dict[str, Any] | None, Path | None]:
+def latest_record_across(
+    paths: list[Path],
+    *,
+    statuses: frozenset[str] | None = None,
+) -> tuple[dict[str, Any] | None, Path | None]:
     best_record: dict[str, Any] | None = None
     best_path: Path | None = None
     best_ts: datetime | None = None
     for path in paths:
-        record = latest_jsonl_record(path)
+        record = latest_jsonl_record(path, statuses=statuses)
         ts = generated_ts(record) if record else None
         if ts is not None and (best_ts is None or ts > best_ts):
             best_record = record
@@ -303,6 +315,7 @@ def summarize_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "executor_failures": 0,
         "live_written": 0,
         "live_errors": 0,
+        "live_guard_blocks": 0,
         "paper_written": 0,
         "plans_read": 0,
         "empty_snapshot_cycles": 0,
@@ -329,6 +342,7 @@ def summarize_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
         parsed = executor_result.get("parsed") if isinstance(executor_result.get("parsed"), dict) else {}
         out["live_written"] += int_value(parsed, "live_written", "live_orders")
         out["live_errors"] += int_value(parsed, "live_errors")
+        out["live_guard_blocks"] += int_value(parsed, "live_guard_blocks")
         out["paper_written"] += int_value(parsed, "paper_written", "paper_orders")
         out["plans_read"] += int_value(parsed, "plans_read")
         if returncode not in (0, "0", None):
@@ -378,7 +392,12 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
     latest_live_ts = None
     live_order_age_hours = None
     if spec.expected_live:
-        latest_live, latest_live_path = latest_record_across(live_order_paths)
+        # Only an accepted exchange submission is economic order activity.
+        # Blocked lifecycle attempts must not keep a strategy looking healthy.
+        latest_live, latest_live_path = latest_record_across(
+            live_order_paths,
+            statuses=frozenset({"submitted"}),
+        )
         latest_live_ts = generated_ts(latest_live) if latest_live else None
         live_order_age_hours = (now - latest_live_ts).total_seconds() / 3600 if latest_live_ts else None
 
@@ -457,6 +476,22 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
                 "detail_key": latest.get("error_class"),
                 "failure_classes": history_stats.get("executor_failure_classes"),
                 "latest_failure": latest,
+            },
+        )
+
+    if spec.expected_live and history_stats["live_guard_blocks"] >= 3:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance=spec.instance,
+            kind="repeated_live_guard_blocks",
+            message=(
+                f"{spec.display_name}: live execution guard blocked "
+                f"{history_stats['live_guard_blocks']} attempt(s) in the recent window"
+            ),
+            detail={
+                "live_guard_blocks": history_stats["live_guard_blocks"],
+                "top_blocker_counts": history_stats.get("top_blocker_counts"),
             },
         )
 
@@ -600,7 +635,7 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
 
 
 def default_specs(root: Path) -> list[WatchSpec]:
-    return [
+    specs = [
         WatchSpec(
             instance="regime_routed_no_shadow_v1",
             display_name="Regime-routed NO shadow",
@@ -670,26 +705,21 @@ def default_specs(root: Path) -> list[WatchSpec]:
             history_window_min=120,
         ),
         WatchSpec(
-            instance="current_yes_heat_death_tiny_live_h1_late_carry_v1",
-            display_name="Current-YES heat-death h1 late-carry tiny-live",
-            runtime_dir=root / "current_yes_heat_death_tiny_live_h1_late_carry_v1",
-            mode="tiny_live_forward_probe",
+            instance="current_yes_core_carry_tiny_live_v2",
+            display_name="Current-YES frozen core carry v2 tiny-live",
+            runtime_dir=root / "current_yes_core_carry_tiny_live_v2",
+            mode="tiny_live",
             expected_live=True,
-            stale_after_min=5,
-            bad_after_min=15,
-            history_window_min=120,
-        ),
-        WatchSpec(
-            instance="current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
-            display_name="Current-YES heat-death h2 early-dislocation tiny-live",
-            runtime_dir=root / "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
-            mode="tiny_live_forward_probe",
-            expected_live=True,
+            live_orders_file=str(
+                root / "current_yes_core_carry_tiny_live_v2" / "live_orders.jsonl"
+            ),
             stale_after_min=5,
             bad_after_min=15,
             history_window_min=120,
         ),
     ]
+    managed_ids = {runtime.instance_id for runtime in load_production_spec().managed_runtimes}
+    return [spec for spec in specs if spec.instance in managed_ids]
 
 
 def load_state(path: Path) -> dict[str, Any]:

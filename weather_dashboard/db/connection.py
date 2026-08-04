@@ -20,3 +20,18 @@ def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     apply_pragmas(conn)
     return conn
+
+
+def get_readonly_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
+    """Open an existing dashboard DB without creating or mutating it."""
+    path = Path(db_path).resolve(strict=True)
+    conn = sqlite3.connect(
+        f"file:{path}?mode=ro",
+        uri=True,
+        check_same_thread=False,
+        timeout=1.0,
+    )
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=1000")
+    return conn

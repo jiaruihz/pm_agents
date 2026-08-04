@@ -22,6 +22,18 @@ managed_runtimes:
     execution_mode: infrastructure
     recovery_policy: manual
 
+  - instance_id: weather_dashboard_api
+    tmux_session: weather_dashboard_api
+    role: dashboard_api
+    execution_mode: read_only_api
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    start_script: scripts/ops/start_weather_dashboard_api_jrs_tmux.sh
+    health_url: http://127.0.0.1:8000/health
+    health_format: http_json
+    accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+
   - instance_id: weather_data_feed_jrs
     tmux_session: weather_data_feed_jrs
     role: data_feed
@@ -75,6 +87,7 @@ managed_runtimes:
     max_health_age_sec: 120
     accepted_health_statuses: [ok]
     expected_live: true
+    live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
     dependencies: [weather_data_feed_jrs]
     recovery_policy: guarded_live
 
@@ -89,6 +102,7 @@ managed_runtimes:
     max_health_age_sec: 180
     accepted_health_statuses: [ok]
     expected_live: true
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/live_orders.jsonl
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: guarded_live
 
@@ -242,6 +256,7 @@ managed_runtimes:
     start_script: scripts/ops/start_weather_runtime_monitor.sh
     health_path: /Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/runtime_monitor/latest_summary.json
     max_health_age_sec: 660
+    accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_source_event_ladder_repricing_shadow

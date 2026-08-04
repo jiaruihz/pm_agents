@@ -57,6 +57,12 @@ def test_committed_production_spec_declares_current_live_control_plane():
 
     assert by_id["current_yes_core_carry_tiny_live_v2"].expected_live is True
     assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
+    assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
+        "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
+        "current_yes_core_carry_tiny_live_v2/live_orders.jsonl"
+    )
+    assert by_id["weather_dashboard_api"].health_format == "http_json"
+    assert by_id["weather_dashboard_api"].health_url == "http://127.0.0.1:8000/health"
     assert by_id["fast_source_prev_no_trial_v1"].dependencies == (
         "weather_data_feed_jrs",
         "weather_live_cross_observations",
@@ -87,11 +93,11 @@ def test_every_business_runtime_has_controller_start_contract():
         if item.instance_id != "weather_jrs_context_keeper"
     ]
 
-    assert len(business) == 22
+    assert len(business) == 23
     assert all(item.recovery_policy != "manual" for item in business)
     assert all(item.checkout_root is not None for item in business)
     assert all(item.resolved_start_script() is not None for item in business)
-    assert all(item.health_path is not None for item in business)
+    assert all(item.health_path is not None or item.health_url is not None for item in business)
     assert all(
         (ROOT / item.start_script).is_file()
         for item in business
@@ -181,6 +187,27 @@ def test_health_supports_explicit_mtime_heartbeat(tmp_path):
     assert report["status"] == "healthy"
     assert report["runtimes"][0]["health_format"] == "mtime"
     assert report["runtimes"][0]["health_age_sec"] == 30.0
+
+
+def test_health_supports_db_backed_http_json(tmp_path, monkeypatch):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="api",
+        tmux_session="api",
+        role="dashboard_api",
+        execution_mode="read_only_api",
+        health_url="http://127.0.0.1:8000/health",
+        health_format="http_json",
+        accepted_health_statuses=("ok",),
+        recovery_policy="safe",
+    )
+    monkeypatch.setattr(ctl, "_read_http_json", lambda _url: ({"status": "critical"}, None))
+
+    report = ctl.evaluate_production_health(
+        production_spec(tmp_path, (runtime,)), observed("api"), now_epoch=1030.0
+    )
+
+    assert report["status"] == "critical"
+    assert report["runtimes"][0]["issues"] == ["health_status_unaccepted"]
 
 
 def test_health_propagates_missing_dependency_to_live_runtime(tmp_path):

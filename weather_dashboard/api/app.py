@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +22,7 @@ from weather_dashboard.api.routers import (
     runs,
     strategy_runtime,
 )
+from weather_dashboard.api.deps import get_db
 
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIST = ROOT / "frontend" / "strategy_dashboard" / "dist"
@@ -67,7 +68,8 @@ def create_app() -> FastAPI:
     app.include_router(data_sources.router, prefix="/api")
 
     @app.get("/health")
-    def health():
+    def health(conn=Depends(get_db)):
+        conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
         return {"status": "ok"}
 
     if FRONTEND_DIST.exists():

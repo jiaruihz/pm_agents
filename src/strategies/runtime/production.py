@@ -23,10 +23,12 @@ class WeatherManagedRuntimeSpec:
     start_script: Path | None = None
     restart_script: Path | None = None
     health_path: Path | None = None
+    health_url: str | None = None
     health_format: str = "json"
     max_health_age_sec: float | None = None
     accepted_health_statuses: tuple[str, ...] = ()
     expected_live: bool = False
+    live_order_path: Path | None = None
     dependencies: tuple[str, ...] = ()
     recovery_policy: str = "manual"
 
@@ -125,6 +127,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     if item.get("health_path")
                     else None
                 ),
+                health_url=(str(item["health_url"]) if item.get("health_url") else None),
                 health_format=str(item.get("health_format") or "json"),
                 max_health_age_sec=(
                     float(item["max_health_age_sec"])
@@ -135,6 +138,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     str(value) for value in (item.get("accepted_health_statuses") or [])
                 ),
                 expected_live=bool(item.get("expected_live", False)),
+                live_order_path=(
+                    Path(item["live_order_path"])
+                    if item.get("live_order_path")
+                    else None
+                ),
                 dependencies=tuple(
                     str(value) for value in (item.get("dependencies") or [])
                 ),
@@ -175,7 +183,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"unsupported recovery_policy for {item.instance_id}: "
                 f"{item.recovery_policy}"
             )
-        if item.health_format not in {"json", "mtime"}:
+        if item.health_format not in {"json", "mtime", "http_json"}:
             raise ValueError(
                 f"unsupported health_format for {item.instance_id}: "
                 f"{item.health_format}"
@@ -185,6 +193,22 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         ):
             raise ValueError(
                 f"mtime health cannot validate status/live fields: {item.instance_id}"
+            )
+        if item.health_format == "http_json" and not item.health_url:
+            raise ValueError(
+                f"http_json health requires health_url: {item.instance_id}"
+            )
+        if item.health_format != "http_json" and item.health_url:
+            raise ValueError(
+                f"health_url requires http_json health: {item.instance_id}"
+            )
+        if item.health_path and item.health_url:
+            raise ValueError(
+                f"runtime cannot declare both health_path and health_url: {item.instance_id}"
+            )
+        if item.expected_live and item.live_order_path is None:
+            raise ValueError(
+                f"live runtime must declare live_order_path: {item.instance_id}"
             )
         if item.recovery_policy != "manual" and item.resolved_start_script() is None:
             raise ValueError(

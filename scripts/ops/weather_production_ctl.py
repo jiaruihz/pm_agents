@@ -26,6 +26,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -49,6 +51,17 @@ def _read_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         return None, "health_path_missing"
     except (OSError, json.JSONDecodeError) as exc:
         return None, f"health_path_unreadable:{type(exc).__name__}"
+    if not isinstance(value, dict):
+        return None, "health_payload_not_object"
+    return value, None
+
+
+def _read_http_json(url: str) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        with urllib.request.urlopen(url, timeout=2.0) as response:
+            value = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        return None, f"health_url_unreadable:{type(exc).__name__}"
     if not isinstance(value, dict):
         return None, "health_payload_not_object"
     return value, None
@@ -112,7 +125,15 @@ def evaluate_production_health(
         if runtime.expected_live and session_row is not None:
             if "--live" not in pane_text or "--confirm-live" not in pane_text:
                 issues.append("live_flags_missing")
-        if runtime.health_path is not None:
+        if runtime.health_format == "http_json":
+            health_payload, health_error = _read_http_json(str(runtime.health_url))
+            if health_error:
+                issues.append(health_error)
+            elif runtime.accepted_health_statuses:
+                status = str(health_payload.get("status") or "")
+                if status not in runtime.accepted_health_statuses:
+                    issues.append("health_status_unaccepted")
+        elif runtime.health_path is not None:
             if not runtime.health_path.is_file():
                 issues.append("health_artifact_missing")
             elif runtime.health_format == "mtime":
@@ -150,6 +171,7 @@ def evaluate_production_health(
             "status": "critical" if issues else "healthy",
             "issues": issues,
             "health_path": str(runtime.health_path) if runtime.health_path else None,
+            "health_url": runtime.health_url,
             "health_format": runtime.health_format,
             "health_age_sec": (
                 round(health_age_sec, 3) if health_age_sec is not None else None

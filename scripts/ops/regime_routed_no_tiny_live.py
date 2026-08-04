@@ -1874,7 +1874,7 @@ def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
         live=bool(args.live),
         confirm_live=bool(args.confirm_live),
         allow_taker=True,
-        cancel_expired=True,
+        cancel_expired=bool(args.live and args.confirm_live),
         no_telegram=True,
         timeout_sec=180.0,
     )

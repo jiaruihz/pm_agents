@@ -19,7 +19,7 @@ def test_check_file_only_blocks_on_missing_submitted_orders(tmp_path: Path) -> N
     _write_jsonl(
         path,
         [
-            {"execution_id": "submitted-present", "status": "submitted"},
+            {"execution_id": "submitted-present", "status": "submitted", "order_id": "clob-present"},
             {"execution_id": "blocked-tail", "status": "blocked"},
             {"execution_id": "failed-tail", "live_submit_status": "submit_failed"},
         ],
@@ -37,9 +37,25 @@ def test_check_file_still_blocks_on_missing_submitted_order(tmp_path: Path) -> N
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE orders (execution_id TEXT PRIMARY KEY)")
     path = tmp_path / "live_orders.jsonl"
-    _write_jsonl(path, [{"execution_id": "submitted-missing", "status": "submitted"}])
+    _write_jsonl(path, [{"execution_id": "submitted-missing", "status": "submitted", "order_id": "clob-missing"}])
 
     report = check_file(conn, path)
 
     assert report["missing_orders"] == 1
     assert report["sample_missing_execution_ids"] == ["submitted-missing"]
+
+
+def test_cancel_lifecycle_submitted_wrapper_is_not_an_exchange_order(tmp_path: Path) -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE orders (execution_id TEXT PRIMARY KEY)")
+    path = tmp_path / "live_orders.jsonl"
+    _write_jsonl(
+        path,
+        [{"execution_id": "cancel-attempt", "status": "submitted", "execution_action": "maker_cancel_ttl"}],
+    )
+
+    report = check_file(conn, path)
+
+    assert report["raw_submitted_rows"] == 0
+    assert report["missing_orders"] == 0
+    assert report["missing_non_submitted_attempts"] == 1

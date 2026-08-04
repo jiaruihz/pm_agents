@@ -114,6 +114,50 @@ def test_price_blocked_live_runner_is_idle_by_policy_not_failure(tmp_path: Path)
     assert result["alerts"] == []
 
 
+def test_blocked_lifecycle_rows_do_not_count_as_recent_live_orders(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 18, 15, 30, tzinfo=timezone.utc)
+    runtime = tmp_path / "heat"
+    summary = {
+        "generated_at_utc": (now - timedelta(minutes=1)).isoformat(),
+        "live_enabled": True,
+        "plans_written": 3,
+        "executor_result": {
+            "returncode": 0,
+            "parsed": {"live_written": 3, "live_guard_blocks": 3},
+        },
+    }
+    write_json(runtime / "latest_summary.json", summary)
+    append_jsonl(runtime / "summary_history.jsonl", [summary])
+    append_jsonl(
+        runtime / "live_orders.jsonl",
+        [
+            {
+                "status": "submitted",
+                "created_at_utc": (now - timedelta(hours=4)).isoformat(),
+            },
+            {
+                "status": "blocked",
+                "created_at_utc": (now - timedelta(seconds=10)).isoformat(),
+            },
+        ],
+    )
+    spec = monitor.WatchSpec(
+        instance="heat_test",
+        display_name="Heat test",
+        runtime_dir=runtime,
+        mode="live",
+        expected_live=True,
+        no_live_order_warn_hours=1,
+    )
+
+    result = monitor.evaluate_spec(spec, now)
+
+    assert result["status"] == "critical"
+    assert result["latest_live_order_ts_utc"] == (now - timedelta(hours=4)).isoformat().replace("+00:00", "Z")
+    assert any(alert["kind"] == "repeated_live_guard_blocks" for alert in result["alerts"])
+    assert any(alert["kind"] == "no_recent_live_orders" for alert in result["alerts"])
+
+
 def test_orderbook_stale_becomes_warning(tmp_path: Path) -> None:
     now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
     old_day = tmp_path / "orderbook_snapshots" / "2026-07-01"

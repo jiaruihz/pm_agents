@@ -50,6 +50,7 @@ SNAPSHOT_DIR = Path("runtime/weather_edge_v1/market_data/paper_snapshots")
 GAMMA_HOST = os.getenv("POLYMARKET_GAMMA_HOST", "https://gamma-api.polymarket.com").rstrip("/")
 _GAMMA_MARKET_CACHE: dict[str, dict[str, Any] | None] = {}
 _CONDITION_ID_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
+_SNAPSHOT_FILE_TS_RE = re.compile(r"snapshot_(\d{8})_(\d{4})\.json$")
 
 
 @dataclass
@@ -155,6 +156,16 @@ def _snapshot_files_for_date(target_date: str) -> list[Path]:
     return sorted(SNAPSHOT_DIR.glob(f"snapshot_{ymd}_*.json"))
 
 
+def _snapshot_file_ts(path: Path) -> datetime | None:
+    match = _SNAPSHOT_FILE_TS_RE.fullmatch(path.name)
+    if not match:
+        return None
+    try:
+        return datetime.strptime("".join(match.groups()), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
 def _row_token_ids(row: dict[str, Any]) -> set[str]:
     out: set[str] = set()
     for key in ("token_id", "yes_token_id", "no_token_id"):
@@ -228,14 +239,31 @@ def _build_snapshot_lookup(rows: list[dict[str, Any]]) -> dict[tuple[str, str], 
         target_date = str(row.get("target_date") or "").strip()
         token_id = str(row.get("token_id") or "").strip()
         if target_date and token_id:
-            wanted.setdefault(target_date, []).append((token_id, _parse_dt(row.get("created_at_utc"))))
+            wanted.setdefault(target_date, []).append(
+                (
+                    token_id,
+                    _parse_dt(
+                        row.get("decision_snapshot_ts_utc")
+                        or row.get("snapshot_ts_utc")
+                        or row.get("created_at_utc")
+                    ),
+                )
+            )
 
     lookup: dict[tuple[str, str], dict[str, Any]] = {}
-    best_ts: dict[tuple[str, str], datetime | None] = {}
     for target_date, token_orders in wanted.items():
         token_set = {token for token, _ in token_orders}
         order_cutoffs = {token: cutoff for token, cutoff in token_orders}
-        for path in _snapshot_files_for_date(target_date):
+        fallback: dict[str, dict[str, Any]] = {}
+        pending = set(token_set)
+        # A snapshot contains the full ladder, so scanning newest-to-oldest can
+        # stop as soon as every token has its latest row at/before the decision
+        # clock.  The old full-day scan parsed gigabytes for one runtime file.
+        for path in reversed(_snapshot_files_for_date(target_date)):
+            file_ts = _snapshot_file_ts(path)
+            pending_cutoffs = [order_cutoffs[token] for token in pending if order_cutoffs.get(token) is not None]
+            if file_ts is not None and pending_cutoffs and file_ts > max(pending_cutoffs):
+                continue
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
@@ -246,20 +274,22 @@ def _build_snapshot_lookup(rows: list[dict[str, Any]]) -> dict[tuple[str, str], 
             for rec in records:
                 if not isinstance(rec, dict):
                     continue
-                tokens = _row_token_ids(rec) & token_set
+                tokens = _row_token_ids(rec) & pending
                 if not tokens:
                     continue
                 rec_ts = _parse_dt(rec.get("snapshot_ts_utc") or rec.get("ts_utc"))
                 for token in tokens:
                     key = (target_date, token)
                     cutoff = order_cutoffs.get(token)
-                    existing = best_ts.get(key)
-                    if cutoff is not None and rec_ts is not None and rec_ts > cutoff:
-                        if key in lookup:
-                            continue
-                    if existing is None or (rec_ts is not None and rec_ts > existing):
+                    fallback.setdefault(token, rec)
+                    if cutoff is None or (rec_ts is not None and rec_ts <= cutoff):
                         lookup[key] = rec
-                        best_ts[key] = rec_ts
+                        pending.discard(token)
+            if not pending:
+                break
+        for token in pending:
+            if token in fallback:
+                lookup[(target_date, token)] = fallback[token]
     return lookup
 
 
@@ -301,6 +331,49 @@ def _runtime_order_status(raw: dict[str, Any]) -> str:
     return str(raw.get("order_status") or raw.get("status") or "").strip() or "submitted"
 
 
+def _runtime_plan_config_id(raw: dict[str, Any], fallback: str) -> str:
+    explicit = str(raw.get("config_id") or "").strip()
+    if explicit:
+        return explicit
+    instance = str(raw.get("strategy_instance") or "").strip()
+    try:
+        shares = float(raw.get("size") or raw.get("shares") or 0.0)
+    except (TypeError, ValueError):
+        shares = 0.0
+    execution_mode = str(raw.get("execution_mode") or "").strip()
+    if instance == "current_yes_heat_death_tiny_live_v1":
+        return "current_yes_heat_death_tiny_live_v1_fixed10"
+    if instance == "current_yes_heat_death_tiny_live_h1_late_carry_v1":
+        if execution_mode == "tiny_live_split_taker_maker_probe" or shares <= 5.0:
+            return "current_yes_heat_death_tiny_live_h1_late_carry_v3_maker_first_chase"
+        return "current_yes_heat_death_tiny_live_h1_late_carry_v1_fixed10"
+    if instance == "current_yes_heat_death_tiny_live_h2_early_dislocation_v1":
+        if execution_mode == "tiny_live_split_taker_maker_probe":
+            return "current_yes_heat_death_tiny_live_h2_early_dislocation_v3_split_taker_maker"
+        if shares <= 5.0:
+            return "current_yes_heat_death_tiny_live_h2_early_dislocation_v2_fixed5"
+        return "current_yes_heat_death_tiny_live_h2_early_dislocation_v1_fixed10"
+    return fallback
+
+
+def physical_exchange_order_id(raw: dict[str, Any]) -> str:
+    for payload in (
+        raw,
+        raw.get("exchange_response") if isinstance(raw.get("exchange_response"), dict) else {},
+    ):
+        for key in ("order_id", "orderID", "clob_order_id"):
+            value = str(payload.get(key) or "").strip()
+            if value:
+                return value
+    response = raw.get("exchange_response")
+    place = response.get("place") if isinstance(response, dict) and isinstance(response.get("place"), dict) else {}
+    for key in ("order_id", "orderID", "clob_order_id"):
+        value = str(place.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) -> dict[str, Any]:
     row = dict(raw)
     snap = snapshot or {}
@@ -331,7 +404,13 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
             row[key] = snap.get(key)
 
     row["created_at_utc"] = row.get("created_at_utc") or row.get("live_attempt_ts_utc") or row.get("ts_utc")
-    row["snapshot_ts_utc"] = row.get("snapshot_ts_utc") or snap.get("snapshot_ts_utc") or snap.get("ts_utc") or row.get("created_at_utc")
+    row["snapshot_ts_utc"] = (
+        row.get("decision_snapshot_ts_utc")
+        or row.get("snapshot_ts_utc")
+        or snap.get("snapshot_ts_utc")
+        or snap.get("ts_utc")
+        or row.get("created_at_utc")
+    )
     row["venue"] = row.get("venue") or "polymarket_clob"
     row["status"] = _runtime_order_status(row)
     row["bracket"] = row.get("bracket") or row.get("t_minus_1_no_bracket_c")
@@ -378,16 +457,53 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
     if not raw_orders:
         return report
 
-    snapshot_lookup = _build_snapshot_lookup(raw_orders)
+    existing_physical_order_ids = {
+        str(row[0])
+        for row in conn.execute(
+            """
+            SELECT DISTINCT order_id
+            FROM orders
+            WHERE venue='polymarket_clob' AND COALESCE(order_id, '') <> ''
+            """
+        ).fetchall()
+    }
+    seen_physical_order_ids: set[str] = set()
+    migration_orders: list[dict[str, Any]] = []
+    for raw in raw_orders:
+        physical_order_id = physical_exchange_order_id(raw)
+        if order_kind == "live" and not physical_order_id:
+            report.skip("non_exchange_order_lifecycle_attempt")
+            continue
+        if physical_order_id and (
+            physical_order_id in existing_physical_order_ids
+            or physical_order_id in seen_physical_order_ids
+        ):
+            report.skip("existing_physical_order")
+            continue
+        if physical_order_id:
+            seen_physical_order_ids.add(physical_order_id)
+        migration_orders.append(raw)
+    if not migration_orders:
+        return report
+
+    snapshot_lookup = _build_snapshot_lookup(migration_orders)
     enriched = [
         _enrich_runtime_order(
             raw,
             snapshot_lookup.get((str(raw.get("target_date") or ""), str(raw.get("token_id") or ""))),
         )
-        for raw in raw_orders
+        for raw in migration_orders
     ]
 
     strategy_params = _strategy_params({}, enriched)
+    declared_config_ids = {
+        _runtime_plan_config_id(row, "")
+        for row in enriched
+        if _runtime_plan_config_id(row, "")
+    }
+    # A durable order journal spans config transitions.  Keep the run-level
+    # config as a stable container identity, while each plan retains the
+    # explicit config_id written by the runner at decision time.
     config_id = _strategy_config_id(strategy_params)
     instance_exists = conn.execute(
         "SELECT 1 FROM strategy_instance WHERE instance_id=?", (strategy_instance,)
@@ -400,7 +516,13 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
     for raw in enriched:
         try:
             signal = _canonical_signal(raw, producer_system=producer_system, cycle_id=run_id)
-            plan = _canonical_plan(raw, run_id=run_id, config_id=config_id, signal_id=signal["signal_id"])
+            plan_config_id = _runtime_plan_config_id(raw, config_id)
+            plan = _canonical_plan(
+                raw,
+                run_id=run_id,
+                config_id=plan_config_id,
+                signal_id=signal["signal_id"],
+            )
             if not str(raw.get("execution_id") or "").strip():
                 raw["execution_id"] = make_execution_id(
                     run_id=run_id,
@@ -432,6 +554,18 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
         strategy_params,
         strategy_key_for_params(strategy_params),
     )
+    for declared_config_id in sorted(declared_config_ids):
+        if conn.execute(
+            "SELECT 1 FROM strategy_config WHERE config_id=?",
+            (declared_config_id,),
+        ).fetchone() is None:
+            insert_strategy_config(
+                conn,
+                declared_config_id,
+                declared_config_id,
+                {**strategy_params, "declared_runtime_config_id": declared_config_id},
+                strategy_key_for_params(strategy_params),
+            )
     insert_universe(conn, f"{run_id}_universe", f"strategy_runtime_{producer_system}_{order_path.parent.name}_{order_path.stem}", cities=cities, models=models)
     insert_code_version(conn, "strategy-runtime-order-migration")
     insert_run(
