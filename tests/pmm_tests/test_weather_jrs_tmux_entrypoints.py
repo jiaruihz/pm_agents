@@ -36,6 +36,8 @@ def test_jrs_managed_start_entries_use_canonical_tmux_helper():
             offenders.append(f"{path.name}:socket_override_knob")
         if re.search(r"(?:^|\s)(?:tmux|\"\$TMUX_BIN\")\s+(?:-L|has-session|new-session|new-window|kill-session)", text):
             offenders.append(f"{path.name}:raw_tmux_command")
+        if re.search(r"weather_jrs_tmux[^\n]*\srun-shell(?:\s|$)", text):
+            offenders.append(f"{path.name}:canonical_run_shell")
     assert offenders == []
 
 

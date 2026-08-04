@@ -57,6 +57,10 @@ def test_committed_production_spec_declares_current_live_control_plane():
 
     assert by_id["current_yes_core_carry_tiny_live_v2"].expected_live is True
     assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
+    assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
+        "/Users/deepsleep/projects/pm_agents_prod/scripts/ops/"
+        "start_weather_current_yes_core_carry_tiny_live_v2.sh"
+    )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
         "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
         "current_yes_core_carry_tiny_live_v2/live_orders.jsonl"
@@ -80,6 +84,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "start_mac_knmi_open_data_jrs_tmux.sh"
     )
     assert by_id["weather_knmi_open_data_jrs"].max_health_age_sec == 900
+    assert by_id["weather_city_probability_runtime_v3"].max_health_age_sec == 1200
+    assert by_id["weather_current_yes_heat_death_shadow_v1"].max_health_age_sec == 2400
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_knmi_first_seen_prod"
     )

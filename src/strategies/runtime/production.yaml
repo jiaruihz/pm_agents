@@ -62,7 +62,7 @@ managed_runtimes:
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
     start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
-    max_health_age_sec: 180
+    max_health_age_sec: 1200
     dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs, weather_knmi_first_seen_ladder_v1]
     recovery_policy: safe
 
@@ -83,6 +83,7 @@ managed_runtimes:
     execution_mode: live
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
+    restart_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json
     max_health_age_sec: 120
     accepted_health_statuses: [ok]
@@ -190,7 +191,7 @@ managed_runtimes:
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_weather_current_yes_heat_death_shadow_v1.sh
     health_path: /Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/current_yes_heat_death_shadow_v1/latest_summary.json
-    max_health_age_sec: 1200
+    max_health_age_sec: 2400
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
