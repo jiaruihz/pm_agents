@@ -119,6 +119,22 @@ def grouped_performance(
     return result
 
 
+def exit_band(value: float) -> str:
+    if value < -0.20:
+        return "<-20%"
+    if value < -0.05:
+        return "-20%..-5%"
+    if value < 0:
+        return "-5%..0%"
+    if value < 0.02:
+        return "0%..2%"
+    if value < 0.05:
+        return "2%..5%"
+    if value < 0.10:
+        return "5%..10%"
+    return "10%+"
+
+
 def date_stability(rows: list[dict[str, Any]]) -> dict[str, Any]:
     by_date: dict[str, dict[str, float]] = defaultdict(
         lambda: {"buy_cost": 0.0, "pnl": 0.0}
@@ -229,9 +245,30 @@ def main() -> None:
         buy_shares = sum(as_float(row.get("size")) for row in buys)
         main_cost = sum(as_float(row.get("usdcSize")) for row in main_rows)
         main_shares = sum(as_float(row.get("size")) for row in main_rows)
+        main_sells = [
+            row
+            for row in sells
+            if str(row.get("conditionId") or "") == main_condition
+            and str(row.get("outcome") or "").lower()
+            == str(main_rows[0].get("outcome") or "").lower()
+        ]
+        main_sell_shares = sum(as_float(row.get("size")) for row in main_sells)
+        main_sell_proceeds = sum(as_float(row.get("usdcSize")) for row in main_sells)
+        main_sold_fraction = ratio(main_sell_shares, main_shares)
+        main_buy_cash_per_share = ratio(main_cost, main_shares)
+        main_sell_cash_per_share = ratio(main_sell_proceeds, main_sell_shares)
+        main_exit_return = (
+            main_sell_cash_per_share / main_buy_cash_per_share - 1
+            if main_buy_cash_per_share and main_sell_cash_per_share is not None
+            else None
+        )
         first_buy_ts = min(int(row.get("timestamp") or 0) for row in buys)
+        last_buy_ts = max(int(row.get("timestamp") or 0) for row in buys)
         first_sell_ts = min((int(row.get("timestamp") or 0) for row in sells), default=0)
         last_sell_ts = max((int(row.get("timestamp") or 0) for row in sells), default=0)
+        first_main_sell_ts = min(
+            (int(row.get("timestamp") or 0) for row in main_sells), default=0
+        )
         largest_buy_tx = max(
             (
                 sum(
@@ -275,6 +312,22 @@ def main() -> None:
                 "main_cost_share": ratio(main_cost, buy_cost),
                 "main_entry_quote": entry_quote,
                 "main_cash_per_share": ratio(main_cost, main_shares),
+                "main_sell_shares": main_sell_shares,
+                "main_sell_proceeds": main_sell_proceeds,
+                "main_sold_fraction": main_sold_fraction,
+                "main_sell_cash_per_share": main_sell_cash_per_share,
+                "main_exit_return": main_exit_return,
+                "main_exit_return_band": (
+                    exit_band(main_exit_return) if main_exit_return is not None else "no_main_sell"
+                ),
+                "main_fully_exited": bool(
+                    main_sold_fraction is not None and main_sold_fraction >= 0.99
+                ),
+                "first_main_sell_delay_minutes": (
+                    (first_main_sell_ts - first_buy_ts) / 60
+                    if first_main_sell_ts
+                    else None
+                ),
                 "main_yes_condition": main_yes_condition,
                 "main_yes_title": main_yes_title,
                 "main_yes_slug": main_yes_slug,
@@ -294,6 +347,9 @@ def main() -> None:
                 ),
                 "first_buy_to_last_sell_hours": (
                     (last_sell_ts - first_buy_ts) / 3600 if last_sell_ts else None
+                ),
+                "first_sell_before_last_buy": bool(
+                    first_sell_ts and first_sell_ts < last_buy_ts
                 ),
                 "has_sell": bool(sells),
                 "sell_proceeds": sum(as_float(row.get("usdcSize")) for row in sells),
@@ -356,6 +412,12 @@ def main() -> None:
     resolved_cost = sum(as_float(row["buy_cost"]) for row in event_rows)
     resolved_pnl = sum(as_float(row["pnl"]) for row in event_rows)
     main_yes_rows = [row for row in event_rows if row["main_yes_condition"]]
+    main_sell_rows = [
+        row for row in event_rows if row["main_exit_return"] is not None
+    ]
+    fully_exited_main_rows = [
+        row for row in main_sell_rows if row["main_fully_exited"]
+    ]
     role_payload = {
         f"{side}:{role}": values
         for (side, role), values in sorted(role_rows.items())
@@ -471,6 +533,34 @@ def main() -> None:
                 if row["first_buy_to_last_sell_hours"] is not None
             ),
             "by_holding_band": grouped_performance(event_rows, "holding_band"),
+        },
+        "exit_diagnostics": {
+            "main_condition_with_sell_events": len(main_sell_rows),
+            "main_condition_fully_exited_events": len(fully_exited_main_rows),
+            "main_condition_fully_exited_share": ratio(
+                len(fully_exited_main_rows), len(main_sell_rows)
+            ),
+            "first_sell_before_last_buy_share": ratio(
+                sum(bool(row["first_sell_before_last_buy"]) for row in event_rows),
+                len(event_rows),
+            ),
+            "main_sold_fraction_distribution": distribution(
+                as_float(row["main_sold_fraction"]) for row in main_sell_rows
+            ),
+            "main_exit_return_all_sellers": distribution(
+                as_float(row["main_exit_return"]) for row in main_sell_rows
+            ),
+            "main_exit_return_fully_exited": distribution(
+                as_float(row["main_exit_return"])
+                for row in fully_exited_main_rows
+            ),
+            "first_main_sell_delay_minutes": distribution(
+                as_float(row["first_main_sell_delay_minutes"])
+                for row in main_sell_rows
+            ),
+            "fully_exited_by_return_band": grouped_performance(
+                fully_exited_main_rows, "main_exit_return_band"
+            ),
         },
         "execution": {
             "sell_event_share": ratio(sum(bool(row["has_sell"]) for row in event_rows), len(event_rows)),
