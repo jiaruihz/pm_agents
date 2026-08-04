@@ -84,6 +84,7 @@ managed_runtimes:
     execution_mode: live
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
+    restart_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/latest_summary.json
     max_health_age_sec: 180
     accepted_health_statuses: [ok]
