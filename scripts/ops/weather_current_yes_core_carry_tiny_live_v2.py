@@ -761,7 +761,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     ap = signal_runner.parser()
     ap.description = __doc__
-    ap.set_defaults(output_dir=str(OUTPUT_DIR), artifact=str(ARTIFACT_PATH), interval_seconds=15.0)
+    ap.set_defaults(
+        output_dir=str(OUTPUT_DIR),
+        artifact=str(ARTIFACT_PATH),
+        interval_seconds=15.0,
+        summary_filename="signal_latest_summary.json",
+        summary_history_filename="signal_summary_history.jsonl",
+    )
     ap.add_argument("--taker-shares", type=float, default=5.0)
     ap.add_argument("--maker-shares", type=float, default=5.0)
     ap.add_argument("--maker-refresh-sec", type=float, default=15.0)

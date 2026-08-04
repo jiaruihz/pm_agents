@@ -577,8 +577,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "probability_status": "not_fitted_forward_collection",
         "live_action": "none",
     }
-    write_json(output_dir / "latest_summary.json", summary)
-    append_jsonl(output_dir / "summary_history.jsonl", [summary])
+    write_json(output_dir / str(getattr(args, "summary_filename", "latest_summary.json")), summary)
+    append_jsonl(
+        output_dir / str(getattr(args, "summary_history_filename", "summary_history.jsonl")),
+        [summary],
+    )
     write_json(state_path, {"last_snapshot_file": snapshot_path.name, "updated_at_utc": utc_now()})
     return summary
 
@@ -590,6 +593,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--observation-cache", default=str(OBSERVATION_CACHE_DEFAULT))
     ap.add_argument("--forecast-curve-dir", default=str(FORECAST_CURVE_DIR_DEFAULT))
     ap.add_argument("--output-dir", default=str(OUTPUT_DIR_DEFAULT))
+    ap.add_argument("--summary-filename", default="latest_summary.json")
+    ap.add_argument("--summary-history-filename", default="summary_history.jsonl")
     ap.add_argument("--feature-store", default=str(FEATURE_STORE_DEFAULT))
     ap.add_argument("--curve-file-limit", type=int, default=16)
     ap.add_argument("--book-proxy", default=None)

@@ -178,6 +178,13 @@ def test_runtime_state_db_busy_is_deferred_without_failing_trading_loop(
     assert summary["status"] == "ok"
     assert summary["runtime_state_publish_status"] == "deferred_db_busy"
     assert "database is locked" in summary["runtime_state_publish_error"]
+
+
+def test_live_runtime_isolates_signal_health_artifacts() -> None:
+    args = runner.parser().parse_args(["run"])
+
+    assert args.summary_filename == "signal_latest_summary.json"
+    assert args.summary_history_filename == "signal_summary_history.jsonl"
     assert "runtime_state_error" not in summary
 
 
