@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather Account Reconcile"
-  short_description: "Reconcile weather cash, fills, fees, exposure, and PnL"
-  default_prompt: "Use $weather-live-account-reconcile to reconcile weather live cash, fills, fees, open exposure, and realized PnL."
+  short_description: "Reconcile cash, fills, fees, exposure, and PnL"
+  default_prompt: "Use $weather-live-account-reconcile to discover live runtimes through the controller and reconcile raw exchange evidence with the canonical DB."

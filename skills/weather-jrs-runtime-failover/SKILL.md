@@ -122,6 +122,8 @@ weather_jrs_tmux_write_probe weather-data-feed-jrs "$JRS_RUNTIME_ROOT"
 该命令必须先用临时 prospective server 验证新调用上下文能访问 JRS，再杀旧 server；restore
 manifest 必须位于 Mac 内置盘。prospective probe 失败、Mac 锁屏/TCC 阻断或 manifest 不完整时停止，
 不得改用默认 tmux、screen、nohup 或 LaunchAgent 抢建 canonical server。
+restore manifest 必须包含 controller desired-state 中的 dashboard API；恢复后 API 由 controller 重建，
+不得用旧 `com.pm-agents.weather-api` LaunchAgent 补洞。
 
 ## 3. JRS → 本机临时接管
 

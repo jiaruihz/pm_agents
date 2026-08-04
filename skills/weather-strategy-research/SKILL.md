@@ -39,7 +39,8 @@ source/raw -> EventEnvelope -> DecisionContext -> ModelOutput
   并为既有东京、赫尔辛基、阿姆斯特丹 fixtures 补 parity regression。
 - 缺失、stale、one-sided book 返回结构化 scorable/blocker 状态并保留 coverage 分母，禁止静默丢行或 fallback。
 
-研究若读取 canonical facts/features，先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；
+研究若读取 canonical facts/features，先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与
+`.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；
 DB split 或存在非 canonical consumer 时只允许继续 raw coverage/机制诊断，不得产出 canonical 同分母结论。
 开始读取时保存 build manifest；若 build 变化，重启该次查询或按 build 分层。
 

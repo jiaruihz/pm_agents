@@ -8,10 +8,11 @@
 
 天气温度策略。**README 描述的是旧 PMM/ARB 框架，已不是活跃主线，别被它误导。**
 
-当前研究姿态（2026-07-15）：**没有一条达到 confirmed、可扩 live 的 alpha**。主研究回到全量、连续的
-`P(outcome)-market` residual：模型/物理特征先在同分母 PIT probability score 上 forward 打败 market，
-再讨论 fee-adjusted 表达。快源只按 source→official/settlement→book 的 first-seen 链积累 collector/shadow
-证据；少量事件、运行中的 probe、历史正 ROI 都不自动升级为 live 结论。
+当前研究姿态（**口径以 [STRATEGY_REGISTRY](docs/WEATHER_STRATEGY_REGISTRY.md) + 最新 reset/freeze report 为准，
+不信本节硬编码日期**）：没有一条达到 confirmed（三门全过）、可真实扩 live 的 alpha。主研究是全量、连续的
+`P(outcome)-market` residual——模型/物理特征先在同分母 PIT probability score 上 forward 打败 market，再谈
+fee-adjusted 表达。快源只按 source→official/settlement→book 的 first-seen 链积累 collector/shadow 证据；
+少量事件、运行中的 probe、历史正 ROI 都不自动升级为 live。
 
 **研究状态与生产状态分开**：registry/freeze 只回答 alpha 是否确认，不能证明当前进程是否真实下单；
 任何 `live/shadow/zero-notional` 判断以 production manifest、进程参数、raw order 与 exchange response 为准，
@@ -52,9 +53,10 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 - **执行 = `pm_agent` strategy runners**：消费标准数据 → signal → plan → CLOB order → fill；当前实例在 Mac，N100 只保留历史/恢复边界。实例是否 live 必须从进程参数、pause/state、raw order 和 exchange response 动态核对，不能从旧文档标签推断。
 
 机器：
-- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard，以及若干 live probe / paper executor / zero-notional shadow；具体清单每次用 `weather_production_ctl.py health/plan` + production manifest + `ps` + raw order files 动态盘点，不在本文件硬编码。data-feed 因 macOS 对外置卷的 TCC/process-context 限制，当前通过 canonical JRS tmux 承载；这只是当前运行架构，**不是永久权限保证**。启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
+- **短期生产主机 = Mac**。`/Users/deepsleep/projects/pm_agents` 是控制/开发仓库，业务进程实际 checkout 必须从 `production.yaml`、manifest 与 PID 动态确认；不要把控制仓库路径误当成所有 live 进程的加载路径。当前 JRS runtime 为 `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）。Mac 目前跑 data-feed snapshot/orderbook、dashboard，以及若干 live probe / paper executor / zero-notional shadow；具体清单每次用 `weather_production_ctl.py health/plan` + production manifest + raw order files 动态盘点，不在本文件硬编码。data-feed 因 macOS 对外置卷的 TCC/process-context 限制，当前通过 canonical JRS tmux 承载；这只是当前运行架构，**不是永久权限保证**。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
 - **生产 identity 先跑 manifest**：`src/strategies/runtime/production.yaml` 只声明期望拓扑；`scripts/ops/weather_production_manifest.py --strict` 用 `ps/lsof/tmux/launchctl/runtime summary` 生成当前事实。物理 canonical DB 期望在 `/Volumes/jrs/pm_agents/runtime/weather.db`；仓库 `runtime/weather.db` 只是兼容入口，健康时必须与前者解析为同一 device/inode。出现 split、非 canonical DB consumer、异常生产 checkout 或失败的 LaunchAgent 时，先处理 P0，不得根据旧文档继续分析、部署或重建。
 - **JRS 常驻进程只有一个运行上下文**：凡是读取或写入 `/Volumes/jrs` 的 collector、strategy、shadow、monitor、patrol，一律通过 `scripts/ops/weather_jrs_tmux_env.sh` 解析并复用 `tmux -L weather-data-feed-jrs`；不使用默认 tmux、`weather-jrs`、独立常驻 socket、screen、nohup 或让 LaunchAgent 直接承载 JRS 子进程。canonical socket、固定 binary path 和 SHA-256 只证明入口/程序 identity，**不能证明当前 tmux parent 仍有 TCC/JRS 权限**。每次 health、部署和恢复都必须以目标 server 内的 read/write probe、canonical DB 可读、producer freshness 和下游 latest 为事实；“设置里 FDA 为 on”“进程/session 存在”或“昨天 probe 成功”均不算当前健康。公共 helper 使用 tmux `-N` attach-only；只有 controller 的 `recover-jrs-context` 可以创建/recreate canonical server，persistent session mutation 也必须带 controller authority。LaunchAgent 只可请求 bounded one-shot，server 缺失时 fail closed。公共 start/stop 脚本不暴露 socket 或 process-manager/start-mode 开关；新增或修改入口先登记 `production.yaml` 合同并改共享 helper/一致性测试，禁止再逐脚本发明启动上下文或直接调用底层脚本改变生产状态。
+- **Dashboard/API 与 refresh 也服从控制面**：API 是 `production.yaml` 登记的 `weather_dashboard_api`，由 controller 在 canonical JRS context 管理；不得恢复旧 `com.pm-agents.weather-api` LaunchAgent。FE 可由非 JRS LaunchAgent 承载。canonical refresh 是唯一登记的 DB 刷新 one-shot；LaunchAgent 只能请求这个 bounded job，不能直接执行 ingest/rebuild 子链。运行状态看 `runtime/weather_edge_v1/canonical_refresh/{last_exit_status,tmux.log}`，任务仍在运行时不得重复触发。
 - **canonical tmux 禁止 `run-shell`**：2026-08-04 的真实 crash report 证明 tmux 3.6b 在 `cmd_run_shell_callback -> cmd_run_shell_print` 发生 `SIGSEGV`，一次 probe/status callback 即可带走整个 server 及全部 session。JRS probe、mkdir、status bridge、prospective-host check 只能走共享 helper 的 checked detached session；新增入口必须由一致性测试扫描 `run-shell`，不能用“只是一条短命令”作为例外。
   当前权限宿主 pin 为 Homebrew Cellar tmux binary；升级时必须先授权新 binary、更新 pin 并在维护窗口重建 canonical server，禁止跟随 symlink 静默切换。但 pin 通过后仍必须做真实 probe。canonical context 失败时先用 `weather_production_ctl.py health/plan` 和 manifest 保存现场；`recover-jrs-context` 只能在已授权维护窗口、prospective-host probe 成功且保存完整 restore manifest 后执行，它不能授予 macOS 权限，也不能绕过锁屏/TCC。普通 LaunchAgent 和业务 start script 不得抢建一个新的无权限 canonical server。
 - **历史复发优先于“已修好”叙述**：JRS/TCC、DB split、collector 中断、重复入口等稳定性问题，开始修复前先在 git history、事故治理记录和 runtime logs 中检索同症状历史，列出每次时间窗、当时修了哪一层、为何仍复发。必须区分 `symptom containment`、`entrypoint unification`、`recovery automation` 和 `root-cause elimination`；前面三者不得称为“根治”“永久解决”或“一劳永逸”。
@@ -80,6 +82,17 @@ execution_policy / live_cycle）走 [weather-strategy-deploy] 的 **git-first** 
 不是给下游再套一层 gate。长期干净方案可以接受短期停数据、停 shadow、停 live 或停旧 runner；不要为了不断流而把临时
 限制、兜底和例外堆进系统。只有当 gate 本身就是正确的业务/资金安全边界，或是发布 PnL/实盘动作前的既有硬口径时，才保留
 或新增，并且要写清楚它保护的不可逆风险。
+
+**生产参数变更走快路径，不把小改动扩成全面研究**：
+- 先用一次精确搜索锁定参数的权威配置、runner default/assert、启动参数、风险/notional cap、artifact entry-cost
+  quantity、runtime identity 和直接测试；只读这些命中文件与部署要求的最小文档集。
+- 若参数不进入 signal eligibility / 概率 / PIT 时钟，只做执行层修改、定向测试、git-first 单实例重启和
+  process/raw/exchange 四项验证，不重跑宽口径研究、不顺手整理无关文档。
+- 若 sizing 会改变 full-ladder cost/EV 或深度可执行性，才补同分母容量重放；结果沿用现有研究产物，不在部署环节
+  重做已完成分析。
+- 同一参数不得长期在 artifact、runner、start script 和 executor limit 多处各自写死。`execution_profile` 应成为
+  sizing/refresh/TTL/cap 的单一权威配置；迁移完成前每次参数变更必须做 hardcode scan，并把发现的重复点一次改齐。
+- 交付只报：改了什么、发现了什么耦合、测试结果、生产 SHA/PID/健康状态、开放订单；阅读文件清单不当作成果。
 
 ## 4. 研究防跑偏
 
@@ -115,25 +128,35 @@ hard filter 只用于机制边界、资金安全、执行质量或已知无效�
 不等于 `X YES` 安全，反而要重点评估 overshoot 到下一档的风险；不要把“触到当前档”误说成“当前档 YES 锁定”。
 
 美国机场快源必须记住 **Atlanta 2026-07-17 terminal false cross**：MADISHF/OMO 连续打印 `91.4F`，但 WU
-native-F 最终最高仍为 `89F`、winning bracket 仍是 `88-89`；NOAA direct MADIS 同一观测也存在且
-`temperatureQCR=0`。因此 OMO/MADISHF/Synoptic 1-minute 等快源只可作概率特征，不是 WU 结算事实。
-事故真实成交是 `15 shares`（`10 @0.87` taker + `5 @0.86` maker），principal `$13.00`、verified fee
-`$0.05655`；maker 在 submission journal 写入 45 秒后才 fill，所以成交统计必须按 order id 回连 canonical `fills`，
-禁止只累加 raw `actual_fill_*`。
-任何相关的 previous-bracket NO、跨档、机场快源或 source-event 策略研究，都必须单列：① Atlanta-type
-`terminal_false_cross`；②同 timestamp 的 source→routine METAR→WU native-F basis；③正确事件不可成交、错误事件
-反而成交的 adverse-selection 分母。只报 persistent-cross 命中率或 QC pass 不算完成排查。
+native-F 最终最高仍为 `89F`、winning bracket 仍是 `88-89`（NOAA direct MADIS 同观测且 `temperatureQCR=0`）。
+因此 OMO/MADISHF/Synoptic 1-minute 等快源只可作概率特征，不是 WU 结算事实；成交统计必须按 order id 回连
+canonical `fills`（该案错误事件反而成交、maker 在 journal 写入 45 秒后才 fill），禁止只累加 raw `actual_fill_*`。
+任何 previous-bracket NO、跨档、机场快源或 source-event 研究都必须单列：① Atlanta-type `terminal_false_cross`；
+②同 timestamp 的 source→routine METAR→WU native-F basis；③正确事件不可成交、错误事件反而成交的
+adverse-selection 分母——只报 persistent-cross 命中率或 QC pass 不算完成排查。逐笔成交/fee 证据见
+[STRATEGY_REGISTRY](docs/WEATHER_STRATEGY_REGISTRY.md) 的 `metar_cross_prev_no` 行与 `2026-07-18-us-madishf-*` 报告。
 
+Ankara 2026-07-20 还暴露了 **native-unit settlement lattice** 错位：MGM 的 `33.4°C` 不能解释成“离 34 档
+只差 0.1°C”；该市场的 WU LTAC 路径以 native-F 形成档位，92°F 仍在 33 档、需要 93°F 才进入 34 档。
+所有临场概率更新必须先保存 source raw unit/value，再显式转换为 settlement-source native lattice distance；MGM/邻站
+小数温度、露点和风只作为连续概率特征。对账纪律：禁止把单一 condition 当成整场 event（该 event 逐 condition 净现金
+差异极大、易把某腿负数误当整场亏损），也禁止把 thesis invalidation 自动等同于开反手仓位。逐笔金额与全 event
+对账见 [casebook](docs/WEATHER_INTRADAY_DECISION_CASEBOOK.md) Case 3。
 
 跨城市细粒度温度模型的公共框架正式名为 **Weather City Intraday Runtime（WCIR）**，稳定标识
-`weather_city_intraday_runtime_v1`，策略族为 `weather.city_intraday_probability`。模型与盘口不强制独立；
-城市插件可实现纯天气、market-offset 或天气与盘口联合模型，但必须复用 WCIR 的采集 profile、事件/四时钟、
-PIT checkpoint/replay、`SignalCandidate`、`TradeIntent` 和公共 order/fill/PnL 血缘。
-
-Amsterdam、Busan、Helsinki、Seoul、Tokyo 及以后新增的每个城市都必须登记为 WCIR `CaptureProfile + city adapter`。
-模型尚未冻结时先接 `coverage-only` adapter 输出结构化 blocker，不得伪造概率、bracket、candidate 或 intent，
-也不得另建 collector、回放、下单或事后分析旁路。公共 contract 不足时扩展 WCIR，并给既有城市补 regression fixture；
-正式接入前必须拿 deployed raw/runtime 做 contract census 与 sample parity，repo 单测不能替代运行中样本验证。
+`weather_city_intraday_runtime_v1`，策略族为 `weather.city_intraday_probability`。不强制共用算法、特征、训练模块或是否把盘口作为模型输入；城市插件可以实现纯天气、
+market-offset 或天气与盘口联合模型，但必须按
+[WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md](docs/WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md) 复用采集 profile、
+事件/四时钟、PIT checkpoint/replay、`SignalCandidate`、`TradeIntent` 和公共执行链，不得为新城市另建 collector、
+回放时钟或 order/fill/PnL 链。研究评测服从
+[WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md](docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md)：统一 prediction table、
+PIT 时间切分、概率指标、同分母 market baseline 和有盘口时的 fee-adjusted 信号/ROI；城市内部不能自然复用的代码不强行合并。
+正式接入前必须拿实际 deployed raw/runtime 做 contract census：区分 point/interval/revision payload，验证业务日期与物理
+shard、source/official/expression 三类 bracket anchor、one-sided/cross-day 状态和 producer/consumer code/config/schema hash；
+repo 单测通过不能替代 running process sample parity。
+Amsterdam、Busan、Helsinki、Seoul、Tokyo 及之后新增的每个城市都必须登记为 WCIR `CaptureProfile + city adapter`；
+模型尚未冻结时先以 `coverage-only` adapter 输出结构化 checkpoint blocker，不得伪造概率、bracket、candidate 或 intent，
+也不得另建 collector、回放、下单、fill/PnL 旁路。公共 contract 不足时扩展 WCIR，并给既有城市补 regression fixture。
 
 ## 5. 分析必走的 skill + 硬口径（细则见 [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)）
 
@@ -173,7 +196,7 @@ scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --marke
 scripts/ops/sync_weather_remote.sh [--dry-run]
 ```
 
-先跑 production manifest；只有 `status=healthy` 时才通过兼容入口读 `runtime/weather.db`（WAL，只读）。不要用无界交互式 sqlite，不在只读连接里跑 checkpoint/WAL 修复 PRAGMA。
+先跑 production manifest；只有 `db_route.status=healthy`、兼容入口与 physical canonical 为同一 device/inode 且没有 manifest `critical` 时，才读 `runtime/weather.db`（WAL，只读）。全局 `warning` 必须逐项归因：与 DB identity/目标窗口无关的 warning 不阻断只读分析，但不得被忽略或冒充生产完全健康。不要用无界交互式 sqlite，不在只读连接里跑 checkpoint/WAL 修复 PRAGMA。
 ```bash
 .venv/bin/python scripts/ops/weather_production_manifest.py --strict
 sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "SELECT COUNT(*) FROM fact_signal_candidates;"

@@ -20,7 +20,7 @@ description: 追踪 weather 的 EventEnvelope→DecisionContext→ModelOutput→
 
 单笔或单日 raw lineage 不需要 sync/rebuild。只有 settlement/PnL 的 canonical 窗口确实缺失时才转 `weather-fact-rebuild`。
 
-需要 canonical 补证前先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB split/consumer route 为 critical，raw lineage 仍可继续，但必须停止 canonical settlement/fee/PnL 结论，不能任选 local/JRS DB 补齐。
+需要 canonical 补证前先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB split/consumer route 为 critical，raw lineage 仍可继续，但必须停止 canonical settlement/fee/PnL 结论，不能任选 local/JRS DB 补齐。
 
 ## 查询前自检
 

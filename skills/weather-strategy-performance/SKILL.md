@@ -68,10 +68,11 @@ PIT weather coverage -> PIT quote coverage -> settlement coverage -> executable 
 先确认 DB 目标窗口与 raw 覆盖；需要刷新时走 `weather-fact-rebuild`。普通历史查询不为形式重建。
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_ctl.py health
 .venv/bin/python scripts/ops/weather_production_manifest.py --strict
 ```
 
-manifest 必须 `status=healthy`，并确认 `runtime/weather.db` 与 JRS physical canonical 是同一 device/inode；split 或存在非 canonical consumer 时停止绩效计算，不能挑行数较多的一份继续。
+manifest 必须无 `critical`，且 `db_route.status=healthy`、`runtime/weather.db` 与 JRS physical canonical 是同一 device/inode；无关 warning 逐项记录但不自动阻断只读绩效。split 或存在非 canonical consumer 时停止绩效计算，不能挑行数较多的一份继续。
 读取开始时固定 canonical build manifest；如 refresh 在运行中切换 build，重启查询或按 build 分层，不得静默混合分母。
 
 ```sql

@@ -13,7 +13,7 @@ description: 查看 weather 策略当前未结算 fill、开放订单和风险�
 2. 运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与
    `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`，动态发现当前 active strategy runtime 和
    DB identity；先看本机 raw，不从 registry 推断进程真的在跑。
-3. manifest healthy 后检查 `runtime/weather.db` 对目标窗口、估值时间和 raw order 的覆盖。若 DB split，open orders 仍可按 authenticated/raw 报告，但不得发布 canonical fill position/MTM。
+3. 确认 manifest 无 `critical`、`db_route.status=healthy` 且兼容入口与 JRS physical canonical 为同一 device/inode 后，检查 `runtime/weather.db` 对目标窗口、估值时间和 raw order 的覆盖。无关 warning 逐项记录；若 DB split，open orders 仍可按 authenticated/raw 报告，但不得发布 canonical fill position/MTM。
 4. DB 滞后时走 `weather-fact-rebuild` 的最小刷新路径；不要为了状态查询无条件全量 rebuild。
 5. 固定 DB realpath/device/inode、build time/`build_id` 和 `observed_at_utc`；如 refresh 切换
    build，重启查询或按 build 分层。

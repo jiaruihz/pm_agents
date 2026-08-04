@@ -59,6 +59,9 @@ canonical tmux socket、binary path/hash 和系统设置中的 Full Disk Access 
 共享 helper 是 attach-only，并用 tmux `-N` 保证 server 缺失时 fail closed，不会由业务脚本或 LaunchAgent 抢建；persistent
 session mutation 必须由 controller 注入 authority。不得通过设置同名环境变量或直接执行 start/stop
 脚本模拟 controller。canonical refresh 仅是已登记的 bounded one-shot，不拥有 permission-host 创建权。
+Dashboard API 同样是 controller-managed runtime；不得恢复旧 `com.pm-agents.weather-api`
+LaunchAgent。FE 的非 JRS LaunchAgent 与 canonical refresh 的 bounded one-shot 是不同合同，不能据此允许
+LaunchAgent 直接承载 API、collector、strategy 或 DB 子链。
 
 当前 controller 的真实边界是：`health/plan` 只读，`reconcile --apply` 只启动 desired-state 中缺失的
 runtime，不停止、替换或重启已存在进程；`recover-jrs-context --apply` 是唯一允许重建 canonical
@@ -88,7 +91,8 @@ PRECHANGE_MANIFEST="$PRECHANGE_DIR/manifest.json"
 
 共享分析/运维入口（coverage gate、manifest、canonical helper）发生接口或
 过滤语义变更时，除 focused unit test 外，还要运行所有固定下游入口的真实
-CLI smoke（至少 account reconcile 与 canonical refresh dry-run/status）。
+CLI smoke（至少 account reconcile、canonical refresh 状态文件/日志检查；若确需执行 refresh，只使用已登记
+one-shot，并确认没有在跑的同名任务）。
 公共参数新增应提供兼容默认值；不能只验证被改模块自身能启动。
 3. 复核 diff，只纳入本次范围。
 4. 创建 scoped commit，记录 SHA。

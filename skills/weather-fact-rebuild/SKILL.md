@@ -27,7 +27,7 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
 
 ## 决策顺序
 
-0. 先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB route 为 split、存在非 canonical consumer 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。
+0. 先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB route 为 split、存在非 canonical consumer 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。无关的 manifest warning 逐项记录，但不冒充 DB identity 故障。
 1. 单笔订单、当前 runner、某次触发：直接读精确 raw 文件，不 sync、不 rebuild。
 2. 历史分析且 DB 已覆盖目标窗：只读查询现有 DB。
 3. 问“最新/今天”且 Mac market mirror 落后：先增量同步当前 Mac market raw。
@@ -61,6 +61,7 @@ scripts/ops/start_weather_canonical_refresh_tmux.sh
 
 该入口是 bounded one-shot，由 canonical JRS helper 承载；LaunchAgent 只触发它，不直接承载 JRS
 子进程。先查 `runtime/weather_edge_v1/canonical_refresh/last_exit_status` 和日志，不得在它仍运行时另起第二个 refresh。
+不得直接调用 refresh 内部的 ingest、fill sync 或 fact builder 来制造第二条生产刷新链。
 
 全量 canonical 重建（显式动作；用户说“重建/重跑底表”即已授权，否则先说明影响）：
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather Exposure"
-  short_description: "Inspect weather positions, open orders, valuation, and risk"
-  default_prompt: "Use $weather-strategy-exposure to inspect current weather positions, open orders, valuation, and concentration risk."
+  short_description: "Inspect positions, open orders, valuation, and risk"
+  default_prompt: "Use $weather-strategy-exposure to discover current runtimes through the controller and report canonical positions separately from authenticated open orders."
