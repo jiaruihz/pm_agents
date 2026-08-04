@@ -20,7 +20,7 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
 | unrealized valuation | mid/bid/last_fill 估值 | `fact_trades.val_*`，附估值时间 |
 | reserved | 仍开放订单占用 | authenticated open orders；不得从 submitted notional 猜 |
 
-当前 raw 优先读本机 `runtime/weather_edge_v1/` 与 active strategy runtime。N100 镜像只用于历史窗口。
+当前 raw 从 `production.yaml`、manifest、进程参数里的 active `health_path/live_order_path/output root` 解析；不得默认等于控制仓库 `runtime/weather_edge_v1/`。N100 镜像只用于历史窗口。
 
 ## 流程
 

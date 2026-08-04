@@ -26,17 +26,10 @@ def resolve_active_live_order_paths(
     root = Path(project_root)
     spec = production_spec or load_production_spec()
     paths: list[Path] = []
-    seen: set[str] = set()
-    for runtime in spec.managed_runtimes:
-        if not runtime.expected_live or runtime.live_order_path is None:
-            continue
-        path = runtime.live_order_path
-        if not path.is_absolute():
-            path = root / path
-        if not path.is_file() or str(path) in seen:
-            continue
-        paths.append(path)
-        seen.add(str(path))
+    for declared in spec.active_live_order_paths():
+        path = declared if declared.is_absolute() else root / declared
+        if path.is_file():
+            paths.append(path)
     return paths
 
 

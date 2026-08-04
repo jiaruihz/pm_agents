@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 # scripts/weather_dashboard/run_stack.sh
 #
-# One-shot bring-up for the weather strategy dashboard stack.
+# Canonical weather DB rebuild/status compatibility entrypoint.
 #
 # Usage:
-#   scripts/weather_dashboard/run_stack.sh                 # start/reuse API + FE; preserve weather.db
-#   scripts/weather_dashboard/run_stack.sh --rebuild       # explicitly rebuild weather.db, facts, and metrics
-#   scripts/weather_dashboard/run_stack.sh --no-rebuild    # compatibility alias for the safe default
+#   scripts/weather_dashboard/run_stack.sh                 # controller/status only; no process mutation
+#   scripts/weather_dashboard/run_stack.sh --rebuild       # explicitly rebuild facts; starts no service
+#   scripts/weather_dashboard/run_stack.sh --no-rebuild    # compatibility alias for --status
 #   scripts/weather_dashboard/run_stack.sh --recreate-db   # explicitly delete and recreate weather.db
-#   scripts/weather_dashboard/run_stack.sh --api-only      # start only API
-#   scripts/weather_dashboard/run_stack.sh --fe-only       # start only FE
 #   scripts/weather_dashboard/run_stack.sh --status        # just show current DB / process status
 #
-# Idempotent. Designed for any agent (Claude, Codex, MiniMax) or human operator
-# to spin up the stack without prior context.
+# API/process recovery belongs exclusively to weather_production_ctl.py.
+# Frontend production lifecycle belongs to com.pm-agents.weather-fe.
 
 set -euo pipefail
 
@@ -23,27 +21,25 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
 VENV="$REPO_ROOT/.venv/bin"
-DB_PATH="$REPO_ROOT/runtime/weather.db"
+DB_PATH=""
 FE_DIR="$REPO_ROOT/frontend/strategy_dashboard"
 API_PORT="${WEATHER_API_PORT:-8000}"
 FE_PORT="${WEATHER_FE_PORT:-5174}"
 LOG_DIR="$REPO_ROOT/runtime/_dashboard_logs"
-mkdir -p "$LOG_DIR"
 
 REBUILD=0
 RECREATE_DB=0
-START_API=1
-START_FE=1
 STATUS_ONLY=0
 
 for arg in "$@"; do
   case "$arg" in
     --rebuild)    REBUILD=1 ;;
-    --no-rebuild) REBUILD=0 ;;
+    --no-rebuild) STATUS_ONLY=1; REBUILD=0 ;;
     --recreate-db) RECREATE_DB=1; REBUILD=1 ;;
-    --api-only)   START_FE=0 ;;
-    --fe-only)    START_API=0; REBUILD=0 ;;
-    --status)     STATUS_ONLY=1; REBUILD=0; START_API=0; START_FE=0 ;;
+    --api-only|--fe-only)
+      echo "$arg is retired: API is controller-managed and FE is LaunchAgent-managed" >&2
+      exit 2 ;;
+    --status)     STATUS_ONLY=1; REBUILD=0 ;;
     -h|--help)
       sed -n '2,15p' "$0"
       exit 0 ;;
@@ -92,89 +88,16 @@ file_size() {
   stat -c '%s bytes' "$path" 2>/dev/null || stat -f '%z bytes' "$path"
 }
 
-start_detached() {
-  if command -v setsid >/dev/null 2>&1; then
-    setsid nohup "$@"
-  else
-    nohup "$@"
-  fi
-}
-
-stop_known_frontend() {
-  local pid
-  if [[ -f "$LOG_DIR/fe.pid" ]]; then
-    pid="$(cat "$LOG_DIR/fe.pid" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      warn "Stopping previous frontend pid=$pid"
-      kill "$pid" 2>/dev/null || true
-      sleep 1
-    fi
-  fi
-}
-
-stop_frontend_port_if_busy() {
-  local port="$1"
-  local pid cmd
-  while IFS= read -r pid; do
-    [[ -z "$pid" ]] && continue
-    cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-    if [[ "$cmd" == *"vite"* || "$cmd" == *"strategy_dashboard"* || "$cmd" == *"node"* ]]; then
-      warn "Port $port is occupied by frontend-like process pid=$pid; stopping it to keep a stable URL"
-      kill "$pid" 2>/dev/null || true
-      sleep 1
-    else
-      err "Port $port is occupied by non-frontend process pid=$pid: $cmd"
-      exit 1
-    fi
-  done < <(pid_listening_on_port "$port")
-}
-
-frontend_port_owned_by_stack() {
-  local port="$1"
-  local pid cmd
-  while IFS= read -r pid; do
-    [[ -z "$pid" ]] && continue
-    cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-    if [[ "$cmd" == *"$FE_DIR"* && "$cmd" == *"vite"* && "$cmd" == *"--port $port"* ]]; then
-      return 0
-    fi
-  done < <(pid_listening_on_port "$port")
-  return 1
-}
-
-ensure_linux_node() {
-  local node_path npm_path nvm_bin
-  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
-    # Non-interactive WSL shells do not source nvm automatically.
-    # Prefer the user's configured Linux node over Windows node/npm on /mnt/c.
-    # shellcheck disable=SC1090
-    source "$HOME/.nvm/nvm.sh"
-    nvm use --silent 20 >/dev/null 2>&1 || nvm use --silent node >/dev/null 2>&1 || true
-  fi
-
-  node_path="$(command -v node 2>/dev/null || true)"
-  npm_path="$(command -v npm 2>/dev/null || true)"
-
-  if [[ "$node_path" == /mnt/* || "$node_path" == *.exe || "$npm_path" == /mnt/* || "$npm_path" == *.cmd ]]; then
-    nvm_bin="$(find "$HOME/.nvm/versions/node" -maxdepth 3 -type f -name node -printf '%h\n' 2>/dev/null | sort -V | tail -1 || true)"
-    if [[ -n "$nvm_bin" ]]; then
-      export PATH="$nvm_bin:$PATH"
-    fi
-  fi
-
-  node_path="$(command -v node 2>/dev/null || true)"
-  npm_path="$(command -v npm 2>/dev/null || true)"
-  if [[ -z "$node_path" || -z "$npm_path" || "$node_path" == /mnt/* || "$npm_path" == /mnt/* ]]; then
-    err "Linux node/npm not found for frontend startup. Install nodejs in WSL or install/use nvm under WSL."
-    exit 1
-  fi
-}
-
 # ---- Preflight ----
 if [[ ! -x "$VENV/python" ]]; then
   err "venv not found at $VENV — create with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
   exit 1
 fi
+
+# Mutations always target the physical canonical declared by production.yaml.
+# Deleting the compatibility symlink and then initializing through its old path
+# would create a split repo-local DB.
+DB_PATH="$($VENV/python -c 'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().canonical_db_path)')"
 
 init_canonical_db() {
   "$VENV/python" -c "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$DB_PATH')"
@@ -209,16 +132,14 @@ show_status() {
   log "DB path:     $DB_PATH ($(file_size "$DB_PATH"))"
   if [[ -f "$DB_PATH" ]]; then
     "$VENV/python" -c "
-from weather_dashboard.db.connection import get_conn
+import sqlite3
 try:
-    c = get_conn('$DB_PATH')
-    rows = c.execute('SELECT run_id, state, execution_mode, (SELECT COUNT(*) FROM fills f JOIN orders o ON f.execution_id=o.execution_id WHERE o.run_id=runs.run_id AND f.status IN (\"filled\", \"simulated\")) AS fills FROM runs').fetchall()
-    if not rows:
-        print('  [DB] schema present but no runs')
-    for r in rows[:25]:
-        print(f'  [DB] {r[\"run_id\"][:12]}  {r[\"state\"]:8s} {r[\"execution_mode\"]:18s} fills={r[\"fills\"]}')
-    if len(rows) > 25:
-        print(f'  [DB] ... {len(rows) - 25} more run(s)')
+    c = sqlite3.connect('file:$DB_PATH?mode=ro', uri=True, timeout=1.0)
+    c.execute('PRAGMA query_only=ON')
+    c.execute('PRAGMA busy_timeout=1000')
+    c.execute('SELECT 1').fetchone()
+    print('  [DB] readable (read-only probe)')
+    c.close()
 except Exception as e:
     print(f'  [DB] error: {e}')
 " 2>&1 || true
@@ -229,8 +150,18 @@ except Exception as e:
 
 if [[ $STATUS_ONLY -eq 1 ]]; then
   show_status
+  "$VENV/python" scripts/ops/weather_production_ctl.py health
   exit 0
 fi
+
+if [[ $REBUILD -ne 1 ]]; then
+  show_status
+  "$VENV/python" scripts/ops/weather_production_ctl.py health
+  exit 0
+fi
+
+mkdir -p "$LOG_DIR"
+"$VENV/python" scripts/ops/weather_production_manifest.py --strict >/dev/null
 
 # ---- 1. Refresh DB (idempotent — ingest is content-addressable) ----
 # Default is non-destructive.  Use --recreate-db only when a clean local
@@ -276,27 +207,10 @@ if [[ $REBUILD -eq 1 ]]; then
   log "  Migrating strategy-local runtime orders into canonical DB"
   {
     init_canonical_db
-    STRATEGY_RUNTIME_ARGS=(--db-path "$DB_PATH")
-    STRATEGY_ORDER_FILES=()
-    for order_file in \
-      "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl" \
-      "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl" \
-      "${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}/output/fast_source_prev_no_trial/orders.jsonl" \
-      "${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}/output/hko_official_tminus1_no_live/orders.jsonl"
-    do
-      if [[ -f "$order_file" ]]; then
-        STRATEGY_RUNTIME_ARGS+=(--order-file "$order_file")
-        STRATEGY_ORDER_FILES+=("$order_file")
-      fi
-    done
-    "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders "${STRATEGY_RUNTIME_ARGS[@]}"
-    if (( ${#STRATEGY_ORDER_FILES[@]} > 0 )); then
-      COVERAGE_ARGS=(--db-path "$DB_PATH")
-      for order_file in "${STRATEGY_ORDER_FILES[@]}"; do
-        COVERAGE_ARGS+=(--order-file "$order_file")
-      done
-      "$VENV/python" -m weather_dashboard.cli.check_strategy_runtime_order_coverage "${COVERAGE_ARGS[@]}"
-    fi
+    "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders \
+      --db-path "$DB_PATH" --active-live-only --project-root "$REPO_ROOT"
+    "$VENV/python" -m weather_dashboard.cli.check_strategy_runtime_order_coverage \
+      --db-path "$DB_PATH" --active-live-only --project-root "$REPO_ROOT"
   } >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "strategy runtime order migration failed — see $LOG_DIR/migrate_live_cycle.log"
     exit 1
@@ -414,124 +328,4 @@ if [[ $REBUILD -eq 1 ]]; then
 fi
 
 show_status
-
-# ---- 2. Start weather API ----
-# (The legacy strategy_dashboard_server BFF on :8011 is gone — it served the
-#  old PMM/ARB framework and is not used by the weather dashboard.
-#  See docs/WEATHER_DATA_PIPELINE.md §5.5.)
-if [[ $START_API -eq 1 ]]; then
-  if port_listening "$API_PORT"; then
-    warn "Port $API_PORT already in use — assuming API is already running"
-  else
-    log "Starting API on :$API_PORT (logs: $LOG_DIR/api.log)"
-    # setsid creates a new process group where available; macOS falls back to nohup.
-    WEATHER_DB_PATH="$DB_PATH" \
-      start_detached "$VENV/uvicorn" weather_dashboard.api.app:app \
-        --host 0.0.0.0 --port "$API_PORT" --reload \
-        >"$LOG_DIR/api.log" 2>&1 &
-    echo $! > "$LOG_DIR/api.pid"
-    sleep 2
-    if ! port_listening "$API_PORT"; then
-      err "API failed to start — tail of log:"
-      tail -20 "$LOG_DIR/api.log" >&2
-      exit 1
-    fi
-    log "  API healthy: http://localhost:$API_PORT/health"
-  fi
-fi
-
-# ---- 3. Start frontend ----
-if [[ $START_FE -eq 1 ]]; then
-  ensure_linux_node
-  if [[ ! -d "$FE_DIR/node_modules" ]]; then
-    log "Installing frontend deps (first run)"
-    (cd "$FE_DIR" && npm install >"$LOG_DIR/npm_install.log" 2>&1)
-  fi
-  if frontend_port_owned_by_stack "$FE_PORT"; then
-    warn "Port $FE_PORT already has this dashboard frontend; reusing existing process"
-  else
-  stop_known_frontend
-  stop_frontend_port_if_busy "$FE_PORT"
-  if port_listening "$FE_PORT"; then
-    err "Port $FE_PORT is still busy after stopping old frontend"
-    exit 1
-  else
-    log "Starting frontend on :$FE_PORT (logs: $LOG_DIR/fe.log)"
-    (cd "$FE_DIR" && start_detached npm run dev -- --host 0.0.0.0 --port "$FE_PORT" --strictPort \
-        >"$LOG_DIR/fe.log" 2>&1 &
-     echo $! > "$LOG_DIR/fe.pid")
-    sleep 5
-    if ! port_listening "$FE_PORT"; then
-      err "Frontend failed to start on fixed port :$FE_PORT — tail of log:"
-      tail -30 "$LOG_DIR/fe.log" >&2
-      exit 1
-    fi
-  fi
-  fi
-fi
-
-# ---- 4. Windows port-forwarding (WSL2 -> Windows host) ----
-#
-# IMPORTANT: In WSL2 mirrored networking mode, portproxy is HARMFUL.
-# Mirrored mode shares the host loopback — WSL ports are directly reachable
-# at localhost from Windows WITHOUT any proxy. Adding a portproxy in mirrored
-# mode makes Windows svchost listen on that port, which blocks WSL from
-# binding to the same port (EADDRINUSE). We detect mirrored mode and instead
-# REMOVE any stale proxies rather than adding new ones.
-setup_windows_portproxy() {
-  if ! command -v powershell.exe >/dev/null 2>&1; then
-    return
-  fi
-
-  # Detect WSL2 mirrored networking via .wslconfig
-  local networking_mode
-  networking_mode="$(powershell.exe -NoProfile -NonInteractive -Command \
-    "try { (Get-Content \"\$env:USERPROFILE\.wslconfig\" -ErrorAction Stop) -match 'networkingMode\s*=\s*mirrored' | Out-Null; if (\$Matches) { 'mirrored' } else { 'nat' } } catch { 'nat' }" \
-    2>/dev/null | tr -d '\r' || echo 'nat')"
-
-  if [[ "$networking_mode" == "mirrored" ]]; then
-    # In mirrored mode: ports are shared between Windows and WSL.
-    # Remove any stale portproxies for our ports (they would block WSL binding).
-    log "WSL mirrored networking detected — removing stale portproxies for ports $API_PORT, $FE_PORT"
-    local del_api="netsh interface portproxy delete v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0 2>NUL; exit 0"
-    local del_fe="netsh interface portproxy delete v4tov4 listenport=${FE_PORT} listenaddress=0.0.0.0 2>NUL; exit 0"
-    powershell.exe -NoProfile -NonInteractive -Command "${del_api}; ${del_fe}" 2>/dev/null || true
-    log "  Mirrored mode: WSL ports accessible at localhost without proxy"
-    return
-  fi
-
-  # NAT mode: set up portproxy so Windows can reach WSL services.
-  local wsl_ip
-  wsl_ip="$(ip addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)"
-  if [[ -z "$wsl_ip" ]]; then
-    warn "Could not determine WSL IP — skipping Windows port-proxy setup"
-    return
-  fi
-  log "Setting up Windows port-proxy (NAT mode): WSL IP=$wsl_ip"
-
-  # Build one-liner netsh commands (avoid multi-line PS quoting issues in bash)
-  local del_api="netsh interface portproxy delete v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0"
-  local add_api="netsh interface portproxy add v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0 connectport=${API_PORT} connectaddress=${wsl_ip}"
-  local del_fe="netsh interface portproxy delete v4tov4 listenport=${FE_PORT} listenaddress=0.0.0.0"
-  local add_fe="netsh interface portproxy add v4tov4 listenport=${FE_PORT} listenaddress=0.0.0.0 connectport=${FE_PORT} connectaddress=${wsl_ip}"
-
-  if powershell.exe -NoProfile -NonInteractive -Command "${del_api}; ${add_api}; ${del_fe}; ${add_fe}; netsh interface portproxy show all" 2>/dev/null; then
-    log "  Port-proxy OK"
-  else
-    warn "  Port-proxy setup requires admin PowerShell. Run manually:"
-    warn "    ${add_api}"
-    warn "    ${add_fe}"
-  fi
-}
-
-if [[ $START_API -eq 1 || $START_FE -eq 1 ]]; then
-  setup_windows_portproxy
-fi
-
-log "Done. Open:"
-log "  Dashboard: http://localhost:$FE_PORT/weather/runs"
-log "  Live mon:  http://localhost:$FE_PORT/weather/live"
-log "  API docs:  http://localhost:$API_PORT/docs"
-log ""
-log "Stop:"
-log "  pkill -F $LOG_DIR/api.pid 2>/dev/null; pkill -F $LOG_DIR/fe.pid 2>/dev/null"
+log "Rebuild completed. No API, frontend, collector, or strategy process was started or stopped."

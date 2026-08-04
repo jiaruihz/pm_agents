@@ -37,6 +37,7 @@ expected raw output / stop-pause mechanism / rollback
 .venv/bin/python scripts/ops/weather_production_ctl.py health
 .venv/bin/python scripts/ops/weather_production_ctl.py plan
 .venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
 git status --short
 git rev-parse HEAD
 ps aux | rg 'weather|low_price|tmax|hko|source_event|regime' | rg -v 'rg '
@@ -50,6 +51,8 @@ canonical JRS session 由 manifest 和 `weather_production_ctl.py health` 盘点
 `live` 标签或一个 PID 推断真实下单能力。
 
 manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 的 checkout/head/loaded SHA、canonical JRS tmux session、LaunchAgent 退出状态和 DB open handles。`critical` 时不得重启或切 live；先修 identity 根因。manifest 不替代 exchange/order pre-state。
+
+storage audit 负责补 manifest 的静态写入合同：active raw root、health artifact、live journal 与 DB 路径只从 `production.yaml`/共享 loader 取值。出现独立 `weather.db`、多个 owner 共用 mutable journal、JSONL parse/schema/shape drift 或脚本内第二份 active path 清单时，先收口 writer/entrypoint，不以复制、同步或下游 guard 掩盖。
 
 canonical tmux socket、binary path/hash 和系统设置中的 Full Disk Access 只证明期望 identity，不能证明当前 parent 仍能访问 JRS。必须以 server 内真实 read/write probe、canonical DB read 和 producer/downstream freshness 为准。开始处理重复故障前先搜索 incident/governance 与 git history；说明本次是入口统一、恢复自动化还是根因消除。没有 fresh-host、server recreate、锁屏/解锁和 reboot/login 的真实验收，不得称为永久解决。
 

@@ -21,13 +21,13 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
 | 层 | 当前来源 | 用途 |
 |---|---|---|
 | current raw market | `/Volumes/jrs/weather_data_feed_service_runtime`（旧 `~/projects/weather_data_feed_service_runtime` 为 symlink） | 最新 snapshot、orderbook、forecast、observation/source event |
-| current raw execution | 本仓库 `runtime/weather_edge_v1/` 与各 active strategy runtime | 当前 Mac signal/plan/order/fill 证据 |
+| current raw execution | `production.yaml` 中 active runtime 的 `health_path/live_order_path` 及进程实际参数指向的 raw root | 当前 Mac signal/plan/order/fill 证据；不得假定都在控制仓库 |
 | historical remote | N100 `weather-predict` / `pm_agent` 镜像 | 事故前历史、备份抢救；不可冒充当前运行态 |
 | canonical analysis | `/Volumes/jrs/pm_agents/runtime/weather.db`（`runtime/weather.db` 仅为同 inode 兼容入口） | `fact_signal_candidates` 机会粒度、`fact_trades` fill 粒度 |
 
 ## 决策顺序
 
-0. 先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB route 为 split、存在非 canonical consumer 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。无关的 manifest warning 逐项记录，但不冒充 DB identity 故障。
+0. 先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health`、`.venv/bin/python scripts/ops/weather_production_manifest.py --strict` 与 `.venv/bin/python scripts/ops/weather_storage_identity_audit.py`。若 DB route 为 split、存在非 canonical consumer、独立可写 `weather.db`、共享 live journal 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。无关 warning 逐项记录，但不冒充 DB identity 故障。
 1. 单笔订单、当前 runner、某次触发：直接读精确 raw 文件，不 sync、不 rebuild。
 2. 历史分析且 DB 已覆盖目标窗：只读查询现有 DB。
 3. 问“最新/今天”且 Mac market mirror 落后：先增量同步当前 Mac market raw。
@@ -69,7 +69,7 @@ scripts/ops/start_weather_canonical_refresh_tmux.sh
 scripts/weather_dashboard/run_stack.sh --rebuild
 ```
 
-无参数 `run_stack.sh` 只启动/复用 API 和 FE，不刷新 DB。不要手工删除 `runtime/weather.db`；`--recreate-db` 比 `--rebuild` 更强，必须有明确授权。
+无参数 `run_stack.sh` 只读取 controller/DB 状态，不刷新 DB、也不启停 API/FE。不要手工删除 `runtime/weather.db`；`--recreate-db` 比 `--rebuild` 更强，必须有明确授权。日常 refresh 只有 bounded canonical one-shot；不得恢复旧 `weather_dashboard_refresh.sh` 内部的 N100 sync/硬编码 order-file 子链。
 
 不要用 WSL 命令。项目 Python 默认使用 `.venv/bin/python`。
 

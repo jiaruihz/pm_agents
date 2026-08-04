@@ -152,16 +152,16 @@ scripts/ops/telegram_research_bot_ctl.sh stop
 
 > ⚠️ 旧的 `strategy_dashboard_server`（端口 8011，服务 PMM/ARB 框架）已废弃，不需要启动。当前使用下方的天气 dashboard。
 
-用途：天气策略大盘看板（本机分析用，不参与 N100 生产）。
+用途：天气策略大盘看板。API 是 `production.yaml:weather_dashboard_api` 的 controller-managed runtime；FE 是独立 LaunchAgent。
 
-启动命令（一键启动/复用 API + 前端，不改写现有 DB）：
+状态与恢复入口：
 
 ```bash
-cd /home/rui/projects/pm_agent
-scripts/weather_dashboard/run_stack.sh
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_production_ctl.py plan
 ```
 
-全量重建只能显式执行 `scripts/weather_dashboard/run_stack.sh --rebuild`。
+需要变更时只走 controller 的已登记合同。`run_stack.sh` 不再启动 API/FE；全量重建只能显式执行 `scripts/weather_dashboard/run_stack.sh --rebuild`，且不会启停任何服务。
 
 服务端口：API `:8000`，前端 `:5174`。详见 [`docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md`](WEATHER_DASHBOARD_TROUBLESHOOTING.md)。
 
@@ -181,7 +181,9 @@ scripts/weather_dashboard/run_stack.sh
 
 - 如果你还在跑 weather live/paper 监控，就要
 
-### C2. Weather Live on N100
+### C2. Weather Live on N100（历史事故资料；不是当前生产 runbook）
+
+以下命令只保留历史追溯，未经独立 N100 灾备恢复合同不得执行。
 
 > **详细命令和口径见** [`docs/WEATHER_STRATEGY_ENTRYPOINT.md`](WEATHER_STRATEGY_ENTRYPOINT.md)，此处只列最小恢复信息。
 
@@ -266,14 +268,14 @@ cd /home/rui/projects/pm_agent
 scripts/ops/after_reboot.sh
 ```
 
-自动按顺序：打印状态 → 启动 Dashboard → 启动 Telegram Bot → 检查 N100 实盘。已运行的服务会自动跳过。
+无参数只执行 manifest/controller health+plan，不启停任何服务。显式恢复使用 `--apply`；live 恢复还必须带 `--confirm-live`。canonical JRS permission host 重建只用 `--recover-jrs-context --apply`。
 
 分项运行：
 
 ```bash
-scripts/ops/after_reboot.sh --dashboard   # 仅 Dashboard
-scripts/ops/after_reboot.sh --n100        # 仅 N100 检查
-scripts/ops/after_reboot.sh --status      # 仅看状态
+scripts/ops/after_reboot.sh
+scripts/ops/after_reboot.sh --apply
+scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 ```
 
 ## 5. 常用文件

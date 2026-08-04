@@ -1,7 +1,7 @@
-from types import SimpleNamespace
+from pathlib import Path
 
 from weather_dashboard.cli import ingest_strategy_runtime_orders as cli
-from src.strategies.runtime.production import WeatherManagedRuntimeSpec
+from src.strategies.runtime.production import WeatherManagedRuntimeSpec, WeatherProductionSpec
 
 
 def test_order_files_supplement_default_runtime_roots(tmp_path, monkeypatch) -> None:
@@ -30,7 +30,16 @@ def test_active_live_order_paths_follow_production_manifest(tmp_path) -> None:
     external_orders = external / "orders.jsonl"
     external_orders.write_text("")
 
-    spec = SimpleNamespace(
+    spec = WeatherProductionSpec(
+        version="test",
+        host_role="test",
+        operational_repo_root=tmp_path,
+        canonical_db_path=tmp_path / "runtime/weather.db",
+        compatibility_db_paths=(Path("runtime/weather.db"),),
+        data_feed_runtime_root=tmp_path / "feed",
+        pm_runtime_root=tmp_path / "runtime",
+        canonical_tmux_socket="test",
+        canonical_tmux_binary=Path("/usr/bin/tmux"),
         managed_runtimes=(
             WeatherManagedRuntimeSpec(
                 instance_id="active", tmux_session="active", role="strategy",

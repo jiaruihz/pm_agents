@@ -12,25 +12,24 @@ FE_DIR   := frontend/strategy_dashboard
 help:
 	@echo "Weather Dashboard targets:"
 	@echo "  test              — run all weather_dashboard tests"
-	@echo "  api               — start FastAPI dev server (port $(API_PORT))"
+	@echo "  api               — show controller-managed API health (does not start uvicorn)"
 	@echo "  fe                — start React dev server (port 5173)"
 	@echo "  db-init           — LEGACY v1 schema init; canonical users should use db-canonical-init"
 	@echo "  db-canonical-init — initialise canonical DB schema at $(DB_PATH)"
-	@echo "  db-canonical-rebuild — delete and rebuild canonical DB at $(DB_PATH)"
+	@echo "  db-canonical-rebuild — explicit run_stack full rebuild; does not start services"
 	@echo "  migrate-legacy-research — migrate T24 research CSVs into canonical DB"
 	@echo "  migrate-live-cycle — migrate live-cycle JSONL lineage into canonical DB"
 	@echo "  ingest-real       — LEGACY v1 ingest; do not use for canonical rebuilds"
 	@echo "  metrics-refresh   — recompute and persist metrics for all runs"
 	@echo "  cleanup-orphans   — list/delete runs with 0 fills (add DRY=1 to preview)"
 	@echo "  clob-fill-sync    — sync CLOB fill status for submitted orders (add DRY=1 for dry-run)"
-	@echo "  clean-db          — delete $(DB_PATH)"
+	@echo "  clean-db          — retired; use explicit run_stack --recreate-db authorization"
 
 test:
 	$(PYTHON) -m pytest tests/weather_dashboard/ -v
 
 api:
-	WEATHER_DB_PATH=$(DB_PATH) $(VENV)/uvicorn weather_dashboard.api.app:app \
-	  --host 0.0.0.0 --port $(API_PORT) --reload
+	$(PYTHON) scripts/ops/weather_production_ctl.py health
 
 fe:
 	cd $(FE_DIR) && npm run dev -- --host 0.0.0.0
@@ -47,7 +46,8 @@ db-canonical-init:
 	$(PYTHON) -c "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$(DB_PATH)')"
 	@echo "Canonical DB initialised at $(DB_PATH)"
 
-db-canonical-rebuild: clean-db db-canonical-init
+db-canonical-rebuild:
+	scripts/weather_dashboard/run_stack.sh --rebuild
 
 migrate-legacy-research: db-canonical-init
 	$(PYTHON) -m weather_dashboard.cli.ingest_legacy_research --db-path $(DB_PATH)
@@ -99,5 +99,5 @@ clob-fill-sync:
 	  $(if $(DRY),--dry-run) $(if $(V),--verbose)
 
 clean-db:
-	rm -f $(DB_PATH) $(DB_PATH)-wal $(DB_PATH)-shm
-	@echo "Deleted $(DB_PATH)"
+	@echo "ERROR: direct clean-db is retired; use run_stack.sh --recreate-db only with explicit authorization" >&2
+	@exit 2

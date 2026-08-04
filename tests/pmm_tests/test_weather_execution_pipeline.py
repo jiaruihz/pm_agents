@@ -566,6 +566,8 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(result["paper_written"], 1)
             self.assertEqual(result["live_orders"], 0)
             self.assertEqual(len(paper.read_text().splitlines()), 1)
+            paper_row = json.loads(paper.read_text().splitlines()[0])
+            self.assertEqual(paper_row["schema_version"], "weather_edge_execution_journal_v1")
             self.assertFalse(live.exists())
 
     def test_execute_trade_plans_requires_live_enabled_plan(self):
@@ -618,6 +620,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(result["live_written"], 1)
             rows = [json.loads(line) for line in live.read_text().splitlines()]
             self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["schema_version"], "weather_edge_execution_journal_v1")
             self.assertEqual(rows[0]["signal_side"], "BUY_YES")
             self.assertEqual(rows[0]["city_pool"], "t1_trading")
             self.assertEqual(rows[0]["best_bid"], 0.39)

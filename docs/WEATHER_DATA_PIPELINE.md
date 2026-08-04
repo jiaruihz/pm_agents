@@ -1,11 +1,17 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-07-18 exchange market end-time lineage
+Updated: 2026-08-04 controller/storage identity and single refresh entrypoint
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-07-18
+Last updated: 2026-08-04
+
+> **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
+> `src/strategies/runtime/production.yaml` 解析；物理 canonical 是
+> `/Volumes/jrs/pm_agents/runtime/weather.db`，仓库 `runtime/weather.db` 仅为同 inode 兼容入口。
+> API/JRS 常驻进程只由 `weather_production_ctl.py` 管理，日常 DB 更新只有 bounded
+> `start_weather_canonical_refresh_tmux.sh`。本文后续 N100/systemd/旧 live 文件名均是历史事故资料，不能作为当前命令。
 
 > 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.3、§7。
 >
@@ -35,40 +41,40 @@ For field-name contracts, [`WEATHER_SYSTEM_CONTRACT.md`](WEATHER_SYSTEM_CONTRACT
 
 ## 1. TL;DR
 
-There are **four explicit stages** during the 2026-07-04 incident handoff:
+Current production has four explicit ownership stages:
 
 ```
-                              Mac (temporary production)
-                              ├── weather_data_feed_service_runtime
+                              Mac production controller
+                              ├── production.yaml desired state
+                              ├── /Volumes/jrs/weather_data_feed_service_runtime
                               │   ├── targeted_output/paper_snapshots
                               │   ├── targeted_output/orderbook_snapshots
                               │   └── targeted_output/forecast_hourly_curves
-                              └── pm_agents strategy runtime
-                                  ├── live/shadow raw journals
+                              └── production-declared strategy runtimes
+                                  ├── health_path / live_order_path
                                   └── runtime monitor (read-only)
                                        │
-                     sync_weather_remote.sh --market-source=mac-weather-data-feed
+                     bounded canonical refresh one-shot
                                        ▼
-                              pm_agents canonical mirror
-                              ├── runtime/weather_edge_v1/market_data (immutable raw)
-                              ├── incremental materializer
-                              │   └── settlement + recent candidate partitions
-                              └── runtime/weather.db (derived analysis DB)
+                              physical canonical JRS DB
+                              ├── /Volumes/jrs/pm_agents/runtime/weather.db
+                              ├── runtime/weather.db (same-inode alias only)
+                              └── incremental order/fill/fact materializer
                                   └── analysis freshness monitor (read-only)
 ```
 
 Ownership is strict:
 
-- collector writes production raw only;
+- every mutable raw/journal target has one production-declared owner;
 - sync copies raw only;
-- materializer is the only analysis DB writer;
+- bounded canonical refresh is the registered analysis DB writer path;
 - monitors never repair or mutate data;
 - `run_stack.sh --rebuild` remains an explicit full rebuild and is never a patrol action.
 
-Daily incremental refresh:
+Daily/current execution refresh:
 
 ```bash
-scripts/ops/refresh_weather_analysis_incremental.sh
+scripts/ops/start_weather_canonical_refresh_tmux.sh
 ```
 
 Read-only checks:
@@ -76,6 +82,7 @@ Read-only checks:
 ```bash
 .venv/bin/python scripts/ops/weather_runtime_monitor.py
 .venv/bin/python scripts/ops/weather_analysis_freshness_monitor.py
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
 ```
 
 N100 remains the historical source and recovery target, but after the 2026-07-01
@@ -110,17 +117,15 @@ unless matched by a real row in `fills`.
 
 ## 2. Data sources
 
-### 2.1 Mac temporary production (`/Users/deepsleep/projects`)
+### 2.1 Mac current production
 
 | Path | Producer | Refresh | What it is |
 |---|---|---|---|
 | `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | current production market snapshots |
 | `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | current production orderbook history; not backfillable if missed |
 | `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
-| `pm_agents/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-lottery-live` | live strategy cadence | current BUY_YES lottery CLOB order submissions |
-| `pm_agents/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-take-profit-exit` | live strategy cadence | current SELL_YES TP exit CLOB order submissions |
-| `pm_agents/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1/live_orders.jsonl` | Mac LaunchAgent `com.pm-agents.regime-routed-no-live` | live strategy cadence | current regime-routed NO live order submissions |
-| `pm_agents/runtime/weather_edge_v1/tmax_distribution_edge_live_candidate_v1/live_orders.jsonl` | Mac strategy runtime | live/shadow strategy cadence | current tmax distribution candidate live order submissions |
+| `production.yaml.managed_runtimes[*].live_order_path` | corresponding controller-managed live runtime | live strategy cadence | complete current live order-journal set; no second hard-coded list |
+| `production.yaml.managed_runtimes[*].health_path` | corresponding controller-managed runtime | role cadence | current raw pulse/summary; the control repo is not assumed to be its storage root |
 
 These live JSONL sources are materialized into `runtime/weather.db.orders`.
 Use `orders` for live order-event questions such as city/date/bracket, YES/NO,
@@ -130,8 +135,8 @@ as original JSON in `orders.order_payload`, so active heads such as forecast
 tail, regime-routed NO, tmax distribution and exit overlays can share one order
 lineage table without per-strategy event tables. It remains submitted-order
 lineage; realized cash/PnL still comes from `fills` and `fact_trades`.
-`weather_dashboard_refresh.sh` and `run_stack.sh` explicitly ingest the active
-Mac live order files and then run
+The bounded canonical refresh resolves active journals with `--active-live-only`
+from `production.yaml`, ingests them, and then runs
 `weather_dashboard.cli.check_strategy_runtime_order_coverage`; if a raw
 strategy-runtime order `execution_id` is missing from canonical `orders`, the
 refresh fails closed instead of producing a DB where submitted orders disappear
@@ -152,10 +157,10 @@ Health gate:
 .venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py
 ```
 
-Sync current market data before rebuilding facts:
+Audit current storage identity before reading or rebuilding facts:
 
 ```bash
-scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
 ```
 
 `runtime/weather_edge_v1/market_data` is a symlink to `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data`, so the sync writes the canonical local mirror to the external disk as well.
@@ -223,7 +228,8 @@ growing ~4 MB/day. Independent of the main sync above.
 **Removed (legacy)** — `runtime/_legacy/weather_v2.db` and
 `runtime/_legacy/weather_edge_v1_weather.db` were deleted 2026-06-05. Only
 `runtime/_legacy/strategy_runtime.db` remains as historical artifact. The
-canonical analysis DB is **only** `runtime/weather.db`. N100 has **no active
+canonical analysis DB is **only** `/Volumes/jrs/pm_agents/runtime/weather.db`;
+`runtime/weather.db` must resolve to the same device/inode. N100 has **no active
 SQLite DB** — production data lives in files on N100, never in a DB.
 
 ### 2.4 Dashboard DB (`runtime/weather.db`)
@@ -566,7 +572,9 @@ The `pm_history_settlements` ingest skips null files automatically.
 
 ---
 
-## 7. N100 automation gap
+## 7. N100 automation gap（历史记录；当前禁止按此部署）
+
+本节仅保留事故前自动化设计，不能作为当前 action item。N100 未进入独立灾备恢复合同前，不安装下述 timer/service。
 
 ### 7.1 settle_t24_paper.py manual rerun
 
@@ -653,31 +661,22 @@ After the timer runs, the local mirror picks up new tars automatically via
 
 ## 8. Operations runbook
 
-### 8.1 Refresh everything end-to-end
+### 8.1 当前日常 refresh（唯一入口）
 
 ```bash
-cd /home/rui/projects/pm_agent
-
-# 1. Pull N100 mirror.
-scripts/ops/sync_weather_remote.sh
-
-# 2. Rebuild DB + run all ingests.
-scripts/weather_dashboard/run_stack.sh
-
-# 3. (Once-per-DB) consolidate fragmented config_ids.
-.venv/bin/python -m weather_dashboard.db.consolidate_configs \
-  --db-path runtime/weather.db
-
-# 4. Ingest pm_history settlements (idempotent).
-.venv/bin/python -m weather_dashboard.ingest.pm_history_settlements \
-  --db-path runtime/weather.db
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
+scripts/ops/start_weather_canonical_refresh_tmux.sh
 ```
 
 ### 8.2 Just check status
 
 ```bash
 scripts/weather_dashboard/run_stack.sh --status
+.venv/bin/python scripts/ops/weather_production_ctl.py health
 ```
+
+全量重建只在明确授权后执行 `scripts/weather_dashboard/run_stack.sh --rebuild`；它不启动或停止 API、FE、collector 或 strategy。
 
 ### 8.3 Diagnose "curve doesn't extend to today"
 

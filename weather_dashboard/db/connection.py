@@ -2,9 +2,11 @@ import sqlite3
 import os
 from pathlib import Path
 
-DB_PATH = os.environ.get(
-    "WEATHER_DASHBOARD_DB",
-    str(Path(__file__).parent.parent.parent / "runtime" / "weather_dashboard.db")
+ROOT = Path(__file__).resolve().parents[2]
+DB_PATH = (
+    os.environ.get("WEATHER_DB_PATH")
+    or os.environ.get("WEATHER_DASHBOARD_DB")
+    or str(ROOT / "runtime" / "weather.db")
 )
 
 def apply_pragmas(conn: sqlite3.Connection) -> None:

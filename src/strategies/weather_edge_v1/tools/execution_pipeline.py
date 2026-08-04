@@ -17,6 +17,7 @@ from src.strategies.weather_edge_v1.tools.execution_policy import (
 
 
 DEFAULT_RUNTIME_ROOT = Path("runtime/weather_edge_v1")
+EXECUTION_JOURNAL_SCHEMA_VERSION = "weather_edge_execution_journal_v1"
 
 
 def utc_now_iso() -> str:
@@ -718,6 +719,7 @@ def cancel_expired_live_orders(
             continue
         created_at = utc_now_iso()
         base = {
+            "schema_version": EXECUTION_JOURNAL_SCHEMA_VERSION,
             "record_type": "weather_edge_live_order_cancel",
             "cancel_id": cancel_id,
             "created_at_utc": created_at,
@@ -918,6 +920,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         **tmax_probability_fields,
     }
     return {
+        "schema_version": EXECUTION_JOURNAL_SCHEMA_VERSION,
         "record_type": "weather_edge_paper_order",
         "execution_id": stable_hash(base),
         "created_at_utc": utc_now_iso(),
@@ -1090,6 +1093,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         **tmax_probability_fields,
     }
     return {
+        "schema_version": EXECUTION_JOURNAL_SCHEMA_VERSION,
         "record_type": "weather_edge_live_order",
         "execution_id": stable_hash(base),
         "created_at_utc": utc_now_iso(),

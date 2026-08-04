@@ -74,6 +74,28 @@ class WeatherProductionSpec:
             for path in self.compatibility_db_paths
         )
 
+    def active_live_order_paths(self) -> tuple[Path, ...]:
+        """Return the unique journals for desired live runtimes.
+
+        The production manifest is the only authority for this set.  Callers
+        must not keep a second hard-coded list of strategy names or paths.
+        """
+
+        paths: list[Path] = []
+        seen: set[str] = set()
+        for runtime in self.managed_runtimes:
+            if not runtime.expected_live or runtime.live_order_path is None:
+                continue
+            path = runtime.live_order_path
+            if not path.is_absolute():
+                base = runtime.checkout_root or self.operational_repo_root
+                path = base / path
+            key = str(path)
+            if key not in seen:
+                paths.append(path)
+                seen.add(key)
+        return tuple(paths)
+
 
 def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     source = path or PRODUCTION_PATH
