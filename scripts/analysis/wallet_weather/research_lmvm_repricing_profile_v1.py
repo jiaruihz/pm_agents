@@ -190,7 +190,15 @@ def main() -> None:
     parser.add_argument("--snapshot", type=Path, required=True)
     parser.add_argument("--wallet", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--rpc-url", action="append", required=True)
+    parser.add_argument("--rpc-url", action="append", default=[])
+    parser.add_argument(
+        "--skip-receipts",
+        action="store_true",
+        help=(
+            "Skip full-history Polygon receipt decoding. Use only when maker/taker "
+            "is reported from a separately disclosed receipt sample."
+        ),
+    )
     args = parser.parse_args()
 
     wallet = args.wallet.lower()
@@ -432,7 +440,13 @@ def main() -> None:
             and row.get("transactionHash")
         }
     )
-    receipts = batch_receipts_with_fallback(transaction_hashes, args.rpc_url)
+    if not args.skip_receipts and not args.rpc_url:
+        parser.error("--rpc-url is required unless --skip-receipts is set")
+    receipts = (
+        {transaction: None for transaction in transaction_hashes}
+        if args.skip_receipts
+        else batch_receipts_with_fallback(transaction_hashes, args.rpc_url)
+    )
     lineage.WALLET = wallet
     _, orders = lineage.decode_wallet_orders(receipts)
     role_rows: dict[tuple[str, str], dict[str, float | int]] = defaultdict(
@@ -640,7 +654,10 @@ def main() -> None:
                 sell_taker_cash, sell_maker_cash + sell_taker_cash
             ),
             "public_boundary": (
-                "receipts prove wallet-side maker/taker for decoded fills; original "
+                "full-history receipt decoding skipped; maker/taker requires a separately "
+                "disclosed receipt sample"
+                if args.skip_receipts
+                else "receipts prove wallet-side maker/taker for decoded fills; original "
                 "post time, cancelled/unfilled orders, queue rank, and live book are unavailable"
             ),
         },
