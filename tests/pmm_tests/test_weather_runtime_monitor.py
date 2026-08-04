@@ -19,6 +19,10 @@ def append_jsonl(path: Path, rows: list[dict]) -> None:
 def test_executor_timeout_becomes_critical_alert(tmp_path: Path) -> None:
     now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
     runtime = tmp_path / "regime"
+    current_failure = {
+        "returncode": 1,
+        "output_tail": "httpx.ConnectTimeout: timed out\nPolyApiException[status_code=None]",
+    }
     write_json(
         runtime / "latest_summary.json",
         {
@@ -28,6 +32,7 @@ def test_executor_timeout_becomes_critical_alert(tmp_path: Path) -> None:
             "routed_candidates": 1,
             "execution_eligible": 1,
             "plans_written": 1,
+            "executor_result": current_failure,
         },
     )
     append_jsonl(
@@ -39,10 +44,7 @@ def test_executor_timeout_becomes_critical_alert(tmp_path: Path) -> None:
                 "routed_candidates": 1,
                 "execution_eligible": 1,
                 "plans_written": 1,
-                "executor_result": {
-                    "returncode": 1,
-                    "output_tail": "httpx.ConnectTimeout: timed out\nPolyApiException[status_code=None]",
-                },
+                "executor_result": current_failure,
             }
         ],
     )
@@ -57,6 +59,37 @@ def test_executor_timeout_becomes_critical_alert(tmp_path: Path) -> None:
     assert result["status"] == "critical"
     assert any(alert["kind"] == "executor_failure" for alert in result["alerts"])
     assert any(alert["kind"] == "plans_without_live_orders" for alert in result["alerts"])
+
+
+def test_historical_executor_failure_downgrades_after_current_success(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
+    runtime = tmp_path / "regime"
+    recovered = {
+        "generated_at_utc": (now - timedelta(minutes=1)).isoformat(),
+        "executor_result": {"returncode": 0, "parsed": {"paper_written": 0}},
+    }
+    write_json(runtime / "latest_summary.json", recovered)
+    append_jsonl(
+        runtime / "summary_history.jsonl",
+        [
+            {
+                "generated_at_utc": (now - timedelta(minutes=2)).isoformat(),
+                "executor_result": {"returncode": 1, "output_tail": "timeout"},
+            },
+            recovered,
+        ],
+    )
+    spec = monitor.WatchSpec(
+        instance="regime_test",
+        display_name="Regime test",
+        runtime_dir=runtime,
+        mode="zero_notional_shadow",
+    )
+
+    result = monitor.evaluate_spec(spec, now)
+
+    assert result["status"] == "warning"
+    assert any(alert["kind"] == "executor_failure_recovered" for alert in result["alerts"])
 
 
 def test_stale_target_date_becomes_warning_for_shadow(tmp_path: Path) -> None:

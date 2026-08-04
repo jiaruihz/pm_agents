@@ -256,7 +256,7 @@ managed_runtimes:
     start_script: scripts/ops/start_weather_runtime_monitor.sh
     health_path: /Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/runtime_monitor/latest_summary.json
     max_health_age_sec: 660
-    accepted_health_statuses: [ok]
+    accepted_health_statuses: [healthy, warning]
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_source_event_ladder_repricing_shadow

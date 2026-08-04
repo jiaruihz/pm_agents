@@ -463,11 +463,14 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
 
     if history_stats["executor_failures"] > 0:
         latest = history_stats.get("latest_executor_failure") or {}
+        latest_executor = summary.get("executor_result") if isinstance(summary.get("executor_result"), dict) else {}
+        latest_returncode = latest_executor.get("returncode")
+        failure_is_current = latest_returncode not in (0, "0", None)
         add_alert(
             alerts,
-            severity="critical",
+            severity="critical" if failure_is_current else "warning",
             instance=spec.instance,
-            kind="executor_failure",
+            kind="executor_failure" if failure_is_current else "executor_failure_recovered",
             message=(
                 f"{spec.display_name}: executor failed {history_stats['executor_failures']} "
                 f"time(s) in the last {spec.history_window_min:g} min"
@@ -476,6 +479,7 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
                 "detail_key": latest.get("error_class"),
                 "failure_classes": history_stats.get("executor_failure_classes"),
                 "latest_failure": latest,
+                "latest_executor_returncode": latest_returncode,
             },
         )
 
