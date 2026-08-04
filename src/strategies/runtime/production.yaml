@@ -275,7 +275,7 @@ managed_runtimes:
     tmux_session: weather_lmvm_forecast_repricing_shadow_v1
     role: shadow
     execution_mode: zero_notional_shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents
+    checkout_root: /Users/deepsleep/projects/pm_agents_lmvm_shadow
     start_script: scripts/ops/start_weather_lmvm_forecast_repricing_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/lmvm_forecast_repricing_shadow_v1/latest.json
     max_health_age_sec: 180
