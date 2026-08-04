@@ -1,5 +1,9 @@
 # LMVM-style D-2/D-1 单档 YES repricing v1
 
+> 2026-08-04 纠偏：zero-notional collector 已停止并移出 production desired state。
+> 本策略必须先完成历史 `ΔPmodel−ΔPmarket` 同分母回测和 frozen forward；下文保留
+> 先前 collector 启动记录仅作审计，不代表当前运行状态或研究升级。
+
 ## 数据快照
 
 | 字段 | 值 |
