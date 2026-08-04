@@ -33,12 +33,12 @@ def _chunks(values: list[str], size: int = 500) -> list[list[str]]:
     return [values[i : i + size] for i in range(0, len(values), size)]
 
 
-def _db_execution_ids(conn: sqlite3.Connection, execution_ids: list[str]) -> set[str]:
+def _db_order_ids(conn: sqlite3.Connection, order_ids: list[str]) -> set[str]:
     found: set[str] = set()
-    for chunk in _chunks(execution_ids):
+    for chunk in _chunks(order_ids):
         placeholders = ",".join("?" for _ in chunk)
         rows = conn.execute(
-            f"SELECT execution_id FROM orders WHERE execution_id IN ({placeholders})",
+            f"SELECT order_id FROM orders WHERE order_id IN ({placeholders})",
             chunk,
         ).fetchall()
         found.update(str(row[0]) for row in rows)
@@ -47,37 +47,31 @@ def _db_execution_ids(conn: sqlite3.Connection, execution_ids: list[str]) -> set
 
 def check_file(conn: sqlite3.Connection, path: Path) -> dict[str, Any]:
     rows = _read_jsonl(path)
-    raw_execution_ids = [
-        str(row.get("execution_id") or "").strip()
-        for row in rows
-        if str(row.get("execution_id") or "").strip()
-    ]
-    unique_ids = sorted(set(raw_execution_ids))
-    found = _db_execution_ids(conn, unique_ids) if unique_ids else set()
+    unique_ids = sorted({physical_exchange_order_id(row) for row in rows if physical_exchange_order_id(row)})
+    found = _db_order_ids(conn, unique_ids) if unique_ids else set()
     submitted_ids = sorted(
         {
-            str(row.get("execution_id") or "").strip()
+            physical_exchange_order_id(row)
             for row in rows
-            if str(row.get("execution_id") or "").strip()
-            and physical_exchange_order_id(row)
+            if physical_exchange_order_id(row)
         }
     )
     missing = [execution_id for execution_id in submitted_ids if execution_id not in found]
-    missing_non_submitted = [
-        execution_id
-        for execution_id in unique_ids
-        if execution_id not in found and execution_id not in submitted_ids
+    lifecycle_attempts = [
+        str(row.get("execution_id") or row.get("decision_id") or "").strip()
+        for row in rows
+        if not physical_exchange_order_id(row)
     ]
     return {
         "path": str(path),
         "raw_rows": len(rows),
-        "raw_execution_ids": len(unique_ids),
+        "raw_exchange_order_ids": len(unique_ids),
         "raw_submitted_rows": len(submitted_ids),
         "db_orders_found": len(found),
         "missing_orders": len(missing),
         "sample_missing_execution_ids": missing[:20],
-        "missing_non_submitted_attempts": len(missing_non_submitted),
-        "sample_missing_non_submitted_execution_ids": missing_non_submitted[:20],
+        "non_exchange_lifecycle_attempts": len(lifecycle_attempts),
+        "sample_non_exchange_lifecycle_ids": [value for value in lifecycle_attempts if value][:20],
     }
 
 
