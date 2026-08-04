@@ -796,3 +796,36 @@ def test_data_feed_semantics_treats_partial_fresh_coverage_as_warning():
         "forecast_hourly_curves_incomplete:NYC@2026-08-02",
         "snapshot_orderbook_coverage_incomplete:4/170",
     ]
+
+
+def test_data_feed_semantic_health_is_bounded(monkeypatch):
+    observed_timeout = None
+
+    def fake_run(*_args, **kwargs):
+        nonlocal observed_timeout
+        observed_timeout = kwargs["timeout"]
+        raise subprocess.TimeoutExpired(cmd="health", timeout=observed_timeout)
+
+    monkeypatch.setattr(ctl.subprocess, "run", fake_run)
+
+    result = ctl.collect_data_feed_semantics()
+
+    assert observed_timeout == ctl.DATA_FEED_SEMANTIC_TIMEOUT_SEC
+    assert result["status"] == "critical"
+    assert result["critical_reasons"] == [
+        f"data_feed_health_command_failed:TimeoutExpired:{observed_timeout}s"
+    ]
+
+
+def test_jrs_context_health_timeout_returns_critical(tmp_path, monkeypatch):
+    def fake_run(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="probe", timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(ctl.subprocess, "run", fake_run)
+    spec = production_spec(tmp_path, ())
+
+    result = ctl.collect_jrs_context_health(spec)
+
+    assert result["status"] == "critical"
+    assert result["returncode"] == 124
+    assert result["output"] == "jrs_context_probe_failed:TimeoutExpired"

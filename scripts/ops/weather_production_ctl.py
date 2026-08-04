@@ -238,6 +238,10 @@ def evaluate_production_health(
     }
 
 
+JRS_CONTEXT_HEALTH_TIMEOUT_SEC = 15
+DATA_FEED_SEMANTIC_TIMEOUT_SEC = 25
+
+
 def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
     """Run the canonical helper's effective write probe, not a session check."""
 
@@ -247,15 +251,24 @@ def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
         "weather_jrs_tmux_write_probe "
         f"{spec.canonical_tmux_socket!r} {str(spec.data_feed_runtime_root)!r}"
     )
-    result = subprocess.run(
-        ["/bin/bash", "-lc", command],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        timeout=15,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["/bin/bash", "-lc", command],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=JRS_CONTEXT_HEALTH_TIMEOUT_SEC,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "status": "critical",
+            "returncode": 124 if isinstance(exc, subprocess.TimeoutExpired) else None,
+            "socket": spec.canonical_tmux_socket,
+            "runtime_root": str(spec.data_feed_runtime_root),
+            "output": f"jrs_context_probe_failed:{type(exc).__name__}",
+        }
     return {
         "status": "healthy" if result.returncode == 0 else "critical",
         "returncode": result.returncode,
@@ -658,16 +671,19 @@ def collect_data_feed_semantics() -> dict[str, Any]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=45,
+            timeout=DATA_FEED_SEMANTIC_TIMEOUT_SEC,
             check=False,
         )
         payload = json.loads(result.stdout)
         if not isinstance(payload, dict):
             raise ValueError("data-feed health payload is not an object")
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError) as exc:
+        detail = type(exc).__name__
+        if isinstance(exc, subprocess.TimeoutExpired):
+            detail += f":{DATA_FEED_SEMANTIC_TIMEOUT_SEC}s"
         return {
             "status": "critical",
-            "critical_reasons": [f"data_feed_health_command_failed:{type(exc).__name__}"],
+            "critical_reasons": [f"data_feed_health_command_failed:{detail}"],
             "warnings": [],
             "ignored_legacy_checks": [],
             "checked_at_utc": None,
