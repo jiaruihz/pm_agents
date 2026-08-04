@@ -107,3 +107,33 @@ baseline=FAIL（model proper score 显著差于 same-row market；primary markou
 forward=NA
 conclusion=historical FAIL_CURRENT_EVIDENCE / zero-notional research / no shadow or live promotion
 ```
+
+## Forward delta-innovation collector
+
+历史失败的是 static residual + taker/taker 表达，不等于 forecast update 方向已证伪。新的
+`lmvm_forecast_innovation_single_yes_v1` 固定为：
+
+```text
+forecast_values_hash first-seen change
+-> complete D-2/D-1 exact-bracket distribution
+-> score every YES rung by ΔPmodel - ΔPmarket
+-> select exactly one argmax rung
+-> zero-notional TradeIntent
+-> append-only 20/60/120/180m bid/ask/depth markout
+```
+
+raw 输出位于 JRS `output/lmvm_forecast_repricing_shadow_v1/`：
+
+- `forecast_updates.jsonl`：forecast update grain；
+- `decision_bundles.jsonl`：`InformationEvent → checkpoint → ModelOutput → SignalCandidate`；
+- `trade_intents.jsonl`：selected rung 的 zero-notional、record-only intent；
+- `quote_markouts.jsonl`：后续盘口，不把 quote cross 冒充 maker fill；
+- `state.json` / `latest.json`：去重、open candidate 与健康状态。
+
+2026-08-04 actual-JRS smoke 读取最近 64 份 snapshot、63,855 个 record rows，得到
+227 个 complete D-2/D-1 ladder states、29 个当前 baseline streams；首轮只建立
+left-censored baseline，按设计不回填候选。maker queue 当前只能记录 visible top-of-book
+queue ahead；没有真实 order/trade prints 时 `maker_fill_status` 固定为 not observable。
+
+该 forward collector 不改变上面的历史三门结论。后续需要新日期累计后，固定比较 delta selector、
+static residual 与 market favorite 的 proper score 和含费 markout；未过三门前保持 zero-notional。

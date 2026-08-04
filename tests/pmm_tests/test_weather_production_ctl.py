@@ -99,7 +99,7 @@ def test_every_business_runtime_has_controller_start_contract():
         if item.instance_id != "weather_jrs_context_keeper"
     ]
 
-    assert len(business) == 23
+    assert len(business) == 24
     assert all(item.recovery_policy != "manual" for item in business)
     assert all(item.checkout_root is not None for item in business)
     assert all(item.resolved_start_script() is not None for item in business)
@@ -124,13 +124,14 @@ def test_migrated_historical_runtimes_remain_non_live():
         "weather_korea_first_seen_state_v1",
         "weather_runtime_monitor",
         "weather_source_event_ladder_repricing_shadow",
+        "weather_lmvm_forecast_repricing_shadow_v1",
         "weather_tokyo_current_break_active_ladder_shadow_v1",
     }
     migrated = [
         item for item in spec.managed_runtimes if item.instance_id in migrated_ids
     ]
 
-    assert len(migrated) == 15
+    assert len(migrated) == 16
     assert all(item.expected_live is False for item in migrated)
     assert all(item.recovery_policy == "safe" for item in migrated)
 
