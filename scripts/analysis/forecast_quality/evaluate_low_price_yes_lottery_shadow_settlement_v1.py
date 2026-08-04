@@ -139,7 +139,7 @@ def summarize(rows: list[dict[str, Any]], n_boot: int) -> dict[str, Any]:
         "open_rows": len(rows) - len(settled),
         "dates": len(daily),
         "cities": len({row["city"] for row in settled}),
-        "avg_ask": sum(float(row["ask"]) for row in settled) / len(settled),
+        "avg_ask": sum(float(row["evaluation_ask"]) for row in settled) / len(settled),
         "win_rate": sum(int(row["win"]) for row in settled) / len(settled),
         "cost": cost,
         "pnl": pnl,
@@ -156,7 +156,7 @@ def summarize(rows: list[dict[str, Any]], n_boot: int) -> dict[str, Any]:
                 "target_date": row["target_date"],
                 "city": row["city"],
                 "bracket": row["bracket"],
-                "ask": row["ask"],
+                "ask": row["evaluation_ask"],
                 "pnl": row["pnl"],
             }
             for row in winners
@@ -206,11 +206,31 @@ def main() -> int:
         item["clob_yes_winner"] = market.get("yes_winner") if market else None
         item["is_settled"] = item["clob_closed"] and item["clob_yes_price"] in (0.0, 1.0)
         if item["is_settled"]:
-            ask = float(item["ask"])
-            cost = float(item.get("hypothetical_notional_usd") or 5.0)
+            ask = float(
+                item.get("ask")
+                or item.get("would_live_best_ask")
+                or item.get("fresh_best_ask")
+                or item.get("decision_entry_price")
+            )
+            shares = item.get("would_live_shares") or item.get("planned_shares")
+            if shares is not None:
+                shares = float(shares)
+                fee_per_share = 0.05 * ask * (1.0 - ask)
+                cost = shares * (ask + fee_per_share)
+                payout = shares
+                item["evaluation_sizing"] = "fixed_shares_weather_taker_fee"
+                item["evaluation_shares"] = shares
+                item["evaluation_fee_per_share"] = fee_per_share
+            else:
+                cost = float(item.get("hypothetical_notional_usd") or 5.0)
+                payout = cost / ask
+                item["evaluation_sizing"] = "legacy_fixed_notional_no_fee"
+                item["evaluation_shares"] = payout
+                item["evaluation_fee_per_share"] = 0.0
+            item["evaluation_ask"] = ask
             item["cost"] = cost
             item["win"] = int(float(item["clob_yes_price"]) == 1.0)
-            item["pnl"] = float(item["clob_yes_price"]) * (cost / ask) - cost
+            item["pnl"] = float(item["clob_yes_price"]) * payout - cost
             item["roi"] = item["pnl"] / cost
         evaluated.append(item)
 
