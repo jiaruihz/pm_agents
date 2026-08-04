@@ -98,11 +98,7 @@ def test_every_business_runtime_has_controller_start_contract():
     assert all(item.checkout_root is not None for item in business)
     assert all(item.resolved_start_script() is not None for item in business)
     assert all(item.health_path is not None or item.health_url is not None for item in business)
-    assert all(
-        (ROOT / item.start_script).is_file()
-        for item in business
-        if item.start_script is not None and not item.start_script.is_absolute()
-    )
+    assert all(item.resolved_start_script().is_file() for item in business)
 
 
 def test_migrated_historical_runtimes_remain_non_live():
