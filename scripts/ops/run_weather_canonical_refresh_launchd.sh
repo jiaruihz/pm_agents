@@ -69,8 +69,3 @@ fi
 "$PROJECT_DIR/.venv/bin/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
   --db "$DB_PATH" \
   --json-out "$PROJECT_DIR/runtime/_dashboard_logs/clob_fill_coverage_gate.json"
-"$PROJECT_DIR/.venv/bin/python" scripts/analysis/execution_quality/weather_execution_module_compare.py \
-  --db "$DB_PATH" \
-  --active-live-only \
-  --json-out "$PROJECT_DIR/runtime/weather_edge_v1/execution_module_compare/latest.json" \
-  >/dev/null
