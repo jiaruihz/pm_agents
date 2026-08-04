@@ -65,7 +65,7 @@ if [[ "$clob_synced" != "1" ]]; then
   exit 1
 fi
 "$PROJECT_DIR/.venv/bin/python" scripts/etl/build_weather_fact_trades.py \
-  --db-path "$DB_PATH" --no-parquet
+  --db-path "$DB_PATH" --incremental --no-parquet
 "$PROJECT_DIR/.venv/bin/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
   --db "$DB_PATH" \
   --json-out "$PROJECT_DIR/runtime/_dashboard_logs/clob_fill_coverage_gate.json"
