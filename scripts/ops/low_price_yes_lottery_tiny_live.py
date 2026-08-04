@@ -2506,21 +2506,23 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         Path(args.snapshot_dir),
         max_age_min=float(args.max_weather_snapshot_age_min),
     )
-    with connect(Path(args.db)) as conn:
-        min_event_date = effective_min_event_date(conn, args)
-        raw_counts = count_raw(conn, args, min_event_date)
-        # The loop trades only from the fresh data-feed snapshot below.  The
-        # all-history exclusion census is diagnostic and used to rescan the
-        # multi-GB candidate fact every five minutes.
-        date_window_excluded_counts = (
-            count_date_window_excluded(conn, args, min_event_date)
-            if args.command == "run"
-            else {
-                "reason": "skipped_in_loop_no_selector_effect",
-                "effective_min_event_date": min_event_date,
-                "selection_behavior": "observability_only_no_selector_change",
-            }
-        )
+    if args.command == "loop":
+        # The production loop selects exclusively from the fresh data-feed
+        # snapshot below. Canonical candidate counts are report diagnostics,
+        # not an execution input, and must not rescan the multi-GB analysis DB
+        # every five minutes.
+        min_event_date = None
+        raw_counts = {"reason": "skipped_in_loop_snapshot_is_selector"}
+        date_window_excluded_counts = {
+            "reason": "skipped_in_loop_no_selector_effect",
+            "effective_min_event_date": None,
+            "selection_behavior": "observability_only_no_selector_change",
+        }
+    else:
+        with connect(Path(args.db)) as conn:
+            min_event_date = effective_min_event_date(conn, args)
+            raw_counts = count_raw(conn, args, min_event_date)
+            date_window_excluded_counts = count_date_window_excluded(conn, args, min_event_date)
     raw_candidates = load_fresh_snapshot_candidates(weather_snapshot, args)
     for row in raw_candidates:
         row["candidate_source"] = "current_data_feed_snapshot"
