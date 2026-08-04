@@ -137,3 +137,11 @@ queue ahead；没有真实 order/trade prints 时 `maker_fill_status` 固定为 
 
 该 forward collector 不改变上面的历史三门结论。后续需要新日期累计后，固定比较 delta selector、
 static residual 与 market favorite 的 proper score 和含费 markout；未过三门前保持 zero-notional。
+
+生产接入于 2026-08-04 完成：controller-managed session
+`weather_lmvm_forecast_repricing_shadow_v1`，干净 checkout SHA `e405d4a6`，execution mode
+`zero_notional_shadow`。启动后 PID `49022`；后验 manifest 与 pre-state 相比没有丢失任何既有 JRS
+session，canonical DB route 保持 healthy。首个持续循环 `latest.json` 为 `status=ok`、
+`phase=forward`、`zero_notional=true`、`no_plan_created=true`、`no_order_placed=true`；当时最近完整
+D-2/D-1 snapshot 为 `2026-08-04T13:47:42Z`，age 3,303 秒。health 上限按 full-ladder 实际抓取
+预算与间隔固定为 5,400 秒，真实 age 始终原样发布，超过后 fail closed 为 `stale`。
