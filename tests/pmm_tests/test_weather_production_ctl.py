@@ -727,6 +727,44 @@ def test_controller_does_not_synthesize_live_restart_contract(tmp_path):
     }
 
 
+def test_controller_stops_exact_safe_non_live_runtime(tmp_path, monkeypatch):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow_session",
+        role="shadow",
+        execution_mode="zero_notional_shadow",
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    calls = []
+
+    def fake_tmux(_spec, *args):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
+
+    assert ctl._run_stop(spec, runtime)["status"] == "stopped"
+    assert calls == [("kill-session", "-t", "=shadow_session")]
+
+
+def test_controller_refuses_stop_for_live_runtime(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live_session",
+        role="strategy",
+        execution_mode="live",
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+
+    assert ctl._run_stop(production_spec(tmp_path, (runtime,)), runtime) == {
+        "instance_id": "live",
+        "status": "blocked",
+        "reason": "live_stop_not_supported",
+    }
+
+
 def test_data_feed_semantics_separates_coverage_warning_from_critical_chain():
     payload = {
         "checked_at_utc": "2026-08-02T16:00:00Z",

@@ -4,6 +4,8 @@
 The default commands are read-only. ``reconcile --apply`` only starts missing
 runtimes declared in production.yaml; it never stops extra processes. Live
 recovery requires both an explicit reason and ``--confirm-live``.
+``stop --apply`` stops one exact ``safe`` non-live runtime and never acts on a
+live or manual-recovery runtime.
 ``restart --apply`` may synthesize an exact-session stop followed by the
 registered start contract only for ``safe`` non-live runtimes; live runtimes
 require an explicit restart contract.
@@ -839,6 +841,40 @@ def _run_restart(
     }
 
 
+def _run_stop(
+    spec: WeatherProductionSpec,
+    runtime: WeatherManagedRuntimeSpec,
+) -> dict[str, Any]:
+    """Stop one exact safe non-live tmux session through controller authority."""
+
+    if runtime.expected_live or runtime.execution_mode == "live":
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "blocked",
+            "reason": "live_stop_not_supported",
+        }
+    if runtime.recovery_policy != "safe":
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "blocked",
+            "reason": "safe_recovery_policy_required",
+        }
+    stopped = _tmux(spec, "kill-session", "-t", f"={runtime.tmux_session}")
+    if stopped.returncode != 0:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": "stop_failed",
+            "returncode": stopped.returncode,
+            "output": stopped.stdout[-2000:].strip(),
+        }
+    return {
+        "instance_id": runtime.instance_id,
+        "status": "stopped",
+        "tmux_session": runtime.tmux_session,
+    }
+
+
 def _ordered_start_items(
     spec: WeatherProductionSpec, plan: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -885,6 +921,11 @@ def parse_args() -> argparse.Namespace:
     restart.add_argument("--instance", required=True)
     restart.add_argument("--confirm-live", action="store_true")
     restart.add_argument("--reason")
+    stop = sub.add_parser("stop")
+    stop.add_argument("--json", action="store_true")
+    stop.add_argument("--apply", action="store_true")
+    stop.add_argument("--instance", required=True)
+    stop.add_argument("--reason")
     recover = sub.add_parser("recover-jrs-context")
     recover.add_argument("--json", action="store_true")
     recover.add_argument("--apply", action="store_true")
@@ -908,6 +949,44 @@ def main() -> int:
     health["plan"] = build_plan(spec, health)
     health["command"] = args.command
     health["apply"] = bool(getattr(args, "apply", False))
+    if args.command == "stop":
+        specs = {item.instance_id: item for item in spec.managed_runtimes}
+        runtime = specs.get(args.instance)
+        if runtime is None:
+            raise SystemExit(f"unknown managed runtime: {args.instance}")
+        health["target_instance"] = args.instance
+        if args.apply:
+            if not args.reason:
+                raise SystemExit("stop --apply requires --reason")
+            if (health.get("jrs_context_health") or {}).get("status") != "healthy":
+                raise SystemExit("stop blocked: jrs_context_unhealthy")
+            action = _run_stop(spec, runtime)
+            time.sleep(2)
+            after = manifest_tool.collect_manifest(spec)
+            after = manifest_tool.compare_prechange_manifest(
+                after,
+                before,
+                allow_missing_sessions={runtime.tmux_session},
+            )
+            health = evaluate_production_health(spec, after)
+            health = attach_jrs_context_health(
+                health, collect_jrs_context_health(spec)
+            )
+            health = attach_semantic_health(
+                health, collect_data_feed_semantics()
+            )
+            health.update(
+                {
+                    "command": args.command,
+                    "apply": True,
+                    "reason": args.reason,
+                    "target_instance": args.instance,
+                    "actions": [action],
+                }
+            )
+            health["plan"] = build_plan(spec, health)
+            if action.get("status") in {"blocked", "error"}:
+                health["status"] = "critical"
     if args.command == "restart":
         specs = {item.instance_id: item for item in spec.managed_runtimes}
         runtime = specs.get(args.instance)
