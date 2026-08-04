@@ -386,6 +386,7 @@ CREATE INDEX IF NOT EXISTS idx_signals_market ON signals(condition_id, market_id
 CREATE INDEX IF NOT EXISTS idx_plans_run_id ON plans(run_id);
 CREATE INDEX IF NOT EXISTS idx_plans_signal_id ON plans(signal_id);
 CREATE INDEX IF NOT EXISTS idx_orders_run_id ON orders(run_id);
+CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
 CREATE INDEX IF NOT EXISTS idx_orders_plan_id ON orders(plan_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status_quote ON orders(status, clob_status, quote_status);
 CREATE INDEX IF NOT EXISTS idx_orders_sizing ON orders(sizing_policy, score_dist_tier);

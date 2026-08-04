@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS ingestion_log (
 
 -- === INDEXES ===
 CREATE INDEX IF NOT EXISTS idx_orders_run_id ON orders(run_id);
+CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
 CREATE INDEX IF NOT EXISTS idx_orders_run_mode ON orders(run_id, execution_mode);
 CREATE INDEX IF NOT EXISTS idx_plans_run_id ON plans(run_id);
 CREATE INDEX IF NOT EXISTS idx_plans_signal_id ON plans(signal_id);
