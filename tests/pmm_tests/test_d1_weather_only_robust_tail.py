@@ -74,3 +74,24 @@ def test_climate_mix_is_exact_convex_probability_mixture() -> None:
     )
 
     assert np.allclose(mixed, 0.95 * weather + 0.05 * climate)
+
+
+def test_market_offset_beta_zero_is_exact_market_baseline() -> None:
+    market = np.array([0.1, 0.3, 0.6])
+    weather = np.array([0.4, 0.4, 0.2])
+
+    posterior = subject.market_offset_vector(market, weather, beta=0.0)
+
+    assert np.array_equal(posterior, market)
+    assert posterior is not market
+
+
+def test_market_offset_is_coherent_and_beta_one_matches_weather() -> None:
+    market = np.array([0.1, 0.3, 0.6])
+    weather = np.array([0.4, 0.4, 0.2])
+
+    posterior = subject.market_offset_vector(market, weather, beta=1.0)
+
+    assert np.all(posterior > 0)
+    assert np.isclose(posterior.sum(), 1.0)
+    assert np.allclose(posterior, weather)

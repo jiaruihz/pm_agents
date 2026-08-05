@@ -6,7 +6,9 @@ weather distribution: a global residual scale temperature plus a small
 climatology mixture prevent overconfident or near-zero native-rung mass.  The
 first 18 reconstructed target dates select parameters.  The final 9 dates are
 reported as a previously observed secondary holdout, never as clean forward.
-Market remains a same-row baseline and is not used by the weather model.
+The frozen weather distribution is also tested as a strongly regularized
+log-probability offset from the same-row market baseline.  Market is never used
+by the weather-only arm or its parameter selection.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ SCALE_TEMPERATURES = (0.75, 1.0, 1.25, 1.5, 2.0)
 CLIMATE_MIXES = (0.0, 0.02, 0.05, 0.10)
 CONSENSUS_STATS = ("median", "mean")
 BIAS_MULTIPLIERS = (0.0, 0.5, 1.0)
+MARKET_OFFSET_BETAS = (0.0, 0.025, 0.05, 0.10, 0.20, 0.35, 0.50, 0.75, 1.0)
 
 
 def _climate_values(state: dict[str, Any], fitted: dict[str, Any]) -> np.ndarray:
@@ -229,6 +232,157 @@ def _paired(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def market_offset_vector(market: np.ndarray, weather: np.ndarray, beta: float) -> np.ndarray:
+    if beta == 0.0:
+        return np.asarray(market, dtype=float).copy()
+    log_posterior = np.log(np.clip(market, v2.EPS, None)) + beta * (
+        np.log(np.clip(weather, v2.EPS, None)) - np.log(np.clip(market, v2.EPS, None))
+    )
+    log_posterior -= float(np.max(log_posterior))
+    posterior = np.exp(log_posterior)
+    return posterior / posterior.sum()
+
+
+def weather_vectors(
+    states: list[dict[str, Any]], fitted: dict[str, Any], selected: dict[str, Any]
+) -> dict[str, np.ndarray]:
+    return {
+        state["snapshot_key"]: robust_tail_vector(
+            state,
+            fitted,
+            ensemble_weight=float(selected["ensemble_weight"]),
+            scale_temperature=float(selected["scale_temperature"]),
+            climate_mix=float(selected["climate_mix"]),
+            consensus_stat=str(selected["consensus_stat"]),
+            bias_multiplier=float(selected["bias_multiplier"]),
+        )
+        for state in states
+    }
+
+
+def best_market_beta(
+    states: list[dict[str, Any]], vectors: dict[str, np.ndarray]
+) -> tuple[float, pd.DataFrame]:
+    rows: list[dict[str, float]] = []
+    for beta in MARKET_OFFSET_BETAS:
+        losses: list[dict[str, Any]] = []
+        for state in states:
+            posterior = market_offset_vector(
+                state["market_probs"], vectors[state["snapshot_key"]], beta
+            )
+            logloss, brier, rps, _, _ = base.score_vector(posterior, state["winner_index"])
+            losses.append(
+                {"target_date": state["target_date"], "logloss": logloss, "brier": brier, "rps": rps}
+            )
+        daily = pd.DataFrame(losses).groupby("target_date")[["logloss", "brier", "rps"]].mean()
+        rows.append(
+            {
+                "beta": beta,
+                "date_equal_logloss": float(daily["logloss"].mean()),
+                "date_equal_brier": float(daily["brier"].mean()),
+                "date_equal_rps": float(daily["rps"].mean()),
+            }
+        )
+    candidates = pd.DataFrame(rows).sort_values(
+        ["date_equal_logloss", "date_equal_rps", "date_equal_brier"], ignore_index=True
+    )
+    return float(candidates.iloc[0]["beta"]), candidates
+
+
+def fit_partial_market_betas(
+    states: list[dict[str, Any]],
+    vectors: dict[str, np.ndarray],
+    global_beta: float,
+) -> dict[str, Any]:
+    source_beta: dict[str, float] = {}
+    source_rows: dict[str, int] = {}
+    for source in sorted({str(state["model_key"]) for state in states}):
+        subset = [state for state in states if str(state["model_key"]) == source]
+        raw_beta, _ = best_market_beta(subset, vectors)
+        n = len(subset)
+        source_rows[source] = n
+        source_beta[source] = global_beta + (n / (n + 60.0)) * (raw_beta - global_beta)
+    city_source_beta: dict[str, float] = {}
+    city_source_rows: dict[str, int] = {}
+    for city, source in sorted({(str(state["city"]), str(state["model_key"])) for state in states}):
+        subset = [
+            state
+            for state in states
+            if str(state["city"]) == city and str(state["model_key"]) == source
+        ]
+        raw_beta, _ = best_market_beta(subset, vectors)
+        n = len(subset)
+        key = f"{city}|{source}"
+        city_source_rows[key] = n
+        base_beta = source_beta[source]
+        city_source_beta[key] = base_beta + (n / (n + 120.0)) * (raw_beta - base_beta)
+    return {
+        "global_beta": global_beta,
+        "source_shrinkage_lambda": 60.0,
+        "city_source_shrinkage_lambda": 120.0,
+        "source_beta": source_beta,
+        "source_rows": source_rows,
+        "city_source_beta": city_source_beta,
+        "city_source_rows": city_source_rows,
+    }
+
+
+def score_market_models(
+    states: list[dict[str, Any]],
+    vectors: dict[str, np.ndarray],
+    *,
+    global_beta: float,
+    partial: dict[str, Any],
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for state in states:
+        weather = vectors[state["snapshot_key"]]
+        key = f"{state['city']}|{state['model_key']}"
+        partial_beta = float(partial["city_source_beta"].get(key, global_beta))
+        arms = {
+            "M0_market": state["market_probs"],
+            "M1_weather": weather,
+            "M2_global_offset": market_offset_vector(state["market_probs"], weather, global_beta),
+            "M3_partial_offset": market_offset_vector(state["market_probs"], weather, partial_beta),
+        }
+        for arm, vector in arms.items():
+            logloss, brier, rps, winner_probability, top1 = base.score_vector(vector, state["winner_index"])
+            rows.append(
+                {
+                    "snapshot_key": state["snapshot_key"],
+                    "target_date": state["target_date"],
+                    "city": state["city"],
+                    "model_key": state["model_key"],
+                    "arm": arm,
+                    "beta": (
+                        0.0
+                        if arm == "M0_market"
+                        else 1.0
+                        if arm == "M1_weather"
+                        else partial_beta
+                        if arm == "M3_partial_offset"
+                        else global_beta
+                    ),
+                    "logloss": logloss,
+                    "brier": brier,
+                    "rps": rps,
+                    "winner_probability": winner_probability,
+                    "top1_accuracy": top1,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def market_paired(frame: pd.DataFrame) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            v2.bootstrap_delta(frame, arm, "M0_market", metric)
+            for metric in ("logloss", "brier", "rps")
+            for arm in ("M1_weather", "M2_global_offset", "M3_partial_offset")
+        ]
+    )
+
+
 def render_report(payload: dict[str, Any]) -> str:
     primary = {row["arm"]: row for row in payload["primary_holdout_scores"]}
     deltas = {
@@ -238,6 +392,11 @@ def render_report(payload: dict[str, Any]) -> str:
     g_f = deltas[("G_robust_tail", "F_v2", "logloss")]
     g_m = deltas[("G_robust_tail", "market", "logloss")]
     diagnostic = payload["primary_diagnostics"]
+    market_scores = {row["arm"]: row for row in payload["market_offset"]["holdout_scores"]}
+    market_deltas = {
+        (row["left"], row["metric"]): row
+        for row in payload["market_offset"]["holdout_deltas_vs_market"]
+    }
     lines = [
         "# D-1 weather-only robust-tail 开发报告 v1",
         "",
@@ -249,8 +408,8 @@ def render_report(payload: dict[str, Any]) -> str:
         "",
         "market residual:",
         "baseline=market_same_rows",
-        "forward=not_run_by_contract",
-        "execution=not_run_by_contract",
+        "forward=legacy_exploratory_only_weather_gate_not_clean",
+        "execution=not_run_no_probability_gate",
         "",
         "production:",
         "live_action=none",
@@ -268,7 +427,7 @@ def render_report(payload: dict[str, Any]) -> str:
         f"开发集在 K={payload['candidate_count']} 个预定义组合中选择 consensus={payload['selected']['consensus_stat']}、ensemble weight={payload['selected']['ensemble_weight']:.3f}、bias multiplier={payload['selected']['bias_multiplier']:.2f}、residual scale={payload['selected']['scale_temperature']:.2f}、climatology mix={payload['selected']['climate_mix']:.2f}。",
         f"secondary holdout 上 G logloss={primary['G_robust_tail']['logloss']:.4f}，F v2={primary['F_v2']['logloss']:.4f}，paired Δ={g_f['delta']:+.4f}（95% CI {g_f['ci_low']:+.4f}..{g_f['ci_high']:+.4f}）。相对 market Δ={g_m['delta']:+.4f}（{g_m['ci_low']:+.4f}..{g_m['ci_high']:+.4f}）。",
         "",
-        "动作：冻结 G 为下一批 clean exact-run D-1 forward challenger，不再读取这 9 个日期调参数。它改善了 location、RPS 与 calibration，但 logloss 显著性尚未过门且仍输 market，因此不运行 market residual、不改 live。",
+        "动作：冻结 G 为下一批 clean exact-run D-1 forward challenger，不再读取这 9 个日期调参数。它改善了 location、RPS 与 calibration，但 logloss 显著性尚未过门且仍输 market；本轮 market-offset 只作 legacy exploratory，不充当 clean gate，也不改 live。",
         "",
         "| arm | logloss | Brier | RPS | winner P | top-1 |",
         "|---|---:|---:|---:|---:|---:|",
@@ -292,10 +451,33 @@ def render_report(payload: dict[str, Any]) -> str:
         "- 改动只作用于 weather distribution；没有使用 market、first_seen reaction、ROI 或价格切片选参数。",
         "- 原 9-date holdout 在提出本机制前已被查看，因此本报告只算 secondary exploratory validation，不重新标成 frozen forward。",
         f"- K={payload['candidate_count']} 未做多重检验校正；这也是必须停止 legacy 调参并转 clean forward 的原因。",
-        "- 参数必须冻结到新 exact-run collector 的 settlement-complete target dates；clean forward 通过前不运行 market residual。",
+        "- 参数必须冻结到新 exact-run collector 的 settlement-complete target dates；clean forward 通过前，本轮 legacy market-offset 只能作为机制验证，不能升级为正式 residual gate。",
         "- 8环中本轮覆盖统计推断、概率分布、同分母 market baseline；不覆盖执行、容量、fills 或 live 动作。",
         "",
         "冻结参数见 [`2026-08-05-d1-weather-only-clean-forward-freeze-v1.json`](2026-08-05-d1-weather-only-clean-forward-freeze-v1.json)。",
+        "",
+        "## Market-offset exploratory",
+        "",
+        "固定同一批 rows、labels 和 reconstructed market distribution，使用 `log P_post = log P_market + beta * (log P_weather - log P_market) - log Z`。beta=0 严格退化为 M0 market；beta 只在前 18 个开发日期选择。M3 的 source 与 city×source beta 进一步向 global beta 强收缩。",
+        "",
+        f"开发集选择 global beta={payload['market_offset']['global_beta']:.3f}；以下仍是已经看过的 9-date secondary holdout，不是 clean forward。",
+        "",
+        "| arm | logloss | Brier | RPS | winner P | top-1 | Δlogloss vs M0 (95% CI) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for arm in ("M0_market", "M1_weather", "M2_global_offset", "M3_partial_offset"):
+        row = market_scores[arm]
+        if arm == "M0_market":
+            delta_text = "reference"
+        else:
+            delta = market_deltas[(arm, "logloss")]
+            delta_text = f"{delta['delta']:+.4f} ({delta['ci_low']:+.4f}..{delta['ci_high']:+.4f})"
+        lines.append(
+            f"| {arm} | {row['logloss']:.4f} | {row['brier']:.4f} | {row['rps']:.4f} | {row['winner_probability']:.3f} | {row['top1_accuracy']:.1%} | {delta_text} |"
+        )
+    lines += [
+        "",
+        "判定只看 M2/M3 相对 M0：若 paired CI 未整体低于 0，就没有可确认的 market residual；weather-only 相对自身旧版的改善不能替代这个条件。当前 market 是 reconstructed/non-executable probability baseline，本轮不计算 ask、fee、slippage、depth 或 ROI。",
         "",
     ]
     return "\n".join(lines)
@@ -340,6 +522,18 @@ def main(argv: list[str] | None = None) -> int:
     primary_scores = _summary(holdout_scored)
     primary_deltas = _paired(holdout_scored)
     diagnostics = v2.probability_diagnostics(holdout_scored)
+    development_vectors = weather_vectors(development, fitted, selected)
+    holdout_vectors = weather_vectors(holdout, fitted, selected)
+    global_beta, market_beta_candidates = best_market_beta(development, development_vectors)
+    partial_betas = fit_partial_market_betas(development, development_vectors, global_beta)
+    market_scored = score_market_models(
+        holdout,
+        holdout_vectors,
+        global_beta=global_beta,
+        partial=partial_betas,
+    )
+    market_scores = _summary(market_scored)
+    market_deltas = market_paired(market_scored)
     payload = {
         "schema_version": "d1_legacy_weather_only_robust_tail_v1",
         "candidate_count": int(len(candidates)),
@@ -356,7 +550,15 @@ def main(argv: list[str] | None = None) -> int:
         "primary_diagnostics": {row["arm"]: row for row in diagnostics.to_dict("records")},
         "secondary_policy_scores": _summary(secondary_scored).to_dict("records"),
         "evidence_status": "legacy_secondary_validation_not_clean_forward",
-        "market_residual": "not_run_by_contract",
+        "market_offset": {
+            "status": "legacy_exploratory_only_weather_gate_not_clean",
+            "equation": "log_P_post=log_P_market+beta*(log_P_weather-log_P_market)-log_Z",
+            "global_beta": global_beta,
+            "partial_betas": partial_betas,
+            "holdout_scores": market_scores.to_dict("records"),
+            "holdout_deltas_vs_market": market_deltas.to_dict("records"),
+        },
+        "market_residual": "legacy_exploratory_only_not_clean_gate",
         "production": {"live_action": "none", "orders_changed": 0},
     }
     args.out.mkdir(parents=True, exist_ok=True)
@@ -366,6 +568,10 @@ def main(argv: list[str] | None = None) -> int:
     primary_deltas.to_csv(args.out / "primary_holdout_paired_bootstrap.csv", index=False)
     diagnostics.to_csv(args.out / "primary_holdout_diagnostics.csv", index=False)
     _summary(secondary_scored).to_csv(args.out / "secondary_policy_scores.csv", index=False)
+    market_beta_candidates.to_csv(args.out / "market_offset_development_beta_grid.csv", index=False)
+    market_scored.to_csv(args.out / "market_offset_holdout_scored.csv", index=False)
+    market_scores.to_csv(args.out / "market_offset_holdout_scores.csv", index=False)
+    market_deltas.to_csv(args.out / "market_offset_holdout_paired_bootstrap.csv", index=False)
     (args.out / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     args.report.write_text(render_report(payload), encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False))
