@@ -515,7 +515,7 @@ def render_report(summary: dict[str, Any], score_table: pd.DataFrame, delta_tabl
         "",
         "## 下一步",
         "",
-        "以 pooled 作为冻结 baseline，hierarchical 作为 challenger。下一版不在这 27 天上继续调 shrinkage λ，而是先补干净的 D-1/D-2 forecast run archive，并在同一骨架上加入 lead/run-age、calendar season、multi-model mean/spread；随后训练 `weather-only` 和 `market + weather residual` 两个头，做新的 frozen forward。",
+        "不冻结任何 probability artifact。pooled 只保留为 temporary reference，hierarchical/city-only 都是失败诊断。下一版不在这 27 天上继续调 shrinkage λ，而是先补干净的 D-1/D-2 forecast run archive；随后以 pooled residual shape 为底，只对 city×source mean bias 和必要的 variance 做收缩，再加入 lead/run-age、calendar season、multi-model mean/spread，训练 `weather-only` 和 `market + weather residual` 两个头。只有候选先接近或打赢同 rows market，才预注册新的 frozen forward。",
         "",
     ]
     return "\n".join(lines)
