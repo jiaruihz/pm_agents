@@ -46,8 +46,10 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.strategies.weather_edge_v1.ids import make_settlement_id
@@ -60,6 +62,7 @@ from weather_dashboard.ingest.settlement_outcomes import (
     settlement_status as outcome_settlement_status,
     stored_final_price,
 )
+from weather_data_feed.source_lineage import producer_build_id
 
 DEFAULT_PMH_DIR = "runtime/weather_edge_v1/market_data/cache/pm_history"
 
@@ -148,6 +151,7 @@ def ingest(
         "no_signal_match": 0, "dry_run": dry_run,
         "start_date": start_date, "end_date": end_date,
     }
+    build_id, _ = producer_build_id()
 
     for f in files:
         parsed = _parse_filename(f.name)
@@ -156,10 +160,16 @@ def ingest(
         city, date = parsed
         stats["files_seen"] += 1
         try:
-            d = json.load(open(f))
+            raw_bytes = f.read_bytes()
+            d = json.loads(raw_bytes)
         except Exception:
             stats["files_skipped_null"] += 1
             continue
+        source_payload_hash = hashlib.sha256(raw_bytes).hexdigest()
+        source_file_mtime_utc = datetime.fromtimestamp(
+            f.stat().st_mtime, tz=timezone.utc
+        ).isoformat()
+        canonical_available_at_utc = datetime.now(timezone.utc).isoformat()
         if not isinstance(d, dict) or not d.get("brackets"):
             stats["files_skipped_null"] += 1
             continue
@@ -187,6 +197,10 @@ def ingest(
                 bracket=b,
                 condition_id=condition_id,
                 market_id=market_id,
+                source_payload_hash=source_payload_hash,
+                source_file_mtime_utc=source_file_mtime_utc,
+                available_at_utc=canonical_available_at_utc,
+                producer_build=build_id,
             )
             if outcome:
                 stats["settlement_outcomes_inserted"] += insert_settlement_outcome(conn, outcome)

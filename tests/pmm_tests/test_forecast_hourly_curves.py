@@ -74,6 +74,9 @@ def test_curve_capture_is_immutable_and_preserves_exact_hash_first_seen(tmp_path
     assert row["forecast_run_ts_utc"] is None
     assert row["forecast_run_lineage_status"] == "source_response_does_not_expose_run_timestamp"
     assert row["forecast_model_fallback"] is False
+    assert len(row["batch_capture_id"]) == 64
+    assert row["source_capture_lineage_schema_version"] == "weather_source_capture_lineage_v1"
+    assert row["producer_build_lineage_status"] in {"known", "unavailable"}
     assert row["hourly_curve"] == [
         {"time_local": "2026-07-11T00:00", "temperature_f": 70.0},
         {"time_local": "2026-07-11T02:00", "temperature_f": 72.125},

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
+
 CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS settlement_outcomes (
     settlement_outcome_id TEXT PRIMARY KEY,
@@ -32,6 +33,12 @@ CREATE TABLE IF NOT EXISTS settlement_outcomes (
     settlement_status TEXT NOT NULL CHECK (settlement_status IN ('settled','missing_event','missing_bracket')),
     question TEXT,
     payload TEXT,
+    source_payload_hash TEXT,
+    source_file_mtime_utc TEXT,
+    first_seen_at_utc TEXT,
+    available_at_utc TEXT,
+    pit_lineage_class TEXT,
+    producer_build_id TEXT,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_settlement_outcomes_city_bracket
@@ -69,11 +76,29 @@ OUTCOME_COLUMNS = (
     "settlement_status",
     "question",
     "payload",
+    "source_payload_hash",
+    "source_file_mtime_utc",
+    "first_seen_at_utc",
+    "available_at_utc",
+    "pit_lineage_class",
+    "producer_build_id",
 )
 
 
 def ensure_settlement_outcomes_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(CREATE_SQL)
+    existing = {str(row[1]) for row in conn.execute("PRAGMA table_info(settlement_outcomes)")}
+    additions = {
+        "source_payload_hash": "TEXT",
+        "source_file_mtime_utc": "TEXT",
+        "first_seen_at_utc": "TEXT",
+        "available_at_utc": "TEXT",
+        "pit_lineage_class": "TEXT",
+        "producer_build_id": "TEXT",
+    }
+    for column, column_type in additions.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE settlement_outcomes ADD COLUMN {column} {column_type}")
 
 
 def make_settlement_outcome_id(source_system: str, city: str, target_date: str, bracket: str) -> str:
@@ -124,6 +149,10 @@ def outcome_from_pm_history_bracket(
     bracket: dict[str, Any],
     condition_id: str | None,
     market_id: str | None,
+    source_payload_hash: str | None = None,
+    source_file_mtime_utc: str | None = None,
+    available_at_utc: str | None = None,
+    producer_build: str | None = None,
 ) -> dict[str, Any] | None:
     label = str(bracket.get("label") or "").strip()
     if not label or bracket.get("final_price") is None:
@@ -150,6 +179,14 @@ def outcome_from_pm_history_bracket(
         "settlement_status": settlement_status(raw_price),
         "question": bracket.get("question"),
         "payload": json.dumps(payload, sort_keys=True) if payload else None,
+        "source_payload_hash": source_payload_hash,
+        "source_file_mtime_utc": source_file_mtime_utc,
+        # pm_history is an archive/rebuild source. Its filesystem mtime must
+        # never be promoted to the original collector first-seen clock.
+        "first_seen_at_utc": None,
+        "available_at_utc": available_at_utc,
+        "pit_lineage_class": "late_backfill_first_seen_unknown",
+        "producer_build_id": producer_build,
     }
 
 

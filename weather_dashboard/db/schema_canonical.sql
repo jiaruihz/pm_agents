@@ -207,6 +207,12 @@ CREATE TABLE IF NOT EXISTS settlement_outcomes (
     settlement_status TEXT NOT NULL CHECK (settlement_status IN ('settled','missing_event','missing_bracket')),
     question TEXT,
     payload TEXT,
+    source_payload_hash TEXT,
+    source_file_mtime_utc TEXT,
+    first_seen_at_utc TEXT,
+    available_at_utc TEXT,
+    pit_lineage_class TEXT,
+    producer_build_id TEXT,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 

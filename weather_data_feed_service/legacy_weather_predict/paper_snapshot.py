@@ -57,6 +57,10 @@ from weather_data_feed.forecast_hourly_curves import (
     summarize_source_models,
     write_forecast_hourly_curve_capture,
 )
+from weather_data_feed.assigned_forecast_models import CITY_MODEL
+from weather_data_feed.information_events import canonical_json_hash
+from weather_data_feed.market_ladder_lineage import annotate_market_ladder_snapshot
+from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
 
 PM_GAMMA_URL = "https://gamma-api.polymarket.com"
@@ -70,6 +74,7 @@ PARTIAL_OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots_partial"
 PARTIAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ORDERBOOK_OUTPUT_DIR = OUTPUT_ROOT / "orderbook_snapshots"
 ORDERBOOK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(Path(__file__).resolve().parents[2])
 PM_HTTP_TIMEOUT = httpx.Timeout(
     connect=float(os.environ.get("WEATHER_DATA_FEED_PM_CONNECT_TIMEOUT_SEC", "2.0")),
     read=float(os.environ.get("WEATHER_DATA_FEED_PM_READ_TIMEOUT_SEC", "4.0")),
@@ -493,6 +498,27 @@ def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_
 
 def append_orderbook_archive(path, row):
     path.parent.mkdir(parents=True, exist_ok=True)
+    row = dict(row)
+    raw_payload_hash = canonical_json_hash(row.get("raw") or {})
+    row.setdefault("schema_version", "weather_orderbook_capture_v2")
+    row.setdefault("producer", "weather_data_feed_service.legacy_weather_predict.paper_snapshot")
+    row.setdefault("producer_build_id", PRODUCER_BUILD_ID)
+    row.setdefault("producer_build_id_basis", PRODUCER_BUILD_ID_BASIS)
+    row.setdefault("raw_payload_hash", raw_payload_hash)
+    row.setdefault(
+        "book_capture_id",
+        canonical_json_hash(
+            {
+                "token_id": row.get("token_id"),
+                "fetched_at_utc": row.get("fetched_at_utc"),
+                "raw_payload_hash": raw_payload_hash,
+            }
+        ),
+    )
+    row.setdefault("detected_at_utc", row.get("fetched_at_utc"))
+    row.setdefault("first_seen_at_utc", row.get("fetched_at_utc"))
+    row.setdefault("available_at_utc", row.get("fetched_at_utc"))
+    row.setdefault("source_lineage_status", "collector_exact_orderbook_response")
     with gzip.open(path, "at", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
@@ -658,52 +684,6 @@ def prefixed_book_fields(prefix, token_id, book, archive_path):
 
 # Per-city best model based on v4 calibration RMSE comparison
 # Source: calibration_results_v4.json, 354 days × 51 cities
-CITY_MODEL = {
-    "Amsterdam": "ecmwf",
-    "Ankara": "ecmwf",
-    "Atlanta": "gfs",
-    "BuenosAires": "ecmwf",
-    "Busan": "ecmwf",
-    "CapeTown": "ecmwf",
-    "Chengdu": "ecmwf",
-    "Chicago": "gfs", "Miami": "gfs", "Austin": "gfs", "NYC": "gfs",
-    "Chongqing": "ecmwf",
-    "Dallas": "ecmwf",
-    "Denver": "gfs",
-    "Guangzhou": "gfs",
-    "Helsinki": "ecmwf",
-    "HongKong": "ecmwf",
-    "Houston": "gfs",
-    "Istanbul": "ecmwf",
-    "Jakarta": "ecmwf",
-    "Jeddah": "ecmwf",
-    "Karachi": "ecmwf",
-    "KualaLumpur": "ecmwf",
-    "LA": "gfs", "Boston": "gfs", "Phoenix": "gfs",
-    "Lagos": "ecmwf",
-    "London": "ecmwf", "Madrid": "ecmwf", "Warsaw": "ecmwf",
-    "Lucknow": "ecmwf",
-    "Manila": "gfs",
-    "MexicoCity": "ecmwf",
-    "Milan": "ecmwf",
-    "Minneapolis": "gfs",
-    "Moscow": "ecmwf",
-    "Munich": "ecmwf",
-    "PanamaCity": "gfs",
-    "Beijing": "ecmwf", "Seoul": "ecmwf",
-    "Paris": "gfs", "Tokyo": "gfs", "Shanghai": "gfs",
-    "SanFrancisco": "ecmwf",
-    "SaoPaulo": "ecmwf",
-    "Seattle": "gfs",
-    "Shenzhen": "ecmwf",
-    "Singapore": "gfs",
-    "Taipei": "gfs",
-    "TelAviv": "gfs",
-    "Wellington": "gfs",
-    "Wuhan": "ecmwf",
-}
-
-
 def _forecast_values_hash(hourly_curve):
     payload = list(hourly_curve or [])
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -1897,6 +1877,11 @@ def main():
     if publish_quality["publishable"]:
         forecast_curve_archive = write_forecast_hourly_curve_capture(OUTPUT_ROOT, forecast_curve_rows)
     stamp_snapshot_availability(output)
+    annotate_market_ladder_snapshot(
+        output,
+        producer="weather_data_feed_service.legacy_weather_predict.paper_snapshot",
+        producer_build_id=PRODUCER_BUILD_ID,
+    )
     # The final snapshot path is the batch commit marker. Orderbook archive and
     # forecast curves must be durable before live consumers can discover it.
     publish_json_atomic(out_file, output)

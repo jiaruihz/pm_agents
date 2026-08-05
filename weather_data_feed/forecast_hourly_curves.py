@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from weather_data_feed.information_events import build_information_event
+from weather_data_feed.source_lineage import (
+    build_source_capture_lineage,
+    capture_batch_id,
+    producer_build_id,
+)
 
 
 FORECAST_HOURLY_CURVE_SCHEMA_VERSION = "forecast_hourly_curve_v4"
@@ -290,6 +295,16 @@ def write_forecast_hourly_curve_capture(
     # This is intentionally sampled at the capture publication boundary, not
     # when any individual forecast fetch completed.
     available_at = (available_at_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    build_id, build_basis = producer_build_id()
+    batch_id = capture_batch_id(
+        producer="weather_data_feed.forecast_hourly_curves",
+        captured_at_utc=_utc_string(snapshot_at),
+        scope={
+            "cities": sorted({str(row.get("city") or "") for row in source_rows}),
+            "target_dates": sorted({str(row.get("target_date") or "") for row in source_rows}),
+        },
+        raw_payload_hashes=[str(row.get("forecast_values_hash") or "") for row in source_rows],
+    )
     payload_rows: list[dict[str, Any]] = []
     for row, detected_at, historical_first_seen in lineage_rows:
         key = _first_seen_key(row)
@@ -329,15 +344,34 @@ def write_forecast_hourly_curve_capture(
             material_state_change=material_state_change,
             raw_source_path=str(destination),
         )
+        source_capture = build_source_capture_lineage(
+            producer="weather_data_feed.forecast_hourly_curves",
+            producer_build=build_id,
+            capture_id=capture_id,
+            batch_capture_id=batch_id,
+            raw_payload_hash=str(row.get("forecast_values_hash") or "") or None,
+            source_event_ts_utc=row.get("forecast_run_ts_utc"),
+            source_fetch_end_utc=_utc_string(detected_at) if detected_at else None,
+            detected_at_utc=_utc_string(detected_at or observed_first_seen),
+            first_seen_at_utc=_utc_string(observed_first_seen),
+            available_at_utc=_utc_string(available_at),
+            lineage_status=str(
+                row.get("forecast_run_lineage_status")
+                or "source_response_does_not_expose_run_timestamp"
+            ),
+        )
         payload_rows.append(
             {
                 **row,
                 **information_event,
+                **source_capture,
                 "information_event_status": (
                     "material" if material_state_change else "non_material_duplicate_state"
                 ),
                 "schema_version": FORECAST_HOURLY_CURVE_SCHEMA_VERSION,
                 "capture_id": capture_id,
+                "batch_capture_id": batch_id,
+                "producer_build_id_basis": build_basis,
                 "available_at_utc": _utc_string(available_at),
                 "available_at_basis": "collector_publish_started_before_final_write_and_atomic_link",
                 "forecast_first_seen_utc": _utc_string(observed_first_seen),
