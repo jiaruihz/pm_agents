@@ -1,6 +1,6 @@
 # D-1 / D-2 跨城市 Tmax 概率研究总纲 v1
 
-Status: implementation in progress; no production deployment
+Status: contract implemented; coverage-only collector deployed; clean forward accumulating
 Updated: 2026-08-05
 Scope: strict first-seen/run-aware forecast contract, weather-only probability, conditional market residual and execution research
 
@@ -10,7 +10,7 @@ weather-only:
 significance=not_tested_on_clean_run-aware_history
 calibration=not_tested_on_clean_run-aware_history
 pooled_baseline=current pooled Normal retained as negative control
-forward=starts only after verified collector deployment and first complete untouched target date
+forward=collector_started_2026-08-05; waits_for_settlement_complete_untouched_target_dates
 
 market residual:
 baseline=normalized same-checkpoint full ladder
@@ -63,7 +63,7 @@ flowchart TD
 | 7. Frozen forward | 完全未参与选模的未来 target dates | 首要验收 | 独立积累 | 部署后首个完整 untouched date 才启动 |
 | 8. Market residual | market log-prob offset + strongly regularized weather delta | weather gate 后 | 当前不做 | posterior 与 market 同 rows 比较 |
 | 9. Trading | YES/NO/contiguous strip、fee、depth、slippage | probability gate 后 | 当前不做 | frozen executable EV |
-| 10. Production | collector 采集行为部署 | 共用 | 共用 | git-first；真实部署前取得明确确认 |
+| 10. Production | collector 采集行为部署 | 共用 | 共用 | 已获确认并 git-first 部署；coverage-only、0 order change |
 
 ## 3. Forecast lineage 合同
 
@@ -145,4 +145,6 @@ log P_post(i) = log P_market(i) + delta_i(weather features) - log Z
 
 现有 raw 已有大量 D-1/D-2 forecast versions、first-seen curve 和 D-1 full ladder，但 provider run timestamp 覆盖为 0；D-2 同期 market ladder 为 0。因此目前可以完成合同、parser、fixtures、one-shot probe、builder 与 blocked semantics，但不能把 legacy 历史包装成 clean run-aware A-G 结论。
 
-若 one-shot 证明 provider run 可采，下一步需要部署 collector 才能开始积累真正 frozen forward。部署将使用 `weather-strategy-deploy` 的 git-first 流程，并在改变真实 collector 行为前停下取得明确确认；不修改 live 策略、订单、city pool、sizing 或 execution policy。
+2026-08-05 已取得明确确认并通过 production controller 部署 `weather_forecast_run_capture_v1`。它每 30 分钟精确尝试最近四个 6h run candidate；每个请求独立、不可用即写 blocker，绝不 fallback 到其他 run。首轮已得到 `2026-08-04T12:00Z` 与 `18:00Z` 两个五模型完整 run，`2026-08-05T00:00Z` 为三模型 partial，`06:00Z` 当时尚 unavailable。采集只写 append-only research evidence，不修改 live 策略、订单、city pool、sizing 或 execution policy。
+
+与此同时，legacy 数据上的模型开发没有暂停：5561 条 long-history rows 用于训练，前 18 个 reconstructed target dates 只用于选 overlay，最后 9 个日期作为 legacy holdout。结果见 [D-1 legacy weather-only v2](2026-08-05-d1-legacy-weather-only-v2.md)。该结果用于确定 challenger，不计作本计划的 clean frozen forward。
