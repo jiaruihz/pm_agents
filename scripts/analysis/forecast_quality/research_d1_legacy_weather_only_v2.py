@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Train D-1 weather-only v2 challengers on legacy development evidence.
 
-This is explicitly not the clean run-aware forward.  Long historical daily
-cache trains A-E.  The first 18 reconstructed D-1 target dates select the F
+This is explicitly not the clean run-aware forward.  A policy-selected legacy
+daily-cache slice trains A-E.  The first 18 reconstructed D-1 target dates select the F
 ensemble/spread overlay, and the remaining dates are an untouched legacy
 holdout.  Market is evaluated on identical rows but never enters a weather
 model.
@@ -30,8 +30,19 @@ from scripts.analysis.forecast_quality import research_d1_cross_city_hierarchy_v
 
 DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_legacy_weather_only_v2"
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-05-d1-legacy-weather-only-v2.md"
+DEFAULT_ENRICHMENT_HISTORY = (
+    ROOT
+    / "docs/analysis/2026-07/generated/historical_forecast_enrichment_bias_v1/daily_error_rows.csv"
+)
 KERNEL_SD_F = 0.75
 EPS = 1e-8
+ENRICHMENT_AVAILABLE_DATE = "2026-07-08"
+HISTORY_POLICIES = (
+    "summer_best",
+    "all_season_best",
+    "harmonic_all_season_best",
+    "all_season_all_models",
+)
 
 
 def _unit_values(values_f: np.ndarray, unit: str) -> np.ndarray:
@@ -61,13 +72,78 @@ def empirical_vector(
     return vector / vector.sum()
 
 
-def select_hierarchy_lambdas(train: pd.DataFrame) -> dict[str, float]:
+def _harmonic_design(months: np.ndarray) -> np.ndarray:
+    angle = 2.0 * np.pi * (np.asarray(months, dtype=float) - 1.0) / 12.0
+    return np.column_stack(
+        [
+            np.ones(len(angle)),
+            np.sin(angle),
+            np.cos(angle),
+            np.sin(2.0 * angle),
+            np.cos(2.0 * angle),
+        ]
+    )
+
+
+def fit_season_coefficients(frame: pd.DataFrame) -> dict[str, np.ndarray]:
+    coefficients: dict[str, np.ndarray] = {}
+    for model, group in frame.groupby("model"):
+        design = _harmonic_design(group["month_num"].to_numpy(dtype=float))
+        target = group["error_f_actual_minus_forecast"].to_numpy(dtype=float)
+        coefficients[str(model)] = np.linalg.lstsq(design, target, rcond=None)[0]
+    return coefficients
+
+
+def season_center(model: str, month: int, coefficients: dict[str, np.ndarray]) -> float:
+    if model not in coefficients:
+        return 0.0
+    return float(_harmonic_design(np.asarray([month], dtype=float))[0] @ coefficients[model])
+
+
+def prepare_history(
+    history: pd.DataFrame,
+    test_start: str,
+    history_policy: str,
+) -> tuple[pd.DataFrame, bool]:
+    if history_policy not in HISTORY_POLICIES:
+        raise ValueError(f"unsupported history_policy={history_policy}")
+    use_all_models = history_policy == "all_season_all_models"
+    train = history.loc[
+        (history["date"] < test_start)
+        & (history["is_best_model"] if not use_all_models else True)
+    ].copy()
+    seasonal = history_policy == "harmonic_all_season_best"
+    if history_policy == "summer_best":
+        train = train.loc[train["month_num"].isin([5, 6, 7, 8])].copy()
+    return train, seasonal
+
+
+def _attach_hierarchy_error(
+    frame: pd.DataFrame,
+    coefficients: dict[str, np.ndarray],
+) -> pd.DataFrame:
+    result = frame.copy()
+    result["hierarchy_error"] = [
+        float(error) - season_center(str(model), int(month), coefficients)
+        for error, model, month in zip(
+            result["error_f_actual_minus_forecast"],
+            result["model"],
+            result["month_num"],
+        )
+    ]
+    return result
+
+
+def select_hierarchy_lambdas(train: pd.DataFrame, *, seasonal: bool = False) -> dict[str, float]:
     fit = train.loc[train["date"] < "2026-01-01"].copy()
     validation = train.loc[train["date"] >= "2026-01-01"].copy()
     if fit.empty or validation.empty:
         raise ValueError("history cannot support pre-2026 hierarchy validation")
-    global_stats = fit.groupby("model")["error_f_actual_minus_forecast"].agg(["mean", "std"])
-    city_stats = fit.groupby(["city", "model"])["error_f_actual_minus_forecast"].agg(["count", "mean", "std"])
+    coefficients = fit_season_coefficients(fit) if seasonal else {}
+    fit = _attach_hierarchy_error(fit, coefficients)
+    validation = _attach_hierarchy_error(validation, coefficients)
+    global_stats = fit.groupby("model")["hierarchy_error"].agg(["mean", "std"])
+    city_stats = fit.groupby(["city", "model"])["hierarchy_error"].agg(["count", "mean", "std"])
     candidates: list[dict[str, float]] = []
     for center_lambda in (10.0, 30.0, 60.0, 120.0, 240.0):
         for scale_lambda in (60.0, 120.0, 240.0, 480.0):
@@ -85,7 +161,7 @@ def select_hierarchy_lambdas(train: pd.DataFrame) -> dict[str, float]:
                 city_sd = max(float(city["std"]), 0.5)
                 global_sd = max(float(glob["std"]), 0.5)
                 scale = global_sd * math.exp(scale_weight * math.log(city_sd / global_sd))
-                error = float(row.error_f_actual_minus_forecast)
+                error = float(row.hierarchy_error)
                 losses.append(math.log(scale) + 0.5 * ((error - center) / scale) ** 2)
             candidates.append(
                 {
@@ -97,20 +173,33 @@ def select_hierarchy_lambdas(train: pd.DataFrame) -> dict[str, float]:
     return min(candidates, key=lambda row: row["validation_nll"])
 
 
-def fit_long_history(history: pd.DataFrame, test_start: str) -> dict[str, Any]:
-    train = history.loc[
-        history["is_best_model"]
-        & (history["date"] < test_start)
-        & history["month_num"].isin([5, 6, 7, 8])
-    ].copy()
-    selected = select_hierarchy_lambdas(train)
+def fit_legacy_history_slice(
+    history: pd.DataFrame,
+    test_start: str,
+    *,
+    history_policy: str = "summer_best",
+) -> dict[str, Any]:
+    train, seasonal = prepare_history(history, test_start, history_policy)
+    assigned_pairs = set(
+        map(
+            tuple,
+            history.loc[history["is_best_model"], ["city", "model"]]
+            .drop_duplicates()
+            .itertuples(index=False, name=None),
+        )
+    )
+    selected = select_hierarchy_lambdas(train, seasonal=seasonal)
+    coefficients = fit_season_coefficients(train) if seasonal else {}
+    train = _attach_hierarchy_error(train, coefficients)
     global_errors = {
-        model: group["error_f_actual_minus_forecast"].to_numpy(dtype=float)
+        model: group["hierarchy_error"].to_numpy(dtype=float)
         for model, group in train.groupby("model")
     }
-    city_stats = train.groupby(["city", "model"])["error_f_actual_minus_forecast"].agg(["count", "mean", "std"])
+    city_stats = train.groupby(["city", "model"])["hierarchy_error"].agg(["count", "mean", "std"])
     specs: dict[str, Any] = {}
     for (city, model), city_row in city_stats.iterrows():
+        if (city, model) not in assigned_pairs:
+            continue
         errors = global_errors[model]
         global_mean = float(np.mean(errors))
         global_sd = max(float(np.std(errors, ddof=1)), 0.5)
@@ -130,23 +219,140 @@ def fit_long_history(history: pd.DataFrame, test_start: str) -> dict[str, Any]:
             "partial_scale": scale,
             "partial_errors": center + scale * standardized_shape,
             "train_rows": int(n),
+            "season_coefficients": coefficients.get(str(model)),
         }
     climatology = (
         train[["city", "date", "actual_max_f"]]
         .drop_duplicates(["city", "date"])
         .assign(month=lambda frame: pd.to_datetime(frame["date"]).dt.month)
     )
-    return {"train": train, "specs": specs, "climatology": climatology, "lambda_selection": selected}
+    return {
+        "train": train,
+        "specs": specs,
+        "climatology": climatology,
+        "lambda_selection": selected,
+        "history_policy": history_policy,
+        "seasonal_harmonic": seasonal,
+    }
+
+
+# Compatibility for the locked robust-tail W0 runner and historical callers.
+fit_long_history = fit_legacy_history_slice
 
 
 def attach_multi_model(states: list[dict[str, Any]], forecasts: pd.DataFrame) -> None:
     grouped = forecasts.groupby("snapshot_key")["forecast_max_f"].agg(["median", "mean", "min", "max"])
     grouped["spread"] = grouped["max"] - grouped["min"]
+    model_values = {
+        str(snapshot_key): {
+            str(row.model_key): float(row.forecast_max_f)
+            for row in group.itertuples(index=False)
+        }
+        for snapshot_key, group in forecasts.groupby("snapshot_key")
+    }
     for state in states:
         row = grouped.loc[state["snapshot_key"]]
         state["ensemble_median_f"] = float(row["median"])
         state["ensemble_mean_f"] = float(row["mean"])
         state["model_spread_f"] = float(row["spread"])
+        state["model_values_f"] = model_values[str(state["snapshot_key"])]
+
+
+def select_enrichment_lambdas(history: pd.DataFrame) -> dict[str, float]:
+    dates = sorted(history["target_date"].astype(str).unique())
+    split = max(1, int(len(dates) * 0.75))
+    fit_dates = set(dates[:split])
+    fit = history.loc[history["target_date"].astype(str).isin(fit_dates)].copy()
+    validation = history.loc[~history["target_date"].astype(str).isin(fit_dates)].copy()
+    global_stats = fit.groupby("model_key")["error_f"].agg(["mean", "std"])
+    city_stats = fit.groupby(["city", "model_key"])["error_f"].agg(["count", "mean", "std"])
+    candidates: list[dict[str, float]] = []
+    for center_lambda in (10.0, 30.0, 60.0, 120.0):
+        for scale_lambda in (60.0, 120.0, 240.0, 480.0):
+            losses: list[float] = []
+            for row in validation.itertuples(index=False):
+                key = (row.city, row.model_key)
+                if key not in city_stats.index or row.model_key not in global_stats.index:
+                    continue
+                city = city_stats.loc[key]
+                glob = global_stats.loc[row.model_key]
+                n = float(city["count"])
+                center_weight = n / (n + center_lambda)
+                scale_weight = n / (n + scale_lambda)
+                center = float(glob["mean"]) + center_weight * (
+                    float(city["mean"]) - float(glob["mean"])
+                )
+                global_sd = max(float(glob["std"]), 0.5)
+                city_sd = max(float(city["std"]), 0.5)
+                scale = global_sd * math.exp(scale_weight * math.log(city_sd / global_sd))
+                losses.append(math.log(scale) + 0.5 * ((float(row.error_f) - center) / scale) ** 2)
+            candidates.append(
+                {
+                    "center_lambda": center_lambda,
+                    "scale_lambda": scale_lambda,
+                    "validation_nll": float(np.mean(losses)),
+                    "fit_dates": len(fit_dates),
+                    "validation_dates": len(dates) - len(fit_dates),
+                }
+            )
+    return min(candidates, key=lambda row: row["validation_nll"])
+
+
+def fit_enrichment_history(history: pd.DataFrame) -> dict[str, Any]:
+    selected = select_enrichment_lambdas(history)
+    global_errors = {
+        str(model): group["error_f"].to_numpy(dtype=float)
+        for model, group in history.groupby("model_key")
+    }
+    city_stats = history.groupby(["city", "model_key"])["error_f"].agg(
+        ["count", "mean", "std"]
+    )
+    specs: dict[tuple[str, str], dict[str, Any]] = {}
+    for (city, model), row in city_stats.iterrows():
+        errors = global_errors[str(model)]
+        global_mean = float(np.mean(errors))
+        global_sd = max(float(np.std(errors, ddof=1)), 0.5)
+        n = float(row["count"])
+        center_weight = n / (n + selected["center_lambda"])
+        scale_weight = n / (n + selected["scale_lambda"])
+        center = global_mean + center_weight * (float(row["mean"]) - global_mean)
+        city_sd = max(float(row["std"]), 0.5)
+        scale = global_sd * math.exp(scale_weight * math.log(city_sd / global_sd))
+        specs[(str(city), str(model))] = {
+            "errors": center + scale * ((errors - global_mean) / global_sd),
+            "rows": int(n),
+        }
+    return {
+        "rows": int(len(history)),
+        "dates": int(history["target_date"].nunique()),
+        "cities": int(history["city"].nunique()),
+        "models": int(history["model_key"].nunique()),
+        "lambda_selection": selected,
+        "specs": specs,
+        "global_errors": global_errors,
+    }
+
+
+def enrichment_vector(
+    state: dict[str, Any],
+    fitted: dict[str, Any],
+) -> np.ndarray | None:
+    samples: list[np.ndarray] = []
+    for model, forecast in state["model_values_f"].items():
+        spec = fitted["specs"].get((state["city"], model))
+        errors = spec["errors"] if spec else fitted["global_errors"].get(model)
+        if errors is not None and len(errors):
+            samples.append(float(forecast) + np.asarray(errors, dtype=float))
+    if not samples:
+        return None
+    # Equal source weight: a source with more archive rows must not silently
+    # receive more probability mass.
+    per_source = [
+        empirical_vector(state, values, kernel_sd_f=KERNEL_SD_F)
+        for values in samples
+    ]
+    vector = np.mean(np.vstack(per_source), axis=0)
+    return vector / vector.sum()
 
 
 def model_vectors(
@@ -155,6 +361,8 @@ def model_vectors(
     *,
     ensemble_weight: float,
     spread_beta: float,
+    only_arm: str | None = None,
+    enrichment_fitted: dict[str, Any] | None = None,
 ) -> dict[str, np.ndarray]:
     spec = fitted["specs"][state["city"]]
     month = int(pd.Timestamp(state["target_date"]).month)
@@ -168,33 +376,50 @@ def model_vectors(
     if len(climate_values) == 0:
         raise ValueError(f"missing climatology training rows for city={state['city']}")
     assigned = float(state["forecast_max_f"])
+    season_bias = season_center(
+        str(spec["model"]),
+        month,
+        ({str(spec["model"]): spec["season_coefficients"]} if spec["season_coefficients"] is not None else {}),
+    )
+    global_center = season_bias + float(spec["global_mean"])
+    partial_center = season_bias + float(spec["partial_center"])
+    global_errors = season_bias + np.asarray(spec["global_errors"], dtype=float)
+    partial_errors = season_bias + np.asarray(spec["partial_errors"], dtype=float)
     blended = (1.0 - ensemble_weight) * assigned + ensemble_weight * float(state["ensemble_median_f"])
     scale_multiplier = math.sqrt(
         1.0 + spread_beta * (float(state["model_spread_f"]) / max(spec["global_sd"], 0.5)) ** 2
     )
-    return {
+    f_vector = empirical_vector(
+        state,
+        blended
+        + partial_center
+        + (partial_errors - partial_center) * scale_multiplier,
+        kernel_sd_f=KERNEL_SD_F,
+    )
+    if only_arm == "F_ensemble_spread":
+        return {"F_ensemble_spread": f_vector}
+    result = {
         "A_climatology": empirical_vector(state, climate_values, kernel_sd_f=KERNEL_SD_F),
         "B_pooled_normal_zero_bias": base.probability_vector(state, 0.0, spec["global_sd"]),
-        "C_bias_corrected_pooled_normal": base.probability_vector(state, spec["global_mean"], spec["global_sd"]),
+        "C_bias_corrected_pooled_normal": base.probability_vector(state, global_center, spec["global_sd"]),
         "D_coherent_pooled_empirical": empirical_vector(
             state,
-            assigned + spec["global_errors"],
+            assigned + global_errors,
             kernel_sd_f=KERNEL_SD_F,
         ),
         "E_partial_hierarchy_v2": empirical_vector(
             state,
-            assigned + spec["partial_errors"],
+            assigned + partial_errors,
             kernel_sd_f=KERNEL_SD_F,
         ),
-        "F_ensemble_spread": empirical_vector(
-            state,
-            blended
-            + spec["partial_center"]
-            + (spec["partial_errors"] - spec["partial_center"]) * scale_multiplier,
-            kernel_sd_f=KERNEL_SD_F,
-        ),
+        "F_ensemble_spread": f_vector,
         "market": state["market_probs"],
     }
+    if enrichment_fitted is not None and str(state["target_date"]) > ENRICHMENT_AVAILABLE_DATE:
+        vector = enrichment_vector(state, enrichment_fitted)
+        if vector is not None:
+            result["H_archive_known_multimodel"] = vector
+    return result
 
 
 def score(
@@ -203,6 +428,8 @@ def score(
     *,
     ensemble_weight: float,
     spread_beta: float,
+    only_arm: str | None = None,
+    enrichment_fitted: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for state in states:
@@ -211,6 +438,8 @@ def score(
             fitted,
             ensemble_weight=ensemble_weight,
             spread_beta=spread_beta,
+            only_arm=only_arm,
+            enrichment_fitted=enrichment_fitted,
         ).items():
             logloss, brier, rps, winner_probability, top1 = base.score_vector(vector, state["winner_index"])
             rows.append(
@@ -244,7 +473,13 @@ def select_f_overlay(dev_states: list[dict[str, Any]], fitted: dict[str, Any]) -
     candidates: list[dict[str, float]] = []
     for weight in (0.0, 0.25, 0.5, 0.75, 1.0):
         for beta in (0.0, 0.25, 0.5, 1.0):
-            frame = score(dev_states, fitted, ensemble_weight=weight, spread_beta=beta)
+            frame = score(
+                dev_states,
+                fitted,
+                ensemble_weight=weight,
+                spread_beta=beta,
+                only_arm="F_ensemble_spread",
+            )
             value = float(
                 frame.loc[frame["arm"] == "F_ensemble_spread"]
                 .groupby("target_date")["logloss"]
@@ -336,7 +571,12 @@ def probability_diagnostics(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.DataFrame) -> str:
+def render_report(
+    summary: dict[str, Any],
+    scores: pd.DataFrame,
+    deltas: pd.DataFrame,
+    enrichment_scores: pd.DataFrame,
+) -> str:
     rows = {row.arm: row for row in scores.itertuples(index=False)}
     lines = [
         "# D-1 legacy weather-only v2 训练与 holdout 报告",
@@ -370,13 +610,41 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
     for arm in ("market", "A_climatology", "B_pooled_normal_zero_bias", "C_bias_corrected_pooled_normal", "D_coherent_pooled_empirical", "E_partial_hierarchy_v2", "F_ensemble_spread"):
         row = rows[arm]
         lines.append(f"| {arm} | {row.logloss:.4f} | {row.brier:.4f} | {row.rps:.4f} | {row.winner_probability:.3f} | {row.top1_accuracy:.1%} |")
+    if not enrichment_scores.empty:
+        enrichment_rows = {
+            row.arm: row for row in enrichment_scores.itertuples(index=False)
+        }
+        lines += [
+            "",
+            "## 7 月 8 日已知的 multi-model archive challenger",
+            "",
+            "这部分历史在 2026-07-08 才形成可审计 artifact，因此只评分 2026-07-16..23；没有回灌到更早 decision。它是 historical archive calibration，不是真实 D-1 run lineage。",
+            "",
+            "| arm | dates | states | logloss | Brier | RPS |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+        for arm in ("market", "F_ensemble_spread", "H_archive_known_multimodel"):
+            row = enrichment_rows[arm]
+            lines.append(
+                f"| {arm} | {row.dates} | {row.states} | {row.logloss:.4f} | {row.brier:.4f} | {row.rps:.4f} |"
+            )
+        h_vs_f = summary["archive_known_multimodel_comparison"]["h_vs_f_logloss"]
+        h_vs_market = summary["archive_known_multimodel_comparison"]["h_vs_market_logloss"]
+        lines += [
+            "",
+            f"- H vs F logloss Δ={h_vs_f['delta']:+.4f}（95% CI {h_vs_f['ci_low']:+.4f}..{h_vs_f['ci_high']:+.4f}）。",
+            f"- H vs market logloss Δ={h_vs_market['delta']:+.4f}（95% CI {h_vs_market['ci_low']:+.4f}..{h_vs_market['ci_high']:+.4f}）。",
+            "- H 对每个可用 source 等权；archive 行数多的 source 不会因此获得更大权重。",
+        ]
     lines += [
         "",
         "G（physical-width）没有进入本轮：旧 reconstruction 没有同 clock 的 rain/convective/cloud/wind 完整特征。缺特征记 coverage blocker，不用事后天气或 hard filter 补洞。",
         "",
         "## 训练合同",
         "",
-        f"- long history：{summary['training']['rows']} rows / {summary['training']['cities']} cities；lineage=`legacy_daily_cache_non_strict_pit_training_prior`。",
+        f"- legacy training slice：policy=`{summary['history_policy']}`，{summary['training']['rows']} rows / {summary['training']['cities']} cities / {summary['training']['dates']} dates；lineage=`legacy_daily_cache_non_strict_pit_training_prior`。",
+        f"- denominator funnel：artifact {summary['training']['denominator']['artifact_input']['rows']} rows / {summary['training']['denominator']['artifact_input']['cities']} cities → best-model {summary['training']['denominator']['best_model_only']['rows']} rows → summer slice {summary['training']['denominator']['best_model_summer_training_slice']['rows']} rows；这不是项目全部历史。",
+        f"- enrichment history：{summary['enrichment_history']['rows']} rows / {summary['enrichment_history']['cities']} cities / {summary['enrichment_history']['models']} models；lineage=`archive_known_2026-07-08_not_collector_exact_run`。",
         f"- partial hierarchy：center λ={summary['partial_hierarchy']['center_lambda']:.0f}，scale λ={summary['partial_hierarchy']['scale_lambda']:.0f}；只在历史 validation 选。",
         f"- F overlay：ensemble weight={summary['f_overlay']['ensemble_weight']:.2f}，spread beta={summary['f_overlay']['spread_beta']:.2f}；只在前 {summary['development']['dates']} 个 reconstructed dates 选。",
         f"- holdout：{summary['holdout']['start']}..{summary['holdout']['end']}；没有调 λ、weight 或 beta。",
@@ -391,7 +659,7 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "",
         "## 下一步",
         "",
-        "把本轮最好的 weather-only 结构作为 challenger 固定下来；新 exact-run collector 的首个完整 target date 之后，按相同代码重估/验证。只有 clean run-aware forward 通过 weather gate，才运行 market residual。",
+        "本轮只做 development challenger 比较，不因 legacy holdout 结果冻结参数。新 exact-run collector 积累 settlement 后，用预注册候选在 fresh frozen forward 重估；只有 clean run-aware forward 通过 weather gate，才运行 market residual。",
         "",
     ]
     return "\n".join(lines)
@@ -402,14 +670,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--forecasts", type=Path, default=base.DEFAULT_FORECASTS)
     parser.add_argument("--baskets", type=Path, default=base.DEFAULT_BASKETS)
     parser.add_argument("--history", type=Path, default=base.DEFAULT_HISTORY)
+    parser.add_argument("--enrichment-history", type=Path, default=DEFAULT_ENRICHMENT_HISTORY)
     parser.add_argument("--db", type=Path, default=base.DEFAULT_DB)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--history-policy", choices=HISTORY_POLICIES, default="summer_best")
     args = parser.parse_args(argv)
 
     forecasts = pd.read_csv(args.forecasts, dtype={"target_date": str})
     baskets = pd.read_csv(args.baskets, dtype={"target_date": str})
     history = pd.read_csv(args.history, dtype={"date": str})
+    enrichment_history = pd.read_csv(args.enrichment_history, dtype={"target_date": str})
     history["is_best_model"] = history["is_best_model"].astype(str).str.lower().isin(["true", "1"])
     history["month_num"] = pd.to_datetime(history["date"]).dt.month
     assignments = base.model_assignments(history)
@@ -422,13 +693,15 @@ def main(argv: list[str] | None = None) -> int:
     holdout_dates = set(target_dates[split:])
     development_states = [state for state in states if state["target_date"] in development_dates]
     holdout_states = [state for state in states if state["target_date"] in holdout_dates]
-    fitted = fit_long_history(history, min(target_dates))
+    fitted = fit_legacy_history_slice(history, min(target_dates), history_policy=args.history_policy)
+    enrichment_fitted = fit_enrichment_history(enrichment_history)
     overlay = select_f_overlay(development_states, fitted)
     scored = score(
         holdout_states,
         fitted,
         ensemble_weight=overlay["ensemble_weight"],
         spread_beta=overlay["spread_beta"],
+        enrichment_fitted=enrichment_fitted,
     )
     score_summary = date_equal(scored)
     diagnostics = probability_diagnostics(scored)
@@ -453,12 +726,46 @@ def main(argv: list[str] | None = None) -> int:
         f"相对 zero-bias pooled Δ={f_vs_b.delta:+.4f}（95% CI {f_vs_b.ci_low:+.4f}..{f_vs_b.ci_high:+.4f}）。"
         f"相对 market Δ={f_vs_market.delta:+.4f}（{f_vs_market.ci_low:+.4f}..{f_vs_market.ci_high:+.4f}）。"
     )
+    enrichment_dates = set(
+        scored.loc[scored["arm"] == "H_archive_known_multimodel", "target_date"]
+    )
+    if not enrichment_dates:
+        raise ValueError("archive-known multimodel challenger has no scoreable holdout dates")
+    enrichment_scored = scored.loc[scored["target_date"].isin(enrichment_dates)].copy()
+    enrichment_comparison = date_equal(enrichment_scored)
+    enrichment_deltas = pd.DataFrame(
+        [
+            bootstrap_delta(enrichment_scored, left, right, metric)
+            for metric in ("logloss", "brier", "rps")
+            for left, right in (
+                ("H_archive_known_multimodel", "F_ensemble_spread"),
+                ("H_archive_known_multimodel", "market"),
+            )
+        ]
+    )
+    h_vs_f_logloss = enrichment_deltas.loc[
+        (enrichment_deltas["metric"] == "logloss")
+        & (enrichment_deltas["left"] == "H_archive_known_multimodel")
+        & (enrichment_deltas["right"] == "F_ensemble_spread")
+    ].iloc[0]
+    h_vs_market_logloss = enrichment_deltas.loc[
+        (enrichment_deltas["metric"] == "logloss")
+        & (enrichment_deltas["left"] == "H_archive_known_multimodel")
+        & (enrichment_deltas["right"] == "market")
+    ].iloc[0]
     summary = {
         "schema_version": "d1_legacy_weather_only_v2",
+        "run_id": f"history_policy_{args.history_policy}",
+        "history_policy": args.history_policy,
         "training": {
             "lineage": "legacy_daily_cache_non_strict_pit_training_prior",
+            "denominator": base.history_denominator_funnel(
+                history, min(target_dates), input_artifact=args.history
+            ),
             "rows": int(len(fitted["train"])),
             "cities": int(fitted["train"]["city"].nunique()),
+            "dates": int(fitted["train"]["date"].nunique()),
+            "seasonal_harmonic": bool(fitted["seasonal_harmonic"]),
         },
         "development": {"dates": len(development_dates), "states": len(development_states)},
         "holdout": {
@@ -478,6 +785,21 @@ def main(argv: list[str] | None = None) -> int:
             "market_residual": "not_run_by_contract",
         },
         "physical_width_status": "blocked_missing_same_clock_legacy_features",
+        "enrichment_history": {
+            "lineage": "archive_known_2026-07-08_not_collector_exact_run",
+            "available_date": ENRICHMENT_AVAILABLE_DATE,
+            **{key: enrichment_fitted[key] for key in ("rows", "dates", "cities", "models")},
+            "lambda_selection": enrichment_fitted["lambda_selection"],
+        },
+        "archive_known_multimodel_comparison": {
+            "dates": len(enrichment_dates),
+            "start": min(enrichment_dates),
+            "end": max(enrichment_dates),
+            "h_vs_f_logloss": h_vs_f_logloss.to_dict(),
+            "h_vs_market_logloss": h_vs_market_logloss.to_dict(),
+            "scores": enrichment_comparison.to_dict("records"),
+            "paired_deltas": enrichment_deltas.to_dict("records"),
+        },
         "conclusion": conclusion,
         "scores": score_summary.to_dict("records"),
         "diagnostics": {row["arm"]: row for row in diagnostics.to_dict("records")},
@@ -486,11 +808,20 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     scored.to_csv(args.out / "holdout_scored_states.csv", index=False)
     score_summary.to_csv(args.out / "holdout_score_summary.csv", index=False)
+    enrichment_comparison.to_csv(
+        args.out / "archive_known_multimodel_score_summary.csv", index=False
+    )
+    enrichment_deltas.to_csv(
+        args.out / "archive_known_multimodel_paired_date_bootstrap.csv", index=False
+    )
     deltas.to_csv(args.out / "holdout_paired_date_bootstrap.csv", index=False)
     calibration(scored).to_csv(args.out / "holdout_calibration.csv", index=False)
     diagnostics.to_csv(args.out / "holdout_probability_diagnostics.csv", index=False)
     (args.out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    args.report.write_text(render_report(summary, score_summary, deltas), encoding="utf-8")
+    args.report.write_text(
+        render_report(summary, score_summary, deltas, enrichment_comparison),
+        encoding="utf-8",
+    )
     print(json.dumps(summary, ensure_ascii=False))
     return 0
 

@@ -1,0 +1,7 @@
+history_policy,training_rows,training_cities,training_dates,logloss,brier,rps,rung_ece,winner_probability_le_001,status
+summer_best,5561,39,253,1.976298,0.077102,0.090334,0.026940,2,legacy_reference_input
+all_season_best,16916,39,738,2.109598,0.081679,0.101831,0.050371,2,reject_point_estimate
+harmonic_all_season_best,16916,39,738,2.106018,0.081478,0.102056,0.041136,2,reject_point_estimate
+all_season_all_models,42705,52,738,2.112640,0.082025,0.102391,0.047947,1,reject_point_estimate
+robust_tail_W0,5561,39,253,1.850626,0.075056,0.082819,0.016042,1,retain_locked_legacy_reference
+market_same_rows,0,0,9,1.549745,0.068361,0.062394,0.019626,0,same_denominator_baseline
