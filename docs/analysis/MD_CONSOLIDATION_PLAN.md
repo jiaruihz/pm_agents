@@ -1,487 +1,68 @@
-# Weather Markdown Consolidation Plan
+# Weather 文档清理账本
 
 Status: current-reference
-Updated: 2026-06-11 Phase 4D batch-02
+Updated: 2026-08-06
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis living docs
+Used by: `WEATHER_DOCS_INDEX.md`; `docs/analysis/` living docs
 
-This is the Phase 4A/4B plan for Markdown cleanup. It does not move files. It records the content audit so later archive work is based on claims, data quality, and overlap rather than filename/date alone.
+这不是策略结论或又一份文档索引，只记录文档负债的清理口径、已完成批次和下一批队列。当前研究结论以
+`WEATHER_STRATEGY_REGISTRY.md`、对应家族 living doc 和最新 frozen/reset report 为准；生产状态以 controller、manifest
+和 raw/exchange evidence 为准。
 
-## Scope
+## 清理合同
 
-Reviewed set:
+整理一个历史报告前必须先读内容，并完成以下四步：
 
-- `docs/analysis/2026-05/*.md`
-- `docs/analysis/2026-06/*.md`
-- Existing living docs under `docs/analysis/*.md`
+1. 锁定 owner living doc，提取仍成立的机制结论、证据窗口和失效边界。
+2. 把耐久结论写入 owner；日期报告只保留当时 snapshot，不再声明“当前结论”。
+3. 检查文档链接、代码默认路径、测试和 artifact consumer；存在消费者就保留。
+4. 只有确认是重复、已被吸收或数字已失效，且用户已授权删除时，才删除/归档；`inconclusive` 和 dormant 不等于 dead。
 
-Not done in this phase:
+禁止用“移动文件”“改索引状态”冒充内容整合，也禁止把旧 PnL、旧城市排名或旧 live 标签复制进 living doc。
 
-- No Markdown files moved.
-- No JSON files moved or removed.
-- No historical report bodies rewritten.
-- No live strategy behavior changed.
+## 权威归属
 
-## Action Labels
-
-| Label | Meaning | Next step |
-|---|---|---|
-| `active-evidence` | Still useful as evidence if cited with its data window and caveats | Extract into owner living doc before archive |
-| `superseded-evidence` | Directional or historical value, but newer report has better data/contract | Keep until newer report is summarized, then archive |
-| `invalidated` | A key numeric conclusion is known wrong or unsafe due to near-binary, fill recovery, stale DB, old attribution, or bad denominator | Do not cite for current decisions except as failure history |
-| `duplicate` | Same or near-same conclusion as a newer/current report | Collapse into newest owner doc; archive duplicate after link check |
-| `design-plan` | Plan/handoff/research plan, not a factual result | Keep only if it still guides execution; otherwise archive after plan is absorbed |
-| `non-weather` | Copy-trade, OpenAI hardware, or other non-weather research | Move to separate non-weather/copy-trade area in a later phase |
-
-## Phase 4B Findings
-
-1. **May reports are mostly historical.** They include useful early lineage and design thinking, but most numeric conclusions are stale because current facts changed after near-binary settlement fixes, CLOB fill recovery, strategy-instance attribution fixes, and later June reruns.
-2. **June 3-6 reports split into two groups.** Reports that already carry near-binary/fill caveats can stay as failure-history evidence; reports with `missing_bracket`-dependent PnL, city rank, win-rate, or strategy rank should be treated as `invalidated`.
-3. **June 7-9 reports are the main active evidence pool.** They generally use CLOB coverage gates, rebuilt facts, and explicit verdict labels. Many still end at `inconclusive` or `shadow_candidate`, so they are evidence, not live action.
-4. **There is heavy duplication in city-day basket, live-period slices, blender, and range-RV reports.** The archive unit should be the older duplicate after its useful claim is merged into the living doc.
-5. **Non-weather research is now mixed into weather analysis.** `copy_trade_*` and OpenAI hardware branch research should leave weather analysis in a later phase.
-
-## Owner Map
-
-| Owner living doc | Pulls from |
+| 内容 | Owner |
 |---|---|
-| `model_vs_market.md` | probability calibration, raw degradation, calibration drift, forecast timing lineage, city model downgrade, model rank IC |
-| `market_structure_edge.md` | market structural edge, range-RV scanner, range-RV positive profiles |
-| `execution_quality.md` | executable edge, fill recovery, maker-queue comparisons, candidates-vs-fills, execution window filters |
-| `entry_timing.md` | entry timing edge, strict vs wide window, city x entry timing, timing baseline, timing plan |
-| `side_alpha.md` | side-band entry analysis, side-band alpha summary, side-band timing impact |
-| `city_selection.md` | city pool contribution, city pool side strategy, city-day basket family, city/model conditional edge |
-| `reheat_risk.md` | current reheat-risk branch owner: shared intraday observed-path model, current YES, higher NO carry, low-price YES reheat reversal |
-| `archive/analysis/observed_max_reheat_risk_legacy.md` | archival observed-max handoff, plan, residual physical-layer experiment; not current owner |
-| `sizing_entry_band.md` | entry band research, sizing and band distribution |
-| `blender_shadow.md` | blender backtests, overlays, edge v2 shadow, filtered operational base |
-| `live_performance.md` | live full research, live period slices, PnL curves, recent loss attribution, three strategy instances |
-| `account_reconcile.md` | account equity replay, UI account loss reconciliation, live account reconcile near-binary fix |
-| `data_integrity.md` | signal side flip, decision-window backfill, candidates-vs-fills linkage |
-
-## Detailed Audit Table
-
-### 2026-05
-
-| File | Owner | Audit status | Read finding | Next action |
-|---|---|---|---|---|
-| `2026-05-26-compare-UNKNOWN-vs-mid_price_core_v1.md` | `execution_quality.md` | `superseded-evidence` | Early UNKNOWN vs mid comparison; warns non-overlapping windows and has `missing_bracket` exposure. | Extract lineage lesson only; archive after execution living doc absorbs. |
-| `2026-05-27-compare-execution-algorithm-window-filter.md` | `execution_quality.md` | `superseded-evidence` | Useful explanation that entry window filter explains much of UNKNOWN delta; old paper/snapshot era. | Keep as historical mechanism evidence, not current PnL. |
-| `2026-05-27-compare-mid-price-vs-maker-queue.md` | `execution_quality.md` | `superseded-evidence` | Direction says maker_queue fill loss outweighed price improvement; sample tiny and pre-current execution. | Extract maker_queue retirement rationale. |
-| `2026-05-27-compare-strict-t24-vs-wide-window.md` | `entry_timing.md` | `superseded-evidence` | Early strict T24 vs wider window selector; old settlement and city pool. | Extract only timing hypothesis. |
-| `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | `execution_quality.md` | `active-evidence` | Useful qualitative lineage: signal filtering, not quote formula, drove key difference. | Summarize mechanism in execution living doc before archive. |
-| `2026-05-27-maker-queue-baseline-and-optimization.md` | `execution_quality.md` | `superseded-evidence` | Maker_queue baseline and cancel hypothesis; strategy is retired. | Move to retired/maker-queue archive later. |
-| `2026-05-27-maker-queue-cancel-backtest.md` | `execution_quality.md` | `superseded-evidence` | Cancel-after-4h direction but tiny sample; retired strategy. | Archive with maker_queue group after extracting caution. |
-| `2026-05-27-performance-city-pool-contribution.md` | `city_selection.md` | `superseded-evidence` | Old T1/T2 contribution replay with `missing_bracket` exposure. | Do not use for current city pool; compare against June city docs. |
-| `2026-05-27-performance-live-full-research.md` | `live_performance.md` | `invalidated` | Report itself says old live denominator mixed `live_real` and `live_simulated`. | Keep only as failure-history example. |
-| `2026-05-28-compare-orig-pool-vs-new-pool.md` | `city_selection.md` | `superseded-evidence` | Useful distinction between realized and unsettled/MTM; old city-pool comparison. | Extract accounting caution; archive after city living doc update. |
-| `2026-05-28-performance-makerqueue-v3-city-pool.md` | `execution_quality.md` | `superseded-evidence` | Old maker_queue/v3 city pool live slice; includes unsettled MTM caveats. | Archive with maker_queue group. |
-| `2026-05-29-entry-timing-edge.md` | `entry_timing.md` | `superseded-evidence` | Early timing edge hypothesis; old denominator and missing-bracket exposure. | Extract hypothesis only; current timing docs supersede numbers. |
-| `2026-05-29-performance-candidates-vs-fills-link.md` | `data_integrity.md` | `active-evidence` | Important bridge between `fact_signal_candidates` and `fact_trades`; explicitly frames execution selection bias. | Keep as active evidence until data-integrity doc absorbs. |
-| `2026-05-29-performance-city-pool-side-strategy.md` | `city_selection.md` | `superseded-evidence` | Early city x side whitelist logic; acknowledges DB changed and decision-window missingness. | Extract side whitelist design lesson, not current city actions. |
-| `2026-05-29-strategy-entry-band-and-execution-quality.md` | `execution_quality.md` | `active-evidence` | Strong early A/B mechanism: mid_price beat maker_queue; entry band concepts. | Extract into execution and sizing docs. |
-| `2026-05-30-performance-entry-band-research.md` | `sizing_entry_band.md` | `superseded-evidence` | Warns no latest sync; useful side x price-band framing. | Extract framework; do not cite numbers for live action. |
-| `2026-05-30-performance-sizing-and-band-distribution.md` | `sizing_entry_band.md` | `active-evidence` | Useful anti-overfit sizing/band reasoning and size inconsistency observation. | Extract methodology and caveats into sizing doc. |
-
-### 2026-06: Data / Account / Live Performance
-
-| File | Owner | Audit status | Read finding | Next action |
-|---|---|---|---|---|
-| `2026-06-03-performance-three-strategy-instances.md` | `live_performance.md` | `invalidated` | Explicitly uses old settlement rule with `missing_bracket=725`; side-band mapping incomplete. | Keep as evidence for why V2 was questioned, but do not cite PnL/rank. |
-| `2026-06-06-account-equity-replay.md` | `account_reconcile.md` | `superseded-evidence` | Correctly identifies DB fill recovery gap, but later account reconcile/fill recovery improved authority. | Extract failure mode; current command remains account reconcile script. |
-| `2026-06-06-live-account-reconcile-near-binary-fix.md` | `account_reconcile.md` | `active-evidence` | Key near-binary and account reconciliation snapshot; current contract supersedes procedure details. | Keep until account living doc fully summarizes. |
-| `2026-06-06-live-strategy-period-slice.md` | `live_performance.md` | `superseded-evidence` | Good distinction between target-date strategy PnL and UI account equity; older than fill fix. | Extract wording; newer 06-07 slices supersede numbers. |
-| `2026-06-06-polymarket-ui-account-loss-reconciliation.md` | `account_reconcile.md` | `superseded-evidence` | It self-corrects public activity / UI interpretation; useful but not final authority. | Extract caveat about UI vs strategy PnL. |
-| `2026-06-06-recent-live-loss-attribution.md` | `live_performance.md` | `invalidated` | Contains old `missing_bracket=734` distribution; later target loss attribution supersedes. | Do not cite current loss numbers. |
-| `2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | `live_performance.md` | `active-evidence` | Recomputed after near-binary; supports V2 stopped/shadow decision. | Extract current still-valid action history. |
-| `2026-06-07-fill-recovery-and-performance-recalc.md` | `execution_quality.md` | `active-evidence` | Core CLOB fill recovery/gate evidence; explains row counts drift with new fills. | Keep as primary fill-recovery evidence. |
-| `2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | `live_performance.md` | `duplicate` | Same title/content family as 15d curve/history rebuild. | Merge into live performance; archive duplicate later. |
-| `2026-06-07-live-pnl-curve-0524-0606.md` | `live_performance.md` | `active-evidence` | PnL curve snapshot after fill recovery period. | Extract only if still needed for curve history. |
-| `2026-06-07-live-strategy-period-slice-after-fill-fix.md` | `live_performance.md` | `duplicate` | Same numbers as history rebuild with smaller open-cost differences. | Prefer `current`; archive older duplicate later. |
-| `2026-06-07-live-strategy-period-slice-after-history-rebuild.md` | `live_performance.md` | `duplicate` | Near-duplicate of after-fill-fix/current. | Prefer `current`; archive duplicate later. |
-| `2026-06-07-live-strategy-period-slice-current.md` | `live_performance.md` | `active-evidence` | Best landing snapshot for current 06-07 period-slice wording. | Extract into live performance. |
-| `2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | `live_performance.md` | `active-evidence` | Newer loss attribution with `missing_bracket` fixed to settled/null. | Extract into live performance. |
-
-### 2026-06: Model / Blender / Edge Engine
-
-| File | Owner | Audit status | Read finding | Next action |
-|---|---|---|---|---|
-| `2026-06-05-probability-calibration.md` | `model_vs_market.md` | `active-evidence` | Foundational calibration snapshot. | Already referenced; keep until model doc has full summary. |
-| `2026-06-05-city-day-basket-eval.md` | `blender_shadow.md` | `superseded-evidence` | Step2 gate did not pass; early blended/basket comparison. | Extract early gate failure; later 06-08 supersedes. |
-| `2026-06-06-blended-entry-band-backtest.md` | `blender_shadow.md` | `invalidated` | Pre near-binary caveat; settlement rows include `missing_bracket`. | Do not cite numbers; keep only as old experiment. |
-| `2026-06-06-blended-paper-fill-estimate.md` | `execution_quality.md` | `superseded-evidence` | Paper fill estimate; not live-real authority. | Keep as execution background if needed. |
-| `2026-06-06-blended-single-v0-backtest.md` | `blender_shadow.md` | `invalidated` | Pre near-binary; settled/live conclusions need newer run. | Superseded by 06-07/08 blender docs. |
-| `2026-06-07-blended-live-instance-overlay.md` | `blender_shadow.md` | `active-evidence` | Supports blender as secondary filter/shadow, not hard live gate. | Extract into blender living doc. |
-| `2026-06-07-blended-paper-fill-estimate.md` | `execution_quality.md` | `superseded-evidence` | Newer than 06-06 paper fill estimate but still paper/shadow only. | Archive after execution doc captures limits. |
-| `2026-06-07-mid-price-core-v1-city-model-downgrade.md` | `model_vs_market.md` | `active-evidence` | City x model downgrade evidence; settled live sample. | Extract to model/city docs, but no direct config without gates. |
-| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | `model_vs_market.md` | `active-evidence` | Gate passed; explains forecast timing degradation lineage. | Extract into model and entry-timing docs. |
-| `2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | `model_vs_market.md` | `active-evidence` | Checks raw probability drift and code breakpoint suspicion. | Extract diagnostic conclusion. |
-| `2026-06-07-mid-price-core-v1-raw-degradation.md` | `model_vs_market.md` | `active-evidence` | Gate passed; core raw/v1 degradation evidence. | Extract into model living doc. |
-| `2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | `entry_timing.md` | `active-evidence` | Says blocked cities should not directly move to side-band live; shadow first. | Extract into entry/side docs. |
-| `2026-06-07-v1-raw-regime-filter-walkforward.md` | `model_vs_market.md` | `active-evidence` | Walk-forward regime filter; useful but still control-variable evidence. | Extract into model doc with gate status. |
-| `2026-06-08-blender-research-state-and-next-plan.md` | `blender_shadow.md` | `active-evidence` | Best narrative handoff for blender: shadow/sizing, not hard gate. | Keep as primary blender evidence until absorbed. |
-| `2026-06-08-blender-signal-value-research.md` | `blender_shadow.md` | `active-evidence` | Current strict base; confirms blender not live hard gate. | Extract tables/conclusion. |
-| `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | `blender_shadow.md` | `active-evidence` | Blender marginal value negative after removing weak cities/T28. | Extract to blender and entry timing. |
-| `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | `blender_shadow.md` | `active-evidence` | Current operational-base research, many gates fail. | Keep as active but `inconclusive` evidence. |
-| `2026-06-08-weather-edge-v2-shadow-lineage.md` | `blender_shadow.md` | `active-evidence` | Shadow lineage, not live performance. | Extract lineage scope into blender doc. |
-| `2026-06-09-model-rank-ic.md` | `model_vs_market.md` | `active-evidence` | Explicit `verdict=inconclusive`; rank/sizing research only. | Already summarized; keep as active evidence. |
-
-### 2026-06: City / Timing / Side / Market Structure
-
-| File | Owner | Audit status | Read finding | Next action |
-|---|---|---|---|---|
-| `2026-06-03-signal-side-flip-check.md` | `data_integrity.md` | `active-evidence` | Confirms side flip can be normal snapshot drift, not immediate bug. | Extract into data integrity. |
-| `2026-06-04-performance-side-band-entry-analysis.md` | `side_alpha.md` | `superseded-evidence` | It says side-band has no strict live_real under producer_run_id; later side-band alpha supersedes. | Extract caution only. |
-| `2026-06-06-city-alpha-framework.md` | `city_selection.md` | `invalidated` | Explicit `missing_bracket=734` pre-fix; city/side rank must be recomputed. | Do not cite current ranks. |
-| `2026-06-06-near-binary-city-reanalysis.md` | `city_selection.md` | `active-evidence` | Post near-binary city reanalysis. | Extract active city evidence. |
-| `2026-06-06-city-day-basket-optimizer-research.md` | `city_selection.md` | `superseded-evidence` | Early optimizer; failed missed-profit / top5 gates. | Later 06-07/08 supersedes. |
-| `2026-06-06-city-day-basket-pr2b-robustness.md` | `city_selection.md` | `superseded-evidence` | PR2b robustness; research-only. | Archive after city doc summarizes overfit risk. |
-| `2026-06-06-city-day-basket-pr2b-sweep.md` | `city_selection.md` | `superseded-evidence` | Offline sweep; explicitly not production approval. | Archive after extracting warning. |
-| `2026-06-06-city-day-basket-vs-legacy-baselines.md` | `city_selection.md` | `superseded-evidence` | Older basket vs baseline. | Prefer 06-08 refresh. |
-| `2026-06-06-city-day-basket-walkforward.md` | `city_selection.md` | `superseded-evidence` | Older walk-forward. | Prefer 06-08 refresh. |
-| `2026-06-06-city-day-distribution-quality.md` | `city_selection.md` | `superseded-evidence` | Older distribution-quality run. | Prefer 06-08 refresh. |
-| `2026-06-07-basket-latest-protocol-experiment-plan.md` | `city_selection.md` | `design-plan` | Research plan with gate pass and forward criteria; no final action. | Keep until plan absorbed into city doc. |
-| `2026-06-07-city-day-basket-optimizer-research.md` | `city_selection.md` | `superseded-evidence` | Newer optimizer but still fails key gates. | Prefer 06-08 state/plan plus latest refresh. |
-| `2026-06-07-city-day-basket-vs-legacy-baselines.md` | `city_selection.md` | `superseded-evidence` | Intermediate refresh. | Prefer 06-08. |
-| `2026-06-07-city-day-basket-walkforward.md` | `city_selection.md` | `superseded-evidence` | Intermediate refresh. | Prefer 06-08. |
-| `2026-06-07-city-day-distribution-quality.md` | `city_selection.md` | `superseded-evidence` | Intermediate refresh. | Prefer 06-08. |
-| `2026-06-08-city-day-basket-research-state-and-plan.md` | `city_selection.md` | `active-evidence` | Best city-day basket state handoff; says research snapshot. | Extract as city-selection anchor. |
-| `2026-06-08-city-day-basket-vs-legacy-baselines.md` | `city_selection.md` | `active-evidence` | Latest baseline refresh; recent slice still not live approval. | Extract to city doc. |
-| `2026-06-08-city-day-basket-walkforward.md` | `city_selection.md` | `active-evidence` | Latest walk-forward refresh. | Extract to city doc. |
-| `2026-06-08-city-day-distribution-quality.md` | `city_selection.md` | `active-evidence` | Latest distribution quality. | Extract to city doc. |
-| `2026-06-08-city-model-conditional-edge.md` | `city_selection.md` | `active-evidence` | `verdict=inconclusive`; no live action. | Extract as negative/holdout evidence. |
-| `2026-06-08-city-x-entry-timing-research.md` | `entry_timing.md` | `active-evidence` | Gate passed; city x timing conclusions but not broad live automation. | Extract to timing doc. |
-| `2026-06-08-entry-timing-effect-baseline.md` | `entry_timing.md` | `active-evidence` | First rigorous timing baseline after gate. | Extract to timing doc. |
-| `2026-06-08-entry-timing-rigorous-research-plan.md` | `entry_timing.md` | `design-plan` | Research plan; warns not to infer live rule from old samples. | Keep as timing method plan. |
-| `2026-06-08-performance-side-band-alpha-summary.md` | `side_alpha.md` | `active-evidence` | Current side-band alpha snapshot with CLOB gate. | Extract into side-alpha doc with sample caveats. |
-| `2026-06-08-side-band-entry-timing-impact.md` | `side_alpha.md` | `active-evidence` | Side-band timing shape differs; no simple v1 timing transplant. | Extract into side-alpha and entry-timing. |
-| `2026-06-08-market-structural-edge.md` | `market_structure_edge.md` | `active-evidence` | Three gates, `verdict=inconclusive`. | Already referenced; keep active. |
-| `2026-06-08-executable-edge.md` | `execution_quality.md` | `active-evidence` | Three gates, `verdict=inconclusive`; core execution reality test. | Already referenced; keep active. |
-| `2026-06-09-range-rv-scanner-v0.md` | `market_structure_edge.md` | `duplicate` | Range RV v0, inconclusive. | Prefer v0-1 or v0-2. |
-| `2026-06-09-range-rv-scanner-v0-1.md` | `market_structure_edge.md` | `duplicate` | Range RV v0 duplicate/variant, inconclusive. | Prefer positive v0.2 if retained. |
-| `2026-06-09-range-rv-positive-v0-2.md` | `market_structure_edge.md` | `active-evidence` | Positive profile test; no live PnL, no live action, `inconclusive`. | Extract as current range-RV evidence. |
-| `2026-06-09-range-rv-variant-lab-v0-3.md` | `market_structure_edge.md` | `active-evidence` | Broader pre-registered range-RV lab; decision proxy and orderbook subsets all fail final verdict, `inconclusive`. | Treat as newest range-RV negative evidence; no live action. |
-| `2026-06-09-range-rv-walkforward-v0-4.md` | `market_structure_edge.md` | `active-evidence` | Expanding-window selector failed significance/baseline/forward gates. | Extract as walk-forward negative evidence. |
-| `2026-06-09-range-rv-market-shape-v0-5.md` | `market_structure_edge.md` | `active-evidence` | Market-shape anomaly variants did not hold in holdout. | Extract as shape negative evidence. |
-| `2026-06-09-range-rv-temporal-reversion-v0-6.md` | `market_structure_edge.md` | `active-evidence` | Temporal reversion generated only 20 rows and failed gates. | Extract sample-thin negative evidence. |
-| `2026-06-09-range-rv-market-shape-fullop-v0-7.md` | `market_structure_edge.md` | `active-evidence` | Full-opportunity market-shape pass remained inconclusive. | Extract as latest shape evidence. |
-| `2026-06-09-range-rv-regime-v0-8.md` | `market_structure_edge.md` | `active-evidence` | Regime-conditioned variants failed all gates. | Extract regime negative evidence. |
-| `2026-06-09-range-rv-noarb-v0-9.md` | `market_structure_edge.md` | `superseded-evidence` | All-YES underround emerged as strongest family, but executable proof was incomplete in this pass. | Prefer robust v1.0 for current conclusion. |
-| `2026-06-09-range-rv-underround-robust-v1-0.md` | `market_structure_edge.md` | `active-evidence` | All-YES underround confirmed offline in proxy and executable orderbook thresholds. | Keep as primary market-structure candidate evidence. |
-| `2026-06-09-forecast-quality-range-rv-overlay.md` | `market_structure_edge.md` | `active-evidence` | Forecast-quality hard filters did not stably improve no-filter range baseline. | Extract as overlay caveat. |
-| `2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | `market_structure_edge.md` | `active-evidence` | Forecast-first adjacent2/3 range failed gates in proxy and orderbook. | Extract as adjacent-range negative evidence. |
-| `2026-06-09-center-shoulders-butterfly-range-rv.md` | `market_structure_edge.md` | `active-evidence` | Center/shoulder/butterfly structures were sample-limited and inconclusive. | Extract as shape-family negative evidence. |
-| `2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md` | `market_structure_edge.md` | `active-evidence` | Tail-fade/uncertainty baskets failed all gates. | Extract as tail-family negative evidence. |
-
-### Handoff / Non-Weather / Misc
-
-| File | Owner | Audit status | Read finding | Next action |
-|---|---|---|---|---|
-| `2026-06-08-HANDOFF-LANDING-VALIDATION.md` | `data_integrity.md` | `design-plan` | Verifies handoff package/script landing; not strategy evidence. | Archive after handoff method absorbed. |
-| `2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | `data_integrity.md` | `design-plan` | Useful review of method and missing executable pieces. | Keep until migration done. |
-| `2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md` | `data_integrity.md` | `active-evidence` | Captures reliability thesis: model weak, execution/stat gates required. | Keep as meta-evidence. |
-| `2026-06-08-decisive-experiment-scripts-audit-and-handoff-draft.md` | `data_integrity.md` | `duplicate` | Draft version; newer audit exists. | Archive draft after final is linked. |
-| `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | `data_integrity.md` | `active-evidence` | Final audit version; separates usable/unusable claims. | Keep until summarized in coverage map. |
-| `2026-06-09-weather-strategy-research-window-handoff.md` | `data_integrity.md` | `active-evidence` | Window handoff with current verdict table. | Keep as active handoff until next window supersedes. |
-| `2026-06-09-decision-window-backfill.md` | `data_integrity.md` | `active-evidence` | Decision-window backfill report. | Extract data-integrity caveat. |
-| `2026-06-09-copy-trade-rule-edge-wallet-research.md` | `non-weather` | `non-weather` | Copy-trade wallet/rule-edge research, not weather spine. | Move to copy-trade docs area later. |
-| `2026-06-09-openai-hardware-branch-edge-research.md` | `non-weather` | `non-weather` | OpenAI hardware branch market research, not weather spine. | Move out of weather analysis later. |
-
-## Recommended Batch Order For Phase 4C/4D
-
-1. `execution_quality + account_reconcile`: highest risk of wrong PnL/account claims; absorb fill recovery and executable-edge caveats first.
-2. `model_vs_market + blender_shadow`: model alpha and blender conclusions are often conflated; consolidate negative/inconclusive gates.
-3. `city_selection`: largest duplicate cluster; process only 5-8 docs per batch.
-4. `entry_timing + side_alpha`: timing and side-band overlap; keep denominators explicit.
-5. `live_performance`: merge live period-slice duplicates after account/fill gates are stable.
-6. `non-weather`: move copy-trade/OpenAI hardware docs to their own area.
-7. `2026-05 archive`: after lessons are extracted, move most May reports together.
-
-## Phase 4C Pilot Absorption Log
-
-### `execution_quality.md` absorbed on 2026-06-11 batch-01
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | UNKNOWN-vs-mid mechanism is primarily signal filtering (`eligible`, bucketing, eligible windows), not quote formula; this remains a historical mechanism checkpoint. | `archive-ready-after-link-check` |
-| `2026-05-27-compare-mid-price-vs-maker-queue.md` | maker_queue showed lower fill capture and adverse-selection concentration after short-term sample, so maker is retained as retired mechanism only. | `archive-ready-after-link-check` |
-| `2026-05-29-strategy-entry-band-and-execution-quality.md` | Early A/B says mid execution dominated maker in realized capture and keeps `entry_price_window` as pre-trade filter. | `archive-ready-after-link-check` |
-| `2026-05-27-maker-queue-baseline-and-optimization.md` | Baseline maker_queue optimization and stale-fill pattern are mechanism-only evidence for historical hardening tests. | `archive-ready-after-link-check` |
-| `2026-05-27-maker-queue-cancel-backtest.md` | 4-hour stale-fill cancel hypothesis has directional value only; sample size remains limited and no live rule. | `archive-ready-after-link-check` |
-| `2026-06-07-fill-recovery-and-performance-recalc.md` | CLOB coverage gate and fill-date truth layer are now required to trust live performance from this family of reports. | keep active evidence until next coverage audit |
-| `2026-06-08-executable-edge.md` | Execution significance/baseline/forward Step2 still `inconclusive`; no live rule change from this file alone. | keep active evidence |
-
-### `execution_quality.md` absorbed on 2026-06-09
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | UNKNOWN vs mid mechanism was signal filtering, not quote formula; paper-era only. | `archive-ready-after-link-check` |
-| `2026-05-27-compare-mid-price-vs-maker-queue.md` | maker_queue price improvement was too small relative to fill-rate loss; retired-strategy evidence. | `archive-ready-after-link-check` |
-| `2026-05-29-strategy-entry-band-and-execution-quality.md` | mid_price beat maker_queue in early A/B; filled-only price-band results conflict with opportunity universe. | `archive-ready-after-link-check` for execution claims; sizing claims still need `sizing_entry_band.md` |
-| `2026-06-07-fill-recovery-and-performance-recalc.md` | CLOB coverage gate, partial-fill recovery, and public fallback over-allocation failure mode. | keep active evidence until next fill-recovery audit supersedes |
-| `2026-06-08-executable-edge.md` | Step2 executable-edge gates failed; current verdict remains `inconclusive`. | keep active evidence |
-
-### `account_reconcile.md` absorbed on 2026-06-09
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-06-account-equity-replay.md` | UI account loss is account-equity/cashflow reconstruction, not settled strategy PnL; public activity was diagnostic for magnitude. | `archive-ready-after-link-check` after account-equity replay successor exists |
-| `2026-06-06-live-account-reconcile-near-binary-fix.md` | near-binary normalization and fill-date cashflow split are required. | `archive-ready-after-link-check` |
-| `2026-06-06-polymarket-ui-account-loss-reconciliation.md` | settled strategy PnL cannot refute UI one-week loss; report already self-corrects. | `archive-ready-after-link-check` |
-| `2026-06-07-fill-recovery-and-performance-recalc.md` | external account activity gap is separate from internal DB/fact coverage gate. | keep active evidence |
-| `2026-06-07-live-strategy-period-slice-current.md` | fill-date cashflow and target-date strategy attribution must be presented separately. | keep for `live_performance.md` absorption later |
-
-## Phase 4D Pilot Absorption Log
-
-### `live_performance.md` absorbed on 2026-06-09
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-03-performance-three-strategy-instances.md` | Old near-binary and side-band mapping make numeric PnL invalid; keep only V2 action-history context. | `archive-ready-after-link-check` as invalidated evidence |
-| `2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | Post-fix instance actions: V2 stopped/shadow, V1 retained but not expanded, side-band small-size only. | keep active action-history evidence until entrypoint supersedes |
-| `2026-06-06-live-strategy-period-slice.md` | Correct distinction between UI equity, target-date attribution, fill-date cashflow, open cost, and MTM. | `archive-ready-after-link-check`; numbers superseded |
-| `2026-06-06-recent-live-loss-attribution.md` | Loss-attribution structure useful, but numeric output pre near-binary fix is invalidated. | `archive-ready-after-link-check` as invalidated evidence |
-| `2026-06-07-live-strategy-period-slice-current.md` | Best 2026-06-07 target-date vs fill-date live period snapshot; row counts timestamped. | keep active evidence until newer live-performance snapshot |
-| `2026-06-07-live-pnl-curve-0524-0606.md` | 15d curve with settled-only PnL and open-cost separation through 2026-06-06. | duplicate-family; keep newest after link check |
-| `2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | Extended 15d curve through 2026-06-07; open rows and MTM missingness explicit. | keep as primary curve snapshot for now |
-| `2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | Post-fix loss attribution by cohort/city/side/instance; no global model proof. | keep active evidence |
-| `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | Current risk posture: gated DB usable, 6月 live turned negative, no add-size / no confirmed edge. | keep active meta-evidence |
-
-### `data_integrity.md` absorbed on 2026-06-09
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-03-signal-side-flip-check.md` | Side flips are mostly forecast/probability instability, not side inversion by default. | `archive-ready-after-link-check` after monitor exists |
-| `2026-05-29-performance-candidates-vs-fills-link.md` | Candidate/fill bridge reached zero orphan in snapshot; counterfactual and fill grains must stay separated. | keep active evidence until reusable orphan table exists |
-| `2026-06-09-decision-window-backfill.md` | Backfill repaired analysis DB coverage only and marks `decision_window_source=orderbook_backfill`. | keep active evidence |
-| `2026-06-08-HANDOFF-LANDING-VALIDATION.md` | Handoff landing/schema validation is method evidence, not strategy proof. | `archive-ready-after-link-check` |
-| `2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | Corrected fact table/schema assumptions and staged reorg advice. | `archive-ready-after-link-check` after current plan supersedes |
-| `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | Report only three-gate verdicts; avoid drifting live_real counts and hard-coded rows. | keep active meta-evidence |
-
-### `entry_timing.md` absorbed on 2026-06-09
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-05-27-compare-strict-t24-vs-wide-window.md` | Strict-vs-wide replay is early timing hypothesis only; old replay source and current facts supersede numbers. | `archive-ready-after-link-check` |
-| `2026-05-29-entry-timing-edge.md` | `<T-22` filled samples looked strong but fill-rate/selection made it unsuitable for live restoration. | `archive-ready-after-link-check` |
-| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | v1 `>T-28` risk filter and `T-26-28` shadow/drop caution; forecast/adverse-move mechanisms overlap. | keep active v1 timing evidence |
-| `2026-06-08-entry-timing-rigorous-research-plan.md` | Timing research must use L0-L4 denominators, matched analysis, forecast checkpoint, and city-day portfolio. | keep design-plan until implementation |
-| `2026-06-08-entry-timing-effect-baseline.md` | Current gated timing baseline: T-22-24 strongest; other bins need opportunity/checkpoint coverage. | keep active evidence |
-| `2026-06-08-city-x-entry-timing-research.md` | City x timing cells guide review priority but are too sparse for broad live automation. | keep active evidence |
-| `2026-06-08-side-band-entry-timing-impact.md` | Side-band timing differs from v1; no simple transplant of v1 timing cuts. | keep for side-alpha absorption too |
-
-### `sizing_entry_band.md` absorbed on 2026-06-09
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-05-27-compare-execution-algorithm-window-filter.md` | `entry_price_window` is pre-trade signal filter; 0.25-0.75 removed many low-quality lottery/over-expensive signals. | `archive-ready-after-link-check` |
-| `2026-05-29-strategy-entry-band-and-execution-quality.md` | Filled-only bands and opportunity bands can disagree; execution selection bias must be separated. | `archive-ready-after-link-check` for sizing claims |
-| `2026-05-30-performance-entry-band-research.md` | Side x price bucket framework is useful; stale DB and high decision-window missingness block live use. | `archive-ready-after-link-check` after fresh rerun exists |
-| `2026-05-30-performance-sizing-and-band-distribution.md` | EV-tier is risk leverage, Kelly overconcentrates, actual fill size inconsistency is first-order. | keep active methodology evidence until sizing report standard exists |
-| `2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | Blocked ECMWF side-band overlay supports shadow research, not direct live restoration. | keep for side-alpha/city absorption too |
-
-### `model_vs_market.md` absorbed on 2026-06-10
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-05-probability-calibration.md` | Raw model probability loses to market out of sample; small blend improvement is not confirmed alpha. | keep active calibration baseline |
-| `2026-06-07-mid-price-core-v1-raw-degradation.md` | Post-June raw edge degraded, especially low/mid edge buckets and ECMWF-heavy paths. | keep active degradation evidence |
-| `2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | No clean code-version breakpoint was proven; breakpoint suspicion remains diagnostic only. | `archive-ready-after-link-check` after lineage rerun exists |
-| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | Timing, adverse market move, and forecast/version lineage overlap with model degradation. | keep active evidence; also owned by `entry_timing.md` |
-| `2026-06-08-city-model-conditional-edge.md` | City/model selected pockets have high point estimates but failed significance/baseline/forward gates. | keep active city/model caution |
-| `2026-06-09-model-rank-ic.md` | `model_edge_at_decision` rank alpha remains inconclusive; `model_side_prob` is not tradable edge by itself. | keep active rank-IC evidence |
-
-### `market_structure_edge.md` absorbed on 2026-06-10
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-08-market-structural-edge.md` | H_B structural BUY_NO/price-bucket edge is useful separation from model alpha but remains inconclusive. | keep active baseline evidence |
-| `2026-06-09-range-rv-positive-v0-2.md` | Adjacent positive profiles had encouraging point estimates but failed required gates. | `archive-ready-after-link-check` after v0.3/v1.0 links verified |
-| `2026-06-09-range-rv-variant-lab-v0-3.md` | Broad Range RV lab found no general adjacent/range/pair/center/tail rule ready for live. | keep active negative evidence |
-| `2026-06-09-range-rv-walkforward-v0-4.md` | Prior-date walk-forward selector did not pass the three-gate standard. | `archive-ready-after-link-check` |
-| `2026-06-09-range-rv-market-shape-v0-5.md` | Market-shape anomaly first pass failed holdout/forward gates. | `archive-ready-after-link-check` after fullop v0.7 retained |
-| `2026-06-09-range-rv-temporal-reversion-v0-6.md` | Temporal reversion sample was too thin and failed gates. | `archive-ready-after-link-check` |
-| `2026-06-09-range-rv-market-shape-fullop-v0-7.md` | Full-opportunity market-shape variants remained inconclusive. | keep active latest shape evidence |
-| `2026-06-09-range-rv-regime-v0-8.md` | Regime-conditioned Range RV variants failed gates. | `archive-ready-after-link-check` |
-| `2026-06-09-range-rv-noarb-v0-9.md` | All-YES underround emerged as strongest no-arb family, but robust v1.0 supersedes the current proof. | `archive-ready-after-link-check` after v1.0 retained |
-| `2026-06-09-range-rv-underround-robust-v1-0.md` | All-YES underround is `confirmed_offline` in both proxy and executable orderbook tests. | keep primary active evidence |
-| `2026-06-09-forecast-quality-range-rv-overlay.md` | Forecast-quality filters are soft stratification, not a stable hard filter. | keep active overlay caveat |
-| `2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | Forecast-first adjacent2/3 range tests failed proxy/orderbook gates. | `archive-ready-after-link-check` |
-| `2026-06-09-center-shoulders-butterfly-range-rv.md` | Center/shoulder/butterfly structures are sample-limited and inconclusive. | `archive-ready-after-link-check` |
-| `2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md` | Tail-fade/uncertainty baskets failed all gates. | `archive-ready-after-link-check` |
-
-### `blender_shadow.md` absorbed on 2026-06-10
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-06-blended-single-v0-backtest.md` | Early blended opportunity backtest is search history only; pre near-binary correction and not final live evidence. | `archive-ready-after-link-check` as superseded evidence |
-| `2026-06-06-blended-entry-band-backtest.md` | Early entry-band blended result is superseded by current gated fact-table runs. | `archive-ready-after-link-check` as superseded evidence |
-| `2026-06-06-blended-paper-fill-estimate.md` | Paper fill estimate is not live-real authority; use only as early execution hypothesis. | `archive-ready-after-link-check` after execution doc link check |
-| `2026-06-07-blended-live-instance-overlay.md` | Blender helped recent June fills but hurt pre-June fills; it is a drift/risk filter, not stable hard alpha. | keep active overlay evidence |
-| `2026-06-07-blended-paper-fill-estimate.md` | Newer paper estimate remains shadow/paper only, not live fill proof. | `archive-ready-after-link-check` |
-| `2026-06-08-blender-research-state-and-next-plan.md` | Best narrative handoff: blender should be lineage/risk/sizing shadow, not live hard gate. | keep active state handoff until next edge-engine doc |
-| `2026-06-08-blender-signal-value-research.md` | Hard gates reduce PnL despite ROI optics; size curves and negative blended-edge alerts remain research candidates. | keep active signal-value evidence |
-| `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | City/time controls explain more June degradation; blender is marginally negative after new operational base. | keep active control evidence |
-| `2026-06-08-weather-edge-v2-shadow-lineage.md` | Edge v2 lineage is shadow/offline artifact; do not read it as live trading result. | keep active lineage evidence |
-| `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Edge v2/basket candidates need separate top5, forward, capacity, and execution gates; do not merge with blender hard-gate approval. | keep active edge-engine evidence |
-
-### `model_vs_market.md` absorbed on 2026-06-11 batch-02
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-05-probability-calibration.md` | Raw model probability loses to market probability out of sample; blend uplift remains small and context-sensitive. | keep active calibration baseline |
-| `2026-06-07-mid-price-core-v1-raw-degradation.md` | Post-June raw-edge deterioration likely from timing/execution/city-model drift mix; keep as active degradation evidence. | keep active degradation evidence |
-| `2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | No clean code-version breakpoint proven; breakpoint should remain hypothesis until rerun with updated lineage. | `archive-ready-after-link-check` |
-| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | Timing/adverse-market pathway is now coupled with `entry_timing.md`; model doc only retains residual-quality claim. | `link-to-entry-timing` |
-| `2026-06-08-city-model-conditional-edge.md` | Conditional city-model pockets remain high-variance and fail significance / forward gate; no live allowlist. | keep active city/model caution |
-| `2026-06-09-model-rank-ic.md` | Rank-IC remains non-actionable for live; `model_side_prob` is not a standalone tradable edge. | keep active rank-IC evidence |
-| `2026-06-08-blender-signal-value-research.md` | Blender hard-gate claims are owned by `blender_shadow.md` and retained here only as cross-domain caution. | `cross-owner-reference` |
-
-### `blender_shadow.md` absorbed on 2026-06-11 batch-02
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-06-blended-single-v0-backtest.md` | Early blended single backtest is historical search and pre-near-binary only. | `archive-ready-after-link-check` |
-| `2026-06-06-blended-entry-band-backtest.md` | Early blended entry-band result is superseded by corrected fact-table-backed runs. | `archive-ready-after-link-check` |
-| `2026-06-06-blended-paper-fill-estimate.md` | Paper-only fill estimate is not live-real authority. | `archive-ready-after-link-check` |
-| `2026-06-07-blended-live-instance-overlay.md` | Recent positive but pre-recent negative split means drift-sensitive overlay, not global hard gate. | keep active overlay evidence |
-| `2026-06-07-blended-paper-fill-estimate.md` | Paper-fill estimate remains proxy; live-real execution recovery remains required. | `archive-ready-after-link-check` |
-| `2026-06-08-blender-research-state-and-next-plan.md` | Direction stays in lineage/risk/sizing shadow track; no live hard gate yet. | keep active state handoff |
-| `2026-06-08-blender-signal-value-research.md` | Hard gates can improve ROI optics while reducing net PnL in base-corrected windows. | keep active signal-value evidence |
-| `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | City/time controls dominate; blender hard thresholds remain marginally negative after base updates. | keep active control evidence |
-| `2026-06-08-weather-edge-v2-shadow-lineage.md` | V2 lineage fields are shadow-only and require independent criteria before any hard usage. | keep active lineage evidence |
-| `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Basket/edge candidates still need full forward/top5/capacity/execution gate stack. | keep active edge-engine evidence |
-
-### `side_alpha.md` absorbed on 2026-06-10
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-04-performance-side-band-entry-analysis.md` | Early side-band entry-band shape is useful, but pre-near-binary caveats and attribution issues make it secondary. | `archive-ready-after-link-check` as superseded evidence |
-| `2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | Side-band would reduce losses in blocked ECMWF city fills, but it is an overlay and still shadow-only. | keep active cross-owner evidence |
-| `2026-06-08-performance-side-band-alpha-summary.md` | Early side-band live PnL was positive but small, concentrated, and not enough for size expansion. | keep active side-band live snapshot |
-| `2026-06-08-side-band-entry-timing-impact.md` | Side-band timing differs from v1; do not transplant v1 timing cuts mechanically. | keep active timing/side evidence |
-| `2026-06-10-side-band-forecast-regime-v0.md` | Full-opportunity clean side-band + forecast-regime test failed significance/baseline/forward gates. | keep active current side-band evidence |
-| `2026-06-10-side-band-mechanism-attribution-v1.md` | Side-band gains look like side/price/date concentration rather than stable reusable alpha; all selectors remain inconclusive. | keep active mechanism evidence |
-| `2026-06-10-weather-strategy-live-test-selection.md` | Side-band is not a real live-test candidate in the current scoreboard. | keep active synthesis evidence |
-| `2026-06-10-shadow-paper-queue-v0.md` | Side-band remains tag-only shadow, not paper/live queue. | keep active queue evidence |
-
-### `city_selection.md` absorbed on 2026-06-11 batch-02
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-06-city-alpha-framework.md` | Numeric city ranks are invalidated by old near-binary `missing_bracket`, but the target metric framework remains useful. | `archive-ready-after-link-check` as invalidated numbers |
-| `2026-06-06-city-day-basket-pr2b-sweep.md` | PR2b sweep confirms multiple threshold settings are not enough without holdout/top5 controls. | `archive-ready-after-link-check` |
-| `2026-06-06-city-day-basket-pr2b-robustness.md` | PR2b robustness pass is still vulnerable to tail concentration and recent underperformance. | `archive-ready-after-link-check` |
-| `2026-06-06-city-day-basket-optimizer-research.md` | Early optimizer found higher headline ROI but failed missed-profit and top5 stress gates. | `archive-ready-after-link-check` |
-| `2026-06-06-city-day-basket-vs-legacy-baselines.md` | Historical baseline-vs-basket comparison; newer 06-08 refresh supersedes numbers. | `archive-ready-after-link-check` |
-| `2026-06-06-city-day-basket-walkforward.md` | Early walk-forward fold structure; newer 06-08 walk-forward refresh supersedes conclusions. | `archive-ready-after-link-check` |
-| `2026-06-06-city-day-distribution-quality.md` | Early city-day distribution check before the 06-08 refresh. | `archive-ready-after-link-check` |
-| `2026-06-06-near-binary-city-reanalysis.md` | Post-fix city evidence points to city x side x strategy_instance, not whole-city ROI. | keep active city correction evidence |
-| `2026-06-08-city-day-basket-research-state-and-plan.md` | Basket remains research/shadow; first rerun on filtered operational base before canary. | keep active basket handoff |
-| `2026-06-08-city-day-basket-vs-legacy-baselines.md` | Basket/combos can show headline gains, but recent/top5 stress still blocks production. | keep active basket baseline evidence |
-| `2026-06-08-city-day-basket-walkforward.md` | Train-selected basket rules do not yet beat simple always-on baselines in unseen windows. | keep active anti-overfit evidence |
-| `2026-06-08-city-day-distribution-quality.md` | Market-normalized distribution remains the safer basket objective anchor in holdout/recent slices. | keep active distribution evidence |
-| `2026-06-08-city-model-conditional-edge.md` | City-model conditional pockets remain high-variance, fail gates, and remain `inconclusive`. | keep active negative evidence |
-| `2026-06-10-weather-strategy-live-test-selection.md` | No new real live-test candidate; adjacent3 only enters shadow/paper observation. | keep active synthesis evidence |
-| `2026-06-10-live-test-readiness-scoreboard-v0.md` | Readiness scoreboard freezes adjacent3 shadow and defers all live scheduling. | keep active readiness evidence |
-
-### `reheat_risk.md` / `archive/analysis/observed_max_reheat_risk_legacy.md` split on 2026-06-16
-
-Current owner is `docs/analysis/reheat_risk.md`. The archived observed-max
-legacy doc remains a historical handoff only.
-
-### `archive/analysis/observed_max_reheat_risk_legacy.md` absorbed on 2026-06-10
-
-| File | Absorbed claim | Archive readiness |
-|---|---|---|
-| `2026-06-10-m3-observed-max-strategy-handoff.md` | reheat-risk is a new observed-running-max information structure; external claims need local reproduction. | keep active framing evidence |
-| `2026-06-10-m3-observed-max-strategy-plan.md` | reheat-risk must start with fact layer and physical residual gates; no live/paper config change. | keep active design evidence |
-| `2026-06-10-m3-observed-max-residual-v0.md` | 19:00+ local observed-max residual passes the first physical candidate gate, but market/execution gates are untouched. | keep active physical evidence |
-| `2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` | Proxy paper-market backtest confirms no reliable edge signal in 4/14 sparse trades; sample concentrated in Moscow/Madrid and not executable-best-ask. | keep active-snapshot; do not cite for live/paper claims |
-
-
-## Phase 4E Archive Move Log
-
-Moved on 2026-06-11: selected pre-2026-06-10 reports from `docs/analysis/2026-06/` to `docs/archive/analysis/2026-06/` after their useful claims were absorbed into owner living docs or explicitly marked invalidated/duplicate/non-weather. This batch intentionally excludes all 2026-06-10 and 2026-06-11 files.
-
-Moved stems:
-- `2026-06-03-performance-three-strategy-instances`
-- `2026-06-04-performance-side-band-entry-analysis`
-- `2026-06-06-account-equity-replay`
-- `2026-06-06-blended-entry-band-backtest`
-- `2026-06-06-blended-paper-fill-estimate`
-- `2026-06-06-blended-single-v0-backtest`
-- `2026-06-06-city-alpha-framework`
-- `2026-06-06-city-day-basket-optimizer-research`
-- `2026-06-06-city-day-basket-pr2b-robustness`
-- `2026-06-06-city-day-basket-pr2b-sweep`
-- `2026-06-06-city-day-basket-vs-legacy-baselines`
-- `2026-06-06-city-day-basket-walkforward`
-- `2026-06-06-city-day-distribution-quality`
-- `2026-06-06-live-strategy-period-slice`
-- `2026-06-06-polymarket-ui-account-loss-reconciliation`
-- `2026-06-06-recent-live-loss-attribution`
-- `2026-06-07-blended-paper-fill-estimate`
-- `2026-06-07-live-strategy-period-slice-after-fill-fix`
-- `2026-06-07-live-strategy-period-slice-after-history-rebuild`
-- `2026-06-08-HANDOFF-LANDING-VALIDATION`
-- `2026-06-08-decisive-experiment-scripts-audit-and-handoff-draft`
-- `2026-06-09-center-shoulders-butterfly-range-rv`
-- `2026-06-09-copy-trade-rule-edge-wallet-research`
-- `2026-06-09-forecast-first-adjacent-range-rv-v0-1`
-- `2026-06-09-openai-hardware-branch-edge-research`
-- `2026-06-09-range-rv-market-shape-v0-5`
-- `2026-06-09-range-rv-noarb-v0-9`
-- `2026-06-09-range-rv-positive-v0-2`
-- `2026-06-09-range-rv-regime-v0-8`
-- `2026-06-09-range-rv-scanner-v0`
-- `2026-06-09-range-rv-scanner-v0-1`
-- `2026-06-09-range-rv-tail-fade-uncertainty-v1-1`
-- `2026-06-09-range-rv-temporal-reversion-v0-6`
-- `2026-06-09-range-rv-walkforward-v0-4`
-
-
-## Phase 4F Link And Script Hygiene Log
-
-Updated on 2026-06-11: current/living docs that still pointed at Phase 4E moved reports now point to `docs/archive/analysis/2026-06/`. Historical archive bodies were left unchanged.
-
-Also updated legacy research scripts whose default outputs targeted archived reports, so rerunning old experiments does not recreate those reports under active `docs/analysis/2026-06/`. Scripts that are imported by newer Range RV experiments remain in place; only their default report output paths were redirected to archive.
-
-Explicitly not touched in this hygiene pass:
-
-- 2026-06-10 reports and scripts.
-- 2026-06-11 reports and scripts.
-- reheat-risk generated artifacts under `docs/analysis/2026-06/generated/`.
-
-
-## Phase 4G May Archive Move Log
-
-Moved on 2026-06-11: all 2026-05 analysis reports from `docs/analysis/2026-05/` to `docs/archive/analysis/2026-05/`. These files are retained as historical mechanism, retired-strategy, or invalidated early-live snapshots; current decisions should cite the owner living docs and current June evidence first.
-
-Updated current docs and living docs to point at the archive paths. Updated May-era analysis script defaults so reruns write old May report names into archive rather than recreating active `docs/analysis/2026-05/` entries.
-
-Moved stems:
-- `2026-05-26-compare-UNKNOWN-vs-mid_price_core_v1`
-- `2026-05-27-compare-execution-algorithm-window-filter`
-- `2026-05-27-compare-mid-price-vs-maker-queue`
-- `2026-05-27-compare-strict-t24-vs-wide-window`
-- `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1`
-- `2026-05-27-maker-queue-baseline-and-optimization`
-- `2026-05-27-maker-queue-cancel-backtest`
-- `2026-05-27-performance-city-pool-contribution`
-- `2026-05-27-performance-live-full-research`
-- `2026-05-28-compare-orig-pool-vs-new-pool`
-- `2026-05-28-performance-makerqueue-v3-city-pool`
-- `2026-05-29-entry-timing-edge`
-- `2026-05-29-performance-candidates-vs-fills-link`
-- `2026-05-29-performance-city-pool-side-strategy`
-- `2026-05-29-strategy-entry-band-and-execution-quality`
-- `2026-05-30-performance-entry-band-research`
-- `2026-05-30-performance-sizing-and-band-distribution`
-
-## Hard Rules For Later Moves
-
-- A historical file can move only after its useful claim appears in the owner living doc or is explicitly marked `invalidated`.
-- Any file containing `missing_bracket` or pre-2026-06-07 live PnL must be checked against near-binary/fill-recovery notes before being cited.
-- Duplicates should keep the newest gated report as the primary evidence.
-- Current production decisions still live in `WEATHER_STRATEGY_ENTRYPOINT.md`, `WEATHER_CITY_POOL_DECISIONS.md`, and `WEATHER_ANALYSIS_CONTRACT.md`, not in old snapshots.
+| 概率、校准、model-vs-market | `model_vs_market.md` |
+| 盘口结构、range/RV、repricing | `market_structure_edge.md` |
+| fill、fee、成交覆盖、执行窗口 | `execution_quality.md` |
+| 入场时钟与 city×timing | `entry_timing.md` |
+| side 表达 | `side_alpha.md` |
+| 城市池与 city-day portfolio | `city_selection.md` |
+| observed path、reheat、current/d1 | `reheat_risk.md` |
+| sizing 与价格带 | `sizing_entry_band.md` |
+| blender/shadow | `blender_shadow.md` |
+| live 历史表现 | `live_performance.md` |
+| 钱包和账户对账 | `account_reconcile.md` |
+| side flip、候选/成交血缘、数据缺口 | `data_integrity.md` |
+
+WCIR、数据源、生产与 canonical contract 不写进上述研究 living doc，分别回到 WCIR 设计、data-feed、repo boundary、
+system contract 和 ops runbook。
+
+## 已完成的历史批次
+
+- 2026-06-11：2026-05 报告迁入历史区；早期 UNKNOWN/maker-queue、旧 city pool、旧 PnL 数字不再作当前证据。
+- 2026-06-11：部分 2026-06-03..09 重复或 invalidated 报告迁入历史区；near-binary、fill recovery、
+  `missing_bracket` 污染窗口保留为失败史。
+- 2026-06-16：observed-max 新研究归入 `reheat_risk`；`observed_max/` 只保留历史 producer/station-basis 邻接工作。
+- 2026-08-05..06：大型 generated 产物迁到 JRS 内容寻址库；可精确重放的派生对象用 tombstone 清理，raw/canonical 不动。
+- 2026-08-06：删除本文件原有 400 余行逐文件流水账；已执行的迁移由 git 历史、索引和 living doc 承担，
+  不再维护第二份平行清单。
+
+## 仍有效的历史边界
+
+- 2026-06-07 前的 live PnL、胜率、城市/策略排名，若依赖旧 near-binary、缺 fill 或 `missing_bracket`，不得用于当前决策。
+- paper/shadow、proxy ask、少量 selected trades 和运行中的 probe 不能证明 live alpha。
+- 后来的 fee、fill、settlement 或 denominator 修正只作勘误；不得把旧 gross 结论继续留在 living doc 主结论中。
+- 日期报告可以保留 lineage、失败模式和预注册规则，但当前动作只能在 owner living doc/registry 出现一次。
+
+## 当前清理队列
+
+1. **dated current-reference 收敛**：日期报告原则上降为 snapshot；只有仍被运行合同直接消费的 protocol/entrypoint 可保留 current-reference。
+2. **重复家族合并**：优先 live-period slice、city-day basket、blender、range/RV、current-YES/reheat 和 source-event 多版本报告。
+3. **历史脚本去重**：先抽公共 helper/config runner，再删除仅城市、日期、参数不同的入口；保留算法或数据合同真正不同的 producer。
+4. **机器产物修复**：没有 frozen input inventory、producer revision 或 exact replay 的对象继续保留，不因文件大而删。
+5. **非天气分离**：copy-trade、wallet 与硬件研究进入各自 owner，不继续混入天气结论索引。
+
+每批交付必须报告：吸收了哪些结论、删除/保留了哪些文件、为什么安全、链接/测试结果，以及是否影响生产。

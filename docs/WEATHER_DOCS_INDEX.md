@@ -618,6 +618,6 @@ manifest/历史报告指针。需要重放历史研究时，用
 - 时间点报告保持正文不改；如结论不再适用，在本索引或当前入口标注，不回写历史正文。
 - 任何改变 live 策略、城市池、账户对账或数据源真相的关键发现，至少要落到对应的 `current-source` 文档和本索引。
 - 每次新增或删除 `docs/` 下 weather 文档，更新本索引；`AGENTS.md` / `CLAUDE.md` 不再维护长表。
-- 2026-08-05 内容审计发现唯一 exact duplicate：
-  `archive/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.md`
-  与 `...after-fill-fix.md` 内容完全相同。两份暂保留历史路径，引用统一指向前者，后续删除候选只处理别名，不再重复吸收结论。
+- 2026-08-05 内容审计发现的 live-period exact duplicate 已于 2026-08-06 收口：保留
+  `archive/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.{md,json}`，删除
+  `...after-fill-fix.{md,json}` 别名；producer 默认输出也已统一到保留路径，没有删除独立业务结论。

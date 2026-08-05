@@ -21,8 +21,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 DB_PATH = ROOT / "runtime" / "weather.db"
-REPORT_PATH = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-07-live-strategy-period-slice-after-fill-fix.md"
-JSON_PATH = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-07-live-strategy-period-slice-after-fill-fix.json"
+REPORT_PATH = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-07-live-strategy-period-slice-after-history-rebuild.md"
+JSON_PATH = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-07-live-strategy-period-slice-after-history-rebuild.json"
 
 INSTANCE_EXPR = """
 CASE

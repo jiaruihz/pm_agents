@@ -136,8 +136,6 @@ Key points:
 - `docs/analysis/2026-06/2026-06-07-account-equity-replay-after-history-rebuild.json`
 - `docs/analysis/2026-06/2026-06-07-live-account-reconcile-after-fill-fix.json`
 - `docs/analysis/2026-06/2026-06-07-live-account-reconcile-after-history-rebuild.json`
-- `docs/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-fill-fix.md`
-- `docs/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-fill-fix.json`
 - `docs/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.md`
 - `docs/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.json`
 - `docs/analysis/2026-06/2026-06-07-clob-fill-coverage-gate.json`

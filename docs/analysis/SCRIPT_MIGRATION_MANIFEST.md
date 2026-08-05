@@ -1,108 +1,54 @@
-# Weather Analysis Script Migration Manifest
+# Weather 分析脚本归属与退场账本
 
 Status: current-reference
-Updated: 2026-06-16 reheat_risk/pre_predict overlay
+Updated: 2026-08-06
 Source of truth: no
-Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; docs/analysis living docs
+Used by: `WEATHER_REPO_BOUNDARY.md`; `WEATHER_ARCHITECTURE_SPINE.md`; analysis living docs
 
-This manifest records the target owner for scripts moved during Phase 3B. Historical Markdown snapshots and JSON artifacts are not moved in this phase.
+这份文件不再维护逐文件 old→new 路径表。2026-06 的迁移已经完成，继续保留相同路径映射只会制造第二份目录索引；
+历史位置由 git 追踪，当前文件位置由 `rg --files scripts/analysis scripts/etl scripts/ops` 查询。
 
-## Rules
+## 当前路由规则
 
-- Scripts that build or backfill fact-table fields belong to `scripts/etl/`.
-- Weather evaluation scripts belong under `scripts/analysis/<living_doc_topic>/`.
-- New pre-path forecast research belongs under `scripts/analysis/pre_predict/`.
-- New intraday observed-path/reheat research belongs under `scripts/analysis/reheat_risk/`.
-- Historical `scripts/analysis/observed_max/` scripts are archival unless a script
-  is intentionally promoted into `reheat_risk` as the maintained entrypoint.
-- Copy-trade research is a separate strategy family and belongs to `scripts/copy_trade/`.
-- Current docs and run scripts should point at the new paths after Phase 3B.
-- Historical snapshots may keep old paths as time-point evidence until Phase 3C.
+| 工作 | 目录 / 入口 |
+|---|---|
+| canonical fact 构建与 backfill | `scripts/etl/`，输出进入统一 fact layer |
+| model-vs-market / forecast quality | 对应 `scripts/analysis/<family>/`，同机制复用 runner+config |
+| intraday observed path / reheat / current-d1 | `scripts/analysis/reheat_risk/` 与 WCIR 公共 contract |
+| execution/fill/fee 研究 | `scripts/analysis/execution_quality/`，读取 canonical facts |
+| account/cash/CLOB reconcile | `scripts/analysis/account_reconcile/`，不与绩效脚本混算 |
+| current production mutation | `scripts/ops/weather_production_ctl.py` 及 production contract 登记入口 |
+| copy-trade / wallet | 独立策略家族，不进入 weather 分析目录 |
 
-## 2026-06-16 Research-Branch Overlay
+新的日期、城市、训练窗、阈值或输出目录不能成为新脚本的理由。算法和数据合同相同时，必须扩展现有 runner 的 config/run
+manifest；新增入口要说明它在 `EventEnvelope → ... → fill → settlement` 的哪一层，以及为什么现有 owner 无法承载。
 
-This overlay records the branch split introduced after the original Phase 3B
-script migration. It does not rewrite historical report filenames.
+## 已完成迁移
 
-| Path / family | Owner | Status |
-|---|---|---|
-| `scripts/analysis/pre_predict/README.md` | pre_predict | indexed-only; no maintained script migrated in this cleanup |
-| `scripts/analysis/reheat_risk/research_m3_exhaustion_source_aware_restart_v1.py` | reheat_risk | maintained bridge from M3 exhaustion to source-aware reheat risk |
-| `scripts/analysis/reheat_risk/research_m3_jump_model_v1.py` | reheat_risk | maintained physical jump-risk model entrypoint |
-| `scripts/analysis/reheat_risk/research_m3_jump_model_v2_quote_calibration.py` | reheat_risk | maintained quote-calibration continuation |
-| `scripts/analysis/reheat_risk/research_m3_jump_model_v3_bad_case_attribution.py` | reheat_risk | maintained bad-case attribution continuation |
-| `scripts/analysis/reheat_risk/research_theta_*.py` | reheat_risk | maintained current YES / higher NO carry / execution / peak-clock research chain |
-| `scripts/analysis/observed_max/research_m3_*.py` except rows above | observed_max archive | archival-kept; do not use as new entrypoints unless promoted in a later cleanup |
-| `scripts/analysis/observed_max/research_station_basis_*.py`, `research_settlement_*.py`, `research_official_*.py` | observed_max / station-basis history | archival-kept or station-basis-adjacent; not moved by this reheat cleanup |
+- fact-table builder/backfill 已归 `scripts/etl/`。
+- model、market structure、execution、entry timing、side、city、sizing、blender、live performance、account、data integrity
+  已按 living-doc family 分目录。
+- copy-trade 工具已与 weather 主线分离。
+- 2026-06-16 后的 maintained observed-path 研究进入 `reheat_risk`；`observed_max/` 不是新工作的默认入口。
+- 2026-08-06 起，producer 只有在输出已精确重放 tombstone、无代码/测试消费者、复现 revision 已记录时才允许退场。
 
-## Manifest
+## 当前脚本债务
 
-| Old path | New path | Owner |
-|---|---|---|
-| `scripts/analysis/build_weather_fact_trades.py` | `scripts/etl/build_weather_fact_trades.py` | [0] data |
-| `scripts/analysis/build_weather_signal_candidates.py` | `scripts/etl/build_weather_signal_candidates.py` | [0] data |
-| `scripts/analysis/backfill_signal_candidate_decision_windows.py` | `scripts/etl/backfill_signal_candidate_decision_windows.py` | [0] data |
-| `scripts/analysis/model_vs_market/calibrate_weather_probability.py` | `scripts/analysis/model_vs_market/calibrate_weather_probability.py` | model_vs_market |
-| `scripts/analysis/model_vs_market/research_mid_price_core_v1_degradation.py` | `scripts/analysis/model_vs_market/research_mid_price_core_v1_degradation.py` | model_vs_market |
-| `scripts/analysis/model_vs_market/research_mid_price_core_v1_raw_calibration_drift.py` | `scripts/analysis/model_vs_market/research_mid_price_core_v1_raw_calibration_drift.py` | model_vs_market |
-| `scripts/analysis/model_vs_market/research_mid_price_core_v1_forecast_timing_lineage.py` | `scripts/analysis/model_vs_market/research_mid_price_core_v1_forecast_timing_lineage.py` | model_vs_market |
-| `scripts/analysis/model_vs_market/research_mid_price_core_v1_city_model_downgrade.py` | `scripts/analysis/model_vs_market/research_mid_price_core_v1_city_model_downgrade.py` | model_vs_market |
-| `scripts/analysis/model_vs_market/research_model_rank_ic.py` | `scripts/analysis/model_vs_market/research_model_rank_ic.py` | model_vs_market |
-| `scripts/analysis/model_vs_market/research_v1_raw_regime_filter_walkforward.py` | `scripts/analysis/model_vs_market/research_v1_raw_regime_filter_walkforward.py` | model_vs_market |
-| `scripts/analysis/market_structure_edge/research_market_structural_edge.py` | `scripts/analysis/market_structure_edge/research_market_structural_edge.py` | market_structure_edge |
-| `scripts/analysis/research_range_rv_scanner.py` | `scripts/analysis/market_structure_edge/research_range_rv_scanner.py` | market_structure_edge |
-| `scripts/analysis/execution_quality/research_executable_edge.py` | `scripts/analysis/execution_quality/research_executable_edge.py` | execution_quality |
-| `scripts/analysis/backtest_blended_paper_fill_estimate.py` | `scripts/analysis/execution_quality/backtest_blended_paper_fill_estimate.py` | execution_quality |
-| `scripts/analysis/execution_quality/weather_window_capture_performance.py` | `scripts/analysis/execution_quality/weather_window_capture_performance.py` | execution_quality |
-| `scripts/analysis/weather_clob_fill_coverage_gate.py` | `scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py` | execution_quality |
-| `scripts/analysis/inspect_weather_live_timing_distribution.py` | `scripts/analysis/entry_timing/inspect_weather_live_timing_distribution.py` | entry_timing |
-| `scripts/analysis/research_entry_timing_effect.py` | `scripts/analysis/entry_timing/research_entry_timing_effect.py` | entry_timing |
-| `scripts/analysis/research_city_timing_effect.py` | `scripts/analysis/entry_timing/research_city_timing_effect.py` | entry_timing |
-| `scripts/analysis/research_v1_removed_ecmwf_t28_blender_overlay.py` | `scripts/analysis/entry_timing/research_v1_removed_ecmwf_t28_blender_overlay.py` | entry_timing |
-| `scripts/analysis/backtest_v1_ecmwf_blocked_side_band_overlay.py` | `scripts/analysis/entry_timing/backtest_v1_ecmwf_blocked_side_band_overlay.py` | entry_timing |
-| `scripts/analysis/side_alpha/weather_side_band_alpha_summary.py` | `scripts/analysis/side_alpha/weather_side_band_alpha_summary.py` | side_alpha |
-| `scripts/analysis/side_alpha/weather_side_band_entry_analysis.py` | `scripts/analysis/side_alpha/weather_side_band_entry_analysis.py` | side_alpha |
-| `scripts/analysis/side_alpha/weather_side_band_timing_impact.py` | `scripts/analysis/side_alpha/weather_side_band_timing_impact.py` | side_alpha |
-| `scripts/analysis/city_selection/compare_city_day_basket_vs_legacy_baselines.py` | `scripts/analysis/city_selection/compare_city_day_basket_vs_legacy_baselines.py` | city_selection |
-| `scripts/analysis/city_selection/eval_city_day_basket.py` | `scripts/analysis/city_selection/eval_city_day_basket.py` | city_selection |
-| `scripts/analysis/city_selection/tune_city_day_basket.py` | `scripts/analysis/city_selection/tune_city_day_basket.py` | city_selection |
-| `scripts/analysis/city_selection/validate_city_day_basket_robustness.py` | `scripts/analysis/city_selection/validate_city_day_basket_robustness.py` | city_selection |
-| `scripts/analysis/city_selection/research_city_day_basket_optimizer.py` | `scripts/analysis/city_selection/research_city_day_basket_optimizer.py` | city_selection |
-| `scripts/analysis/city_selection/research_city_day_basket_walkforward.py` | `scripts/analysis/city_selection/research_city_day_basket_walkforward.py` | city_selection |
-| `scripts/analysis/city_selection/research_city_day_distribution_quality.py` | `scripts/analysis/city_selection/research_city_day_distribution_quality.py` | city_selection |
-| `scripts/analysis/research_weather_city_alpha_framework.py` | `scripts/analysis/city_selection/research_weather_city_alpha_framework.py` | city_selection |
-| `scripts/analysis/city_selection/weather_city_day_portfolio.py` | `scripts/analysis/city_selection/weather_city_day_portfolio.py` | city_selection |
-| `scripts/analysis/city_selection/weather_city_pool_contribution_analysis.py` | `scripts/analysis/city_selection/weather_city_pool_contribution_analysis.py` | city_selection |
-| `scripts/analysis/city_selection/weather_near_binary_city_reanalysis.py` | `scripts/analysis/city_selection/weather_near_binary_city_reanalysis.py` | city_selection |
-| `scripts/analysis/city_selection/research_city_model_conditional_edge.py` | `scripts/analysis/city_selection/research_city_model_conditional_edge.py` | city_selection |
-| `scripts/analysis/sizing_entry_band/weather_sizing_band_study.py` | `scripts/analysis/sizing_entry_band/weather_sizing_band_study.py` | sizing_entry_band |
-| `scripts/analysis/sizing_entry_band/weather_entry_band_research.py` | `scripts/analysis/sizing_entry_band/weather_entry_band_research.py` | sizing_entry_band |
-| `scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_single.py` | `scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_single.py` | blender_shadow |
-| `scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_entry_bands.py` | `scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_entry_bands.py` | blender_shadow |
-| `scripts/analysis/blender_shadow/weather_blended_live_instance_overlay.py` | `scripts/analysis/blender_shadow/weather_blended_live_instance_overlay.py` | blender_shadow |
-| `scripts/analysis/blender_shadow/build_weather_edge_v2_shadow_lineage.py` | `scripts/analysis/blender_shadow/build_weather_edge_v2_shadow_lineage.py` | blender_shadow |
-| `scripts/analysis/blender_shadow/research_weather_edge_v2_filtered_operational_base.py` | `scripts/analysis/blender_shadow/research_weather_edge_v2_filtered_operational_base.py` | blender_shadow |
-| `scripts/analysis/blender_shadow/research_blender_signal_value.py` | `scripts/analysis/blender_shadow/research_blender_signal_value.py` | blender_shadow |
-| `scripts/analysis/blender_shadow/recalibrate_blend.py` | `scripts/analysis/blender_shadow/recalibrate_blend.py` | blender_shadow |
-| `scripts/analysis/live_performance/weather_live_full_research.py` | `scripts/analysis/live_performance/weather_live_full_research.py` | live_performance |
-| `scripts/analysis/live_performance/weather_live_pnl_curve.py` | `scripts/analysis/live_performance/weather_live_pnl_curve.py` | live_performance |
-| `scripts/analysis/live_performance/weather_live_strategy_period_slice.py` | `scripts/analysis/live_performance/weather_live_strategy_period_slice.py` | live_performance |
-| `scripts/analysis/live_performance/weather_account_equity_replay.py` | `scripts/analysis/live_performance/weather_account_equity_replay.py` | live_performance |
-| `scripts/analysis/live_performance/weather_recent_live_loss_attribution.py` | `scripts/analysis/live_performance/weather_recent_live_loss_attribution.py` | live_performance |
-| `scripts/analysis/live_performance/pnl_curve_detailed.py` | `scripts/analysis/live_performance/pnl_curve_detailed.py` | live_performance |
-| `scripts/analysis/live_performance/weather_three_strategy_overlap_analysis.py` | `scripts/analysis/live_performance/weather_three_strategy_overlap_analysis.py` | live_performance |
-| `scripts/analysis/live_performance/force_settle_live_real.py` | `scripts/analysis/live_performance/force_settle_live_real.py` | live_performance |
-| `scripts/analysis/weather_live_account_reconcile.py` | `scripts/analysis/account_reconcile/weather_live_account_reconcile.py` | account_reconcile |
-| `scripts/analysis/account_reconcile/weather_polymarket_account_activity.py` | `scripts/analysis/account_reconcile/weather_polymarket_account_activity.py` | account_reconcile |
-| `scripts/analysis/account_reconcile/weather_polymarket_position_snapshot.py` | `scripts/analysis/account_reconcile/weather_polymarket_position_snapshot.py` | account_reconcile |
-| `scripts/analysis/account_reconcile/weather_polymarket_snapshot_summary.py` | `scripts/analysis/account_reconcile/weather_polymarket_snapshot_summary.py` | account_reconcile |
-| `scripts/analysis/data_integrity/inspect_weather_signal_side_flips.py` | `scripts/analysis/data_integrity/inspect_weather_signal_side_flips.py` | data_integrity |
-| `scripts/analysis/data_integrity/inspect_weather_snapshot_bracket_evolution.py` | `scripts/analysis/data_integrity/inspect_weather_snapshot_bracket_evolution.py` | data_integrity |
-| `scripts/analysis/data_integrity/inspect_weather_snapshot_side_flip_transitions.py` | `scripts/analysis/data_integrity/inspect_weather_snapshot_side_flip_transitions.py` | data_integrity |
-| `scripts/analysis/build_copy_trade_address_pools.py` | `scripts/copy_trade/build_copy_trade_address_pools.py` | copy_trade |
-| `scripts/analysis/copy_trade_event_driven_scanner.py` | `scripts/copy_trade/copy_trade_event_driven_scanner.py` | copy_trade |
-| `scripts/analysis/copy_trade_position_analyzer.py` | `scripts/copy_trade/copy_trade_position_analyzer.py` | copy_trade |
-| `scripts/copy_trade/copy_trade_rule_edge_wallet_research.py` | `scripts/copy_trade/copy_trade_rule_edge_wallet_research.py` | copy_trade |
-| `scripts/analysis/copy_trade_tech_market_scanner.py` | `scripts/copy_trade/copy_trade_tech_market_scanner.py` | copy_trade |
-| `scripts/analysis/copy_trade_thematic_scan.py` | `scripts/copy_trade/copy_trade_thematic_scan.py` | copy_trade |
-| `scripts/analysis/copy_trade_wallet_research.py` | `scripts/copy_trade/copy_trade_wallet_research.py` | copy_trade |
+1. **历史 producer 被当 helper import**：先把公共逻辑抽到稳定 module，再退掉一次性研究入口；不能直接删除。
+2. **同家族 vN 脚本**：按 AST/行为比较，不按文件名猜重复；模型、标签、PIT clock 或数据合同不同则保留。
+3. **城市专用脚本**：城市只改变 profile/config 时并入 WCIR runner；city adapter 真正不同则保留 adapter，不复制 collector/execution。
+4. **动态输入**：argparse default、Path join、glob 和 imported helper 的 archived input 都必须进入 dependency audit。
+5. **mutable replay**：依赖 current DB、latest.json 或后来补入的 snapshot inventory 时，先冻结输入清单；无法 exact replay 就保留。
+6. **无界 self-check**：历史 producer 不应为生成一个派生 CSV 扫描当前整库；保留的 runner 改用共享、bounded manifest/gate。
+
+## 删除验收
+
+一个历史脚本只有同时满足以下条件才可删除：
+
+- 不属于 production manifest/controller 注册入口；
+- 没有 import、测试、文档执行命令或 active artifact consumer；
+- 耐久结论已经进入 owner living doc，日期报告保留必要 lineage；
+- 派生输出已保留，或 clean revision + frozen inputs 能精确重放；
+- 删除后 docs check、dependency audit 和相关测试通过。
+
+暂时不用、研究失败或被新方向覆盖，只能标 dormant/superseded-for-now；这本身不满足删除条件。
