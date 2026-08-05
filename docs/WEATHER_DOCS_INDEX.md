@@ -5,7 +5,7 @@ Updated: 2026-07-15 authority reset, Mac runtime routing, research skill refresh
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-07-15
+更新时间：2026-08-05
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -26,6 +26,26 @@ Status 口径：
 - 当前进程、pause、订单和 fill 只认 Mac raw runtime + exchange evidence；静态 entrypoint/registry 负责路由，不替代运行态。
 - 当前策略研究总判断以 registry + 最新 living/reset report 为准；旧正 ROI、旧 `confirmed` 标签和旧 N100 配置不得跨口径继承。
 - 技能工作流以仓库 `skills/weather-*` 为准；细节定义仍服从本索引列出的 contract/source 文档。
+
+## 研究文档族路由
+
+日期报告是不可变证据，不是新的 source of truth。读历史报告前先从下表进入当前家族结论；
+新实验结束时必须回写所属家族入口和 `WEATHER_STRATEGY_REGISTRY.md`，不能只新增一份日期报告。
+
+| 研究家族 | 当前结论入口 | 历史报告如何使用 |
+|---|---|---|
+| current-YES / reheat / carry / overshoot | [reheat_risk.md](analysis/reheat_risk.md) + [STRATEGY_REGISTRY](WEATHER_STRATEGY_REGISTRY.md) | 6 月模型地图和 v9/hazard 是历史谱系；7 月 challenger 已在 family synthesis 收口，不从单份正 ROI 恢复 selector |
+| Tmax distribution / full ladder / target book | [WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md](WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md) | P0–P6、lineage repair、v3 报告用于复核演进；当前结论是概率/会计框架保留、alpha 未 confirmed |
+| Amsterdam / Busan / Helsinki / Seoul / Tokyo 城市模型 | [WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md](WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md) + [WCIR runtime design](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md) | 先读“五城知识账”；数字版本是 experiment/run，不自动成为新模型身份或新 collector |
+| 外部钱包 | [WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md](WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md) | 先读全钱包结论矩阵；逐钱包报告只支持机制与历史 selected-fill 证据，不支持地址跟单或 live eligibility |
+| market structure / Range RV / underround / microstructure | [market_structure_edge.md](analysis/market_structure_edge.md) | 历史 scanner 版本是 search history；当前只保留已吸收的结构结论和仍需 forward 的执行问题 |
+| forecast source / city-model calibration | [WEATHER_FORECAST_SOURCE_CALIBRATION.md](WEATHER_FORECAST_SOURCE_CALIBRATION.md) | 单日/单模型 scorecard 只作 snapshot；当前每城模型与 lineage 以 living calibration doc 为准 |
+| 生产、JRS、DB、采集事故 | [WEATHER_JRS_RUNTIME_INCIDENTS.md](WEATHER_JRS_RUNTIME_INCIDENTS.md) + [DATA_PIPELINE](WEATHER_DATA_PIPELINE.md) + [ENTRYPOINT](WEATHER_STRATEGY_ENTRYPOINT.md) | 事故报告用于时间窗和根因证据，不替代 controller/manifest 的当前状态 |
+
+机器产物不承担知识路由。CSV/JSONL/model/image 已迁入
+`production.yaml.research_artifact_root` 的内容寻址库；Markdown 家族入口保留结论、证据边界和
+manifest/历史报告指针。需要重放历史研究时，用
+`weather_research_artifact_ctl.py` 先查看并恢复该脚本的归档依赖，不把整库重新复制回仓库。
 
 ## 2026-06-06 口径勘误
 
@@ -594,3 +614,6 @@ Status 口径：
 - 时间点报告保持正文不改；如结论不再适用，在本索引或当前入口标注，不回写历史正文。
 - 任何改变 live 策略、城市池、账户对账或数据源真相的关键发现，至少要落到对应的 `current-source` 文档和本索引。
 - 每次新增或删除 `docs/` 下 weather 文档，更新本索引；`AGENTS.md` / `CLAUDE.md` 不再维护长表。
+- 2026-08-05 内容审计发现唯一 exact duplicate：
+  `archive/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.md`
+  与 `...after-fill-fix.md` 内容完全相同。两份暂保留历史路径，引用统一指向前者，后续删除候选只处理别名，不再重复吸收结论。

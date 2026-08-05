@@ -9,6 +9,7 @@ machine outputs under ``docs/``.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -36,6 +37,7 @@ from src.strategies.runtime.production import load_production_spec
 
 
 GENERATED_ROOT = ROOT / "docs" / "analysis"
+READ_CALL_PREFIXES = ("read", "load", "open", "glob", "iterdir", "exists", "stat")
 
 
 def utc_now() -> str:
@@ -48,6 +50,158 @@ def sha256_file(path: Path) -> str:
         while chunk := handle.read(8 * 1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def archived_artifact_rows(artifact_root: Path | None = None) -> dict[str, dict[str, Any]]:
+    """Load the generated-artifact path map and reject ambiguous history."""
+    root = artifact_root or load_production_spec().research_artifact_root
+    rows: dict[str, dict[str, Any]] = {}
+    for manifest in sorted((root / "manifests").glob("*.json")):
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != "pm_agents_research_artifact_manifest_v1":
+            continue
+        if payload.get("snapshot_kind") == "dirty_worktree":
+            continue
+        for raw in payload.get("files", []):
+            if not raw.get("object_path") or not raw.get("sha256"):
+                continue
+            row = dict(raw)
+            row["manifest_path"] = str(manifest)
+            previous = rows.get(row["path"])
+            if previous and previous["sha256"] != row["sha256"]:
+                raise RuntimeError(
+                    f"ambiguous archived revisions for {row['path']}: "
+                    f"{previous['manifest_path']} vs {manifest}"
+                )
+            rows[row["path"]] = row
+    return rows
+
+
+def _static_path(node: ast.AST, environment: dict[str, str]) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return environment.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _static_path(node.left, environment)
+        right = _static_path(node.right, environment)
+        if left and right:
+            if "docs/" in right:
+                return right
+            return f"{left.rstrip('/')}/{right.lstrip('/')}"
+        return left or right
+    if isinstance(node, ast.Call) and node.args:
+        name = ""
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            name = node.func.attr
+        if name in {"Path", "str", "resolve"}:
+            return _static_path(node.args[0], environment)
+    return None
+
+
+def _python_path_environment(tree: ast.AST) -> dict[str, str]:
+    environment: dict[str, str] = {}
+    assignments = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+    ]
+    for _ in range(4):
+        changed = False
+        for node in assignments:
+            value = _static_path(node.value, environment)
+            if not value:
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and environment.get(target.id) != value:
+                    environment[target.id] = value
+                    changed = True
+        if not changed:
+            break
+    return environment
+
+
+def discover_archived_dependencies(
+    source_paths: list[Path],
+    archive_rows: dict[str, dict[str, Any]],
+) -> dict[str, list[str]]:
+    """Find archived generated inputs read by Python scripts, including split Path joins."""
+    dependencies: dict[str, list[str]] = {}
+    archived_paths = tuple(sorted(archive_rows))
+    for source in source_paths:
+        try:
+            tree = ast.parse(source.read_text(encoding="utf-8", errors="ignore"))
+        except SyntaxError:
+            continue
+        environment = _python_path_environment(tree)
+        required: set[str] = set()
+
+        def add_archived_path(value: str) -> None:
+            if "docs/analysis/" not in value or "/generated/" not in value:
+                return
+            relative = value[value.index("docs/analysis/") :]
+            if relative in archive_rows:
+                required.add(relative)
+            prefix = relative.rstrip("/") + "/"
+            required.update(path for path in archived_paths if path.startswith(prefix))
+
+        # argparse defaults are read indirectly through ``args.<name>`` and do
+        # not appear at the eventual pandas/open call.  Treat static non-output
+        # constants as dependencies as well.
+        for name, value in environment.items():
+            if any(marker in name.upper() for marker in ("OUTPUT", "OUT_DIR", "DESTINATION")):
+                continue
+            add_archived_path(value)
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Attribute):
+                function = node.func.attr
+                candidates = [node.func.value, *node.args[:1]]
+            elif isinstance(node.func, ast.Name):
+                function = node.func.id
+                candidates = list(node.args[:1])
+            else:
+                continue
+            if not function.startswith(READ_CALL_PREFIXES):
+                continue
+            for candidate in candidates:
+                value = _static_path(candidate, environment)
+                if value:
+                    add_archived_path(value)
+        if required:
+            dependencies[str(source.relative_to(ROOT))] = sorted(required)
+    return dependencies
+
+
+def dependency_plan(selected_scripts: set[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    archive_rows = archived_artifact_rows()
+    if selected_scripts:
+        source_paths = []
+        for relative in sorted(selected_scripts):
+            source = ROOT / relative
+            if not source.is_file() or source.suffix != ".py":
+                raise ValueError(f"dependency script must be a Python file: {relative}")
+            source_paths.append(source)
+    else:
+        source_paths = sorted((ROOT / "scripts").glob("**/*.py"))
+        source_paths += sorted((ROOT / "src").glob("**/*.py"))
+    dependencies = discover_archived_dependencies(source_paths, archive_rows)
+    required_paths = sorted({path for paths in dependencies.values() for path in paths})
+    rows = [archive_rows[path] for path in required_paths]
+    missing = [path for path in required_paths if not (ROOT / path).exists()]
+    plan = {
+        "affected_script_count": len(dependencies),
+        "archived_file_count": len(rows),
+        "archived_bytes": sum(int(row["size_bytes"]) for row in rows),
+        "missing_in_worktree_count": len(missing),
+        "scripts": dependencies,
+    }
+    return plan, rows
 
 
 def generated_files() -> list[Path]:
@@ -258,6 +412,15 @@ def restore(
         print(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True))
         return plan
 
+    restored = restore_rows(rows)
+    plan["applied"] = True
+    plan["restored_file_count"] = restored
+    print(json.dumps(plan, ensure_ascii=False, sort_keys=True))
+    return plan
+
+
+def restore_rows(rows: list[dict[str, Any]]) -> int:
+    """Restore already-validated manifest rows and return the created count."""
     restored = 0
     for row in rows:
         destination = ROOT / row["path"]
@@ -287,10 +450,25 @@ def restore(
             raise RuntimeError(f"restored file hash mismatch: {destination}")
         temporary.replace(destination)
         restored += 1
-    plan["applied"] = True
-    plan["restored_file_count"] = restored
-    print(json.dumps(plan, ensure_ascii=False, sort_keys=True))
-    return plan
+    return restored
+
+
+def restore_dependencies(selected_scripts: set[str], *, apply: bool) -> dict[str, Any]:
+    if not selected_scripts:
+        raise ValueError("restore-dependencies requires at least one --script")
+    plan, rows = dependency_plan(selected_scripts)
+    payload = {
+        **plan,
+        "selected_scripts": sorted(selected_scripts),
+        "applied": False,
+    }
+    if not apply:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        return payload
+    payload["restored_file_count"] = restore_rows(rows)
+    payload["applied"] = True
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return payload
 
 
 def dirty_worktree_paths() -> list[Path]:
@@ -384,7 +562,15 @@ def snapshot_worktree(run_id: str, *, apply: bool) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "command", choices=("inventory", "archive", "restore", "snapshot-worktree")
+        "command",
+        choices=(
+            "inventory",
+            "archive",
+            "restore",
+            "dependencies",
+            "restore-dependencies",
+            "snapshot-worktree",
+        ),
     )
     parser.add_argument(
         "--run-id",
@@ -393,7 +579,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="archive, verify, and remove selected repository copies",
+        help="execute archive/removal or restore; otherwise print a read-only plan",
     )
     parser.add_argument("--manifest", type=Path)
     parser.add_argument(
@@ -401,6 +587,12 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help="repository-relative path to restore; repeat as needed",
+    )
+    parser.add_argument(
+        "--script",
+        action="append",
+        default=[],
+        help="repository-relative Python script for dependency audit/restore",
     )
     return parser.parse_args()
 
@@ -426,6 +618,13 @@ def main() -> int:
             selected_paths=set(args.path),
             apply=args.apply,
         )
+        return 0
+    if args.command == "dependencies":
+        plan, _ = dependency_plan(set(args.script))
+        print(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    if args.command == "restore-dependencies":
+        restore_dependencies(set(args.script), apply=args.apply)
         return 0
     if args.command == "snapshot-worktree":
         snapshot_worktree(args.run_id, apply=args.apply)

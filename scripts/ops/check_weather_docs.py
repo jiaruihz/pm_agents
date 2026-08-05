@@ -212,6 +212,48 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
                 fail(errors, f"{path}: missing WCIR/canonical term {term}")
 
 
+def check_research_knowledge_routing(errors: list[str]) -> None:
+    expectations = {
+        "docs/WEATHER_DOCS_INDEX.md": (
+            "## 研究文档族路由",
+            "日期报告是不可变证据",
+            "weather_research_artifact_ctl.py",
+        ),
+        "docs/analysis/reheat_risk.md": (
+            "Family synthesis after the July challenger sequence",
+            "80 dated current-YES reports",
+        ),
+        "docs/WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md": (
+            "confirmed_alpha = none",
+            "v3 fixed-denominator result",
+        ),
+        "docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md": (
+            "### 1.1 当前五城知识账",
+            "busan_intraday_exact_no",
+        ),
+        "docs/WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md": (
+            "## 全钱包结论矩阵",
+            "所有钱包共同的结论",
+        ),
+        "skills/weather-strategy-research/SKILL.md": (
+            "只新增日期报告、不更新家族入口，任务不算完成",
+            "restore-dependencies",
+        ),
+        "skills/weather-strategy-performance/SKILL.md": (
+            "family living doc",
+            "大型明细、模型和图片进入",
+        ),
+    }
+    for path, markers in expectations.items():
+        text = read(path)
+        for marker in markers:
+            if marker not in text:
+                fail(errors, f"{path}: missing knowledge-routing marker {marker!r}")
+    for path in ("AGENTS.md", "CLAUDE.md"):
+        if "迁移机器产物不等于完成知识整理" not in read(path):
+            fail(errors, f"{path}: missing artifact-to-knowledge handoff")
+
+
 def check_index_links(errors: list[str], tracked: set[str]) -> None:
     index_path = ROOT / "docs" / "WEATHER_DOCS_INDEX.md"
     for target, resolved in local_markdown_targets(index_path):
@@ -394,6 +436,7 @@ def main() -> int:
     check_historical_status(errors)
     check_skill_surface(errors)
     check_operational_skill_contracts(errors)
+    check_research_knowledge_routing(errors)
     check_index_links(errors, tracked)
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)

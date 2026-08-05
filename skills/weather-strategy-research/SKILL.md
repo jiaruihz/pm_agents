@@ -122,7 +122,14 @@ maker 假设必须建 fill/queue/adverse selection，不能把 future touch 当�
 
 - 可复跑脚本放对应 `scripts/analysis/<family>/`，使用 `.venv/bin/python`。
 - 原始机会/特征若会复用，进入 canonical opportunity/feature layer，不另建平行事实表。
-- 报告写 `docs/analysis/YYYY-MM/`，并在成为 durable reference 时更新 `WEATHER_DOCS_INDEX.md` / registry。
+- 大型 CSV/JSONL/model/image 写 `production.yaml.research_artifact_root`；历史脚本需要已归档输入时，先用
+  `weather_research_artifact_ctl.py dependencies` 定位，再用 `restore-dependencies --script ... --apply`
+  按脚本最小恢复，不把整库复制回 `docs/`。
+- 日期报告写 `docs/analysis/YYYY-MM/`，只作 snapshot。实验结束时必须同时回写
+  `WEATHER_DOCS_INDEX.md` 的所属家族 living doc 与 `WEATHER_STRATEGY_REGISTRY.md`：写清耐久结论、
+  被取代的旧判断、证据边界和当前动作。只新增日期报告、不更新家族入口，任务不算完成。
+- 新版本若只是同一模型的 feature/参数/训练窗 experiment，保留稳定 model identity，用 `run_id/artifact_id`
+  区分；不要继续制造 `v9/v10/v11` 平行“当前模型”。
 - 结论保留 `inconclusive` / `shadow_candidate` / `rejected_for_expression` 边界；方向暂停不删除资产。
 
 最终先给动作：继续 collector、启动 zero-notional shadow、保持 research、停止某 expression、或不改 live；再给证据和 blocker。

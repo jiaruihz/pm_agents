@@ -20,6 +20,25 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 3. 使用同一套概率指标；有 PIT 盘口时，再使用同一套 market baseline 和交易指标。
 
 城市代码能自然复用就复用；不能复用时可以独立实现，只要最终导出统一结果。不要为了接口整齐扭曲城市自己的数据和物理机制。
+目标模块边界、接口、迁移顺序和新城市接入工作单见
+[WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md)。
+
+### 1.1 当前五城知识账
+
+城市报告不再按 `v7/v8/v9...` 文件名推断当前模型。下表只记录已吸收的耐久结论；
+运行中的 adapter/process/订单仍从 production manifest 和 raw runtime 动态读取。
+
+| 城市 | 稳定模型/接入身份 | 已吸收结论 | 当前研究动作 |
+|---|---|---|---|
+| Amsterdam | WCIR Amsterdam adapter；weather head 保留，交易头改为 market-prior + KNMI innovation | standalone weather probability 不能直接当 fair price；captured-book D1 上 market-prior 仅点估改善，CI 跨零且交易未胜纯 market direction | zero-notional；补真实 first-seen lineage 与 frozen forward · [paradigm](analysis/2026-08/2026-08-04-amsterdam-market-prior-event-innovation-paradigm-v1.md) · [executable null](analysis/2026-08/2026-08-04-amsterdam-executable-market-null-v2.md) |
+| Busan | `busan_intraday_exact_no`；固定为 confirmation head + conditional reheat head | AMOS cross persistence 不能替代 source→routine/WU basis；v9/v10/v11 只是同一模型的历史 experiment。非线性 tournament 和连续 residual 都受独立日期、market-aligned rows 与 conditional-reheat 样本限制 | coverage-only；不继续造版本号，按固定 ontology append 新日期 · [stable architecture](analysis/2026-08/2026-08-04-busan-stable-model-architecture-v1.md) · [family benchmark](analysis/2026-08/2026-08-04-busan-model-family-benchmark.md) |
+| Helsinki | frozen remaining-heat/weather artifact + market-expression research head | weather head 有历史 OOF 增量，但当前 expression reliability 未通过；少量正 ROI 不能覆盖 market baseline、active grain 和独立日期不足 | 保持 zero-notional，不改 artifact；补 PIT book/forward · [v7 lineage](analysis/2026-07/2026-07-31-helsinki-v7-forecast-lineage-missing-expert.md) · [reliability](analysis/2026-07/2026-07-31-helsinki-model-reliability-audit-v1.md) |
+| Tokyo | frozen weather path head；market-offset 仍是 development challenger | 历史 collector-exact 覆盖不足以重训后恢复旧 holdout；state-entry 仍未稳定胜 market | zero-notional collector，达到预注册 exact train/holdout 日期后再评审 · [coverage](analysis/2026-07/2026-07-31-tokyo-market-anchor-training-coverage-v7.md) |
+| Seoul | Korea source-event adapter，尚无独立 frozen probability artifact | 与 Busan 共用的 CrossNO/dual-head 不能绕过城市 source→settlement basis；外部负面对照使当前表达不能晋级 | coverage-only；先建 Seoul 自己的 PIT probability/basis，再谈 expression · [Korea dual head](analysis/2026-08/2026-08-03-korea-cross-event-dual-head-v5.md) |
+
+跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
+没有冻结 artifact 的城市输出 structured blocker；有 artifact 的城市也只有在同 checkpoint
+proper score、market baseline、frozen forward 和 executable expression 四层闭合后才能改变交易状态。
 
 ## 2. 城市内部可以不同
 

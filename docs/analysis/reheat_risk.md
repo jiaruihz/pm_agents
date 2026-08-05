@@ -3,6 +3,120 @@
 Status: current-reference
 Created: 2026-06-16
 
+## 2026-07-27 current correction
+
+This file remains the family-level entry point, but most dated results below
+describe the June research state and must not be used as current model-selection
+evidence on their own.
+
+Current decision:
+
+- the active current-YES challenger is the frozen compact core carry; its live
+  probe status and current sizing must be read from
+  `WEATHER_STRATEGY_REGISTRY.md` and current runtime evidence;
+- the June binary hazard, regime hazard and first-principles survival reports
+  are historical experiments. Later fixed-denominator reruns corrected
+  forecast lineage, city-day weighting, native settlement lattice, strict-high
+  clocks, official fees and longer out-of-period coverage;
+- after those corrections, hazard/remaining-heat/path/regime overlays did not
+  stably improve proper score over market or the frozen core. They are not
+  approved as filters, sizing overlays or a live V4;
+- `hazard` remains a valid probability representation, not established alpha.
+  A new hazard formula using the same information is only a
+  reparameterization.
+
+Current corrective references:
+
+- `2026-07/2026-07-21-heat-death-overshoot-edge-strategy-v2.md`
+- `2026-07/2026-07-22-current-yes-carry-mechanism-timing-audit-v1.md`
+- `2026-07/2026-07-25-d1-bounded-reheat-overshoot-v2.md`
+- `2026-07/2026-07-27-current-yes-core-carry-overshoot-missing-mechanisms-v2.md`
+
+### Family synthesis after the July challenger sequence
+
+The durable conclusion from the 80 dated current-YES reports is shorter than
+their version history:
+
+1. June `v9`/fade/peak-forming/hazard reports are historical lineage, not a
+   current selector or live authorization.
+2. `current_yes_core_carry_v2` is the frozen reference probability/expression
+   for this family, but its historical positive 5-share replay did not by
+   itself prove incremental probability alpha over market and does not make
+   the strategy `confirmed`.
+3. Overshoot sizing, semantic weather augmentation, synoptic/advection,
+   late-plateau mixing and post-rebracket challengers all failed their
+   same-denominator or frozen-forward promotion tests. Their mechanisms remain
+   useful features/case labels; none is an approved hard filter, sizing overlay
+   or replacement model.
+4. Maker-first and larger taker sizing produced execution evidence, not model
+   promotion. Queue, missed-fill and settled maker denominators remain distinct
+   from taker replay.
+5. New work should update a continuous exact-bracket posterior from market
+   prior plus first-seen weather innovation, then compare on the same PIT
+   checkpoints. Do not create another numbered strategy because one case was
+   bad.
+
+Current routing:
+
+- model/strategy state and production-independent verdict:
+  `WEATHER_STRATEGY_REGISTRY.md` rows for `current_yes_core_carry`;
+- production process, notional and order state: production manifest + raw
+  runtime + exchange evidence;
+- physical semantics and failure cases:
+  `WEATHER_INTRADAY_DECISION_CASEBOOK.md`;
+- July challenger evidence:
+  [v3 performance](2026-07/2026-07-29-current-yes-core-carry-v3-upgrade-and-performance-v1.md),
+  [semantic v2](2026-07/2026-07-29-current-yes-core-carry-physical-semantic-audit-v2.md),
+  [synoptic/advection v3](2026-07/2026-07-29-current-yes-core-carry-synoptic-advection-v3.md),
+  [late plateau](2026-07/2026-07-29-current-yes-late-semantic-plateau-challenger-v1.md),
+  [post-rebracket A/B](2026-07/2026-07-30-current-yes-core-carry-post-rebracket-event-ab-v1.md),
+  and [maker lineage](2026-07/2026-07-29-current-yes-core-carry-maker-fill-lineage-v2.md).
+
+This section is the semantic replacement for treating
+`2026-06-21-current-yes-model-map-and-version-guide.md` as a living model map.
+That dated document remains a historical snapshot.
+
+### What first-seen transition research is for
+
+`first_seen_at` answers when the strategy could actually know that a source
+event or state transition had happened. It is distinct from:
+
+```text
+valid_time / observation_time  = when the weather state applies
+issued_at                      = when the provider says it published the item
+first_seen_at                  = when our collector first received it
+decision_ts                    = when the strategy evaluated the market
+```
+
+The target is not “rain/cloud is good or bad.” It is the information surprise:
+
+```text
+expected transition has arrived early / on time / late / not yet
+new forecast run moved the upward-exit probability
+new observation changed the path state before the market fully repriced
+```
+
+It has three legitimate consumers:
+
+1. **Current-YES carry probability challenger** — update remaining overshoot
+   risk when an expected rain/cloud/wind transition arrives early, arrives
+   late, or fails to arrive. Example: a PIT TAF expected rain at 13:00, but at
+   14:00 the station is still CAVOK; that is additional heating-window
+   evidence, not a permanent city/date gate.
+2. **Source-event repricing research** — measure whether a genuinely new
+   METAR/TAF/forecast/radar event reaches our collector before the book reprices.
+   This is a latency/execution residual and must use the quote at or after the
+   same `first_seen_at`.
+3. **Forecast revision reliability** — compare successive forecast vintages
+   relative to the settlement-native upward-exit boundary. Re-reading one
+   cached run is not a revision.
+
+First-seen transitions must remain continuous telemetry until they improve
+V3/core proper score on the same checkpoints and survive frozen forward. They
+must not become `rain=true`, `TAF transition missing`, support-count, or other
+hard eligibility gates. Later observations may be labels, never retroactive
+features.
+
 Use `reheat_risk` for the shared physical model, and use strategy-specific
 names for trade expressions.
 

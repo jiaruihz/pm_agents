@@ -1,35 +1,53 @@
 # Weather Tmax Distribution Edge Strategy
 
 Status: current-reference
-Updated: 2026-07-10 lineage repair replay
+Updated: 2026-08-05 semantic consolidation through tmax v3
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md
 
 ## 当前结论
 
-这条策略目前叫：
+这条研究家族的稳定名字是：
 
 ```text
 tmax_distribution_edge
 ```
 
-当前运行实例：
+当前研究状态：
 
 ```text
-tmax_distribution_edge_shadow_v1
+confirmed_alpha = none
+historical_shadow_identity = tmax_distribution_edge_shadow_v1
+promotion = no live
 ```
 
-状态：
+人话：这一家族保留了完整的概率、表达和执行血缘，但截至当前没有一版在固定 PIT
+分母上稳定打败 market 并通过 frozen forward。`tmax_distribution_edge_shadow_v1`
+是历史 shadow identity，不证明此刻有对应进程；实际 runner、notional 和订单状态只认
+production manifest、raw runtime 与 exchange evidence。
 
-```text
-zero-notional shadow
-no_order_placed = true
-live_action = none
-```
+45 份 Tmax 报告整合后的耐久结论：
 
-人话：它现在不是实盘策略，也不是 paper 下单策略，而是一个按真实策略逻辑持续记录“会选什么表达、为什么选/为什么不选”的 forward 取证系统。
-Lucknow 7/05 首个 live 日暴露出执行层去重/持仓血缘问题后，tmax tiny-live 保持暂停；任何恢复 live
-都必须先证明 runner 执行口径与回测口径一致。
+- P0–P6 与 target-book v2 证明了“coherent exact/full-ladder distribution →
+  fee-adjusted expression residual”是正确问题形式，但早期正 ROI 的日期 CI 较宽。
+- 7/10 lineage repair 修掉 live/replay feature、NaN ask、sibling 和完整 ladder
+  口径分叉；同时证明所谓 below-ladder 新容量主要是 collector 丢 near-binary sibling，
+  不是新 alpha。
+- v3 在固定 8,094 clean states 上复核后，weather-only 明显输 market；
+  `market_path`、source、strict PIT 和 archive upper-bound 均未稳定改善 market proper
+  score。first-lock execution 的大多数 route ROI 也跨零或为负。
+- 因此旧 `inconclusive_positive_signal` 只能描述对应历史窗口，不能作为当前晋级依据。
+  当前可复用的是分布表示、PIT contract、full-ladder accounting 和 blocked telemetry，
+  不是旧 selector、阈值或 live 配置。
+
+当前收口证据：
+[lineage repair](analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.md) ·
+[clean feature restoration](analysis/2026-07/2026-07-12-tmax-clean-feature-restoration-v1.md) ·
+[v3 fixed-denominator result](analysis/2026-07/2026-07-13-tmax-distribution-v3.md)。
+
+下文保留策略从 P0–P6、target-book、lineage repair 到 runtime contract 的历史演进。
+其中出现的 candidate config、runner 名和 live/shadow 叙述都只属于相应报告时点；与本节冲突时，
+以本节研究结论和动态 production evidence 为准。
 
 ## 策略本体
 

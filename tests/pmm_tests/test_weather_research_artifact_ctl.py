@@ -112,3 +112,74 @@ def test_restore_recreates_symlink_from_snapshot(tmp_path, monkeypatch):
     assert restored.is_symlink()
     assert restored.readlink() == Path("/Volumes/jrs/research/source.jsonl.gz")
     assert result["restored_file_count"] == 1
+
+
+def test_dependency_scan_resolves_split_path_joins_and_directory_reads(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    source = repo / "scripts/analysis/family/research_example.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """from pathlib import Path
+ROOT = Path(__file__).resolve().parents[3]
+INPUT_ROOT = ROOT / "docs/analysis/2026-07" / "generated/example_v1"
+INPUT = INPUT_ROOT / "input.csv"
+rows = INPUT.read_text()
+children = list(INPUT_ROOT.iterdir())
+""",
+        encoding="utf-8",
+    )
+    rows = {
+        "docs/analysis/2026-07/generated/example_v1/input.csv": {},
+        "docs/analysis/2026-07/generated/example_v1/nested/labels.csv": {},
+        "docs/analysis/2026-07/generated/unrelated/output.csv": {},
+    }
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+
+    result = artifact_ctl.discover_archived_dependencies([source], rows)
+
+    assert result == {
+        "scripts/analysis/family/research_example.py": [
+            "docs/analysis/2026-07/generated/example_v1/input.csv",
+            "docs/analysis/2026-07/generated/example_v1/nested/labels.csv",
+        ]
+    }
+
+
+def test_restore_dependencies_uses_minimal_script_plan(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    content = b"archived input\n"
+    digest = hashlib.sha256(content).hexdigest()
+    archived = tmp_path / "objects" / digest
+    archived.parent.mkdir()
+    archived.write_bytes(content)
+    row = {
+        "path": "docs/analysis/generated/input.csv",
+        "size_bytes": len(content),
+        "sha256": digest,
+        "object_path": str(archived),
+    }
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "dependency_plan",
+        lambda scripts: (
+            {
+                "affected_script_count": 1,
+                "archived_file_count": 1,
+                "archived_bytes": len(content),
+                "missing_in_worktree_count": 1,
+                "scripts": {next(iter(scripts)): [row["path"]]},
+            },
+            [row],
+        ),
+    )
+
+    result = artifact_ctl.restore_dependencies(
+        {"scripts/analysis/example.py"}, apply=True
+    )
+
+    assert (repo / row["path"]).read_bytes() == content
+    assert result["restored_file_count"] == 1

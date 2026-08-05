@@ -2,13 +2,42 @@
 
 Status: current-reference
 
-Updated: 2026-07-29
+Updated: 2026-08-05 semantic consolidation
 
 Source of truth: external-wallet research register, not production strategy truth
 
 本文件长期登记外部 weather 账户的地址、完整策略判断、证据边界和下一步研究方向。
 单个 bracket 交易只作为 chronology；策略归因必须先合并同一 `city × target_date`
 的完整互斥 ladder。
+
+## 全钱包结论矩阵
+
+这里是当前人工入口。后面的长段只保留三条代表性机制的完整说明；其余逐钱包报告是
+时间点证据，不应再各自充当“当前策略结论”。所有钱包共同的结论是：历史 selected fills
+可以证明某个账户曾经盈利，却不能提供我们的未选择机会分母、私有概率、挂单队列或同刻
+可执行 baseline，因此没有一条可以直接复制成 live 策略。
+
+| 钱包 / 家族 | 已吸收的耐久机制 | 当前可复用部分 | 当前状态 / 详细证据 |
+|---|---|---|---|
+| `yourthos` | Seoul/RKSI source-event 后动态切换 current NO、current YES 与 upper YES，并用 NegRisk/SELL 释放资金 | source-event 后重算整条 ladder；钱包方向只作 confirmation/veto | `inconclusive / 秒级执行不可跟单`；见下文 |
+| `Gptball` | Chengdu/ZUUU 日内 path-state router，NO pass-through 后切 current YES | 单城 source/basis adapter、状态切换而非单腿模仿 | `inconclusive / research-only`；见下文 |
+| `0x43cb` | 全球 target-day 连续 YES strip：range 底仓 + 中心加权，主要持有到结算 | full-ladder bounded-support probability 与 basket accounting | `historically profitable / transferable alpha unproven`；见下文与 [架构推断](analysis/2026-08/2026-08-05-research-43cb-city-model-architecture-v1.md) |
+| `0x919698…d934` | current/neighbor YES/NO + 高确定性 NO + maker/SELL 的动态 ladder | 完整 ladder 和主动退出的研究样板 | `historically profitable / copying inconclusive`；[机制](analysis/2026-07/2026-07-29-research-wallet-0x919698-weather-strategy-v1.md) · [绩效](analysis/2026-07/2026-07-29-performance-wallet-0x919698-weather-v1.md) |
+| `WeatherHK2` | 华南区域 D-1 库存，D0 随路径在相邻 YES/NO 间换档并 SELL/MERGE | 区域 source-basis、库存状态机 | `research-only`；[生命周期](analysis/2026-07/2026-07-30-research-weatherhk2-strategy-lifecycle-v1.md) · [案例](analysis/2026-07/2026-07-30-lineage-weatherhk2-five-case-v1.md) |
+| `jjavi` | D-1/D0 欧洲概率分布与相邻档轮动 | 分布更新和主动退出机制 | `mechanism reference / execution complex`；[全历史对照](analysis/2026-07/2026-07-31-lineage-weather-wallet-remaining-four-v1.md) |
+| `badatmath` | 提前建立宽 YES distribution 与 cheap-tail convexity | 概率分布和 tail sizing 研究 | `mechanism reference / 不复制高频执行`；[全历史对照](analysis/2026-07/2026-07-31-lineage-weather-wallet-remaining-four-v1.md) |
+| `HighTempTation` | target-day 高速 NO inventory 后近确定性退出 | 只作 terminal latency 上限 | `non-copyable latency benchmark`；[五钱包对照](analysis/2026-07/2026-07-30-performance-weather-wallet-five-way-v1.md) |
+| `MidYes56b` | target-day mid-price YES selector / 路径换档 | 只作 selector case source | `inconclusive / 收益集中`；[全历史对照](analysis/2026-07/2026-07-31-lineage-weather-wallet-remaining-four-v1.md) |
+| `LMVM` | D-2/D-1 单档 YES，短持仓主动 repricing SELL，极少依赖 settlement | 固定 horizon 的 repricing 生命周期 | `signal unknown / mechanism reference`；[profile](analysis/2026-08/2026-08-04-lineage-lmvm-repricing-profile-v1.md) |
+| `neo7777` | 多城市 mixed YES/NO，repricing 与 settlement hold 混合 | position-state 拆分方法 | `mixed account / 不归为 LMVM-like`；[profile](analysis/2026-08/2026-08-04-lineage-neo7777-repricing-profile-v1.md) |
+| `balthazar` | full-NO-set + NegRisk conversion / SPLIT / MERGE | full-set conversion accounting | `structural research only`；[新增五钱包总账](analysis/2026-07/2026-07-31-lineage-weather-wallet-new-five-v1.md) |
+| `opopv.` | D-2 起长期 mixed inventory、maker-style 累积与双向换手 | 库存/退出状态参考 | `historically positive / too complex to copy`；[profile](analysis/2026-08/2026-08-04-lineage-opopv-repricing-profile-v1.md) |
+| `macau.weather` | 香港集中式路径交易 | 与 WeatherHK2 做区域机制对照 | `concentrated / unstable`；[新增五钱包总账](analysis/2026-07/2026-07-31-lineage-weather-wallet-new-five-v1.md) |
+| `0x496f…` | D-2/D-1 多 NO ladder、长时间 inventory、conversion/MERGE 和 SELL | 完整库存与 NegRisk 会计 | `historically profitable / baseline unavailable`；[profile](analysis/2026-08/2026-08-04-lineage-wallet496f-repricing-profile-v1.md) |
+
+统一研究结论：优先复用的是 `full-ladder probability + position state + executable
+exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏好和持仓时长都是描述性
+切片，除非在我们的全机会分母、PIT book 和 frozen forward 上重现，否则不进入 eligibility。
 
 ## 已完整研究
 
