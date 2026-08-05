@@ -38,6 +38,8 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 **做任何新分析 / 脚本 / 特征 / 看板前，先定位它在血缘哪一层：**
 - 读数据 → 从 canonical 表读，不绕过去自算 fill / PnL / 漏单 / 滑点。
 - 产新信号 / 特征 → 挂进 `fact_signal_candidates` 机会粒度，不另建并行的一次性表。
+- 同一研究机制的不同日期、城市、训练窗和参数 → 复用一个 runner，以 config/run manifest 区分；不得复制成
+  `research_<city>_*_vN.py`。只有算法或数据合同真正不同才新增入口，并优先抽公共 helper/adapter。
 - 不确定结构往哪挂 → 先读 `WEATHER_STRATEGY_QUANT_DESIGN.md`，别先写脚本。
 
 完整设计 [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) ·

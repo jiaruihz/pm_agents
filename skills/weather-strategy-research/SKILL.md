@@ -121,6 +121,9 @@ maker 假设必须建 fill/queue/adverse selection，不能把 future touch 当�
 ## 产物
 
 - 可复跑脚本放对应 `scripts/analysis/<family>/`，使用 `.venv/bin/python`。
+- 同一机制的 city/date/window/parameter 变化必须走现有 runner 的 config/run manifest；禁止每天、每城复制一个
+  `research_*_vN.py`。新增入口前先运行 `check_weather_docs.py` 的 research debt audit；只有算法或输入合同真正变化
+  才允许新增，并把跨城市/跨版本重复函数提到共享 adapter、`weather_model_evaluation` 或 family common module。
 - 原始机会/特征若会复用，进入 canonical opportunity/feature layer，不另建平行事实表。
 - 大型 CSV/JSONL/model/image 写 `production.yaml.research_artifact_root`；历史脚本需要已归档输入时，先用
   `weather_research_artifact_ctl.py dependencies` 定位，再用 `restore-dependencies --script ... --apply`

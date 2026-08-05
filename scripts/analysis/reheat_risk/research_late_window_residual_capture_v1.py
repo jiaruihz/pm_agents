@@ -16,6 +16,7 @@ import gzip
 import json
 import math
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,21 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.reheat_risk.late_window_shared import (  # noqa: E402
+    basket_rows,
+    best_level,
+    block_ci,
+    connect_ro,
+    load_today_observation,
+    round_half_up,
+    rows,
+    scalar,
+    summary_num,
+)
+
 DB = ROOT / "runtime/weather.db"
 ORDERBOOK_DIR = ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/late_window_residual_capture_v1"
@@ -50,24 +66,6 @@ class Bracket:
     raw: str
     low: float | None
     high: float | None
-
-
-def connect_ro(path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=1.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA query_only=ON")
-    conn.execute("PRAGMA busy_timeout=1000")
-    return conn
-
-
-def rows(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-    cur = conn.execute(sql, params)
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
-
-
-def scalar(conn: sqlite3.Connection, sql: str) -> Any:
-    return conn.execute(sql).fetchone()[0]
 
 
 def parse_bracket(value: Any) -> Bracket | None:
@@ -102,44 +100,6 @@ def contains(bracket: Bracket, value: float) -> bool:
     return True
 
 
-def round_half_up(value: float) -> int:
-    return int(math.floor(float(value) + 0.5))
-
-
-def best_level(raw: Any, side: str) -> tuple[float | None, float | None]:
-    if not isinstance(raw, dict):
-        return None, None
-    levels = raw.get(side)
-    if not isinstance(levels, list) or not levels:
-        return None, None
-    parsed: list[tuple[float, float | None]] = []
-    for level in levels:
-        if not isinstance(level, dict):
-            continue
-        try:
-            price = float(level.get("price"))
-        except (TypeError, ValueError):
-            continue
-        try:
-            size = float(level.get("size")) if level.get("size") is not None else None
-        except (TypeError, ValueError):
-            size = None
-        parsed.append((price, size))
-    if not parsed:
-        return None, None
-    return min(parsed, key=lambda x: x[0]) if side == "asks" else max(parsed, key=lambda x: x[0])
-
-
-def summary_num(record: dict[str, Any], key: str) -> float | None:
-    summary = record.get("summary")
-    if not isinstance(summary, dict):
-        return None
-    try:
-        return float(summary.get(key)) if summary.get(key) is not None else None
-    except (TypeError, ValueError):
-        return None
-
-
 def load_observed(shards: list[Path], hours: set[int]) -> pd.DataFrame:
     frames = []
     for path in shards:
@@ -155,50 +115,6 @@ def load_observed(shards: list[Path], hours: set[int]) -> pd.DataFrame:
     out = out.sort_values(["target_date", "city", "decision_hour_local"])
     out = out.drop_duplicates(["city", "target_date", "decision_hour_local"], keep="last")
     return out
-
-
-def load_today_observation(path: Path, city: str = "Chengdu", hour: int = 17) -> pd.DataFrame:
-    if not path.exists():
-        return pd.DataFrame()
-    data = json.loads(path.read_text(encoding="utf-8"))
-    records = data.get("records") or []
-    rec = next((r for r in records if r.get("city") == city and r.get("status") == "ok"), None)
-    if not rec:
-        return pd.DataFrame()
-    target_date = str(rec.get("target_date"))
-    row = {
-        "city": rec.get("city"),
-        "icao": rec.get("station"),
-        "timezone": rec.get("timezone_name"),
-        "target_date": target_date,
-        "decision_hour_local": hour,
-        "obs_count_day": rec.get("record_count"),
-        "obs_count_to_decision": rec.get("record_count"),
-        "decision_last_obs_utc": rec.get("last_obs_utc"),
-        "current_temp_c": rec.get("current_temp_c"),
-        "current_temp_f": rec.get("tmpf_now"),
-        "running_max_c": rec.get("running_max_c"),
-        "running_max_f": (float(rec["running_max_c"]) * 9.0 / 5.0 + 32.0) if rec.get("running_max_c") is not None else None,
-        "decline_from_max_c": rec.get("decline_c"),
-        "decline_from_max_f": (float(rec["decline_c"]) * 9.0 / 5.0) if rec.get("decline_c") is not None else None,
-        "final_max_c": np.nan,
-        "final_max_f": np.nan,
-        "tmpf_now": rec.get("tmpf_now"),
-        "dwpf_now": rec.get("dwpf_now"),
-        "dewpoint_depression_f": rec.get("dewpoint_depression_f"),
-        "relative_humidity_pct": rec.get("relh_now"),
-        "wind_speed_kt": rec.get("sknt_now"),
-        "sky_cover_code": rec.get("sky_code_now"),
-        "temp_trend_1h_f": rec.get("d_tmpf_1h"),
-        "temp_trend_3h_f": rec.get("d_tmpf_3h"),
-        "minutes_since_running_max": rec.get("minutes_since_running_max"),
-        "cadence_min": rec.get("cadence_min"),
-        "minutes_to_next_obs": rec.get("minutes_to_next_obs"),
-        "source": rec.get("source"),
-        "source_chain": ",".join(rec.get("source_chain") or []),
-        "asof_generated_at_utc": data.get("generated_at_utc"),
-    }
-    return pd.DataFrame([row])
 
 
 def settlement_maps(conn: sqlite3.Connection) -> tuple[pd.DataFrame, dict[tuple[str, str, str], float], dict[tuple[str, str], str]]:
@@ -420,16 +336,6 @@ def summarize(frame: pd.DataFrame, group_cols: list[str]) -> list[dict[str, Any]
     return rows_out
 
 
-def block_ci(values: np.ndarray, reps: int = 2000, seed: int = 0) -> tuple[float | None, float | None]:
-    values = np.asarray(values, dtype=float)
-    values = values[np.isfinite(values)]
-    if len(values) < 2:
-        return None, None
-    rng = np.random.default_rng(seed)
-    samples = rng.choice(values, size=(reps, len(values)), replace=True).sum(axis=1)
-    return float(np.quantile(samples, 0.025)), float(np.quantile(samples, 0.975))
-
-
 def add_slices(rows_df: pd.DataFrame) -> pd.DataFrame:
     out = rows_df.copy()
     out["period"] = np.where(out["target_date"].ge("2026-06-29"), "forward_2026-06-29_2026-07-04", "train_to_2026-06-28")
@@ -446,26 +352,6 @@ def add_slices(rows_df: pd.DataFrame) -> pd.DataFrame:
         default="missing",
     )
     return out
-
-
-def basket_rows(selected: pd.DataFrame) -> pd.DataFrame:
-    if selected.empty:
-        return pd.DataFrame()
-    settled = selected[selected["settled"]].copy()
-    if settled.empty:
-        return pd.DataFrame()
-    return (
-        settled.groupby(["execution_mode", "city", "target_date", "decision_hour_local", "snapshot_ts_utc"], as_index=False)
-        .agg(
-            legs=("leg", "count"),
-            leg_set=("leg", lambda s: ",".join(sorted(s))),
-            cost=("cost_per_share", "sum"),
-            pnl=("pnl_per_share", "sum"),
-            worst_leg_pnl=("pnl_per_share", "min"),
-            final_winning_bracket=("final_winning_bracket", "first"),
-        )
-        .assign(roi=lambda d: d["pnl"] / d["cost"])
-    )
 
 
 def chengdu_39no_orderbook_timeline(orderbook_dir: Path) -> pd.DataFrame:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import gzip
 import hashlib
 import json
 import os
@@ -38,6 +39,8 @@ from src.strategies.runtime.production import load_production_spec
 
 GENERATED_ROOT = ROOT / "docs" / "analysis"
 READ_CALL_PREFIXES = ("read", "load", "open", "glob", "iterdir", "exists", "stat")
+ARTIFACT_MANIFEST_SCHEMA = "pm_agents_research_artifact_manifest_v1"
+ARTIFACT_TOMBSTONE_SCHEMA = "pm_agents_research_artifact_tombstone_v1"
 
 
 def utc_now() -> str:
@@ -56,9 +59,13 @@ def archived_artifact_rows(artifact_root: Path | None = None) -> dict[str, dict[
     """Load the generated-artifact path map and reject ambiguous history."""
     root = artifact_root or load_production_spec().research_artifact_root
     rows: dict[str, dict[str, Any]] = {}
+    tombstones: list[tuple[Path, dict[str, Any]]] = []
     for manifest in sorted((root / "manifests").glob("*.json")):
         payload = json.loads(manifest.read_text(encoding="utf-8"))
-        if payload.get("schema_version") != "pm_agents_research_artifact_manifest_v1":
+        if payload.get("schema_version") == ARTIFACT_TOMBSTONE_SCHEMA:
+            tombstones.append((manifest, payload))
+            continue
+        if payload.get("schema_version") != ARTIFACT_MANIFEST_SCHEMA:
             continue
         if payload.get("snapshot_kind") == "dirty_worktree":
             continue
@@ -74,7 +81,114 @@ def archived_artifact_rows(artifact_root: Path | None = None) -> dict[str, dict[
                     f"{previous['manifest_path']} vs {manifest}"
                 )
             rows[row["path"]] = row
+    for manifest, payload in tombstones:
+        for tombstone in payload.get("tombstones", []):
+            previous = rows.get(tombstone["path"])
+            if previous is not None and previous["sha256"] != tombstone["sha256"]:
+                raise RuntimeError(
+                    f"tombstone hash mismatch for {tombstone['path']}: {manifest}"
+                )
+            rows.pop(tombstone["path"], None)
     return rows
+
+
+def artifact_tombstones(artifact_root: Path) -> dict[str, dict[str, Any]]:
+    tombstones: dict[str, dict[str, Any]] = {}
+    for manifest in sorted((artifact_root / "manifests").glob("*.json")):
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != ARTIFACT_TOMBSTONE_SCHEMA:
+            continue
+        for row in payload.get("tombstones", []):
+            tombstones[row["path"]] = {**row, "manifest_path": str(manifest)}
+    return tombstones
+
+
+def _gzip_error(path: Path) -> str | None:
+    try:
+        with gzip.open(path, "rb") as handle:
+            while handle.read(8 * 1024 * 1024):
+                pass
+    except (EOFError, OSError) as exc:
+        return f"{type(exc).__name__}: {exc}"
+    return None
+
+
+def prune_corrupt(
+    selected_paths: set[str],
+    *,
+    run_id: str,
+    apply: bool,
+    artifact_root: Path | None = None,
+) -> dict[str, Any]:
+    """Tombstone proven-corrupt archive representations and reclaim unique objects."""
+    if not selected_paths:
+        raise ValueError("prune-corrupt requires at least one --path")
+    root = artifact_root or load_production_spec().research_artifact_root
+    rows = archived_artifact_rows(root)
+    missing = sorted(selected_paths - rows.keys())
+    if missing:
+        raise ValueError(f"paths absent from active archive: {missing}")
+
+    tombstones: list[dict[str, Any]] = []
+    for relative in sorted(selected_paths):
+        row = rows[relative]
+        source = Path(row["object_path"])
+        if not source.exists() or sha256_file(source) != row["sha256"]:
+            raise RuntimeError(f"archive object missing or hash-corrupt: {source}")
+        if not relative.endswith(".gz"):
+            raise ValueError(f"automatic corruption proof only supports gzip: {relative}")
+        error = _gzip_error(source)
+        if error is None:
+            raise ValueError(f"refusing to prune valid gzip artifact: {relative}")
+        tombstones.append(
+            {
+                "path": relative,
+                "sha256": row["sha256"],
+                "object_path": str(source),
+                "size_bytes": int(row["size_bytes"]),
+                "reason": "gzip_integrity_failure",
+                "integrity_error": error,
+            }
+        )
+
+    selected_hashes = {row["sha256"] for row in tombstones}
+    remaining_hashes = {
+        row["sha256"] for path, row in rows.items() if path not in selected_paths
+    }
+    payload: dict[str, Any] = {
+        "schema_version": ARTIFACT_TOMBSTONE_SCHEMA,
+        "run_id": run_id,
+        "generated_at_utc": utc_now(),
+        "artifact_root": str(root),
+        "applied": False,
+        "tombstones": tombstones,
+        "reclaimable_bytes": sum(
+            row["size_bytes"]
+            for row in tombstones
+            if row["sha256"] not in remaining_hashes
+        ),
+    }
+    if not apply:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        return payload
+
+    manifest = root / "manifests" / f"{run_id}.json"
+    if manifest.exists():
+        raise RuntimeError(f"refusing to overwrite tombstone manifest: {manifest}")
+    payload["applied"] = True
+    payload["tombstoned_at_utc"] = utc_now()
+    write_json_atomic(manifest, payload)
+    deleted_bytes = 0
+    for row in tombstones:
+        if row["sha256"] in remaining_hashes:
+            continue
+        Path(row["object_path"]).unlink()
+        deleted_bytes += row["size_bytes"]
+    payload["deleted_object_bytes"] = deleted_bytes
+    payload["deleted_at_utc"] = utc_now()
+    write_json_atomic(manifest, payload)
+    print(json.dumps({**payload, "manifest": str(manifest)}, ensure_ascii=False, sort_keys=True))
+    return payload
 
 
 def _static_path(node: ast.AST, environment: dict[str, str]) -> str | None:
@@ -313,7 +427,7 @@ def archive(run_id: str, *, apply: bool) -> dict[str, Any]:
     spec = load_production_spec()
     artifact_root = spec.research_artifact_root
     payload: dict[str, Any] = {
-        "schema_version": "pm_agents_research_artifact_manifest_v1",
+        "schema_version": ARTIFACT_MANIFEST_SCHEMA,
         "run_id": run_id,
         "generated_at_utc": utc_now(),
         "repo_root": str(ROOT),
@@ -390,12 +504,17 @@ def restore(
     apply: bool,
 ) -> dict[str, Any]:
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if payload.get("schema_version") != "pm_agents_research_artifact_manifest_v1":
+    if payload.get("schema_version") != ARTIFACT_MANIFEST_SCHEMA:
         raise ValueError(f"unsupported artifact manifest: {manifest_path}")
+    tombstones = artifact_tombstones(manifest_path.parent.parent)
+    requested_tombstones = sorted(selected_paths.intersection(tombstones))
+    if requested_tombstones:
+        raise ValueError(f"paths were intentionally tombstoned: {requested_tombstones}")
     rows = [
         row
         for row in payload.get("files", [])
-        if not selected_paths or row["path"] in selected_paths
+        if row["path"] not in tombstones
+        and (not selected_paths or row["path"] in selected_paths)
     ]
     found = {row["path"] for row in rows}
     missing = sorted(selected_paths - found)
@@ -510,7 +629,7 @@ def snapshot_worktree(run_id: str, *, apply: bool) -> dict[str, Any]:
         else:
             rows.append({"path": relative, "kind": "missing", "size_bytes": 0})
     payload: dict[str, Any] = {
-        "schema_version": "pm_agents_research_artifact_manifest_v1",
+        "schema_version": ARTIFACT_MANIFEST_SCHEMA,
         "snapshot_kind": "dirty_worktree",
         "run_id": run_id,
         "generated_at_utc": utc_now(),
@@ -570,6 +689,7 @@ def parse_args() -> argparse.Namespace:
             "dependencies",
             "restore-dependencies",
             "snapshot-worktree",
+            "prune-corrupt",
         ),
     )
     parser.add_argument(
@@ -628,6 +748,13 @@ def main() -> int:
         return 0
     if args.command == "snapshot-worktree":
         snapshot_worktree(args.run_id, apply=args.apply)
+        return 0
+    if args.command == "prune-corrupt":
+        prune_corrupt(
+            set(args.path),
+            run_id=args.run_id,
+            apply=args.apply,
+        )
         return 0
     archive(args.run_id, apply=args.apply)
     return 0

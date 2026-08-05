@@ -9,6 +9,12 @@ untracked_artifact_archive_min_bytes: 0
 # wrappers and lowers this number; CI prevents new wrappers in the meantime.
 max_entrypoints_outside_production_closure: 64
 
+# Research scripts are immutable evidence only when they represent a distinct
+# experiment. New city/date runs must use an existing runner + run manifest.
+# These ceilings are lowered as historical copies are consolidated.
+max_research_experiment_entrypoints: 421
+max_repeated_research_function_bodies: 180
+
 # These are still consumed by active ops/source code.  They remain explicit
 # exceptions until their consumers use the JRS research artifact resolver.
 large_generated_allowlist:

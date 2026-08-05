@@ -8,6 +8,7 @@ state as present truth.
 
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 from pathlib import Path
@@ -428,6 +429,60 @@ def check_production_entrypoints(errors: list[str], tracked: set[str]) -> None:
         )
 
 
+def check_research_script_debt(errors: list[str], tracked: set[str]) -> None:
+    """Prevent daily/city experiments from growing new script copies."""
+    config = hygiene_config()
+    prefixes = (
+        "research_",
+        "train_",
+        "build_",
+        "audit_",
+        "review_",
+        "record_",
+        "materialize_",
+    )
+    scripts = sorted(
+        relative
+        for relative in tracked
+        if relative.startswith(("scripts/analysis/", "scripts/wallets/"))
+        and relative.endswith(".py")
+    )
+    entrypoints = [
+        relative for relative in scripts if Path(relative).name.startswith(prefixes)
+    ]
+    entrypoint_ceiling = int(config["max_research_experiment_entrypoints"])
+    if len(entrypoints) > entrypoint_ceiling:
+        fail(
+            errors,
+            "research experiment entrypoints grew from ceiling "
+            f"{entrypoint_ceiling} to {len(entrypoints)}; use an existing runner "
+            "with a run manifest/config instead of a city/date script copy",
+        )
+
+    fingerprints: dict[str, set[str]] = {}
+    for relative in scripts:
+        try:
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+        except SyntaxError as exc:
+            fail(errors, f"{relative}: syntax error during research debt audit: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if (getattr(node, "end_lineno", node.lineno) - node.lineno + 1) < 8:
+                continue
+            fingerprint = ast.dump(node, include_attributes=False)
+            fingerprints.setdefault(fingerprint, set()).add(relative)
+    repeated = sum(len(paths) > 1 for paths in fingerprints.values())
+    repeated_ceiling = int(config["max_repeated_research_function_bodies"])
+    if repeated > repeated_ceiling:
+        fail(
+            errors,
+            "repeated research function bodies grew from ceiling "
+            f"{repeated_ceiling} to {repeated}; move shared logic into a common module",
+        )
+
+
 def main() -> int:
     errors: list[str] = []
     tracked = git_tracked_files()
@@ -441,6 +496,7 @@ def main() -> int:
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)
     check_production_entrypoints(errors, tracked)
+    check_research_script_debt(errors, tracked)
     if errors:
         for error in errors:
             print(f"FAIL: {error}")
