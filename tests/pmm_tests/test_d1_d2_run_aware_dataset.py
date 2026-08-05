@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/analysis/forecast_quality/build_d1_d2_run_aware_dataset_v1.py"
+SPEC = importlib.util.spec_from_file_location("d1_d2_dataset", SCRIPT)
+assert SPEC and SPEC.loader
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+
+def test_signal_and_evidence_funnels_are_separate() -> None:
+    forecast_rows = [
+        {
+            "batch_capture_id": "batch-d1",
+            "city": "Tokyo",
+            "target_date": "2026-08-06",
+            "horizon_days_local": 1,
+            "forecast_run_lineage_status": "identified",
+            "forecast_run_at_utc": "2026-08-04T12:00:00Z",
+            "first_seen_at_utc": "2026-08-05T00:00:00Z",
+            "available_at_utc": "2026-08-05T00:00:01Z",
+        },
+        {
+            "batch_capture_id": "batch-d2",
+            "city": "Tokyo",
+            "target_date": "2026-08-07",
+            "horizon_days_local": 2,
+            "forecast_run_lineage_status": "identified",
+            "forecast_run_at_utc": "2026-08-04T12:00:00Z",
+            "first_seen_at_utc": "2026-08-05T00:00:00Z",
+            "available_at_utc": "2026-08-05T00:00:01Z",
+        },
+    ]
+    batches = [
+        {"batch_capture_id": "batch-d1", "city": "Tokyo", "target_date": "2026-08-06", "missing_model_keys": [], "model_count": 1},
+        {"batch_capture_id": "batch-d2", "city": "Tokyo", "target_date": "2026-08-07", "missing_model_keys": [], "model_count": 1},
+    ]
+    settlements = [
+        {"city": "Tokyo", "target_date": "2026-08-06", "settlement_complete": True, "settlement_native_tmax": 34, "settlement_unit": "C"},
+        {"city": "Tokyo", "target_date": "2026-08-07", "settlement_complete": True, "settlement_native_tmax": 35, "settlement_unit": "C"},
+    ]
+    ladders = [
+        {"city": "Tokyo", "target_date": "2026-08-06", "horizon_days": 1, "rung_completeness": True, "market_distribution_complete": True, "feature_book_snapshot_id": "book-1"}
+    ]
+    dataset, summary = MODULE.build_dataset(forecast_rows, batches, settlements, ladders)
+    assert summary["signal_funnel"]["oof_scoreable"] == 2
+    assert summary["evidence_funnel"]["market_complete"] == 1
+    d2 = next(row for row in dataset if row["horizon_days_local"] == 2)
+    assert d2["weather_only_status"] == "scoreable"
+    assert d2["market_residual_status"] == "blocked"
+    assert "d2_market_ladder_unavailable" in d2["market_residual_blockers"]
+
+
+def test_unverified_run_is_not_oof_scoreable() -> None:
+    rows = [{"batch_capture_id": "b", "city": "Tokyo", "target_date": "2026-08-06", "horizon_days_local": 1, "forecast_run_lineage_status": "blocked", "first_seen_at_utc": "2026-08-05T00:00:00Z", "available_at_utc": "2026-08-05T00:00:01Z"}]
+    batches = [{"batch_capture_id": "b", "city": "Tokyo", "target_date": "2026-08-06", "missing_model_keys": []}]
+    settlements = [{"city": "Tokyo", "target_date": "2026-08-06", "settlement_complete": True, "settlement_native_tmax": 34}]
+    dataset, summary = MODULE.build_dataset(rows, batches, settlements, [])
+    assert summary["signal_funnel"]["real_run_identified"] == 0
+    assert dataset[0]["weather_only_blockers"] == ["real_run_unidentified"]
