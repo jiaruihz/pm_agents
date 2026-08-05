@@ -2,7 +2,7 @@
 
 > Living doc for module [1]: whether blend / edge-engine fields are useful as shadow signals, sizing inputs, or future live gates.
 > Current status: `shadow_candidate`; not approved as a live hard gate.
-> Last updated: 2026-06-11 Phase 4D batch-02.
+> Last updated: 2026-08-06 documentation consolidation.
 
 ## Current Conclusion
 
@@ -31,12 +31,11 @@ Live behavior changes still require `weather-strategy-deploy` flow and the gates
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
 | `docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md` | current handoff | stable edge-engine handoff and split-track direction | current-source |
-| `docs/analysis/2026-06/2026-06-08-blender-research-state-and-next-plan.md` | 2026-06 | blender research state and next plan | active-evidence |
-| `docs/analysis/2026-06/2026-06-07-blended-live-instance-overlay.md` | 2026-05-16 to 2026-06-05 live fills | control-variable overlay; recent positive, pre-recent negative | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | 2026-05-16 to 2026-06-05 live fills | city/time controls dominate; blender marginal negative on new base | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 | hard-gate and sizing signal value | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.md` | 2026-06 | v2 shadow lineage | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | 2026-06 | filtered operational base research | active-evidence |
+| `docs/analysis/2026-06/2026-06-07-blended-live-instance-overlay.md` | 2026-05-16 to 2026-06-05 live fills | control-variable overlay; recent positive, pre-recent negative | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | 2026-05-16 to 2026-06-05 live fills | city/time controls dominate; blender marginal negative on new base | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 | hard-gate and sizing signal value | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.md` | 2026-06 | v2 shadow lineage | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | 2026-06 | filtered operational base research | snapshot-evidence |
 
 ## Required Gates Before Live Use
 
@@ -55,3 +54,5 @@ Live behavior changes still require `weather-strategy-deploy` flow and the gates
 2. Do not merge blender and city-day basket conclusions into one live proposal.
 3. Standardize shadow output fields for `raw_p_yes`, `market_p_yes`, `blended_p_yes`, `blended_edge`, `raw_market_disagreement`, and `size_multiplier_candidate`.
 4. Re-run on future settled windows and evaluate daily median delta, top-winner dependence, avoided loss, missed profit, and actual order/fill feasibility.
+
+The former dated blender handoff was removed after its durable conclusions and evidence routing were absorbed here. Keep the three distinct producer reports above: they measure different denominators and are not duplicate files.

@@ -25,7 +25,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 最新交接报告：
 
 ```text
-docs/analysis/2026-06/2026-06-08-blender-research-state-and-next-plan.md
+docs/analysis/blender_shadow.md
 docs/analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md
 docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md
 ```

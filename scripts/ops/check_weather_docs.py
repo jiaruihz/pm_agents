@@ -255,6 +255,33 @@ def check_research_knowledge_routing(errors: list[str]) -> None:
             fail(errors, f"{path}: missing artifact-to-knowledge handoff")
 
 
+def check_dated_current_references(errors: list[str]) -> None:
+    """Keep dated snapshots from silently becoming parallel current truth."""
+    allowed_runtime_contracts = {
+        "2026-07-14-current-yes-heat-death-physical-backtest-v1.md",
+        "2026-07-15-heat-death-live-promotion-preregistration-v1.md",
+        "2026-07-15-d1-yes-high-mid-strategy-v1.md",
+        "2026-07-15-market-calibration-curve-v1.md",
+        "2026-07-02-low-price-yes-integrated-tail-v2.md",
+        "2026-07-06-low-price-yes-score-dist-sizing-v1.md",
+        "2026-07-04-low-price-yes-heada-refinement-v1.md",
+        "2026-06-21-reheat-risk-yes-no-expression-map.md",
+    }
+    for line_number, line in enumerate(read("docs/WEATHER_DOCS_INDEX.md").splitlines(), 1):
+        if "| `current-reference`" not in line:
+            continue
+        match = MARKDOWN_LINK_RE.search(line)
+        if not match or not re.search(r"/20\d\d-\d\d/", match.group(1)):
+            continue
+        basename = Path(match.group(1)).name
+        if basename not in allowed_runtime_contracts:
+            fail(
+                errors,
+                "WEATHER_DOCS_INDEX.md: dated current-reference is not an allowed "
+                f"runtime contract at line {line_number}: {basename}",
+            )
+
+
 def check_index_links(errors: list[str], tracked: set[str]) -> None:
     index_path = ROOT / "docs" / "WEATHER_DOCS_INDEX.md"
     for target, resolved in local_markdown_targets(index_path):
@@ -492,6 +519,7 @@ def main() -> int:
     check_skill_surface(errors)
     check_operational_skill_contracts(errors)
     check_research_knowledge_routing(errors)
+    check_dated_current_references(errors)
     check_index_links(errors, tracked)
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)

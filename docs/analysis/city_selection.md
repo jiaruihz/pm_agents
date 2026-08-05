@@ -2,7 +2,7 @@
 
 > Living doc for module [3]: city pool, city-day basket, and region/forecast-source selection.
 > Current status: `shadow_candidate` for research-only basket ideas; live city pool remains governed by `WEATHER_CITY_POOL_DECISIONS.md`.
-> Last updated: 2026-06-11 Phase 4D city batch-02.
+> Last updated: 2026-08-06 documentation consolidation.
 
 ## Current Conclusion
 
@@ -36,11 +36,10 @@ The current city-selection state is:
 | `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md` | 2026-06 | baseline-vs-basket comparison on older window | superseded-evidence |
 | `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md` | 2026-06 | city-day basket walk-forward; train-selected folds not robust | superseded-evidence |
 | `docs/archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.md` | 2026-06 | distribution diagnostics before basket objective refresh | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md` | 2026-06 | basket vs legacy baseline refresh | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-walkforward.md` | 2026-06 | walk-forward check, overfit risk | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-distribution-quality.md` | 2026-06 | distribution quality and normalized market distribution | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-06 | city x model x side conditional edge | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-research-state-and-plan.md` | 2026-06 | basket research state, filtered-base rerun plan, no canary | active-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md` | 2026-06 | basket vs legacy baseline refresh | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-day-basket-walkforward.md` | 2026-06 | walk-forward check, overfit risk | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-day-distribution-quality.md` | 2026-06 | distribution quality and normalized market distribution | snapshot-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-06 | city x model x side conditional edge | snapshot-evidence |
 | `docs/analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md` | 2026-06 | near-binary fixed city reanalysis | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md` | 2026-06 | no new real live test candidate; adjacent3 only shadow | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md` | 2026-06 | readiness scoreboard; no city/basket live promotion | active-evidence |
@@ -58,7 +57,7 @@ The current city-selection state is:
 
 ## Open Work
 
-1. Convert city-day basket research into one evidence table with accepted/rejected/shadow states.
+1. Keep this table as the single city-day basket conclusion surface; dated reports remain reproducible evidence only.
 2. Keep research-only PR2b/basket parameters out of production config until gates pass.
 3. Rerun basket only on the filtered operational base before revisiting any canary proposal.
 4. Keep city x side x strategy_instance as the default grain for future city promotion/demotion evidence.

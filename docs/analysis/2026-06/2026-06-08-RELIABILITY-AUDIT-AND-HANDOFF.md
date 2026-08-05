@@ -5,7 +5,7 @@
 > **未 git push**。配套两个脚本（见 §6 manifest）需随本文一起迁移。
 >
 > 所有数字均引自本仓库现有文档（`WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md`、
-> `2026-06-08-blender-research-state-and-next-plan.md` 等），非本文新测。
+> `docs/analysis/blender_shadow.md` 汇总的 blender 历史证据等），非本文新测。
 
 ---
 

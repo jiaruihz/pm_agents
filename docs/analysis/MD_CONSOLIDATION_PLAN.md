@@ -50,6 +50,14 @@ system contract 和 ops runbook。
 - 2026-08-06：删除本文件原有 400 余行逐文件流水账；已执行的迁移由 git 历史、索引和 living doc 承担，
   不再维护第二份平行清单。
 
+- 2026-08-06：dated `current-reference` 从 73 份收敛到 8 份；保留项均被 `scripts/ops` 作为运行实例的冻结
+  source/preregistration/provenance 合同引用，其余65份统一降为 `snapshot`。新增 docs check allowlist，防止日期报告重新
+  膨胀为平行当前真相。
+- 2026-08-06：city-day basket 删除11个已吸收文件：06-07 同 runner 的较早 baseline/distribution、除时间戳外完全
+  重复的 walk-forward、已被 living doc 吸收的 optimizer/protocol，以及两份过渡 handoff；当前只保留06-08较新证据并
+  由 `city_selection.md` 统一结论。blender 的过渡 handoff 已吸收进 `blender_shadow.md`；三份不同 denominator 的 producer
+  报告继续保留为 snapshot evidence，不误删成“重复”。
+
 ## 仍有效的历史边界
 
 - 2026-06-07 前的 live PnL、胜率、城市/策略排名，若依赖旧 near-binary、缺 fill 或 `missing_bracket`，不得用于当前决策。
