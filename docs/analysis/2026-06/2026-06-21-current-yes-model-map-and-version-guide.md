@@ -1,7 +1,14 @@
 # Current-YES 模型地图与版本主线
 
 日期：2026-06-21
-状态：当前人工阅读入口 / 主线梳理（已整合 6/20 归零事件 + 校准证据，见「核心诊断」节；分层词汇表见「分层架构与当前条件归属」节）
+状态：`historical / superseded_for_decision_use`
+
+> ⚠️ 本文是 6 月21日时点的历史地图，不再是当前人工决策入口。文中的 live 状态、
+> v9/hazard 晋级判断和“下一步联合门”均不得直接恢复。其后已修正固定
+> `CITY_MODEL`、forecast/PIT 血缘、city-day 权重、official fee、native settlement
+> lattice、obs-age train/serve skew、strict-high/跨日时钟，并完成更长窗口复测。
+> 当前策略状态读 `WEATHER_STRATEGY_REGISTRY.md`；hazard 当前结论读
+> `analysis/reheat_risk.md` 顶部 2026-07-27 correction。
 
 ## 一句话主线
 

@@ -1,7 +1,11 @@
 # Current-YES Filter Simplification v22
 
 Date: 2026-06-19
-Status: deployed change candidate
+Status: `historical execution-policy reference / superseded_for_decision_use`
+
+> ⚠️ 本文描述旧 N100 current-YES runner 的候选/部署语义，不代表当前 Mac
+> `current_yes_core_carry` 配置。保留“不要把天气变量堆成 hard filter”的原则；当前
+> sizing、execution profile、process 与 live 授权必须动态读取 registry/runtime。
 
 ## Decision
 

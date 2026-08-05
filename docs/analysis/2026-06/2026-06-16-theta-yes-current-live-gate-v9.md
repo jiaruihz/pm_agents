@@ -1,8 +1,14 @@
 # Theta Current YES Live Gate v9
 
-Status: snapshot
+Status: `historical / superseded_for_decision_use`
 Generated: 2026-06-15T17:39:32.421757+00:00
 Target metric: `current_yes_live_gate` = v8 best fixed current YES rule 能否从 shadow_candidate 升级到 live。
+
+> ⚠️ 本文的 tiny-live candidate/`confirmed` 判断只属于 6 月旧分母和旧治理口径，
+> 已被后续 live failure、canonical fee/PIT/forecast/clock 审计及当前
+> `current_yes_core_carry` freeze 取代。不得据此恢复 v9、N100 旧 runner、旧仓位或
+> 旧 eligibility。当前策略身份与授权状态只读 `WEATHER_STRATEGY_REGISTRY.md` 和当前
+> runtime。
 
 ## 数据完整性自检
 

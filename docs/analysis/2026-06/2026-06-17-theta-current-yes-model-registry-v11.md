@@ -1,8 +1,12 @@
 # Theta Current YES Model Registry v11
 
-Status: research_only
+Status: `historical model-governance reference / superseded_for_decision_use`
 Generated: 2026-06-17T15:51:43+00:00
 Target metric: `current_yes_probability_model_registry` = maintain comparable versions for `P(current running-max bracket wins)`.
+
+> The same-denominator market-baseline principle remains valid. Model identities,
+> data windows and deployment decisions in this June registry are historical;
+> current model status is maintained in `WEATHER_STRATEGY_REGISTRY.md`.
 
 ## Data Snapshot
 
