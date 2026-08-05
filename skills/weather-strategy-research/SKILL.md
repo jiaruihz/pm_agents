@@ -128,6 +128,9 @@ maker 假设必须建 fill/queue/adverse selection，不能把 future touch 当�
 - 大型 CSV/JSONL/model/image 写 `production.yaml.research_artifact_root`；历史脚本需要已归档输入时，先用
   `weather_research_artifact_ctl.py dependencies` 定位，再用 `restore-dependencies --script ... --apply`
   按脚本最小恢复，不把整库复制回 `docs/`。
+- 清理已归档的派生输出只能在用户明确授权删除后使用 `prune-reproduced`；必须从 clean HEAD 重放、逐文件 SHA-256
+  精确一致、无下游代码消费者，并记录 producer/code revision、archived input hashes 和任何 runtime input inventory。
+  semantic equivalence、只跑到中间阶段、raw/canonical 或无法冻结输入的结果一律保留。
 - 日期报告写 `docs/analysis/YYYY-MM/`，只作 snapshot。实验结束时必须同时回写
   `WEATHER_DOCS_INDEX.md` 的所属家族 living doc 与 `WEATHER_STRATEGY_REGISTRY.md`：写清耐久结论、
   被取代的旧判断、证据边界和当前动作。只新增日期报告、不更新家族入口，任务不算完成。

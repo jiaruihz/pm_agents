@@ -55,6 +55,17 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def git_file_at_revision(revision: str, relative: str) -> bytes:
+    try:
+        return subprocess.check_output(
+            ["git", "show", f"{revision}:{relative}"],
+            cwd=ROOT,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(f"file is absent from code revision {revision}: {relative}") from exc
+
+
 def archived_artifact_rows(artifact_root: Path | None = None) -> dict[str, dict[str, Any]]:
     """Load the generated-artifact path map and reject ambiguous history."""
     root = artifact_root or load_production_spec().research_artifact_root
@@ -162,6 +173,183 @@ def prune_corrupt(
         "artifact_root": str(root),
         "applied": False,
         "tombstones": tombstones,
+        "reclaimable_bytes": sum(
+            row["size_bytes"]
+            for row in tombstones
+            if row["sha256"] not in remaining_hashes
+        ),
+    }
+    if not apply:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        return payload
+
+    manifest = root / "manifests" / f"{run_id}.json"
+    if manifest.exists():
+        raise RuntimeError(f"refusing to overwrite tombstone manifest: {manifest}")
+    payload["applied"] = True
+    payload["tombstoned_at_utc"] = utc_now()
+    write_json_atomic(manifest, payload)
+    deleted_bytes = 0
+    for row in tombstones:
+        if row["sha256"] in remaining_hashes:
+            continue
+        Path(row["object_path"]).unlink()
+        deleted_bytes += row["size_bytes"]
+    payload["deleted_object_bytes"] = deleted_bytes
+    payload["deleted_at_utc"] = utc_now()
+    write_json_atomic(manifest, payload)
+    print(json.dumps({**payload, "manifest": str(manifest)}, ensure_ascii=False, sort_keys=True))
+    return payload
+
+
+def prune_reproduced(
+    selected_paths: set[str],
+    *,
+    run_id: str,
+    producer: str,
+    reproduced_root: Path,
+    code_revision: str,
+    runtime_inputs: tuple[Path, ...] = (),
+    additional_inputs: frozenset[str] = frozenset(),
+    apply: bool,
+    artifact_root: Path | None = None,
+) -> dict[str, Any]:
+    """Tombstone derived outputs proven identical in a clean replay."""
+    if not selected_paths:
+        raise ValueError("prune-reproduced requires at least one --path")
+    producer_path = ROOT / producer
+    if not producer_path.is_file() or producer_path.suffix != ".py":
+        raise ValueError(f"producer must be a Python file: {producer}")
+    if not reproduced_root.is_dir():
+        raise ValueError(f"reproduced root is not a directory: {reproduced_root}")
+    if not code_revision:
+        raise ValueError("prune-reproduced requires --code-revision")
+    reproduced_producer = reproduced_root / producer
+    if not reproduced_producer.is_file():
+        raise ValueError(f"producer is missing from reproduced root: {reproduced_producer}")
+    revision_source = git_file_at_revision(code_revision, producer)
+    if reproduced_producer.read_bytes() != revision_source:
+        raise ValueError(
+            f"reproduced producer does not match code revision {code_revision}: {producer}"
+        )
+
+    root = artifact_root or load_production_spec().research_artifact_root
+    rows = archived_artifact_rows(root)
+    missing = sorted(selected_paths - rows.keys())
+    if missing:
+        raise ValueError(f"paths absent from active archive: {missing}")
+
+    source_paths = sorted((ROOT / "scripts").glob("**/*.py"))
+    source_paths += sorted((ROOT / "src").glob("**/*.py"))
+    dependencies = discover_archived_dependencies(source_paths, rows)
+    consumers = {
+        relative: sorted(
+            script
+            for script, paths in dependencies.items()
+            if relative in paths and script != producer
+        )
+        for relative in selected_paths
+    }
+    blocked = {path: scripts for path, scripts in consumers.items() if scripts}
+    if blocked:
+        raise ValueError(f"reproduced outputs still have downstream consumers: {blocked}")
+
+    producer_plan, producer_inputs = dependency_plan({producer})
+    producer_input_rows = {
+        row["path"]: row
+        for row in producer_inputs
+        if row["path"] not in selected_paths
+    }
+    unknown_inputs = sorted(additional_inputs - rows.keys())
+    if unknown_inputs:
+        raise ValueError(f"proof inputs absent from active archive: {unknown_inputs}")
+    for relative in additional_inputs:
+        if relative not in selected_paths:
+            producer_input_rows[relative] = rows[relative]
+    runtime_proof: list[dict[str, Any]] = []
+    for runtime_input in runtime_inputs:
+        if runtime_input.is_file():
+            runtime_proof.append(
+                {
+                    "path": str(runtime_input.resolve()),
+                    "kind": "file",
+                    "size_bytes": runtime_input.stat().st_size,
+                    "sha256": sha256_file(runtime_input),
+                }
+            )
+            continue
+        if not runtime_input.is_dir():
+            raise ValueError(f"runtime input does not exist: {runtime_input}")
+        inventory_digest = hashlib.sha256()
+        file_count = 0
+        size_bytes = 0
+        latest_mtime_ns = 0
+        for child in sorted(path for path in runtime_input.rglob("*") if path.is_file()):
+            stat = child.stat()
+            relative = str(child.relative_to(runtime_input))
+            inventory_digest.update(
+                f"{relative}\0{stat.st_size}\0{stat.st_mtime_ns}\n".encode()
+            )
+            file_count += 1
+            size_bytes += stat.st_size
+            latest_mtime_ns = max(latest_mtime_ns, stat.st_mtime_ns)
+        runtime_proof.append(
+            {
+                "path": str(runtime_input.resolve()),
+                "kind": "directory_inventory",
+                "file_count": file_count,
+                "size_bytes": size_bytes,
+                "latest_mtime_ns": latest_mtime_ns,
+                "path_size_mtime_sha256": inventory_digest.hexdigest(),
+            }
+        )
+    tombstones: list[dict[str, Any]] = []
+    for relative in sorted(selected_paths):
+        row = rows[relative]
+        archived = Path(row["object_path"])
+        reproduced = reproduced_root / relative
+        if not archived.exists() or sha256_file(archived) != row["sha256"]:
+            raise RuntimeError(f"archive object missing or hash-corrupt: {archived}")
+        if not reproduced.is_file():
+            raise ValueError(f"reproduced output is missing: {reproduced}")
+        reproduced_sha = sha256_file(reproduced)
+        if reproduced_sha != row["sha256"]:
+            raise ValueError(
+                f"reproduced output hash mismatch for {relative}: "
+                f"{reproduced_sha} != {row['sha256']}"
+            )
+        tombstones.append(
+            {
+                "path": relative,
+                "sha256": row["sha256"],
+                "object_path": str(archived),
+                "size_bytes": int(row["size_bytes"]),
+                "reason": "exact_clean_reproduction",
+                "reproduced_path": str(reproduced),
+            }
+        )
+
+    remaining_hashes = {
+        row["sha256"] for path, row in rows.items() if path not in selected_paths
+    }
+    payload: dict[str, Any] = {
+        "schema_version": ARTIFACT_TOMBSTONE_SCHEMA,
+        "run_id": run_id,
+        "generated_at_utc": utc_now(),
+        "artifact_root": str(root),
+        "applied": False,
+        "tombstones": tombstones,
+        "reproduction_proof": {
+            "producer": producer,
+            "code_revision": code_revision,
+            "replay_command": f"python {producer}",
+            "input_plan": producer_plan,
+            "input_hashes": {
+                path: row["sha256"] for path, row in sorted(producer_input_rows.items())
+            },
+            "runtime_inputs": runtime_proof,
+            "match": "sha256_exact",
+        },
         "reclaimable_bytes": sum(
             row["size_bytes"]
             for row in tombstones
@@ -690,6 +878,7 @@ def parse_args() -> argparse.Namespace:
             "restore-dependencies",
             "snapshot-worktree",
             "prune-corrupt",
+            "prune-reproduced",
         ),
     )
     parser.add_argument(
@@ -702,6 +891,22 @@ def parse_args() -> argparse.Namespace:
         help="execute archive/removal or restore; otherwise print a read-only plan",
     )
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--producer")
+    parser.add_argument("--reproduced-root", type=Path)
+    parser.add_argument("--code-revision")
+    parser.add_argument(
+        "--runtime-input",
+        action="append",
+        default=[],
+        type=Path,
+        help="mutable runtime input to inventory in the replay proof; repeat as needed",
+    )
+    parser.add_argument(
+        "--proof-input",
+        action="append",
+        default=[],
+        help="additional archived input used through an imported helper; repeat as needed",
+    )
     parser.add_argument(
         "--path",
         action="append",
@@ -753,6 +958,22 @@ def main() -> int:
         prune_corrupt(
             set(args.path),
             run_id=args.run_id,
+            apply=args.apply,
+        )
+        return 0
+    if args.command == "prune-reproduced":
+        if not args.producer or args.reproduced_root is None or not args.code_revision:
+            raise SystemExit(
+                "prune-reproduced requires --producer, --reproduced-root, and --code-revision"
+            )
+        prune_reproduced(
+            set(args.path),
+            run_id=args.run_id,
+            producer=args.producer,
+            reproduced_root=args.reproduced_root,
+            code_revision=args.code_revision,
+            runtime_inputs=tuple(args.runtime_input),
+            additional_inputs=frozenset(args.proof_input),
             apply=args.apply,
         )
         return 0

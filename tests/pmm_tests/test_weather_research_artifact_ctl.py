@@ -32,7 +32,6 @@ def test_restore_recreates_content_addressed_artifact(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(artifact_ctl, "ROOT", repo)
-
     result = artifact_ctl.restore(
         manifest,
         selected_paths={"docs/analysis/generated/evidence.csv"},
@@ -72,7 +71,6 @@ def test_restore_refuses_to_overwrite_different_content(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(artifact_ctl, "ROOT", repo)
-
     try:
         artifact_ctl.restore(
             manifest,
@@ -282,3 +280,145 @@ def test_prune_corrupt_refuses_valid_gzip(tmp_path, monkeypatch):
         assert "valid gzip" in str(exc)
     else:
         raise AssertionError("valid gzip must never be pruned")
+
+
+def test_prune_reproduced_records_exact_replay_and_deletes_unique_object(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    producer = repo / "scripts/analysis/research_example.py"
+    producer.parent.mkdir(parents=True)
+    producer.write_text("print('replay')\n", encoding="utf-8")
+    relative = "docs/analysis/generated/example/rows.csv"
+    content = b"value\n1\n"
+    digest = hashlib.sha256(content).hexdigest()
+    artifact_root = tmp_path / "artifact_store"
+    object_path = artifact_root / "objects" / digest[:2] / digest
+    object_path.parent.mkdir(parents=True)
+    object_path.write_bytes(content)
+    manifest = artifact_root / "manifests/archive.json"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": artifact_ctl.ARTIFACT_MANIFEST_SCHEMA,
+                "files": [
+                    {
+                        "path": relative,
+                        "size_bytes": len(content),
+                        "sha256": digest,
+                        "object_path": str(object_path),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    reproduced_root = tmp_path / "clean_checkout"
+    reproduced_producer = reproduced_root / "scripts/analysis/research_example.py"
+    reproduced_producer.parent.mkdir(parents=True)
+    reproduced_producer.write_bytes(producer.read_bytes())
+    reproduced = reproduced_root / relative
+    reproduced.parent.mkdir(parents=True)
+    reproduced.write_bytes(content)
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "git_file_at_revision",
+        lambda revision, relative: producer.read_bytes(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "dependency_plan",
+        lambda scripts: (
+            {
+                "affected_script_count": 0,
+                "archived_file_count": 0,
+                "archived_bytes": 0,
+                "missing_in_worktree_count": 0,
+                "scripts": {},
+            },
+            [],
+        ),
+    )
+
+    result = artifact_ctl.prune_reproduced(
+        {relative},
+        run_id="replay_exact",
+        producer="scripts/analysis/research_example.py",
+        reproduced_root=reproduced_root,
+        code_revision="abc123",
+        apply=True,
+        artifact_root=artifact_root,
+    )
+
+    assert result["deleted_object_bytes"] == len(content)
+    assert result["reproduction_proof"]["match"] == "sha256_exact"
+    assert result["tombstones"][0]["reason"] == "exact_clean_reproduction"
+    assert not object_path.exists()
+    assert artifact_ctl.archived_artifact_rows(artifact_root) == {}
+
+
+def test_prune_reproduced_refuses_hash_mismatch(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    producer = repo / "scripts/analysis/research_example.py"
+    producer.parent.mkdir(parents=True)
+    producer.write_text("print('replay')\n", encoding="utf-8")
+    relative = "docs/analysis/generated/example/rows.csv"
+    content = b"original\n"
+    digest = hashlib.sha256(content).hexdigest()
+    artifact_root = tmp_path / "artifact_store"
+    object_path = artifact_root / "objects" / digest[:2] / digest
+    object_path.parent.mkdir(parents=True)
+    object_path.write_bytes(content)
+    manifest = artifact_root / "manifests/archive.json"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": artifact_ctl.ARTIFACT_MANIFEST_SCHEMA,
+                "files": [
+                    {
+                        "path": relative,
+                        "size_bytes": len(content),
+                        "sha256": digest,
+                        "object_path": str(object_path),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    reproduced_root = tmp_path / "clean_checkout"
+    reproduced_producer = reproduced_root / "scripts/analysis/research_example.py"
+    reproduced_producer.parent.mkdir(parents=True)
+    reproduced_producer.write_bytes(producer.read_bytes())
+    reproduced = reproduced_root / relative
+    reproduced.parent.mkdir(parents=True)
+    reproduced.write_bytes(b"different\n")
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "git_file_at_revision",
+        lambda revision, relative: producer.read_bytes(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "dependency_plan",
+        lambda scripts: ({"scripts": {}}, []),
+    )
+
+    try:
+        artifact_ctl.prune_reproduced(
+            {relative},
+            run_id="must_not_prune",
+            producer="scripts/analysis/research_example.py",
+            reproduced_root=reproduced_root,
+            code_revision="abc123",
+            apply=True,
+            artifact_root=artifact_root,
+        )
+    except ValueError as exc:
+        assert "hash mismatch" in str(exc)
+    else:
+        raise AssertionError("non-identical replay must never be pruned")
