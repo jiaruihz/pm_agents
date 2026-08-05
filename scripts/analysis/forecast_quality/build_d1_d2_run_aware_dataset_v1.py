@@ -15,6 +15,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.forecast_run_contract import parse_utc, stable_content_hash  # noqa: E402
+from weather_model_evaluation.d1_revision_repricing import (  # noqa: E402
+    material_forecast_batches,
+    run_study as run_revision_repricing_study,
+)
 
 
 DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_d2_run_aware_dataset_v1"
@@ -67,12 +71,10 @@ def build_dataset(
         ): dict(row)
         for row in ladder_checkpoints
     }
-    rows_by_batch: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        rows_by_batch.setdefault(str(row.get("batch_capture_id") or ""), []).append(row)
+    material_batches, rows_by_batch = material_forecast_batches(rows, batches)
 
     dataset: list[dict[str, Any]] = []
-    for batch in batches:
+    for batch in material_batches:
         batch_id = str(batch.get("batch_capture_id") or "")
         members = rows_by_batch.get(batch_id, [])
         horizon_values = {
@@ -115,14 +117,14 @@ def build_dataset(
                     {"batch_capture_id": batch_id, "horizon_days_local": horizon}
                 ),
                 "batch_capture_id": batch_id,
+                "material_batch_key": batch.get("material_batch_key"),
+                "delivery_count": batch.get("delivery_count"),
                 "batch_content_hash": batch.get("batch_content_hash"),
+                "forecast_run_at_utc": batch.get("forecast_run_at_utc"),
                 "city": city,
                 "target_date": target_date,
                 "horizon_days_local": horizon,
-                "available_at_utc": min(
-                    (str(row.get("available_at_utc")) for row in members),
-                    default=None,
-                ),
+                "available_at_utc": batch.get("batch_available_at_utc"),
                 "model_values": batch.get("model_values"),
                 "model_count": batch.get("model_count"),
                 "missing_model_keys": batch.get("missing_model_keys"),
@@ -175,7 +177,9 @@ def build_dataset(
     signal_funnel = {
         "unit": "forecast_batch",
         "raw_forecast_versions": len(rows),
+        "raw_forecast_batches": len(batches),
         "forecast_batches": len(dataset),
+        "duplicate_poll_batches_collapsed": len(batches) - len(dataset),
         "real_run_identified": sum(row["real_run_identified"] for row in dataset),
         "batch_complete": sum(row["real_run_identified"] and row["batch_complete"] for row in dataset),
         "settlement_complete": sum(row["real_run_identified"] and row["batch_complete"] and row["settlement_complete"] for row in dataset),
@@ -210,17 +214,40 @@ def build_dataset(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--forecast-rows", type=Path, required=True)
+    parser.add_argument("--forecast-rows", type=Path)
     parser.add_argument("--forecast-batches", type=Path)
     parser.add_argument("--settlements", type=Path)
     parser.add_argument("--ladder-checkpoints", type=Path)
     parser.add_argument("--frozen-forward-start")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--revision-repricing", action="store_true")
+    parser.add_argument("--capture-dir", type=Path)
+    parser.add_argument("--snapshot-dir", type=Path)
+    parser.add_argument("--db", type=Path)
+    parser.add_argument("--report", type=Path)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.revision_repricing:
+        kwargs = {
+            key: value
+            for key, value in {
+                "capture_dir": args.capture_dir,
+                "snapshot_dir": args.snapshot_dir,
+                "db": args.db,
+                "output_dir": (
+                    args.output_dir if args.output_dir != DEFAULT_OUT else None
+                ),
+                "report": args.report,
+            }.items()
+            if value is not None
+        }
+        run_revision_repricing_study(**kwargs)
+        return 0
+    if args.forecast_rows is None:
+        raise SystemExit("--forecast-rows is required unless --revision-repricing is set")
     forecast_rows = read_records(args.forecast_rows, keys=("forecast_rows", "records"))
     forecast_batches = read_records(args.forecast_batches or args.forecast_rows, keys=("forecast_batches", "batches"))
     settlements = read_records(args.settlements, keys=("settlements", "records"))

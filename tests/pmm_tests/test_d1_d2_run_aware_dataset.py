@@ -61,3 +61,69 @@ def test_unverified_run_is_not_oof_scoreable() -> None:
     dataset, summary = MODULE.build_dataset(rows, batches, settlements, [])
     assert summary["signal_funnel"]["real_run_identified"] == 0
     assert dataset[0]["weather_only_blockers"] == ["real_run_unidentified"]
+
+
+def test_repeated_poll_batches_collapse_and_use_full_batch_availability() -> None:
+    rows = [
+        {
+            "batch_capture_id": "first",
+            "city": "Tokyo",
+            "target_date": "2026-08-06",
+            "horizon_days_local": 1,
+            "model_key": "gfs_global",
+            "forecast_run_lineage_status": "identified",
+            "forecast_run_at_utc": "2026-08-05T00:00:00Z",
+            "first_seen_at_utc": "2026-08-05T07:00:00Z",
+            "available_at_utc": "2026-08-05T07:00:01Z",
+        },
+        {
+            "batch_capture_id": "first",
+            "city": "Tokyo",
+            "target_date": "2026-08-06",
+            "horizon_days_local": 1,
+            "model_key": "ecmwf_ifs025",
+            "forecast_run_lineage_status": "identified",
+            "forecast_run_at_utc": "2026-08-05T00:00:00Z",
+            "first_seen_at_utc": "2026-08-05T07:00:02Z",
+            "available_at_utc": "2026-08-05T07:00:03Z",
+        },
+        {
+            "batch_capture_id": "repeat",
+            "city": "Tokyo",
+            "target_date": "2026-08-06",
+            "horizon_days_local": 1,
+            "model_key": "gfs_global",
+            "forecast_run_lineage_status": "identified",
+            "forecast_run_at_utc": "2026-08-05T00:00:00Z",
+            "first_seen_at_utc": "2026-08-05T07:00:00Z",
+            "available_at_utc": "2026-08-05T07:30:01Z",
+        },
+        {
+            "batch_capture_id": "repeat",
+            "city": "Tokyo",
+            "target_date": "2026-08-06",
+            "horizon_days_local": 1,
+            "model_key": "ecmwf_ifs025",
+            "forecast_run_lineage_status": "identified",
+            "forecast_run_at_utc": "2026-08-05T00:00:00Z",
+            "first_seen_at_utc": "2026-08-05T07:00:02Z",
+            "available_at_utc": "2026-08-05T07:30:03Z",
+        },
+    ]
+    batches = [
+        {
+            "batch_capture_id": batch_id,
+            "city": "Tokyo",
+            "target_date": "2026-08-06",
+            "batch_content_hash": "same-content",
+            "missing_model_keys": [],
+            "model_count": 2,
+        }
+        for batch_id in ("first", "repeat")
+    ]
+    dataset, summary = MODULE.build_dataset(rows, batches, [], [])
+    assert len(dataset) == 1
+    assert dataset[0]["delivery_count"] == 2
+    assert dataset[0]["available_at_utc"] == "2026-08-05T07:00:03Z"
+    assert summary["signal_funnel"]["raw_forecast_batches"] == 2
+    assert summary["signal_funnel"]["duplicate_poll_batches_collapsed"] == 1

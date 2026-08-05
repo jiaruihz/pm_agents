@@ -15,6 +15,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from weather_data_feed import load_city_configs
+from weather_data_feed.assigned_forecast_models import assigned_single_run_model_key
 from weather_data_feed.forecast_run_contract import (
     EXACT_SINGLE_RUN_ENDPOINT,
     build_forecast_row,
@@ -72,6 +73,12 @@ def materialize_capture(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     state = dict(previous_state or {})
     latest = dict(state.get("latest_by_model_city_target") or {})
+    run_history = {
+        str(sequence_key): dict(versions)
+        for sequence_key, versions in dict(
+            state.get("run_history_by_model_city_target") or {}
+        ).items()
+    }
     first_seen_by_content = dict(state.get("first_seen_by_content") or {})
     captured_text = captured_at_utc.astimezone(timezone.utc).isoformat()
     contract_rows: list[dict[str, Any]] = []
@@ -98,7 +105,17 @@ def materialize_capture(
                 except ValueError:
                     continue
                 sequence_key = "|".join((model, str(city_input["city"]), target_date))
-                prior = dict(latest.get(sequence_key) or {})
+                versions = dict(run_history.get(sequence_key) or {})
+                current_run_ts = str(evidence["forecast_run_at_utc"])
+                same_run_prior = dict(versions.get(current_run_ts) or {})
+                earlier_run_timestamps = [
+                    timestamp for timestamp in versions if timestamp < current_run_ts
+                ]
+                previous_run = (
+                    dict(versions[max(earlier_run_timestamps)])
+                    if earlier_run_timestamps
+                    else {}
+                )
                 raw_hash = str(metadata.get("raw_hash") or "")
                 content_identity = stable_content_hash(
                     {
@@ -122,7 +139,6 @@ def materialize_capture(
                 capture_id = stable_content_hash(
                     {"batch_capture_id": batch_capture_id, "model": model}
                 )
-                same_prior_run = prior.get("forecast_run_at_utc") == evidence["forecast_run_at_utc"]
                 row = build_forecast_row(
                     model_key=model,
                     city=str(city_input["city"]),
@@ -141,37 +157,45 @@ def materialize_capture(
                     forecast_run_evidence=evidence["forecast_run_evidence"],
                     forecast_run_lineage_status=evidence["forecast_run_lineage_status"],
                     lineage_blocker=evidence["blocker"],
+                    assigned_model=(
+                        model == assigned_single_run_model_key(str(city_input["city"]))
+                    ),
                     previous_run_ts=(
-                        str(prior.get("forecast_run_at_utc"))
-                        if prior and not same_prior_run
+                        str(previous_run.get("forecast_run_at_utc"))
+                        if previous_run
                         else None
                     ),
                     previous_run_forecast_max_f=(
-                        float(prior["forecast_max_f"])
-                        if prior and not same_prior_run and prior.get("forecast_max_f") is not None
+                        float(previous_run["forecast_max_f"])
+                        if previous_run.get("forecast_max_f") is not None
                         else None
                     ),
                     previous_content_hash=(
-                        str(prior.get("content_hash"))
-                        if prior and same_prior_run
+                        str(same_run_prior.get("content_hash"))
+                        if same_run_prior
                         else None
                     ),
                     previous_content_forecast_max_f=(
-                        float(prior["forecast_max_f"])
-                        if prior and same_prior_run and prior.get("forecast_max_f") is not None
+                        float(same_run_prior["forecast_max_f"])
+                        if same_run_prior.get("forecast_max_f") is not None
                         else None
                     ),
                     revision_of_content_id=(
-                        str(prior.get("capture_id")) if prior and same_prior_run else None
+                        str(same_run_prior.get("capture_id")) if same_run_prior else None
                     ),
                 )
                 contract_rows.append(row)
-                latest[sequence_key] = {
+                version_state = {
                     "forecast_run_at_utc": row["forecast_run_at_utc"],
                     "forecast_max_f": row["forecast_max_f"],
                     "content_hash": row["content_hash"],
                     "capture_id": row["capture_id"],
                 }
+                versions[current_run_ts] = version_state
+                run_history[sequence_key] = versions
+                latest_prior = dict(latest.get(sequence_key) or {})
+                if not latest_prior or str(latest_prior.get("forecast_run_at_utc") or "") <= current_run_ts:
+                    latest[sequence_key] = version_state
     grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for row in contract_rows:
         grouped.setdefault(
@@ -184,6 +208,7 @@ def materialize_capture(
     ]
     return contract_rows, batches, {
         "latest_by_model_city_target": latest,
+        "run_history_by_model_city_target": run_history,
         "first_seen_by_content": first_seen_by_content,
     }
 
