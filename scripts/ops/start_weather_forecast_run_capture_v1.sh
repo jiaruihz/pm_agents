@@ -18,7 +18,7 @@ PY="${PYTHON_BIN:-/Users/deepsleep/projects/pm_agents/.venv/bin/python}"
 
 weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
-loop_command="while true; do date -u +\"[forecast_run_capture] start_utc=%Y-%m-%dT%H:%M:%SZ\"; '$PY' -u -m weather_data_feed_service.forecast_run_capture --output-dir '$OUTPUT_DIR' --candidate-latest-cycle --timeout-sec '$TIMEOUT_SECONDS'; rc=\$?; date -u +\"[forecast_run_capture] done_utc=%Y-%m-%dT%H:%M:%SZ returncode=\$rc\"; sleep '$INTERVAL_SECONDS'; done"
+loop_command="while true; do date -u +\"[forecast_run_capture] start_utc=%Y-%m-%dT%H:%M:%SZ\"; rc=0; for offset in 18 12 6 0; do '$PY' -u -m weather_data_feed_service.forecast_run_capture --output-dir '$OUTPUT_DIR' --candidate-latest-cycle --candidate-cycle-offset-hours \"\$offset\" --timeout-sec '$TIMEOUT_SECONDS' || rc=\$?; done; date -u +\"[forecast_run_capture] done_utc=%Y-%m-%dT%H:%M:%SZ returncode=\$rc\"; sleep '$INTERVAL_SECONDS'; done"
 
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "=$TMUX_SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \

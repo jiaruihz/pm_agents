@@ -193,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--run", help="Exact UTC run wire value, e.g. 2026-08-04T12:00")
     parser.add_argument("--candidate-latest-cycle", action="store_true")
+    parser.add_argument("--candidate-cycle-offset-hours", type=int, default=0)
     parser.add_argument("--now-utc")
     parser.add_argument("--cities", nargs="*")
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_GLOBAL_SINGLE_RUN_MODELS))
@@ -210,7 +211,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.now_utc
         else datetime.now(timezone.utc)
     )
-    run = args.run or latest_cycle_candidate(now_utc)
+    if args.candidate_cycle_offset_hours < 0 or args.candidate_cycle_offset_hours % 6:
+        raise SystemExit("--candidate-cycle-offset-hours must be a non-negative multiple of 6")
+    run = args.run or latest_cycle_candidate(
+        now_utc - timedelta(hours=args.candidate_cycle_offset_hours)
+    )
     configs = load_city_configs(
         include_station_diff=False,
         only_cities=set(args.cities or []) or None,

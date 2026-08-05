@@ -24,6 +24,7 @@ def _response() -> dict[str, object]:
 
 def test_latest_cycle_candidate_is_request_only() -> None:
     assert latest_cycle_candidate(datetime(2026, 8, 5, 5, 59, tzinfo=timezone.utc)) == "2026-08-05T00:00"
+    assert latest_cycle_candidate(datetime(2026, 8, 4, 17, 59, tzinfo=timezone.utc)) == "2026-08-04T12:00"
 
 
 def test_capture_materializes_d1_d2_and_missing_models() -> None:
