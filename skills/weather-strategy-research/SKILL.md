@@ -129,7 +129,8 @@ maker 假设必须建 fill/queue/adverse selection，不能把 future touch 当�
   `weather_research_artifact_ctl.py dependencies` 定位，再用 `restore-dependencies --script ... --apply`
   按脚本最小恢复，不把整库复制回 `docs/`。
 - 清理已归档的派生输出只能在用户明确授权删除后使用 `prune-reproduced`；必须从 clean HEAD 重放、逐文件 SHA-256
-  精确一致、无下游代码消费者，并记录 producer/code revision、archived input hashes 和任何 runtime input inventory。
+  精确一致、无下游代码消费者，并记录 producer/code revision、完整 replay args、archived input hashes 和任何
+  mutable DB/runtime identity 或目录 inventory。
   semantic equivalence、只跑到中间阶段、raw/canonical 或无法冻结输入的结果一律保留。
 - 日期报告写 `docs/analysis/YYYY-MM/`，只作 snapshot。实验结束时必须同时回写
   `WEATHER_DOCS_INDEX.md` 的所属家族 living doc 与 `WEATHER_STRATEGY_REGISTRY.md`：写清耐久结论、

@@ -14,6 +14,7 @@ import gzip
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -210,7 +211,9 @@ def prune_reproduced(
     reproduced_root: Path,
     code_revision: str,
     runtime_inputs: tuple[Path, ...] = (),
+    runtime_identity_inputs: tuple[Path, ...] = (),
     additional_inputs: frozenset[str] = frozenset(),
+    replay_args: tuple[str, ...] = (),
     apply: bool,
     artifact_root: Path | None = None,
 ) -> dict[str, Any]:
@@ -303,6 +306,23 @@ def prune_reproduced(
                 "path_size_mtime_sha256": inventory_digest.hexdigest(),
             }
         )
+    for runtime_input in runtime_identity_inputs:
+        if not runtime_input.exists():
+            raise ValueError(f"runtime identity input does not exist: {runtime_input}")
+        resolved = runtime_input.resolve()
+        if not resolved.is_file():
+            raise ValueError(f"runtime identity input must be a file: {runtime_input}")
+        stat = resolved.stat()
+        runtime_proof.append(
+            {
+                "path": str(resolved),
+                "kind": "mutable_file_identity",
+                "device": stat.st_dev,
+                "inode": stat.st_ino,
+                "size_bytes": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+            }
+        )
     tombstones: list[dict[str, Any]] = []
     for relative in sorted(selected_paths):
         row = rows[relative]
@@ -342,7 +362,9 @@ def prune_reproduced(
         "reproduction_proof": {
             "producer": producer,
             "code_revision": code_revision,
-            "replay_command": f"python {producer}",
+            "replay_command": " ".join(
+                shlex.quote(part) for part in ("python", producer, *replay_args)
+            ),
             "input_plan": producer_plan,
             "input_hashes": {
                 path: row["sha256"] for path, row in sorted(producer_input_rows.items())
@@ -908,6 +930,19 @@ def parse_args() -> argparse.Namespace:
         help="additional archived input used through an imported helper; repeat as needed",
     )
     parser.add_argument(
+        "--runtime-identity-input",
+        action="append",
+        default=[],
+        type=Path,
+        help="mutable canonical input recorded by device/inode/size/mtime rather than content hash",
+    )
+    parser.add_argument(
+        "--replay-arg",
+        action="append",
+        default=[],
+        help="argument included in the recorded producer replay command; repeat as needed",
+    )
+    parser.add_argument(
         "--path",
         action="append",
         default=[],
@@ -973,7 +1008,9 @@ def main() -> int:
             reproduced_root=args.reproduced_root,
             code_revision=args.code_revision,
             runtime_inputs=tuple(args.runtime_input),
+            runtime_identity_inputs=tuple(args.runtime_identity_input),
             additional_inputs=frozenset(args.proof_input),
+            replay_args=tuple(args.replay_arg),
             apply=args.apply,
         )
         return 0

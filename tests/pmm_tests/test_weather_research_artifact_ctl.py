@@ -321,6 +321,8 @@ def test_prune_reproduced_records_exact_replay_and_deletes_unique_object(
     reproduced = reproduced_root / relative
     reproduced.parent.mkdir(parents=True)
     reproduced.write_bytes(content)
+    runtime_db = tmp_path / "weather.db"
+    runtime_db.write_bytes(b"mutable canonical")
     monkeypatch.setattr(artifact_ctl, "ROOT", repo)
     monkeypatch.setattr(
         artifact_ctl,
@@ -348,12 +350,16 @@ def test_prune_reproduced_records_exact_replay_and_deletes_unique_object(
         producer="scripts/analysis/research_example.py",
         reproduced_root=reproduced_root,
         code_revision="abc123",
+        runtime_identity_inputs=(runtime_db,),
+        replay_args=("--max-files", "10"),
         apply=True,
         artifact_root=artifact_root,
     )
 
     assert result["deleted_object_bytes"] == len(content)
     assert result["reproduction_proof"]["match"] == "sha256_exact"
+    assert result["reproduction_proof"]["replay_command"].endswith("--max-files 10")
+    assert result["reproduction_proof"]["runtime_inputs"][0]["kind"] == "mutable_file_identity"
     assert result["tombstones"][0]["reason"] == "exact_clean_reproduction"
     assert not object_path.exists()
     assert artifact_ctl.archived_artifact_rows(artifact_root) == {}
