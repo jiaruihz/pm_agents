@@ -1,0 +1,60 @@
+{
+  "schema_version": "d1_weather_only_clean_forward_freeze_v1",
+  "model_identity": "d1_weather_only_probability_challenger",
+  "artifact_role": "legacy_trained_challenger_for_clean_exact_run_forward",
+  "frozen_at_utc": "2026-08-05T08:52:26Z",
+  "training_lineage": "legacy_daily_cache_non_strict_pit_training_prior",
+  "development_lineage": "single_run_reconstructed_conservative_12h_lag",
+  "clean_forward_lineage_required": "provider_exact_run_first_seen_append_only",
+  "location": {
+    "consensus_stat": "mean",
+    "consensus_weight": 0.875,
+    "assigned_model_weight": 0.125,
+    "city_source_bias_multiplier": 1.0,
+    "city_source_bias_structure": "strongly_shrunk_partial_hierarchy"
+  },
+  "distribution": {
+    "shape": "pooled_empirical_residual",
+    "city_scale_structure": "more_strongly_shrunk_partial_hierarchy",
+    "residual_scale_temperature": 1.25,
+    "climatology_tail_mix": 0.02,
+    "kernel_sd_f": 0.75
+  },
+  "selection": {
+    "primary_metric": "target_date_equal_exact_bracket_logloss",
+    "candidate_count": 600,
+    "development_target_dates": 18,
+    "development_states": 233,
+    "secondary_holdout_target_dates": 9,
+    "secondary_holdout_states": 46,
+    "multiple_testing_adjustment": "none_exploratory_clean_forward_required"
+  },
+  "secondary_holdout": {
+    "candidate_logloss": 1.8506261997366888,
+    "incumbent_f_v2_logloss": 1.9762982722028701,
+    "market_logloss": 1.5497447691801467,
+    "candidate_minus_incumbent_logloss_delta": -0.12567207246618092,
+    "candidate_minus_incumbent_logloss_ci95": [
+      -0.2993584866325134,
+      0.01300867187907376
+    ],
+    "candidate_rps": 0.08281935377895794,
+    "incumbent_f_v2_rps": 0.09033386344593625,
+    "rung_ece": 0.01604235181136273,
+    "winner_probability_le_001_states": 1
+  },
+  "feature_policy": {
+    "market_features_used": false,
+    "first_seen_used_as_alpha_feature": false,
+    "first_seen_used_as_pit_clock": true,
+    "run_revision_features": "pending_clean_history",
+    "physical_width_features": "pending_same_clock_history"
+  },
+  "gates": {
+    "weather_only_clean_forward": "pending",
+    "market_residual": "not_run_by_contract",
+    "execution": "not_run_by_contract",
+    "live_action": "none",
+    "orders_changed": 0
+  }
+}

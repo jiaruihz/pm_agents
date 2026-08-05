@@ -148,3 +148,5 @@ log P_post(i) = log P_market(i) + delta_i(weather features) - log Z
 2026-08-05 已取得明确确认并通过 production controller 部署 `weather_forecast_run_capture_v1`。它每 30 分钟精确尝试最近四个 6h run candidate；每个请求独立、不可用即写 blocker，绝不 fallback 到其他 run。首轮已得到 `2026-08-04T12:00Z` 与 `18:00Z` 两个五模型完整 run，`2026-08-05T00:00Z` 为三模型 partial，`06:00Z` 当时尚 unavailable。采集只写 append-only research evidence，不修改 live 策略、订单、city pool、sizing 或 execution policy。
 
 与此同时，legacy 数据上的模型开发没有暂停：5561 条 long-history rows 用于训练，前 18 个 reconstructed target dates 只用于选 overlay，最后 9 个日期作为 legacy holdout。结果见 [D-1 legacy weather-only v2](2026-08-05-d1-legacy-weather-only-v2.md)。该结果用于确定 challenger，不计作本计划的 clean frozen forward。
+
+随后完成 weather-only robust-tail/location ablation：在 600 个开发组合中选出 `87.5% ensemble mean + 12.5% assigned model + full shrunk city/source bias + 1.25× residual scale + 2% climatology tail`。secondary holdout logloss `1.9763→1.8506`、RPS `0.0903→0.0828`、top-1 `21.9%→26.8%`，但 logloss CI 仍跨 0 且仍显著输 market `1.5497`。因此该参数已[冻结为 clean-forward challenger](2026-08-05-d1-weather-only-clean-forward-freeze-v1.json)，停止继续读取旧 9-date holdout 调参；market residual 继续 blocked。
