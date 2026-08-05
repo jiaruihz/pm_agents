@@ -63,6 +63,10 @@ Target metric: `current_yes_no_reheat` = 在 source-aligned city-day 中，买�
 
 ## 产物
 
+该入口及下列派生 CSV 已在 2026-08-05 完成 SHA-256 精确重放后退场；复现代码固定为
+`a1349192df452d88cecd4c2731653c5bda9d8a5e`，删除证明见 JRS artifact manifest
+`pm_agents_replay_prune_theta_yes_current_selector_v7_20260805.json`。本报告保留结论与历史路径，不把这些路径当作当前工作树输入。
+
 - CSV: `docs/analysis/2026-06/generated/theta_yes_current_selector_v7/model_metrics.csv`
 - CSV: `docs/analysis/2026-06/generated/theta_yes_current_selector_v7/fixed_grid.csv`
 - CSV: `docs/analysis/2026-06/generated/theta_yes_current_selector_v7/chosen_holdout.csv`

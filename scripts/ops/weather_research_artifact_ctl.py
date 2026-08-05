@@ -491,6 +491,23 @@ def discover_archived_dependencies(
                 candidates = list(node.args[:1])
             else:
                 continue
+            if function == "add_argument":
+                option_names = {
+                    str(arg.value).lstrip("-").replace("-", "_").upper()
+                    for arg in node.args
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                }
+                is_output_argument = any(
+                    any(marker in option for marker in ("OUTPUT", "OUT_DIR", "DESTINATION"))
+                    for option in option_names
+                )
+                if not is_output_argument:
+                    for keyword in node.keywords:
+                        if keyword.arg != "default":
+                            continue
+                        value = _static_path(keyword.value, environment)
+                        if value:
+                            add_archived_path(value)
             if not function.startswith(READ_CALL_PREFIXES):
                 continue
             for candidate in candidates:

@@ -146,6 +146,37 @@ children = list(INPUT_ROOT.iterdir())
     }
 
 
+def test_dependency_scan_resolves_argparse_input_defaults_but_not_outputs(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    source = repo / "scripts/analysis/family/research_example.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import argparse
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[3]
+parser = argparse.ArgumentParser()
+parser.add_argument("--observed-detail", type=Path, default=str(ROOT / "docs/analysis/2026-07/generated/example_v1/input.csv"))
+parser.add_argument("--output-dir", type=Path, default=ROOT / "docs/analysis/2026-07/generated/example_v1/output")
+""",
+        encoding="utf-8",
+    )
+    rows = {
+        "docs/analysis/2026-07/generated/example_v1/input.csv": {},
+        "docs/analysis/2026-07/generated/example_v1/output/result.csv": {},
+    }
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+
+    result = artifact_ctl.discover_archived_dependencies([source], rows)
+
+    assert result == {
+        "scripts/analysis/family/research_example.py": [
+            "docs/analysis/2026-07/generated/example_v1/input.csv"
+        ]
+    }
+
+
 def test_restore_dependencies_uses_minimal_script_plan(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
