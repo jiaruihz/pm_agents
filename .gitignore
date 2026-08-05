@@ -54,6 +54,8 @@ local_market_collection/market_snapshot_*.json
 
 # Runtime local artifacts
 runtime/
+!src/strategies/weather_edge_v1/runtime/
+!src/strategies/weather_edge_v1/runtime/execution_journal.py
 runtime/*.pid
 runtime/*.db
 runtime/*.db.*
@@ -83,9 +85,21 @@ runtime/verify_market_analysis_cn/
 # Generated analysis artifacts; keep Markdown conclusions in git.
 docs/analysis/**/*.json
 docs/analysis/**/*.jsonl
+!docs/analysis/2026-07/generated/intraday_decision_casebook_v1/*.json
+!docs/analysis/2026-07/generated/intraday_decision_casebook_v1/*.jsonl
 # Reproducible analysis CSVs under generated/ are bulky (~270MB); scripts
 # regenerate them and reports cite the numbers. Keep them out of git.
 docs/analysis/**/generated/**/*.csv
+docs/analysis/**/generated/**/*.csv.gz
+docs/analysis/**/generated/**/*.json.gz
+docs/analysis/**/generated/**/*.joblib
+docs/analysis/**/generated/**/*.pkl
+docs/analysis/**/generated/**/*.pickle
+docs/analysis/**/generated/**/*.parquet
+docs/analysis/**/generated/**/*.feather
+docs/analysis/**/generated/**/*.npy
+docs/analysis/**/generated/**/*.npz
+docs/analysis/**/generated/**/*.png
 
 # Local agent state
 .claude/

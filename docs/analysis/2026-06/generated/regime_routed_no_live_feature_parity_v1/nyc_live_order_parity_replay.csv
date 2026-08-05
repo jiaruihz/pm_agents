@@ -1,2 +1,0 @@
-label,asof_utc,snapshot,posted_price,live_feature_status,status
-first_live_order,2026-06-25T15:54:21+00:00,runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260625_2330.json,0.35,no_asof_records,missing_features

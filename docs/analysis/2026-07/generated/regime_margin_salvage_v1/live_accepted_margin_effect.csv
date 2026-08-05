@@ -1,6 +1,0 @@
-city,target_date,bracket,route_leg,forecast_max_native,current_no_escape_threshold_native,current_no_escape_margin_native,live_order_shares,kept_gt_0,kept_gt_0.1,kept_gt_0.25,kept_gt_0.5,kept_gt_0.75,kept_gt_1,kept_gt_1.5,kept_gt_2
-CapeTown,2026-07-05,18,fresh_runway_current_no,19.0,18.5,0.5,8.0,True,True,True,False,False,False,False,False
-Miami,2026-07-05,90-91,capped_d2_no,86.3,,,9.851351351351353,True,True,True,True,True,True,True,True
-Atlanta,2026-07-05,92-93,fresh_runway_current_no,94.7,93.5,1.2000000000000028,10.59,True,True,True,True,True,True,False,False
-Beijing,2026-07-06,33,fresh_runway_current_no,35.1,33.5,1.6000000000000014,8.0,True,True,True,True,True,True,True,False
-Chengdu,2026-07-06,37,fresh_runway_current_no,37.6,37.5,0.10000000000000142,7.83,True,True,False,False,False,False,False,False

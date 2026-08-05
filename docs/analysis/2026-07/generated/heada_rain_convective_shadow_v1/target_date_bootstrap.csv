@@ -1,4 +1,0 @@
-block,draws,target_dates,selected_roi_ci_low,selected_roi_ci_high,roi_uplift_vs_complement_ci_low,roi_uplift_vs_complement_ci_high
-historical_discovery_non_pit,20000,26,-0.1115893539452688,2.518869928877278,-0.6394768391855999,2.1315170877054617
-historical_replication_non_pit,20000,27,0.21707153130526555,2.6940906311363237,0.21249487730033592,2.9544944710844923
-current_frozen_pit,20000,8,-1.0,1.7901464582752773,-1.2590572428887503,1.858788868189642

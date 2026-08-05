@@ -101,7 +101,7 @@ ask source for d1/d2 YES: 1 - sibling NO bid
 
 ## 2026-07-10 Lineage Repair
 
-[2026-07-10-tmax-lineage-repair-v1.md](analysis/2026-07/2026-07-10-tmax-lineage-repair-v1.md)
+[2026-07-10-tmax-lineage-repair-replay-v1.md](analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.md)
 完成 live/replay 同口径修复：共享 tail-aware bracket parser、GFS/ECMWF enrichment、RH/sky/wind observation context、
 sibling complement snapshot estimate、direct fresh executable ask、NaN ask 拦截和 blocked telemetry。`1-NO bid`
 只作估价/telemetry，不作为当前 BUY YES executor 的可成交 ask。旧 live 缺字段会让 verified-forward proper score 变差：

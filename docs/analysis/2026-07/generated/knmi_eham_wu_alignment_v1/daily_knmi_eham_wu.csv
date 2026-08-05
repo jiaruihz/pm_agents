@@ -1,6 +1,0 @@
-target_date,knmi_rows,knmi_ta_daily_max_raw_c,knmi_ta_daily_max_round_c,knmi_tx_daily_max_raw_c,knmi_tx_daily_max_round_c,eham_metar_daily_max_c,wu_native_daily_max_c,winning_bracket,ta_minus_wu_c,tx_minus_wu_c,metar_minus_wu_c,ta_in_winning_bracket,tx_in_winning_bracket,wu_in_winning_bracket,tx_terminal_false_cross,wu_status
-2026-07-22,144,20.8,21,21.2,21,20,20,20,1,1,0,0,0,1,1,ok
-2026-07-23,144,20.3,20,20.7,21,21,21,21,-1,0,0,0,1,1,0,ok
-2026-07-24,144,24.1,24,24.3,24,24,24,,0,0,0,,,,0,ok
-2026-07-25,144,24.8,25,25.1,25,25,25,,0,0,0,,,,0,ok
-2026-07-26,144,21.8,22,21.9,22,22,22,,0,0,0,,,,0,ok

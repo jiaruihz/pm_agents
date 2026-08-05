@@ -1,5 +1,0 @@
-slice,selected_n,selected_losses,selected_loss_rate,other_n,other_losses,other_loss_rate,post_hoc
-market_mid_lt_0.85,37,5,0.13513513513513514,99,1,0.010101010101010102,True
-minutes_since_running_max_lt_60,74,6,0.08108108108108109,62,0,0.0,True
-forecast_peak_passed_1.5_to_2.5h,30,4,0.13333333333333333,106,2,0.018867924528301886,True
-path_faded,49,1,0.02040816326530612,87,5,0.05747126436781609,True

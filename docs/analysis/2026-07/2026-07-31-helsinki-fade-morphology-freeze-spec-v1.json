@@ -1,0 +1,81 @@
+{
+  "model_id": "helsinki_fade_morphology_v1",
+  "target": "P(current official integer bracket is exceeded within 30m/60m/120m/EOD | deterministic path_state=fade)",
+  "unit": "10-minute historical observation-clock checkpoint",
+  "train_window": [
+    "2023-07-31",
+    "2025-12-31"
+  ],
+  "selection_window": [
+    "2025-01-01",
+    "2025-12-31"
+  ],
+  "oof_folds": [
+    ["2025Q1", "2025-01-01", "2025-03-31"],
+    ["2025Q2", "2025-04-01", "2025-06-30"],
+    ["2025Q3", "2025-07-01", "2025-09-30"],
+    ["2025Q4", "2025-10-01", "2025-12-31"]
+  ],
+  "labels": [
+    "label_break_30m",
+    "label_break_60m",
+    "label_break_120m",
+    "label_break_eod"
+  ],
+  "compact_features": [
+    "local_hour_sin",
+    "local_hour_cos",
+    "doy_sin",
+    "doy_cos",
+    "pullback_depth_c",
+    "temp_slope_30m_cph",
+    "temp_slope_60m_cph",
+    "log_minutes_since_strict_high",
+    "solar_elevation_deg",
+    "global_radiation_wm2",
+    "relative_humidity_pct",
+    "dewpoint_depression_c",
+    "wind_speed_ms",
+    "cloud_cover_okta",
+    "precipitation_10m_mm"
+  ],
+  "forecast_features": [
+    "forecast_available",
+    "forecast_run_age_h",
+    "forecast_current_innovation_c",
+    "forecast_future_peak_margin_vs_boundary_c",
+    "forecast_signed_minutes_to_day_peak",
+    "forecast_minutes_to_future_peak",
+    "forecast_future_heat_area_above_boundary",
+    "forecast_future_hours_above_boundary",
+    "forecast_future_radiation_sum_kwhm2",
+    "forecast_future_cloud_mean_pct",
+    "forecast_future_wind_mean_kmh"
+  ],
+  "candidates": [
+    "season_hour_prior",
+    "compact_logit",
+    "forecast_logit",
+    "shallow_hgb"
+  ],
+  "hgb_params": {
+    "learning_rate": 0.05,
+    "max_iter": 120,
+    "max_leaf_nodes": 8,
+    "max_depth": 3,
+    "min_samples_leaf": 100,
+    "l2_regularization": 4.0,
+    "random_state": 20260731
+  },
+  "coherence": "after independent heads, apply cumulative maximum over 30m,60m,120m,EOD",
+  "primary_metrics": [
+    "date-equal integrated Brier",
+    "date-equal integrated logloss"
+  ],
+  "selection_rule": "select shallow_hgb only if both integrated Brier and logloss target-date bootstrap upper bounds versus forecast_logit are below zero; otherwise select forecast_logit if both bounds versus season_hour_prior are below zero; otherwise keep season_hour_prior",
+  "artifact_train_end": "2025-12-31",
+  "clean_forward_start": "2026-07-31",
+  "market_role": "feature-only challenger; no entry threshold and no live change",
+  "pit_note": "historical FMI/METAR/forecast reconstruction uses observation clock and fixed six-hour forecast availability lag; clean forward must use captured first-seen payloads",
+  "final_strategy_price_filter": null
+}

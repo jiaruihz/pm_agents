@@ -1,4 +1,0 @@
-city,source,collector_exact_dates,raw_matching_rows,raw_rows__knmi_open_data,exact_rows__knmi_open_data,outside_first_seen_age_contract,outside_target_window,distinct_collector_exact_events,raw_rows__high_frequency_observations,missing_exact_first_seen,missing_exact__high_frequency_observations,exact_rows__high_frequency_observations,raw_rows__live_cross_observations,exact_rows__live_cross_observations,raw_rows__jma_hot_observations,missing_exact__jma_hot_observations,exact_rows__jma_hot_observations
-Amsterdam,knmi,1,422,422,422,11,306,37,,,,,,,,,
-Helsinki,fmi,7,34096,,,,33,591,33466,32869,32869,597,630,630,,,
-Tokyo,jma_amedas,7,42585,,,,40,579,41959,41960,41958,1,608,608,18,2,16

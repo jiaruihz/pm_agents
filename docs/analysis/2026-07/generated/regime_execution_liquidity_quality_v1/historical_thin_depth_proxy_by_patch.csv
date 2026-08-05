@@ -1,7 +1,0 @@
-evidence_layer,patch_effect,rows,dates,cities,cost_usd,pnl_usd,roi,roi_ci_low,roi_ci_high,avg_spread,avg_top_ask_notional,win_rate
-historical_best_ask_diagnostic,below_min5_after_sizing,179,38,33,108.571,-6.571,-0.06052260732608155,-0.16657471317961378,0.05464681355324061,,,0.5698324022346368
-frozen_live_like_route_price,below_min5_after_sizing,64,32,22,32.569,-2.629000000000001,-0.08072093094660569,-0.3033105348165362,0.14963567916577197,,,0.46774193548387094
-historical_best_ask_diagnostic,shadow_only_tail_or_false_fade,40,24,26,18.134,3.8660000000000005,0.2131906915186942,-0.0992440251286973,0.5121584679610399,,,0.55
-frozen_live_like_route_price,shadow_only_tail_or_false_fade,36,22,23,15.573999999999998,4.426,0.28419160138692695,-0.07742339677985673,0.6345988717903664,,,0.5555555555555556
-frozen_live_like_route_price,city_source_bias_resized,1,1,1,0.29,-0.29,-1.0,,,,,0.0
-historical_best_ask_diagnostic,city_source_bias_resized,1,1,1,0.29,-0.29,-1.0,,,,,0.0

@@ -661,6 +661,7 @@ def build_manifest(
             ],
             "data_feed_runtime_root": str(spec.data_feed_runtime_root),
             "pm_runtime_root": str(spec.pm_runtime_root),
+            "research_artifact_root": str(spec.research_artifact_root),
             "canonical_tmux_socket": spec.canonical_tmux_socket,
             "canonical_tmux_binary": str(spec.canonical_tmux_binary),
             "managed_runtime_sessions": [

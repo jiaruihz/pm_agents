@@ -6,6 +6,7 @@ compatibility_db_paths:
   - runtime/weather.db
 data_feed_runtime_root: /Volumes/jrs/weather_data_feed_service_runtime
 pm_runtime_root: /Volumes/jrs/pm_agents/runtime
+research_artifact_root: /Volumes/jrs/pm_agents/research/artifact_store
 canonical_tmux_socket: weather-data-feed-jrs
 canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
 

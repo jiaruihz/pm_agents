@@ -13,6 +13,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 > - Mac 是当前生产：market/data-feed raw 在 `/Volumes/jrs/weather_data_feed_service_runtime`；执行 raw 必须从 `production.yaml`、manifest 与进程参数解析，不能默认在控制仓库。
 > - N100 在磁盘事故恢复完成前仅是历史/抢救源，不是当前 runner、order、source-event 或 snapshot 真相。
 > - 当前状态问题先读 raw + exchange evidence；历史绩效/settlement/opportunity analysis 才以 canonical facts 为首选。
+> - 大型研究 generated artifacts 的物理正本统一为 `production.yaml.research_artifact_root`（当前 `/Volumes/jrs/pm_agents/research/artifact_store`）的 SHA-256 内容寻址对象；仓库只保留结论、紧凑 metadata、权威 case evidence 和活跃消费者所需的显式例外。路径映射及恢复以 `manifests/*.json` 和 `weather_research_artifact_ctl.py restore` 为准。
 >
 > **历史前提（2026-06-05 核实）**：
 > - **N100 上没有活跃的 SQLite DB**。所有生产数据以 JSONL/JSON 文件形态存在 `output/`（weather-predict）和 `runtime/weather_edge_v1/`（pm_agent）下。
@@ -136,6 +137,7 @@ device/inode，属于 DB split P0，不得任选一份继续分析或重建。�
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |
 | **本机** `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` | mirror | rsync from N100 | `migrate-live-cycle` → orders | N100 真金 CLOB 提交凭证镜像 |
 | **JRS** `/Volumes/jrs/pm_agents/runtime/weather.db` | **physical canonical operational DB** | bounded canonical refresh 增量 ingest；`run_stack.sh --rebuild` 显式全量派生层重算 | 所有分析 / API / 前端 | `runtime/weather.db` 必须只是同 inode alias；无参数 `run_stack.sh` 只读状态且不启停服务。 |
+| **JRS** `/Volumes/jrs/pm_agents/research/artifact_store` | **research artifact physical canonical** | `weather_research_artifact_ctl.py archive` | 历史研究复现 / 按 manifest 恢复 | 位于既有统一 research 根内并按 SHA-256 内容寻址；`docs/analysis/**/generated` 不再保存大型或不可见的第二份机器产物。 |
 | **本机** `runtime/weather.db.orders` | canonical（订单/执行事件） | strategy runtime/live-cycle ingest | live 下单结果、档位、挂单/吃单、blocked/error、执行版本、score tier、策略原始 payload | grain = 每个 canonical order/execution attempt；未成交不代表现金流 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |

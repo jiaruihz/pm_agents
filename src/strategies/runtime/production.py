@@ -62,6 +62,9 @@ class WeatherProductionSpec:
     pm_runtime_root: Path
     canonical_tmux_socket: str
     canonical_tmux_binary: Path
+    research_artifact_root: Path = Path(
+        "/Volumes/jrs/pm_agents/research/artifact_store"
+    )
     managed_runtimes: tuple[WeatherManagedRuntimeSpec, ...] = field(default_factory=tuple)
     allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
 
@@ -184,6 +187,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         pm_runtime_root=Path(raw["pm_runtime_root"]),
         canonical_tmux_socket=str(raw["canonical_tmux_socket"]),
         canonical_tmux_binary=Path(raw["canonical_tmux_binary"]),
+        research_artifact_root=Path(raw["research_artifact_root"]),
         managed_runtimes=tuple(managed),
         allowed_unmanaged_sessions=tuple(str(item) for item in allowed_unmanaged),
     )
@@ -193,6 +197,13 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("operational_repo_root must be absolute")
     if spec.canonical_db_path.parent != spec.pm_runtime_root:
         raise ValueError("canonical_db_path must live directly under pm_runtime_root")
+    if not spec.research_artifact_root.is_absolute():
+        raise ValueError("research_artifact_root must be absolute")
+    research_owner = spec.pm_runtime_root.parent / "research"
+    if not spec.research_artifact_root.is_relative_to(research_owner):
+        raise ValueError(
+            "research_artifact_root must live under the canonical JRS research root"
+        )
     managed_ids = {item.instance_id for item in spec.managed_runtimes}
     for item in spec.managed_runtimes:
         if item.desired_state != "running":

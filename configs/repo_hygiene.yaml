@@ -1,0 +1,16 @@
+version: pm_agents_repo_hygiene_v1
+
+# Machine-generated research data belongs on JRS.  Git keeps only compact
+# metadata, small golden evidence, and files that active code still consumes.
+generated_artifact_max_bytes: 5242880
+untracked_artifact_archive_min_bytes: 0
+
+# Temporary migration ceiling.  Batch 4 removes or registers the historical
+# wrappers and lowers this number; CI prevents new wrappers in the meantime.
+max_entrypoints_outside_production_closure: 64
+
+# These are still consumed by active ops/source code.  They remain explicit
+# exceptions until their consumers use the JRS research artifact resolver.
+large_generated_allowlist:
+  - docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv
+  - docs/analysis/2026-07/generated/tmax_distribution_p6_shadow_telemetry_v1/shadow_events.csv

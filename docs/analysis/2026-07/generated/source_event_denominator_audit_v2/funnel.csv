@@ -1,8 +1,0 @@
-lineage,stage,rows,dates,cities,grain
-raw saved-field audit,all-window hourly-last inventory,68026,69,49,last saved snapshot per city/date/local-hour
-raw saved-field audit,same-window hourly-last inventory,23850,22,47,hourly-last inventory restricted to the v3 labeled date window
-v3 reconstructed PIT,clean labeled decision snapshots,8094,22,47,every reconstructable decision snapshot; multiple rows per local hour
-v3 reconstructed PIT,clean labeled unique city-date-hours,4121,22,47,v3 states deduplicated to city/date/local-hour for comparability
-v3 reconstructed PIT,generic running-high bracket advances,518,22,40,current bracket changed from previous state; not source-specific
-v3 reconstructed PIT,generic cross current-NO executable,499,22,40,all cross rows with ask 0.001..0.999 and ask_size>=5
-v3 reconstructed PIT,v1 model edge>=2c current-NO,42,14,17,final model-selected subset
