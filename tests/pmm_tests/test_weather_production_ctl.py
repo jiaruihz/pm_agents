@@ -99,12 +99,19 @@ def test_every_business_runtime_has_controller_start_contract():
         if item.instance_id != "weather_jrs_context_keeper"
     ]
 
-    assert len(business) == 23
+    assert len(business) == 24
     assert all(item.recovery_policy != "manual" for item in business)
     assert all(item.checkout_root is not None for item in business)
     assert all(item.resolved_start_script() is not None for item in business)
     assert all(item.health_path is not None or item.health_url is not None for item in business)
     assert all(item.resolved_start_script().is_file() for item in business)
+    run_capture = next(
+        item
+        for item in business
+        if item.instance_id == "weather_forecast_run_capture_v1"
+    )
+    assert run_capture.execution_mode == "collector"
+    assert run_capture.recovery_policy == "safe"
 
 
 def test_migrated_historical_runtimes_remain_non_live():

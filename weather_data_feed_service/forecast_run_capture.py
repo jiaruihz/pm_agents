@@ -275,6 +275,12 @@ def main(argv: list[str] | None = None) -> int:
     write_json(state_path, state)
     summary = {
         "schema_version": "weather_forecast_run_capture_summary_v1",
+        "status": "ok",
+        "capture_status": (
+            "complete"
+            if len(responses_by_model) == len(args.models)
+            else ("partial" if responses_by_model else "blocked")
+        ),
         "capture_id": capture_id,
         "captured_at_utc": now_utc.isoformat(),
         "requested_run": run,

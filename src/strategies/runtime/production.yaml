@@ -45,6 +45,19 @@ managed_runtimes:
     max_health_age_sec: 1800
     recovery_policy: safe
 
+  - instance_id: weather_forecast_run_capture_v1
+    tmux_session: weather_forecast_run_capture_v1
+    role: source_collector
+    execution_mode: collector
+    checkout_root: /Users/deepsleep/projects/pm_agents_forecast_run_prod
+    start_script: scripts/ops/start_weather_forecast_run_capture_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/latest.json
+    health_format: json
+    max_health_age_sec: 2400
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+
   - instance_id: weather_live_cross_observations
     tmux_session: weather_live_cross_observations
     role: source_collector
