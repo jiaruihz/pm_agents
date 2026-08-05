@@ -158,7 +158,9 @@ log P_post(i) = log P_market(i) + delta_i(weather features) - log Z
 下一阶段分成两条严格隔离的线：
 
 1. weather-only W1：先用 archive-known-available 历史与 collector-exact 的第一段 clean development 训练 `revision + spread + run-age` challenger。主 checkpoint 固定为当地 target 前一日 18:00–24:00 的首个 complete batch，12:00–18:00 仅作 secondary。W1 的 family、feature、lambda 和 tail 先在 target-date block inner validation 选择；结果评审后才生成新的 freeze artifact。
-2. market repricing R1：只用 collector-exact 的新 complete run/batch event，比较 event 前最后完整 ladder、event 后第一完整 ladder与 30/60/90m markout。bootstrap 已存在 run 和 partial→complete 补齐保留为 coverage，但不得进入 latency alpha。
+2. market repricing R1：只用 collector-exact 的新 complete run/batch event，比较 event 前最后完整 ladder、event 后第一完整 ladder与 5/10/30/60/90m markout。bootstrap 已存在 run 和 partial→complete 补齐保留为 coverage，但不得进入 latency alpha。
+
+市场时钟与 forecast 时钟分开：同一 `batch_capture_id/forecast_run_at_utc` 在没有新 run 时，weather-only location 不因盘口过了 5–120 分钟而重算；lead/run-age 只允许连续调整 uncertainty。每个 forecast batch 可以对应多个 `feature_book_snapshot_id`，固定比较 event 前、event 后第一份以及 5/10/30/60/90m 完整 ladder。`M0(t)` 永远使用该决策时刻真实可见的 contemporaneous market，后一个 checkpoint 只用于 repricing/efficiency label，禁止事后替换早期决策价。哪个 checkpoint 更有效，只能在相同 city-date、相同 native ladder、相同 settlement label 上按 logloss/RPS/calibration 与 quote freshness/spread/depth判断；不能按单次价格更平滑或事后更接近赢家选择。
 
 正式概率比较仍固定 W0 locked legacy reference、W1 revision challenger、M0 market、M2 global offset、M3 partial offset。冻结顺序固定为 `clean development → W1 weather-only 结果评审 → M2/M3 同分母结果评审 → freeze artifact → untouched forward`。freeze 之前的数据全部标记 development，不能事后改称 forward；freeze 之后最低正式复核分母预注册为 `>=30` 个 untouched settled target dates。market residual 还要求同一 event 的 pre/post complete ladder coverage，并按 target_date block bootstrap；没有 proper-score residual 前不启动 execution EV。
 

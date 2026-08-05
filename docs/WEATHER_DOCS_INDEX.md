@@ -208,6 +208,8 @@ manifest/历史报告指针。需要重放历史研究时，用
 
 ## 模型与 Edge Engine
 
+> D-1 当前口径（2026-08-05）：robust-tail 参数只锁定为 W0 legacy reference；W1 与 M2/M3 已进入 clean development/model-selection，尚未冻结。相同 city-date/ladder 的 checkpoint 配对显示 18–24h market 优于12–18h，但同期 forecast 也变化，正在用 exact-run 同 batch 的5/10/30/60/90m markout拆分市场时间效应。权威状态以 `WEATHER_STRATEGY_REGISTRY.md` 的 `d1_weather_only_probability_challenger` 行为准。
+
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
 | [2026-08-02-city-probability-runtime-v3-direct-migration-v1.md](analysis/2026-08/2026-08-02-city-probability-runtime-v3-direct-migration-v1.md) | `direct migration code/replay complete / production activation blocked` | Helsinki + Tokyo 已直接迁到 shared-contract runtime v3；388 条 legacy evaluation 恢复为 386 unique candidate、6 zero-notional intent、6 explicit blockers，canonical candidate delta=0，真实输入全流程 smoke 与 restart dedupe 通过。旧 v2 journals 标记 deprecated/read-only；JRS tmux 权限与 manifest critical 阻挡 production activation。 |

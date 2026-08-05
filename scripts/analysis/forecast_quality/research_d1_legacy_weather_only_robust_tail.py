@@ -260,6 +260,92 @@ def weather_vectors(
     }
 
 
+def checkpoint_market_comparison(
+    states: list[dict[str, Any]],
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Compare early/late D-1 markets only on identical city-date ladders.
+
+    The later checkpoint is never substituted into the earlier decision.  This
+    table only diagnoses which contemporaneous market distribution was more
+    informative about settlement and how much forecast information changed
+    between the two clocks.
+    """
+    by_city_date: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+    for state in states:
+        by_city_date.setdefault((state["city"], state["target_date"]), {})[
+            state["policy"]
+        ] = state
+    rows: list[dict[str, Any]] = []
+    long_rows: list[dict[str, Any]] = []
+    early_policy = "D-1_12_18_first"
+    late_policy = "D-1_18_24_first"
+    for (city, target_date), policies in sorted(by_city_date.items()):
+        if early_policy not in policies or late_policy not in policies:
+            continue
+        early, late = policies[early_policy], policies[late_policy]
+        early_labels = [bracket.label for bracket in early["brackets"]]
+        late_labels = [bracket.label for bracket in late["brackets"]]
+        if early_labels != late_labels or early["winner_index"] != late["winner_index"]:
+            continue
+        early_scores = base.score_vector(early["market_probs"], early["winner_index"])
+        late_scores = base.score_vector(late["market_probs"], late["winner_index"])
+        gap_hours = (
+            pd.Timestamp(late["decision_time_utc"]) - pd.Timestamp(early["decision_time_utc"])
+        ).total_seconds() / 3600.0
+        total_variation = 0.5 * float(
+            np.abs(np.asarray(late["market_probs"]) - np.asarray(early["market_probs"])).sum()
+        )
+        row = {
+            "city": city,
+            "target_date": target_date,
+            "early_decision_time_utc": early["decision_time_utc"],
+            "late_decision_time_utc": late["decision_time_utc"],
+            "decision_gap_hours": gap_hours,
+            "market_total_variation": total_variation,
+            "forecast_revision_f": float(late["forecast_max_f"]) - float(early["forecast_max_f"]),
+            "ensemble_mean_revision_f": float(late["ensemble_mean_f"])
+            - float(early["ensemble_mean_f"]),
+            "early_winner_probability": early_scores[3],
+            "late_winner_probability": late_scores[3],
+            "early_logloss": early_scores[0],
+            "late_logloss": late_scores[0],
+            "late_minus_early_logloss": late_scores[0] - early_scores[0],
+            "early_brier": early_scores[1],
+            "late_brier": late_scores[1],
+            "early_rps": early_scores[2],
+            "late_rps": late_scores[2],
+        }
+        rows.append(row)
+        for arm, scores in (("M0_early_12_18", early_scores), ("M0_late_18_24", late_scores)):
+            long_rows.append(
+                {
+                    "snapshot_key": f"{city}|{target_date}|{arm}",
+                    "city": city,
+                    "target_date": target_date,
+                    "arm": arm,
+                    "logloss": scores[0],
+                    "brier": scores[1],
+                    "rps": scores[2],
+                    "winner_probability": scores[3],
+                    "top1_accuracy": scores[4],
+                }
+            )
+    comparison = pd.DataFrame(rows)
+    long_frame = pd.DataFrame(long_rows)
+    if long_frame.empty:
+        return comparison, pd.DataFrame(), pd.DataFrame()
+    scores = _summary(long_frame)
+    paired = pd.DataFrame(
+        [
+            v2.bootstrap_delta(
+                long_frame, "M0_late_18_24", "M0_early_12_18", metric
+            )
+            for metric in ("logloss", "brier", "rps")
+        ]
+    )
+    return comparison, scores, paired
+
+
 def best_market_beta(
     states: list[dict[str, Any]], vectors: dict[str, np.ndarray]
 ) -> tuple[float, pd.DataFrame]:
@@ -397,6 +483,14 @@ def render_report(payload: dict[str, Any]) -> str:
         (row["left"], row["metric"]): row
         for row in payload["market_offset"]["holdout_deltas_vs_market"]
     }
+    checkpoint_scores = {
+        row["arm"]: row for row in payload["checkpoint_market_efficiency"]["scores"]
+    }
+    checkpoint_delta = next(
+        row
+        for row in payload["checkpoint_market_efficiency"]["paired_deltas"]
+        if row["metric"] == "logloss"
+    )
     lines = [
         "# D-1 weather-only robust-tail 开发报告 v1",
         "",
@@ -445,6 +539,11 @@ def render_report(payload: dict[str, Any]) -> str:
         f"- G winner≤1% states={diagnostic['G_robust_tail']['winner_probability_le_001']}，F={diagnostic['F_v2']['winner_probability_le_001']}。",
         f"- G bottom tail predicted/actual={diagnostic['G_robust_tail']['bottom_predicted']:.1%}/{diagnostic['G_robust_tail']['bottom_actual']:.1%}；top={diagnostic['G_robust_tail']['top_predicted']:.1%}/{diagnostic['G_robust_tail']['top_actual']:.1%}。",
         f"- location-only 已把 top-1 从 F 的 {primary['F_v2']['top1_accuracy']:.1%} 提到 {primary['H_location_only']['top1_accuracy']:.1%}；scale={payload['selected']['scale_temperature']:.2f} 进一步修复过度自信。{payload['selected']['climate_mix']:.0%} climatology mix 主要作极端档保底，在 secondary holdout 上没有独立 logloss 增益。",
+        "",
+        "## D-1 checkpoint market efficiency",
+        "",
+        f"在完全相同的 city-date 与 native ladder 上配对 {payload['checkpoint_market_efficiency']['paired_city_dates']} 个状态 / {payload['checkpoint_market_efficiency']['paired_target_dates']} 个日期。12–18h checkpoint market logloss={checkpoint_scores['M0_early_12_18']['logloss']:.4f}，18–24h={checkpoint_scores['M0_late_18_24']['logloss']:.4f}；late-minus-early={checkpoint_delta['delta']:+.4f}（95% CI {checkpoint_delta['ci_low']:+.4f}..{checkpoint_delta['ci_high']:+.4f}）。",
+        f"两 checkpoint 平均相隔 {payload['checkpoint_market_efficiency']['mean_gap_hours']:.2f} 小时，market ladder total variation 均值={payload['checkpoint_market_efficiency']['mean_total_variation']:.3f}；assigned forecast 绝对变化均值={payload['checkpoint_market_efficiency']['mean_absolute_forecast_revision_f']:.3f}°F，ensemble mean 绝对变化均值={payload['checkpoint_market_efficiency']['mean_absolute_ensemble_revision_f']:.3f}°F。这里 later book 只用于判断市场信息效率，不会事后替换 early decision book。",
         "",
         "## 证据边界",
         "",
@@ -501,6 +600,9 @@ def main(argv: list[str] | None = None) -> int:
     assignments = base.model_assignments(history)
     states, funnels = base.build_states(forecasts, baskets, assignments, base.load_settlements(args.db))
     v2.attach_multi_model(states, forecasts)
+    checkpoint_rows, checkpoint_scores, checkpoint_paired = checkpoint_market_comparison(states)
+    if checkpoint_rows.empty:
+        raise ValueError("no identical-ladder early/late D-1 checkpoint pairs")
     primary = [state for state in states if state["policy"] == base.PRIMARY_POLICY]
     dates = sorted({state["target_date"] for state in primary})
     split = min(18, len(dates) - 5)
@@ -558,6 +660,21 @@ def main(argv: list[str] | None = None) -> int:
             "holdout_scores": market_scores.to_dict("records"),
             "holdout_deltas_vs_market": market_deltas.to_dict("records"),
         },
+        "checkpoint_market_efficiency": {
+            "paired_city_dates": int(len(checkpoint_rows)),
+            "paired_target_dates": int(checkpoint_rows["target_date"].nunique()),
+            "paired_cities": int(checkpoint_rows["city"].nunique()),
+            "mean_gap_hours": float(checkpoint_rows["decision_gap_hours"].mean()),
+            "mean_total_variation": float(checkpoint_rows["market_total_variation"].mean()),
+            "mean_absolute_forecast_revision_f": float(
+                checkpoint_rows["forecast_revision_f"].abs().mean()
+            ),
+            "mean_absolute_ensemble_revision_f": float(
+                checkpoint_rows["ensemble_mean_revision_f"].abs().mean()
+            ),
+            "scores": checkpoint_scores.to_dict("records"),
+            "paired_deltas": checkpoint_paired.to_dict("records"),
+        },
         "market_residual": "legacy_exploratory_only_not_clean_gate",
         "production": {"live_action": "none", "orders_changed": 0},
     }
@@ -572,6 +689,9 @@ def main(argv: list[str] | None = None) -> int:
     market_scored.to_csv(args.out / "market_offset_holdout_scored.csv", index=False)
     market_scores.to_csv(args.out / "market_offset_holdout_scores.csv", index=False)
     market_deltas.to_csv(args.out / "market_offset_holdout_paired_bootstrap.csv", index=False)
+    checkpoint_rows.to_csv(args.out / "checkpoint_market_efficiency_pairs.csv", index=False)
+    checkpoint_scores.to_csv(args.out / "checkpoint_market_efficiency_scores.csv", index=False)
+    checkpoint_paired.to_csv(args.out / "checkpoint_market_efficiency_paired_bootstrap.csv", index=False)
     (args.out / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     args.report.write_text(render_report(payload), encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False))

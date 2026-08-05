@@ -3,6 +3,10 @@ from __future__ import annotations
 from weather_model_evaluation import d1_revision_repricing as subject
 
 
+def test_markout_horizons_include_thin_book_short_windows() -> None:
+    assert subject.MARKOUT_MINUTES == (5, 10, 30, 60, 90)
+
+
 def test_lineage_impact_separates_backward_and_repeated_forward_rows() -> None:
     rows = [
         {

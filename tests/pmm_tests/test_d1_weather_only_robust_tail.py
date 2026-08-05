@@ -95,3 +95,38 @@ def test_market_offset_is_coherent_and_beta_one_matches_weather() -> None:
     assert np.all(posterior > 0)
     assert np.isclose(posterior.sum(), 1.0)
     assert np.allclose(posterior, weather)
+
+
+def test_checkpoint_market_comparison_pairs_identical_city_date_ladders() -> None:
+    common = {
+        "city": "TestCity",
+        "target_date": "2026-07-01",
+        "brackets": _state()["brackets"],
+        "winner_index": 1,
+        "forecast_max_f": 70.0,
+        "ensemble_mean_f": 70.5,
+    }
+    states = [
+        {
+            **common,
+            "policy": "D-1_12_18_first",
+            "decision_time_utc": "2026-06-30T12:00:00Z",
+            "market_probs": np.array([0.7, 0.2, 0.1]),
+        },
+        {
+            **common,
+            "policy": "D-1_18_24_first",
+            "decision_time_utc": "2026-06-30T18:00:00Z",
+            "market_probs": np.array([0.1, 0.8, 0.1]),
+        },
+    ]
+
+    pairs, scores, deltas = subject.checkpoint_market_comparison(states)
+
+    assert len(pairs) == 1
+    assert pairs.iloc[0]["decision_gap_hours"] == 6.0
+    assert np.isclose(pairs.iloc[0]["market_total_variation"], 0.6)
+    assert scores.set_index("arm").loc["M0_late_18_24", "logloss"] < scores.set_index("arm").loc[
+        "M0_early_12_18", "logloss"
+    ]
+    assert deltas.loc[deltas["metric"] == "logloss", "delta"].iloc[0] < 0

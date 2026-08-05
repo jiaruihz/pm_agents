@@ -2,7 +2,7 @@
 
 weather-only:
 significance=not_run_no_settlement_complete_forward_dates
-calibration=frozen_challenger_unchanged
+calibration=W0_reference_unchanged_W1_training_pending
 pooled_baseline=retained_negative_control
 forward=collector_accumulating
 
@@ -17,19 +17,19 @@ orders_changed=0
 
 ## 数据快照
 
-- forecast rows=7956，raw batches=1836，material batches=408。
-- collector observed window=2026-08-05T07:15:57.703070Z..2026-08-05T10:51:41.942531Z。
-- market checkpoints=586；complete=182。
+- forecast rows=16660，raw batches=3808，material batches=621。
+- collector observed window=2026-08-05T07:15:57.703070Z..2026-08-05T15:29:37.759673Z。
+- market checkpoints=864；complete=246。
 - settlement-complete revision events=0；其余保持 unsettled coverage，missing_bracket=0。
 
 ## 先修的 lineage 根因
 
-旧 state 产生 backward previous-run rows=2380；另外 forward transition delivery rows=5236，折叠后 unique transition keys=748，重复=4488。
+旧 state 产生 backward previous-run rows=5425；另外 forward transition delivery rows=10880，折叠后 unique transition keys=977，重复=9903。
 根因是每轮从旧 run 重新请求，而 state 只保存最后轮询 run。修复后按 model×city×target×run 保存历史，旧 run 重抓只比较同 run content，不再引用未来 run；原始 payload/run/value 不删除，污染仅限派生 revision lineage。
 
 ## 固定研究问题
 
-在 D-1 complete exact-run material event 的 first available clock 上，比较事件前最后一份完整 ladder、事件后第一份完整 ladder和 30/60/90m markout；先检验 revision 是否带来方向一致的 market repricing，再在结算后比较 frozen weather posterior 与 M0 market proper score。
+在 D-1 complete exact-run material event 的 first available clock 上，比较事件前最后一份完整 ladder、事件后第一份完整 ladder和 5/10/30/60/90m markout；短窗用于识别薄盘/stale quote，长窗用于判断市场是否持续吸收同一 run。先检验 revision 是否带来方向一致的 market repricing，再在结算后比较 weather posterior 与各 checkpoint 的 M0 market proper score。
 
 静态 forecast level、revision event 和 market residual 分三层：weather-only challenger 不读取市场；revision 只做连续 feature；M2/M3 只在同 rows、同 labels、同 feature-book 时钟下与 M0 比。
 正式 weather score 的主 checkpoint 固定为当地 target 前一日 18:00–24:00 的首个 complete batch（`D-1_18_24`）；12:00–18:00 只作 secondary。revision markout 可保留全部 D-1 events，但不得替代主 checkpoint proper score。
@@ -38,10 +38,10 @@ orders_changed=0
 
 | signal funnel | count |
 |---|---:|
-| raw_forecast_batches | 1836 |
-| material_forecast_batches | 408 |
-| duplicate_poll_batches_collapsed | 1428 |
-| complete_material_batches | 204 |
+| raw_forecast_batches | 3808 |
+| material_forecast_batches | 621 |
+| duplicate_poll_batches_collapsed | 3187 |
+| complete_material_batches | 210 |
 | monitor_start_utc | 2026-08-05T07:15:57Z |
 | bootstrap_end_utc | 2026-08-05T07:45:57Z |
 | d1_complete_run_transition_events | 68 |
@@ -52,14 +52,16 @@ orders_changed=0
 
 | evidence funnel | count |
 |---|---:|
-| market_checkpoints | 586 |
-| complete_market_checkpoints | 182 |
+| market_checkpoints | 864 |
+| complete_market_checkpoints | 246 |
 | revision_events_with_pre_book | 65 |
-| revision_events_with_post_book | 67 |
+| revision_events_with_post_book | 68 |
 | revision_events_immediate_scoreable | 14 |
+| revision_events_5m_markout_scoreable | 17 |
+| revision_events_10m_markout_scoreable | 17 |
 | revision_events_30m_markout_scoreable | 15 |
-| revision_events_60m_markout_scoreable | 8 |
-| revision_events_90m_markout_scoreable | 9 |
+| revision_events_60m_markout_scoreable | 15 |
+| revision_events_90m_markout_scoreable | 15 |
 | executable | 0 |
 | actual_fills | 0 |
 

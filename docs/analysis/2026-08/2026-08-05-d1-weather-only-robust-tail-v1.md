@@ -45,6 +45,11 @@ secondary holdout 上 G logloss=1.8506，F v2=1.9763，paired Δ=-0.1257（95% C
 - G bottom tail predicted/actual=1.0%/2.2%；top=1.1%/0.0%。
 - location-only 已把 top-1 从 F 的 21.9% 提到 27.9%；scale=1.25 进一步修复过度自信。2% climatology mix 主要作极端档保底，在 secondary holdout 上没有独立 logloss 增益。
 
+## D-1 checkpoint market efficiency
+
+在完全相同的 city-date 与 native ladder 上配对 243 个状态 / 26 个日期。12–18h checkpoint market logloss=1.5743，18–24h=1.5306；late-minus-early=-0.0436（95% CI -0.0870..-0.0027）。
+两 checkpoint 平均相隔 5.92 小时，market ladder total variation 均值=0.079；assigned forecast 绝对变化均值=1.059°F，ensemble mean 绝对变化均值=0.450°F。这里 later book 只用于判断市场信息效率，不会事后替换 early decision book。
+
 ## 证据边界
 
 - 改动只作用于 weather distribution；没有使用 market、first_seen reaction、ROI 或价格切片选参数。
