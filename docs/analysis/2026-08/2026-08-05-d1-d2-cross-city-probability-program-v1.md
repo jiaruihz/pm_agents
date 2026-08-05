@@ -1,6 +1,6 @@
 # D-1 / D-2 跨城市 Tmax 概率研究总纲 v1
 
-Status: contract implemented; coverage-only collector deployed; clean forward accumulating
+Status: contract implemented; lineage fix deployed; clean development accumulating; W1 not frozen
 Updated: 2026-08-05
 Scope: strict first-seen/run-aware forecast contract, weather-only probability, conditional market residual and execution research
 
@@ -28,7 +28,7 @@ D-1 与 D-2 **一起建设底层合同、分别训练与验收、互不阻塞**�
 ```mermaid
 flowchart TD
     A["统一 forecast 数据合同<br/>真实 run / first-seen / revision / batch"] --> B["统一原生温度概率目标<br/>P(final settlement-native Tmax)"]
-    B --> C1["D-1 weather-only head"]
+    B --> C1["D-1 weather-only W1 head"]
     B --> C2["D-2 weather-only head"]
 
     C1 --> D1["映射到 D-1 完整 market ladder"]
@@ -166,4 +166,35 @@ log P_post(i) = log P_market(i) + delta_i(weather features) - log Z
 
 首轮机制挂到稳定 dataset runner `build_d1_d2_run_aware_dataset_v1.py --revision-repricing`，共享实现位于 `weather_model_evaluation/d1_revision_repricing.py`；结果见 [revision × repricing 计划与首轮审计](2026-08-05-d1-forecast-revision-market-repricing-plan-v1.md)。审计同时发现 collector v1 的 revision state 根因：每轮按旧→新 run 轮询，但只保存最后 run，下一轮会产生 backward `previous_run_ts`。截至 `2026-08-05T10:51:41Z`，7,956 raw forecast rows 中有 2,380 个 backward previous-run rows，另外 5,236 个 forward delivery rows 折叠后仅 748 个 unique transition keys（重复 4,488）。原始 run/value/hash 保持可审计，污染范围只在派生 revision lineage；旧行保留并明确排除，不删除、不改写。
 
-本地修复已改为按 `model×city×target×run` 保存版本，重复旧 run 只比较 same-run content；同时 material-batch runner 折叠 1,428 个重复 poll batch，并用完整 batch 的最后模型 availability 作为时钟。首轮得到 408 material batches、68 个 D-1 complete transitions、586 个相关 market checkpoints；其中 34 个 transition 是 bootstrap、34 个是 partial→complete，`forward_new_complete_run=0`、settlement-complete=0，所以当前只算研究已启动，不能评分 alpha。修复代码与测试完成后必须先 git commit；production collector 重载仍需显式确认，且不会改策略、订单、city pool、sizing 或 execution policy。
+修复已改为按 `model×city×target×run` 保存版本，重复旧 run 只比较 same-run content；同时 material-batch runner 折叠重复 poll batch，并用完整 batch 的最后模型 availability 作为时钟。production cutover 已于 `2026-08-05T15:45:11Z` 完成，checkout SHA=`42f6dff511f4658352b1e86c53a4b07030082b5a`。首个真实轮询 returncode=0；cutover 后 1,020 rows、680 rows 带 previous run、backward previous-run=0，state 已保存 `run_history_by_model_city_target`。这批尚未结算，当前阶段是 clean development accumulation，不能评分 alpha，也不是 frozen forward。
+
+## 10. 采集进入训练的闭环
+
+collector 是持续运行的，不存在“全部采完才训练”。每个 target date 结算后，dataset builder 增量物化 clean development；达到每个 horizon 至少 30 个 settled target dates 后，自动把该 horizon 标记为 `ready_for_inner_train`。D-1 先到门槛就先训练，D-2 不阻塞。
+
+为尽早暴露 schema/feature 问题，7/14/21 个 settled dates 时可以自动跑 learning-curve diagnostic，但这些结果不选最终 family/feature/λ；满 30 dates 才做第一次正式 inner-CV tournament 与 W1 freeze 评审。freeze 后再保留至少 30 个新 settled dates 做真正的 untouched forward。
+
+```mermaid
+flowchart LR
+    A["append-only exact-run forecast"] --> B["settlement + native ladder join"]
+    B --> C["clean development dataset"]
+    C --> D["target-date blocked inner CV"]
+    D --> E["W1 weather-only A-G tournament"]
+    E --> F["W1结果评审并生成 freeze artifact"]
+    F --> G["freeze之后的新日期<br/>untouched forward"]
+    E --> H["同 development rows<br/>M0/M1/M2/M3"]
+    H --> I["residual结果评审并冻结"]
+    I --> G
+    G --> J["proper-score gate"]
+    J --> K["ask + fee + slippage + depth EV"]
+```
+
+训练固定为三层：
+
+1. `W1 weather-only`：以 W0 为 locked reference，比较 A-G；center 由 ensemble、assigned model、city/source shrinkage 与 revision 估计，width/tail 由 residual dispersion、spread/IQR、revision instability、lead/run age、season 与同 clock physical features 估计。
+2. `checkpoint / market efficiency`：同一个 forecast batch 配 pre、post、5/10/30/60/90m 完整 ladder。只用 development dates 选择固定 decision checkpoint；任何后来的 book 只作 markout label，不能替换早期决策价。
+3. `market residual`：W1 weather-only 独立验收后，在完全相同 rows 上比较 M0 market、M1 W1、M2 global offset、M3 partial offset。`delta=0` 必须精确回到 M0。
+
+选模只发生在 target-date block inner CV；最终生成带 `training_end_target_date / selected_features / hyperparameters / code_sha / data_hash / freeze_at_utc` 的新 W1 artifact。从该时间点之后才开始真正的 untouched forward，至少累计 30 个 settled target dates，期间不改 family、feature 或 lambda。旧 W0 继续保留为 legacy reference，但不再标成等待 forward 的最终 challenger。
+
+当前 readiness 实跑（2026-08-05）：17,680 raw forecast versions 折叠为 689 个 material batches（D-1=340、D-2=349），其中 278 个 complete；当前 0 个 settlement-complete、0 个 OOF-scoreable，所以 W1 还不能对 clean 数据拟合。状态脚本已输出 D-1/D-2 均为 `clean_development_accumulation`，而不是假装训练成功。

@@ -69,10 +69,11 @@ market evidence 当前未与 one-shot 拼接；D-2 market residual 明确为 `d2
 
 ## Production collector 实证
 
-- instance/session：`weather_forecast_run_capture_v1`；checkout=`/Users/deepsleep/projects/pm_agents_forecast_run_prod`；deployed SHA=`fba1b2ea1f32b6b18743f12fa509021a820de6cf`。
+- instance/session：`weather_forecast_run_capture_v1`；checkout=`/Users/deepsleep/projects/pm_agents_forecast_run_prod`；chronological-lineage deployed SHA=`42f6dff511f4658352b1e86c53a4b07030082b5a`。
 - 调度：每 30 分钟依次精确请求最近四个 6h candidates；每次请求独立，unavailable 写结构化 blocker，`fallback_attempted=false`。
 - 首轮：`2026-08-04T12:00Z` 与 `18:00Z` 均为 34 cities / 5 models / 340 rows / 68 complete batches；`2026-08-05T00:00Z` 为 3/5 models partial；`06:00Z` 当时 5/5 unavailable 并显式 blocked。
 - controller health 显示 collector OK；strict manifest 的 DB route healthy。整体 health 的 observation rollover warning 为部署前既存状态，与本 collector 无关。
+- 修复后首轮 `15:45:11Z..15:45:37Z` returncode=0；cutover 后 1,020 rows、680 previous-run links、0 backward previous-run，真实 state 已包含 `run_history_by_model_city_target`。这些日期尚未结算，因此先进入 clean development accumulation，不计作 untouched forward。
 
 ## Legacy 模型开发（与 clean forward 分轨）
 

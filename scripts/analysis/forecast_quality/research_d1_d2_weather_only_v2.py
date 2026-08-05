@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Pre-registered weather-only v2 gate over the clean run-aware dataset.
+"""Pre-registered weather-only v2 training gate over the clean run-aware dataset.
 
 Model fitting is intentionally fail-closed until the clean dataset contains
 enough distinct settled target dates.  This prevents legacy daily cache or the
-one-shot probe from silently becoming training evidence.
+one-shot probe from silently becoming training evidence.  The registered W0
+artifact is a locked legacy reference, not a frozen W1 candidate or forward
+model.
 """
 
 from __future__ import annotations
@@ -101,15 +103,45 @@ def build_gate(
             "horizon_days_local": 1,
             "model_code": "L0",
             "model_id": d1_challenger["model_identity"],
-            "status": status_by_horizon[1],
+            "status": "locked_reference_only",
             "exact_bracket_logloss": None,
             "rung_brier": None,
             "rps": None,
             "winner_probability_mean": None,
             "calibration": None,
-            "forward_status": "frozen_waiting_for_scoreable_dates",
+            "forward_status": "reference_only_not_forward_candidate",
         }
     )
+    training_phase_by_horizon = {
+        str(horizon): (
+            "inner_train_and_blocked_target_date_validation"
+            if status_by_horizon[horizon] == "ready_for_inner_train"
+            else "clean_development_accumulation"
+        )
+        for horizon in (1, 2)
+    }
+    learning_curve_by_horizon: dict[str, dict[str, Any]] = {}
+    for horizon in (1, 2):
+        observed = len(horizons[horizon])
+        milestones = sorted(
+            {minimum_settled_target_dates}
+            | {milestone for milestone in (7, 14, 21) if milestone < minimum_settled_target_dates}
+        )
+        next_milestone = next(
+            (milestone for milestone in milestones if observed < milestone),
+            None,
+        )
+        learning_curve_by_horizon[str(horizon)] = {
+            "settled_target_dates": observed,
+            "diagnostic_milestones": [7, 14, 21],
+            "formal_inner_train_milestone": minimum_settled_target_dates,
+            "next_milestone": next_milestone,
+            "status": (
+                "formal_inner_train_ready"
+                if next_milestone is None
+                else "diagnostic_accumulating"
+            ),
+        }
     summary = {
         "schema_version": "d1_d2_weather_only_v2_preregistered_gate",
         "weather_only_status": overall_status,
@@ -119,6 +151,11 @@ def build_gate(
         "scoreable_target_dates_by_horizon": {str(key): len(value) for key, value in horizons.items()},
         "minimum_settled_target_dates_per_horizon": minimum_settled_target_dates,
         "d1_frozen_challenger": d1_challenger,
+        "d1_locked_w0_reference": d1_challenger,
+        "training_phase_by_horizon": training_phase_by_horizon,
+        "learning_curve_by_horizon": learning_curve_by_horizon,
+        "w1_freeze_status": "not_frozen_pending_clean_development_results",
+        "untouched_forward_status": "not_started_until_w1_freeze_timestamp",
         "d1_blocked_by_d2": False,
         "legacy_daily_cache_used": False,
         "estimated_run_timestamp_used": False,

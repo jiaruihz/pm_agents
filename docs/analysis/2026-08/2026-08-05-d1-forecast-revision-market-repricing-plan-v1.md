@@ -15,6 +15,10 @@ production:
 live_action=none
 orders_changed=0
 
+## Production cutover（2026-08-05）
+
+chronological revision lineage 修复已按 git-first 流程部署到 coverage-only collector：production checkout SHA=`42f6dff511f4658352b1e86c53a4b07030082b5a`，session=`weather_forecast_run_capture_v1`。首轮从 `15:45:11Z` 到 `15:45:37Z`，returncode=0；cutover 后新增 1,020 forecast rows，其中 680 rows 有 `previous_run_ts`，backward previous-run=0。collector 不产生 signal、intent 或订单；live strategy/order/city pool/sizing/execution policy 均未修改。
+
 ## 数据快照
 
 - forecast rows=16660，raw batches=3808，material batches=621。
@@ -69,7 +73,7 @@ event classes：`{"bootstrap_existing_run": 34, "complete_batch_after_partial": 
 
 ## 下一阶段与冻结规则
 
-1. collector 修复部署后，从全新 state schema 开始积累 chronological revision；不重写旧 JSONL。
+1. collector 修复已部署，从新 `run_history_by_model_city_target` state 开始积累 chronological revision；不重写旧 JSONL。
 2. 先累计 complete D-1 run events、完整 pre/post ladders与 settlement；第一段 clean rows 明确作为 development，不冒充 forward。
 3. W0 只作锁定 legacy reference；W1 在 clean development 的 inner train/validation 中选择 revision/spread/lead-age、层级收缩和 tail，先跑出 weather-only 结果再决定是否冻结。
 4. W1 评审后，在同一 development rows 上比较 M0/M1/M2/M3并选择 residual 正则；两条线都出结果后才生成 freeze artifact。只有 freeze timestamp 之后的新日期进入 untouched forward，且 M2/M3 必须在其 target-date block bootstrap 的 logloss/RPS/calibration 上优于 M0，才进入 ask/fee/depth EV。
@@ -79,4 +83,4 @@ event classes：`{"bootstrap_existing_run": 34, "complete_batch_after_partial": 
 
 本轮覆盖 lineage、signal/evidence coverage、market checkpoint contract；统计推断因 0 个 eligible settled forward events 未启动，执行、容量、fills、组合相关性均未覆盖。
 
-结论：`inconclusive / collector-and-lineage-repair`。研究已经启动，但旧 revision 字段不能使用；修复代码需经生产确认后部署，随后才开始干净 forward clock。
+结论：`inconclusive / clean-development-accumulating`。研究已经启动，旧 revision 字段不能使用；部署 cutover 后 chronology 已通过真实轮询验证。cutover 后结算样本先进入 development，W1/M2/M3 评审并生成 freeze artifact 后，才启动真正的 untouched forward clock。
