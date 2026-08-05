@@ -27,7 +27,7 @@ orders_changed=0
 开发集在 K=600 个预定义组合中选择 consensus=mean、ensemble weight=0.875、bias multiplier=1.00、residual scale=1.25、climatology mix=0.02。
 secondary holdout 上 G logloss=1.8506，F v2=1.9763，paired Δ=-0.1257（95% CI -0.2994..+0.0130）。相对 market Δ=+0.3009（+0.0815..+0.5196）。
 
-动作：冻结 G 为下一批 clean exact-run D-1 forward challenger，不再读取这 9 个日期调参数。它改善了 location、RPS 与 calibration，但 logloss 显著性尚未过门且仍输 market；本轮 market-offset 只作 legacy exploratory，不充当 clean gate，也不改 live。
+动作：把 G 锁定为 W0 legacy reference，不再读取这 9 个已查看日期调参数；它不是新 W1/M2/M3 的最终冻结模型。W1 必须先在 clean exact-run development 上完成 revision/spread/run-age 模型选择，随后 M2/M3 才能在同一 development 分母上选择正则，二者评审后再产生新的 freeze artifact 与 untouched forward。
 
 | arm | logloss | Brier | RPS | winner P | top-1 |
 |---|---:|---:|---:|---:|---:|
@@ -50,10 +50,10 @@ secondary holdout 上 G logloss=1.8506，F v2=1.9763，paired Δ=-0.1257（95% C
 - 改动只作用于 weather distribution；没有使用 market、first_seen reaction、ROI 或价格切片选参数。
 - 原 9-date holdout 在提出本机制前已被查看，因此本报告只算 secondary exploratory validation，不重新标成 frozen forward。
 - K=600 未做多重检验校正；这也是必须停止 legacy 调参并转 clean forward 的原因。
-- 参数必须冻结到新 exact-run collector 的 settlement-complete target dates；clean forward 通过前，本轮 legacy market-offset 只能作为机制验证，不能升级为正式 residual gate。
+- 当前参数只锁定为 W0 legacy reference。新 exact-run 数据先划出 clean development 供 W1 与 M2/M3 模型选择；只有显式生成新 freeze artifact 之后的日期才属于 untouched forward。
 - 8环中本轮覆盖统计推断、概率分布、同分母 market baseline；不覆盖执行、容量、fills 或 live 动作。
 
-冻结参数见 [`2026-08-05-d1-weather-only-clean-forward-freeze-v1.json`](2026-08-05-d1-weather-only-clean-forward-freeze-v1.json)。
+W0 锁定参考参数见 [`2026-08-05-d1-weather-only-clean-forward-freeze-v1.json`](2026-08-05-d1-weather-only-clean-forward-freeze-v1.json)；文件名沿用既有审计身份，但不代表 W1 或 market residual 已冻结。
 
 ## Market-offset exploratory
 

@@ -149,7 +149,7 @@ log P_post(i) = log P_market(i) + delta_i(weather features) - log Z
 
 与此同时，legacy 数据上的模型开发没有暂停：5561 条 long-history rows 用于训练，前 18 个 reconstructed target dates 只用于选 overlay，最后 9 个日期作为 legacy holdout。结果见 [D-1 legacy weather-only v2](2026-08-05-d1-legacy-weather-only-v2.md)。该结果用于确定 challenger，不计作本计划的 clean frozen forward。
 
-随后完成 weather-only robust-tail/location ablation：在 600 个开发组合中选出 `87.5% ensemble mean + 12.5% assigned model + full shrunk city/source bias + 1.25× residual scale + 2% climatology tail`。secondary holdout logloss `1.9763→1.8506`、RPS `0.0903→0.0828`、top-1 `21.9%→26.8%`，但 logloss CI 仍跨 0 且仍显著输 market `1.5497`。因此该参数已[冻结为 clean-forward challenger](2026-08-05-d1-weather-only-clean-forward-freeze-v1.json)，停止继续读取旧 9-date holdout 调参。
+随后完成 weather-only robust-tail/location ablation：在 600 个开发组合中选出 `87.5% ensemble mean + 12.5% assigned model + full shrunk city/source bias + 1.25× residual scale + 2% climatology tail`。secondary holdout logloss `1.9763→1.8506`、RPS `0.0903→0.0828`、top-1 `21.9%→26.8%`，但 logloss CI 仍跨 0 且仍显著输 market `1.5497`。该参数只[锁定为 W0 legacy reference](2026-08-05-d1-weather-only-clean-forward-freeze-v1.json)，停止继续读取旧 9-date holdout 调参；它不是 W1 或 market residual 的最终冻结模型。
 
 为验证第二阶段的建模形式，同一 legacy 分母又运行了 strongly-regularized market-offset exploratory：开发集只选择 `beta=0.05`，即 posterior 约为 95% market anchor + 5% weather log-probability correction。secondary holdout 上 M0 market logloss=`1.5497`，M2 global offset=`1.5546`，M3 partial offset=`1.5540`；相对 M0 的 paired Δlogloss 分别为 `+0.0049`（95% CI `-0.0052..+0.0149`）与 `+0.0043`（`-0.0097..+0.0175`）。所以当前没有 confirmed market residual，且不进入 execution/ROI；完整结果见 [weather-only robust-tail + market-offset 报告](2026-08-05-d1-weather-only-robust-tail-v1.md)。clean residual gate 仍等待 exact-run frozen forward，而不是被这次 legacy exploratory 解锁。
 
@@ -157,10 +157,10 @@ log P_post(i) = log P_market(i) + delta_i(weather features) - log Z
 
 下一阶段分成两条严格隔离的线：
 
-1. weather-only W1：只用 pre-2026-08-05 的 exact-run/archive-known-available 历史训练 `revision + spread + run-age` challenger；2026-08-05 之后 collector-exact dates 只作 frozen forward，不选 feature、lambda 或 family。主 checkpoint 固定为当地 target 前一日 18:00–24:00 的首个 complete batch，12:00–18:00 仅作 secondary。
+1. weather-only W1：先用 archive-known-available 历史与 collector-exact 的第一段 clean development 训练 `revision + spread + run-age` challenger。主 checkpoint 固定为当地 target 前一日 18:00–24:00 的首个 complete batch，12:00–18:00 仅作 secondary。W1 的 family、feature、lambda 和 tail 先在 target-date block inner validation 选择；结果评审后才生成新的 freeze artifact。
 2. market repricing R1：只用 collector-exact 的新 complete run/batch event，比较 event 前最后完整 ladder、event 后第一完整 ladder与 30/60/90m markout。bootstrap 已存在 run 和 partial→complete 补齐保留为 coverage，但不得进入 latency alpha。
 
-正式概率比较仍固定 W0 frozen challenger、W1 revision challenger、M0 market、M2 global offset、M3 partial offset。最低正式复核分母预注册为 `>=30` 个 untouched settled target dates；此前第 7/14 日只发布 coverage/calibration patrol，不作模型选择或 live 决策。market residual 还要求同一 event 的 pre/post complete ladder coverage，并按 target_date block bootstrap；没有 proper-score residual 前不启动 execution EV。
+正式概率比较仍固定 W0 locked legacy reference、W1 revision challenger、M0 market、M2 global offset、M3 partial offset。冻结顺序固定为 `clean development → W1 weather-only 结果评审 → M2/M3 同分母结果评审 → freeze artifact → untouched forward`。freeze 之前的数据全部标记 development，不能事后改称 forward；freeze 之后最低正式复核分母预注册为 `>=30` 个 untouched settled target dates。market residual 还要求同一 event 的 pre/post complete ladder coverage，并按 target_date block bootstrap；没有 proper-score residual 前不启动 execution EV。
 
 首轮机制挂到稳定 dataset runner `build_d1_d2_run_aware_dataset_v1.py --revision-repricing`，共享实现位于 `weather_model_evaluation/d1_revision_repricing.py`；结果见 [revision × repricing 计划与首轮审计](2026-08-05-d1-forecast-revision-market-repricing-plan-v1.md)。审计同时发现 collector v1 的 revision state 根因：每轮按旧→新 run 轮询，但只保存最后 run，下一轮会产生 backward `previous_run_ts`。截至 `2026-08-05T10:51:41Z`，7,956 raw forecast rows 中有 2,380 个 backward previous-run rows，另外 5,236 个 forward delivery rows 折叠后仅 748 个 unique transition keys（重复 4,488）。原始 run/value/hash 保持可审计，污染范围只在派生 revision lineage；旧行保留并明确排除，不删除、不改写。
 

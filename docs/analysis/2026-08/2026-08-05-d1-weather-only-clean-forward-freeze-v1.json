@@ -1,7 +1,7 @@
 {
   "schema_version": "d1_weather_only_clean_forward_freeze_v1",
   "model_identity": "d1_weather_only_probability_challenger",
-  "artifact_role": "legacy_trained_challenger_for_clean_exact_run_forward",
+  "artifact_role": "locked_w0_legacy_reference_not_w1_or_market_residual_freeze",
   "frozen_at_utc": "2026-08-05T08:52:26Z",
   "training_lineage": "legacy_daily_cache_non_strict_pit_training_prior",
   "development_lineage": "single_run_reconstructed_conservative_12h_lag",
@@ -51,6 +51,7 @@
     "physical_width_features": "pending_same_clock_history"
   },
   "gates": {
+    "w1_model_selection": "pending_clean_development",
     "weather_only_clean_forward": "pending",
     "market_residual": "not_run_by_contract",
     "execution": "not_run_by_contract",

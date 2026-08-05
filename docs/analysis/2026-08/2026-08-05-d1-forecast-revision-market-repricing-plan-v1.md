@@ -68,9 +68,9 @@ event classes：`{"bootstrap_existing_run": 34, "complete_batch_after_partial": 
 ## 下一阶段与冻结规则
 
 1. collector 修复部署后，从全新 state schema 开始积累 chronological revision；不重写旧 JSONL。
-2. 先累计 complete D-1 run events、完整 pre/post ladders与 settlement；模型和 beta 在新 forward 期间不调。
-3. weather-only 继续使用已冻结 challenger，新增 revision/spread/lead-age 只能在 inner train 建下一 challenger。
-4. market head 固定 M0/M1/M2/M3；M2/M3 必须在 target-date block bootstrap 的 logloss/RPS/calibration 上优于 M0，才进入 ask/fee/depth EV。
+2. 先累计 complete D-1 run events、完整 pre/post ladders与 settlement；第一段 clean rows 明确作为 development，不冒充 forward。
+3. W0 只作锁定 legacy reference；W1 在 clean development 的 inner train/validation 中选择 revision/spread/lead-age、层级收缩和 tail，先跑出 weather-only 结果再决定是否冻结。
+4. W1 评审后，在同一 development rows 上比较 M0/M1/M2/M3并选择 residual 正则；两条线都出结果后才生成 freeze artifact。只有 freeze timestamp 之后的新日期进入 untouched forward，且 M2/M3 必须在其 target-date block bootstrap 的 logloss/RPS/calibration 上优于 M0，才进入 ask/fee/depth EV。
 5. 当前不做 ROI、maker、selected price band、城市名单或 live 动作。
 
 ## 8 环与结论

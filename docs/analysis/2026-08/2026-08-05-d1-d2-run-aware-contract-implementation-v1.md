@@ -99,4 +99,4 @@ collector execution mode=`coverage-only`，不产生 SignalCandidate、TradeInte
 
 ## D-1 独立 gate 修正
 
-`research_d1_d2_weather_only_v2.py` 已改为按 horizon 独立判断 readiness：D-1 满足自身 minimum settled target dates 后即可进入 inner train/forward scoring，不再等待 D-2 同时满样本。D-2 继续独立积累，不阻塞 D-1。输出固定保存 `weather_only_status_by_horizon`、`d1_blocked_by_d2=false`，并登记 frozen challenger spec SHA；空数据 smoke 仍明确 blocked，market residual 仍为 `not_run_by_contract`。
+`research_d1_d2_weather_only_v2.py` 已改为按 horizon 独立判断 readiness：D-1 满足自身 minimum settled target dates 后即可进入 inner train/development scoring，不再等待 D-2 同时满样本。D-2 继续独立积累，不阻塞 D-1。输出固定保存 `weather_only_status_by_horizon`、`d1_blocked_by_d2=false`，并登记 W0 locked-reference spec SHA；W1 与 M2/M3 必须完成 clean development 结果评审后才生成新 freeze artifact，之后的日期才进入 untouched forward。空数据 smoke 仍明确 blocked，market residual 仍为 `not_run_by_contract`。
