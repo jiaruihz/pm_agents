@@ -135,6 +135,34 @@ def test_wcir_skills_pin_decision_and_canonical_identity() -> None:
         assert "observed_at_utc" in text
 
 
+def test_weather_research_instruction_layers_use_one_brief_template() -> None:
+    for path in ("AGENTS.md", "CLAUDE.md"):
+        text = _read(path)
+        assert "研究指令分层" in text
+        assert "docs/analysis/templates/research.md" in text
+        assert "唯一动作" in text
+
+    skill = _read("skills/weather-strategy-research/SKILL.md")
+    for required in (
+        "单轮研究 brief 与 readiness",
+        "一个可证伪假设",
+        "验收门槛",
+        "唯一动作",
+        "clean frozen-forward status",
+    ):
+        assert required in skill
+
+    template = _read("docs/analysis/templates/research.md")
+    for required in (
+        "## 单轮 brief",
+        "## Readiness",
+        "acceptance gates",
+        "PIT state + four clocks",
+        "clean frozen-forward status",
+    ):
+        assert required in template
+
+
 def test_fact_refresh_prefers_bounded_and_incremental_paths() -> None:
     text = _read("skills/weather-fact-rebuild/SKILL.md")
 

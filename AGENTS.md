@@ -100,6 +100,16 @@ execution_policy / live_cycle）走 [weather-strategy-deploy] 的 **git-first** 
 
 ## 4. 研究防跑偏
 
+### 研究指令分层（避免每轮重复一整套研究章程）
+
+研究任务按三层写，低层规则不要在每次 prompt 重复或另起版本：
+
+- **本文件**只放永久边界：canonical/PIT/资金安全、血缘、证据和交付标准。
+- **`skills/weather-strategy-research/SKILL.md`**只放可复用的研究方法：readiness、固定分母、双漏斗、market baseline、验证与产物路由。
+- **单轮 prompt**只引用对应 skill，并填写 `docs/analysis/templates/research.md` 的 brief：一个假设、数据/日期范围、验收门槛、唯一动作；没有这些信息时，先做最小 read-only readiness，而不是重述全套规则。
+
+同一机制的变体必须复用同一 brief/runner，并以 `run_id` 或 manifest 区分；不要把“新城市 / 新日期 / 调一个参数”伪装成新的研究方法或新 prompt 章程。
+
 用户提出的往往是一个很具体的失败模式 / 交易形态。先把问题收敛成一句明确的 **target metric / target slice**，
 再跑数据写脚本：先复述目标指标 → 先锁分母（事前持仓形态 vs 事后结算形态，不混用）→ 结论先给交易动作
 （保留 / 过滤 / 降 size / shadow / 不改 live）再给证据。**不要擅自把"某个坏场景怎么优化"扩大成"整个分支砍不砍"。**

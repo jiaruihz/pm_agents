@@ -44,6 +44,26 @@ source/raw -> EventEnvelope -> DecisionContext -> ModelOutput
 DB split 或存在非 canonical consumer 时只允许继续 raw coverage/机制诊断，不得产出 canonical 同分母结论。
 开始读取时保存 build manifest；若 build 变化，重启该次查询或按 build 分层。
 
+## 单轮研究 brief 与 readiness
+
+单轮任务使用 `docs/analysis/templates/research.md`。prompt 只需给出：
+
+1. **一个可证伪假设**（不是一组候选策略或“看看有什么发现”）；
+2. **数据/日期范围**（城市、target-date、source、是否含已看过样本）；
+3. **验收门槛**（至少明确 probability / baseline / forward / execution 哪些必须通过）；
+4. **唯一动作**（例如 coverage audit、固定 A/B、frozen-forward collector 或 zero-notional shadow）。
+
+开始建模、ROI 或策略结论前，先输出以下最小 readiness 卡；任一项为 `BLOCKED` 时，只能做 coverage/机制诊断，
+不能把缺口行静默丢掉或产出可交易结论：
+
+```text
+PIT state + clocks | canonical/build identity | market quote freshness/depth
+settlement/label coverage | independent target dates | clean frozen-forward status
+```
+
+已有 `AGENTS.md` 的永久边界和本 skill 的固定方法不在 prompt 中重复。若任务缺 brief 信息，按用户已给范围做最小
+read-only readiness，并把唯一缺失的决策点报告出来；不要擅自扩展为另一条策略、另一座城市或 live 改动。
+
 ## 研究问题模板
 
 先写一句 target：
