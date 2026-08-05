@@ -63,6 +63,10 @@ PIT weather coverage -> PIT quote coverage -> settlement coverage -> executable 
 
 每层标 grain、行数、独立 target dates。盘口/结算缺失是 coverage gap，不是策略筛除。
 
+禁止用未限定的“全量历史 / 全部数据 / full history / long history”给结果命名。报告必须写
+`denominator_scope`、输入 artifact/表、原始 rows/日期/城市范围和逐层过滤 funnel；成交、某季节、某城市池、
+best-model 或 evidence-complete 子集只能称 slice。只有明确 universe、覆盖起止、来源和已知缺口后才可称该 scope 内全量。
+
 ## 数据检查
 
 先确认 DB 目标窗口与 raw 覆盖；需要刷新时走 `weather-fact-rebuild`。普通历史查询不为形式重建。

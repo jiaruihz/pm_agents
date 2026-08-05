@@ -193,6 +193,31 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
         for term in ("candidate_grain_version", "build_id", "observed_at_utc"):
             if term not in text:
                 fail(errors, f"{path}: missing canonical identity term {term}")
+    for path, skill_text in (
+        ("weather-strategy-performance", performance),
+        ("weather-strategy-research", research),
+    ):
+        if "denominator_scope" not in skill_text:
+            fail(errors, f"{path}: missing scoped-history denominator contract")
+
+    for path in ("AGENTS.md", "CLAUDE.md", "docs/WEATHER_ANALYSIS_CONTRACT.md"):
+        if "denominator_scope" not in read(path):
+            fail(errors, f"{path}: missing scoped-history denominator contract")
+
+    ambiguous_history_claims = {
+        "scripts/analysis/forecast_quality/research_d1_legacy_weather_only_v2.py": (
+            "long history：",
+        ),
+        "scripts/analysis/forecast_quality/research_d1_legacy_weather_only_robust_tail.py": (
+            "legacy long-history training",
+        ),
+    }
+    for path, phrases in ambiguous_history_claims.items():
+        source_text = read(path)
+        for phrase in phrases:
+            if phrase in source_text:
+                fail(errors, f"{path}: ambiguous history denominator phrase {phrase!r}")
+
     for term in ("EventEnvelope", "DecisionContext", "ModelOutput", "TradeIntent"):
         if term not in lineage:
             fail(errors, f"weather-strategy-lineage: missing WCIR lineage term {term}")

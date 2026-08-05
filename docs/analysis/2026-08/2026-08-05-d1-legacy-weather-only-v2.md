@@ -37,7 +37,8 @@ G（physical-width）没有进入本轮：旧 reconstruction 没有同 clock 的
 
 ## 训练合同
 
-- long history：5561 rows / 39 cities；lineage=`legacy_daily_cache_non_strict_pit_training_prior`。
+- legacy summer best-model training slice：5561 rows / 39 cities；lineage=`legacy_daily_cache_non_strict_pit_training_prior`。
+- denominator funnel：`daily_error_rows.csv` 42,705 rows / 52 cities / 738 dates → `is_best_model=true` 16,916 rows / 39 cities → May–Aug training slice 5,561 rows / 39 cities / 253 dates。5,561 不是项目全部历史，42,705 也只代表这个 artifact 的输入 scope。
 - partial hierarchy：center λ=10，scale λ=60；只在历史 validation 选。
 - F overlay：ensemble weight=0.75，spread beta=0.00；只在前 18 个 reconstructed dates 选。
 - holdout：2026-07-07..2026-07-23；没有调 λ、weight 或 beta。

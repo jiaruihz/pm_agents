@@ -511,7 +511,8 @@ def render_report(payload: dict[str, Any]) -> str:
         "",
         "## 数据快照",
         "",
-        f"- legacy long-history training：{payload['training_rows']} rows / {payload['training_cities']} cities。",
+        f"- legacy summer best-model training slice：{payload['training_rows']} rows / {payload['training_cities']} cities；不是项目全部历史。",
+        f"- denominator funnel：artifact {payload['training_denominator']['artifact_input']['rows']} rows / {payload['training_denominator']['artifact_input']['cities']} cities → best-model {payload['training_denominator']['best_model_only']['rows']} rows → summer slice {payload['training_denominator']['best_model_summer_training_slice']['rows']} rows。",
         f"- reconstructed D-1：开发 {payload['development_states']} states / {payload['development_dates']} dates；secondary holdout {payload['holdout_states']} states / {payload['holdout_dates']} dates。",
         "- settlement 来自 canonical `settlement_outcomes`；missing settlement=0，unsettled=0。",
         "- 本轮不是 fill/ROI 研究，missing_bracket 不适用；market 仅作同 rows probability baseline。",
@@ -609,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     dev_dates, holdout_dates = set(dates[:split]), set(dates[split:])
     development = [state for state in primary if state["target_date"] in dev_dates]
     holdout = [state for state in primary if state["target_date"] in holdout_dates]
-    fitted = v2.fit_long_history(history, min(dates))
+    fitted = v2.fit_legacy_history_slice(history, min(dates))
     selected, candidates = select_parameters(development, fitted)
     kwargs = {
         "ensemble_weight": selected["ensemble_weight"],
@@ -642,6 +643,9 @@ def main(argv: list[str] | None = None) -> int:
         "selected": selected,
         "training_rows": int(len(fitted["train"])),
         "training_cities": int(fitted["train"]["city"].nunique()),
+        "training_denominator": base.history_denominator_funnel(
+            history, min(dates), input_artifact=args.history
+        ),
         "development_states": len(development),
         "development_dates": len(dev_dates),
         "holdout_states": len(holdout),

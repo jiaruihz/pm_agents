@@ -116,6 +116,12 @@ event、city-day、expression 还是 fill。盘口/结算缺失只能记为 cove
 由此产生的高平均入场价只能解释为 archive/collector timing bias，不能解释成“模型必须等到该价格才确认”。样本因 coverage 缩小
 时，结论是证据不足并补采集，不是把少量剩余行包装成“精筛策略”。
 
+**“全量历史 / 全部数据 / full history / long history”必须带作用域**：不得用这些词指代未声明过滤条件的数字。
+训练或评测产物必须同时写 `denominator_scope`、输入 artifact/表、原始 rows/日期/城市范围，以及按时间、城市、模型、季节、
+label、PIT/盘口/settlement 可用性逐层过滤后的 funnel；最终训练集只能称 `training slice`。例如 `best_model + May–Aug`
+得到的 5,561 rows 不是“全部历史”，原 artifact 的 42,705 rows 也不等于项目拥有的全部历史数据。所谓“全量”只允许表示
+一个明确定义且可核验的 universe（如某公开账户端点的完整可分页窗口），并紧邻写出覆盖起止、来源和已知缺口。
+
 天气策略研究优先从第一性原理构造连续信号，再用切片解释信号，不要把切片当策略本体。比如 no-reheat /
 remaining-heat 这类问题，先定义物理目标（剩余时间是否还能打穿当前高点 / bracket）、机制特征（剩余加热能量、
 forecast ceiling margin、plateau 可靠性、reheat 机制、观测 cadence/source）和可校准概率，再用市场价格计算 EV。

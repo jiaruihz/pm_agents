@@ -62,7 +62,7 @@
 
 ## 数据与模型合同
 
-- 训练：5561 rows，39 城，2024-05-01 至 2026-05-07，只用 5–8 月；截止早于测试。
+- 训练 slice：5561 rows，39 城，2024-05-01 至 2026-05-07；它来自 legacy daily-error artifact 的 42,705 rows / 52 城 / 738 dates，经 `is_best_model=true` 后为 16,916 rows，再限制 5–8 月得到 5,561。该数字不是项目全部历史。
 - 测试：694 checkpoints；forecast lineage=`single_run_reconstructed_conservative_12h_lag`；日期 2026-06-17 至 2026-07-23。
 - pooled：按固定 forecast source（GFS/ECMWF）共享 Normal error distribution；city-only：单城 source-specific error distribution；hierarchical：`w=n/(n+60)` 的分布矩收缩。
 - 公共同分母只保留旧 registry 已有固定模型选择的 34 城；严格 D-1 原始 47 城中的其余 13 城记 coverage gap。

@@ -86,6 +86,11 @@ evidence funnel: PIT source -> PIT book -> settlement -> executable expression -
 
 每层标 grain、行数、独立 target dates。盘口/结算/archive 缺失只能记 coverage gap，不能伪装成策略筛除。
 
+样本命名也属于合同：禁止用未限定的“全量历史 / 全部数据 / full history / long history”。每个训练、评测和绩效
+artifact 必须保存 `denominator_scope`、输入 artifact/表、原始 rows/日期/城市范围及逐层过滤 funnel。按时间、城市、
+模型、季节、label、PIT/book/settlement availability 过滤后的集合只能称 slice。只有紧邻声明 universe、覆盖起止、
+来源和已知缺口时，才可称该 scope 内全量；artifact 的全部 rows 也不能自动外推为项目全部历史。
+
 ### SQLite 查询可靠性（硬规定）
 
 manifest 的 `db_route.status=healthy` 且 storage audit 无 critical 后，`runtime/weather.db` 是 JRS physical canonical 的同 inode 兼容入口，也是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。

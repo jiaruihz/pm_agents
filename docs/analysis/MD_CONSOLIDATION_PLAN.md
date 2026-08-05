@@ -50,6 +50,9 @@ system contract 和 ops runbook。
 - 2026-08-06：删除本文件原有 400 余行逐文件流水账；已执行的迁移由 git 历史、索引和 living doc 承担，
   不再维护第二份平行清单。
 
+- 2026-08-06：完成“切片冒充全量”专项清理。D-1 的 5,561 rows 已还原为
+  `42,705 artifact rows → 16,916 best-model rows → 5,561 May–Aug training slice`，修正 registry、活跃报告、
+  runner 与 summary metadata；artifact 全部 rows 也不自动等于项目全部历史。
 - 2026-08-06：dated `current-reference` 从 73 份收敛到 8 份；保留项均被 `scripts/ops` 作为运行实例的冻结
   source/preregistration/provenance 合同引用，其余65份统一降为 `snapshot`。新增 docs check allowlist，防止日期报告重新
   膨胀为平行当前真相。

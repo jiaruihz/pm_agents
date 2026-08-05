@@ -17,7 +17,7 @@ orders_changed=0
 
 ## 结论
 
-历史数据确实远多于上一版列出的 5,561 行，但完整使用后没有改善 D-1 概率模型。5,561 只是 `best source × 5–8月`；可用长期误差历史实际为 42,705 rows / 52 cities / 738 dates，另有 26,741 rows / 45 cities / 18 models 的 7 月 8 日 archive-known multi-model calibration。
+该 legacy daily-error artifact 远多于上一版列出的 5,561 行，但使用其完整 42,705-row scope 后没有改善 D-1 概率模型。5,561 只是 `best source × 5–8月` training slice；该 artifact 为 42,705 rows / 52 cities / 738 dates，另有 26,741 rows / 45 cities / 18 models 的 7 月 8 日 archive-known multi-model calibration。两者都不等于项目全部历史。
 
 同一 46 states / 9 target dates holdout 上，扩大到全年 best-source、加入 seasonal harmonic、以及使用全部 42,705 行估计 source residual，logloss 分别为 `2.1096 / 2.1060 / 2.1126`，均差于原 summer F `1.9763`，更差于已经锁定的 robust-tail W0 `1.8506`。因此 W0 保持不变；新增口径作为已检验的 negative controls，不冻结为 W1。
 
@@ -27,9 +27,9 @@ orders_changed=0
 
 | 数据层 | rows | cities | models | dates | 正确用途 |
 |---|---:|---:|---:|---:|---|
-| long history, summer best | 5,561 | 39 | assigned GFS/ECMWF | 253 | 原 W0 location/residual prior |
-| long history, all-season best | 16,916 | 39 | assigned GFS/ECMWF | 738 | 检验季节外扩 |
-| long history, all-season all models | 42,705 | 52 | GFS + ECMWF | 738 | source-level residual shape；city correction 仍只落 assigned source |
+| legacy artifact, summer best slice | 5,561 | 39 | assigned GFS/ECMWF | 253 | 原 W0 location/residual prior |
+| legacy artifact, all-season best slice | 16,916 | 39 | assigned GFS/ECMWF | 738 | 检验季节外扩 |
+| legacy artifact, all-season all-model rows | 42,705 | 52 | GFS + ECMWF | 738 | source-level residual shape；city correction 仍只落 assigned source |
 | reconstructed D-1 single run | 8,870 | 47 | 5 | 28 | legacy development/secondary holdout，不是真实 run-aware forward |
 | multi-model archive calibration | 26,741 | 45 | 18 | 64 | 2026-07-08 以后才允许启用的 archive-known challenger |
 | executable basket archive | 4,086 | 48 | — | 56 | market/execution coverage inventory；本轮不算 ROI |

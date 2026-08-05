@@ -17,7 +17,8 @@ orders_changed=0
 
 ## 数据快照
 
-- legacy long-history training：5561 rows / 39 cities。
+- legacy summer best-model training slice：5561 rows / 39 cities；不是项目全部历史。
+- denominator funnel：`daily_error_rows.csv` 42,705 rows / 52 cities / 738 dates → `is_best_model=true` 16,916 rows / 39 cities → May–Aug slice 5,561 rows / 39 cities / 253 dates。
 - reconstructed D-1：开发 233 states / 18 dates；secondary holdout 46 states / 9 dates。
 - settlement 来自 canonical `settlement_outcomes`；missing settlement=0，unsettled=0。
 - 本轮不是 fill/ROI 研究，missing_bracket 不适用；market 仅作同 rows probability baseline。

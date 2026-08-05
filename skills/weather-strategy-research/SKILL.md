@@ -84,6 +84,10 @@ evidence funnel: PIT source -> PIT book -> settlement -> executable expression -
 
 每层标 unit 和独立日期。archive 晚起、盘口缺失、结算缺失只算 coverage gap；不能包装成精筛策略。
 
+禁止用未限定的“全量历史 / 全部数据 / full history / long history”给样本命名。每个训练或评测产物都写
+`denominator_scope`、输入 artifact/表、原始 rows/日期/城市范围和逐层过滤 funnel；按 best-model、季节、城市、
+label 或 evidence availability 过滤后的结果称 `training/evaluation slice`，不称项目全部历史。
+
 ## PIT 与 source 研究
 
 - forecast 用 issue/run/first-seen/hash/age lineage，不用粗 local-hour 标签冒充信息状态。

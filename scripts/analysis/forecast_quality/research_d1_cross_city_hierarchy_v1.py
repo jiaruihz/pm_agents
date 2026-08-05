@@ -135,6 +135,42 @@ def model_assignments(history: pd.DataFrame) -> pd.DataFrame:
     return pairs
 
 
+def history_denominator_funnel(
+    history: pd.DataFrame,
+    test_start: str,
+    *,
+    months: tuple[int, ...] = (5, 6, 7, 8),
+    input_artifact: Path = DEFAULT_HISTORY,
+) -> dict[str, Any]:
+    """Describe the artifact and every filter leading to the training slice."""
+    before_test = history.loc[history["date"] < test_start]
+    best_model = before_test.loc[before_test["is_best_model"]]
+    training_slice = best_model.loc[best_model["month_num"].isin(months)]
+
+    def census(frame: pd.DataFrame) -> dict[str, Any]:
+        return {
+            "rows": int(len(frame)),
+            "dates": int(frame["date"].nunique()),
+            "cities": int(frame["city"].nunique()),
+            "models": int(frame["model"].nunique()),
+            "start": str(frame["date"].min()),
+            "end": str(frame["date"].max()),
+        }
+
+    return {
+        "denominator_scope": "legacy_daily_error_artifact_to_summer_best_model_training_slice",
+        "input_artifact": str(input_artifact.resolve().relative_to(ROOT.resolve()))
+        if input_artifact.resolve().is_relative_to(ROOT.resolve())
+        else str(input_artifact.resolve()),
+        "artifact_input": census(history),
+        "before_test_start": census(before_test),
+        "best_model_only": census(best_model),
+        "best_model_summer_training_slice": census(training_slice),
+        "filters": [f"date < {test_start}", "is_best_model = true", f"month in {list(months)}"],
+        "project_history_complete": False,
+    }
+
+
 def fit_error_models(history: pd.DataFrame, test_start: str) -> tuple[dict[str, Any], pd.DataFrame]:
     train = history.loc[
         history["is_best_model"]
@@ -569,6 +605,9 @@ def main() -> int:
         "primary_policy": PRIMARY_POLICY,
         "training": {
             "lineage": "legacy_daily_cache_non_strict_pit_training_prior",
+            "denominator": history_denominator_funnel(
+                history, test_start, input_artifact=args.history
+            ),
             "rows": int(len(train_used)),
             "cities": int(train_used["city"].nunique()),
             "start": str(train_used["date"].min()),
