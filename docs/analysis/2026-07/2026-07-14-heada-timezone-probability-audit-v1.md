@@ -53,8 +53,8 @@ Forward 7/01+ overlap is 74 tickets; legacy-only 1, corrected-only 11. These are
 
 Not cleanly yet.
 
-- Fresh 7/08..7/13: the 39 legacy-selector opportunities won 3 times (7.7%); 5-8c tickets were 0/18, but the same cheap band was profitable over the full 68-day history. Cutting it now would be a six-day hindsight rule.
-- Recent 6/21..7/13: GFS was 16/70 and ECMWF 6/70, but both model families were positive over the full history and the ECMWF deterioration overlaps the known source outage/pollution window. This is a source-regime diagnostic, not a city/source hard block.
+- Fresh 7/08..7/13: the 39 legacy-selector opportunities won 3 times (7.7%); 5-8c tickets were 0/18, but the same cheap band was profitable inside this report's fixed 2,660-row / 68-date / 49-city neutral denominator (`2026-05-06..2026-07-13`). Cutting it now would be a six-day hindsight rule.
+- Recent 6/21..7/13: GFS was 16/70 and ECMWF 6/70, but both model families were positive inside that same declared neutral denominator; the ECMWF deterioration also overlaps the known source outage/pollution window. This is a source-regime diagnostic, not a city/source hard block.
 - Higher `model_p_yes` or larger reported edge is not monotonic. Fresh edge quartiles won 2/10, 0/10, 0/9, 1/10. The raw score is therefore unsuitable for sizing and cannot support a simple “remove low score” fix.
 - `dist>2 brackets` is 0/4 recently, but four rows are not a selector. `dist<=0` remains the only mechanism-defined exclusion already supported by broader evidence.
 

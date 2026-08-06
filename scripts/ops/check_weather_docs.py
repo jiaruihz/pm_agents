@@ -225,6 +225,10 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
             "交易层：完整历史分布",
             "这是完整历史分布",
         ),
+        "scripts/analysis/forecast_quality/research_heada_timezone_probability_audit_v1.py": (
+            "profitable over the full 68-day history",
+            "positive over the full history",
+        ),
     }
     for path, phrases in ambiguous_history_claims.items():
         text = read(path)
