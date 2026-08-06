@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import math
-import sqlite3
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
+
+try:
+    from .weather_research_data_shared import data_self_check
+except ImportError:  # direct script execution
+    from weather_research_data_shared import data_self_check
 
 
 def json_ready(value: Any) -> Any:
@@ -26,51 +29,6 @@ def json_ready(value: Any) -> Any:
     if isinstance(value, float):
         return None if not math.isfinite(value) else value
     return value
-
-
-def _query_rows(conn: sqlite3.Connection, sql: str) -> list[dict[str, Any]]:
-    cur = conn.execute(sql)
-    cols = [description[0] for description in cur.description]
-    return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
-
-
-def data_self_check(db: Path) -> dict[str, Any]:
-    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA query_only=ON")
-    conn.execute("PRAGMA busy_timeout=1000")
-    try:
-        return {
-            "fact_trades_max_built_at_utc": conn.execute(
-                "SELECT MAX(fact_built_at_utc) FROM fact_trades"
-            ).fetchone()[0],
-            "fact_trades_by_class": _query_rows(
-                conn,
-                "SELECT trade_class, COUNT(*) AS rows FROM fact_trades "
-                "GROUP BY trade_class ORDER BY trade_class",
-            ),
-            "fact_trades_by_settlement_status": _query_rows(
-                conn,
-                "SELECT COALESCE(settlement_status, '') AS settlement_status, "
-                "COUNT(*) AS rows FROM fact_trades GROUP BY settlement_status "
-                "ORDER BY settlement_status",
-            ),
-            "fact_signal_candidate_coverage": _query_rows(
-                conn,
-                "SELECT COUNT(*) AS rows, SUM(eligible) AS eligible, "
-                "SUM(paper_ordered) AS paper_ordered, SUM(live_filled) AS live_filled "
-                "FROM fact_signal_candidates",
-            )[0],
-            "clob_order_fill_join": _query_rows(
-                conn,
-                "SELECT o.status, COUNT(*) AS orders, "
-                "SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 0 END) AS with_fill "
-                "FROM orders o LEFT JOIN fills f USING(execution_id) "
-                "WHERE o.venue='polymarket_clob' GROUP BY o.status ORDER BY o.status",
-            ),
-        }
-    finally:
-        conn.close()
 
 
 def metric_row(name: str, frame: pd.DataFrame, p_col: str) -> dict[str, Any]:

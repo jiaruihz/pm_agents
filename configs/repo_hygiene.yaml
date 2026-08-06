@@ -13,7 +13,7 @@ max_entrypoints_outside_production_closure: 64
 # experiment. New city/date runs must use an existing runner + run manifest.
 # These ceilings are lowered as historical copies are consolidated.
 max_research_experiment_entrypoints: 422
-max_repeated_research_function_bodies: 174
+max_repeated_research_function_bodies: 173
 
 # These are still consumed by active ops/source code.  They remain explicit
 # exceptions until their consumers use the JRS research artifact resolver.

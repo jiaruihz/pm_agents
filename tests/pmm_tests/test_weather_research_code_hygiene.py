@@ -1,4 +1,5 @@
 import json
+import sqlite3
 
 import numpy as np
 import pandas as pd
@@ -6,6 +7,7 @@ import pytest
 
 from scripts.analysis.reheat_risk import late_window_shared
 from scripts.analysis.reheat_risk import peak_forming_hazard_shared
+from scripts.analysis.reheat_risk import weather_research_data_shared
 from scripts.analysis.reheat_risk import (
     research_late_window_residual_capture_feature_layer_v2 as feature_layer_v2,
 )
@@ -96,6 +98,53 @@ def test_peak_forming_versions_use_shared_version_neutral_helpers():
     assert v1["orders"] == v2["orders"] == 2
     assert v1["cost"] == pytest.approx(1.2)
     assert v1["pnl"] == pytest.approx(-0.2)
+
+
+def test_weather_research_data_helpers_keep_one_read_only_contract(tmp_path):
+    database = tmp_path / "weather.db"
+    with sqlite3.connect(database) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE fact_trades(
+                fact_built_at_utc TEXT, trade_class TEXT, settlement_status TEXT
+            );
+            CREATE TABLE fact_signal_candidates(
+                city TEXT, event_date TEXT, bracket TEXT, side TEXT,
+                model_p_yes REAL, eligible INTEGER, paper_ordered INTEGER,
+                live_filled INTEGER
+            );
+            CREATE TABLE orders(execution_id TEXT, status TEXT, venue TEXT);
+            CREATE TABLE fills(execution_id TEXT);
+            INSERT INTO fact_trades VALUES ('2026-08-01T00:00:00Z', 'live_real', 'settled');
+            INSERT INTO fact_signal_candidates VALUES
+                ('Tokyo', '2026-08-01', '35', 'BUY_YES', 0.4, 1, 0, 0),
+                ('Tokyo', '2026-08-01', '35', 'BUY_YES', 0.6, 1, 0, 0);
+            INSERT INTO orders VALUES ('order-1', 'filled', 'polymarket_clob');
+            INSERT INTO fills VALUES ('order-1');
+            """
+        )
+    gate = tmp_path / "gate.json"
+    gate.write_text(
+        json.dumps(
+            {
+                "gate_pass": True,
+                "fail_reasons": [],
+                "db_fills": {"missing_order_rows": 0, "over_order_keys": 0},
+                "db_fill_cost_minus_fact_cost": 0.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    check = weather_research_data_shared.data_self_check(database)
+    prior = weather_research_data_shared.load_buy_yes_forecast_prior(database)
+    coverage = weather_research_data_shared.load_fill_coverage_gate(gate)
+
+    assert check["fact_trades_max_built_at_utc"] == "2026-08-01T00:00:00Z"
+    assert check["clob_order_fill_join"][0]["with_fill"] == 1
+    assert prior.iloc[0]["raw_model_p_yes"] == pytest.approx(0.5)
+    assert prior.iloc[0]["prior_rows"] == 2
+    assert coverage["gate_pass"] is True
 
 
 def test_research_debt_checker_rejects_new_entrypoint_and_duplicate_growth(

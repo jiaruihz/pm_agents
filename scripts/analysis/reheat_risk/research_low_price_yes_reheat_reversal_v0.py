@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import math
-import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +28,19 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+try:
+    from .weather_research_data_shared import (
+        data_self_check as shared_data_self_check,
+        load_buy_yes_forecast_prior,
+        load_fill_coverage_gate,
+    )
+except ImportError:  # direct script execution
+    from weather_research_data_shared import (
+        data_self_check as shared_data_self_check,
+        load_buy_yes_forecast_prior,
+        load_fill_coverage_gate,
+    )
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -72,78 +84,16 @@ def money(value: float | None) -> str:
     return f"{float(value):+.2f}"
 
 
-def connect_ro() -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=1.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA query_only=ON")
-    conn.execute("PRAGMA busy_timeout=1000")
-    return conn
-
-
-def query_rows(conn: sqlite3.Connection, sql: str) -> list[dict[str, Any]]:
-    cur = conn.execute(sql)
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
-
-
 def data_self_check() -> dict[str, Any]:
-    conn = connect_ro()
-    try:
-        return {
-            "fact_trades_max_built_at_utc": conn.execute("SELECT MAX(fact_built_at_utc) FROM fact_trades").fetchone()[0],
-            "fact_trades_by_class": query_rows(conn, "SELECT trade_class, COUNT(*) AS rows FROM fact_trades GROUP BY trade_class ORDER BY trade_class"),
-            "fact_trades_by_settlement_status": query_rows(
-                conn,
-                "SELECT COALESCE(settlement_status, '') AS settlement_status, COUNT(*) AS rows "
-                "FROM fact_trades GROUP BY settlement_status ORDER BY settlement_status",
-            ),
-            "fact_signal_candidate_coverage": query_rows(
-                conn,
-                "SELECT COUNT(*) AS rows, SUM(eligible) AS eligible, SUM(paper_ordered) AS paper_ordered, "
-                "SUM(live_filled) AS live_filled FROM fact_signal_candidates",
-            )[0],
-            "clob_order_fill_join": query_rows(
-                conn,
-                "SELECT o.status, COUNT(*) AS orders, "
-                "SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 0 END) AS with_fill "
-                "FROM orders o LEFT JOIN fills f USING(execution_id) "
-                "WHERE o.venue='polymarket_clob' GROUP BY o.status ORDER BY o.status",
-            ),
-        }
-    finally:
-        conn.close()
+    return shared_data_self_check(DB)
 
 
 def load_gate() -> dict[str, Any]:
-    if not GATE.exists():
-        return {"gate_pass": None, "missing": True}
-    data = json.loads(GATE.read_text())
-    return {
-        "gate_pass": data.get("gate_pass"),
-        "fail_reasons": data.get("fail_reasons", []),
-        "missing_order_rows": data.get("db_fills", {}).get("missing_order_rows"),
-        "over_order_keys": data.get("db_fills", {}).get("over_order_keys"),
-        "db_fill_cost_minus_fact_cost": data.get("db_fill_cost_minus_fact_cost"),
-    }
+    return load_fill_coverage_gate(GATE)
 
 
 def load_forecast_prior() -> pd.DataFrame:
-    conn = connect_ro()
-    try:
-        rows = query_rows(
-            conn,
-            """
-            SELECT city, event_date AS target_date, bracket,
-                   AVG(model_p_yes) AS raw_model_p_yes,
-                   COUNT(*) AS prior_rows
-            FROM fact_signal_candidates
-            WHERE side='BUY_YES' AND model_p_yes IS NOT NULL
-            GROUP BY city, event_date, bracket
-            """,
-        )
-    finally:
-        conn.close()
-    return pd.DataFrame(rows)
+    return load_buy_yes_forecast_prior(DB)
 
 
 def materialize_rows() -> tuple[pd.DataFrame, dict[str, Any]]:
