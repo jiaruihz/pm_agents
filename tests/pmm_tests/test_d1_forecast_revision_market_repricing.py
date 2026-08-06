@@ -117,6 +117,42 @@ def test_directional_repricing_flips_downward_revision_sign() -> None:
     assert abs(immediate["mean_directional_rung_shift"] - 0.25) < 1e-12
 
 
+def test_market_transition_summary_scores_shared_book_move_once() -> None:
+    common = {
+        "target_date": "2026-08-07",
+        "city": "Tokyo",
+        "event_class": "forward_provider_run_first_seen",
+        "pre_book_snapshot_id": "pre",
+        "post_book_snapshot_id": "post",
+        "immediate_market_status": "scoreable",
+        "immediate_mean_rung_shift": 0.2,
+    }
+    events = [
+        {
+            **common,
+            "model_revision_f": 1.0,
+            "consensus_mean_revision_f": 0.2,
+        },
+        {
+            **common,
+            "model_revision_f": -0.5,
+            "consensus_mean_revision_f": -0.1,
+        },
+    ]
+    rows = subject.market_transition_repricing_summary(events)
+    immediate = next(
+        row
+        for row in rows
+        if row["scope"] == "forward_collector_exact"
+        and row["horizon"] == "immediate"
+    )
+    assert immediate["event_rows"] == 2
+    assert immediate["independent_market_transitions"] == 1
+    assert immediate["single_forecast_event_transitions"] == 0
+    assert immediate["conflicting_provider_direction_transitions"] == 1
+    assert immediate["direction_agreement_rate"] == 1.0
+
+
 def test_provider_run_events_use_asof_model_arrivals_not_complete_batches() -> None:
     models = [
         ("gfs_global", 80.0),

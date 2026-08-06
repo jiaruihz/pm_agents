@@ -706,6 +706,7 @@ def attach_market_evidence(
             )
             if post_time is None:
                 event[f"markout_{minutes}m_status"] = "missing_post_checkpoint"
+                event[f"markout_{minutes}m_snapshot_id"] = None
                 event[f"markout_{minutes}m_total_variation"] = None
                 event[f"markout_{minutes}m_mean_rung_shift"] = None
                 continue
@@ -713,6 +714,7 @@ def attach_market_evidence(
                 event[f"markout_{minutes}m_status"] = (
                     "post_checkpoint_after_markout_horizon"
                 )
+                event[f"markout_{minutes}m_snapshot_id"] = None
                 event[f"markout_{minutes}m_total_variation"] = None
                 event[f"markout_{minutes}m_mean_rung_shift"] = None
                 continue
@@ -730,6 +732,9 @@ def attach_market_evidence(
             mark = min(later, key=lambda item: item["checkpoint_ts_utc"]) if later else None
             values = _probability_markout(post, mark)
             event[f"markout_{minutes}m_status"] = values["status"]
+            event[f"markout_{minutes}m_snapshot_id"] = (
+                mark.get("feature_book_snapshot_id") if mark else None
+            )
             event[f"markout_{minutes}m_total_variation"] = values["total_variation"]
             event[f"markout_{minutes}m_mean_rung_shift"] = values["mean_rung_shift"]
         result.append(event)
@@ -824,6 +829,133 @@ def directional_repricing_summary(events: list[dict[str, Any]]) -> list[dict[str
     return output
 
 
+def market_transition_repricing_summary(
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Score each independent book transition once.
+
+    Several provider runs can arrive between two book checkpoints.  Their
+    rolling consensus-mean revisions telescope, so the interval signal is the
+    sum of those revisions; the same market move must not be attributed once
+    to every provider delivery.
+    """
+    horizons: list[tuple[str, str, str, str | None]] = [
+        (
+            "immediate",
+            "immediate_market_status",
+            "immediate_mean_rung_shift",
+            None,
+        ),
+        *[
+            (
+                f"{minutes}m",
+                f"markout_{minutes}m_status",
+                f"markout_{minutes}m_mean_rung_shift",
+                f"markout_{minutes}m_snapshot_id",
+            )
+            for minutes in MARKOUT_MINUTES
+        ],
+    ]
+    output: list[dict[str, Any]] = []
+    for horizon, status_field, shift_field, mark_field in horizons:
+        grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+        for event in events:
+            if event.get(status_field) != "scoreable":
+                continue
+            transition_key = (
+                str(event.get("event_class") or ""),
+                str(event.get("city") or ""),
+                str(event.get("target_date") or ""),
+                str(event.get("pre_book_snapshot_id") or ""),
+                str(event.get("post_book_snapshot_id") or ""),
+                str(event.get(mark_field) or "") if mark_field else "",
+            )
+            grouped.setdefault(transition_key, []).append(event)
+        transitions: list[dict[str, Any]] = []
+        for key, members in grouped.items():
+            revisions = [
+                float(event["consensus_mean_revision_f"])
+                for event in members
+                if event.get("consensus_mean_revision_f") is not None
+            ]
+            if not revisions:
+                continue
+            net_revision = sum(revisions)
+            shift = members[0].get(shift_field)
+            if abs(net_revision) <= 1e-12 or shift is None:
+                continue
+            shift_value = float(shift)
+            provider_signs = {
+                1 if float(event["model_revision_f"]) > 0 else -1
+                for event in members
+                if event.get("model_revision_f") is not None
+                and abs(float(event["model_revision_f"])) > 1e-12
+            }
+            transitions.append(
+                {
+                    "event_class": key[0],
+                    "target_date": key[2],
+                    "event_rows": len(members),
+                    "conflicting_provider_directions": len(provider_signs) > 1,
+                    "net_consensus_mean_revision_f": net_revision,
+                    "market_rung_shift": shift_value,
+                    "directional_shift": (
+                        shift_value if net_revision > 0 else -shift_value
+                    ),
+                }
+            )
+        for scope, scoped in (
+            ("all", transitions),
+            (
+                "legacy_development",
+                [
+                    row
+                    for row in transitions
+                    if row["event_class"] == "legacy_provider_run_earliest_observed"
+                ],
+            ),
+            (
+                "forward_collector_exact",
+                [
+                    row
+                    for row in transitions
+                    if row["event_class"] == "forward_provider_run_first_seen"
+                ],
+            ),
+        ):
+            directional = [float(row["directional_shift"]) for row in scoped]
+            output.append(
+                {
+                    "scope": scope,
+                    "horizon": horizon,
+                    "event_rows": sum(int(row["event_rows"]) for row in scoped),
+                    "independent_market_transitions": len(scoped),
+                    "single_forecast_event_transitions": sum(
+                        int(row["event_rows"]) == 1 for row in scoped
+                    ),
+                    "conflicting_provider_direction_transitions": sum(
+                        bool(row["conflicting_provider_directions"])
+                        for row in scoped
+                    ),
+                    "target_dates": len(
+                        {str(row["target_date"]) for row in scoped}
+                    ),
+                    "direction_agreement_rate": (
+                        sum(value > 0 for value in directional) / len(directional)
+                        if directional
+                        else None
+                    ),
+                    "mean_directional_rung_shift": (
+                        mean(directional) if directional else None
+                    ),
+                    "median_directional_rung_shift": (
+                        median(directional) if directional else None
+                    ),
+                }
+            )
+    return output
+
+
 def load_settled_city_dates(
     path: Path,
     target_keys: set[tuple[str, str]],
@@ -869,6 +1001,33 @@ def render_report(summary: dict[str, Any]) -> str:
     impact = summary["lineage_impact"]
     classes = summary["event_classes"]
     markout_statuses = summary["market_markout_status_counts"]
+    transition_rows = [
+        row
+        for row in summary.get("market_transition_repricing", [])
+        if row["scope"] in ("legacy_development", "forward_collector_exact")
+    ]
+    transition_table = [
+        "| {scope} | {horizon} | {events} | {transitions} | {single} | {conflicts} | {dates} | {agreement} | {shift} |".format(
+            scope=row["scope"],
+            horizon=row["horizon"],
+            events=row["event_rows"],
+            transitions=row["independent_market_transitions"],
+            single=row["single_forecast_event_transitions"],
+            conflicts=row["conflicting_provider_direction_transitions"],
+            dates=row["target_dates"],
+            agreement=(
+                f"{row['direction_agreement_rate']:.1%}"
+                if row["direction_agreement_rate"] is not None
+                else "NA"
+            ),
+            shift=(
+                f"{row['mean_directional_rung_shift']:+.4f}"
+                if row["mean_directional_rung_shift"] is not None
+                else "NA"
+            ),
+        )
+        for row in transition_rows
+    ]
     directional = [
         row
         for row in summary.get("directional_repricing", [])
@@ -945,6 +1104,14 @@ def render_report(summary: dict[str, Any]) -> str:
             "",
             "该表检验 forecast revision 后市场是否沿同方向移动，是短持策略目标；它不是 settlement accuracy，也不是 executable bid/ask PnL。",
             "",
+            "## 独立盘口变化（主口径）",
+            "",
+            "| scope | horizon | event rows | independent transitions | single-event | direction conflicts | dates | agreement | mean directional shift |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            *transition_table,
+            "",
+            "主口径把同两个盘口 checkpoint 之间到达的所有 provider updates 合并，使用 rolling consensus mean 的净 revision，并且每次盘口变化只评分一次。raw event-row 表只保留为诊断，不能作 causal/alpha 结论。",
+            "",
             "## 首轮双漏斗",
             "",
             "| signal funnel | count |",
@@ -1008,6 +1175,7 @@ def run_study(
         ) in settled_city_dates
     event_classes = Counter(str(event["event_class"]) for event in d1_events)
     directional_repricing = directional_repricing_summary(d1_events)
+    market_transition_repricing = market_transition_repricing_summary(d1_events)
     signal_funnel = {
         **provider_summary,
         "complete_batch_material_forecast_batches": complete_batch_summary[
@@ -1083,6 +1251,7 @@ def run_study(
         "market_markout_status_counts": market_markout_status_counts,
         "event_classes": dict(sorted(event_classes.items())),
         "directional_repricing": directional_repricing,
+        "market_transition_repricing": market_transition_repricing,
         "blocker_rows": len(blockers),
         "conclusion": "inconclusive_collector_and_lineage_repair",
         "production": {"live_action": "none", "orders_changed": 0},

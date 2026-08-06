@@ -123,3 +123,20 @@ v3 合同把 `provider-run first_seen` 与 `same-run content first_seen` 分开�
 迁移后 legacy-development 分母为 34 城、3 target dates、1,224 个 D-1 provider-run transitions；其中 262 个落在 D-1 18–24 主窗口。市场证据为 2,243 checkpoints、452 complete；immediate/5m/10m/30m/60m/90m scoreable 分别为259/0/7/156/210/205。`model_revision_f` 的 immediate 同向率为59.0%（249 events/3 dates），30m 49.7%，60m 53.5%，90m 61.2%；日期只有2–3天且时钟只是 legacy earliest-observed，所以结论仍是 `inconclusive`，不能计算或宣称交易 alpha。
 
 下一步不是拿未来 market 当“天气真值”：最终 settlement 继续裁决概率准确度；future 5–90m ladder 只检验 forecast revision 是否领先市场 repricing；只有 formal forward 的 signed repricing 成立后，才用 entry ask→future bid、official fee、slippage 与 depth 检验能否赚钱。当前 `live_action=none`、`orders_changed=0`；collector v3 代码与测试已完成，生产重启仍需显式部署确认。
+
+### 盘口变化主口径修正
+
+raw provider-event 不能直接当独立盘口变化：259 条 immediate scoreable event rows 只对应 134 个 pre→post book transitions；32 个 transition 前出现多条 provider updates，最多8条，24个 transition 同时包含上调和下调。runner 已改为在两个盘口 checkpoint 之间汇总 rolling consensus mean 的净 revision，并将同一次盘口变化只评分一次。
+
+去除净 revision=0 的 interval 后，legacy development 的独立盘口变化为：
+
+| horizon | event rows | independent transitions | single-event | conflicting directions | dates | direction agreement | mean signed rung shift |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| immediate | 246 | 128 | 97 | 23 | 3 | 59.38% | +0.01661 |
+| 5m | 0 | 0 | 0 | 0 | 0 | NA | NA |
+| 10m | 6 | 6 | 6 | 0 | 1 | 33.33% | -0.02762 |
+| 30m | 145 | 91 | 79 | 7 | 3 | 50.55% | +0.00310 |
+| 60m | 199 | 123 | 104 | 13 | 2 | 53.66% | +0.00661 |
+| 90m | 193 | 111 | 92 | 14 | 2 | 62.16% | +0.01736 |
+
+这里最重要的不是90m点估为正，而是时钟覆盖：事件后的下一份 book checkpoint 延迟中位28.8分钟，book真正 `available_at` 延迟中位43.0分钟；1,224个事件中0个在5分钟内可用、0个在10分钟内可用，只有34个在30分钟内可用。因此当前 archive 无法回答“forecast 到来后5–10分钟能否抢先”，30–90m点估也只有2–3个日期，不能视为 alpha。正式研究必须先部署v3 collector，让 forecast first-seen 与更高频完整 ladder 同时运行；然后按独立book interval评估，最后再接 ask→future bid。
