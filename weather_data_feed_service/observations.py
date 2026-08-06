@@ -67,7 +67,7 @@ def _source_chain(cfg: CityConfig, *, include_fallback_sources: bool) -> list[st
     sources = [cfg.live_observation_source]
     if include_fallback_sources:
         if normalize_source_name(cfg.live_observation_source) == "aviationweather_metar":
-            sources.append("aviationweather_cache_csv")
+            sources.extend(("aviationweather_cache_csv", "noaa_tgftp_station_txt"))
         sources.extend(cfg.fallback_sources)
     out: list[str] = []
     for source in sources:
@@ -79,6 +79,7 @@ def _source_chain(cfg: CityConfig, *, include_fallback_sources: bool) -> list[st
 
 def _fetch_result(cfg: CityConfig, target_date: str, settings: FetchSettings, sources: list[str]) -> tuple[str, Any]:
     last_error = ""
+    stale_results: list[tuple[datetime, str, Any]] = []
     for source in sources:
         try:
             result = fetch_observation_source(
@@ -92,11 +93,23 @@ def _fetch_result(cfg: CityConfig, target_date: str, settings: FetchSettings, so
                 ),
                 settings=settings,
             )
-            if result.records or result.status == "ok":
-                return source, result
+            latest = max(
+                (dt for record in result.records if (dt := parse_dt(record.obs_ts_utc)) is not None),
+                default=None,
+            )
+            fetched_at = parse_dt(result.fetched_at_utc) or datetime.now(timezone.utc)
+            if latest is not None:
+                age_min = (fetched_at - latest).total_seconds() / 60.0
+                if 0.0 <= age_min <= 120.0:
+                    return source, result
+                if age_min >= 0.0:
+                    stale_results.append((latest, source, result))
             last_error = result.error or result.status
         except Exception as exc:  # noqa: BLE001
             last_error = f"{type(exc).__name__}: {exc}"
+    if stale_results:
+        _latest, source, result = max(stale_results, key=lambda item: item[0])
+        return source, result
     raise RuntimeError(last_error or "no observation records")
 
 

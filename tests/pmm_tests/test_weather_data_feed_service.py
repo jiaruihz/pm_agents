@@ -786,6 +786,7 @@ def test_observations_source_chain_uses_awc_cache_before_iem() -> None:
     assert observations._source_chain(cfg, include_fallback_sources=True) == [
         "aviationweather_metar",
         "aviationweather_cache_csv",
+        "noaa_tgftp_station_txt",
         "iem_asos",
     ]
 
