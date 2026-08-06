@@ -64,3 +64,43 @@ V04 不是最终模型，只是线性 market-offset baseline。本轮已把候�
 - execution：只有 signed repricing 在 target-date OOF/forward 为正，才加入 direct ask、fee、slippage、depth；maker queue 单独 A/B。
 
 测试：相关 10 tests 全部通过。没有修改 live strategy、city pool、sizing、execution policy 或订单。
+
+## 市场基准的正确含义
+
+同一 checkpoint 的 weather probability `p_t` 与 market distribution `q_t` 并不是互相拟合，而是分别对最终 winner `Y` 评分：
+
+```text
+weather logloss = -log p_t(Y)
+market logloss  = -log q_t(Y)
+delta           = weather logloss - market logloss
+```
+
+因此，市场当时定价错误并不会把 weather 模型判错；只要 weather 给最终赢家的概率更合理，它就会得到更低的 loss。V05–V10 失败的原因不是“偏离市场”，而是这些偏离在后来的真实 winner 上没有稳定改善。市场是同时间、同信息集的强基线，settlement 才是概率准确度的真值。
+
+短持 repricing 是另一项任务，不能与 terminal probability 混算。该任务使用事件对齐的四个时点：
+
+```text
+first-seen 前最后一份完整 ladder = pre-event market state
+first-seen 后第一份新鲜完整 ladder = entry / immediate response
++5/+10/+30/+60/+90m ladder          = future repricing markout
+最终 settlement                     = terminal accuracy label
+```
+
+未来市场也不是真值，它只回答“其他参与者随后是否向 forecast revision 的方向调整”；是否真有盈利，还必须使用 entry ask、future bid、fee、slippage 和 depth 单独验收。
+
+## 2026-08-06 首轮 repricing smoke
+
+当前最后一份可读的 exact-run artifact 只有 2026-08-05 一个 target date、68 个 revision rows；其中 34 个是 existing-run bootstrap，34 个是 partial batch 完成，尚无 `forward_new_complete_run`。因此只作机制 smoke，不作 alpha 结论：
+
+| horizon | scoreable events | revision 与 ladder shift 同向率 | mean signed rung shift |
+|---|---:|---:|---:|
+| immediate | 13 | 69.23% | +0.02004 |
+| 5m | 16 | 0.00% | 0.00000 |
+| 10m | 16 | 0.00% | 0.00000 |
+| 30m | 14 | 21.43% | -0.00251 |
+| 60m | 14 | 42.86% | -0.00594 |
+| 90m | 14 | 57.14% | -0.00764 |
+
+immediate 的正方向反应可能是真实首跳，也可能混有同批采集/partial-completion timing；5/10m 完全不动显示现有 book cadence 或 freshness 仍不足；30–90m 没有稳定延续。当前结果不支持交易，但支持继续积累真正的 new-run first-seen forward 后再判断。
+
+2026-08-06 当前生产检查为 `CRITICAL`：canonical JRS permission host 的真实 read/write probe 失败，forecast-run collector 与 full-ladder feed stale，无法生成新的 clean forward event。此次研究没有恢复或改变任何生产进程；恢复 collector 属于生产行为变更，需按 deployment contract 取得显式确认后执行。

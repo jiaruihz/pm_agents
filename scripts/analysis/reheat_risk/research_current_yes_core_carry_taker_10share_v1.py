@@ -207,6 +207,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--net-ev-sizing", action="store_true")
     parser.add_argument("--descriptive-audit", action="store_true")
+    parser.add_argument("--semantic-challenger", action="store_true")
+    parser.add_argument("--overshoot-survival", action="store_true")
     args, _ = parser.parse_known_args()
     if args.net_ev_sizing:
         from scripts.analysis.reheat_risk.core_carry_net_ev_sizing import (
@@ -220,6 +222,18 @@ def main() -> int:
         )
 
         return descriptive_main()
+    if args.semantic_challenger:
+        from scripts.analysis.reheat_risk.core_carry_semantic_challenger import (
+            main as semantic_challenger_main,
+        )
+
+        return semantic_challenger_main()
+    if args.overshoot_survival:
+        from scripts.analysis.reheat_risk.core_carry_overshoot_survival import (
+            main as overshoot_survival_main,
+        )
+
+        return overshoot_survival_main()
     oof = pd.read_csv(OOF_PATH)
     oof["decision_snapshot_dt"] = pd.to_datetime(
         oof["decision_snapshot_ts_utc"], utc=True, errors="coerce"

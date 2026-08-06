@@ -1,0 +1,30 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "current_yes_core_carry_overshoot_survival_v1",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-06T08:30:00Z",
+  "hypothesis": "On the unchanged Core Carry PIT denominator, a current-status cumulative overshoot hazard with same-row market cumulative hazard as its null and physically structured remaining-heat exposure improves exact-current-bracket hold probability versus both frozen Core Carry v2 and market.",
+  "target": "Final settlement holds the current exact bracket (label=1); the only failure direction in this parent is upward overshoot.",
+  "denominator": "Archived 1,349-row Core Carry PIT opportunity ledger, 31 target dates, with no outcome, edge, city, or price selection beyond the frozen parent definition.",
+  "candidate_k": 1,
+  "candidate": "market cumulative hazard multiplied by a strongly regularized non-negative physical exposure correction",
+  "features": [
+    "forecast crossing pressure in settlement-native ticks",
+    "0-2h remaining heat exposure",
+    "2-4h remaining heat exposure",
+    "4h+ remaining heat exposure",
+    "positive observed warming runway per exit tick",
+    "positive solar recovery per exit tick",
+    "weak plateau evidence"
+  ],
+  "market_role": "decision-current market midpoint converted to cumulative hazard; zero correction exactly reproduces market probability",
+  "split": "First 8 target dates warm-up; expanding OOF through the pre-forward window; final 8 target dates fit once on all prior dates with frozen coefficients.",
+  "primary_grain": "first state entry per city,target_date,current_bracket",
+  "secondary_grains": ["checkpoint", "path transition"],
+  "primary_metrics": ["target-date-equal Brier", "target-date-equal logloss"],
+  "uncertainty": "Target-date block bootstrap, 5000 repetitions, seed 20260806.",
+  "acceptance": "On frozen forward primary grain, both Brier and logloss deltas must be negative versus frozen Core Carry v2 and same-row market, and all four 95% intervals must exclude zero. Secondary grains must not reverse sign.",
+  "execution": "Fixed 10-share taker replay is descriptive only and cannot override the probability gate; maker is out of scope.",
+  "known_limit": "The hourly forecast cache is currently permission-blocked. V1 uses PIT scalar forecast max/peak clock to construct current-status exposure buckets; it does not claim observed time-to-event or a full hourly time-varying hazard.",
+  "live_action": "None. Same Core Carry expression and execution; probability research only."
+}

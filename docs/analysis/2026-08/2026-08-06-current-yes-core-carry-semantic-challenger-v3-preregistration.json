@@ -1,0 +1,29 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "current_yes_core_carry_semantic_challenger_v3",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-06T00:00:00Z",
+  "hypothesis": "A compact carry-specific semantic residual, expressed as a fixed core-probability logit offset plus calibration and low-dimensional physical interactions, improves hold-probability proper loss versus frozen core and same-row market without adding eligibility gates.",
+  "denominator": "Archived 1,349-row frozen current-YES core-carry PIT checkpoint opportunity ledger; no row is selected by outcome, price edge, or candidate model.",
+  "target": "Current exact bracket holds at settlement (label=1).",
+  "development_protocol": "First 8 target dates warm-up; subsequent pre-forward dates expanding OOF. Select one of four preregistered candidates by average rank of development city-day Brier and logloss.",
+  "forward_protocol": "Last 8 target dates are untouched during selection. Refit the chosen algorithm once on all earlier dates, freeze coefficients, and score all 8 forward dates.",
+  "candidates": [
+    "core_recalibration",
+    "semantic_linear",
+    "semantic_interactions",
+    "semantic_spline"
+  ],
+  "primary_baselines": [
+    "frozen_core_no_obs_age",
+    "same_row_market_mid"
+  ],
+  "primary_metrics": [
+    "city_day_equal_weight_brier",
+    "city_day_equal_weight_logloss"
+  ],
+  "uncertainty": "Target-date block bootstrap, 5000 repetitions, seed 20260806.",
+  "decision_rule": "Challenger is research-positive only if both forward Brier and logloss deltas versus frozen core are negative and both 95% target-date block bootstrap intervals exclude zero; market comparison is reported on identical rows. Otherwise verdict is inconclusive or rejected and live remains unchanged.",
+  "multiple_testing": "K=4 candidates. Selection occurs only on development OOF; the untouched forward slice is evaluated once for the selected candidate.",
+  "live_action": "None. Research-only; no production configuration, process, order, or sizing change."
+}
