@@ -350,9 +350,17 @@ def _tmux(spec: WeatherProductionSpec, *args: str) -> subprocess.CompletedProces
 def _tmux_on_socket(
     spec: WeatherProductionSpec, socket: str, *args: str
 ) -> subprocess.CompletedProcess[str]:
+    tmux_env = os.environ.copy()
+    # A newly-created permission host must not inherit the interactive zsh as
+    # tmux's default shell.  Production checked sessions and start contracts
+    # are bash-based, and /bin/bash is the separately audited FDA shell on this
+    # host.  Pinning it here also makes prospective and canonical hosts use the
+    # same responsible-process chain.
+    tmux_env["SHELL"] = "/bin/bash"
     return subprocess.run(
         [str(spec.canonical_tmux_binary), "-L", socket, *args],
         cwd=ROOT,
+        env=tmux_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

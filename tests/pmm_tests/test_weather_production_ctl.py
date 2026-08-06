@@ -492,6 +492,23 @@ def test_prospective_probe_uses_ephemeral_session_not_run_shell(monkeypatch, tmp
     assert not any(args[0] == "run-shell" for args in calls)
 
 
+def test_tmux_new_host_uses_audited_bash_default_shell(monkeypatch, tmp_path):
+    spec = production_spec(tmp_path, ())
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(ctl.subprocess, "run", fake_run)
+
+    ctl._tmux_on_socket(spec, "probe", "new-session", "-d", "true")
+
+    assert captured["env"]["SHELL"] == "/bin/bash"
+    assert captured["command"][:3] == [str(spec.canonical_tmux_binary), "-L", "probe"]
+
+
 def test_prospective_probe_reports_first_io_failure(monkeypatch, tmp_path):
     base = production_spec(tmp_path, ())
     base.canonical_db_path.write_bytes(b"x")
