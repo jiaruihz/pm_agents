@@ -78,7 +78,7 @@ manifest/历史报告指针。需要重放历史研究时，用
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
-| [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | Mac 当前生产边界、如何动态发现真实 runner/live/order 状态、N100 恢复边界；正文下半旧 N100/mid_price 内容仅作历史 |
+| [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | Weather 生产接手第一入口：controller/manifest 当前事实、权威来源、git-first 变更、JRS 恢复与 N100 历史边界；不再内嵌旧启动命令和 allowlist |
 | [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) | `current-reference` | 我们一共研究过哪些策略：每条的灵感/盈利规则、当前状态(live/shadow/research/dormant)、是否可行、属于血缘哪一层 |
 | [2026-07-14-strategy-search-reset-v1.md](analysis/2026-07/2026-07-14-strategy-search-reset-v1.md) | `snapshot` | 当前研究总判断：没有 confirmed 可扩 live alpha；回到全量连续 residual，快源 collector-only，模型先在同分母 proper score 上胜 market |
 | [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) | `current-reference` | 一条策略跑完后怎么一步步复盘：preflight→成交质量→绩效→对账→关联参数→结论；每阶段的 canonical 源/gate/skill/living doc 与 live-vs-shadow 比法 |
