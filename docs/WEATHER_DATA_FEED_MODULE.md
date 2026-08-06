@@ -240,72 +240,40 @@ aviationweather_cache_csv
 `weather_metar_cross_prev_no_shadow.py` 读取 source-events 时只用最新观测 seed/更新 running max。冷启动没有 state 时，
 它不会从 latest event 反推出当天历史最高温；这会漏掉已经发生过的 crossing，但避免凭不完整历史误触发真钱路径。
 
-消费者默认：
-
-```text
-weather_source_orderbook_timing_monitor.py
-  --source-input source-events
-  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json
-
-weather_metar_cross_prev_no_shadow.py
-  --signal-input source-events
-  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json
-```
+消费者默认使用 `source-events`，其 physical path 从 production contract/共享 loader 解析；文档和业务脚本不再写死
+`~/projects/weather_data_feed_service_runtime`、N100 checkout 或第二份 fallback root。
 
 如果 `source_events/latest.json` stale 或缺 city/source，消费者应该显式报 `source_event_missing` /
 `source_event_wrong_date`，不要静默回退到直抓天气源。需要临时排查上游 source 时，才手动切到 `live-fetch`。
 
 ## 生产数据验证计划
 
-每次数据层 / snapshot / current-YES runner 改动后，在 N100 跑:
+每次数据层、snapshot 或 runner 输入合同改动后，在当前 Mac production context 验证：
 
 ```bash
-cd ~/projects/pm_agent
-.venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py \
-  --snapshot-dir ../weather-predict/output/paper_snapshots \
-  --runtime-root runtime/weather_edge_v1
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py
 ```
 
-检查内容:
+检查内容：
 
-- `weather-predict` 最新 snapshot 是否满足 `weather_data_feed_snapshot_v1` 协议；
+- current Mac 最新 snapshot 是否满足 `weather_data_feed_snapshot_v1` 协议；
 - snapshot record 是否缺字段、无法 normalize、或出现 `(city,target_date,token_id,bracket)` 重复；
-- snapshot 是否 stale，默认阈值 45 分钟；
-- current-YES split telemetry 是否 JSON 损坏、缺关键字段、或同一 decision key 重复；
-- current-YES split live order 文件是否有重复 `order_id` 或重复 `(strategy_instance,city,target_date,token_id,side)`。
+- snapshot、orderbook、observation、forecast 与注册 producer latest 是否 stale；
+- telemetry 是否 JSON 损坏、缺关键字段、decision key 或 order identity 重复；
+- active live order journal 是否存在重复 `order_id` 或重复策略决策身份。
 
-验收口径:
+验收口径：
 
-- `status=ok`: 可以继续让策略消费；
-- `status=warn`: 字段/重复没坏，但存在 stale snapshot、summary stale、或非致命重复风险；
-- `status=fail`: 协议、JSON、snapshot 重复或 order_id 重复等结构性问题，先修数据再谈策略信号。
+- `status=ok`：合同、identity、freshness 和必需 coverage 均通过；
+- `status=warn`：逐项归因，不得冒充全链路健康；
+- `status=fail/critical`：先修数据或生产入口，再讨论策略信号。
 
-抢单/测速链路改动后额外验证:
-
-```bash
-systemctl --user start weather-data-feed-source-events.service
-systemctl --user list-timers --all | grep weather-data-feed-source-events
-
-cd ~/projects/pm_agent
-TIMING_MONITOR_MARKET_PROXY=http://127.0.0.1:18089 \
-  .venv/bin/python scripts/ops/weather_source_orderbook_timing_monitor.py cycle \
-  --cities Shanghai \
-  --sources profile_primary aviationweather_cache_csv \
-  --source-input source-events \
-  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json \
-  --bracket-radius 0 --max-workers 2
-
-METAR_CROSS_MARKET_PROXY=http://127.0.0.1:18089 \
-  .venv/bin/python scripts/ops/weather_metar_cross_prev_no_shadow.py cycle \
-  --dry-run --cities Shanghai \
-  --signal-input source-events \
-  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json \
-  --obs-source aviationweather_metar --max-workers 1
-```
-
-通过标准：source-events latest 足够新，`rows=80 / ok=80 / cities=40`（随城市池调整可变），timing monitor
-有 `source_rows>0` 且能 join book，crossing dry-run cycle 写出 `signal_input=source-events` /
-`obs_source_input=data_feed_source_events`，且 `errors=0`。
+source-event/测速链路改动也必须走 production contract 与 controller；不得恢复 N100 systemd、固定 `18089` proxy、远端
+checkout 或手工常驻 cycle。验收以 manifest 登记 producer 的真实 latest、source/city coverage、first-seen clocks、book
+join、结构化 errors 和下游 consumer freshness 为准，不硬编码某次城市数/row 数。需要一次性诊断时使用 read-only/dry-run
+入口，不能借诊断脚本创建平行常驻进程。
 
 ## Observation Sources 迁移边界
 

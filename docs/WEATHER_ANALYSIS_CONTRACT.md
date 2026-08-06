@@ -531,11 +531,11 @@ rows = conn.execute("""
 
 `overall` 对象的字段：`n / wins / win_rate / cost_usd / pnl_usd / roi`
 
-### N100 raw（降级使用）
+### 历史 N100 raw（恢复边界）
 
-- SSH：`ssh jiarui@192.168.0.200`（WSL 内执行，密钥 `~/.ssh/id_ed25519_weather_deploy`）
-- 关键路径：`~/projects/weather-predict/output/paper_trades/paper_orders.jsonl`
-- 同步命令：`scripts/ops/sync_weather_remote.sh`
+N100 不是当前生产 truth，不在分析合同中提供 SSH、密钥或固定远端路径。当前窗口先读 production contract 解析出的
+Mac raw；只有明确的历史恢复/补数任务才通过 `weather-fact-rebuild` 使用 N100 镜像，并记录 remote identity、覆盖起止、
+同步时间和已知缺口。不得把 N100 raw、旧 WSL 路径或 repo-local 历史 runtime 静默替代当前 Mac 数据。
 
 ---
 
