@@ -4,12 +4,18 @@ operational_repo_root: /Users/deepsleep/projects/pm_agents
 # Bounded refresh executes the same committed code as current production.
 # Operational scripts/status remain owned by operational_repo_root.
 canonical_refresh_checkout_root: /Users/deepsleep/projects/pm_agents_prod
+# The mount name is a compatibility contract; UUID is the physical identity.
+# A same-named replacement disk must fail closed instead of becoming production.
+production_storage_root: /Volumes/jrs
+production_storage_volume_uuid: 93F5EA71-2AAB-4A45-9A21-18220BBE4614
+archive_storage_root: /Volumes/jrs-archive
+archive_storage_volume_uuid: 748B704B-E074-40C1-A5F0-AC9205B52E9F
 canonical_db_path: /Volumes/jrs/pm_agents/runtime/weather.db
 compatibility_db_paths:
   - runtime/weather.db
 data_feed_runtime_root: /Volumes/jrs/weather_data_feed_service_runtime
 pm_runtime_root: /Volumes/jrs/pm_agents/runtime
-research_artifact_root: /Volumes/jrs/pm_agents/research/artifact_store
+research_artifact_root: /Volumes/jrs-archive/pm_agents/research/artifact_store
 canonical_tmux_socket: weather-data-feed-jrs
 canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
 

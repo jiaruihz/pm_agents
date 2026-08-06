@@ -55,6 +55,13 @@ def test_committed_production_spec_declares_current_live_control_plane():
     spec = load_production_spec()
     by_id = {item.instance_id: item for item in spec.managed_runtimes}
 
+    assert spec.production_storage_root == Path("/Volumes/jrs")
+    assert spec.production_storage_volume_uuid == "93F5EA71-2AAB-4A45-9A21-18220BBE4614"
+    assert spec.archive_storage_root == Path("/Volumes/jrs-archive")
+    assert spec.archive_storage_volume_uuid == "748B704B-E074-40C1-A5F0-AC9205B52E9F"
+    assert spec.research_artifact_root == Path(
+        "/Volumes/jrs-archive/pm_agents/research/artifact_store"
+    )
     assert by_id["current_yes_core_carry_tiny_live_v2"].expected_live is True
     assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
@@ -390,6 +397,56 @@ def test_recovery_requires_live_confirmation(tmp_path):
         assert str(exc) == "recover-jrs-context requires --confirm-live"
     else:
         raise AssertionError("expected live confirmation failure")
+
+
+def test_storage_migration_requires_live_confirmation(tmp_path):
+    spec = production_spec(tmp_path, ())
+
+    try:
+        ctl.migrate_production_storage(
+            spec,
+            observed("existing"),
+            staging_root=tmp_path / "staging",
+            confirm_live=False,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "migrate-production-storage requires --confirm-live"
+    else:
+        raise AssertionError("expected live confirmation failure")
+
+
+def test_storage_migration_fails_before_tmux_on_wrong_volume(monkeypatch, tmp_path):
+    base = production_spec(tmp_path, ())
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "production_storage_volume_uuid": "NEW",
+            "archive_storage_volume_uuid": "OLD",
+        }
+    )
+    monkeypatch.setattr(
+        ctl.manifest_tool,
+        "inspect_volume_identity",
+        lambda path: {"volume_uuid": "WRONG"},
+    )
+    tmux_calls = []
+    monkeypatch.setattr(
+        ctl, "_tmux_on_socket", lambda *args, **kwargs: tmux_calls.append(args)
+    )
+
+    try:
+        ctl.migrate_production_storage(
+            spec,
+            observed("existing"),
+            staging_root=tmp_path / "staging",
+            confirm_live=True,
+        )
+    except RuntimeError as exc:
+        assert "source volume identity mismatch" in str(exc)
+    else:
+        raise AssertionError("expected volume identity failure")
+
+    assert tmux_calls == []
 
 
 def test_recovery_retries_canonical_server_start(monkeypatch, tmp_path):

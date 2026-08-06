@@ -33,7 +33,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
-        "/Volumes/jrs/pm_agents/research/artifact_store"
+        "/Volumes/jrs-archive/pm_agents/research/artifact_store"
     )
 
 

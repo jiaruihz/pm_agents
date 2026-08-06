@@ -369,6 +369,56 @@ def _tmux_on_socket(
     )
 
 
+def _run_tmux_checked(
+    spec: WeatherProductionSpec,
+    socket: str,
+    session: str,
+    command: str,
+    *,
+    timeout_sec: float,
+) -> subprocess.CompletedProcess[str]:
+    """Run one detached command without tmux run-shell and bridge its status."""
+
+    with tempfile.TemporaryDirectory(prefix=f"weather-{session}-") as bridge_dir:
+        status_path = Path(bridge_dir) / "status"
+        output_path = Path(bridge_dir) / "output"
+        wrapped = (
+            "set +e; "
+            f"{{ {command}; }} > {shlex.quote(str(output_path))} 2>&1; "
+            "rc=$?; "
+            f"printf '%s\\n' \"$rc\" > {shlex.quote(str(status_path))}; "
+            "exit \"$rc\""
+        )
+        started = _tmux_on_socket(
+            spec, socket, "new-session", "-d", "-s", session, wrapped
+        )
+        if started.returncode != 0:
+            return started
+        deadline = time.monotonic() + timeout_sec
+        while time.monotonic() < deadline:
+            present = _tmux_on_socket(
+                spec, socket, "has-session", "-t", f"={session}"
+            )
+            if present.returncode != 0:
+                break
+            time.sleep(0.25)
+        else:
+            return subprocess.CompletedProcess(
+                ["tmux", "-L", socket, session], 124, "migration command timed out"
+            )
+        try:
+            returncode = int(status_path.read_text(encoding="utf-8").strip())
+        except (FileNotFoundError, OSError, ValueError):
+            returncode = 1
+        try:
+            output = output_path.read_text(encoding="utf-8")
+        except OSError:
+            output = "migration command exited without output bridge"
+        return subprocess.CompletedProcess(
+            ["tmux", "-L", socket, session], returncode, output
+        )
+
+
 def persist_recovery_manifest(
     observed: Mapping[str, Any], *, directory: Path | None = None
 ) -> Path:
@@ -591,6 +641,193 @@ def recover_jrs_context(
                 raise RuntimeError(
                     f"failed restoring {session} pane {index}: {result.stdout}"
                 )
+    return actions
+
+
+def migrate_production_storage(
+    spec: WeatherProductionSpec,
+    before: Mapping[str, Any],
+    *,
+    staging_root: Path,
+    confirm_live: bool,
+) -> list[dict[str, Any]]:
+    """Atomically move the production mount contract to the pinned NVMe UUID."""
+
+    if not confirm_live:
+        raise RuntimeError("migrate-production-storage requires --confirm-live")
+    if (
+        not spec.production_storage_volume_uuid
+        or not spec.archive_storage_volume_uuid
+    ):
+        raise RuntimeError("production and archive volume UUIDs must be pinned")
+    source = manifest_tool.inspect_volume_identity(spec.production_storage_root)
+    target = manifest_tool.inspect_volume_identity(staging_root)
+    if source.get("volume_uuid") != spec.archive_storage_volume_uuid:
+        raise RuntimeError(
+            "source volume identity mismatch: "
+            f"expected={spec.archive_storage_volume_uuid} observed={source.get('volume_uuid')}"
+        )
+    if target.get("volume_uuid") != spec.production_storage_volume_uuid:
+        raise RuntimeError(
+            "staging volume identity mismatch: "
+            f"expected={spec.production_storage_volume_uuid} observed={target.get('volume_uuid')}"
+        )
+    restore_rows = [
+        row
+        for row in _pane_restore_rows(before)
+        if row["session"] not in set(spec.allowed_unmanaged_sessions)
+    ]
+    socket = f"{spec.canonical_tmux_socket}-storage-migration-{os.getpid()}"
+    keeper = _tmux_on_socket(
+        spec,
+        socket,
+        "new-session",
+        "-d",
+        "-s",
+        "weather_storage_migration_keeper",
+        "while :; do sleep 3600; done",
+    )
+    if keeper.returncode != 0:
+        raise RuntimeError(
+            f"failed to start migration permission host: {keeper.stdout}"
+        )
+    actions: list[dict[str, Any]] = []
+    canonical_stopped = False
+    cutover_succeeded = False
+    try:
+        probe_command = " && ".join(
+            (
+                f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.production_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.archive_storage_volume_uuid)}",
+                f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(staging_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.production_storage_volume_uuid)}",
+                f"test -r {shlex.quote(str(spec.canonical_db_path))}",
+                f"touch {shlex.quote(str(staging_root / '.weather_storage_migration_probe'))}",
+                f"rm -f {shlex.quote(str(staging_root / '.weather_storage_migration_probe'))}",
+            )
+        )
+        probe = _run_tmux_checked(
+            spec,
+            socket,
+            "weather_storage_migration_probe",
+            probe_command,
+            timeout_sec=30,
+        )
+        actions.append(
+            {
+                "action": "prospective_dual_volume_probe",
+                "returncode": probe.returncode,
+                "output": probe.stdout[-2000:].strip(),
+            }
+        )
+        if probe.returncode != 0:
+            raise RuntimeError(f"migration permission host probe failed: {probe.stdout}")
+
+        killed = _tmux(spec, "kill-server")
+        actions.append(
+            {
+                "action": "stop_canonical_server",
+                "returncode": killed.returncode,
+                "output": killed.stdout[-2000:].strip(),
+            }
+        )
+        if killed.returncode != 0:
+            raise RuntimeError(f"failed to stop canonical server: {killed.stdout}")
+        canonical_stopped = True
+
+        source_feed = shlex.quote(str(spec.data_feed_runtime_root) + "/")
+        target_feed_path = staging_root / spec.data_feed_runtime_root.relative_to(
+            spec.production_storage_root
+        )
+        target_feed = shlex.quote(str(target_feed_path) + "/")
+        source_runtime = shlex.quote(str(spec.pm_runtime_root) + "/")
+        target_runtime_path = staging_root / spec.pm_runtime_root.relative_to(
+            spec.production_storage_root
+        )
+        target_runtime = shlex.quote(str(target_runtime_path) + "/")
+        source_db = shlex.quote(str(spec.canonical_db_path))
+        target_db = staging_root / spec.canonical_db_path.relative_to(
+            spec.production_storage_root
+        )
+        target_db_tmp = target_db.with_name(target_db.name + ".migration.tmp")
+        final_command = " && ".join(
+            (
+                "set -eu",
+                f"mkdir -p {shlex.quote(str(target_feed_path))} {shlex.quote(str(target_runtime_path))}",
+                f"/usr/bin/rsync -aE --partial --stats --exclude=/history/ --exclude=/migration_archive/ --exclude=/research/ {source_feed} {target_feed}",
+                f"/usr/bin/rsync -aE --partial --stats --exclude=/db_cutover_backups/ --exclude=/weather.db --exclude=/weather.db-wal --exclude=/weather.db-shm --exclude=/weather_edge_v1/market_data.pre_external_*/ {source_runtime} {target_runtime}",
+                f"rm -f {shlex.quote(str(target_db_tmp))}",
+                f"/usr/bin/sqlite3 {source_db} \".timeout 30000\" \".backup '{str(target_db_tmp).replace("'", "''")}'\"",
+                f"test \"$(/usr/bin/sqlite3 {shlex.quote(str(target_db_tmp))} 'PRAGMA quick_check;')\" = ok",
+                f"mv -f {shlex.quote(str(target_db_tmp))} {shlex.quote(str(target_db))}",
+                "/usr/bin/sync",
+                f"/usr/sbin/diskutil rename {shlex.quote(str(spec.production_storage_root))} {shlex.quote(spec.archive_storage_root.name)}",
+                f"/usr/sbin/diskutil rename {shlex.quote(str(staging_root))} {shlex.quote(spec.production_storage_root.name)}",
+                f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.production_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.production_storage_volume_uuid)}",
+                f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.archive_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.archive_storage_volume_uuid)}",
+            )
+        )
+        migrated = _run_tmux_checked(
+            spec,
+            socket,
+            "weather_storage_migration_cutover",
+            final_command,
+            timeout_sec=3600,
+        )
+        actions.append(
+            {
+                "action": "copy_verify_and_swap_mounts",
+                "returncode": migrated.returncode,
+                "output": migrated.stdout[-4000:].strip(),
+            }
+        )
+        if migrated.returncode != 0:
+            raise RuntimeError(
+                "storage cutover failed; rescue permission host preserved at "
+                f"socket={socket}: {migrated.stdout}"
+            )
+        cutover_succeeded = True
+    finally:
+        # Once production is stopped, a failed cutover must retain its fresh
+        # permission host for repair. Killing it here would turn a recoverable
+        # copy/rename error into another lock-screen/TCC incident.
+        if cutover_succeeded or not canonical_stopped:
+            _tmux_on_socket(spec, socket, "kill-server")
+
+    started = _tmux(
+        spec,
+        "new-session",
+        "-d",
+        "-s",
+        "weather_jrs_context_keeper",
+        "while :; do sleep 3600; done",
+    )
+    if started.returncode != 0:
+        raise RuntimeError(f"failed to start canonical tmux host after cutover: {started.stdout}")
+    probe = collect_jrs_context_health(spec)
+    actions.append({"action": "new_production_volume_probe", **probe})
+    if probe["status"] != "healthy":
+        raise RuntimeError(f"new production volume probe failed: {probe['output']}")
+    for row in restore_rows:
+        for index, pane in enumerate(row["panes"]):
+            result = _tmux(
+                spec,
+                "new-session" if index == 0 else "new-window",
+                "-d",
+                *(["-s", row["session"]] if index == 0 else ["-t", row["session"]]),
+                "-c",
+                pane["cwd"],
+                pane["command"],
+            )
+            actions.append(
+                {
+                    "action": "restore_pane",
+                    "session": row["session"],
+                    "pane_index": index,
+                    "returncode": result.returncode,
+                    "output": result.stdout[-1000:].strip(),
+                }
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"failed restoring {row['session']} pane {index}: {result.stdout}")
     return actions
 
 
@@ -953,6 +1190,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="saved pre-change manifest used only when retrying an interrupted recovery",
     )
+    migrate = sub.add_parser("migrate-production-storage")
+    migrate.add_argument("--json", action="store_true")
+    migrate.add_argument("--apply", action="store_true")
+    migrate.add_argument("--confirm-live", action="store_true")
+    migrate.add_argument("--reason")
+    migrate.add_argument("--staging-root", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -966,6 +1209,44 @@ def main() -> int:
     health["plan"] = build_plan(spec, health)
     health["command"] = args.command
     health["apply"] = bool(getattr(args, "apply", False))
+    if args.command == "migrate-production-storage":
+        health["staging_root"] = str(args.staging_root)
+        if args.apply:
+            if not args.reason:
+                raise SystemExit("migrate-production-storage --apply requires --reason")
+            recovery_manifest_path = persist_recovery_manifest(before)
+            try:
+                actions = migrate_production_storage(
+                    spec,
+                    before,
+                    staging_root=args.staging_root,
+                    confirm_live=bool(args.confirm_live),
+                )
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    f"{exc}; recovery_manifest={recovery_manifest_path}"
+                ) from exc
+            time.sleep(3)
+            after = manifest_tool.collect_manifest(spec)
+            after = manifest_tool.compare_prechange_manifest(
+                after, without_allowed_unmanaged_sessions(spec, before)
+            )
+            health = evaluate_production_health(spec, after)
+            health = attach_jrs_context_health(
+                health, collect_jrs_context_health(spec)
+            )
+            health = attach_semantic_health(health, collect_data_feed_semantics())
+            health.update(
+                {
+                    "command": args.command,
+                    "apply": True,
+                    "reason": args.reason,
+                    "staging_root": str(args.staging_root),
+                    "actions": actions,
+                    "recovery_manifest": str(recovery_manifest_path),
+                }
+            )
+            health["plan"] = build_plan(spec, health)
     if args.command == "stop":
         specs = {item.instance_id: item for item in spec.managed_runtimes}
         runtime = specs.get(args.instance)

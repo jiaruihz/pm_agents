@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import plistlib
 import re
 import shlex
 import socket
@@ -202,6 +203,44 @@ def probe_file_readable(path: Path) -> dict[str, Any]:
             "error": f"{type(exc).__name__}: {exc}",
         }
     return {"readable": True, "error": None}
+
+
+def inspect_volume_identity(path: Path) -> dict[str, Any]:
+    """Resolve an external volume by UUID, not its mutable mount label."""
+
+    result = subprocess.run(
+        ["/usr/sbin/diskutil", "info", "-plist", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=10,
+        check=False,
+    )
+    if result.returncode != 0:
+        return {
+            "path": str(path),
+            "mounted": False,
+            "volume_uuid": None,
+            "error": result.stderr.decode("utf-8", errors="replace").strip(),
+        }
+    try:
+        payload = plistlib.loads(result.stdout)
+    except (plistlib.InvalidFileException, ValueError) as exc:
+        return {
+            "path": str(path),
+            "mounted": False,
+            "volume_uuid": None,
+            "error": f"invalid_diskutil_plist:{exc}",
+        }
+    return {
+        "path": str(path),
+        "mounted": bool(payload.get("MountPoint")),
+        "mount_point": payload.get("MountPoint"),
+        "volume_name": payload.get("VolumeName"),
+        "volume_uuid": str(payload.get("VolumeUUID") or "").upper() or None,
+        "device_identifier": payload.get("DeviceIdentifier"),
+        "protocol": payload.get("BusProtocol"),
+        "error": None,
+    }
 
 
 def inspect_db_route(
@@ -495,6 +534,41 @@ def build_manifest(
     observed_processes: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
 
+    production_volume = inspect_volume_identity(spec.production_storage_root)
+    archive_volume = inspect_volume_identity(spec.archive_storage_root)
+    expected_production_uuid = spec.production_storage_volume_uuid
+    if expected_production_uuid and (
+        production_volume.get("volume_uuid") != expected_production_uuid
+    ):
+        findings.append(
+            finding(
+                "critical",
+                "production_storage_volume_identity_mismatch",
+                "production mount does not resolve to the pinned physical volume UUID",
+                {
+                    "root": str(spec.production_storage_root),
+                    "expected_volume_uuid": expected_production_uuid,
+                    "observed": production_volume,
+                },
+            )
+        )
+    expected_archive_uuid = spec.archive_storage_volume_uuid
+    if archive_volume.get("mounted") and expected_archive_uuid and (
+        archive_volume.get("volume_uuid") != expected_archive_uuid
+    ):
+        findings.append(
+            finding(
+                "critical",
+                "archive_storage_volume_identity_mismatch",
+                "archive mount does not resolve to the pinned physical volume UUID",
+                {
+                    "root": str(spec.archive_storage_root),
+                    "expected_volume_uuid": expected_archive_uuid,
+                    "observed": archive_volume,
+                },
+            )
+        )
+
     if db_route["status"] != "healthy":
         findings.append(
             finding(
@@ -654,6 +728,10 @@ def build_manifest(
         "host_role": spec.host_role,
         "status": status,
         "desired": {
+            "production_storage_root": str(spec.production_storage_root),
+            "production_storage_volume_uuid": spec.production_storage_volume_uuid,
+            "archive_storage_root": str(spec.archive_storage_root),
+            "archive_storage_volume_uuid": spec.archive_storage_volume_uuid,
             "canonical_db_path": str(spec.canonical_db_path),
             "operational_repo_root": str(spec.operational_repo_root),
             "compatibility_db_paths": [
@@ -668,6 +746,10 @@ def build_manifest(
                 item.tmux_session for item in spec.managed_runtimes
             ],
             "allowed_unmanaged_sessions": list(spec.allowed_unmanaged_sessions),
+        },
+        "storage_volumes": {
+            "production": production_volume,
+            "archive": archive_volume,
         },
         "db_route": dict(db_route),
         "db_consumers": sorted(db_consumers.values(), key=lambda row: int(row["pid"])),

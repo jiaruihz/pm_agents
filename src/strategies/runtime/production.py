@@ -62,6 +62,10 @@ class WeatherProductionSpec:
     pm_runtime_root: Path
     canonical_tmux_socket: str
     canonical_tmux_binary: Path
+    production_storage_root: Path = Path("/Volumes/jrs")
+    production_storage_volume_uuid: str | None = None
+    archive_storage_root: Path = Path("/Volumes/jrs-archive")
+    archive_storage_volume_uuid: str | None = None
     canonical_refresh_checkout_root: Path | None = None
     research_artifact_root: Path = Path(
         "/Volumes/jrs/pm_agents/research/artifact_store"
@@ -188,6 +192,22 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         pm_runtime_root=Path(raw["pm_runtime_root"]),
         canonical_tmux_socket=str(raw["canonical_tmux_socket"]),
         canonical_tmux_binary=Path(raw["canonical_tmux_binary"]),
+        production_storage_root=Path(
+            raw.get("production_storage_root") or "/Volumes/jrs"
+        ),
+        production_storage_volume_uuid=(
+            str(raw["production_storage_volume_uuid"]).upper()
+            if raw.get("production_storage_volume_uuid")
+            else None
+        ),
+        archive_storage_root=Path(
+            raw.get("archive_storage_root") or "/Volumes/jrs-archive"
+        ),
+        archive_storage_volume_uuid=(
+            str(raw["archive_storage_volume_uuid"]).upper()
+            if raw.get("archive_storage_volume_uuid")
+            else None
+        ),
         canonical_refresh_checkout_root=(
             Path(raw["canonical_refresh_checkout_root"])
             if raw.get("canonical_refresh_checkout_root")
@@ -201,6 +221,16 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("canonical_db_path must be absolute")
     if not spec.operational_repo_root.is_absolute():
         raise ValueError("operational_repo_root must be absolute")
+    if not spec.production_storage_root.is_absolute():
+        raise ValueError("production_storage_root must be absolute")
+    if not spec.archive_storage_root.is_absolute():
+        raise ValueError("archive_storage_root must be absolute")
+    if spec.production_storage_root == spec.archive_storage_root:
+        raise ValueError("production and archive storage roots must differ")
+    if not spec.canonical_db_path.is_relative_to(spec.production_storage_root):
+        raise ValueError("canonical_db_path must live under production_storage_root")
+    if not spec.data_feed_runtime_root.is_relative_to(spec.production_storage_root):
+        raise ValueError("data_feed_runtime_root must live under production_storage_root")
     if (
         spec.canonical_refresh_checkout_root is not None
         and not spec.canonical_refresh_checkout_root.is_absolute()
@@ -210,10 +240,10 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("canonical_db_path must live directly under pm_runtime_root")
     if not spec.research_artifact_root.is_absolute():
         raise ValueError("research_artifact_root must be absolute")
-    research_owner = spec.pm_runtime_root.parent / "research"
+    research_owner = spec.archive_storage_root / "pm_agents/research"
     if not spec.research_artifact_root.is_relative_to(research_owner):
         raise ValueError(
-            "research_artifact_root must live under the canonical JRS research root"
+            "research_artifact_root must live under the archive research root"
         )
     managed_ids = {item.instance_id for item in spec.managed_runtimes}
     for item in spec.managed_runtimes:
