@@ -8,6 +8,7 @@ leg remains an unproven execution overlay and is reported separately.
 
 from __future__ import annotations
 
+import argparse
 import gzip
 import json
 import sqlite3
@@ -203,6 +204,15 @@ def live_maker_fill_rate() -> float:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--net-ev-sizing", action="store_true")
+    args, _ = parser.parse_known_args()
+    if args.net_ev_sizing:
+        from scripts.analysis.reheat_risk.core_carry_net_ev_sizing import (
+            main as sizing_main,
+        )
+
+        return sizing_main()
     oof = pd.read_csv(OOF_PATH)
     oof["decision_snapshot_dt"] = pd.to_datetime(
         oof["decision_snapshot_ts_utc"], utc=True, errors="coerce"

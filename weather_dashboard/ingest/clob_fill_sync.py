@@ -1002,13 +1002,16 @@ def _discover_funder(conn: sqlite3.Connection) -> str:
     return KNOWN_WEATHER_FUNDER
 
 
-def _parse_clob_order_response(data: dict[str, Any]) -> dict[str, Any]:
+def _parse_clob_order_response(
+    data: dict[str, Any], *, expected_shares: float | None = None
+) -> dict[str, Any]:
     """
     Normalise a /data/order/{id} response.
 
     Typical fields:
         status        "LIVE" | "MATCHED" | "CANCELLED" | "EXPIRED"
-        sizeMatched   filled qty in smallest token units (/ 1e6 = shares)
+        sizeMatched   filled qty; current v2 responses use shares, while some
+                      legacy responses used smallest token units
         price         limit price (str)
         takerFee      fee in smallest USDC units (/ 1e6 = USD)
         updatedAt     timestamp ms (str)
@@ -1018,7 +1021,17 @@ def _parse_clob_order_response(data: dict[str, Any]) -> dict[str, Any]:
     size_matched_raw = data.get("size_matched") or data.get("sizeMatched") or "0"
     try:
         size_matched = float(size_matched_raw)
-        if "size_matched" not in data:
+        # Do not infer units from camelCase.  Current authenticated responses
+        # return e.g. ``sizeMatched='5'`` for a five-share order.  Only treat a
+        # value as micro-units when it is implausibly large relative to the
+        # submitted order (or clearly >= one token-micro unit without that
+        # context).
+        micro_threshold = (
+            max(100_000.0, float(expected_shares) * 1_000.0)
+            if expected_shares is not None and expected_shares > 0
+            else 1_000_000.0
+        )
+        if size_matched >= micro_threshold:
             size_matched /= 1_000_000
     except (ValueError, TypeError):
         size_matched = 0.0
@@ -1444,7 +1457,9 @@ def sync_clob_fills(
             if client is not None:
                 authenticated_order = _fetch_order_status_clob(client, clob_order_id)
                 if authenticated_order is not None:
-                    authenticated = _parse_clob_order_response(authenticated_order)
+                    authenticated = _parse_clob_order_response(
+                        authenticated_order, expected_shares=row_shares
+                    )
                     if authenticated["fees_usd"] > 0:
                         fee_details = {
                             "fees_usd": authenticated["fees_usd"],
@@ -1510,7 +1525,9 @@ def sync_clob_fills(
             matched_trades = trades_by_order_id.get(clob_order_id, [])
 
             if order_data is not None:
-                parsed = _parse_clob_order_response(order_data)
+                parsed = _parse_clob_order_response(
+                    order_data, expected_shares=row_shares
+                )
                 clob_status = parsed["clob_status"]
 
                 if clob_status == "MATCHED":

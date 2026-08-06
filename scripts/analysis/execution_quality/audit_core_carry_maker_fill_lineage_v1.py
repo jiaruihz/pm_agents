@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,10 @@ from dotenv import load_dotenv
 from py_clob_client_v2.client import ClobClient
 from py_clob_client_v2.clob_types import TradeParams
 from py_clob_client_v2.constants import POLYGON
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -125,10 +130,20 @@ def embedded_authenticated_matches(rows: list[dict[str, Any]]) -> dict[str, floa
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--orders", type=Path, required=True)
+    parser.add_argument("--orders", type=Path)
     parser.add_argument("--fill-cache", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--microstructure", action="store_true")
     args = parser.parse_args()
+
+    if args.microstructure:
+        from scripts.analysis.execution_quality.core_carry_maker_microstructure import (
+            main as microstructure_main,
+        )
+
+        return microstructure_main()
+    if args.orders is None:
+        parser.error("--orders is required unless --microstructure is used")
 
     load_dotenv()
     rows = [

@@ -14,7 +14,11 @@ class _CapturedAddress(RuntimeError):
 def test_default_authenticated_trade_lookup_uses_funder(monkeypatch: pytest.MonkeyPatch) -> None:
     conn = sqlite3.connect(":memory:")
     monkeypatch.setenv("PM_ADDRESS", "0xfunder")
-    monkeypatch.setattr(clob_fill_sync, "_get_submitted_orders", lambda _conn: [object()])
+    monkeypatch.setattr(
+        clob_fill_sync,
+        "_get_submitted_orders",
+        lambda _conn, **_kwargs: [object()],
+    )
     monkeypatch.setattr(clob_fill_sync, "_build_clob_client", lambda: object())
 
     seen: list[str] = []
@@ -43,3 +47,17 @@ def test_v2_clob_share_units_are_not_divided_by_one_million() -> None:
 
     assert order["size_matched"] == 5.0
     assert trade["size_matched"] == 5.0
+
+
+def test_v2_camel_case_share_units_are_not_divided_by_one_million() -> None:
+    order = clob_fill_sync._parse_clob_order_response(
+        {"status": "MATCHED", "sizeMatched": "5", "price": "0.95"},
+        expected_shares=5.0,
+    )
+    legacy_micro_units = clob_fill_sync._parse_clob_order_response(
+        {"status": "MATCHED", "sizeMatched": "5000000", "price": "0.95"},
+        expected_shares=5.0,
+    )
+
+    assert order["size_matched"] == 5.0
+    assert legacy_micro_units["size_matched"] == 5.0
