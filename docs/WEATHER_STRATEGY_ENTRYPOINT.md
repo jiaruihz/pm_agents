@@ -89,7 +89,7 @@ read/write probe 和下游 freshness 为准。
 - [`WEATHER_ANALYSIS_CONTRACT.md`](WEATHER_ANALYSIS_CONTRACT.md)
 - [`WEATHER_STRATEGY_QUANT_DESIGN.md`](WEATHER_STRATEGY_QUANT_DESIGN.md)
 
-## 6. 历史资料边界
+## Historical Production Posture（历史资料边界）
 
 N100、WSL、`weather-predict`、mid_price/T1-T2 allowlist、旧 PMM/ARB、旧 doctor/proxy/timer 和早期 live rollout
 只作历史/恢复证据，不是当前命令或配置：
