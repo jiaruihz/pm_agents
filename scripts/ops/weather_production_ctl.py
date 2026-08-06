@@ -733,11 +733,9 @@ def migrate_production_storage(
             raise RuntimeError(f"failed to stop canonical server: {killed.stdout}")
         canonical_stopped = True
 
-        source_feed = shlex.quote(str(spec.data_feed_runtime_root) + "/")
         target_feed_path = staging_root / spec.data_feed_runtime_root.relative_to(
             spec.production_storage_root
         )
-        target_feed = shlex.quote(str(target_feed_path) + "/")
         source_runtime = shlex.quote(str(spec.pm_runtime_root) + "/")
         target_runtime_path = staging_root / spec.pm_runtime_root.relative_to(
             spec.production_storage_root
@@ -748,12 +746,51 @@ def migrate_production_storage(
             spec.production_storage_root
         )
         target_db_tmp = target_db.with_name(target_db.name + ".migration.tmp")
+        source_output = spec.data_feed_runtime_root / "output"
+        target_output = staging_root / source_output.relative_to(
+            spec.production_storage_root
+        )
+        source_current_yes = (
+            spec.pm_runtime_root
+            / "weather_edge_v1/current_yes_core_carry_tiny_live_v2"
+        )
+        target_current_yes = staging_root / source_current_yes.relative_to(
+            spec.production_storage_root
+        )
+        mutable_feed_command = (
+            f"for src in {shlex.quote(str(source_output))}/*; do "
+            "test -d \"$src\" || continue; "
+            f"dst={shlex.quote(str(target_output))}/\"${{src##*/}}\"; "
+            "mkdir -p \"$dst\"; "
+            "/usr/bin/rsync -aE --exclude='*/' \"$src/\" \"$dst/\"; "
+            "done"
+        )
+        current_day_command = (
+            "for day in \"$(date +%Y-%m-%d)\" \"$(date -v-1d +%Y-%m-%d)\"; do "
+            f"for src in {shlex.quote(str(source_output))}/*/\"$day\" "
+            f"{shlex.quote(str(spec.data_feed_runtime_root / 'full_ladder_output'))}/*/\"$day\" "
+            f"{shlex.quote(str(spec.data_feed_runtime_root / 'targeted_output'))}/*/\"$day\"; do "
+            "test -d \"$src\" || continue; "
+            f"rel=\"${{src#{str(spec.production_storage_root)}/}}\"; "
+            f"dst={shlex.quote(str(staging_root))}/\"$rel\"; "
+            "mkdir -p \"$(dirname \"$dst\")\"; "
+            "/usr/bin/rsync -aE \"$src/\" \"$dst/\"; "
+            "done; "
+            "stamp=\"${day//-/}\"; "
+            f"for src in {shlex.quote(str(spec.data_feed_runtime_root / 'targeted_output/paper_snapshots'))}/snapshot_\"$stamp\"*; do "
+            "test -f \"$src\" || continue; "
+            f"/usr/bin/rsync -aE \"$src\" {shlex.quote(str(staging_root / (spec.data_feed_runtime_root / 'targeted_output/paper_snapshots').relative_to(spec.production_storage_root)) + '/')} ; "
+            "done; done"
+        )
         final_command = " && ".join(
             (
                 "set -eu",
                 f"mkdir -p {shlex.quote(str(target_feed_path))} {shlex.quote(str(target_runtime_path))}",
-                f"/usr/bin/rsync -aE --partial --stats --exclude=/history/ --exclude=/migration_archive/ --exclude=/research/ --exclude=/loop/ --exclude=/targeted_output/paper_snapshots/snapshot_202606* --exclude=/targeted_output/paper_snapshots/snapshot_202607* {source_feed} {target_feed}",
-                f"/usr/bin/rsync -aE --partial --stats --exclude=/db_cutover_backups/ --exclude=/_dashboard_logs/ --exclude=/loop/ --exclude=/weather.db --exclude=/weather.db-wal --exclude=/weather.db-shm --exclude=/weather_edge_v1/feature_store/ --exclude=/weather_edge_v1/market_data/ --exclude=/weather_edge_v1/market_data.pre_external_*/ --exclude=/weather_edge_v1/remote_pm_agent/ --exclude=/weather_edge_v1/source_orderbook_timing/ --exclude=/weather_edge_v1/wu_basis_us/ {source_runtime} {target_runtime}",
+                mutable_feed_command,
+                current_day_command,
+                f"mkdir -p {shlex.quote(str(target_current_yes))}",
+                f"/usr/bin/rsync -aE {shlex.quote(str(source_current_yes) + '/')} {shlex.quote(str(target_current_yes) + '/')}",
+                f"/usr/bin/rsync -aE --exclude='*/' --exclude='weather.db' --exclude='weather.db-wal' --exclude='weather.db-shm' {source_runtime} {target_runtime}",
                 f"rm -f {shlex.quote(str(target_db_tmp))}",
                 f"/usr/bin/sqlite3 {source_db} \".timeout 30000\" \".backup '{str(target_db_tmp).replace("'", "''")}'\"",
                 f"test \"$(/usr/bin/sqlite3 {shlex.quote(str(target_db_tmp))} 'PRAGMA quick_check;')\" = ok",
