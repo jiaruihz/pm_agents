@@ -172,7 +172,7 @@ _PROFILES = {
                 maker_only=True,
                 reprice_policy="deadline_staged_follow_best_bid",
                 price_cap_policy="model_probability_retained_edge_and_taker_improvement",
-                max_reprices=None,
+                max_reprices=2,
             ),
         ),
         cancel_buffer_sec=90,

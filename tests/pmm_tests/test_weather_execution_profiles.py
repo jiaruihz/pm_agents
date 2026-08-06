@@ -151,4 +151,5 @@ def test_core_carry_edge_capped_profile_owns_price_and_deadline_parameters():
     assert maker.price_cap_policy == (
         "model_probability_retained_edge_and_taker_improvement"
     )
+    assert maker.max_reprices == 2
     assert "taker_fallback" not in maker.order_lifecycle_policy

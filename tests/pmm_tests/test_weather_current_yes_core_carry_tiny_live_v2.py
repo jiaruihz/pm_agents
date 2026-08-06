@@ -334,10 +334,10 @@ def test_same_observation_keeps_queue_when_own_order_is_best_bid(
 
     assert plans == []
     assert decisions[0]["action"] == ""
-    assert decisions[0]["blocker"] == "own_or_same_level_best_bid_keep_queue"
+    assert decisions[0]["blocker"] == "queue_preserving_stage"
 
 
-def test_same_observation_reprices_only_after_external_bid_moves_above_order(
+def test_queue_stage_does_not_reprice_after_external_bid_moves_above_order(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -363,11 +363,9 @@ def test_same_observation_reprices_only_after_external_bid_moves_above_order(
         now=now,
     )
 
-    assert decisions[0]["action"] == "core_carry_maker_reprice"
-    assert plans[0]["cancel_before_order_id"] == "maker-order-1"
-    assert plans[0]["replacement_requires_order_state"] is True
-    assert plans[0]["limit_price"] == pytest.approx(0.83)
-    assert plans[0]["source_report_ts_utc"] == "2026-07-24T04:20:00Z"
+    assert plans == []
+    assert decisions[0]["action"] == ""
+    assert decisions[0]["blocker"] == "queue_preserving_stage"
 
 
 def test_true_new_observation_cancels_even_when_same_bracket(
@@ -480,6 +478,40 @@ def test_maker_reprices_to_midpoint_after_five_minutes(
     assert decisions[0]["reprice_stage"] == "midpoint"
     assert decisions[0]["next_price"] == pytest.approx(0.82)
     assert plans[0]["limit_price"] == pytest.approx(0.82)
+    assert plans[0]["maker_lifecycle_reprice_count"] == 1
+    assert plans[0]["maker_last_reprice_stage"] == "midpoint"
+
+
+def test_maker_reprices_at_most_once_per_stage(tmp_path, monkeypatch) -> None:
+    now = datetime(2026, 7, 24, 4, 38, tzinfo=timezone.utc)
+    order = _live_maker_order(created=now - timedelta(minutes=6))
+    order["posted_price"] = 0.82
+    order["maker_lifecycle_reprice_count"] = 1
+    order["maker_last_reprice_stage"] = "midpoint"
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
+    _write_lifecycle_state(tmp_path, source_epoch="2026-07-24T04:20:00Z")
+    monkeypatch.setattr(
+        runner,
+        "market_httpx_client",
+        lambda *_args, **_kwargs: nullcontext(object()),
+    )
+    monkeypatch.setattr(
+        runner.weather_state,
+        "_fetch_token_book",
+        lambda *_args, **_kwargs: {
+            "book_status": "ok",
+            "bid": 0.82,
+            "ask": 0.85,
+            "tick_size": 0.01,
+        },
+    )
+
+    plans, decisions = runner.maker_lifecycle_plans(
+        _lifecycle_args(tmp_path), tmp_path, now=now
+    )
+
+    assert plans == []
+    assert decisions[0]["blocker"] == "maker_reprice_stage_already_used"
 
 
 def test_maker_reprices_to_one_tick_below_ask_after_ten_minutes(
@@ -515,6 +547,39 @@ def test_maker_reprices_to_one_tick_below_ask_after_ten_minutes(
     assert decisions[0]["reprice_stage"] == "near_ask"
     assert decisions[0]["next_price"] == pytest.approx(0.83)
     assert plans[0]["limit_price"] == pytest.approx(0.83)
+
+
+def test_maker_stops_after_two_reprices(tmp_path, monkeypatch) -> None:
+    now = datetime(2026, 7, 24, 4, 42, tzinfo=timezone.utc)
+    order = _live_maker_order(created=now - timedelta(minutes=11))
+    order["posted_price"] = 0.82
+    order["maker_lifecycle_reprice_count"] = 2
+    order["maker_last_reprice_stage"] = "midpoint"
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
+    _write_lifecycle_state(tmp_path, source_epoch="2026-07-24T04:20:00Z")
+    monkeypatch.setattr(
+        runner,
+        "market_httpx_client",
+        lambda *_args, **_kwargs: nullcontext(object()),
+    )
+    monkeypatch.setattr(
+        runner.weather_state,
+        "_fetch_token_book",
+        lambda *_args, **_kwargs: {
+            "book_status": "ok",
+            "bid": 0.82,
+            "ask": 0.86,
+            "tick_size": 0.01,
+        },
+    )
+
+    plans, decisions = runner.maker_lifecycle_plans(
+        _lifecycle_args(tmp_path), tmp_path, now=now
+    )
+
+    assert plans == []
+    assert decisions[0]["maker_max_reprices"] == 2
+    assert decisions[0]["blocker"] == "maker_reprice_limit_reached"
 
 
 def test_maker_is_not_created_inside_pre_update_blackout() -> None:
@@ -589,6 +654,9 @@ def test_definitive_post_failure_retries_without_recancelling(tmp_path, monkeypa
     assert plans[0]["replacement_requires_order_state"] is False
     assert plans[0]["source_order_id"] == "maker-order-1"
     assert plans[0]["size"] == 5.0
+    assert plans[0]["maker_lifecycle_reprice_count"] == failed[
+        "maker_lifecycle_reprice_count"
+    ]
 
 
 def test_signal_id_is_stable_per_city_day() -> None:
