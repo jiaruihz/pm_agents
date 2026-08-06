@@ -239,6 +239,11 @@ def inspect_volume_identity(path: Path) -> dict[str, Any]:
         "volume_uuid": str(payload.get("VolumeUUID") or "").upper() or None,
         "device_identifier": payload.get("DeviceIdentifier"),
         "protocol": payload.get("BusProtocol"),
+        "solid_state": payload.get("SolidState"),
+        "writable": payload.get("WritableVolume"),
+        "smart_status": payload.get("SMARTStatus"),
+        "total_bytes": payload.get("TotalSize"),
+        "container_free_bytes": payload.get("APFSContainerFree"),
         "error": None,
     }
 
@@ -552,6 +557,32 @@ def build_manifest(
                 },
             )
         )
+    if production_volume.get("mounted") and not production_volume.get("writable"):
+        findings.append(
+            finding(
+                "critical",
+                "production_storage_not_writable",
+                "production volume is mounted but not writable",
+                {"observed": production_volume},
+            )
+        )
+    total_bytes = production_volume.get("total_bytes")
+    free_bytes = production_volume.get("container_free_bytes")
+    if isinstance(total_bytes, int) and isinstance(free_bytes, int) and total_bytes > 0:
+        free_ratio = free_bytes / total_bytes
+        if free_ratio < 0.10:
+            findings.append(
+                finding(
+                    "critical" if free_ratio < 0.05 else "warning",
+                    "production_storage_low_capacity",
+                    "production volume free capacity is below the operating threshold",
+                    {
+                        "free_bytes": free_bytes,
+                        "total_bytes": total_bytes,
+                        "free_ratio": round(free_ratio, 6),
+                    },
+                )
+            )
     expected_archive_uuid = spec.archive_storage_volume_uuid
     if archive_volume.get("mounted") and expected_archive_uuid and (
         archive_volume.get("volume_uuid") != expected_archive_uuid
