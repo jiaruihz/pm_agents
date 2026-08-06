@@ -11,32 +11,35 @@ from __future__ import annotations
 import json
 import math
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-
 try:
     from .peak_forming_hazard_shared import (
         approx_metar_veto,
+        artifact_from_model as shared_artifact_from_model,
+        build_pipeline,
         data_self_check as shared_data_self_check,
         json_ready,
         metric_row,
+        score_artifact as shared_score_artifact,
+        select_grid as shared_select_grid,
         summarize_trade as shared_summarize_trade,
     )
 except ImportError:  # direct script execution
     from peak_forming_hazard_shared import (
         approx_metar_veto,
+        artifact_from_model as shared_artifact_from_model,
+        build_pipeline,
         data_self_check as shared_data_self_check,
         json_ready,
         metric_row,
+        score_artifact as shared_score_artifact,
+        select_grid as shared_select_grid,
         summarize_trade as shared_summarize_trade,
     )
 
@@ -127,6 +130,25 @@ WEATHER_ONLY_NUMERIC_FEATURES = [feature for feature in NUMERIC_FEATURES if feat
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+pipeline = partial(
+    build_pipeline,
+    default_numeric_features=NUMERIC_FEATURES,
+    categorical_features=CAT_FEATURES,
+    seed=SEED,
+)
+artifact_from_model = partial(
+    shared_artifact_from_model,
+    categorical_features=CAT_FEATURES,
+    source_feature_rows=REHEAT_ROWS,
+    root=ROOT,
+    peak_decline_max_native=PEAK_DECLINE_MAX_NATIVE,
+    seed=SEED,
+    trained_at_utc=now_utc,
+)
+score_artifact = partial(shared_score_artifact, base_alias=BASE_ALIAS)
+select_grid = partial(shared_select_grid, seed=SEED)
 
 
 def pct(value: float | None, digits: int = 1) -> str:
@@ -292,90 +314,6 @@ def load_peak_rows() -> pd.DataFrame:
     return peak
 
 
-def pipeline(numeric_features: list[str] | None = None, c: float = 0.8) -> Pipeline:
-    if numeric_features is None:
-        numeric_features = NUMERIC_FEATURES
-    pre = ColumnTransformer(
-        [
-            ("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), numeric_features),
-            ("cat", OneHotEncoder(handle_unknown="ignore"), CAT_FEATURES),
-        ]
-    )
-    return Pipeline([("pre", pre), ("model", LogisticRegression(max_iter=3000, C=c, random_state=SEED))])
-
-
-def artifact_from_model(model: Pipeline, train: pd.DataFrame, numeric_features: list[str], artifact_type: str, strategy_id: str) -> dict[str, Any]:
-    pre = model.named_steps["pre"]
-    num_pipe = pre.named_transformers_["num"]
-    cat = pre.named_transformers_["cat"]
-    clf = model.named_steps["model"]
-    categories = [[str(v) for v in values] for values in cat.categories_]
-    feature_names = list(numeric_features)
-    for feature, cats in zip(CAT_FEATURES, categories, strict=True):
-        feature_names.extend([f"cat__{feature}_{cat_value}" for cat_value in cats])
-    return {
-        "artifact_type": artifact_type,
-        "strategy_id": strategy_id,
-        "label": "current_yes_survives",
-        "source_feature_rows": str(REHEAT_ROWS.relative_to(ROOT)),
-        "trained_at_utc": now_utc(),
-        "training_filter": f"period == train AND decline_native <= {PEAK_DECLINE_MAX_NATIVE}",
-        "numeric_features": numeric_features,
-        "categorical_features": CAT_FEATURES,
-        "numeric_medians": num_pipe.named_steps["imputer"].statistics_.tolist(),
-        "numeric_means": num_pipe.named_steps["scale"].mean_.tolist(),
-        "numeric_scales": num_pipe.named_steps["scale"].scale_.tolist(),
-        "categories": categories,
-        "feature_names": feature_names,
-        "coef": clf.coef_[0].tolist(),
-        "intercept": float(clf.intercept_[0]),
-        "train_rows": int(len(train)),
-        "train_dates": int(train["target_date"].nunique()),
-        "train_positive_rate": float(train["label_current_yes_survives"].mean()),
-        "sklearn_spec": {
-            "model": "LogisticRegression(max_iter=3000, C=0.8)",
-            "numeric_preprocess": "median_impute_then_standard_scale",
-            "categorical_preprocess": "one_hot_handle_unknown_ignore",
-            "random_state": SEED,
-        },
-    }
-
-
-def score_artifact(rows: pd.DataFrame, artifact: dict[str, Any]) -> np.ndarray:
-    numeric_features = list(artifact["numeric_features"])
-    categorical_features = list(artifact["categorical_features"])
-    work = rows.copy()
-    for feature, alias in BASE_ALIAS.items():
-        if feature not in work.columns and alias in work.columns:
-            work[feature] = work[alias]
-    for feature in numeric_features:
-        if feature not in work.columns:
-            work[feature] = np.nan
-    for feature in categorical_features:
-        if feature not in work.columns:
-            work[feature] = ""
-    numeric = work[numeric_features].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
-    medians = np.asarray(artifact["numeric_medians"], dtype=float)
-    means = np.asarray(artifact["numeric_means"], dtype=float)
-    scales = np.asarray(artifact["numeric_scales"], dtype=float)
-    numeric = np.where(np.isfinite(numeric), numeric, medians)
-    numeric = (numeric - means) / scales
-    cat_parts = []
-    for idx, feature in enumerate(categorical_features):
-        values = work[feature].astype(str).to_numpy()
-        cats = [str(x) for x in artifact["categories"][idx]]
-        mat = np.zeros((len(work), len(cats)), dtype=float)
-        lookup = {cat: i for i, cat in enumerate(cats)}
-        for row_idx, value in enumerate(values):
-            col_idx = lookup.get(str(value))
-            if col_idx is not None:
-                mat[row_idx, col_idx] = 1.0
-        cat_parts.append(mat)
-    x = np.hstack([numeric] + cat_parts)
-    logits = x @ np.asarray(artifact["coef"], dtype=float) + float(artifact["intercept"])
-    return 1.0 / (1.0 + np.exp(-logits))
-
-
 def summarize_trade(frame: pd.DataFrame, p_col: str, name: str) -> dict[str, Any]:
     return shared_summarize_trade(frame, p_col, name, seed=SEED)
 
@@ -411,27 +349,6 @@ def live_like_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
         & frame["p_hazard"].ge(0.60)
         & (frame["p_hazard"] - frame["current_yes_ask"]).ge(0.02),
     }
-
-
-def select_grid(train: pd.DataFrame) -> list[dict[str, Any]]:
-    rows = []
-    for min_p in [0.55, 0.60, 0.65, 0.70, 0.75]:
-        for min_edge in [0.00, 0.02, 0.04, 0.06, 0.08]:
-            for min_hour in [13, 14, 15]:
-                mask = (
-                    train["decision_hour_local"].between(min_hour, 17)
-                    & train["current_yes_ask"].between(0.50, 0.97, inclusive="both")
-                    & train["min_forecast_peak_delta_hours_local"].fillna(-999).ge(-1.0)
-                    & train["p_hazard"].ge(min_p)
-                    & (train["p_hazard"] - train["current_yes_ask"]).ge(min_edge)
-                )
-                sub = train[mask]
-                if len(sub) < 20 or sub["target_date"].nunique() < 5:
-                    continue
-                stats = summarize_trade(sub, "p_hazard", f"grid_h{min_hour}_p{min_p:.2f}_edge{min_edge:.2f}")
-                rows.append({**stats, "min_p": min_p, "min_edge": min_edge, "min_hour": min_hour})
-    rows.sort(key=lambda r: (r.get("roi") if r.get("roi") is not None else -999, r["orders"]), reverse=True)
-    return rows[:10]
 
 
 def write_markdown(payload: dict[str, Any]) -> None:

@@ -76,6 +76,14 @@ def test_peak_forming_versions_use_shared_version_neutral_helpers():
     assert peak_v2.metric_row is peak_forming_hazard_shared.metric_row
     assert peak_v1.approx_metar_veto is peak_forming_hazard_shared.approx_metar_veto
     assert peak_v2.approx_metar_veto is peak_forming_hazard_shared.approx_metar_veto
+    for version in (peak_v1, peak_v2):
+        assert version.pipeline.func is peak_forming_hazard_shared.build_pipeline
+        assert (
+            version.artifact_from_model.func
+            is peak_forming_hazard_shared.artifact_from_model
+        )
+        assert version.score_artifact.func is peak_forming_hazard_shared.score_artifact
+        assert version.select_grid.func is peak_forming_hazard_shared.select_grid
 
     rows = pd.DataFrame(
         [

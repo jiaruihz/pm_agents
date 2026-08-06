@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 try:
     from .weather_research_data_shared import data_self_check
@@ -137,3 +143,179 @@ def approx_metar_veto(frame: pd.DataFrame) -> pd.Series:
         | (warming.notna() & warming.ge(1.5))
         | (min_gap.notna() & min_gap.lt(-0.1))
     )
+
+
+def build_pipeline(
+    numeric_features: list[str] | None = None,
+    c: float = 0.8,
+    *,
+    default_numeric_features: list[str],
+    categorical_features: list[str],
+    seed: int,
+) -> Pipeline:
+    if numeric_features is None:
+        numeric_features = default_numeric_features
+    preprocessor = ColumnTransformer(
+        [
+            (
+                "num",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scale", StandardScaler()),
+                    ]
+                ),
+                numeric_features,
+            ),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features),
+        ]
+    )
+    return Pipeline(
+        [
+            ("pre", preprocessor),
+            ("model", LogisticRegression(max_iter=3000, C=c, random_state=seed)),
+        ]
+    )
+
+
+def artifact_from_model(
+    model: Pipeline,
+    train: pd.DataFrame,
+    numeric_features: list[str],
+    artifact_type: str,
+    strategy_id: str,
+    *,
+    categorical_features: list[str],
+    source_feature_rows: Path,
+    root: Path,
+    peak_decline_max_native: float,
+    seed: int,
+    trained_at_utc: Callable[[], str],
+) -> dict[str, Any]:
+    preprocessor = model.named_steps["pre"]
+    numeric_pipeline = preprocessor.named_transformers_["num"]
+    categorical = preprocessor.named_transformers_["cat"]
+    classifier = model.named_steps["model"]
+    categories = [[str(value) for value in values] for values in categorical.categories_]
+    feature_names = list(numeric_features)
+    for feature, category_values in zip(
+        categorical_features, categories, strict=True
+    ):
+        feature_names.extend(
+            [f"cat__{feature}_{category_value}" for category_value in category_values]
+        )
+    return {
+        "artifact_type": artifact_type,
+        "strategy_id": strategy_id,
+        "label": "current_yes_survives",
+        "source_feature_rows": str(source_feature_rows.relative_to(root)),
+        "trained_at_utc": trained_at_utc(),
+        "training_filter": (
+            f"period == train AND decline_native <= {peak_decline_max_native}"
+        ),
+        "numeric_features": numeric_features,
+        "categorical_features": categorical_features,
+        "numeric_medians": numeric_pipeline.named_steps["imputer"].statistics_.tolist(),
+        "numeric_means": numeric_pipeline.named_steps["scale"].mean_.tolist(),
+        "numeric_scales": numeric_pipeline.named_steps["scale"].scale_.tolist(),
+        "categories": categories,
+        "feature_names": feature_names,
+        "coef": classifier.coef_[0].tolist(),
+        "intercept": float(classifier.intercept_[0]),
+        "train_rows": int(len(train)),
+        "train_dates": int(train["target_date"].nunique()),
+        "train_positive_rate": float(train["label_current_yes_survives"].mean()),
+        "sklearn_spec": {
+            "model": "LogisticRegression(max_iter=3000, C=0.8)",
+            "numeric_preprocess": "median_impute_then_standard_scale",
+            "categorical_preprocess": "one_hot_handle_unknown_ignore",
+            "random_state": seed,
+        },
+    }
+
+
+def score_artifact(
+    rows: pd.DataFrame,
+    artifact: dict[str, Any],
+    *,
+    base_alias: dict[str, str],
+) -> np.ndarray:
+    numeric_features = list(artifact["numeric_features"])
+    categorical_features = list(artifact["categorical_features"])
+    work = rows.copy()
+    for feature, alias in base_alias.items():
+        if feature not in work.columns and alias in work.columns:
+            work[feature] = work[alias]
+    for feature in numeric_features:
+        if feature not in work.columns:
+            work[feature] = np.nan
+    for feature in categorical_features:
+        if feature not in work.columns:
+            work[feature] = ""
+    numeric = work[numeric_features].apply(
+        pd.to_numeric, errors="coerce"
+    ).to_numpy(dtype=float)
+    medians = np.asarray(artifact["numeric_medians"], dtype=float)
+    means = np.asarray(artifact["numeric_means"], dtype=float)
+    scales = np.asarray(artifact["numeric_scales"], dtype=float)
+    numeric = np.where(np.isfinite(numeric), numeric, medians)
+    numeric = (numeric - means) / scales
+    categorical_parts = []
+    for index, feature in enumerate(categorical_features):
+        values = work[feature].astype(str).to_numpy()
+        categories = [str(value) for value in artifact["categories"][index]]
+        matrix = np.zeros((len(work), len(categories)), dtype=float)
+        lookup = {category: i for i, category in enumerate(categories)}
+        for row_index, value in enumerate(values):
+            column_index = lookup.get(str(value))
+            if column_index is not None:
+                matrix[row_index, column_index] = 1.0
+        categorical_parts.append(matrix)
+    design = np.hstack([numeric] + categorical_parts)
+    logits = design @ np.asarray(artifact["coef"], dtype=float) + float(
+        artifact["intercept"]
+    )
+    return 1.0 / (1.0 + np.exp(-logits))
+
+
+def select_grid(train: pd.DataFrame, *, seed: int) -> list[dict[str, Any]]:
+    rows = []
+    for min_probability in [0.55, 0.60, 0.65, 0.70, 0.75]:
+        for min_edge in [0.00, 0.02, 0.04, 0.06, 0.08]:
+            for min_hour in [13, 14, 15]:
+                mask = (
+                    train["decision_hour_local"].between(min_hour, 17)
+                    & train["current_yes_ask"].between(
+                        0.50, 0.97, inclusive="both"
+                    )
+                    & train["min_forecast_peak_delta_hours_local"]
+                    .fillna(-999)
+                    .ge(-1.0)
+                    & train["p_hazard"].ge(min_probability)
+                    & (train["p_hazard"] - train["current_yes_ask"]).ge(min_edge)
+                )
+                subset = train[mask]
+                if len(subset) < 20 or subset["target_date"].nunique() < 5:
+                    continue
+                stats = summarize_trade(
+                    subset,
+                    "p_hazard",
+                    f"grid_h{min_hour}_p{min_probability:.2f}_edge{min_edge:.2f}",
+                    seed=seed,
+                )
+                rows.append(
+                    {
+                        **stats,
+                        "min_p": min_probability,
+                        "min_edge": min_edge,
+                        "min_hour": min_hour,
+                    }
+                )
+    rows.sort(
+        key=lambda row: (
+            row.get("roi") if row.get("roi") is not None else -999,
+            row["orders"],
+        ),
+        reverse=True,
+    )
+    return rows[:10]

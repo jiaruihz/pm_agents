@@ -13,7 +13,7 @@ max_entrypoints_outside_production_closure: 64
 # experiment. New city/date runs must use an existing runner + run manifest.
 # These ceilings are lowered as historical copies are consolidated.
 max_research_experiment_entrypoints: 422
-max_repeated_research_function_bodies: 173
+max_repeated_research_function_bodies: 169
 
 # Local worktree debt is part of the audit: otherwise an agent can create a
 # hundred untracked one-off runners while the tracked-only check stays green.
@@ -21,7 +21,7 @@ max_repeated_research_function_bodies: 173
 max_untracked_research_experiment_entrypoints: 111
 max_research_version_families: 16
 max_research_version_family_copies: 37
-max_worktree_repeated_function_extra_copies: 511
+max_worktree_repeated_function_extra_copies: 506
 
 # These are still consumed by active ops/source code.  They remain explicit
 # exceptions until their consumers use the JRS research artifact resolver.
