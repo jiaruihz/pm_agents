@@ -96,175 +96,45 @@ PRECHANGE_MANIFEST="$PRECHANGE_DIR/manifest.json"
 只有本次明确要停的实例才可逐项传
 `--allow-missing-session SESSION`；不得因为主要服务已恢复就忽略其他 strategy/shadow/collector。
 
-先用这个脚本看当前状态：
+`scripts/ops/process_status.py` 只保留为旧 PMM/个人工具的辅助诊断；weather 生产盘点不得用它替代上面的
+controller health/plan 与 strict manifest。
 
-```bash
-cd /home/rui/projects/pm_agent
-PYTHONPATH=. .venv/bin/python scripts/ops/process_status.py
-```
+## 2. 当前生产范围
 
-它会输出：
+weather 当前生产拓扑只读 `src/strategies/runtime/production.yaml`，实际状态只读
+controller health/plan 与 production manifest。不要在 runbook 维护第二份“应该运行的进程”清单，也不要从日期报告、
+PID 文件或某次 `ps` 输出推断 desired state。
 
-- 当前识别到的常驻服务
-- 是否正在运行
-- PID
-- 日志路径
-- 是否建议在重启后重新拉起
+- data-feed、strategy、shadow、monitor、patrol、canonical refresh 与 dashboard API：按 production contract 由
+  controller 管理；凡访问 JRS 的常驻进程都在 canonical JRS tmux context。
+- dashboard FE：可由非 JRS LaunchAgent 承载；API 仍属于 controller-managed runtime。
+- Telegram Research Bot、旧 PMM/ARB runner 和其他个人工具：不属于 weather production desired state；需要时按各自
+  明确请求处理，不能混入 weather reconcile/recovery。
+- N100：只作历史正本/灾备边界，不是当前生产 truth。旧 doctor、proxy failover、crontab、systemd 和 live 启动命令从
+  活跃 runbook 移除；需要恢复时必须先建立独立 N100 恢复合同并验证磁盘、备份与服务链。
 
-## 2. 当前默认关注的常驻进程
-
-### A. Telegram Research Bot
-
-用途：
-
-- Telegram 里收 Polymarket 链接
-- 支持 `/full` 和 `/prompt`
-
-启动命令：
-
-```bash
-cd /home/rui/projects/pm_agent
-export TG_RESEARCH_BOT_TOKEN="..."
-export TG_RESEARCH_ALLOWED_CHAT_IDS="5589339017"
-scripts/ops/telegram_research_bot_ctl.sh start
-```
-
-是否建议重启后拉起：
-
-- 是
-
-说明：
-
-- 当前推荐通过固定脚本管理：
-
-```bash
-scripts/ops/telegram_research_bot_ctl.sh start
-scripts/ops/telegram_research_bot_ctl.sh status
-scripts/ops/telegram_research_bot_ctl.sh logs 80
-scripts/ops/telegram_research_bot_ctl.sh stop
-```
-
-- 默认日志：`runtime/logs/telegram_research_bot.log`
-- 默认 pid：`runtime/telegram_research_bot.pid`
-- 机器重启后不会自动恢复，但恢复方式已经固定
-
-### B. Weather Dashboard（FastAPI + React 前端）
-
-> ⚠️ 旧的 `strategy_dashboard_server`（端口 8011，服务 PMM/ARB 框架）已废弃，不需要启动。当前使用下方的天气 dashboard。
-
-用途：天气策略大盘看板。API 是 `production.yaml:weather_dashboard_api` 的 controller-managed runtime；FE 是独立 LaunchAgent。
-
-状态与恢复入口：
-
-```bash
-.venv/bin/python scripts/ops/weather_production_ctl.py health
-.venv/bin/python scripts/ops/weather_production_ctl.py plan
-```
-
-需要变更时只走 controller 的已登记合同。`run_stack.sh` 不再启动 API/FE；全量重建只能显式执行 `scripts/weather_dashboard/run_stack.sh --rebuild`，且不会启停任何服务。
-
-服务端口：API `:8000`，前端 `:5174`。详见 [`docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md`](WEATHER_DASHBOARD_TROUBLESHOOTING.md)。
-
-### C. Weather Position Monitor
-
-用途：
-
-- 监控天气策略已有持仓
-- 写 heartbeat 到 `runtime/strategy_runtime.db`
-
-启动命令：
-
-- 不写死，按你当前实际参数启动
-- 当前在线参数可以直接从 `scripts/ops/process_status.py` 输出里抄
-
-是否建议重启后拉起：
-
-- 如果你还在跑 weather live/paper 监控，就要
-
-### C2. Weather Live on N100（历史事故资料；不是当前生产 runbook）
-
-以下命令只保留历史追溯，未经独立 N100 灾备恢复合同不得执行。
-
-> **详细命令和口径见** [`docs/WEATHER_STRATEGY_ENTRYPOINT.md`](WEATHER_STRATEGY_ENTRYPOINT.md)，此处只列最小恢复信息。
-
-用途：N100 上运行天气策略实盘 loop（`/home/jiarui/projects/pm_agent`）。
-
-**机器重启后恢复**：
-
-```bash
-# 从当前 Mac 执行
-ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_doctor.py --http-timeout 6'
-```
-
-关键注意：`city_pool=t1_trading` 是交易池真相，N100 代理 `xray` 监听 `127.0.0.1:10809`（Gamma/CLOB/Telegram 均依赖）。doctor 通过 crontab 每 15 分钟巡检，日志在 `runtime/weather_edge_v1/live_cycle/doctor_cron.log`。
-
-**N100 代理 failover**：
-
-当 N100 原生 `127.0.0.1:10809` 访问 Gamma/CLOB 失败，但本机代理可以访问时，先用下面的只读检查确认：
-
-```bash
-scripts/ops/weather_n100_proxy_failover.sh --check-only
-```
-
-如果输出显示 N100 原代理失败、本机隧道代理可用，则执行切换：
-
-```bash
-scripts/ops/weather_n100_proxy_failover.sh
-```
-
-该脚本会检查 N100 原 `127.0.0.1:10809`，失败时建立 Mac `127.0.0.1:7897` 到 N100 `127.0.0.1:18089` 的 SSH reverse tunnel，并备份更新 N100 `~/projects/weather_data_feed_service/.env` 与 `~/projects/pm_agent/.env`。脚本不会自动重启数据/策略服务；更新后只重启受影响的 data-feed producer 或 live runner，并先确认是否会触发真实下单。这是临时兜底；长期仍应修 N100 自身 xray 节点/订阅/流量。
-
-如果只是显式切换远端代理，不走 failover 判断，直接指定目标 proxy：
-
-```bash
-# 临时走 Mac fallback
-scripts/ops/weather_n100_proxy_failover.sh --apply-proxy http://127.0.0.1:18089
-
-# N100 原生代理恢复后切回
-scripts/ops/weather_n100_proxy_failover.sh --apply-proxy http://127.0.0.1:10809
-```
-
-默认会写这些 key：`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`WEATHER_DATA_FEED_MARKET_PROXY`、`WEATHER_PREDICT_PROXY`。需要调整时用 `REMOTE_PROXY_ENV_KEYS=...`，不要改脚本逻辑。
-
-注意：本机 fallback 不能让远端数据走高倍率节点。脚本会尝试通过 Clash Verge/Mihomo 的 Unix socket 把相关 selector 分组切到 `🇯🇵 日本 01丨1x JP`；如本机代理 UI 改过规则，先确认 `Gamma/CLOB/Telegram` 不在 5x 节点上。高频 `source_orderbook_timing` 监控不要长期走本机 fallback，除非另行限频和确认节点倍率。2026-06-30 当前策略：先用 JP 1x fallback 顶到 7 月，再切回修好的 N100 原生代理。
-
-### D. PMM Main
-
-用途：
-
-- 真正的 PMM 主循环
-
-说明：
-
-- 当前不在运行也正常
-- 只有在你明确跑某个 PMM 实例时才需要拉起
-
-参考手册：
-
-- [docs/pmm/PAPER_RUNBOOK.md](/home/rui/projects/pm_agent/docs/pmm/PAPER_RUNBOOK.md)
+Dashboard 页面与端口见
+[`WEATHER_DASHBOARD_TROUBLESHOOTING.md`](WEATHER_DASHBOARD_TROUBLESHOOTING.md)。
+`run_stack.sh` 不启动 API/FE；全量重建只能显式执行 `run_stack.sh --rebuild`，且不会启停服务。
 
 ## 3. 当前哪些信息算“真”
 
 优先级按下面来：
 
-1. `scripts/ops/process_status.py` 的实时输出
-2. 实际 `ps -ef`
-3. `runtime/strategy_runtime.db`
-4. `runtime/*.pid`
-5. 文档
+1. `weather_production_manifest.py --strict` 的进程、checkout、tmux、LaunchAgent、DB route 与 runtime 事实；
+2. `weather_production_ctl.py health/plan` 对 production contract 的解释；
+3. 对应 Mac raw runtime 与 exchange order/fill response；
+4. canonical `weather.db`（分析派生事实，不替代当前进程/订单状态）；
+5. living docs 与 registry（研究状态，不替代生产状态）。
 
-注意：
-
-- `runtime/*.pid` 不是全仓库统一真相，只能作为辅助
-- `strategy_runtime.db` 目前主要覆盖 PMM / weather monitor 这类接入 heartbeat 的实例
-- Telegram Research Bot 现在还没有接进 `strategy_runtime.db`
+`ps`、PID 文件、`strategy_runtime.db` 和 `process_status.py` 只能帮助诊断，均不能单独证明实例健康、JRS 权限、live 授权
+或订单状态。
 
 ## 4. 重启后最小恢复清单
 
-**一键恢复（推荐）：**
+**统一入口：**
 
 ```bash
-cd /home/rui/projects/pm_agent
 scripts/ops/after_reboot.sh
 ```
 
@@ -278,48 +148,38 @@ scripts/ops/after_reboot.sh --apply
 scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 ```
 
-## 5. 常用文件
+## 5. 常用入口
 
-- 运行库：`runtime/strategy_runtime.db`
-- 天气决策日志：`runtime/weather_decision_journal.db`
-- 运行日志目录：`runtime/logs/`
-- 研究 bot 入口：`scripts/ops/telegram_research_bot.py`
-- 状态脚本：`scripts/ops/process_status.py`
+- desired state：`src/strategies/runtime/production.yaml`
+- current fact manifest：`scripts/ops/weather_production_manifest.py --strict`
+- controller：`scripts/ops/weather_production_ctl.py`
+- JRS context helper：`scripts/ops/weather_jrs_tmux_env.sh`
+- canonical DB：`production.yaml` 解析出的 physical canonical；`runtime/weather.db` 仅为同 inode 兼容入口
+- current raw、active order journal、health artifacts：全部从 production contract/共享 loader 解析，不在本文写死路径
+- 事故与恢复证据：`WEATHER_JRS_RUNTIME_INCIDENTS.md`
 
 ## 6. 当前已知缺口
 
-这一版先不解决，但要心里有数：
+以下缺口不得被旧 runbook 的“已配置”叙述掩盖：
 
-- 没有统一 supervisor
-- 没有 systemd user service
-- Telegram Research Bot 没接 heartbeat
-- dashboard 的 `/api/v1/ops/status` 目前偏 PMM，不是统一运维总览
+- controller 统一了入口，但不等于 macOS TCC/JRS 根因永久消失；reboot/login、fresh permission host、server
+  death/recreate 等验收状态以事故 living doc 的最新证据为准。
+- N100 tar、repo 镜像和 JRS 同盘目录都不能自动算当前生产备份。当前 raw/canonical 的异盘、可恢复、定期校验
+  备份合同若未在 canonical sources 中登记，就仍是运维缺口。
+- 非 production-contract 的个人工具不享受 weather controller 自动恢复；不得因此扩张 controller scope。
 
 ## 7. 建议的后续升级顺序
 
-如果后面继续补，优先顺序建议是：
+1. 按事故 living doc 完成尚未覆盖的真实 Mac/JRS 恢复验收；
+2. 为 current JRS raw/canonical 建立独立介质、可校验、可恢复的备份合同；
+3. 新增 runtime 只扩展 production contract、controller 和一致性测试，不再增加平行 supervisor。
 
-1. 给 Telegram Research Bot 接入 heartbeat
-2. 给常驻进程做统一 pid/log/service 约定
-3. 再决定要不要上 systemd user services
+## 8. 备份边界
 
-## 8. 备份策略（2026-06-19 从 AGENTS.md/CLAUDE.md 迁入）
+历史 N100 tar 与同步脚本只覆盖旧 `weather-predict` cache/output，不能恢复当前 Mac/JRS production 全链路，也不能证明
+canonical DB、active raw/order journals 或 research artifact store 已备份。历史映射保留在
+[`WEATHER_DATA_CANONICAL_SOURCES.md`](WEATHER_DATA_CANONICAL_SOURCES.md) 与
+[`WEATHER_DATA_PIPELINE.md`](WEATHER_DATA_PIPELINE.md)，但活跃 runbook 不再提供可误执行的 N100 备份/恢复命令。
 
-N100 备份入口：
-```bash
-ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/backup_data.sh'
-```
-
-备份输出：
-```text
-/home/jiarui/weather-predict-backups/weather-predict-data-YYYYMMDDTHHMMSSZ.tar.zst
-/home/jiarui/weather-predict-backups/weather-predict-data-YYYYMMDDTHHMMSSZ.tar.zst.sha256
-```
-
-备份范围：`output/`、`cache/pm_history/`、`cache/wu_obs/`、`cache/iem_v2_*.csv`
-
-最低要求：
-- N100 本地保留最近 14 天 tar 包。
-- 本机 `runtime/weather_edge_v1/market_data/` 是第二份镜像。
-- 每天同步一次，重启或故障后手动同步一次。
-- 大文件原始 cache 不进 git，只走 `rsync` / `tar`。
+任何新的备份合同必须明确：physical source、独立目标介质、包含/排除范围、频率、retention、checksum、加密/凭据边界、
+restore drill 与最近一次成功时间；只有实际 restore 验证通过后才能称“可恢复备份”。

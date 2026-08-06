@@ -89,7 +89,7 @@ manifest/历史报告指针。需要重放历史研究时，用
 | [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `snapshot` | 2026-06-08 方法论/结构重整交接的历史记录；方法已吸收进 ANALYSIS_CONTRACT §0 + performance skill。当前复盘入口改用 STRATEGY_REVIEW_PIPELINE / ARCHITECTURE_SPINE |
 | [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `current-reference` | 天气策略当前真实架构：[0]–[6] 分层、主血缘、共享/派生/新增节点、执行层已落地与未落地边界；2026-07-07 同步 feature-layer Phase 1-6C 实际落地状态与 live decision-input 未迁移边界 |
 | [WEATHER_STRATEGY_RUNTIME_PLATFORM_DESIGN.md](WEATHER_STRATEGY_RUNTIME_PLATFORM_DESIGN.md) | `design-draft` | 运行时平台产品化目标草案：统一 StrategyHead 接口 + BaseRunner harness、单一 supervisor 启动器、DB 优先控制面（strategy_def/instance/runtime/control_log）、数据源一等公民领域模型（feed_source_profile/subscription/health）、看板控制动作、五期落地。取代 archive 旧 PMM/ARB 版 Unified Platform 的目标定位 |
-| [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | 常驻进程、日志、通用运维命令在哪里 |
+| [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | Mac weather controller/manifest 唯一运维入口、生产事实优先级、重启恢复、N100 历史边界与当前备份缺口 |
 | [WEATHER_JRS_RUNTIME_INCIDENTS.md](WEATHER_JRS_RUNTIME_INCIDENTS.md) | `current-source` | Mac canonical JRS tmux/TCC 事故账：故障窗口、影响数字、根因证据、controller/LaunchAgent 收口、生产验收与尚未通过的 reboot/login 边界 |
 | [WEATHER_MAC_MINI_RUNBOOK.md](WEATHER_MAC_MINI_RUNBOOK.md) | `superseded-for-now` | 2026-07 前后的 Mac LaunchAgent 接管历史；其中 direct LaunchAgent/start/live 命令已被 controller + canonical JRS tmux 取代，不可作为当前运维入口 |
 | [WEATHER_DASHBOARD.md](WEATHER_DASHBOARD.md) | `current-source` | 重做后看板的信息架构 / 每页口径（在险资金、陈旧未结算、镜像≠生产、探针/研究口径）/ 新增 API |
