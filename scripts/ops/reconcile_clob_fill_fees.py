@@ -49,7 +49,12 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
     ).fetchone() is not None
 
 
-def _load_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+def _load_rows(
+    conn: sqlite3.Connection,
+    *,
+    unknown_lineage_only: bool = False,
+    include_fact: bool = True,
+) -> list[dict[str, Any]]:
     has_adjustments = _table_exists(conn, "fill_fee_adjustments")
     adjustment_cte = (
         "SELECT fill_id, SUM(fee_delta_usd) fee_delta_usd, COUNT(*) adjustment_rows "
@@ -57,7 +62,7 @@ def _load_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         if has_adjustments
         else "SELECT NULL fill_id, 0.0 fee_delta_usd, 0 adjustment_rows WHERE 0"
     )
-    has_fact = _table_exists(conn, "fact_trades")
+    has_fact = include_fact and _table_exists(conn, "fact_trades")
     fact_join = "LEFT JOIN fact_trades ft ON ft.fill_id=f.fill_id" if has_fact else ""
     fact_columns = (
         "ft.strategy_key, ft.strategy_name, ft.instance_id, ft.trade_class, "
@@ -82,6 +87,12 @@ def _load_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     validity_filter = (
         "AND COALESCE(validity.effective_status, 'valid') <> 'excluded'"
         if has_validity
+        else ""
+    )
+    lineage_filter = (
+        "AND lower(COALESCE(f.fee_source, '')) IN ('', 'legacy_unknown', 'unknown') "
+        "AND COALESCE(fee_adj.adjustment_rows, 0) = 0"
+        if unknown_lineage_only
         else ""
     )
     rows = conn.execute(
@@ -111,6 +122,7 @@ def _load_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
           AND f.status IN ('filled', 'partial')
           {alias_filter}
           {validity_filter}
+          {lineage_filter}
         ORDER BY f.filled_at_utc, f.fill_id
         """
     ).fetchall()
@@ -129,6 +141,9 @@ def reconcile(
     conn: sqlite3.Connection,
     activity_rows: list[dict[str, Any]],
     cache_rows: list[dict[str, Any]],
+    *,
+    unknown_lineage_only: bool = False,
+    include_fact: bool = True,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     activity_by_tx = _index_public_activity_by_tx(activity_rows)
     cache_tx_by_fill = {
@@ -139,7 +154,11 @@ def reconcile(
         if row.get("fill_id")
         and (row.get("transaction_hash") or row.get("transactionHash"))
     }
-    rows = _load_rows(conn)
+    rows = _load_rows(
+        conn,
+        unknown_lineage_only=unknown_lineage_only,
+        include_fact=include_fact,
+    )
     now = datetime.now(timezone.utc).isoformat()
     details: list[dict[str, Any]] = []
     adjustments: list[dict[str, Any]] = []
@@ -374,6 +393,21 @@ def main() -> int:
     parser.add_argument("--journal", type=Path, default=DEFAULT_FEE_ADJUSTMENT_PATH)
     parser.add_argument("--apply-exact", action="store_true")
     parser.add_argument("--apply-lineage", action="store_true")
+    parser.add_argument(
+        "--skip-public-activity",
+        action="store_true",
+        help="Skip paginated public activity; only propose order-semantic lineage fixes.",
+    )
+    parser.add_argument(
+        "--unknown-lineage-only",
+        action="store_true",
+        help="Limit reconciliation to fills with no effective fee-lineage adjustment.",
+    )
+    parser.add_argument(
+        "--skip-fact-join",
+        action="store_true",
+        help="Skip fact_trades metadata/PnL lookup for lineage-only repairs.",
+    )
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
 
@@ -381,14 +415,23 @@ def main() -> int:
     conn.row_factory = sqlite3.Row
     try:
         wallet = args.wallet or _discover_funder(conn)
-        activity = _fetch_activity_public(wallet)
+        activity = [] if args.skip_public_activity else _fetch_activity_public(wallet)
         cache_rows = list(iter_cached_fills(args.cache))
-        summary, adjustments = reconcile(conn, activity, cache_rows)
+        summary, adjustments = reconcile(
+            conn,
+            activity,
+            cache_rows,
+            unknown_lineage_only=args.unknown_lineage_only,
+            include_fact=not args.skip_fact_join,
+        )
         summary["wallet"] = wallet
         summary["activity_trade_rows"] = len(activity)
         summary["cache_rows"] = len(cache_rows)
         summary["apply_exact"] = args.apply_exact
         summary["apply_lineage"] = args.apply_lineage
+        summary["public_activity_skipped"] = args.skip_public_activity
+        summary["unknown_lineage_only"] = args.unknown_lineage_only
+        summary["fact_join_skipped"] = args.skip_fact_join
         rows_to_apply = (
             adjustments
             if args.apply_lineage
