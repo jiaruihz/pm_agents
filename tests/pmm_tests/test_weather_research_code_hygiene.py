@@ -5,10 +5,13 @@ import pandas as pd
 import pytest
 
 from scripts.analysis.reheat_risk import late_window_shared
+from scripts.analysis.reheat_risk import peak_forming_hazard_shared
 from scripts.analysis.reheat_risk import (
     research_late_window_residual_capture_feature_layer_v2 as feature_layer_v2,
 )
 from scripts.analysis.reheat_risk import research_late_window_residual_capture_v1 as legacy_v1
+from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v1 as peak_v1
+from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v2 as peak_v2
 from scripts.ops import check_weather_docs
 
 
@@ -60,6 +63,39 @@ def test_late_window_variants_use_one_shared_helper_implementation(tmp_path):
     result = late_window_shared.basket_rows(basket).iloc[0]
     assert result["roi"] == pytest.approx(1.5)
     assert late_window_shared.block_ci(np.array([1.0])) == (None, None)
+
+
+def test_peak_forming_versions_use_shared_version_neutral_helpers():
+    assert peak_v1.json_ready is peak_forming_hazard_shared.json_ready
+    assert peak_v2.json_ready is peak_forming_hazard_shared.json_ready
+    assert peak_v1.metric_row is peak_forming_hazard_shared.metric_row
+    assert peak_v2.metric_row is peak_forming_hazard_shared.metric_row
+    assert peak_v1.approx_metar_veto is peak_forming_hazard_shared.approx_metar_veto
+    assert peak_v2.approx_metar_veto is peak_forming_hazard_shared.approx_metar_veto
+
+    rows = pd.DataFrame(
+        [
+            {
+                "target_date": "2026-06-01",
+                "city": "London",
+                "label_current_yes_survives": 1,
+                "current_yes_ask": 0.8,
+                "p_hazard": 0.9,
+            },
+            {
+                "target_date": "2026-06-02",
+                "city": "Paris",
+                "label_current_yes_survives": 0,
+                "current_yes_ask": 0.4,
+                "p_hazard": 0.3,
+            },
+        ]
+    )
+    v1 = peak_v1.summarize_trade(rows, "p_hazard", "same")
+    v2 = peak_v2.summarize_trade(rows, "p_hazard", "same")
+    assert v1["orders"] == v2["orders"] == 2
+    assert v1["cost"] == pytest.approx(1.2)
+    assert v1["pnl"] == pytest.approx(-0.2)
 
 
 def test_research_debt_checker_rejects_new_entrypoint_and_duplicate_growth(
