@@ -1,6 +1,9 @@
 version: weather_production_v1
 host_role: mac_current_production
 operational_repo_root: /Users/deepsleep/projects/pm_agents
+# Bounded refresh executes the same committed code as current production.
+# Operational scripts/status remain owned by operational_repo_root.
+canonical_refresh_checkout_root: /Users/deepsleep/projects/pm_agents_prod
 canonical_db_path: /Volumes/jrs/pm_agents/runtime/weather.db
 compatibility_db_paths:
   - runtime/weather.db

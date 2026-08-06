@@ -28,6 +28,9 @@ def test_committed_production_spec_owns_jrs_canonical_db():
 
     assert spec.canonical_db_path == Path("/Volumes/jrs/pm_agents/runtime/weather.db")
     assert spec.operational_repo_root == Path("/Users/deepsleep/projects/pm_agents")
+    assert spec.canonical_refresh_checkout_root == Path(
+        "/Users/deepsleep/projects/pm_agents_prod"
+    )
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
         "/Volumes/jrs/pm_agents/research/artifact_store"

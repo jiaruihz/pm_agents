@@ -229,6 +229,8 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "run_weather_canonical_refresh_launchd.sh" not in installer
     assert "weather_jrs_tmux_env.sh" in starter
     assert "weather_jrs_tmux_run_oneshot" in starter
+    assert "canonical_refresh_checkout_root" in starter
+    assert 'export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q' in starter
     assert 'SESSION="weather_canonical_refresh"' in starter
     assert "run_weather_canonical_refresh_launchd.sh" in starter
     assert "weather_jrs_tmux_start_socket" not in starter
