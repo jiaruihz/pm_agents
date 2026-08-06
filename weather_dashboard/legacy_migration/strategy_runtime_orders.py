@@ -419,13 +419,23 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
     row["unit"] = row.get("unit") or snap.get("unit") or "C"
     row["signal_side"] = _side_from_runtime(row)
     row["order_side"] = _order_side_from_runtime(row)
-    row["model_p_yes"] = row.get("model_p_yes") or row.get("model_p_yes_used") or row.get("model_p_yes_raw") or snap.get("model_prob") or 0.0
+    row["model_p_yes"] = (
+        row.get("model_p_yes")
+        or row.get("model_p_yes_used")
+        or row.get("model_p_yes_raw")
+        or row.get("model_token_probability")
+        or snap.get("model_prob")
+        or 0.0
+    )
     row["market_price"] = row.get("market_price") or row.get("best_ask") or row.get("posted_price") or row.get("limit_price") or snap.get("entry_price")
     row["posted_price"] = row.get("posted_price") or row.get("limit_price") or row.get("best_ask")
     row["shares"] = row.get("shares") or row.get("size") or row.get("planned_shares")
     row["posted_notional"] = row.get("posted_notional") or row.get("submitted_notional_usd") or row.get("planned_notional_usd")
     row["notional"] = row.get("notional") or row.get("posted_notional")
-    row["edge"] = row.get("edge") or snap.get("edge") or 0.0
+    edge = row.get("edge") or snap.get("edge")
+    if not edge and row["signal_side"] == "YES" and row["model_p_yes"] and row["market_price"]:
+        edge = float(row["model_p_yes"]) - float(row["market_price"])
+    row["edge"] = edge or 0.0
     row["forecast_source"] = row.get("forecast_source") or "open_meteo_live_gfs"
     if not row.get("model_version"):
         source = str(row.get("forecast_source") or "").lower()
