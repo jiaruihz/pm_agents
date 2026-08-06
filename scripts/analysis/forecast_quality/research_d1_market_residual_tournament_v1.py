@@ -304,7 +304,20 @@ def fit_model(
         options={"maxiter": 400, "ftol": 1e-12, "gtol": 1e-9},
     )
     if not fitted.success:
-        raise RuntimeError(f"residual fit failed: {fitted.message}")
+        retry = minimize(
+            objective,
+            np.clip(np.asarray(fitted.x, dtype=float), -2.0, 2.0),
+            jac=True,
+            method="SLSQP",
+            bounds=[(-2.0, 2.0)] * len(feature_names),
+            options={"maxiter": 800, "ftol": 1e-10},
+        )
+        if not retry.success:
+            raise RuntimeError(
+                "residual fit failed: "
+                f"lbfgsb={fitted.message}; slsqp={retry.message}"
+            )
+        fitted = retry
     return np.asarray(fitted.x, dtype=float), scale
 
 
@@ -428,7 +441,37 @@ def run_outer_oof(states: list[PreparedState]) -> tuple[pd.DataFrame, pd.DataFra
     frame = pd.DataFrame(scored)
     # M0 was emitted once per candidate; keep one exact baseline row per state.
     market = frame.loc[frame["arm"] == "M0_market"].drop_duplicates("snapshot_key")
-    frame = pd.concat([market, frame.loc[frame["arm"] != "M0_market"]], ignore_index=True)
+    weather_rows: list[dict[str, Any]] = []
+    date_index = {target_date: index for index, target_date in enumerate(dates)}
+    for state in states:
+        train_dates = date_index[state.target_date]
+        if train_dates < OUTER_MIN_TRAIN_DATES:
+            continue
+        weather_rows.append(
+            {
+                "snapshot_key": state.snapshot_key,
+                "city": state.city,
+                "target_date": state.target_date,
+                "model_key": state.model_key,
+                "arm": "W0_weather_only",
+                "outer_train_dates": train_dates,
+                "selected_ridge": "locked_weather_only",
+                **_state_score(state, state.weather),
+                "winner_index": state.winner_index,
+                "probabilities_json": json.dumps(state.weather.tolist(), separators=(",", ":")),
+                "reconstructed_revision_f": state.reconstructed_revision_f,
+                "model_spread_f": state.model_spread_f,
+                "assigned_minus_consensus_f": state.assigned_minus_consensus_f,
+            }
+        )
+    frame = pd.concat(
+        [
+            market,
+            pd.DataFrame(weather_rows),
+            frame.loc[frame["arm"] != "M0_market"],
+        ],
+        ignore_index=True,
+    )
     return frame, pd.DataFrame(selections)
 
 
@@ -443,7 +486,12 @@ def date_equal_summary(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def paired_bootstrap(
-    frame: pd.DataFrame, left: str, metric: str, *, seed: int = 20260806
+    frame: pd.DataFrame,
+    left: str,
+    metric: str,
+    *,
+    seed: int = 20260806,
+    family_size: int = 4,
 ) -> dict[str, Any]:
     daily = (
         frame.loc[frame["arm"].isin([left, "M0_market"])]
@@ -463,9 +511,8 @@ def paired_bootstrap(
         "delta": float(delta.mean()),
         "ci95_low": float(np.quantile(draws, 0.025)),
         "ci95_high": float(np.quantile(draws, 0.975)),
-        # Bonferroni family-wise 95% for K=4 candidate models.
-        "ci_bonf_low": float(np.quantile(draws, 0.00625)),
-        "ci_bonf_high": float(np.quantile(draws, 0.99375)),
+        "ci_bonf_low": float(np.quantile(draws, 0.025 / family_size)),
+        "ci_bonf_high": float(np.quantile(draws, 1.0 - 0.025 / family_size)),
     }
 
 
@@ -496,7 +543,7 @@ def city_catastrophes(frame: pd.DataFrame) -> pd.DataFrame:
         index=["city", "target_date", "snapshot_key"], columns="arm", values="logloss", aggfunc="first"
     ).reset_index()
     rows = []
-    for arm in FEATURE_SETS:
+    for arm in ("W0_weather_only", *FEATURE_SETS):
         group = pivot.dropna(subset=[arm, "M0_market"]).copy()
         group["delta"] = group[arm] - group["M0_market"]
         for city, city_rows in group.groupby("city"):
@@ -600,13 +647,19 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
     delta_map = {(r.left, r.metric): r for r in deltas.itertuples(index=False)}
     best_arm = min(FEATURE_SETS, key=lambda arm: float(by_arm.loc[arm, "logloss"]))
     best_delta = delta_map[(best_arm, "logloss")]
+    weather_delta = delta_map[("W0_weather_only", "logloss")]
     baseline_pass = bool(best_delta.ci_bonf_high < 0.0)
+    null_counts = {
+        arm: int(summary["ridge_selection_counts"].get(arm, {}).get("inf", 0))
+        for arm in FEATURE_SETS
+    }
+    total_folds = int(summary["outer_oof_dates"])
     lines = [
         "# D-1 market-residual nested expanding-OOF tournament v1",
         "",
         "weather-only:",
-        "significance=not_retested; locked W0 used only as a residual feature",
-        "calibration=legacy W0",
+        f"significance=FAIL; W0-market delta={weather_delta.delta:+.4f}, 95% CI {weather_delta.ci95_low:+.4f}..{weather_delta.ci95_high:+.4f}",
+        "calibration=locked robust-tail W0 on identical OOF rows",
         "pooled_baseline=robust-tail W0",
         "forward=reconstructed development only",
         "",
@@ -621,8 +674,9 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "",
         "## 结论",
         "",
+        f"locked weather-only W0 在相同 OOF rows 的 logloss={by_arm.loc['W0_weather_only', 'logloss']:.4f}，显著差于 market={by_arm.loc['M0_market', 'logloss']:.4f}，Δ={weather_delta.delta:+.4f}（95% CI {weather_delta.ci95_low:+.4f}..{weather_delta.ci95_high:+.4f}）。",
         f"四个预注册 residual 版本均按 target_date 做 nested expanding OOF。点估最佳 `{best_arm}` 的 date-equal logloss={by_arm.loc[best_arm, 'logloss']:.4f}，market={by_arm.loc['M0_market', 'logloss']:.4f}，Δ={best_delta.delta:+.4f}（95% CI {best_delta.ci95_low:+.4f}..{best_delta.ci95_high:+.4f}；K=4 Bonferroni CI {best_delta.ci_bonf_low:+.4f}..{best_delta.ci_bonf_high:+.4f}）。",
-        f"baseline gate={'PASS' if baseline_pass else 'FAIL'}：当前没有一个版本可以声明击败 market。V01/V03 在 17/17 个 outer folds 都选择 market null；V02/V04 也分别在 16/17 folds 选择 null，因此 V04 的微小负 delta 只来自一个日期，不是稳定 residual。",
+        f"baseline gate={'PASS' if baseline_pass else 'FAIL'}：当前没有一个版本可以声明击败 market。各 arm 选择 market null 的 outer folds 为 V01={null_counts['V01_weather_logratio']}/{total_folds}、V02={null_counts['V02_ordinal_location_scale']}/{total_folds}、V03={null_counts['V03_structured_weather']}/{total_folds}、V04={null_counts['V04_revision_spread_bias']}/{total_folds}；V04 虽有 {total_folds - null_counts['V04_revision_spread_bias']} 个非 null folds，但 date-block CI 仍跨 0。",
         "只有 delta 与 Bonferroni CI 均小于 0 才称为击败 market。本报告不会把 beta 收缩到 0 后与 market 相近称为 alpha。",
         "",
         "## 同分母 OOF scores",
@@ -630,7 +684,7 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "| arm | states | dates | cities | logloss | Brier | RPS | winner P | top-1 | ΔLL vs market (95% / Bonf.) |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
-    for arm in ["M0_market", *FEATURE_SETS]:
+    for arm in ["M0_market", "W0_weather_only", *FEATURE_SETS]:
         row = by_arm.loc[arm]
         if arm == "M0_market":
             comparison = "reference"
@@ -667,7 +721,7 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "## Calibration / city catastrophe",
         "",
     ]
-    for arm in ["M0_market", *FEATURE_SETS]:
+    for arm in ["M0_market", "W0_weather_only", *FEATURE_SETS]:
         diag = summary["diagnostics"][arm]
         lines.append(
             f"- {arm}: rung ECE={diag['rung_ece']:.4f}，winner≤1%={diag['winner_probability_le_001']}，"
@@ -679,7 +733,7 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "",
         "- 输入 lineage：forecast=`d1_single_runs_backfill_v1/forecast_rows.csv`、book=`d1_extreme_no_snapshot_history_v4/executable_baskets.csv`；label/native ladder/normalized market 读取上游 fixed-denominator `d1_cross_city_hierarchy_v1/scored_states.csv`（其 label 来自当时 materialized canonical `settlement_outcomes`），本 runner 不重扫 mutable live DB。没有读取 intraday atlas/P3 forecast backfill。",
         "- PIT：market/forecast 是 single-run conservative reconstruction，不是严格 first-seen/provider-run capture；因此 OOF 防标签泄漏，但不能升级为 clean forward，也不能写 `beat_market` claim。",
-        "- W0/W1：本轮只把 locked legacy robust-tail W0 当 residual feature；真实 provider-run/first-seen/revision W1 尚未可评分，未训练、未伪造。",
+        "- W0/W1：本轮在同一 OOF rows 独立评分 locked legacy robust-tail W0，并把它作为 residual feature；真实 provider-run/first-seen/revision W1 尚未可评分，未训练、未伪造。",
         "- M0 是同一 checkpoint normalized mid distribution，不是 ask/depth/fee/slippage execution baseline。",
         "- K=4 同时报 95% 与 Bonferroni family-wise CI；未进行城市/价格/赢家事后筛选。",
         "- 覆盖 8 环中的概率分布、统计推断和同分母 baseline；缺 execution、capacity、fills、clean frozen forward。",
@@ -701,6 +755,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--history", type=Path, default=base.DEFAULT_HISTORY)
     parser.add_argument("--db", type=Path, default=base.DEFAULT_DB)
     parser.add_argument("--prepared-scored", type=Path, default=DEFAULT_PREPARED_SCORED)
+    parser.add_argument(
+        "--assignment-policy",
+        choices=("authoritative_city_model", "legacy_is_best_model"),
+        default="legacy_is_best_model",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args(argv)
@@ -714,7 +773,11 @@ def main(argv: list[str] | None = None) -> int:
     primary_dates = sorted(
         {str(s["target_date"]) for s in states if s["policy"] == PRIMARY_POLICY}
     )
-    fitted_weather = v2.fit_legacy_history_slice(history, min(primary_dates))
+    fitted_weather = v2.fit_legacy_history_slice(
+        history,
+        min(primary_dates),
+        assignment_policy=args.assignment_policy,
+    )
     prepared = prepare_states(states, fitted_weather)
     if len(primary_dates) <= OUTER_MIN_TRAIN_DATES:
         raise ValueError("not enough primary target dates for outer expanding OOF")
@@ -723,8 +786,13 @@ def main(argv: list[str] | None = None) -> int:
     scores = date_equal_summary(scored)
     deltas = pd.DataFrame(
         [
-            paired_bootstrap(scored, arm, metric)
-            for arm in FEATURE_SETS
+            paired_bootstrap(
+                scored,
+                arm,
+                metric,
+                family_size=1 if arm == "W0_weather_only" else len(FEATURE_SETS),
+            )
+            for arm in ("W0_weather_only", *FEATURE_SETS)
             for metric in ("logloss", "brier", "rps")
         ]
     )
@@ -784,6 +852,7 @@ def main(argv: list[str] | None = None) -> int:
         "candidates": FEATURE_SETS,
         "ridge_grid": ["inf" if math.isinf(x) else x for x in RIDGE_GRID],
         "w0_params_locked": W0_PARAMS,
+        "assignment_policy": args.assignment_policy,
         "funnel": funnel,
         "scores": scores.to_dict("records"),
         "paired_deltas": deltas.to_dict("records"),

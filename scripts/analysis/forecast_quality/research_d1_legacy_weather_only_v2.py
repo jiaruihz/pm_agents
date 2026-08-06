@@ -104,14 +104,23 @@ def prepare_history(
     history: pd.DataFrame,
     test_start: str,
     history_policy: str,
+    assignments: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, bool]:
     if history_policy not in HISTORY_POLICIES:
         raise ValueError(f"unsupported history_policy={history_policy}")
     use_all_models = history_policy == "all_season_all_models"
-    train = history.loc[
-        (history["date"] < test_start)
-        & (history["is_best_model"] if not use_all_models else True)
-    ].copy()
+    eligible = history.loc[history["date"] < test_start].copy()
+    if not use_all_models:
+        if assignments is None:
+            eligible = eligible.loc[eligible["is_best_model"]].copy()
+        else:
+            eligible = eligible.merge(
+                assignments[["city", "model"]],
+                on=["city", "model"],
+                how="inner",
+                validate="many_to_one",
+            )
+    train = eligible
     seasonal = history_policy == "harmonic_all_season_best"
     if history_policy == "summer_best":
         train = train.loc[train["month_num"].isin([5, 6, 7, 8])].copy()
@@ -178,15 +187,17 @@ def fit_legacy_history_slice(
     test_start: str,
     *,
     history_policy: str = "summer_best",
+    assignment_policy: str = "legacy_is_best_model",
 ) -> dict[str, Any]:
-    train, seasonal = prepare_history(history, test_start, history_policy)
+    assignments = base.model_assignments(history, assignment_policy)
+    train, seasonal = prepare_history(
+        history,
+        test_start,
+        history_policy,
+        assignments=None if history_policy == "all_season_all_models" else assignments,
+    )
     assigned_pairs = set(
-        map(
-            tuple,
-            history.loc[history["is_best_model"], ["city", "model"]]
-            .drop_duplicates()
-            .itertuples(index=False, name=None),
-        )
+        map(tuple, assignments[["city", "model"]].itertuples(index=False, name=None))
     )
     selected = select_hierarchy_lambdas(train, seasonal=seasonal)
     coefficients = fit_season_coefficients(train) if seasonal else {}
@@ -232,6 +243,7 @@ def fit_legacy_history_slice(
         "climatology": climatology,
         "lambda_selection": selected,
         "history_policy": history_policy,
+        "assignment_policy": assignment_policy,
         "seasonal_harmonic": seasonal,
     }
 

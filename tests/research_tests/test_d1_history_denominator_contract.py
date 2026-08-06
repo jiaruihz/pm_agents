@@ -4,6 +4,7 @@ import pandas as pd
 
 from scripts.analysis.forecast_quality.research_d1_cross_city_hierarchy_v1 import (
     history_denominator_funnel,
+    model_assignments,
 )
 
 
@@ -29,3 +30,21 @@ def test_history_denominator_funnel_does_not_call_training_slice_full_history() 
     assert funnel["best_model_summer_training_slice"]["rows"] == 1
     assert funnel["project_history_complete"] is False
     assert funnel["denominator_scope"].endswith("training_slice")
+
+
+def test_authoritative_assignment_does_not_depend_on_legacy_best_flag() -> None:
+    history = pd.DataFrame(
+        [
+            {"date": "2024-05-01", "city": "Amsterdam", "model": "ecmwf", "is_best_model": False},
+            {"date": "2024-05-01", "city": "Amsterdam", "model": "gfs", "is_best_model": True},
+            {"date": "2024-05-01", "city": "Paris", "model": "gfs", "is_best_model": False},
+            {"date": "2024-05-01", "city": "Paris", "model": "ecmwf", "is_best_model": True},
+        ]
+    )
+
+    assigned = model_assignments(history, "authoritative_city_model")
+
+    assert assigned.set_index("city")["model"].to_dict() == {
+        "Amsterdam": "ecmwf",
+        "Paris": "gfs",
+    }

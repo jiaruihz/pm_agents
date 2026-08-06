@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,12 +24,16 @@ import numpy as np
 import pandas as pd
 from scipy.special import ndtr
 
+from weather_data_feed.assigned_forecast_models import CITY_MODEL
+from weather_dashboard.ingest.settlement_outcomes import normalize_final_price
+
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_FORECASTS = ROOT / "docs/analysis/2026-07/generated/d1_single_runs_backfill_v1/forecast_rows.csv"
 DEFAULT_BASKETS = ROOT / "docs/analysis/2026-07/generated/d1_extreme_no_snapshot_history_v4/executable_baskets.csv"
 DEFAULT_HISTORY = ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv"
 DEFAULT_DB = ROOT / "runtime/weather.db"
+DEFAULT_PM_HISTORY = ROOT / "runtime/weather_edge_v1/market_data/cache/pm_history"
 DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_cross_city_hierarchy_v1"
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-05-d1-cross-city-hierarchy-v1.md"
 
@@ -103,17 +109,38 @@ def validate_ladder(brackets: list[Bracket]) -> None:
             raise ValueError(f"ladder gap/overlap: {left.label} -> {right.label}")
 
 
-def load_settlements(db_path: Path) -> dict[tuple[str, str], str]:
+def load_settlements(
+    db_path: Path,
+    *,
+    target_start: str | None = None,
+    target_end: str | None = None,
+    cities: list[str] | None = None,
+) -> dict[tuple[str, str], str]:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
     conn.execute("PRAGMA query_only=ON")
     conn.execute("PRAGMA busy_timeout=1000")
+    clauses = ["settlement_status='settled'", "final_price > 0.999"]
+    params: list[Any] = []
+    if target_start is not None:
+        clauses.append("target_date >= ?")
+        params.append(target_start)
+    if target_end is not None:
+        clauses.append("target_date <= ?")
+        params.append(target_end)
+    if cities:
+        clauses.append(f"city IN ({','.join('?' for _ in cities)})")
+        params.extend(cities)
     frame = pd.read_sql_query(
-        """
+        f"""
         SELECT city, target_date, bracket
-        FROM settlement_outcomes
-        WHERE settlement_status='settled' AND final_price > 0.999
+        -- The external JRS volume has very poor random-read latency.  The
+        -- date/city index requires one table lookup per matching rung and was
+        -- materially slower than one sequential pass in the 2026-08-06 audit.
+        FROM settlement_outcomes NOT INDEXED
+        WHERE {' AND '.join(clauses)}
         """,
         conn,
+        params=params,
     )
     conn.close()
     counts = frame.groupby(["city", "target_date"]).size()
@@ -123,9 +150,66 @@ def load_settlements(db_path: Path) -> dict[tuple[str, str], str]:
     return {(r.city, str(r.target_date)): str(r.bracket) for r in frame.itertuples()}
 
 
-def model_assignments(history: pd.DataFrame) -> pd.DataFrame:
-    best = history.loc[history["is_best_model"]].copy()
-    pairs = best[["city", "model"]].drop_duplicates()
+def load_settlements_from_pm_history(
+    root: Path,
+    *,
+    target_start: str,
+    target_end: str,
+    cities: list[str],
+) -> dict[tuple[str, str], str]:
+    settlements: dict[tuple[str, str], str] = {}
+    city_set = set(cities)
+    pattern = re.compile(r"^(.*)_(\d{4}-\d{2}-\d{2})\.json$")
+    # One sequential directory scan is substantially faster on the external
+    # APFS volume than thousands of random exists()/stat() calls.
+    for entry in os.scandir(root):
+        match = pattern.match(entry.name)
+        if not match:
+            continue
+        city, target_date = match.groups()
+        if city not in city_set or not (target_start <= target_date <= target_end):
+            continue
+        path = Path(entry.path)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
+            continue
+        winners = [
+            str(row.get("label"))
+            for row in (payload or {}).get("brackets", [])
+            if normalize_final_price(row.get("final_price")) == 1.0
+        ]
+        if len(winners) != 1:
+            continue
+        settlements[(city, target_date)] = winners[0]
+    return settlements
+
+
+def model_assignments(
+    history: pd.DataFrame,
+    assignment_policy: str = "legacy_is_best_model",
+) -> pd.DataFrame:
+    if assignment_policy == "legacy_is_best_model":
+        pairs = history.loc[history["is_best_model"], ["city", "model"]].drop_duplicates()
+    elif assignment_policy == "authoritative_city_model":
+        history_cities = set(history["city"].astype(str))
+        pairs = pd.DataFrame(
+            [
+                {"city": city, "model": model}
+                for city, model in CITY_MODEL.items()
+                if city in history_cities
+            ]
+        )
+        available = set(zip(history["city"].astype(str), history["model"].astype(str)))
+        missing = [
+            f"{row.city}:{row.model}"
+            for row in pairs.itertuples(index=False)
+            if (str(row.city), str(row.model)) not in available
+        ]
+        if missing:
+            raise ValueError(f"authoritative city-model rows absent from history: {missing}")
+    else:
+        raise ValueError(f"unknown assignment policy: {assignment_policy}")
     multi = pairs.groupby("city").size()
     if (multi != 1).any():
         raise ValueError("historical best-model assignment is not unique by city")
@@ -141,11 +225,21 @@ def history_denominator_funnel(
     *,
     months: tuple[int, ...] = (5, 6, 7, 8),
     input_artifact: Path = DEFAULT_HISTORY,
+    assignments: pd.DataFrame | None = None,
+    assignment_policy: str = "legacy_is_best_model",
 ) -> dict[str, Any]:
     """Describe the artifact and every filter leading to the training slice."""
     before_test = history.loc[history["date"] < test_start]
-    best_model = before_test.loc[before_test["is_best_model"]]
-    training_slice = best_model.loc[best_model["month_num"].isin(months)]
+    if assignments is None:
+        assigned = before_test.loc[before_test["is_best_model"]]
+    else:
+        assigned = before_test.merge(
+            assignments[["city", "model"]],
+            on=["city", "model"],
+            how="inner",
+            validate="many_to_one",
+        )
+    training_slice = assigned.loc[assigned["month_num"].isin(months)]
 
     def census(frame: pd.DataFrame) -> dict[str, Any]:
         return {
@@ -158,25 +252,52 @@ def history_denominator_funnel(
         }
 
     return {
-        "denominator_scope": "legacy_daily_error_artifact_to_summer_best_model_training_slice",
+        "denominator_scope": "legacy_daily_error_artifact_to_summer_best_model_training_slice"
+        if assignment_policy == "legacy_is_best_model"
+        else "legacy_daily_error_artifact_to_summer_authoritative_city_model_training_slice",
         "input_artifact": str(input_artifact.resolve().relative_to(ROOT.resolve()))
         if input_artifact.resolve().is_relative_to(ROOT.resolve())
         else str(input_artifact.resolve()),
         "artifact_input": census(history),
         "before_test_start": census(before_test),
-        "best_model_only": census(best_model),
+        "best_model_only": census(assigned),
         "best_model_summer_training_slice": census(training_slice),
-        "filters": [f"date < {test_start}", "is_best_model = true", f"month in {list(months)}"],
+        "assignment_policy": assignment_policy,
+        "filters": [
+            f"date < {test_start}",
+            "is_best_model = true"
+            if assignment_policy == "legacy_is_best_model"
+            else "city/model = weather_data_feed.assigned_forecast_models.CITY_MODEL",
+            f"month in {list(months)}",
+        ],
         "project_history_complete": False,
     }
 
 
-def fit_error_models(history: pd.DataFrame, test_start: str) -> tuple[dict[str, Any], pd.DataFrame]:
-    train = history.loc[
-        history["is_best_model"]
-        & (history["date"] < test_start)
-        & history["month_num"].isin([5, 6, 7, 8])
+def assigned_history_slice(
+    history: pd.DataFrame,
+    assignments: pd.DataFrame,
+    test_start: str,
+) -> pd.DataFrame:
+    eligible = history.loc[
+        (history["date"] < test_start) & history["month_num"].isin([5, 6, 7, 8])
     ].copy()
+    return eligible.merge(
+        assignments[["city", "model"]],
+        on=["city", "model"],
+        how="inner",
+        validate="many_to_one",
+    )
+
+
+def fit_error_models(
+    history: pd.DataFrame,
+    test_start: str,
+    assignments: pd.DataFrame | None = None,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    if assignments is None:
+        assignments = model_assignments(history, "legacy_is_best_model")
+    train = assigned_history_slice(history, assignments, test_start)
     if train.empty:
         raise ValueError("empty historical training frame")
     global_stats = train.groupby("model")["error_f_actual_minus_forecast"].agg(["count", "mean", "std"])
@@ -221,6 +342,10 @@ def fit_error_models(history: pd.DataFrame, test_start: str) -> tuple[dict[str, 
 
 def get_snapshot_records(path: str, city: str, target_date: str, cache: dict[str, Any]) -> list[dict[str, Any]]:
     if path not in cache:
+        # Snapshot payloads can be several MB.  build_states sorts by source_path,
+        # so retaining only the active payload avoids multi-GB growth on a full
+        # May--July replay without causing repeat reads.
+        cache.clear()
         cache[path] = json.loads(Path(path).read_text(encoding="utf-8"))["records"]
     rows = [r for r in cache[path] if r.get("city") == city and str(r.get("event_date")) == target_date]
     unique: dict[str, dict[str, Any]] = {}
@@ -244,6 +369,7 @@ def build_states(
         columns={"forecast_max_f": "single_run_forecast_max_f"}
     )
     joined = joined.merge(chosen, on=["snapshot_key", "model_key"], how="inner", validate="one_to_one")
+    joined = joined.sort_values(["source_path", "city", "target_date", "policy"])
     cache: dict[str, Any] = {}
     states: list[dict[str, Any]] = []
     counters = {
@@ -252,6 +378,10 @@ def build_states(
         "assigned_model_snapshots": int(len(joined)),
         "missing_settlement": 0,
         "invalid_ladder": 0,
+        "duplicate_bracket": 0,
+        "ladder_parse_error": 0,
+        "ladder_structure_error": 0,
+        "winner_not_in_ladder": 0,
         "missing_market_mid": 0,
         "missing_ask": 0,
         "scoreable_states": 0,
@@ -262,19 +392,31 @@ def build_states(
         if winner is None:
             counters["missing_settlement"] += 1
             continue
-        records = get_snapshot_records(row.source_path, row.city, str(row.target_date), cache)
+        try:
+            records = get_snapshot_records(row.source_path, row.city, str(row.target_date), cache)
+        except ValueError:
+            counters["invalid_ladder"] += 1
+            counters["duplicate_bracket"] += 1
+            continue
         try:
             parsed = [(parse_bracket(r["bracket"], r.get("question", "")), r) for r in records]
             parsed.sort(key=lambda item: sort_key(item[0]))
             brackets = [item[0] for item in parsed]
-            validate_ladder(brackets)
         except (KeyError, TypeError, ValueError):
             counters["invalid_ladder"] += 1
+            counters["ladder_parse_error"] += 1
+            continue
+        try:
+            validate_ladder(brackets)
+        except (TypeError, ValueError):
+            counters["invalid_ladder"] += 1
+            counters["ladder_structure_error"] += 1
             continue
         labels = [x.label for x in brackets]
         winner_norm = str(winner).replace("°C", "").replace("°F", "").replace("°", "").strip()
         if winner_norm not in labels:
             counters["invalid_ladder"] += 1
+            counters["winner_not_in_ladder"] += 1
             continue
         mids: list[float] = []
         asks: list[float] = []
@@ -563,8 +705,20 @@ def main() -> int:
     parser.add_argument("--baskets", type=Path, default=DEFAULT_BASKETS)
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
+    parser.add_argument("--pm-history-dir", type=Path, default=DEFAULT_PM_HISTORY)
+    parser.add_argument(
+        "--settlement-source",
+        choices=("canonical_db", "pm_history_raw"),
+        default="canonical_db",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument(
+        "--assignment-policy",
+        choices=("authoritative_city_model", "legacy_is_best_model"),
+        default="authoritative_city_model",
+        help="City/model authority. Legacy mode is retained only for exact reproduction of old artifacts.",
+    )
     args = parser.parse_args()
 
     forecasts = pd.read_csv(args.forecasts, dtype={"target_date": str})
@@ -572,10 +726,26 @@ def main() -> int:
     history = pd.read_csv(args.history, dtype={"date": str})
     history["is_best_model"] = history["is_best_model"].astype(str).str.lower().isin(["true", "1"])
     history["month_num"] = pd.to_datetime(history["date"]).dt.month
-    assignments = model_assignments(history)
+    assignments = model_assignments(history, args.assignment_policy)
     test_start = str(forecasts["target_date"].min())
-    specs, fitted = fit_error_models(history, test_start)
-    settlements = load_settlements(args.db)
+    specs, fitted = fit_error_models(history, test_start, assignments)
+    settlement_start = str(forecasts["target_date"].min())
+    settlement_end = str(forecasts["target_date"].max())
+    settlement_cities = sorted(forecasts["city"].astype(str).unique())
+    if args.settlement_source == "pm_history_raw":
+        settlements = load_settlements_from_pm_history(
+            args.pm_history_dir,
+            target_start=settlement_start,
+            target_end=settlement_end,
+            cities=settlement_cities,
+        )
+    else:
+        settlements = load_settlements(
+            args.db,
+            target_start=settlement_start,
+            target_end=settlement_end,
+            cities=settlement_cities,
+        )
     states, funnels = build_states(forecasts, baskets, assignments, settlements)
     scored = score_states(states, specs)
     score_table = date_equal_summary(scored)
@@ -593,11 +763,7 @@ def main() -> int:
     delta_table = pd.DataFrame(deltas)
     trades = trade_summary(scored)
     cities = city_summary(scored)
-    train_used = history.loc[
-        history["is_best_model"]
-        & (history["date"] < test_start)
-        & history["month_num"].isin([5, 6, 7, 8])
-    ]
+    train_used = assigned_history_slice(history, assignments, test_start)
     strict_cities = set(forecasts["city"].unique())
     assigned_cities = set(assignments["city"]) & strict_cities
     summary = {
@@ -606,7 +772,11 @@ def main() -> int:
         "training": {
             "lineage": "legacy_daily_cache_non_strict_pit_training_prior",
             "denominator": history_denominator_funnel(
-                history, test_start, input_artifact=args.history
+                history,
+                test_start,
+                input_artifact=args.history,
+                assignments=assignments,
+                assignment_policy=args.assignment_policy,
             ),
             "rows": int(len(train_used)),
             "cities": int(train_used["city"].nunique()),
@@ -616,6 +786,7 @@ def main() -> int:
         },
         "test": {
             "lineage": sorted(forecasts["lineage_status"].dropna().unique().tolist()),
+            "settlement_source": args.settlement_source,
             "scoreable_states": int(len(states)),
             "cities": int(len({x["city"] for x in states})),
             "start": min(x["target_date"] for x in states),
@@ -625,6 +796,7 @@ def main() -> int:
             "error_family": "Normal(actual_max_f - forecast_max_f)",
             "hierarchy_lambda": HIERARCHY_LAMBDA,
             "fee_rate": FEE_RATE,
+            "assignment_policy": args.assignment_policy,
         },
         "funnels": {
             **funnels,
