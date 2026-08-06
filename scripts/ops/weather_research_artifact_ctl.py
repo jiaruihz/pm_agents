@@ -649,8 +649,40 @@ def store_object(source: Path, object_root: Path, digest: str) -> Path:
     return destination
 
 
-def archive(run_id: str, *, apply: bool) -> dict[str, Any]:
+def archive(
+    run_id: str,
+    *,
+    selected_paths: set[str] | None = None,
+    apply: bool,
+) -> dict[str, Any]:
     rows, summary = select_artifacts()
+    if selected_paths:
+        eligible_paths = {row["path"] for row in rows}
+        unknown = sorted(selected_paths - eligible_paths)
+        if unknown:
+            raise ValueError(
+                "archive paths are absent or not eligible for archival: "
+                f"{unknown}"
+            )
+        rows = [row for row in rows if row["path"] in selected_paths]
+        summary = {
+            "all_file_count": summary["all_file_count"],
+            "all_bytes": summary["all_bytes"],
+            "selected_file_count": len(rows),
+            "selected_bytes": sum(int(row["size_bytes"]) for row in rows),
+            "selected_tracked_file_count": sum(
+                bool(row["git_tracked"]) for row in rows
+            ),
+            "selected_tracked_bytes": sum(
+                int(row["size_bytes"]) for row in rows if row["git_tracked"]
+            ),
+            "selected_untracked_file_count": sum(
+                not row["git_tracked"] for row in rows
+            ),
+            "selected_untracked_bytes": sum(
+                int(row["size_bytes"]) for row in rows if not row["git_tracked"]
+            ),
+        }
     spec = load_production_spec()
     artifact_root = spec.research_artifact_root
     payload: dict[str, Any] = {
@@ -672,11 +704,29 @@ def archive(run_id: str, *, apply: bool) -> dict[str, Any]:
     manifest_root = artifact_root / "manifests"
     prepared_path = manifest_root / f"{run_id}.prepared.json"
     final_path = manifest_root / f"{run_id}.json"
+    if prepared_path.exists() or final_path.exists():
+        raise RuntimeError(f"refusing to overwrite artifact manifest for run: {run_id}")
+
+    # Hash every source before copying or removing anything.  A repository path
+    # has one active archive identity; silently adding a different hash would
+    # make restore ambiguous and poison all later dependency audits.
+    active_archive = archived_artifact_rows(artifact_root)
+    for row in rows:
+        source = ROOT / row["path"]
+        digest = sha256_file(source)
+        previous = active_archive.get(row["path"])
+        if previous and previous["sha256"] != digest:
+            raise RuntimeError(
+                f"refusing ambiguous archive revision for {row['path']}: "
+                f"{previous['sha256']} != {digest}"
+            )
+        row["sha256"] = digest
+
     archived_bytes = 0
     for index, row in enumerate(rows, start=1):
         source = ROOT / row["path"]
         before = source.stat()
-        digest = sha256_file(source)
+        digest = row["sha256"]
         destination = store_object(source, object_root, digest)
         after = source.stat()
         if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
@@ -963,7 +1013,7 @@ def parse_args() -> argparse.Namespace:
         "--path",
         action="append",
         default=[],
-        help="repository-relative path to restore; repeat as needed",
+        help="repository-relative path to archive/restore/prune; repeat as needed",
     )
     parser.add_argument(
         "--script",
@@ -1031,7 +1081,7 @@ def main() -> int:
             apply=args.apply,
         )
         return 0
-    archive(args.run_id, apply=args.apply)
+    archive(args.run_id, selected_paths=set(args.path), apply=args.apply)
     return 0
 
 

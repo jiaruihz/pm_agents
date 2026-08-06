@@ -6,6 +6,152 @@ from pathlib import Path
 from scripts.ops import weather_research_artifact_ctl as artifact_ctl
 
 
+def test_archive_filters_exact_paths_and_removes_only_selected(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    selected = repo / "docs/analysis/2026-06/generated/old/rows.csv"
+    retained = repo / "docs/analysis/2026-08/generated/current/rows.csv"
+    selected.parent.mkdir(parents=True)
+    retained.parent.mkdir(parents=True)
+    selected.write_bytes(b"old rows\n")
+    retained.write_bytes(b"current rows\n")
+    artifact_root = tmp_path / "artifact_store"
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "select_artifacts",
+        lambda: (
+            [
+                {
+                    "path": str(selected.relative_to(repo)),
+                    "size_bytes": selected.stat().st_size,
+                    "git_tracked": False,
+                    "repo_eligible": False,
+                    "required_in_worktree": False,
+                    "selected": True,
+                },
+                {
+                    "path": str(retained.relative_to(repo)),
+                    "size_bytes": retained.stat().st_size,
+                    "git_tracked": False,
+                    "repo_eligible": False,
+                    "required_in_worktree": False,
+                    "selected": True,
+                },
+            ],
+            {
+                "all_file_count": 2,
+                "all_bytes": selected.stat().st_size + retained.stat().st_size,
+                "selected_file_count": 2,
+                "selected_bytes": selected.stat().st_size + retained.stat().st_size,
+                "selected_tracked_file_count": 0,
+                "selected_tracked_bytes": 0,
+                "selected_untracked_file_count": 2,
+                "selected_untracked_bytes": (
+                    selected.stat().st_size + retained.stat().st_size
+                ),
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "load_production_spec",
+        lambda: type("Spec", (), {"research_artifact_root": artifact_root})(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "git_snapshot",
+        lambda: {"head": "abc", "dirty_entry_count": 2},
+    )
+
+    result = artifact_ctl.archive(
+        "batch_old",
+        selected_paths={str(selected.relative_to(repo))},
+        apply=True,
+    )
+
+    assert result["selection"]["selected_file_count"] == 1
+    assert not selected.exists()
+    assert retained.read_bytes() == b"current rows\n"
+
+
+def test_archive_refuses_different_hash_for_existing_path(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    source = repo / "docs/analysis/2026-06/generated/old/rows.csv"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"new revision\n")
+    artifact_root = tmp_path / "artifact_store"
+    old_object = artifact_root / "objects/aa/old"
+    old_object.parent.mkdir(parents=True)
+    old_object.write_bytes(b"old revision\n")
+    old_digest = artifact_ctl.sha256_file(old_object)
+    manifest = artifact_root / "manifests/old.json"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": artifact_ctl.ARTIFACT_MANIFEST_SCHEMA,
+                "files": [
+                    {
+                        "path": str(source.relative_to(repo)),
+                        "size_bytes": old_object.stat().st_size,
+                        "sha256": old_digest,
+                        "object_path": str(old_object),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    row = {
+        "path": str(source.relative_to(repo)),
+        "size_bytes": source.stat().st_size,
+        "git_tracked": False,
+        "repo_eligible": False,
+        "required_in_worktree": False,
+        "selected": True,
+    }
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "select_artifacts",
+        lambda: (
+            [row],
+            {
+                "all_file_count": 1,
+                "all_bytes": source.stat().st_size,
+                "selected_file_count": 1,
+                "selected_bytes": source.stat().st_size,
+                "selected_tracked_file_count": 0,
+                "selected_tracked_bytes": 0,
+                "selected_untracked_file_count": 1,
+                "selected_untracked_bytes": source.stat().st_size,
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "load_production_spec",
+        lambda: type("Spec", (), {"research_artifact_root": artifact_root})(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "git_snapshot",
+        lambda: {"head": "abc", "dirty_entry_count": 1},
+    )
+
+    try:
+        artifact_ctl.archive(
+            "ambiguous",
+            selected_paths={str(source.relative_to(repo))},
+            apply=True,
+        )
+    except RuntimeError as exc:
+        assert "ambiguous archive revision" in str(exc)
+    else:
+        raise AssertionError("archive must reject a second hash for one repository path")
+    assert source.exists()
+
+
 def test_restore_recreates_content_addressed_artifact(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
