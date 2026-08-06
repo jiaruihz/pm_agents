@@ -85,6 +85,39 @@ def test_db_route_rejects_metadata_only_access(tmp_path, monkeypatch):
     assert result["read_probe"]["readable"] is False
 
 
+def test_db_route_retries_jrs_read_in_canonical_context(tmp_path, monkeypatch):
+    spec = WeatherProductionSpec(
+        **{
+            **production_spec(tmp_path).__dict__,
+            "production_storage_root": tmp_path / "jrs",
+        }
+    )
+    spec.canonical_db_path.parent.mkdir(parents=True)
+    spec.canonical_db_path.write_text("jrs", encoding="utf-8")
+    local = tmp_path / "repo/runtime/weather.db"
+    local.parent.mkdir(parents=True)
+    local.symlink_to(spec.canonical_db_path)
+    monkeypatch.setattr(
+        manifest,
+        "probe_file_readable",
+        lambda _path: {"readable": False, "error": "Operation not permitted"},
+    )
+    monkeypatch.setattr(
+        manifest,
+        "probe_file_readable_via_canonical_context",
+        lambda _spec, _path: {
+            "readable": True,
+            "error": None,
+            "read_context": "canonical_jrs_tmux",
+        },
+    )
+
+    result = manifest.inspect_db_route(spec, repo_root=tmp_path / "repo")
+
+    assert result["status"] == "healthy"
+    assert result["read_probe"]["read_context"] == "canonical_jrs_tmux"
+
+
 def test_process_parser_and_execution_mode_are_present_state_based():
     rows = manifest.parse_process_table(
         " 14098 1 Tue Jul 28 21:36:02 2026 "

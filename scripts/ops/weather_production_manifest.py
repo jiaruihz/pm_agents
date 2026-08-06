@@ -205,6 +205,34 @@ def probe_file_readable(path: Path) -> dict[str, Any]:
     return {"readable": True, "error": None}
 
 
+def probe_file_readable_via_canonical_context(
+    spec: WeatherProductionSpec, path: Path
+) -> dict[str, Any]:
+    """Retry a JRS read under the already-authorized canonical tmux parent."""
+
+    helper = ROOT / "scripts/ops/weather_jrs_tmux_env.sh"
+    inner = f"/usr/bin/head -c 1 {shlex.quote(str(path))} >/dev/null"
+    command = (
+        f"source {shlex.quote(str(helper))}; "
+        "weather_jrs_tmux_exec_checked "
+        f"{shlex.quote(spec.canonical_tmux_socket)} manifest_db_read "
+        f"{shlex.quote(inner)}"
+    )
+    result = run_command(["/bin/bash", "-lc", command], timeout=20, stderr=None)
+    if result.returncode == 0:
+        return {
+            "readable": True,
+            "error": None,
+            "read_context": "canonical_jrs_tmux",
+        }
+    detail = (result.stdout or result.stderr or "canonical read probe failed").strip()
+    return {
+        "readable": False,
+        "error": detail[-1000:],
+        "read_context": "canonical_jrs_tmux",
+    }
+
+
 def inspect_volume_identity(path: Path) -> dict[str, Any]:
     """Resolve an external volume by UUID, not its mutable mount label."""
 
@@ -270,6 +298,14 @@ def inspect_db_route(
         if canonical.get("exists")
         else {"readable": False, "error": "canonical DB missing"}
     )
+    if (
+        canonical.get("exists")
+        and not read_probe["readable"]
+        and spec.canonical_db_path.is_relative_to(spec.production_storage_root)
+    ):
+        read_probe = probe_file_readable_via_canonical_context(
+            spec, spec.canonical_db_path
+        )
     if canonical.get("exists") and not read_probe["readable"]:
         status = "inaccessible"
     elif canonical.get("exists") and linked and not distinct_existing:

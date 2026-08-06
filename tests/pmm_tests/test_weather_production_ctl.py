@@ -976,6 +976,57 @@ def test_data_feed_semantic_health_is_bounded(monkeypatch):
     ]
 
 
+def test_read_json_falls_back_to_canonical_context(tmp_path, monkeypatch):
+    spec = production_spec(tmp_path, ())
+    path = tmp_path / "health.json"
+    original_read_text = Path.read_text
+
+    def denied_read_text(self, *args, **kwargs):
+        if self == path:
+            raise PermissionError("Operation not permitted")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied_read_text)
+    monkeypatch.setattr(
+        ctl,
+        "_run_tmux_checked",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["tmux"], 0, '{"status":"ok"}'
+        ),
+    )
+
+    payload, error = ctl._read_json(path, canonical_spec=spec)
+
+    assert error is None
+    assert payload == {"status": "ok"}
+
+
+def test_data_feed_semantics_uses_canonical_context(tmp_path, monkeypatch):
+    spec = production_spec(tmp_path, ())
+    payload = {
+        "checked_at_utc": "2026-08-06T00:00:00Z",
+        "observation_cache": {"status": "ok"},
+        "forecast_hourly_curves": {"status": "ok"},
+        "live_cross_observation_state": {"status": "ok"},
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_orderbook_coverage": {"status": "ok"},
+        "snapshot_source_model": {"status": "ok", "fallback_detected": False},
+        "orderbook_snapshots": {"missing": False, "stale": False},
+        "snapshot_city_state_coverage": {"status": "ok"},
+    }
+    monkeypatch.setattr(
+        ctl,
+        "_run_tmux_checked",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["tmux"], 0, json.dumps(payload)
+        ),
+    )
+
+    result = ctl.collect_data_feed_semantics(spec)
+
+    assert result["status"] == "healthy"
+
+
 def test_jrs_context_health_timeout_returns_critical(tmp_path, monkeypatch):
     def fake_run(*_args, **kwargs):
         raise subprocess.TimeoutExpired(cmd="probe", timeout=kwargs["timeout"])

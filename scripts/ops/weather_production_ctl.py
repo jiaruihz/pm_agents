@@ -46,12 +46,29 @@ from src.strategies.runtime.production import (  # noqa: E402
 )
 
 
-def _read_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+def _read_json(
+    path: Path, *, canonical_spec: WeatherProductionSpec | None = None
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None, "health_path_missing"
     except (OSError, json.JSONDecodeError) as exc:
+        if canonical_spec is not None and isinstance(exc, OSError):
+            result = _run_tmux_checked(
+                canonical_spec,
+                canonical_spec.canonical_tmux_socket,
+                "weather_controller_health_read",
+                f"/bin/cat {shlex.quote(str(path))}",
+                timeout_sec=15,
+            )
+            if result.returncode == 0:
+                try:
+                    value = json.loads(result.stdout)
+                except json.JSONDecodeError:
+                    return None, "health_payload_invalid_json"
+                if isinstance(value, dict):
+                    return value, None
         return None, f"health_path_unreadable:{type(exc).__name__}"
     if not isinstance(value, dict):
         return None, "health_payload_not_object"
@@ -144,7 +161,9 @@ def evaluate_production_health(
                     0.0, now_epoch - runtime.health_path.stat().st_mtime
                 )
             else:
-                health_payload, health_error = _read_json(runtime.health_path)
+                health_payload, health_error = _read_json(
+                    runtime.health_path, canonical_spec=spec
+                )
                 if health_error:
                     issues.append(health_error)
                 else:
@@ -945,21 +964,32 @@ def summarize_data_feed_semantics(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect_data_feed_semantics() -> dict[str, Any]:
+def collect_data_feed_semantics(
+    spec: WeatherProductionSpec | None = None,
+) -> dict[str, Any]:
     command = [
         str(ROOT / ".venv/bin/python"),
         str(ROOT / "scripts/ops/weather_data_feed_prod_health_check.py"),
     ]
     try:
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=DATA_FEED_SEMANTIC_TIMEOUT_SEC,
-            check=False,
-        )
+        if spec is None:
+            result = subprocess.run(
+                command,
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=DATA_FEED_SEMANTIC_TIMEOUT_SEC,
+                check=False,
+            )
+        else:
+            result = _run_tmux_checked(
+                spec,
+                spec.canonical_tmux_socket,
+                "weather_controller_feed_health",
+                shlex.join(command),
+                timeout_sec=DATA_FEED_SEMANTIC_TIMEOUT_SEC,
+            )
         payload = json.loads(result.stdout)
         if not isinstance(payload, dict):
             raise ValueError("data-feed health payload is not an object")
@@ -1235,7 +1265,7 @@ def main() -> int:
     before = manifest_tool.collect_manifest(spec)
     health = evaluate_production_health(spec, before)
     health = attach_jrs_context_health(health, collect_jrs_context_health(spec))
-    health = attach_semantic_health(health, collect_data_feed_semantics())
+    health = attach_semantic_health(health, collect_data_feed_semantics(spec))
     health["plan"] = build_plan(spec, health)
     health["command"] = args.command
     health["apply"] = bool(getattr(args, "apply", False))
@@ -1265,7 +1295,9 @@ def main() -> int:
             health = attach_jrs_context_health(
                 health, collect_jrs_context_health(spec)
             )
-            health = attach_semantic_health(health, collect_data_feed_semantics())
+            health = attach_semantic_health(
+                health, collect_data_feed_semantics(spec)
+            )
             health.update(
                 {
                     "command": args.command,
@@ -1301,7 +1333,7 @@ def main() -> int:
                 health, collect_jrs_context_health(spec)
             )
             health = attach_semantic_health(
-                health, collect_data_feed_semantics()
+                health, collect_data_feed_semantics(spec)
             )
             health.update(
                 {
@@ -1365,7 +1397,7 @@ def main() -> int:
                 health, collect_jrs_context_health(spec)
             )
             health = attach_semantic_health(
-                health, collect_data_feed_semantics()
+                health, collect_data_feed_semantics(spec)
             )
             health.update(
                 {
@@ -1436,7 +1468,9 @@ def main() -> int:
         health = attach_jrs_context_health(
             health, collect_jrs_context_health(spec)
         )
-        health = attach_semantic_health(health, collect_data_feed_semantics())
+        health = attach_semantic_health(
+            health, collect_data_feed_semantics(spec)
+        )
         health["command"] = args.command
         health["apply"] = True
         health["reason"] = args.reason
