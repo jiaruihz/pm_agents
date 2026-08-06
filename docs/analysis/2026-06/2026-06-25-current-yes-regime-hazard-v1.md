@@ -1,6 +1,13 @@
 # Current-YES Regime Hazard V1
 
-Status: `model_branch_shadow_only`
+Status: `historical / superseded_for_decision_use`
+
+> ⚠️ Historical branch prototype. The structure “regime as a continuous model
+> feature, not a hard gate” remains valid, but the three-date forward-like
+> slice was not independent evidence. Later D1/current-YES same-denominator
+> studies found that adding regime to a market residual was neutral or worse.
+> Do not restore this shadow branch or build a live route from its headline
+> forward numbers.
 
 ## Human Summary
 

@@ -1,7 +1,14 @@
 # Current-YES First-Principles Survival V2
 
-Status: `research_only_not_live`
+Status: `historical / superseded_for_decision_use`
 Generated UTC: `2026-06-25T17:01:50+00:00`
+
+> ⚠️ Historical result only. The three-date forward-like table is not a
+> promotion result; the holdout probability model was worse than raw market and
+> all three original gates failed. Later canonical studies tested strict-high,
+> solar, remaining runway, forecast curve, path, atmosphere and regime on wider
+> fixed denominators and still did not establish incremental alpha. Preserve
+> this as a feature/mechanism inventory, not a candidate live V4.
 
 ## Human Summary
 

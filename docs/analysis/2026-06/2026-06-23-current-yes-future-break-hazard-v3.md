@@ -1,7 +1,14 @@
 # Current-YES Future-Break Hazard V3
 
-Status: research-only
+Status: `historical / superseded_for_decision_use`
 Generated: 2026-06-22T16:17:27+00:00
+
+> ⚠️ Historical result only. The positive three-date forward-tail ROI was too
+> thin and the main rule CI crossed zero. This version also predates the
+> canonical fixed-model, native-lattice and corrected physical-clock audits.
+> Later wider reruns did not preserve a hazard residual over market/frozen
+> core. Preserve the scored rows for lineage, but do not cite this as evidence
+> that a future-break V4 is ready.
 
 Target metric: `future_break_hazard_v3` predicts whether the current running-max YES bracket survives, and reports the equivalent future-break probability as `1 - p_survive`.
 

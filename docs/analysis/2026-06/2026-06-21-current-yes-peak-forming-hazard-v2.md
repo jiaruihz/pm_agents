@@ -1,7 +1,14 @@
 # Current YES Peak-Forming Hazard Model v2
 
-Status: research-only
+Status: `historical / superseded_for_decision_use`
 Generated: 2026-06-21T05:18:27+00:00
+
+> ⚠️ Historical result only. Plateau features made this version semantically
+> richer than v1, but it remains an early-window experiment and already failed
+> its forward gate. Later canonical, longer-window reruns corrected forecast
+> lineage, city-day weighting, native settlement lattice and clock semantics;
+> they still found no stable hazard increment over market/frozen core. Do not
+> use this report to justify a live filter, V4 model or sizing change.
 
 Target metric: `current_yes_peak_forming_hazard_v2` = 当前温度仍在 running max 附近时，预测当前最高温 bracket 是否最终守住；等价地，预测后面会不会出现更高温打穿。
 

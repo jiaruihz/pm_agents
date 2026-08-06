@@ -1,7 +1,15 @@
 # Current YES Peak-Forming Hazard Model v1
 
-Status: research-only
+Status: `historical / superseded_for_decision_use`
 Generated: 2026-06-18T16:53:07+00:00
+
+> ⚠️ Historical result only. This report preserves the original experiment,
+> but its headline metrics must not be used for current model selection. It
+> predates the longer canonical reruns and the later corrections to assigned
+> forecast lineage, city-day weighting, settlement-native lattice and physical
+> clock semantics. Read the 2026-07-21 overshoot-edge v2 and 2026-07-27
+> core-carry missing-mechanisms v2 reports for the current negative result:
+> hazard/physics overlays did not stably beat market or the frozen core.
 
 Target metric: `current_yes_peak_forming_hazard_v1` = 当前温度仍在 running max 附近时，预测当前最高温 bracket 是否最终守住；等价地，预测后面会不会出现更高温打穿。
 

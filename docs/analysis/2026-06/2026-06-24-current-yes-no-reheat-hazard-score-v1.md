@@ -1,7 +1,14 @@
 # Current-YES No-Reheat Hazard Score v1
 
-Status: research-only
+Status: `historical / superseded_for_decision_use`
 Generated: 2026-06-24T03:40:18+00:00
+
+> ⚠️ Historical negative experiment. The physical score was interpretable but
+> substantially worse than market, and the report's proposed missing features
+> were later tested in richer solar/runway/regime and native-lattice studies
+> without stable incremental proper-score improvement. Those features may
+> remain telemetry; this document must not be read as an unfinished positive
+> model awaiting a few more conditions.
 
 ## 一句话结论
 
