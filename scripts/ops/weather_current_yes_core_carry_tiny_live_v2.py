@@ -8,9 +8,9 @@ For each first positive-EV city-day signal this adapter submits two separately
 attributed children:
 
 * taker: fresh full-ladder ten-share EV is revalidated immediately before send;
-* maker: five shares at best bid + one tick, then staged toward the fresh ask
-  while retaining one cent of model edge and at least one tick of improvement
-  versus the trigger-time taker ask.
+* maker: five shares at best bid + one tick, held in queue for five minutes,
+  then repriced at most once at the midpoint stage and once at the near-ask
+  stage while retaining one cent of model edge.
 
 Maker replacements never cross the ask and never convert to taker. They are
 cancelled 90 seconds before the next expected weather update, when an
@@ -580,6 +580,14 @@ def maker_profile_parameter(name: str) -> float:
     return value
 
 
+def maker_max_reprices() -> int:
+    profile = get_execution_profile(EXECUTION_PROFILE)
+    maker_leg = next((leg for leg in profile.legs if leg.role == "maker"), None)
+    if maker_leg is None or maker_leg.max_reprices is None:
+        raise RuntimeError("core carry maker profile requires a finite max_reprices")
+    return int(maker_leg.max_reprices)
+
+
 def maker_edge_price_cap(
     *,
     best_ask: float,
@@ -882,6 +890,7 @@ def build_maker_lifecycle_plan(
     cancel_source_order: bool,
     now: datetime,
     live_enabled: bool,
+    reprice_stage: str = "",
 ) -> dict[str, Any]:
     live_source_id = live_order_id(order)
     lineage_source_id = live_source_id or str(order.get("source_order_id") or "")
@@ -909,8 +918,15 @@ def build_maker_lifecycle_plan(
         "replacement_requires_order_state": bool(cancel_source_order and not cancel_only),
         "cancel_only": cancel_only,
         "allow_duplicate_signal_id": True,
-        "maker_lifecycle_reprice_count": int(finite(order.get("maker_lifecycle_reprice_count")) or 0)
-        + (0 if cancel_only else 1),
+        "maker_lifecycle_reprice_count": int(
+            finite(order.get("maker_lifecycle_reprice_count")) or 0
+        )
+        + (1 if action == "core_carry_maker_reprice" else 0),
+        "maker_last_reprice_stage": (
+            reprice_stage
+            if action == "core_carry_maker_reprice"
+            else str(order.get("maker_last_reprice_stage") or "")
+        ),
     }
     fields["plan_id"] = "plan-" + stable_hash(
         {
@@ -961,6 +977,11 @@ def maker_lifecycle_plans(
             best_ask = 0.0
             cancel_only = False
             reprice_stage = ""
+            reprice_count = int(
+                finite(order.get("maker_lifecycle_reprice_count")) or 0
+            )
+            last_reprice_stage = str(order.get("maker_last_reprice_stage") or "")
+            max_reprices = maker_max_reprices()
             if deadline is None or now >= deadline:
                 if active_order:
                     cancel_before_update = parse_utc(
@@ -1006,11 +1027,12 @@ def maker_lifecycle_plans(
                     )
                     if not active_order and next_price > 0:
                         action = "core_carry_maker_repost"
-                    elif (
-                        reprice_stage == "queue"
-                        and best_bid <= posted + tick / 2.0
-                    ):
-                        blocker = "own_or_same_level_best_bid_keep_queue"
+                    elif reprice_stage == "queue":
+                        blocker = "queue_preserving_stage"
+                    elif reprice_count >= max_reprices:
+                        blocker = "maker_reprice_limit_reached"
+                    elif last_reprice_stage == reprice_stage:
+                        blocker = "maker_reprice_stage_already_used"
                     elif next_price > posted + tick / 2.0:
                         action = "core_carry_maker_reprice"
                     elif best_bid <= posted + tick / 2.0:
@@ -1036,6 +1058,9 @@ def maker_lifecycle_plans(
                 "new_observation_revalidation_status": "",
                 "new_observation_revalidation_reasons": [],
                 "reprice_stage": reprice_stage,
+                "maker_reprice_count": reprice_count,
+                "maker_max_reprices": max_reprices,
+                "maker_last_reprice_stage": last_reprice_stage,
             }
             decisions.append(decision)
             if action:
@@ -1045,6 +1070,7 @@ def maker_lifecycle_plans(
                     limit_price=next_price,
                     cancel_only=cancel_only,
                     cancel_source_order=active_order,
+                    reprice_stage=reprice_stage,
                     now=now,
                     live_enabled=bool(args.live and args.confirm_live),
                 )
@@ -1170,7 +1196,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "taker_shares": float(args.taker_shares),
         "maker_shares": float(args.maker_shares),
         "maker_refresh_sec": float(args.maker_refresh_sec),
-        "maker_reprice_limit": None,
+        "maker_reprice_limit": maker_max_reprices(),
         "maker_cancel_buffer_sec": get_execution_profile(
             EXECUTION_PROFILE
         ).cancel_buffer_sec,
