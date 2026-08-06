@@ -4,13 +4,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
+PY="${PYTHON_BIN:-/Users/deepsleep/projects/pm_agents_prod/.venv/bin/python}"
 ENV_FILE="${WEATHER_ENV_FILE:-$ROOT/.env}"
 SESSION="weather_live_cross_observations"
 OUTPUT_DIR="$RUNTIME_ROOT/output/live_cross_observations"
 NOTIFY_PATH="$RUNTIME_ROOT/loop/live_cross_observation_notify.json"
 LOG_FILE="$RUNTIME_ROOT/loop/live_cross_observations.log"
 ACTION="${1:-start}"
+if [[ ! -x "$PY" ]]; then
+  echo "configured live-cross Python is not executable: $PY" >&2
+  exit 1
+fi
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 
 if [[ "$ACTION" == "status" ]]; then

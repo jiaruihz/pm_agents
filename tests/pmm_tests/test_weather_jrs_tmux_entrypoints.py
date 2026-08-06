@@ -217,6 +217,19 @@ def test_jrs_start_entries_do_not_create_jrs_directories_outside_tmux():
     assert offenders == []
 
 
+def test_live_cross_start_uses_existing_production_python():
+    text = (OPS / "start_weather_live_cross_observations.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        'PY="${PYTHON_BIN:-/Users/deepsleep/projects/pm_agents_prod/.venv/bin/python}"'
+        in text
+    )
+    assert 'if [[ ! -x "$PY" ]]' in text
+    assert '$ROOT/.venv/bin/python' not in text
+
+
 def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     installer = (OPS / "install_weather_canonical_refresh_launchagent.sh").read_text(
         encoding="utf-8"
