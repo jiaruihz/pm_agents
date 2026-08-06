@@ -63,6 +63,8 @@ system contract 和 ops runbook。
 - 2026-08-06：删除4份已吸收的早期交接/计划：06-08 综合审计交接、06-09 research-window handoff、06-10 observed-max
   原始交接与重复执行计划。三门 verdict 已在 `live_performance.md` / `data_integrity.md`，observed-max 的耐久机制与证据边界
   已在 `reheat_risk.md`；删除项仍可从 git 历史恢复，不再让旧 WSL/N100 提示词和“物理盖棺”措辞充当当前入口。
+- 2026-08-06：删除 Fabel review prompt 与已退役的 Range-RV N100 shadow handoff。前者只是模型间提示词副本，后者的
+  runtime 路径和 sync/start 命令已失效；METAR/forecast-tail 结果报告及 Range-RV 实验/forward 证据继续保留。
 
 
 ## 仍有效的历史边界
