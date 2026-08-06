@@ -14,6 +14,8 @@ from scripts.analysis.reheat_risk import (
 from scripts.analysis.reheat_risk import research_late_window_residual_capture_v1 as legacy_v1
 from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v1 as peak_v1
 from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v2 as peak_v2
+from scripts.analysis.reheat_risk import research_tmax_cross_hour_coherence_audit_v1 as coherence_v1
+from scripts.analysis.reheat_risk import research_tmax_cross_hour_coherence_audit_v2 as coherence_v2
 from scripts.ops import check_weather_docs
 
 
@@ -145,6 +147,11 @@ def test_weather_research_data_helpers_keep_one_read_only_contract(tmp_path):
     assert prior.iloc[0]["raw_model_p_yes"] == pytest.approx(0.5)
     assert prior.iloc[0]["prior_rows"] == 2
     assert coverage["gate_pass"] is True
+
+
+def test_tmax_coherence_v2_reuses_v1_serialization_contract():
+    assert coherence_v2._json_ready is coherence_v1._json_ready
+    assert coherence_v2._safe_float is coherence_v1._safe_float
 
 
 def test_research_debt_checker_rejects_new_entrypoint_and_duplicate_growth(

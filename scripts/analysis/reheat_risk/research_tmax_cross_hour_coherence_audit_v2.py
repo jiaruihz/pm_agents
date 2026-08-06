@@ -33,7 +33,9 @@ if str(ROOT) not in sys.path:
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import research_tmax_cross_hour_coherence_audit_v1 as v1  # noqa: E402
+from scripts.analysis.reheat_risk import (  # noqa: E402
+    research_tmax_cross_hour_coherence_audit_v1 as v1,
+)
 import research_tmax_distribution_p0_anchor_scorecard_v1 as p0  # noqa: E402
 import research_tmax_distribution_p1_fusion_scorecard_v1 as p1  # noqa: E402
 import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: E402
@@ -48,27 +50,8 @@ METHOD = v1.METHOD
 MODEL_SPEC = v1.MODEL_SPEC
 ALPHA_GRID = [0.0, 0.25, 0.5, 0.75, 1.0]
 
-
-def _json_ready(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): _json_ready(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_json_ready(v) for v in value]
-    if isinstance(value, (np.integer, np.floating)):
-        return _json_ready(value.item())
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    return value
-
-
-def _safe_float(value: object) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    if math.isnan(out) or math.isinf(out):
-        return None
-    return out
+_json_ready = v1._json_ready
+_safe_float = v1._safe_float
 
 
 def _fmt_pct(value: object, *, signed: bool = True) -> str:
