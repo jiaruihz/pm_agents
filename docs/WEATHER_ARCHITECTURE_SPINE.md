@@ -146,7 +146,7 @@ flowchart TB
 | factory 全量迁到 `runtime/weather_feature_store/` | 部分落地：offline feature store helper 已有，runner telemetry refs 已有；canonical fact rebuild / generated artifact 搬迁未做 |
 | live decision-input 统一迁到 feature layer | 未落地；当前只完成 research/zero-notional/tiny-live telemetry ref，真实 selector/size/quote/order 输入仍在各策略私有实现 |
 | stable adapter 全面替代 research import | 部分落地：`regime_routed_no_stable.py` 已自包含；tmax live bridge 仍直接 import P0-P4 research modules，后续只能逐 parity 迁 |
-| first-seen information-event lineage | 数据/信号实现与历史 raw replay 已完成：统一 event header → PIT checkpoint → `fact_signal_candidates` v2；zero-notional forward 入口已具备，但当前被 canonical JRS tmux write probe 权限错误阻塞；不新增并行 feature/opportunity fact，不接执行 |
+| first-seen information-event lineage | 数据/信号实现与历史 raw replay 已完成：统一 event header → PIT checkpoint → `fact_signal_candidates` v2；zero-notional forward 入口已具备，是否可运行由当次 manifest/controller 与 JRS probe 动态决定；不新增并行 feature/opportunity fact，不接执行 |
 
 ## 七层边界
 
@@ -155,7 +155,7 @@ flowchart TB
 | `[0] 数据` | 同步 market/weather/live lineage 并 rebuild fact tables | `WEATHER_DATA_CANONICAL_SOURCES.md`, `WEATHER_DATA_PIPELINE.md`, `weather_data_feed/` |
 | `[1] 事实/机制特征` | temperature state、weather context、regime、forecast reliability | `WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md`, `weather_data_feed/weather_context.py`, `weather_data_feed/city_family.py`, `weather_data_feed/sky_cover.py` |
 | `[2] 信号/表达` | `P(win)-price`、expression selector、strategy head | `fact_signal_candidates`, strategy docs/registry |
-| `[3] 决策` | city pool、entry band、sizing、risk cap | `WEATHER_STRATEGY_ENTRYPOINT.md`, `WEATHER_CITY_POOL_DECISIONS.md` |
+| `[3] 决策` | city pool、entry band、sizing、risk cap | production contract、共享 execution profile 与 runner config；`WEATHER_CITY_POOL_DECISIONS.md` 只作历史决策账 |
 | `[4] 执行` | maker/taker/FOK、notional guard、fresh book、cancel/fill recovery | `weather_order_executor.py`, runner-specific execution logic, `analysis/execution_quality.md` |
 | `[5] 结算` | settlement -> realized/open/MTM PnL | `fact_trades`, `settlements`, account reconcile |
 | `[6] 评估` | live/shadow 对比、coverage gate、attribution、回写判断 | `WEATHER_ANALYSIS_CONTRACT.md`, living docs, dashboard |
