@@ -36,6 +36,7 @@ if str(ROOT) not in sys.path:
 from scripts.analysis.forecast_quality import research_d1_cross_city_hierarchy_v1 as base  # noqa: E402
 from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_robust_tail as robust  # noqa: E402
 from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_v2 as v2  # noqa: E402
+from scripts.analysis.versioned_artifact_output import resolve_run_output  # noqa: E402
 
 
 DEFAULT_OUT = Path(
@@ -43,9 +44,12 @@ DEFAULT_OUT = Path(
     "d1_market_residual_tournament_v2"
 )
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-d1-market-residual-tournament-v2.md"
-DEFAULT_PREPARED_SCORED = (
-    ROOT / "docs/analysis/2026-08/generated/d1_cross_city_hierarchy_v1/scored_states.csv"
+PINNED_HIERARCHY_RUN = resolve_run_output(
+    "d1_cross_city_hierarchy_v1",
+    run_id="denominator_scope_repair_20260807",
+    explicit_output=None,
 )
+DEFAULT_PREPARED_SCORED = PINNED_HIERARCHY_RUN / "scored_states.csv"
 PRIMARY_POLICY = base.PRIMARY_POLICY
 OUTER_MIN_TRAIN_DATES = 10
 INNER_MIN_TRAIN_DATES = 6

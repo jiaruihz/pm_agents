@@ -3,12 +3,30 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/analysis/forecast_quality/build_d1_d2_run_aware_dataset_v1.py"
 SPEC = importlib.util.spec_from_file_location("d1_d2_dataset", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+
+def test_default_output_requires_stable_run_id() -> None:
+    with pytest.raises(SystemExit, match="stable --run-id is required"):
+        MODULE.main([])
+
+
+def test_explicit_output_refuses_to_overwrite_prior_run(tmp_path: Path) -> None:
+    output = tmp_path / "run"
+    output.mkdir()
+    (output / "summary.json").write_text("{}", encoding="utf-8")
+    forecast = tmp_path / "forecast.json"
+    forecast.write_text('{"forecast_rows": []}', encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        MODULE.main(["--forecast-rows", str(forecast), "--output-dir", str(output)])
 
 
 def test_signal_and_evidence_funnels_are_separate() -> None:

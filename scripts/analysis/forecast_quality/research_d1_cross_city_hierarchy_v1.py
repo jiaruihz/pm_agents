@@ -26,6 +26,10 @@ from scipy.special import ndtr
 
 from weather_data_feed.assigned_forecast_models import CITY_MODEL
 from weather_dashboard.ingest.settlement_outcomes import normalize_final_price
+from scripts.analysis.versioned_artifact_output import (
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -34,7 +38,7 @@ DEFAULT_BASKETS = ROOT / "docs/analysis/2026-07/generated/d1_extreme_no_snapshot
 DEFAULT_HISTORY = ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv"
 DEFAULT_DB = ROOT / "runtime/weather.db"
 DEFAULT_PM_HISTORY = ROOT / "runtime/weather_edge_v1/market_data/cache/pm_history"
-DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_cross_city_hierarchy_v1"
+OUTPUT_FAMILY = "d1_cross_city_hierarchy_v1"
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-05-d1-cross-city-hierarchy-v1.md"
 
 POLICIES = ("D-1_12_18_first", "D-1_18_24_first")
@@ -723,7 +727,7 @@ def render_report(summary: dict[str, Any], score_table: pd.DataFrame, delta_tabl
     return "\n".join(lines)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--forecasts", type=Path, default=DEFAULT_FORECASTS)
     parser.add_argument("--baskets", type=Path, default=DEFAULT_BASKETS)
@@ -735,7 +739,8 @@ def main() -> int:
         choices=("canonical_db", "pm_history_raw"),
         default="canonical_db",
     )
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--run-id")
+    parser.add_argument("--out", type=Path)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument(
         "--assignment-policy",
@@ -743,7 +748,15 @@ def main() -> int:
         default="authoritative_city_model",
         help="City/model authority. Legacy mode is retained only for exact reproduction of old artifacts.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    try:
+        output_dir = resolve_run_output(
+            OUTPUT_FAMILY,
+            run_id=args.run_id,
+            explicit_output=args.out,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     forecasts = pd.read_csv(args.forecasts, dtype={"target_date": str})
     baskets = pd.read_csv(args.baskets, dtype={"target_date": str})
@@ -840,15 +853,20 @@ def main() -> int:
         "trade_diagnostic": trades.to_dict("records"),
     }
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    scored.to_csv(args.out / "scored_states.csv", index=False)
-    pd.DataFrame(evidence_blockers).to_csv(args.out / "evidence_blockers.csv", index=False)
-    fitted.to_csv(args.out / "fitted_city_error_models.csv", index=False)
-    score_table.to_csv(args.out / "score_summary.csv", index=False)
-    delta_table.to_csv(args.out / "paired_date_bootstrap_deltas.csv", index=False)
-    trades.to_csv(args.out / "trade_diagnostic.csv", index=False)
-    cities.to_csv(args.out / "city_summary_primary_policy.csv", index=False)
-    (args.out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    prepare_new_run_output(output_dir)
+    scored.to_csv(output_dir / "scored_states.csv", index=False)
+    pd.DataFrame(evidence_blockers).to_csv(
+        output_dir / "evidence_blockers.csv", index=False
+    )
+    fitted.to_csv(output_dir / "fitted_city_error_models.csv", index=False)
+    score_table.to_csv(output_dir / "score_summary.csv", index=False)
+    delta_table.to_csv(output_dir / "paired_date_bootstrap_deltas.csv", index=False)
+    trades.to_csv(output_dir / "trade_diagnostic.csv", index=False)
+    cities.to_csv(output_dir / "city_summary_primary_policy.csv", index=False)
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(render_report(summary, score_table, delta_table, trades, cities), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False))

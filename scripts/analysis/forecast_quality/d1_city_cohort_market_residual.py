@@ -31,6 +31,7 @@ if str(ROOT) not in sys.path:
 from scripts.analysis.forecast_quality import research_d1_cross_city_hierarchy_v1 as base
 from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_robust_tail as robust
 from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_v2 as v2
+from scripts.analysis.versioned_artifact_output import resolve_run_output
 
 
 DEFAULT_OUT = Path(
@@ -41,13 +42,13 @@ DEFAULT_REPORT = (
     ROOT
     / "docs/analysis/2026-08/2026-08-06-d1-city-cohort-market-residual-audit-v1.md"
 )
-DEFAULT_STATE_ARTIFACT = (
-    ROOT
-    / "docs/analysis/2026-08/generated/d1_cross_city_hierarchy_v1/scored_states.csv"
+PINNED_HIERARCHY_RUN = resolve_run_output(
+    "d1_cross_city_hierarchy_v1",
+    run_id="denominator_scope_repair_20260807",
+    explicit_output=None,
 )
-DEFAULT_STATE_SUMMARY = (
-    ROOT / "docs/analysis/2026-08/generated/d1_cross_city_hierarchy_v1/summary.json"
-)
+DEFAULT_STATE_ARTIFACT = PINNED_HIERARCHY_RUN / "scored_states.csv"
+DEFAULT_STATE_SUMMARY = PINNED_HIERARCHY_RUN / "summary.json"
 W0_PARAMETERS = {
     "ensemble_weight": 0.875,
     "scale_temperature": 1.25,

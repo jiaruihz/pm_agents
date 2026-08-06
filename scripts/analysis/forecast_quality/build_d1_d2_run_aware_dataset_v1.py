@@ -19,9 +19,13 @@ from weather_model_evaluation.d1_revision_repricing import (  # noqa: E402
     material_forecast_batches,
     run_study as run_revision_repricing_study,
 )
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
-DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_d2_run_aware_dataset_v1"
+OUTPUT_FAMILY = "d1_d2_run_aware_dataset_v1"
 
 
 def read_records(path: Path | None, *, keys: tuple[str, ...] = ()) -> list[dict[str, Any]]:
@@ -219,7 +223,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--settlements", type=Path)
     parser.add_argument("--ladder-checkpoints", type=Path)
     parser.add_argument("--frozen-forward-start")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--revision-repricing", action="store_true")
     parser.add_argument("--capture-dir", type=Path)
     parser.add_argument("--snapshot-dir", type=Path)
@@ -230,16 +235,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    try:
+        output_dir = resolve_run_output(
+            OUTPUT_FAMILY,
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     if args.revision_repricing:
+        prepare_new_run_output(output_dir)
         kwargs = {
             key: value
             for key, value in {
                 "capture_dir": args.capture_dir,
                 "snapshot_dir": args.snapshot_dir,
                 "db": args.db,
-                "output_dir": (
-                    args.output_dir if args.output_dir != DEFAULT_OUT else None
-                ),
+                "output_dir": output_dir,
                 "report": args.report,
             }.items()
             if value is not None
@@ -259,15 +271,15 @@ def main(argv: list[str] | None = None) -> int:
         ladders,
         frozen_forward_start=args.frozen_forward_start,
     )
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    with (args.output_dir / "dataset.jsonl").open("w", encoding="utf-8") as handle:
+    prepare_new_run_output(output_dir)
+    with (output_dir / "dataset.jsonl").open("w", encoding="utf-8") as handle:
         for row in dataset:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-    (args.output_dir / "summary.json").write_text(
+    (output_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    with (args.output_dir / "funnels.csv").open("w", encoding="utf-8", newline="") as handle:
+    with (output_dir / "funnels.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=("funnel", "stage", "unit", "count"))
         writer.writeheader()
         for name in ("signal_funnel", "evidence_funnel"):

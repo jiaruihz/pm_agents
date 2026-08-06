@@ -1,11 +1,18 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from scripts.analysis.forecast_quality.research_d1_cross_city_hierarchy_v1 import (
     history_denominator_funnel,
+    main,
     model_assignments,
 )
+
+
+def test_hierarchy_default_output_requires_stable_run_id() -> None:
+    with pytest.raises(SystemExit, match="stable --run-id is required"):
+        main([])
 
 
 def test_history_denominator_funnel_does_not_call_training_slice_full_history() -> None:
