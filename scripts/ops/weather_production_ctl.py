@@ -740,6 +740,7 @@ def migrate_production_storage(
         target_feed_path = staging_root / spec.data_feed_runtime_root.relative_to(
             spec.production_storage_root
         )
+        target_loop_path = target_feed_path / "loop"
         source_runtime = shlex.quote(str(spec.pm_runtime_root) + "/")
         target_runtime_path = staging_root / spec.pm_runtime_root.relative_to(
             spec.production_storage_root
@@ -789,7 +790,7 @@ def migrate_production_storage(
         final_command = " && ".join(
             (
                 "set -eu",
-                f"mkdir -p {shlex.quote(str(target_feed_path))} {shlex.quote(str(target_runtime_path))}",
+                f"mkdir -p {shlex.quote(str(target_feed_path))} {shlex.quote(str(target_loop_path))} {shlex.quote(str(target_runtime_path))}",
                 mutable_feed_command,
                 current_day_command,
                 f"mkdir -p {shlex.quote(str(target_current_yes))}",
