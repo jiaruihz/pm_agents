@@ -1,7 +1,7 @@
 # Weather Data Canonical Sources
 
 Status: current-source
-Updated: 2026-07-29 JRS physical canonical DB identity
+Updated: 2026-07-29 JRS DB identity; first-seen raw/canonical boundary preserved
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -13,7 +13,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 > - Mac 是当前生产：market/data-feed raw 在 `/Volumes/jrs/weather_data_feed_service_runtime`；执行 raw 必须从 `production.yaml`、manifest 与进程参数解析，不能默认在控制仓库。
 > - N100 在磁盘事故恢复完成前仅是历史/抢救源，不是当前 runner、order、source-event 或 snapshot 真相。
 > - 当前状态问题先读 raw + exchange evidence；历史绩效/settlement/opportunity analysis 才以 canonical facts 为首选。
-> - 大型研究 generated artifacts 的物理正本统一为 `production.yaml.research_artifact_root`（当前 `/Volumes/jrs/pm_agents/research/artifact_store`）的 SHA-256 内容寻址对象；仓库只保留结论、紧凑 metadata、权威 case evidence 和活跃消费者所需的显式例外。路径映射及恢复以 `manifests/*.json` 和 `weather_research_artifact_ctl.py restore` 为准。
+> - 大型研究 generated artifacts 的物理正本统一为 `production.yaml.research_artifact_root`（当前 `/Volumes/jrs-archive/pm_agents/research/artifact_store`）的 SHA-256 内容寻址对象；仓库只保留结论、紧凑 metadata、权威 case evidence 和活跃消费者所需的显式例外。旧 `/Volumes/jrs/pm_agents/research` 路径只是跨卷兼容链接，不是第二份正本。路径映射及恢复以 `manifests/*.json` 和 `weather_research_artifact_ctl.py restore` 为准。
 >
 > **历史前提（2026-06-05 核实）**：
 > - **N100 上没有活跃的 SQLite DB**。所有生产数据以 JSONL/JSON 文件形态存在 `output/`（weather-predict）和 `runtime/weather_edge_v1/`（pm_agent）下。
@@ -36,7 +36,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | 单笔血缘 (candidate→signal→plan→order→fill→settle) | 当前策略 raw runtime + exchange response；`fact_trades` 补 settlement/fee/PnL | 为单笔问题无条件全量 rebuild；只读旧 N100 状态冒充当前 |
 | 实盘下单凭证（真金 CLOB 提交记录） | `production.yaml.managed_runtimes[*].live_order_path`；bounded refresh 以 `--active-live-only` ingest 到 `orders` | 旧策略文件名清单、repo-local/N100 路径 fallback |
 | 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
-| 抢单/测速实时天气信号 | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/` 与 high-frequency outputs | 策略脚本默认不要各自拥有 canonical weather fetch；调试绕过必须显式 |
+| 抢单/测速实时天气信号 | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/` 与 high-frequency outputs；当前是 raw delivery evidence，canonical event identity/first-seen/checkpoint 尚待 [first-seen lineage](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md) 落地 | 策略脚本默认不要各自拥有 canonical weather fetch；调试绕过必须显式 |
 | live observation feature/cache | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json` | full snapshot 里的旧 `metar_latest_*` 字段只作兼容回退 |
 | 机场/官方高频参考站 enrichment | `weather_data_feed_service_runtime/output/high_frequency_observations/latest.json`；历史审计读 `high_frequency_observations.jsonl` | 不作为 settlement truth；只用于和 METAR/WU/source-events/settlement outcome 做 lag/bias/参考站关系研究 |
 | 概率模型 / 错误分布 cache | 当前 Mac data-feed cache + 本机 canonical mirror；N100 `gfs_365d_*` 只作历史输入 | 静默 model/source fallback |
@@ -45,6 +45,16 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 **唯一 DB identity**：`/Volumes/jrs/pm_agents/runtime/weather.db`。`runtime/weather.db` 不是第二份 DB，而是同一
 文件的兼容入口。查询前运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；若两者不是同一
 device/inode，属于 DB split P0，不得任选一份继续分析或重建。其他历史 `.db` 文件见 `runtime/_legacy/`（§3）。
+
+### 0.1 Source value 先对齐 settlement lattice
+
+“同站”不等于“同档位语义”。每次临场判断必须保留 `source_system/station/raw_value/raw_unit`，再显式映射到
+`settlement_source/native_unit/native_bucket`，并计算离下一 exact bracket 还需要几个 native ticks。快源、小数观测和邻站
+只能更新概率，不能绕过这一步直接宣布跨档。
+
+Ankara 2026-07-20 是标准反例：MGM 报 33.4°C，LTAC METAR 报整数 33°C，而 WU LTAC 当日最高仍为
+92°F；该市场需要 WU native-F 打印 93°F 才进入 34 档。因此“33.4 离 34 只差 0.1”是 source-unit 算术，
+不是 settlement distance。完整交易与证据见 [intraday casebook](WEATHER_INTRADAY_DECISION_CASEBOOK.md)。
 
 ---
 
@@ -128,8 +138,8 @@ device/inode，属于 DB split P0，不得任选一份继续分析或重建。�
 | **N100** `cache/arome_v5_<City>_*.json` | source | N100 AROME fetcher | 法国专用 | 本机镜像 `market_data/cache/arome_v5/`（2026-06-05 起加入 sync） |
 | **N100** `cache/iem_v2_<ICAO>_<start>_<end>.csv` | source | N100 IEM fetcher | 概率模型/校准 | HongKong 用 `VHHH`（不是 VHKO）。本机镜像 `market_data/cache/iem/` |
 | **N100** `output/logs/*.log` | log | N100 systemd timer | 故障排查 | 本机镜像 `market_data/logs/`（2026-06-05 起加入 sync）。判断 timer 跑没跑的唯一来源 |
-| **N100** `weather_data_feed_service_runtime/output/source_events/latest.json` | source | `weather-data-feed-source-events.timer` | timing monitor / METAR crossing bot | city/source/station 最新观测事件；默认天气信号入口。包含 report_ts、detect_ts、payload hash、raw METAR、source profile 审计字段 |
-| **N100** `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | source log | `weather-data-feed-source-events.timer` | latency research / source-vs-market audit | append-only；用于判断哪个源先更新、市场是否领先天气源 |
+| **N100** `weather_data_feed_service_runtime/output/source_events/latest.json` | source | `weather-data-feed-source-events.timer` | timing monitor / METAR crossing bot | 历史 source-event raw；包含 report_ts、detect_ts、payload hash、raw METAR、source profile 审计字段。恢复前不是当前真相，也不是 canonical exact first-seen |
+| **N100** `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | source log | `weather-data-feed-source-events.timer` | latency research / source-vs-market audit | append-only raw delivery journal；重复 poll、late backfill 与跨源同内容需按 [first-seen lineage](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md) canonicalize 后才能作为统一 event denominator |
 | **N100** `weather_data_feed_service_runtime/output/observations/latest.json` | source cache | `weather-data-feed-observations.timer` | current-YES / regime-routed live feature layer | 标准 `weather_data_feed_observation_cache_v1`；策略优先读它，不再重复抓天气 API |
 | **N100/Mac** `weather_data_feed_service_runtime/output/high_frequency_observations/latest.json` | enrichment source | `weather_data_feed_service high-frequency-observations` | airport/reference station research | 标准 `weather_high_frequency_observation_v1`；AMOS/MADIS/MSS/JMA/HKO/CoWIN/MGM/IMS/FMI 等机场或官方参考站，不替代 settlement/source-events |
 | **N100** `pm_agent/runtime/logs/*.log` | log | N100 pm_agent live cycle | 故障排查 | 本机镜像 `remote_pm_agent/logs/`（2026-06-05 起加入 sync） |
@@ -137,7 +147,7 @@ device/inode，属于 DB split P0，不得任选一份继续分析或重建。�
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |
 | **本机** `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` | mirror | rsync from N100 | `migrate-live-cycle` → orders | N100 真金 CLOB 提交凭证镜像 |
 | **JRS** `/Volumes/jrs/pm_agents/runtime/weather.db` | **physical canonical operational DB** | bounded canonical refresh 增量 ingest；`run_stack.sh --rebuild` 显式全量派生层重算 | 所有分析 / API / 前端 | `runtime/weather.db` 必须只是同 inode alias；无参数 `run_stack.sh` 只读状态且不启停服务。 |
-| **JRS** `/Volumes/jrs/pm_agents/research/artifact_store` | **research artifact physical canonical** | `weather_research_artifact_ctl.py archive` | 历史研究复现 / 按 manifest 恢复 | 位于既有统一 research 根内并按 SHA-256 内容寻址；`docs/analysis/**/generated` 不再保存大型或不可见的第二份机器产物。 |
+| **JRS archive** `/Volumes/jrs-archive/pm_agents/research/artifact_store` | **research artifact physical canonical** | `weather_research_artifact_ctl.py archive` | 历史研究复现 / 按 manifest 恢复 | 位于归档盘统一 research 根内并按 SHA-256 内容寻址；旧 `/Volumes/jrs/pm_agents/research` 仅为兼容链接，`docs/analysis/**/generated` 不再保存大型或不可见的第二份机器产物。 |
 | **本机** `runtime/weather.db.orders` | canonical（订单/执行事件） | strategy runtime/live-cycle ingest | live 下单结果、档位、挂单/吃单、blocked/error、执行版本、score tier、策略原始 payload | grain = 每个 canonical order/execution attempt；未成交不代表现金流 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |

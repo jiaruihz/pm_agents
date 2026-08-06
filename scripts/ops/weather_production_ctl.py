@@ -763,6 +763,12 @@ def migrate_production_storage(
                 f"/usr/sbin/diskutil rename {shlex.quote(str(staging_root))} {shlex.quote(spec.production_storage_root.name)}",
                 f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.production_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.production_storage_volume_uuid)}",
                 f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.archive_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.archive_storage_volume_uuid)}",
+                f"ln -s {shlex.quote(str(spec.archive_storage_root / 'pm_agents/research'))} {shlex.quote(str(spec.production_storage_root / 'pm_agents/research'))}",
+                f"ln -s {shlex.quote(str(spec.archive_storage_root / 'pm_agents/archive'))} {shlex.quote(str(spec.production_storage_root / 'pm_agents/archive'))}",
+                f"ln -s {shlex.quote(str(spec.archive_storage_root / 'pm_agents/backups'))} {shlex.quote(str(spec.production_storage_root / 'pm_agents/backups'))}",
+                f"ln -s {shlex.quote(str(spec.archive_storage_root / 'weather_data_feed_service_runtime/history'))} {shlex.quote(str(spec.production_storage_root / 'weather_data_feed_service_runtime/history'))}",
+                f"ln -s {shlex.quote(str(spec.archive_storage_root / 'weather_data_feed_service_runtime/migration_archive'))} {shlex.quote(str(spec.production_storage_root / 'weather_data_feed_service_runtime/migration_archive'))}",
+                f"ln -s {shlex.quote(str(spec.archive_storage_root / 'weather_data_feed_service_runtime/research'))} {shlex.quote(str(spec.production_storage_root / 'weather_data_feed_service_runtime/research'))}",
             )
         )
         migrated = _run_tmux_checked(

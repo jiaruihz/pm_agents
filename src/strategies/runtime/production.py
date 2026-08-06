@@ -68,7 +68,7 @@ class WeatherProductionSpec:
     archive_storage_volume_uuid: str | None = None
     canonical_refresh_checkout_root: Path | None = None
     research_artifact_root: Path = Path(
-        "/Volumes/jrs/pm_agents/research/artifact_store"
+        "/Volumes/jrs-archive/pm_agents/research/artifact_store"
     )
     managed_runtimes: tuple[WeatherManagedRuntimeSpec, ...] = field(default_factory=tuple)
     allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
