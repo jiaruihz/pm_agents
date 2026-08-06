@@ -134,7 +134,11 @@ def journal_shape(path: Path, tail_lines: int = 200) -> dict[str, Any]:
         return {**result, "error": f"{type(exc).__name__}: {exc}"}
     keysets: Counter[tuple[str, ...]] = Counter()
     schema_versions: Counter[str] = Counter()
+    schema_versions_by_record_type: dict[str, Counter[str]] = defaultdict(Counter)
     parse_errors = 0
+    seen_versioned_row = False
+    missing_schema_after_versioned = 0
+    latest_schema_version: str | None = None
     for raw in lines:
         try:
             row = json.loads(raw)
@@ -145,12 +149,38 @@ def journal_shape(path: Path, tail_lines: int = 200) -> dict[str, Any]:
             parse_errors += 1
             continue
         keysets[tuple(sorted(row))] += 1
-        schema_versions[str(row.get("schema_version") or "<missing>")] += 1
+        schema_version = str(row.get("schema_version") or "<missing>")
+        record_type = str(
+            row.get("record_type") or row.get("event_type") or "<default>"
+        )
+        schema_versions[schema_version] += 1
+        schema_versions_by_record_type[record_type][schema_version] += 1
+        latest_schema_version = schema_version
+        if schema_version == "<missing>":
+            if seen_versioned_row:
+                missing_schema_after_versioned += 1
+        else:
+            seen_versioned_row = True
+    missing_count = schema_versions.get("<missing>", 0)
+    legacy_unversioned_prefix_rows = (
+        missing_count
+        if missing_count
+        and not missing_schema_after_versioned
+        and latest_schema_version not in (None, "<missing>")
+        else 0
+    )
     return {
         **result,
         "checked_rows": len(lines),
         "parse_error_count": parse_errors,
         "schema_versions": dict(schema_versions),
+        "schema_versions_by_record_type": {
+            record_type: dict(versions)
+            for record_type, versions in schema_versions_by_record_type.items()
+        },
+        "latest_schema_version": latest_schema_version,
+        "legacy_unversioned_prefix_rows": legacy_unversioned_prefix_rows,
+        "missing_schema_after_versioned": missing_schema_after_versioned,
         "distinct_key_shapes": len(keysets),
         "top_key_shapes": [
             {"count": count, "keys": list(keys)}
@@ -285,24 +315,39 @@ def build_report(spec: WeatherProductionSpec) -> dict[str, Any]:
             )
         versions = journal.get("schema_versions") or {}
         if versions.get("<missing>", 0):
+            legacy_prefix_rows = journal.get("legacy_unversioned_prefix_rows", 0)
             findings.append(
                 {
-                    "severity": "warning",
-                    "kind": "live_order_schema_missing",
+                    "severity": "info" if legacy_prefix_rows else "warning",
+                    "kind": (
+                        "live_order_legacy_unversioned_prefix"
+                        if legacy_prefix_rows
+                        else "live_order_schema_missing"
+                    ),
                     "path": journal["path"],
                     "row_count": versions["<missing>"],
+                    "message": (
+                        "append-only legacy prefix is preserved; current tail is versioned"
+                        if legacy_prefix_rows
+                        else "current or interleaved journal rows are missing schema_version"
+                    ),
                 }
             )
-        declared_versions = [value for value in versions if value != "<missing>"]
-        if len(declared_versions) > 1:
-            findings.append(
-                {
-                    "severity": "warning",
-                    "kind": "live_order_schema_version_drift",
-                    "path": journal["path"],
-                    "versions": versions,
-                }
-            )
+        by_record_type = journal.get("schema_versions_by_record_type") or {}
+        for record_type, record_versions in by_record_type.items():
+            declared_versions = [
+                value for value in record_versions if value != "<missing>"
+            ]
+            if len(declared_versions) > 1:
+                findings.append(
+                    {
+                        "severity": "warning",
+                        "kind": "live_order_schema_version_drift",
+                        "path": journal["path"],
+                        "record_type": record_type,
+                        "versions": record_versions,
+                    }
+                )
 
     critical = sum(item["severity"] == "critical" for item in findings)
     warning = sum(item["severity"] == "warning" for item in findings)

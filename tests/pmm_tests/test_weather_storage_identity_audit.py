@@ -76,6 +76,68 @@ def test_production_spec_is_single_authority_for_live_journals(tmp_path: Path) -
     assert report["active_live_order_journals"][0]["schema_versions"] == {"orders_v1": 1}
 
 
+def test_storage_audit_preserves_legacy_unversioned_prefix_without_warning(
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    journal = tmp_path / "feed/output/live/orders.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"record_type":"order","order_id":"legacy"}\n'
+        '{"schema_version":"orders_v1","record_type":"order","order_id":"current"}\n',
+        encoding="utf-8",
+    )
+
+    report = build_report(_spec(tmp_path, canonical, compatibility))
+
+    journal_report = report["active_live_order_journals"][0]
+    assert journal_report["legacy_unversioned_prefix_rows"] == 1
+    assert journal_report["missing_schema_after_versioned"] == 0
+    findings = [item for item in report["findings"] if item["path"] == str(journal)]
+    assert findings == [
+        {
+            "severity": "info",
+            "kind": "live_order_legacy_unversioned_prefix",
+            "path": str(journal),
+            "row_count": 1,
+            "message": "append-only legacy prefix is preserved; current tail is versioned",
+        }
+    ]
+
+
+def test_storage_audit_allows_distinct_schemas_for_distinct_record_types(
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    journal = tmp_path / "feed/output/live/orders.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"schema_version":"orders_v2","record_type":"order","order_id":"1"}\n'
+        '{"schema_version":"exit_v1","event_type":"exit","order_id":"1"}\n',
+        encoding="utf-8",
+    )
+
+    report = build_report(_spec(tmp_path, canonical, compatibility))
+
+    assert report["active_live_order_journals"][0][
+        "schema_versions_by_record_type"
+    ] == {"order": {"orders_v2": 1}, "exit": {"exit_v1": 1}}
+    assert not any(
+        item["kind"] == "live_order_schema_version_drift"
+        for item in report["findings"]
+    )
+
+
 def test_dashboard_connection_default_never_points_to_parallel_dashboard_db() -> None:
     assert Path(DB_PATH).name == "weather.db"
 
