@@ -194,3 +194,47 @@ def test_research_debt_checker_rejects_new_entrypoint_and_duplicate_growth(
 
     assert any("entrypoints grew" in error for error in errors)
     assert any("function bodies grew" in error for error in errors)
+
+
+def test_research_debt_checker_includes_untracked_worktree_scripts(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    script_root = repo / "scripts/analysis/family"
+    script_root.mkdir(parents=True)
+    body = """def repeated_function(values):
+    total = 0
+    for value in values:
+        if value:
+            total += value
+        else:
+            total -= 1
+    return total
+"""
+    paths = {
+        "scripts/analysis/family/research_city_v1.py",
+        "scripts/analysis/family/research_city_v2.py",
+    }
+    for relative in paths:
+        (repo / relative).write_text(body, encoding="utf-8")
+    monkeypatch.setattr(check_weather_docs, "ROOT", repo)
+    monkeypatch.setattr(
+        check_weather_docs,
+        "hygiene_config",
+        lambda: {
+            "max_research_experiment_entrypoints": 0,
+            "max_repeated_research_function_bodies": 0,
+            "max_untracked_research_experiment_entrypoints": 1,
+            "max_research_version_families": 0,
+            "max_research_version_family_copies": 0,
+            "max_worktree_repeated_function_extra_copies": 0,
+        },
+    )
+
+    errors: list[str] = []
+    check_weather_docs.check_research_script_debt(errors, set(), paths)
+
+    assert any("untracked research experiment entrypoints grew" in error for error in errors)
+    assert any("versioned research script families grew" in error for error in errors)
+    assert any("versioned research script copies grew" in error for error in errors)
+    assert any("worktree repeated research function copies grew" in error for error in errors)

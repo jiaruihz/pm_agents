@@ -46,6 +46,13 @@ def git_tracked_files() -> set[str]:
     return {item for item in output.split("\0") if item}
 
 
+def git_untracked_files() -> set[str]:
+    output = subprocess.check_output(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=ROOT
+    ).decode("utf-8")
+    return {item for item in output.split("\0") if item}
+
+
 def hygiene_config() -> dict:
     payload = yaml.safe_load(HYGIENE_CONFIG.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -193,12 +200,15 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
         for term in ("candidate_grain_version", "build_id", "observed_at_utc"):
             if term not in text:
                 fail(errors, f"{path}: missing canonical identity term {term}")
-    for path, skill_text in (
+    for path, text in (
         ("weather-strategy-performance", performance),
         ("weather-strategy-research", research),
     ):
-        if "denominator_scope" not in skill_text:
+        if "denominator_scope" not in text:
             fail(errors, f"{path}: missing scoped-history denominator contract")
+    for term in ("EventEnvelope", "DecisionContext", "ModelOutput", "TradeIntent"):
+        if term not in lineage:
+            fail(errors, f"weather-strategy-lineage: missing WCIR lineage term {term}")
 
     for path in ("AGENTS.md", "CLAUDE.md", "docs/WEATHER_ANALYSIS_CONTRACT.md"):
         if "denominator_scope" not in read(path):
@@ -211,16 +221,16 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
         "scripts/analysis/forecast_quality/research_d1_legacy_weather_only_robust_tail.py": (
             "legacy long-history training",
         ),
+        "scripts/analysis/reheat_risk/research_korea_intraday_residual_baseline_v1.py": (
+            "交易层：完整历史分布",
+            "这是完整历史分布",
+        ),
     }
     for path, phrases in ambiguous_history_claims.items():
-        source_text = read(path)
+        text = read(path)
         for phrase in phrases:
-            if phrase in source_text:
+            if phrase in text:
                 fail(errors, f"{path}: ambiguous history denominator phrase {phrase!r}")
-
-    for term in ("EventEnvelope", "DecisionContext", "ModelOutput", "TradeIntent"):
-        if term not in lineage:
-            fail(errors, f"weather-strategy-lineage: missing WCIR lineage term {term}")
 
     for path in ("docs/WEATHER_ANALYSIS_CONTRACT.md", "docs/WEATHER_SYSTEM_CONTRACT.md"):
         text = read(path)
@@ -481,7 +491,9 @@ def check_production_entrypoints(errors: list[str], tracked: set[str]) -> None:
         )
 
 
-def check_research_script_debt(errors: list[str], tracked: set[str]) -> None:
+def check_research_script_debt(
+    errors: list[str], tracked: set[str], untracked: set[str] | None = None
+) -> None:
     """Prevent daily/city experiments from growing new script copies."""
     config = hygiene_config()
     prefixes = (
@@ -534,10 +546,81 @@ def check_research_script_debt(errors: list[str], tracked: set[str]) -> None:
             f"{repeated_ceiling} to {repeated}; move shared logic into a common module",
         )
 
+    if untracked is None:
+        return
+
+    untracked_entrypoints = sorted(
+        relative
+        for relative in untracked
+        if relative.startswith(("scripts/analysis/", "scripts/wallets/"))
+        and relative.endswith(".py")
+        and Path(relative).name.startswith(prefixes)
+    )
+    untracked_ceiling = int(
+        config["max_untracked_research_experiment_entrypoints"]
+    )
+    if len(untracked_entrypoints) > untracked_ceiling:
+        fail(
+            errors,
+            "untracked research experiment entrypoints grew from ceiling "
+            f"{untracked_ceiling} to {len(untracked_entrypoints)}; consolidate or "
+            "register the active experiment before creating another script",
+        )
+
+    all_entrypoints = sorted(set(entrypoints) | set(untracked_entrypoints))
+    version_families: dict[str, list[str]] = {}
+    for relative in all_entrypoints:
+        family = re.sub(r"_v\d+(?=\.py$)", "_vN", relative)
+        version_families.setdefault(family, []).append(relative)
+    repeated_families = {
+        family: paths for family, paths in version_families.items() if len(paths) > 1
+    }
+    family_ceiling = int(config["max_research_version_families"])
+    if len(repeated_families) > family_ceiling:
+        fail(
+            errors,
+            "versioned research script families grew from ceiling "
+            f"{family_ceiling} to {len(repeated_families)}; use one runner plus config",
+        )
+    family_copy_count = sum(len(paths) for paths in repeated_families.values())
+    family_copy_ceiling = int(config["max_research_version_family_copies"])
+    if family_copy_count > family_copy_ceiling:
+        fail(
+            errors,
+            "versioned research script copies grew from ceiling "
+            f"{family_copy_ceiling} to {family_copy_count}; extend the family runner",
+        )
+
+    all_fingerprints: dict[str, set[str]] = {}
+    for relative in all_entrypoints:
+        try:
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+        except SyntaxError as exc:
+            fail(errors, f"{relative}: syntax error during worktree debt audit: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if (getattr(node, "end_lineno", node.lineno) - node.lineno + 1) < 8:
+                continue
+            fingerprint = ast.dump(node, include_attributes=False)
+            all_fingerprints.setdefault(fingerprint, set()).add(relative)
+    extra_copies = sum(
+        len(paths) - 1 for paths in all_fingerprints.values() if len(paths) > 1
+    )
+    extra_copy_ceiling = int(config["max_worktree_repeated_function_extra_copies"])
+    if extra_copies > extra_copy_ceiling:
+        fail(
+            errors,
+            "worktree repeated research function copies grew from ceiling "
+            f"{extra_copy_ceiling} to {extra_copies}; extract shared implementation",
+        )
+
 
 def main() -> int:
     errors: list[str] = []
     tracked = git_tracked_files()
+    untracked = git_untracked_files()
     check_entrypoints(errors)
     check_current_strategy_language(errors)
     check_historical_status(errors)
@@ -549,7 +632,7 @@ def main() -> int:
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)
     check_production_entrypoints(errors, tracked)
-    check_research_script_debt(errors, tracked)
+    check_research_script_debt(errors, tracked, untracked)
     if errors:
         for error in errors:
             print(f"FAIL: {error}")
