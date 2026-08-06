@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+import subprocess
 from pathlib import Path
 
-from scripts.ops.weather_storage_identity_audit import build_report
+from scripts.ops import weather_storage_identity_audit as storage_audit
+from scripts.ops.weather_storage_identity_audit import (
+    build_report,
+    sqlite_schema_fingerprint,
+)
 from src.strategies.runtime.production import (
     WeatherManagedRuntimeSpec,
     WeatherProductionSpec,
@@ -56,6 +61,44 @@ def test_storage_audit_distinguishes_alias_and_distinct_weather_db(tmp_path: Pat
     assert by_path[str(compatibility)]["classification"] == "compatibility_alias"
     assert by_path[str(distinct)]["classification"] == "distinct_canonical_name"
     assert report["status"] == "critical"
+
+
+def test_schema_probe_has_process_level_timeout(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "blocked.db"
+    database.touch()
+
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(storage_audit.subprocess, "run", timeout)
+
+    fingerprint, error = sqlite_schema_fingerprint(database, timeout_sec=0.01)
+
+    assert fingerprint is None
+    assert error == "schema_probe_timeout_after_0.01s"
+
+
+def test_storage_audit_reuses_schema_probe_for_same_inode(tmp_path: Path, monkeypatch) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    calls: list[Path] = []
+
+    def fingerprint(path: Path, **kwargs):
+        calls.append(path)
+        return "fingerprint", None
+
+    monkeypatch.setattr(storage_audit, "sqlite_schema_fingerprint", fingerprint)
+
+    report = build_report(_spec(tmp_path, canonical, compatibility))
+
+    assert calls == [canonical]
+    by_path = {item["path"]: item for item in report["databases"]}
+    assert by_path[str(canonical)]["schema_identity_reused"] is True
+    assert by_path[str(compatibility)]["schema_identity_reused"] is True
 
 
 def test_production_spec_is_single_authority_for_live_journals(tmp_path: Path) -> None:

@@ -11,7 +11,6 @@ import argparse
 import hashlib
 import json
 import os
-import sqlite3
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -26,8 +25,35 @@ if str(ROOT) not in sys.path:
 from src.strategies.runtime.production import WeatherProductionSpec, load_production_spec
 
 
-SQLITE_HEADER = b"SQLite format 3\x00"
 SIDECAR_DB_NAMES = {"weather_decision_journal.db"}
+SCHEMA_PROBE_TIMEOUT_SEC = 5.0
+SCHEMA_PROBE_CODE = r"""
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    with path.open("rb") as handle:
+        if handle.read(16) != b"SQLite format 3\x00":
+            print(json.dumps({"error": "not_sqlite"}))
+            raise SystemExit(0)
+    uri = f"file:{path.resolve()}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, timeout=1.0)
+    try:
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("PRAGMA busy_timeout=1000")
+        rows = conn.execute(
+            "SELECT type, name, COALESCE(sql, '') FROM sqlite_master "
+            "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+        ).fetchall()
+    finally:
+        conn.close()
+    print(json.dumps({"rows": rows}, ensure_ascii=False, separators=(",", ":")))
+except (OSError, sqlite3.Error) as exc:
+    print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}))
+"""
 
 
 def file_identity(path: Path) -> dict[str, Any]:
@@ -52,24 +78,35 @@ def file_identity(path: Path) -> dict[str, Any]:
     return result
 
 
-def sqlite_schema_fingerprint(path: Path) -> tuple[str | None, str | None]:
+def sqlite_schema_fingerprint(
+    path: Path, *, timeout_sec: float = SCHEMA_PROBE_TIMEOUT_SEC
+) -> tuple[str | None, str | None]:
+    """Fingerprint SQLite schema without letting a stalled volume hang the audit."""
     try:
-        with path.open("rb") as handle:
-            if handle.read(len(SQLITE_HEADER)) != SQLITE_HEADER:
-                return None, "not_sqlite"
-        uri = f"file:{path.resolve()}?mode=ro"
-        conn = sqlite3.connect(uri, uri=True, timeout=1.0)
-        try:
-            conn.execute("PRAGMA query_only=ON")
-            rows = conn.execute(
-                "SELECT type, name, COALESCE(sql, '') FROM sqlite_master "
-                "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
-            ).fetchall()
-        finally:
-            conn.close()
+        proc = subprocess.run(
+            [sys.executable, "-c", SCHEMA_PROBE_CODE, str(path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return None, f"schema_probe_timeout_after_{timeout_sec:g}s"
+    if proc.returncode != 0:
+        return None, f"schema_probe_exit_{proc.returncode}: {proc.stderr.strip()}"
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        return None, f"schema_probe_invalid_json: {exc}"
+    if result.get("error"):
+        return None, str(result["error"])
+    rows = result.get("rows")
+    if not isinstance(rows, list):
+        return None, "schema_probe_missing_rows"
+    try:
         payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest(), None
-    except (OSError, sqlite3.Error) as exc:
+    except (TypeError, ValueError) as exc:
         return None, f"{type(exc).__name__}: {exc}"
 
 
@@ -219,13 +256,22 @@ def build_report(spec: WeatherProductionSpec) -> dict[str, Any]:
     canonical_identity = file_identity(canonical)
     canonical_pair = (canonical_identity.get("device"), canonical_identity.get("inode"))
     canonical_schema, canonical_schema_error = sqlite_schema_fingerprint(canonical)
+    schema_by_identity: dict[tuple[Any, Any], tuple[str | None, str | None]] = {}
+    if canonical_pair[0] is not None:
+        schema_by_identity[canonical_pair] = (canonical_schema, canonical_schema_error)
     dbs: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
     compatibility_set = {str(path) for path in compatibility}
     for path in db_paths:
         item = file_identity(path)
         pair = (item.get("device"), item.get("inode"))
-        schema, schema_error = sqlite_schema_fingerprint(path)
+        schema_identity_reused = pair[0] is not None and pair in schema_by_identity
+        if schema_identity_reused:
+            schema, schema_error = schema_by_identity[pair]
+        else:
+            schema, schema_error = sqlite_schema_fingerprint(path)
+            if pair[0] is not None:
+                schema_by_identity[pair] = (schema, schema_error)
         if str(path) == str(canonical):
             classification = "physical_canonical"
         elif str(path) in compatibility_set and pair == canonical_pair:
@@ -278,6 +324,7 @@ def build_report(spec: WeatherProductionSpec) -> dict[str, Any]:
                 "classification": classification,
                 "schema_fingerprint": schema,
                 "schema_error": schema_error,
+                "schema_identity_reused": schema_identity_reused,
                 "open_by": open_users.get(str(path), []),
             }
         )
