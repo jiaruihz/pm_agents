@@ -492,6 +492,40 @@ def test_prospective_probe_uses_ephemeral_session_not_run_shell(monkeypatch, tmp
     assert not any(args[0] == "run-shell" for args in calls)
 
 
+def test_prospective_probe_reports_first_io_failure(monkeypatch, tmp_path):
+    base = production_spec(tmp_path, ())
+    base.canonical_db_path.write_bytes(b"x")
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "data_feed_runtime_root": Path("/dev/null/blocked"),
+        }
+    )
+
+    def fake_tmux_on_socket(_spec, _socket, *args):
+        if args[0] == "new-session" and str(args[3]).endswith("_io"):
+            completed = subprocess.run(
+                ["/bin/sh", "-c", str(args[-1])],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return subprocess.CompletedProcess(
+                args, 0, completed.stdout, completed.stderr
+            )
+        if args[0] == "has-session":
+            return subprocess.CompletedProcess(args, 1, "", "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(ctl, "_tmux_on_socket", fake_tmux_on_socket)
+
+    report = ctl.collect_prospective_jrs_context_health(spec)
+
+    assert report["status"] == "critical"
+    assert report["returncode"] != 0
+    assert "Not a directory" in report["output"]
+
+
 def test_persist_recovery_manifest_is_complete(tmp_path):
     snapshot = observed("one", "two")
 

@@ -403,7 +403,7 @@ def collect_prospective_jrs_context_health(
     probe_returncode = started.returncode
     try:
         if started.returncode == 0:
-            commands = ["set -eu", "umask 077"]
+            commands = ["umask 077"]
             for index, probe_dir in enumerate(probe_dirs):
                 probe_path = probe_dir / (
                     f".prospective_tmux_probe_{os.getpid()}_{index}"
@@ -424,10 +424,14 @@ def collect_prospective_jrs_context_health(
                 prefix="weather-jrs-prospective-probe-"
             ) as bridge_dir:
                 status_path = Path(bridge_dir) / "status"
-                command = "; ".join(commands)
+                output_path = Path(bridge_dir) / "output"
+                # Preserve the first failing JRS operation long enough to
+                # write its status. ``set -e`` previously exited before the
+                # bridge file was created and hid the useful TCC errno.
+                command = " && ".join(commands)
                 session_command = (
                     "set +e; "
-                    f"{command}; "
+                    f"{{ {command}; }} > {shlex.quote(str(output_path))} 2>&1; "
                     "rc=$?; "
                     f"printf '%s\\n' \"$rc\" > {shlex.quote(str(status_path))}; "
                     "exit \"$rc\""
@@ -461,6 +465,11 @@ def collect_prospective_jrs_context_health(
                     except (FileNotFoundError, OSError, ValueError):
                         probe_returncode = 1
                         output = "prospective JRS probe exited without status"
+                    else:
+                        try:
+                            output = output_path.read_text(encoding="utf-8").strip()
+                        except OSError:
+                            pass
     finally:
         _tmux_on_socket(spec, socket, "kill-server")
     return {
