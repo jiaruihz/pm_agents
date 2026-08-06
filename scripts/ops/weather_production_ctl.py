@@ -677,24 +677,25 @@ def migrate_production_storage(
         for row in _pane_restore_rows(before)
         if row["session"] not in set(spec.allowed_unmanaged_sessions)
     ]
-    socket = f"{spec.canonical_tmux_socket}-storage-migration-{os.getpid()}"
-    keeper = _tmux_on_socket(
-        spec,
-        socket,
-        "new-session",
-        "-d",
-        "-s",
-        "weather_storage_migration_keeper",
-        "while :; do sleep 3600; done",
+    active_allowed = sorted(
+        {
+            str(row.get("session"))
+            for row in before.get("tmux_sessions", [])
+            if isinstance(row, Mapping)
+            and row.get("session") in set(spec.allowed_unmanaged_sessions)
+        }
     )
-    if keeper.returncode != 0:
+    if active_allowed:
         raise RuntimeError(
-            f"failed to start migration permission host: {keeper.stdout}"
+            "bounded one-shot sessions must finish before storage migration: "
+            + ",".join(active_allowed)
         )
+    # Reuse the already-proven canonical permission parent. macOS may deny a
+    # fresh tmux parent even when the existing server still has both volumes;
+    # the controller therefore stops/restores sessions without killing it.
+    socket = spec.canonical_tmux_socket
     actions: list[dict[str, Any]] = []
-    canonical_stopped = False
-    cutover_succeeded = False
-    try:
+    if True:
         probe_command = " && ".join(
             (
                 f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.production_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.archive_storage_volume_uuid)}",
@@ -713,25 +714,28 @@ def migrate_production_storage(
         )
         actions.append(
             {
-                "action": "prospective_dual_volume_probe",
+                "action": "canonical_dual_volume_probe",
                 "returncode": probe.returncode,
                 "output": probe.stdout[-2000:].strip(),
             }
         )
         if probe.returncode != 0:
-            raise RuntimeError(f"migration permission host probe failed: {probe.stdout}")
+            raise RuntimeError(f"canonical dual-volume probe failed: {probe.stdout}")
 
-        killed = _tmux(spec, "kill-server")
-        actions.append(
-            {
-                "action": "stop_canonical_server",
-                "returncode": killed.returncode,
-                "output": killed.stdout[-2000:].strip(),
-            }
-        )
-        if killed.returncode != 0:
-            raise RuntimeError(f"failed to stop canonical server: {killed.stdout}")
-        canonical_stopped = True
+        for row in restore_rows:
+            killed = _tmux(spec, "kill-session", "-t", f"={row['session']}")
+            actions.append(
+                {
+                    "action": "stop_session_for_storage_cutover",
+                    "session": row["session"],
+                    "returncode": killed.returncode,
+                    "output": killed.stdout[-2000:].strip(),
+                }
+            )
+            if killed.returncode != 0:
+                raise RuntimeError(
+                    f"failed to stop {row['session']}: {killed.stdout}"
+                )
 
         target_feed_path = staging_root / spec.data_feed_runtime_root.relative_to(
             spec.production_storage_root
@@ -824,27 +828,9 @@ def migrate_production_storage(
         )
         if migrated.returncode != 0:
             raise RuntimeError(
-                "storage cutover failed; rescue permission host preserved at "
+                "storage cutover failed; canonical permission host preserved at "
                 f"socket={socket}: {migrated.stdout}"
             )
-        cutover_succeeded = True
-    finally:
-        # Once production is stopped, a failed cutover must retain its fresh
-        # permission host for repair. Killing it here would turn a recoverable
-        # copy/rename error into another lock-screen/TCC incident.
-        if cutover_succeeded or not canonical_stopped:
-            _tmux_on_socket(spec, socket, "kill-server")
-
-    started = _tmux(
-        spec,
-        "new-session",
-        "-d",
-        "-s",
-        "weather_jrs_context_keeper",
-        "while :; do sleep 3600; done",
-    )
-    if started.returncode != 0:
-        raise RuntimeError(f"failed to start canonical tmux host after cutover: {started.stdout}")
     probe = collect_jrs_context_health(spec)
     actions.append({"action": "new_production_volume_probe", **probe})
     if probe["status"] != "healthy":
