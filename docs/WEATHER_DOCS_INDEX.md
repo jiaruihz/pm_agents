@@ -93,8 +93,8 @@ manifest/历史报告指针。需要重放历史研究时，用
 | [WEATHER_JRS_RUNTIME_INCIDENTS.md](WEATHER_JRS_RUNTIME_INCIDENTS.md) | `current-source` | Mac canonical JRS tmux/TCC 事故账：故障窗口、影响数字、根因证据、controller/LaunchAgent 收口、生产验收与尚未通过的 reboot/login 边界 |
 | [WEATHER_MAC_MINI_RUNBOOK.md](WEATHER_MAC_MINI_RUNBOOK.md) | `superseded-for-now` | 2026-07 前后的 Mac LaunchAgent 接管历史；其中 direct LaunchAgent/start/live 命令已被 controller + canonical JRS tmux 取代，不可作为当前运维入口 |
 | [WEATHER_DASHBOARD.md](WEATHER_DASHBOARD.md) | `current-source` | 重做后看板的信息架构 / 每页口径（在险资金、陈旧未结算、镜像≠生产、探针/研究口径）/ 新增 API |
-| [WEATHER_DASHBOARD_DEPLOY.md](WEATHER_DASHBOARD_DEPLOY.md) | `current-reference` | 看板怎么构建 + 部署到公网域名（Cloudflare Tunnel + 强制鉴权 + 安全清单） |
-| [WEATHER_DASHBOARD_TROUBLESHOOTING.md](WEATHER_DASHBOARD_TROUBLESHOOTING.md) | `current-reference` | 本机 dashboard / API / FE 出问题时怎么排查 |
+| [WEATHER_DASHBOARD_DEPLOY.md](WEATHER_DASHBOARD_DEPLOY.md) | `current-reference` | Mac dashboard 当前发布合同：controller-managed JRS API、LaunchAgent FE、canonical refresh 与公网鉴权边界 |
+| [WEATHER_DASHBOARD_TROUBLESHOOTING.md](WEATHER_DASHBOARD_TROUBLESHOOTING.md) | `current-reference` | Mac dashboard/API/FE/数据新鲜度排查；移除 WSL portproxy、N100 systemd 和 direct process 恢复路径 |
 
 ### Weather skills
 

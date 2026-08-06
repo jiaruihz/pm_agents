@@ -1,155 +1,77 @@
-# Weather 看板部署流程（Deploy Runbook）
+# Weather Dashboard Deployment
 
-Status: `current-reference`
-Updated: 2026-06-27
-关联：[WEATHER_DASHBOARD.md](WEATHER_DASHBOARD.md)（口径）· [OPS_RUNBOOK.md](OPS_RUNBOOK.md)
+Status: current-reference
+Updated: 2026-08-06 Mac controller architecture
+关联：[WEATHER_DASHBOARD.md](WEATHER_DASHBOARD.md) · [OPS_RUNBOOK.md](OPS_RUNBOOK.md)
 
-> 怎么把看板部署到公网域名，并持久化这套流程。
-> **安全前提（必读）**：看板暴露真实交易数据（持仓 / PnL / 策略参数 / 城市池）。
-> **绝不允许无鉴权公开暴露**。任何公网入口必须前置鉴权（Cloudflare Access 或反代 Basic Auth）。
+## 当前架构
 
-## 0.1 当前实际部署（N100，权威）
+- API：`production.yaml:weather_dashboard_api`，由 weather production controller 在 canonical JRS context 管理，
+  默认 health endpoint 为 `http://127.0.0.1:8000/health`。
+- FE：独立 `com.pm-agents.weather-fe` LaunchAgent，默认 `http://127.0.0.1:5174`；它不读写 JRS，因此不并入
+  canonical JRS tmux。
+- DB：API 读取 production contract 解析出的 canonical DB；仓库 `runtime/weather.db` 必须与 JRS physical
+  canonical 为同一 device/inode。
+- refresh：只有登记的 bounded canonical refresh one-shot；`run_stack.sh` 不再启停 API/FE。
 
-公网 **https://dashboard.weekendleague.party** 已上线，落在 N100：
+N100 systemd、`rsync dist`、WSL、旧 `com.pm-agents.weather-api` LaunchAgent、单进程 API+静态 FE 和公网 tunnel
+部署均为历史形态，不是当前发布步骤。
 
-- **主机**：N100（`jiarui@192.168.0.200`），repo `~/projects/pm_agent`，分支 `develop`。
-- **进程**：systemd **user** service `pm-agent-weather-dashboard.service`，
-  `uvicorn weather_dashboard.api.app:app --host 127.0.0.1 --port 18080`（含 ExecStartPre 刷新探针注册表）。
-  装/改服务：`scripts/ops/install_weather_dashboard_user_services.sh`。
-- **公网入口**：`cloudflared tunnel run`（token 模式，ingress 在 Cloudflare 面板配 `dashboard.weekendleague.party → 127.0.0.1:18080`）。
-- **node/npm**：在 `~/.local/bin`（非交互 ssh 的 PATH 里没有，要 `PATH=$HOME/.local/bin:$PATH`）。
-
-### 实际发布步骤（git-first 代码 + dist 制品）
-```bash
-# 1) 本机：提交后推到 N100 裸库
-git push n100 develop
-# 2) N100：拉代码
-ssh jiarui@192.168.0.200 'cd ~/projects/pm_agent && git checkout develop && git pull --ff-only origin develop'
-# 3) 前端 dist：本机构建后 rsync（dist 是 gitignore 的构建产物）
-cd frontend/strategy_dashboard && npm run build && cd ../..
-rsync -az --delete frontend/strategy_dashboard/dist/ jiarui@192.168.0.200:/home/jiarui/projects/pm_agent/frontend/strategy_dashboard/dist/
-#    （或在 N100 上 PATH=$HOME/.local/bin:$PATH npm ci && npm run build）
-# 4) 重启服务（加载新 API 路由）
-ssh jiarui@192.168.0.200 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user restart pm-agent-weather-dashboard.service'
-# 5) 验证
-curl -s https://dashboard.weekendleague.party/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
-```
-
-### 鉴权现状：已加 HTTP Basic Auth（2026-06-27）
-之前无鉴权、公开可读真实持仓。现已开启**应用层 Basic Auth**（`weather_dashboard/api/auth.py`，
-env-gated）。N100 配置：systemd drop-in `~/.config/systemd/user/pm-agent-weather-dashboard.service.d/auth.conf`：
-```ini
-[Service]
-Environment=DASHBOARD_AUTH=admin:<password>
-```
-- 未登录 → 401；`/health` 仍开放（liveness）。本机 dev/测试不设此 env → 无鉴权，不受影响。
-- **改密码**：编辑该 drop-in 的 `DASHBOARD_AUTH`，`systemctl --user daemon-reload && systemctl --user restart pm-agent-weather-dashboard.service`。
-- **生成强密码**：`openssl rand -hex 16`。
-
-> Basic Auth 是即时止血。若要 SSO/邮箱登录，按 §4 上 Cloudflare Access（隧道层鉴权），
-> 之后可把 `DASHBOARD_AUTH` 去掉只留 Access，或两者叠加。
-> 隧道：token 模式，account `314dbf17…`，tunnel `b76927af-16d0-432e-a5eb-a79451dd208a`，
-> ingress/Access 在 Cloudflare Zero Trust 面板配。
-
----
-
-## 0. 架构：单制品
-
-FastAPI (`weather_dashboard/api/app.py`) 会把构建后的前端 `frontend/strategy_dashboard/dist`
-挂在同一个端口（默认 8000）一起服务。所以**一个进程 = 整个看板**：API + 静态前端。
-公网只需要把这一个端口经鉴权隧道暴露出去。
-
-数据来源（部署主机上必须可读）：
-- `runtime/weather.db`（canonical 库）
-- `runtime/weather_edge_v1/*`（探针脉搏 / 盘口快照镜像）
-- `docs/analysis/**/generated/*/summary.json`（研究证据）
-
-> 数据是 N100 的镜像，靠 `scripts/ops/sync_weather_remote.sh` 同步。部署主机要么是本机 Mac（定时 sync），
-> 要么直接放 N100（数据在本地，最新）。**看板新鲜度 = 部署主机镜像新鲜度**，仍遵守「镜像≠生产」口径。
-
-## 1. 构建 + 本地验证
+## 发布前检查
 
 ```bash
-cd frontend/strategy_dashboard && npm ci && npm run build      # 产出 dist/
-cd ../.. && .venv/bin/python -m uvicorn weather_dashboard.api.app:app --host 127.0.0.1 --port 8000
-# 打开 http://127.0.0.1:8000 应看到完整看板（API+FE 同端口）
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_production_ctl.py plan
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
 ```
 
-环境变量（按需）：
-- `WEATHER_DB_PATH`（默认 `runtime/weather.db`）
-- `WEATHER_RUNTIME_ROOT`（默认 `runtime/weather_edge_v1`）
-- `WEATHER_ANALYSIS_ROOT`（默认 `docs/analysis`）
-- `WEATHER_SNAPSHOTS_DIR`、`CORS_ORIGINS`、`PORT`
+存在 manifest critical、DB split、非 canonical DB consumer、异常 checkout 或 JRS probe 失败时停止发布，先修 P0。
 
-## 2. 生产进程
+## API 变更
 
-用 systemd（Linux/N100）或 launchd/pm2 常驻：
+API 属于 weather production 变更：
 
-```ini
-# /etc/systemd/system/weather-dashboard.service
-[Unit]
-Description=Weather Dashboard (FastAPI + built FE)
-After=network.target
-[Service]
-WorkingDirectory=/home/<user>/projects/pm_agent
-ExecStart=/home/<user>/projects/pm_agent/.venv/bin/python -m uvicorn weather_dashboard.api.app:app --host 127.0.0.1 --port 8000
-Restart=always
-Environment=WEATHER_DB_PATH=runtime/weather.db
-[Install]
-WantedBy=multi-user.target
-```
+1. 修改代码并运行 API/DB 定向测试；
+2. 提交代码；
+3. 用 controller 对 `weather_dashboard_api` 的登记合同预览并重启；
+4. 验证 production SHA、实例健康、DB identity、`/health` 与目标 API；
+5. 比较 prechange manifest，不能带走其他 JRS session。
 
-> 绑 `127.0.0.1` 不绑 `0.0.0.0`：只让本机隧道访问，不直接开公网端口。
+不要直接运行 uvicorn、底层 start script、raw tmux 或恢复旧 API LaunchAgent。
 
-数据新鲜：部署主机加一条 sync cron（若不是 N100 本机）：
-```cron
-*/30 * * * * cd /path/to/pm_agent && scripts/ops/sync_weather_remote.sh >> runtime/_dashboard_logs/sync.cron.log 2>&1
-```
-
-## 3. 公网入口：Cloudflare Tunnel（推荐）
-
-无需开放入站端口、自带 TLS、可叠加 Cloudflare Access 鉴权。
+## FE 变更
 
 ```bash
-# 安装 cloudflared（mac: brew install cloudflared / linux: 官方包）
-cloudflared tunnel login                          # 浏览器授权到你的 Cloudflare 账号+域名
-cloudflared tunnel create weather-dashboard       # 生成 tunnel + 凭证
-# ~/.cloudflared/config.yml:
-#   tunnel: <TUNNEL_ID>
-#   credentials-file: /home/<user>/.cloudflared/<TUNNEL_ID>.json
-#   ingress:
-#     - hostname: dash.example.com
-#       service: http://127.0.0.1:8000
-#     - service: http_status:404
-cloudflared tunnel route dns weather-dashboard dash.example.com
-cloudflared tunnel run weather-dashboard          # 或装成 systemd 服务常驻
+cd frontend/strategy_dashboard
+npm ci
+npm run build
 ```
 
-**快速临时 URL（仅自测，勿放敏感数据长期暴露）**：
-`cloudflared tunnel --url http://127.0.0.1:8000` → 给一个 `*.trycloudflare.com`。
+构建和前端测试通过后提交源码。当前 FE 生命周期归 `com.pm-agents.weather-fe` LaunchAgent；发布时核对它实际加载的
+checkout/命令和新 bundle，再用该 LaunchAgent 的既有合同重载并验证 `http://127.0.0.1:5174`。不得把开发 Vite
+进程、临时 shell 或旧 N100 dist 当生产 FE。
 
-## 4. 鉴权（强制）
+若实际 LaunchAgent checkout 与目标提交不一致，先修 manifest/部署合同，不直接复制 dist 绕过 git 审计。
 
-二选一，**上线前必须有**：
-
-- **Cloudflare Access**（推荐）：Zero Trust → Access → 给 `dash.example.com` 建 Application，
-  Policy 限定你的邮箱/Google 登录。隧道层就挡住未授权访问，看板本身不用改。
-- **反代 Basic Auth**（无 Cloudflare 账号时）：nginx/Caddy 前置 `auth_basic` + TLS，再反代到 `127.0.0.1:8000`。
-
-> 看板目前**没有内置登录**。鉴权放在入口层（隧道/反代）。若以后要细粒度权限，再在 API 加鉴权中间件。
-
-## 5. 上线安全清单
-
-- [ ] 进程绑 `127.0.0.1`，未直接开公网端口
-- [ ] 公网入口前置鉴权（Access / Basic Auth）已生效，匿名访问被挡
-- [ ] 只读确认：看板无任何写/下单接口（设计即只读）
-- [ ] DB 里无私钥/助记词（`runtime/weather.db` 只有成交/结算/配置，不含钱包密钥——上线前核一遍）
-- [ ] sync cron 正常，新鲜度口径仍显示「镜像≠生产」
-- [ ] 回滚：停 `cloudflared` 即下线公网；停 systemd 即停服务
-
-## 6. 更新发布
+## Canonical refresh
 
 ```bash
-git pull && cd frontend/strategy_dashboard && npm ci && npm run build && cd ../..
-sudo systemctl restart weather-dashboard      # FE 是静态 dist，重启即生效
+scripts/ops/weather_dashboard_refresh.sh --status
+scripts/ops/weather_dashboard_refresh.sh
 ```
+
+无参数只请求唯一 bounded refresh。状态与证据读取
+`runtime/weather_edge_v1/canonical_refresh/{last_exit_status,tmux.log}`。任务正在运行时不得重复触发；全量重建必须有
+显式授权并使用 `scripts/weather_dashboard/run_stack.sh --rebuild`，它不会启停服务。
+
+## 公网与鉴权边界
+
+本文不声明当前存在公网部署。若新增公网入口，它属于新的安全/生产变更，必须先确认：
+
+- API/FE 仍只绑定 loopback 或受控反代；
+- Cloudflare Access、SSO 或等价鉴权在匿名访问前生效；
+- 不暴露私钥、助记词、环境变量或写/下单控制面；
+- tunnel/反代配置有版本审计、回滚和实际匿名拒绝测试。
+
+历史域名、tunnel id、Basic Auth 密码位置和 N100 service 不得从旧文档恢复。
