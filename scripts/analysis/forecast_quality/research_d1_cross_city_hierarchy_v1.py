@@ -362,6 +362,7 @@ def build_states(
     baskets: pd.DataFrame,
     assignments: pd.DataFrame,
     settlements: dict[tuple[str, str], str],
+    evidence_blockers: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     baskets = baskets.loc[baskets["snapshot_key"].isin(forecasts["snapshot_key"]) & baskets["policy"].isin(POLICIES)].copy()
     joined = baskets.merge(assignments, on="city", how="inner", validate="many_to_one")
@@ -386,37 +387,58 @@ def build_states(
         "missing_ask": 0,
         "scoreable_states": 0,
     }
+
+    def block(row: Any, reason: str, detail: str | None = None) -> None:
+        if evidence_blockers is None:
+            return
+        evidence_blockers.append(
+            {
+                "snapshot_key": str(row.snapshot_key),
+                "source_path": str(row.source_path),
+                "city": str(row.city),
+                "target_date": str(row.target_date),
+                "policy": str(row.policy),
+                "reason": reason,
+                "detail": detail,
+            }
+        )
+
     for row in joined.itertuples(index=False):
         key = (row.city, str(row.target_date))
         winner = settlements.get(key)
         if winner is None:
             counters["missing_settlement"] += 1
+            block(row, "missing_settlement")
             continue
         try:
             records = get_snapshot_records(row.source_path, row.city, str(row.target_date), cache)
-        except ValueError:
+        except ValueError as exc:
             counters["invalid_ladder"] += 1
             counters["duplicate_bracket"] += 1
+            block(row, "duplicate_bracket", str(exc))
             continue
         try:
             parsed = [(parse_bracket(r["bracket"], r.get("question", "")), r) for r in records]
             parsed.sort(key=lambda item: sort_key(item[0]))
             brackets = [item[0] for item in parsed]
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as exc:
             counters["invalid_ladder"] += 1
             counters["ladder_parse_error"] += 1
+            block(row, "ladder_parse_error", str(exc))
             continue
         try:
             validate_ladder(brackets)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             counters["invalid_ladder"] += 1
             counters["ladder_structure_error"] += 1
+            block(row, "ladder_structure_error", str(exc))
             continue
         labels = [x.label for x in brackets]
         winner_norm = str(winner).replace("°C", "").replace("°F", "").replace("°", "").strip()
         if winner_norm not in labels:
             counters["invalid_ladder"] += 1
             counters["winner_not_in_ladder"] += 1
+            block(row, "winner_not_in_ladder", f"winner={winner_norm}")
             continue
         mids: list[float] = []
         asks: list[float] = []
@@ -442,9 +464,11 @@ def build_states(
             ask_sizes.append(float(size) if np.isfinite(size) else math.nan)
         if not market_ok or sum(mids) <= 0:
             counters["missing_market_mid"] += 1
+            block(row, "missing_market_mid")
             continue
         if not ask_ok:
             counters["missing_ask"] += 1
+            block(row, "missing_ask_execution_only")
         market_probs = np.asarray(mids, dtype=float)
         market_probs /= market_probs.sum()
         states.append(
@@ -746,7 +770,14 @@ def main() -> int:
             target_end=settlement_end,
             cities=settlement_cities,
         )
-    states, funnels = build_states(forecasts, baskets, assignments, settlements)
+    evidence_blockers: list[dict[str, Any]] = []
+    states, funnels = build_states(
+        forecasts,
+        baskets,
+        assignments,
+        settlements,
+        evidence_blockers=evidence_blockers,
+    )
     scored = score_states(states, specs)
     score_table = date_equal_summary(scored)
     deltas = []
@@ -811,6 +842,7 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     scored.to_csv(args.out / "scored_states.csv", index=False)
+    pd.DataFrame(evidence_blockers).to_csv(args.out / "evidence_blockers.csv", index=False)
     fitted.to_csv(args.out / "fitted_city_error_models.csv", index=False)
     score_table.to_csv(args.out / "score_summary.csv", index=False)
     delta_table.to_csv(args.out / "paired_date_bootstrap_deltas.csv", index=False)

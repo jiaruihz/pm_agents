@@ -43,6 +43,7 @@ legacy paper baskets（2026-05-20..2026-07-23）
    - all-policy：3,550 assigned → **1,844 scoreable states / 48 cities**；
    - primary `D-1_18_24_first`：**763 states / 49 dates / 48 cities**；
    - invalid ladder=1,706，全部是 `ladder_structure_error`；duplicate=0、parse=0、winner-not-in-ladder=0、missing-market-mid=0、missing-settlement=0。
+   - 已物化逐 checkpoint `hierarchy/evidence_blockers.csv`：1,706 rows / 46 dates / 47 cities；18–24 policy 987，12–18 policy 719。
 4. 重跑 weather-only：primary date-equal logloss 为 market **1.4800**、pooled **2.3272**、hierarchical **2.4422**、city-only **2.7648**。扩分母没有改变 weather-only 明显落后 market 的结论。
 5. 重跑 nested expanding OOF market residual：
    - prepared primary=763 states / 49 dates；前 10 dates 训练；
