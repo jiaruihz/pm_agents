@@ -226,6 +226,80 @@ def journal_shape(path: Path, tail_lines: int = 200) -> dict[str, Any]:
     }
 
 
+def storage_quarantine(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    manifest_path = root / "runtime/_legacy/storage_quarantine/manifest.json"
+    report: dict[str, Any] = {
+        "manifest_path": str(manifest_path),
+        "exists": manifest_path.is_file(),
+        "files": [],
+    }
+    findings: list[dict[str, Any]] = []
+    if not manifest_path.is_file():
+        return report, findings
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        findings.append(
+            {
+                "severity": "critical",
+                "kind": "storage_quarantine_manifest_invalid",
+                "path": str(manifest_path),
+                "message": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        return {**report, "error": findings[-1]["message"]}, findings
+    report["schema_version"] = payload.get("schema_version")
+    report["quarantined_at_utc"] = payload.get("quarantined_at_utc")
+    for declared in payload.get("files") or []:
+        quarantine_path = root / str(declared.get("quarantine_path") or "")
+        original_path = root / str(declared.get("original_path") or "")
+        item = {
+            **declared,
+            **file_identity(quarantine_path),
+            "original_path_exists": original_path.exists(),
+        }
+        if quarantine_path.is_file():
+            digest = hashlib.sha256()
+            with quarantine_path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            item["actual_sha256"] = digest.hexdigest()
+        report["files"].append(item)
+        if not quarantine_path.is_file():
+            findings.append(
+                {
+                    "severity": "critical",
+                    "kind": "storage_quarantine_file_missing",
+                    "path": str(quarantine_path),
+                }
+            )
+        elif item.get("actual_sha256") != declared.get("sha256"):
+            findings.append(
+                {
+                    "severity": "critical",
+                    "kind": "storage_quarantine_hash_mismatch",
+                    "path": str(quarantine_path),
+                }
+            )
+        if item.get("process_writable"):
+            findings.append(
+                {
+                    "severity": "warning",
+                    "kind": "storage_quarantine_file_writable",
+                    "path": str(quarantine_path),
+                }
+            )
+        if original_path.exists():
+            findings.append(
+                {
+                    "severity": "warning",
+                    "kind": "storage_quarantine_original_reappeared",
+                    "path": str(original_path),
+                }
+            )
+    return report, findings
+
+
 def configured_artifacts(spec: WeatherProductionSpec) -> list[dict[str, Any]]:
     artifacts: list[dict[str, Any]] = []
     for runtime in spec.managed_runtimes:
@@ -261,6 +335,10 @@ def build_report(spec: WeatherProductionSpec) -> dict[str, Any]:
         schema_by_identity[canonical_pair] = (canonical_schema, canonical_schema_error)
     dbs: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
+    quarantine, quarantine_findings = storage_quarantine(
+        spec.operational_repo_root
+    )
+    findings.extend(quarantine_findings)
     compatibility_set = {str(path) for path in compatibility}
     for path in db_paths:
         item = file_identity(path)
@@ -416,6 +494,7 @@ def build_report(spec: WeatherProductionSpec) -> dict[str, Any]:
         "databases": dbs,
         "configured_artifacts": artifacts,
         "active_live_order_journals": journals,
+        "storage_quarantine": quarantine,
         "findings": findings,
         "summary": {
             "database_file_count": len(dbs),

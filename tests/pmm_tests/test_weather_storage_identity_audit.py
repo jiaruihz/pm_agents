@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 import subprocess
+import hashlib
+import json
 from pathlib import Path
 
 from scripts.ops import weather_storage_identity_audit as storage_audit
@@ -177,6 +179,46 @@ def test_storage_audit_allows_distinct_schemas_for_distinct_record_types(
     ] == {"order": {"orders_v2": 1}, "exit": {"exit_v1": 1}}
     assert not any(
         item["kind"] == "live_order_schema_version_drift"
+        for item in report["findings"]
+    )
+
+
+def test_storage_audit_verifies_recoverable_quarantine(tmp_path: Path) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    quarantine = tmp_path / "runtime/_legacy/storage_quarantine"
+    quarantine.mkdir(parents=True)
+    retired = quarantine / "retired.db"
+    retired.write_bytes(b"retired")
+    retired.chmod(0o444)
+    digest = hashlib.sha256(retired.read_bytes()).hexdigest()
+    (quarantine / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "weather_storage_quarantine_v1",
+                "quarantined_at_utc": "2026-08-06T00:00:00Z",
+                "files": [
+                    {
+                        "original_path": "runtime/retired.db",
+                        "quarantine_path": "runtime/_legacy/storage_quarantine/retired.db",
+                        "sha256": digest,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_report(_spec(tmp_path, canonical, compatibility))
+
+    assert report["storage_quarantine"]["exists"] is True
+    assert report["storage_quarantine"]["files"][0]["actual_sha256"] == digest
+    assert not any(
+        item["kind"].startswith("storage_quarantine_")
         for item in report["findings"]
     )
 
