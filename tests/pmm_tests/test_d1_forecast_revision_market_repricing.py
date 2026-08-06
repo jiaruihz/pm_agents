@@ -62,3 +62,54 @@ def test_d1_checkpoint_policy_uses_city_local_target_midnight() -> None:
     )
     assert policy == "D-1_18_24"
     assert hours == -3.0
+
+
+def test_directional_repricing_flips_downward_revision_sign() -> None:
+    events = [
+        {
+            "target_date": "2026-08-06",
+            "event_class": "forward_new_complete_run",
+            "checkpoint_policy": "D-1_18_24",
+            "consensus_median_revision_f": 1.0,
+            "assigned_model_revision_f": 1.0,
+            "immediate_market_status": "scoreable",
+            "immediate_mean_rung_shift": 0.20,
+            **{
+                f"markout_{minutes}m_status": "scoreable"
+                for minutes in subject.MARKOUT_MINUTES
+            },
+            **{
+                f"markout_{minutes}m_mean_rung_shift": 0.10
+                for minutes in subject.MARKOUT_MINUTES
+            },
+        },
+        {
+            "target_date": "2026-08-07",
+            "event_class": "forward_new_complete_run",
+            "checkpoint_policy": "D-1_18_24",
+            "consensus_median_revision_f": -2.0,
+            "assigned_model_revision_f": -2.0,
+            "immediate_market_status": "scoreable",
+            "immediate_mean_rung_shift": -0.30,
+            **{
+                f"markout_{minutes}m_status": "scoreable"
+                for minutes in subject.MARKOUT_MINUTES
+            },
+            **{
+                f"markout_{minutes}m_mean_rung_shift": -0.20
+                for minutes in subject.MARKOUT_MINUTES
+            },
+        },
+    ]
+
+    rows = subject.directional_repricing_summary(events)
+    immediate = next(
+        row
+        for row in rows
+        if row["scope"] == "forward_new_complete_run"
+        and row["revision_field"] == "consensus_median_revision_f"
+        and row["horizon"] == "immediate"
+    )
+    assert immediate["events"] == 2
+    assert immediate["direction_agreement_rate"] == 1.0
+    assert abs(immediate["mean_directional_rung_shift"] - 0.25) < 1e-12

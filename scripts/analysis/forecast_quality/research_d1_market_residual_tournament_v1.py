@@ -40,9 +40,9 @@ from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_v2
 
 DEFAULT_OUT = Path(
     "/Volumes/jrs/pm_agents/research/artifact_store/active/"
-    "d1_market_residual_tournament_v1"
+    "d1_market_residual_tournament_v2"
 )
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-d1-market-residual-tournament-v1.md"
+DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-d1-market-residual-tournament-v2.md"
 DEFAULT_PREPARED_SCORED = (
     ROOT / "docs/analysis/2026-08/generated/d1_cross_city_hierarchy_v1/scored_states.csv"
 )
@@ -77,6 +77,40 @@ FEATURE_SETS = {
         "spread_logratio",
         "assigned_consensus_bias",
         "checkpoint_revision",
+    ),
+    "V05_piecewise_surprise_gam": (
+        "weather_positive",
+        "weather_negative",
+        "weather_hinge_050",
+        "weather_hinge_100",
+        "rare_rung_weather",
+        "location",
+        "scale",
+    ),
+    "V06_revision_gated_nonlinear": (
+        "weather_logratio",
+        "weather_agreement",
+        "weather_disagreement",
+        "revision_positive_location",
+        "revision_negative_location",
+        "revision_tail",
+        "consensus_tail",
+        "rare_rung_weather",
+    ),
+    "V07_random_feature_network": tuple(f"random_tanh_{index:02d}" for index in range(16)),
+    "V08_hybrid_nonlinear": (
+        "weather_positive",
+        "weather_negative",
+        "weather_hinge_050",
+        "weather_hinge_100",
+        "rare_rung_weather",
+        "weather_agreement",
+        "weather_disagreement",
+        "revision_positive_location",
+        "revision_negative_location",
+        "revision_tail",
+        "consensus_tail",
+        *(f"random_tanh_{index:02d}" for index in range(16)),
     ),
 }
 
@@ -222,18 +256,72 @@ def prepare_states(
         )
         assigned_bias = float(state["forecast_max_f"] - state["ensemble_median_f"])
         spread = float(state["model_spread_f"])
-        features = {
+        revision_scaled = float(np.clip(revision / 3.0, -3.0, 3.0))
+        assigned_scaled = float(np.clip(assigned_bias / 3.0, -3.0, 3.0))
+        spread_scaled = float(np.clip(spread / 3.0, 0.0, 3.0))
+        rare_weight = np.clip((0.15 - market) / 0.15, 0.0, 1.0)
+        base_features = {
             "weather_logratio": logratio,
             "location": _center_by_market(z * location_gap, market),
             "scale": _center_by_market((z**2) * scale_gap, market),
-            "spread_logratio": _center_by_market(logratio * np.clip(spread / 3.0, 0.0, 3.0), market),
+            "spread_logratio": _center_by_market(logratio * spread_scaled, market),
             "assigned_consensus_bias": _center_by_market(
-                z * np.clip(assigned_bias / 3.0, -3.0, 3.0), market
+                z * assigned_scaled, market
             ),
             "checkpoint_revision": _center_by_market(
-                z * np.clip(revision / 3.0, -3.0, 3.0), market
+                z * revision_scaled, market
+            ),
+            "weather_positive": _center_by_market(np.maximum(logratio, 0.0), market),
+            "weather_negative": _center_by_market(np.minimum(logratio, 0.0), market),
+            "weather_hinge_050": _center_by_market(
+                np.sign(logratio) * np.maximum(np.abs(logratio) - 0.5, 0.0), market
+            ),
+            "weather_hinge_100": _center_by_market(
+                np.sign(logratio) * np.maximum(np.abs(logratio) - 1.0, 0.0), market
+            ),
+            "rare_rung_weather": _center_by_market(logratio * rare_weight, market),
+            "weather_agreement": _center_by_market(
+                logratio * math.exp(-spread_scaled), market
+            ),
+            "weather_disagreement": _center_by_market(
+                logratio * (1.0 - math.exp(-spread_scaled)), market
+            ),
+            "revision_positive_location": _center_by_market(
+                z * max(revision_scaled, 0.0), market
+            ),
+            "revision_negative_location": _center_by_market(
+                z * min(revision_scaled, 0.0), market
+            ),
+            "revision_tail": _center_by_market(
+                (z**2) * abs(revision_scaled) * np.sign(logratio), market
+            ),
+            "consensus_tail": _center_by_market(
+                (z**2) * abs(assigned_scaled) * np.sign(logratio), market
             ),
         }
+        # Fixed random hidden layer + regularized softmax output gives a compact
+        # nonlinear challenger while keeping every nested fit convex and fully
+        # reproducible.  The zero output layer remains exactly equal to market.
+        random_input = np.column_stack(
+            [
+                logratio,
+                z,
+                z**2 - float(np.dot(market, z**2)),
+                np.full(n, revision_scaled),
+                np.full(n, assigned_scaled),
+                np.full(n, spread_scaled),
+                rare_weight,
+            ]
+        )
+        rng = np.random.default_rng(20260806)
+        projection = rng.normal(0.0, 0.75, size=(random_input.shape[1], 16))
+        bias = rng.uniform(-1.0, 1.0, size=16)
+        hidden = np.tanh(random_input @ projection + bias)
+        random_features = {
+            f"random_tanh_{index:02d}": _center_by_market(hidden[:, index], market)
+            for index in range(hidden.shape[1])
+        }
+        features = {**base_features, **random_features}
         zero = softmax_offset(market, np.column_stack(list(features.values())), np.zeros(len(features)))
         if not np.array_equal(zero, market):
             raise AssertionError("delta=0 must return market exactly")
@@ -560,6 +648,39 @@ def city_catastrophes(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["arm", "mean_logloss_delta"], ascending=[True, False])
 
 
+def posterior_shift_summary(frame: pd.DataFrame) -> pd.DataFrame:
+    """Quantify whether a challenger creates locally tradable probability moves."""
+    market_map = {
+        str(row.snapshot_key): np.asarray(json.loads(row.probabilities_json), dtype=float)
+        for row in frame.loc[frame["arm"] == "M0_market"].itertuples(index=False)
+    }
+    rows: list[dict[str, Any]] = []
+    challengers = frame.loc[~frame["arm"].isin(["M0_market", "W0_weather_only"])]
+    for arm, group in challengers.groupby("arm"):
+        maxima: list[float] = []
+        total_variation: list[float] = []
+        for row in group.itertuples(index=False):
+            posterior = np.asarray(json.loads(row.probabilities_json), dtype=float)
+            delta = posterior - market_map[str(row.snapshot_key)]
+            maxima.append(float(np.max(np.abs(delta))))
+            total_variation.append(float(0.5 * np.abs(delta).sum()))
+        values = np.asarray(maxima, dtype=float)
+        rows.append(
+            {
+                "arm": arm,
+                "states": len(values),
+                "median_max_abs_shift": float(np.median(values)),
+                "p90_max_abs_shift": float(np.quantile(values, 0.90)),
+                "max_abs_shift": float(np.max(values)),
+                "median_total_variation": float(np.median(total_variation)),
+                "states_shift_ge_2pp": int((values >= 0.02).sum()),
+                "states_shift_ge_5pp": int((values >= 0.05).sum()),
+                "states_shift_ge_10pp": int((values >= 0.10).sum()),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -574,7 +695,7 @@ def build_runtime_artifact(
     """Fit the point-estimate best arm and express it in the runtime schema.
 
     Runtime schema compatibility does not imply shadow eligibility: the current
-    checkpoint producer does not materialize these six rung-level features and
+    checkpoint producer does not materialize the selected rung-level features and
     the OOF baseline gate is not passed.
     """
     by_arm = scores.set_index("arm")
@@ -589,10 +710,10 @@ def build_runtime_artifact(
     gate_pass = bool(delta["ci_bonf_high"] < 0.0)
     payload = {
         "schema_version": "weather_d1_market_residual_artifact_v1",
-        "artifact_id": "d1_market_residual_v04_reconstructed_20260723",
+        "artifact_id": "d1_market_residual_v2_reconstructed_20260723",
         "model_id": candidate,
         "feature_set_id": "d1_reconstructed_weather_ordinal_revision_v1",
-        "model_family": "linear_market_log_offset",
+        "model_family": "regularized_nonlinear_basis_market_log_offset",
         "training_cutoff": max(state.target_date for state in prepared),
         "frozen_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "target_kind": "market_expression",
@@ -655,7 +776,7 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
     }
     total_folds = int(summary["outer_oof_dates"])
     lines = [
-        "# D-1 market-residual nested expanding-OOF tournament v1",
+        "# D-1 market-residual nonlinear nested expanding-OOF tournament v2",
         "",
         "weather-only:",
         f"significance=FAIL; W0-market delta={weather_delta.delta:+.4f}, 95% CI {weather_delta.ci95_low:+.4f}..{weather_delta.ci95_high:+.4f}",
@@ -675,8 +796,8 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "## 结论",
         "",
         f"locked weather-only W0 在相同 OOF rows 的 logloss={by_arm.loc['W0_weather_only', 'logloss']:.4f}，显著差于 market={by_arm.loc['M0_market', 'logloss']:.4f}，Δ={weather_delta.delta:+.4f}（95% CI {weather_delta.ci95_low:+.4f}..{weather_delta.ci95_high:+.4f}）。",
-        f"四个预注册 residual 版本均按 target_date 做 nested expanding OOF。点估最佳 `{best_arm}` 的 date-equal logloss={by_arm.loc[best_arm, 'logloss']:.4f}，market={by_arm.loc['M0_market', 'logloss']:.4f}，Δ={best_delta.delta:+.4f}（95% CI {best_delta.ci95_low:+.4f}..{best_delta.ci95_high:+.4f}；K=4 Bonferroni CI {best_delta.ci_bonf_low:+.4f}..{best_delta.ci_bonf_high:+.4f}）。",
-        f"baseline gate={'PASS' if baseline_pass else 'FAIL'}：当前没有一个版本可以声明击败 market。各 arm 选择 market null 的 outer folds 为 V01={null_counts['V01_weather_logratio']}/{total_folds}、V02={null_counts['V02_ordinal_location_scale']}/{total_folds}、V03={null_counts['V03_structured_weather']}/{total_folds}、V04={null_counts['V04_revision_spread_bias']}/{total_folds}；V04 虽有 {total_folds - null_counts['V04_revision_spread_bias']} 个非 null folds，但 date-block CI 仍跨 0。",
+        f"{len(FEATURE_SETS)} 个 residual 版本均按 target_date 做 nested expanding OOF。点估最佳 `{best_arm}` 的 date-equal logloss={by_arm.loc[best_arm, 'logloss']:.4f}，market={by_arm.loc['M0_market', 'logloss']:.4f}，Δ={best_delta.delta:+.4f}（95% CI {best_delta.ci95_low:+.4f}..{best_delta.ci95_high:+.4f}；K={len(FEATURE_SETS)} Bonferroni CI {best_delta.ci_bonf_low:+.4f}..{best_delta.ci_bonf_high:+.4f}）。",
+        f"baseline gate={'PASS' if baseline_pass else 'FAIL'}。每个候选都可由 inner OOF 选择 `ridge=∞` 严格退回 market；退回次数：" + "、".join(f"{arm}={null_counts[arm]}/{total_folds}" for arm in FEATURE_SETS) + "。",
         "只有 delta 与 Bonferroni CI 均小于 0 才称为击败 market。本报告不会把 beta 收缩到 0 后与 market 相近称为 alpha。",
         "",
         "## 同分母 OOF scores",
@@ -701,13 +822,29 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         )
     lines += [
         "",
-        "## 四个版本",
+        "## 八个版本",
         "",
         "- V01：强正则 `log(weather/market)` offset。",
         "- V02：只允许 coherent ordinal location/scale 调整，不直接使用逐档 weather likelihood。",
         "- V03：V01+V02，并让 model spread 连续调整 weather residual。",
         "- V04：再加入 assigned-minus-consensus bias 与 12–18h→18–24h reconstructed checkpoint revision。该 revision 是 archive reconstruction proxy，不是真实 provider run revision。",
+        "- V05：piecewise GAM，将 weather surprise 拆成正/负、0.5/1.0 log-odds hinge，并单独处理 market<15% 的档位。",
+        "- V06：按 spread 门控 forecast agreement/disagreement，并拆开升温/降温 revision 与 tail interaction。",
+        "- V07：16 节点固定随机 tanh hidden layer + 正则 softmax output；是可复现的非线性 challenger。",
+        "- V08：piecewise、revision gate 与 nonlinear hidden features 的联合模型。",
         "- 每个 outer date 的 ridge 都只用更早日期的 inner expanding OOF 选择；候选包含 `ridge=∞`，它严格等于 market。",
+        "",
+        "## 与市场偏离幅度",
+        "",
+        "| arm | median max shift | p90 | max | states ≥2pp | ≥5pp | ≥10pp |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in summary["posterior_shift_summary"]:
+        lines.append(
+            f"| {row['arm']} | {row['median_max_abs_shift']:.2%} | {row['p90_max_abs_shift']:.2%} | "
+            f"{row['max_abs_shift']:.2%} | {row['states_shift_ge_2pp']} | {row['states_shift_ge_5pp']} | {row['states_shift_ge_10pp']} |"
+        )
+    lines += [
         "",
         "## 数据 / 双漏斗",
         "",
@@ -735,13 +872,13 @@ def render_report(summary: dict[str, Any], scores: pd.DataFrame, deltas: pd.Data
         "- PIT：market/forecast 是 single-run conservative reconstruction，不是严格 first-seen/provider-run capture；因此 OOF 防标签泄漏，但不能升级为 clean forward，也不能写 `beat_market` claim。",
         "- W0/W1：本轮在同一 OOF rows 独立评分 locked legacy robust-tail W0，并把它作为 residual feature；真实 provider-run/first-seen/revision W1 尚未可评分，未训练、未伪造。",
         "- M0 是同一 checkpoint normalized mid distribution，不是 ask/depth/fee/slippage execution baseline。",
-        "- K=4 同时报 95% 与 Bonferroni family-wise CI；未进行城市/价格/赢家事后筛选。",
+        f"- K={len(FEATURE_SETS)} 同时报 95% 与 Bonferroni family-wise CI；未进行城市/价格/赢家事后筛选。",
         "- 覆盖 8 环中的概率分布、统计推断和同分母 baseline；缺 execution、capacity、fills、clean frozen forward。",
         "- 无论点估如何，本轮唯一动作都是 research/collector，不改 live。",
         "",
         "## Runtime artifact",
         "",
-        f"- point-estimate best={summary['runtime_artifact']['candidate']}，final expanding selection ridge={summary['runtime_artifact']['ridge']}；artifact schema=`weather_d1_market_residual_artifact_v1` / family=`linear_market_log_offset`。",
+        f"- point-estimate best={summary['runtime_artifact']['candidate']}，final expanding selection ridge={summary['runtime_artifact']['ridge']}；artifact schema=`weather_d1_market_residual_artifact_v1` / family=`regularized_nonlinear_basis_market_log_offset`。",
         f"- baseline_gate_pass={summary['runtime_artifact']['baseline_gate_pass']}，shadow_eligible=false，converter={summary['runtime_artifact']['converter_status']}。artifact 可被现有 loader 校验，但在 WCIR 生成同 lineage 的逐 rung features 前不可运行，更不可下单。",
         "",
     ]
@@ -798,6 +935,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     calibration = calibration_summary(scored)
     city = city_catastrophes(scored)
+    shifts = posterior_shift_summary(scored)
     diagnostics: dict[str, dict[str, Any]] = {}
     for arm, group in scored.groupby("arm"):
         cal = calibration.loc[calibration["arm"] == arm]
@@ -820,7 +958,7 @@ def main(argv: list[str] | None = None) -> int:
 
     oof_dates = sorted(scored["target_date"].unique())
     summary = {
-        "run_id": "d1_market_residual_tournament_v1_20260806",
+        "run_id": "d1_market_residual_tournament_v2_20260806",
         "denominator_scope": (
             "reconstructed_single_run_D1_18_24_first_complete_native_ladder_"
             "settled_contemporaneous_normalized_market"
@@ -857,6 +995,7 @@ def main(argv: list[str] | None = None) -> int:
         "scores": scores.to_dict("records"),
         "paired_deltas": deltas.to_dict("records"),
         "diagnostics": diagnostics,
+        "posterior_shift_summary": shifts.to_dict("records"),
         "runtime_artifact": runtime_metadata,
         "ridge_selection_counts": {
             arm: selections.loc[selections["candidate"] == arm, "selected_ridge"].astype(str).value_counts().to_dict()
@@ -873,6 +1012,7 @@ def main(argv: list[str] | None = None) -> int:
     deltas.to_csv(args.out / "paired_target_date_bootstrap.csv", index=False)
     calibration.to_csv(args.out / "calibration.csv", index=False)
     city.to_csv(args.out / "city_catastrophes.csv", index=False)
+    shifts.to_csv(args.out / "posterior_shift_summary.csv", index=False)
     runtime_path = args.out / "weather_d1_market_residual_artifact_v1.json"
     runtime_path.write_text(
         json.dumps(runtime_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"

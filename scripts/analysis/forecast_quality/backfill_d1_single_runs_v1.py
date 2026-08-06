@@ -56,6 +56,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--holdout-start", default=HOLDOUT_START)
     parser.add_argument("--holdout-end", default=HOLDOUT_END)
     parser.add_argument("--batch-size", type=int, default=20)
+    parser.add_argument("--request-retries", type=int, default=4)
+    parser.add_argument("--retry-backoff-sec", type=float, default=15.0)
+    parser.add_argument("--known-unavailable-target-start")
+    parser.add_argument("--known-unavailable-target-end")
+    parser.add_argument(
+        "--unavailable-policy",
+        choices=("fail", "block"),
+        default="fail",
+        help="Fail closed by default; 'block' records unavailable batches and continues.",
+    )
     return parser.parse_args()
 
 
@@ -105,6 +115,36 @@ def run_backfill(args: argparse.Namespace) -> dict[str, Any]:
         for start in range(0, len(records), args.batch_size):
             batch_number += 1
             chunk = records[start : start + args.batch_size]
+            if bool(args.known_unavailable_target_start) != bool(args.known_unavailable_target_end):
+                raise ValueError("known unavailable target range requires both start and end")
+            blocked_known = []
+            if args.known_unavailable_target_start:
+                blocked_known = [
+                    row
+                    for row in chunk
+                    if args.known_unavailable_target_start
+                    <= str(row["target_date"])
+                    <= args.known_unavailable_target_end
+                ]
+                chunk = [row for row in chunk if row not in blocked_known]
+                if blocked_known:
+                    counters["unavailable_batches"] += 1
+                    counters["unavailable_jobs"] += len(blocked_known)
+                    request_records.append(
+                        {
+                            "requested_run": run,
+                            "actual_run": None,
+                            "fallback_cycles": None,
+                            "request_key": None,
+                            "raw_hash": None,
+                            "cache_hit": False,
+                            "location_count": len(blocked_known),
+                            "models": ",".join(DEFAULT_GLOBAL_SINGLE_RUN_MODELS),
+                            "status": "blocked_known_unavailable_target_range",
+                        }
+                    )
+                if not chunk:
+                    continue
             locations = [
                 {
                     "city": row["city"],
@@ -117,20 +157,52 @@ def run_backfill(args: argparse.Namespace) -> dict[str, Any]:
             actual_run = requested_run
             for fallback_cycles in range(5):
                 try:
-                    responses, metadata = fetch_single_run_batch(
-                        locations,
-                        run=actual_run,
-                        cache_dir=args.cache_dir,
-                    )
+                    for request_attempt in range(max(1, args.request_retries)):
+                        try:
+                            responses, metadata = fetch_single_run_batch(
+                                locations,
+                                run=actual_run,
+                                cache_dir=args.cache_dir,
+                            )
+                            break
+                        except RuntimeError as exc:
+                            if (
+                                "429 Too Many Requests" not in str(exc)
+                                or request_attempt + 1 >= args.request_retries
+                            ):
+                                raise
+                            counters["rate_limit_retries"] += 1
+                            time.sleep(args.retry_backoff_sec * (request_attempt + 1))
+                    else:  # pragma: no cover - retry loop either breaks or raises
+                        raise AssertionError("unreachable request retry state")
                     break
                 except ModelRunUnavailable:
+                    # A run that exists for only some models must not be used as
+                    # a complete batch; try the preceding provider run.
                     actual_run = (
                         parse_utc(f"{actual_run}:00Z") - timedelta(hours=6)
                     ).strftime("%Y-%m-%dT%H:00")
             else:
-                raise RuntimeError(
-                    f"no common model run within 24h before {requested_run}"
+                if args.unavailable_policy == "fail":
+                    raise RuntimeError(
+                        f"no common model run within 24h before {requested_run}"
+                    )
+                counters["unavailable_batches"] += 1
+                counters["unavailable_jobs"] += len(chunk)
+                request_records.append(
+                    {
+                        "requested_run": run,
+                        "actual_run": None,
+                        "fallback_cycles": 5,
+                        "request_key": None,
+                        "raw_hash": None,
+                        "cache_hit": False,
+                        "location_count": len(chunk),
+                        "models": ",".join(DEFAULT_GLOBAL_SINGLE_RUN_MODELS),
+                        "status": "blocked_no_common_model_run_within_24h",
+                    }
                 )
+                continue
             if not metadata["cache_hit"]:
                 time.sleep(0.5)
             counters["requests"] += 1
@@ -164,6 +236,7 @@ def run_backfill(args: argparse.Namespace) -> dict[str, Any]:
                     "cache_hit": metadata["cache_hit"],
                     "location_count": len(chunk),
                     "models": ",".join(DEFAULT_GLOBAL_SINGLE_RUN_MODELS),
+                    "status": "complete",
                 }
             )
             if batch_number % 10 == 0 or batch_number == total_batches:
@@ -191,6 +264,10 @@ def run_backfill(args: argparse.Namespace) -> dict[str, Any]:
                 "public first-seen"
             ),
             "models": list(DEFAULT_GLOBAL_SINGLE_RUN_MODELS),
+            "known_unavailable_target_range": [
+                args.known_unavailable_target_start,
+                args.known_unavailable_target_end,
+            ],
             "temperature_unit": "fahrenheit",
         },
         "input_baskets": int(
@@ -205,6 +282,8 @@ def run_backfill(args: argparse.Namespace) -> dict[str, Any]:
         "requests": int(counters["requests"]),
         "cache_hits": int(counters["cache_hits"]),
         "complete_jobs": int(counters["complete_jobs"]),
+        "unavailable_batches": int(counters["unavailable_batches"]),
+        "unavailable_jobs": int(counters["unavailable_jobs"]),
         "forecast_rows": len(forecasts),
         "expected_forecast_rows": expected_rows,
         "coverage": len(forecasts) / expected_rows if expected_rows else 0.0,

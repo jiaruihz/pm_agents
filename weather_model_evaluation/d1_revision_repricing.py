@@ -13,6 +13,7 @@ from collections import Counter
 import csv
 from datetime import datetime, timedelta, timezone
 import json
+import math
 from pathlib import Path
 import sqlite3
 import sys
@@ -468,6 +469,83 @@ def attach_market_evidence(
     return result
 
 
+def directional_repricing_summary(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Measure whether signed forecast revisions lead signed ladder repricing.
+
+    This is a short-horizon mechanism target, deliberately separate from final
+    settlement probability.  Positive values mean the market ladder moved in
+    the direction implied by the forecast revision.
+    """
+    horizons: list[tuple[str, str, str]] = [
+        ("immediate", "immediate_market_status", "immediate_mean_rung_shift"),
+        *[
+            (f"{minutes}m", f"markout_{minutes}m_status", f"markout_{minutes}m_mean_rung_shift")
+            for minutes in MARKOUT_MINUTES
+        ],
+    ]
+    output: list[dict[str, Any]] = []
+    scopes = {
+        "all_d1_events": events,
+        "forward_new_complete_run": [
+            event for event in events if event.get("event_class") == "forward_new_complete_run"
+        ],
+        "primary_d1_18_24": [
+            event for event in events if event.get("checkpoint_policy") == "D-1_18_24"
+        ],
+    }
+    for scope, scoped in scopes.items():
+        for revision_field in ("consensus_median_revision_f", "assigned_model_revision_f"):
+            for horizon, status_field, shift_field in horizons:
+                rows = []
+                for event in scoped:
+                    revision = event.get(revision_field)
+                    shift = event.get(shift_field)
+                    if event.get(status_field) != "scoreable" or revision is None or shift is None:
+                        continue
+                    revision_value = float(revision)
+                    if abs(revision_value) <= 1e-12:
+                        continue
+                    shift_value = float(shift)
+                    rows.append(
+                        {
+                            "target_date": str(event.get("target_date") or ""),
+                            "revision": revision_value,
+                            "shift": shift_value,
+                            "directional_shift": shift_value if revision_value > 0 else -shift_value,
+                        }
+                    )
+                revisions = [row["revision"] for row in rows]
+                shifts = [row["shift"] for row in rows]
+                directional = [row["directional_shift"] for row in rows]
+                denominator = sum(value * value for value in revisions)
+                output.append(
+                    {
+                        "scope": scope,
+                        "revision_field": revision_field,
+                        "horizon": horizon,
+                        "events": len(rows),
+                        "target_dates": len({row["target_date"] for row in rows}),
+                        "direction_agreement_rate": (
+                            sum(value > 0 for value in directional) / len(directional)
+                            if directional
+                            else None
+                        ),
+                        "mean_directional_rung_shift": (
+                            sum(directional) / len(directional) if directional else None
+                        ),
+                        "median_directional_rung_shift": (
+                            sorted(directional)[len(directional) // 2] if directional else None
+                        ),
+                        "rung_shift_per_revision_f": (
+                            sum(left * right for left, right in zip(revisions, shifts)) / denominator
+                            if denominator
+                            else None
+                        ),
+                    }
+                )
+    return output
+
+
 def load_settled_city_dates(
     path: Path,
     target_keys: set[tuple[str, str]],
@@ -512,6 +590,31 @@ def render_report(summary: dict[str, Any]) -> str:
     evidence = summary["evidence_funnel"]
     impact = summary["lineage_impact"]
     classes = summary["event_classes"]
+    directional = [
+        row
+        for row in summary.get("directional_repricing", [])
+        if row["revision_field"] == "consensus_median_revision_f"
+        and row["scope"] in ("all_d1_events", "forward_new_complete_run")
+    ]
+    directional_rows = [
+        "| {scope} | {horizon} | {events} | {dates} | {agreement} | {shift} |".format(
+            scope=row["scope"],
+            horizon=row["horizon"],
+            events=row["events"],
+            dates=row["target_dates"],
+            agreement=(
+                f"{row['direction_agreement_rate']:.1%}"
+                if row["direction_agreement_rate"] is not None
+                else "NA"
+            ),
+            shift=(
+                f"{row['mean_directional_rung_shift']:+.4f}"
+                if row["mean_directional_rung_shift"] is not None
+                else "NA"
+            ),
+        )
+        for row in directional
+    ]
     return "\n".join(
         [
             "# D-1 forecast revision × market repricing 研究计划与首轮审计 v1",
@@ -549,6 +652,14 @@ def render_report(summary: dict[str, Any]) -> str:
             "",
             "静态 forecast level、revision event 和 market residual 分三层：weather-only challenger 不读取市场；revision 只做连续 feature；M2/M3 只在同 rows、同 labels、同 feature-book 时钟下与 M0 比。",
             "正式 weather score 的主 checkpoint 固定为当地 target 前一日 18:00–24:00 的首个 complete batch（`D-1_18_24`）；12:00–18:00 只作 secondary。revision markout 可保留全部 D-1 events，但不得替代主 checkpoint proper score。",
+            "",
+            "## Revision → market repricing 机制指标",
+            "",
+            "| scope | horizon | events | dates | direction agreement | mean directional rung shift |",
+            "|---|---:|---:|---:|---:|---:|",
+            *directional_rows,
+            "",
+            "该表检验 forecast revision 后市场是否沿同方向移动，是短持策略目标；它不是 settlement accuracy，也不是 executable bid/ask PnL。",
             "",
             "## 首轮双漏斗",
             "",
@@ -604,6 +715,7 @@ def run_study(
             event["city"], event["target_date"]
         ) in settled_city_dates
     event_classes = Counter(str(event["event_class"]) for event in d1_events)
+    directional_repricing = directional_repricing_summary(d1_events)
     signal_funnel = {
         **material_summary,
         "d1_complete_run_transition_events": len(d1_events),
@@ -641,6 +753,7 @@ def run_study(
         "signal_funnel": signal_funnel,
         "evidence_funnel": evidence_funnel,
         "event_classes": dict(sorted(event_classes.items())),
+        "directional_repricing": directional_repricing,
         "blocker_rows": len(blockers),
         "conclusion": "inconclusive_collector_and_lineage_repair",
         "production": {"live_action": "none", "orders_changed": 0},

@@ -33,10 +33,18 @@ def test_prepared_labels_preserve_open_native_tails() -> None:
     assert brackets[-1].low == 82.0
 
 
-def test_version_budget_is_exactly_v01_to_v04() -> None:
+def test_version_budget_includes_nonlinear_challengers() -> None:
     assert list(target.FEATURE_SETS) == [
         "V01_weather_logratio",
         "V02_ordinal_location_scale",
         "V03_structured_weather",
         "V04_revision_spread_bias",
+        "V05_piecewise_surprise_gam",
+        "V06_revision_gated_nonlinear",
+        "V07_random_feature_network",
+        "V08_hybrid_nonlinear",
     ]
+    assert len(target.FEATURE_SETS["V07_random_feature_network"]) == 16
+    assert set(target.FEATURE_SETS["V07_random_feature_network"]).issubset(
+        target.FEATURE_SETS["V08_hybrid_nonlinear"]
+    )
