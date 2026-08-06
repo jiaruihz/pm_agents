@@ -50,8 +50,7 @@ The settlement source registry v0 (2026-06-14) converts that blocker into a usab
 
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
-| `docs/analysis/2026-06/2026-06-10-m3-observed-max-strategy-handoff.md` | 2026-06 handoff | strategy intuition and research discipline for observed max | snapshot |
-| `docs/analysis/2026-06/2026-06-10-m3-observed-max-strategy-plan.md` | 2026-06 design | P0-P4 plan, repo ownership, no-live boundary | design-draft |
+| deleted handoff/plan pair (recoverable from git history) | 2026-06 | durable observed-max thesis and evidence boundaries were absorbed into `docs/analysis/reheat_risk.md`; the duplicated early plan and stale runtime claims were removed | historical |
 | `docs/analysis/2026-06/2026-06-10-m3-observed-max-residual-v0.md` | 2024-04-30 to 2026-05 cache window | physical residual experiment; 19:00+ passes v0 physical gate | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` | 2026-05-05 to 2026-05-12 | local paper snapshot proxy with `market_yes_price`, only 4/14 joined trades, no statistical gates | snapshot-inconclusive |
 | `docs/analysis/2026-06/2026-06-10-m3-orderbook-best-ask-backtest-v0.md` | 2026-05-20 to 2026-06-09 trade window | superseded observed-payout best-ask result; do not cite ROI | superseded |

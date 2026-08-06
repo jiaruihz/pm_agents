@@ -32,7 +32,6 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | `docs/analysis/2026-06/2026-06-15-forecast-quality-source-adjusted-v0.md` | 2026-06 | forecast-quality reliability stratified by settlement source class; default WU is generic denominator, HK/Jakarta/station-diff require source-aware adapters | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md` | 2026-06 | handoff package landing and schema validation | design-plan |
 | `docs/analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | 2026-06 | handoff package execution gaps and three-source microstructure correction | design-plan |
-| `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | 2026-06 | final audit: use three-gate verdicts and avoid drifting live_real counts | snapshot |
 | `scripts/ops/repair_clob_fill_cache_for_gate.py` | 2026-06-14 | local cap-safe CLOB cache repair; drops stale current-DB-nonmatching rows and over-cap duplicate fills before rebuild | active-tool |
 
 ## Absorbed Historical Claims

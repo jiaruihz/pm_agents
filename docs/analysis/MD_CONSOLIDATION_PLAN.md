@@ -60,6 +60,10 @@ system contract 和 ops runbook。
   重复的 walk-forward、已被 living doc 吸收的 optimizer/protocol，以及两份过渡 handoff；当前只保留06-08较新证据并
   由 `city_selection.md` 统一结论。blender 的过渡 handoff 已吸收进 `blender_shadow.md`；三份不同 denominator 的 producer
   报告继续保留为 snapshot evidence，不误删成“重复”。
+- 2026-08-06：删除4份已吸收的早期交接/计划：06-08 综合审计交接、06-09 research-window handoff、06-10 observed-max
+  原始交接与重复执行计划。三门 verdict 已在 `live_performance.md` / `data_integrity.md`，observed-max 的耐久机制与证据边界
+  已在 `reheat_risk.md`；删除项仍可从 git 历史恢复，不再让旧 WSL/N100 提示词和“物理盖棺”措辞充当当前入口。
+
 
 ## 仍有效的历史边界
 

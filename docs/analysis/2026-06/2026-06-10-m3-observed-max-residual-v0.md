@@ -3,7 +3,7 @@
 Status: snapshot
 Updated: 2026-06-10
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; 2026-06-10-m3-observed-max-strategy-plan.md
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis/reheat_risk.md
 
 ## 数据快照
 

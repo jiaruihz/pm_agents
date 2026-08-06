@@ -27,7 +27,6 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 | `docs/analysis/2026-06/2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | 2026-06 | 15d curve after history rebuild | snapshot |
 | `docs/analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | 2026-06 | three strategy instances after near-binary fix | snapshot |
 | `docs/analysis/2026-06/2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | 2026-06 | post-fix recent loss attribution by cohort/city/side/instance | snapshot |
-| `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | 2026-06 | 2026-06-08 DB/gate audit and no-live-expansion conclusion | snapshot |
 | `docs/archive/analysis/2026-05/2026-05-27-performance-live-full-research.md` | 2026-05 | early full live research | snapshot |
 
 ## Absorbed Historical Claims
@@ -39,7 +38,7 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 | 2026-06-06 live period slice correctly separated UI equity from target-date strategy PnL | Claim absorbed here and in `account_reconcile.md`; numbers superseded by later fill-recovery snapshots |
 | 2026-06-07 period slices and PnL curves show realized-only PnL plus open cost/MTM by date lens | Use as current snapshot family only with timestamp and coverage-gate context |
 | 2026-06-07 recent loss attribution points to expanded-city cohorts, specific city x side rows, and V2/YES weakness | Use for triage; do not convert directly into permanent live city-pool or side bans without deploy process and fresh gates |
-| 2026-06-08 audit says 6月窗口转负 and all decisive gates remain inconclusive | Use as live risk posture: no add size, no city-pool expansion, no confirmed edge claim |
+| 2026-06-08 gated audit says 6月窗口转负 and all decisive gates remain inconclusive | Conclusion absorbed here; underlying market-structure and executable-edge snapshots remain in the docs index |
 
 ## Required Gates Before Publishing
 

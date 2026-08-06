@@ -2,7 +2,7 @@
 
 > **废弃提示（2026-06-08，本机复核后）**：本文是外部审计草稿，只保留作原始输入和对照材料。
 > 其中 `live_real=1246~1302`、近 7 天 PnL、以及“两脚本已写已自测”等表述已经被本机审计降级或修正。
-> 对外引用请使用同目录 `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md`；
+> 审计结论已吸收进 `docs/analysis/live_performance.md` 与 `docs/analysis/data_integrity.md`；
 > 实验脚本状态以当前工作树 `scripts/analysis/` 为准。
 
 > 生成于 2026-06-08。本文是一份**自包含交接件**,回答用户的原始问题:「这个项目的天气策略是否合理」。
@@ -354,7 +354,7 @@ SELECT o.status, COUNT(*), SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 
 ## 8. 交接清单 / 文件 manifest
 
 ```
-docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md   ← 本文
+deleted audited copy (recoverable from git history); durable verdicts now live in the family living docs
 docs/analysis/2026-06/2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md                    ← 前置(H_A/H_B 判断 + 两脚本初版)
 scripts/analysis/research_market_structural_edge.py                                 ← Step 1(待修 §4.1)
 scripts/analysis/research_executable_edge.py                                        ← Step 2(待修 §4.2)

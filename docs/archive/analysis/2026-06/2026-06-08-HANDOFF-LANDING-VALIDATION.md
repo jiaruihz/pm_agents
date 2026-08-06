@@ -121,7 +121,6 @@
 
 - `tmp_check_n100_city_pool.sh`
 - `tmp_paper_live_gap_new_cities.py`
-- `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md`
 - `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff-draft.md`
 
 这些文件未在本次校验中改动。
