@@ -68,8 +68,9 @@ def test_directional_repricing_flips_downward_revision_sign() -> None:
     events = [
         {
             "target_date": "2026-08-06",
-            "event_class": "forward_new_complete_run",
+            "event_class": "forward_provider_run_first_seen",
             "checkpoint_policy": "D-1_18_24",
+            "model_revision_f": 1.0,
             "consensus_median_revision_f": 1.0,
             "assigned_model_revision_f": 1.0,
             "immediate_market_status": "scoreable",
@@ -85,8 +86,9 @@ def test_directional_repricing_flips_downward_revision_sign() -> None:
         },
         {
             "target_date": "2026-08-07",
-            "event_class": "forward_new_complete_run",
+            "event_class": "forward_provider_run_first_seen",
             "checkpoint_policy": "D-1_18_24",
+            "model_revision_f": -2.0,
             "consensus_median_revision_f": -2.0,
             "assigned_model_revision_f": -2.0,
             "immediate_market_status": "scoreable",
@@ -106,10 +108,109 @@ def test_directional_repricing_flips_downward_revision_sign() -> None:
     immediate = next(
         row
         for row in rows
-        if row["scope"] == "forward_new_complete_run"
+        if row["scope"] == "forward_provider_run_first_seen"
         and row["revision_field"] == "consensus_median_revision_f"
         and row["horizon"] == "immediate"
     )
     assert immediate["events"] == 2
     assert immediate["direction_agreement_rate"] == 1.0
     assert abs(immediate["mean_directional_rung_shift"] - 0.25) < 1e-12
+
+
+def test_provider_run_events_use_asof_model_arrivals_not_complete_batches() -> None:
+    models = [
+        ("gfs_global", 80.0),
+        ("ecmwf_ifs025", 81.0),
+        ("icon_seamless", 82.0),
+        ("gem_global", 83.0),
+        ("jma_gsm", 84.0),
+    ]
+    rows = []
+    for index, (model, value) in enumerate(models):
+        rows.append(
+            {
+                "schema_version": "weather_forecast_run_row_v2",
+                "model_key": model,
+                "city": "Tokyo",
+                "target_date": "2026-08-07",
+                "horizon_days_local": 1,
+                "forecast_run_at_utc": "2026-08-05T00:00:00Z",
+                "forecast_max_f": value,
+                "first_seen_at_utc": f"2026-08-06T00:0{index}:00Z",
+                "assigned_model": model == "gfs_global",
+            }
+        )
+    rows.extend(
+        [
+            {
+                "schema_version": "weather_forecast_run_row_v2",
+                "model_key": "icon_seamless",
+                "city": "Tokyo",
+                "target_date": "2026-08-07",
+                "horizon_days_local": 1,
+                "forecast_run_at_utc": "2026-08-05T06:00:00Z",
+                "forecast_max_f": 85.0,
+                "first_seen_at_utc": "2026-08-06T01:00:00Z",
+                "assigned_model": False,
+            },
+            {
+                "schema_version": "weather_forecast_run_row_v3",
+                "model_key": "gfs_global",
+                "city": "Tokyo",
+                "target_date": "2026-08-07",
+                "horizon_days_local": 1,
+                "forecast_run_at_utc": "2026-08-05T06:00:00Z",
+                "forecast_max_f": 82.0,
+                "run_first_seen_at_utc": "2026-08-06T01:10:00Z",
+                "run_first_seen_status": "collector_exact",
+                "assigned_model": True,
+            },
+        ]
+    )
+    events, summary = subject.build_provider_run_events(rows)
+    assert summary["provider_run_transition_events"] == 2
+    assert events[0]["event_class"] == "legacy_provider_run_earliest_observed"
+    assert events[0]["model_key"] == "icon_seamless"
+    assert events[0]["consensus_median_revision_f"] == 1.0
+    assert events[1]["event_class"] == "forward_provider_run_first_seen"
+    assert events[1]["assigned_model_revision_f"] == 2.0
+
+
+def test_markout_does_not_compare_late_post_checkpoint_to_itself() -> None:
+    event = {
+        "city": "Tokyo",
+        "target_date": "2026-08-07",
+        "event_available_at_utc": "2026-08-06T00:00:00Z",
+    }
+    common = {
+        "city": "Tokyo",
+        "target_date": "2026-08-07",
+        "market_distribution_complete": True,
+        "probabilities": {"30": 0.4, "31+": 0.6},
+    }
+    checkpoints = [
+        {
+            **common,
+            "checkpoint_ts_utc": "2026-08-05T23:59:00Z",
+            "available_at_utc": "2026-08-05T23:59:30Z",
+            "feature_book_snapshot_id": "pre",
+        },
+        {
+            **common,
+            "checkpoint_ts_utc": "2026-08-06T00:12:00Z",
+            "available_at_utc": "2026-08-06T00:12:30Z",
+            "feature_book_snapshot_id": "post",
+        },
+        {
+            **common,
+            "probabilities": {"30": 0.3, "31+": 0.7},
+            "checkpoint_ts_utc": "2026-08-06T00:31:00Z",
+            "available_at_utc": "2026-08-06T00:31:30Z",
+            "feature_book_snapshot_id": "later",
+        },
+    ]
+    result = subject.attach_market_evidence([event], checkpoints)[0]
+    assert result["markout_5m_status"] == "post_checkpoint_after_markout_horizon"
+    assert result["markout_10m_status"] == "post_checkpoint_after_markout_horizon"
+    assert result["markout_30m_status"] == "scoreable"
+    assert abs(result["markout_30m_mean_rung_shift"] - 0.1) < 1e-12

@@ -17,7 +17,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
 
 
-FORECAST_ROW_SCHEMA = "weather_forecast_run_row_v2"
+FORECAST_ROW_SCHEMA = "weather_forecast_run_row_v3"
 FORECAST_BATCH_SCHEMA = "weather_forecast_batch_v2"
 FULL_LADDER_SCHEMA = "weather_full_ladder_checkpoint_v2"
 EXACT_SINGLE_RUN_ENDPOINT = "https://single-runs-api.open-meteo.com/v1/forecast"
@@ -124,6 +124,9 @@ def build_forecast_row(
     first_seen_at_utc: str,
     available_at_utc: str,
     raw_payload_hash: str,
+    normalized_content_hash: str | None = None,
+    content_first_seen_at_utc: str | None = None,
+    run_first_seen_status: str = "collector_exact",
     producer_build_identity: str,
     capture_id: str,
     batch_capture_id: str,
@@ -142,11 +145,18 @@ def build_forecast_row(
     fetched = parse_utc(source_fetched_at_utc, field="source_fetched_at_utc")
     detected = parse_utc(detected_at_utc, field="detected_at_utc")
     first_seen = parse_utc(first_seen_at_utc, field="first_seen_at_utc")
+    content_first_seen = (
+        parse_utc(content_first_seen_at_utc, field="content_first_seen_at_utc")
+        if content_first_seen_at_utc
+        else first_seen
+    )
     available = parse_utc(available_at_utc, field="available_at_utc")
     if not fetched <= detected <= available:
         raise ValueError("clock constraint requires source_fetched <= detected <= available")
     if first_seen > available:
         raise ValueError("clock constraint requires first_seen <= available")
+    if content_first_seen > available:
+        raise ValueError("clock constraint requires content_first_seen <= available")
     run_at = parse_utc(forecast_run_at_utc, field="forecast_run_at_utc") if forecast_run_at_utc else None
     if forecast_run_lineage_status == "identified" and run_at is None:
         raise ValueError("identified run lineage requires forecast_run_at_utc")
@@ -162,7 +172,11 @@ def build_forecast_row(
             "target_date": target_date,
             "forecast_run_at_utc": utc_text(run_at) if run_at else None,
             "forecast_max_f": round(float(forecast_max_f), 6),
-            "raw_payload_hash": raw_payload_hash,
+            # The raw provider payload may contain volatile request metadata
+            # (for example generation time).  Content-version identity must be
+            # based on normalized forecast content, while the untouched raw
+            # payload hash remains separately auditable below.
+            "normalized_content_hash": normalized_content_hash or raw_payload_hash,
         }
     )
     same_run_revision = bool(previous_content_hash and previous_content_hash != content_hash)
@@ -181,6 +195,9 @@ def build_forecast_row(
         "source_fetched_at_utc": utc_text(fetched),
         "detected_at_utc": utc_text(detected),
         "first_seen_at_utc": utc_text(first_seen),
+        "run_first_seen_at_utc": utc_text(first_seen),
+        "run_first_seen_status": run_first_seen_status,
+        "content_first_seen_at_utc": utc_text(content_first_seen),
         "available_at_utc": utc_text(available),
         "lead_hours": round((_target_start_utc(target_date) - available).total_seconds() / 3600.0, 6),
         "model_run_age_hours": round((available - run_at).total_seconds() / 3600.0, 6) if run_at else None,

@@ -16,6 +16,7 @@ import json
 import math
 from pathlib import Path
 import sqlite3
+from statistics import mean, median
 import sys
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
@@ -31,6 +32,7 @@ from weather_data_feed.forecast_run_contract import (  # noqa: E402
     parse_utc,
     stable_content_hash,
 )
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 DEFAULT_CAPTURE_DIR = Path(
@@ -43,15 +45,22 @@ DEFAULT_OUT = (
     ROOT
     / "docs/analysis/2026-08/generated/d1_forecast_revision_market_repricing"
 )
-DEFAULT_REPORT = (
-    ROOT
-    / "docs/analysis/2026-08/2026-08-05-d1-forecast-revision-market-repricing-plan-v1.md"
-)
+DEFAULT_REPORT = DEFAULT_OUT / "report.md"
 DEFAULT_DB = ROOT / "runtime/weather.db"
 BOOTSTRAP_WINDOW_MINUTES = 30
 # Short horizons distinguish a thin/stale first book from genuine absorption;
 # longer horizons measure whether the market keeps repricing the same run.
 MARKOUT_MINUTES = (5, 10, 30, 60, 90)
+
+
+def default_snapshot_dirs() -> list[Path]:
+    spec = load_production_spec()
+    relative = spec.data_feed_runtime_root.relative_to(spec.production_storage_root)
+    roots = [
+        spec.data_feed_runtime_root / "full_ladder_output" / "paper_snapshots",
+        spec.archive_storage_root / relative / "full_ladder_output" / "paper_snapshots",
+    ]
+    return list(dict.fromkeys(path for path in roots if path.exists()))
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -161,6 +170,31 @@ def d1_checkpoint_policy(
 
 def lineage_impact(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     source = [dict(row) for row in rows]
+    by_provider_run: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    for row in source:
+        key = (
+            str(row.get("model_key") or ""),
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("forecast_run_at_utc") or ""),
+        )
+        by_provider_run.setdefault(key, []).append(row)
+    repeated_provider_runs = {
+        key: deliveries
+        for key, deliveries in by_provider_run.items()
+        if len(deliveries) > 1
+    }
+    first_seen_drift_keys = sum(
+        len({str(row.get("first_seen_at_utc") or "") for row in deliveries}) > 1
+        for deliveries in repeated_provider_runs.values()
+    )
+    content_revision_rows = [
+        row for row in source if row.get("previous_content_hash")
+    ]
+    zero_delta_content_revision_rows = sum(
+        float(row.get("content_revision_delta_f") or 0.0) == 0.0
+        for row in content_revision_rows
+    )
     with_previous = [row for row in source if row.get("previous_run_ts")]
     backward = [
         row
@@ -189,6 +223,12 @@ def lineage_impact(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "forward_previous_run_rows": len(forward),
         "unique_forward_transition_keys": len(transition_keys),
         "repeated_forward_transition_rows": len(forward) - len(transition_keys),
+        "unique_provider_run_keys": len(by_provider_run),
+        "multi_delivery_provider_run_keys": len(repeated_provider_runs),
+        "provider_run_keys_with_first_seen_drift": first_seen_drift_keys,
+        "duplicate_delivery_rows": len(source) - len(by_provider_run),
+        "content_revision_rows": len(content_revision_rows),
+        "zero_delta_content_revision_rows": zero_delta_content_revision_rows,
         "affected_window_start_utc": min(
             (str(row.get("available_at_utc")) for row in source), default=None
         ),
@@ -323,26 +363,212 @@ def build_revision_events(
     }
 
 
-def _snapshot_paths(snapshot_dir: Path, events: list[dict[str, Any]]) -> list[Path]:
+def build_provider_run_events(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build asynchronous provider-run first-seen events.
+
+    Global models do not publish a common run atomically.  Requiring an entire
+    five-model batch to be complete at its first poll makes the formal forward
+    denominator structurally empty.  The market-observable event is one
+    provider model's new run becoming available.  Consensus features are the
+    rolling as-of vector immediately before and after that one-model update.
+
+    Legacy v2 rows did not persist run first-seen across polls, but their
+    append-only journal still supports an auditable earliest-observed clock.
+    Those events remain development-only.  V3 collector-exact rows are the
+    only events eligible for untouched forward.
+    """
+
+    timezone_by_city = {
+        config.city: config.timezone_name
+        for config in load_city_configs(include_station_diff=False)
+    }
+    by_run: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    delivery_counts: Counter[tuple[str, str, str, str]] = Counter()
+    for source in rows:
+        run_at = str(source.get("forecast_run_at_utc") or "")
+        available = str(
+            source.get("run_first_seen_at_utc")
+            or source.get("first_seen_at_utc")
+            or source.get("available_at_utc")
+            or ""
+        )
+        if not run_at or not available:
+            continue
+        key = (
+            str(source.get("model_key") or ""),
+            str(source.get("city") or ""),
+            str(source.get("target_date") or ""),
+            run_at,
+        )
+        delivery_counts[key] += 1
+        candidate = dict(source)
+        candidate["observed_run_first_seen_at_utc"] = available
+        prior = by_run.get(key)
+        if prior is None or available < str(prior["observed_run_first_seen_at_utc"]):
+            by_run[key] = candidate
+
+    arrivals = sorted(
+        by_run.values(),
+        key=lambda item: (
+            str(item["observed_run_first_seen_at_utc"]),
+            str(item.get("model_key") or ""),
+            str(item.get("city") or ""),
+            str(item.get("target_date") or ""),
+            str(item.get("forecast_run_at_utc") or ""),
+        ),
+    )
+    latest_by_model_city_target: dict[tuple[str, str, str], dict[str, Any]] = {}
+    asof_values: dict[tuple[str, str], dict[str, float]] = {}
+    events: list[dict[str, Any]] = []
+    out_of_order = 0
+    bootstrap = 0
+    for current in arrivals:
+        model = str(current.get("model_key") or "")
+        city = str(current.get("city") or "")
+        target_date = str(current.get("target_date") or "")
+        run_at = str(current.get("forecast_run_at_utc") or "")
+        event_time = str(current["observed_run_first_seen_at_utc"])
+        sequence_key = (model, city, target_date)
+        previous = latest_by_model_city_target.get(sequence_key)
+        if previous and str(previous.get("forecast_run_at_utc") or "") >= run_at:
+            out_of_order += 1
+            continue
+
+        vector_key = (city, target_date)
+        before_values = dict(asof_values.get(vector_key) or {})
+        previous_model_value = before_values.get(model)
+        current_value = float(current["forecast_max_f"])
+        after_values = {**before_values, model: current_value}
+        asof_values[vector_key] = after_values
+        latest_by_model_city_target[sequence_key] = current
+        if previous is None or previous_model_value is None:
+            bootstrap += 1
+            continue
+
+        previous_run_at = str(previous.get("forecast_run_at_utc") or "")
+        if previous_run_at >= run_at:
+            out_of_order += 1
+            continue
+        checkpoint_policy, local_hours = d1_checkpoint_policy(
+            target_date,
+            event_time,
+            timezone_by_city[city],
+        )
+        schema_version = str(current.get("schema_version") or "")
+        first_seen_status = str(current.get("run_first_seen_status") or "")
+        collector_exact = (
+            schema_version == "weather_forecast_run_row_v3"
+            and first_seen_status == "collector_exact"
+        )
+        event_class = (
+            "forward_provider_run_first_seen"
+            if collector_exact
+            else "legacy_provider_run_earliest_observed"
+        )
+        before_median = median(before_values.values()) if before_values else None
+        after_median = median(after_values.values()) if after_values else None
+        before_mean = mean(before_values.values()) if before_values else None
+        after_mean = mean(after_values.values()) if after_values else None
+        assigned = bool(current.get("assigned_model"))
+        events.append(
+            {
+                "revision_event_id": stable_content_hash(
+                    {
+                        "event_type": "provider_run_first_seen",
+                        "model": model,
+                        "city": city,
+                        "target_date": target_date,
+                        "previous_run": previous_run_at,
+                        "current_run": run_at,
+                        "event_time": event_time,
+                    }
+                ),
+                "event_type": "provider_run_first_seen",
+                "event_class": event_class,
+                "model_key": model,
+                "city": city,
+                "target_date": target_date,
+                "horizon_days_local": int(current.get("horizon_days_local") or -1),
+                "previous_run_at_utc": previous_run_at,
+                "forecast_run_at_utc": run_at,
+                "event_available_at_utc": event_time,
+                "run_first_seen_status": (
+                    first_seen_status or "legacy_earliest_observed"
+                ),
+                "checkpoint_policy": checkpoint_policy,
+                "local_hours_from_target_midnight": local_hours,
+                "common_model_count": len(before_values),
+                "model_revision_f": current_value - float(previous_model_value),
+                "consensus_mean_revision_f": (
+                    float(after_mean) - float(before_mean)
+                    if before_mean is not None and after_mean is not None
+                    else None
+                ),
+                "consensus_median_revision_f": (
+                    float(after_median) - float(before_median)
+                    if before_median is not None and after_median is not None
+                    else None
+                ),
+                "mean_absolute_model_revision_f": abs(
+                    current_value - float(previous_model_value)
+                ),
+                "assigned_model_revision_f": (
+                    current_value - float(previous_model_value) if assigned else None
+                ),
+                "assigned_model_event": assigned,
+                "source_capture_id": current.get("capture_id"),
+                "source_batch_capture_id": current.get("batch_capture_id"),
+            }
+        )
+    return events, {
+        "raw_forecast_rows": len(rows),
+        "unique_provider_run_keys": len(by_run),
+        "duplicate_provider_run_deliveries_collapsed": sum(delivery_counts.values())
+        - len(by_run),
+        "provider_run_bootstrap_states": bootstrap,
+        "provider_run_out_of_order_backfills": out_of_order,
+        "provider_run_transition_events": len(events),
+        "legacy_provider_run_events": sum(
+            event["event_class"] == "legacy_provider_run_earliest_observed"
+            for event in events
+        ),
+        "forward_provider_run_events": sum(
+            event["event_class"] == "forward_provider_run_first_seen"
+            for event in events
+        ),
+    }
+
+
+def _snapshot_paths(
+    snapshot_dirs: Iterable[Path], events: list[dict[str, Any]]
+) -> list[Path]:
+    if isinstance(snapshot_dirs, Path):
+        snapshot_dirs = [snapshot_dirs]
     days: set[str] = set()
     for event in events:
         value = parse_utc(event["event_available_at_utc"], field="event_available_at_utc")
         for offset in (-1, 0, 1):
             days.add((value + timedelta(days=offset)).strftime("%Y%m%d"))
     return sorted(
-        path
-        for day in days
-        for path in snapshot_dir.glob(f"snapshot_{day}_*.json")
+        {
+            path
+            for snapshot_dir in snapshot_dirs
+            for day in days
+            for path in snapshot_dir.glob(f"snapshot_{day}_*.json")
+        },
+        key=lambda path: (path.name, str(path)),
     )
 
 
 def load_market_checkpoints(
-    snapshot_dir: Path,
+    snapshot_dirs: Iterable[Path],
     events: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     target_keys = {(event["city"], event["target_date"]) for event in events}
     checkpoints: list[dict[str, Any]] = []
-    for path in _snapshot_paths(snapshot_dir, events):
+    for path in _snapshot_paths(snapshot_dirs, events):
         payload = json.loads(path.read_text(encoding="utf-8"))
         groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for source in payload.get("records") or []:
@@ -383,8 +609,19 @@ def load_market_checkpoints(
                 }
             )
             checkpoints.append(checkpoint)
-    checkpoints.sort(key=lambda item: str(item.get("checkpoint_ts_utc") or ""))
-    return checkpoints
+    deduplicated: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for checkpoint in checkpoints:
+        key = (
+            str(checkpoint.get("city") or ""),
+            str(checkpoint.get("target_date") or ""),
+            str(checkpoint.get("checkpoint_ts_utc") or ""),
+            str(checkpoint.get("ladder_hash") or ""),
+        )
+        deduplicated.setdefault(key, checkpoint)
+    return sorted(
+        deduplicated.values(),
+        key=lambda item: str(item.get("checkpoint_ts_utc") or ""),
+    )
 
 
 def _probability_markout(
@@ -447,18 +684,48 @@ def attach_market_evidence(
             if post
             else None
         )
+        event["post_book_available_delay_minutes"] = (
+            (
+                parse_utc(post["available_at_utc"], field="available_at_utc")
+                - event_time
+            ).total_seconds()
+            / 60.0
+            if post
+            else None
+        )
         immediate = _probability_markout(pre, post)
         event["immediate_market_status"] = immediate["status"]
         event["immediate_total_variation"] = immediate["total_variation"]
         event["immediate_mean_rung_shift"] = immediate["mean_rung_shift"]
         for minutes in MARKOUT_MINUTES:
             target = event_time + timedelta(minutes=minutes)
+            post_time = (
+                parse_utc(post.get("checkpoint_ts_utc"), field="checkpoint_ts_utc")
+                if post
+                else None
+            )
+            if post_time is None:
+                event[f"markout_{minutes}m_status"] = "missing_post_checkpoint"
+                event[f"markout_{minutes}m_total_variation"] = None
+                event[f"markout_{minutes}m_mean_rung_shift"] = None
+                continue
+            if post_time > target:
+                event[f"markout_{minutes}m_status"] = (
+                    "post_checkpoint_after_markout_horizon"
+                )
+                event[f"markout_{minutes}m_total_variation"] = None
+                event[f"markout_{minutes}m_mean_rung_shift"] = None
+                continue
             later = [
                 item
                 for item in eligible
                 if target
                 <= parse_utc(item.get("checkpoint_ts_utc"), field="checkpoint_ts_utc")
                 <= parse_utc(item.get("available_at_utc"), field="available_at_utc")
+                and parse_utc(
+                    item.get("checkpoint_ts_utc"), field="checkpoint_ts_utc"
+                )
+                > post_time
             ]
             mark = min(later, key=lambda item: item["checkpoint_ts_utc"]) if later else None
             values = _probability_markout(post, mark)
@@ -486,15 +753,26 @@ def directional_repricing_summary(events: list[dict[str, Any]]) -> list[dict[str
     output: list[dict[str, Any]] = []
     scopes = {
         "all_d1_events": events,
-        "forward_new_complete_run": [
-            event for event in events if event.get("event_class") == "forward_new_complete_run"
+        "legacy_provider_run_development": [
+            event
+            for event in events
+            if event.get("event_class") == "legacy_provider_run_earliest_observed"
+        ],
+        "forward_provider_run_first_seen": [
+            event
+            for event in events
+            if event.get("event_class") == "forward_provider_run_first_seen"
         ],
         "primary_d1_18_24": [
             event for event in events if event.get("checkpoint_policy") == "D-1_18_24"
         ],
     }
     for scope, scoped in scopes.items():
-        for revision_field in ("consensus_median_revision_f", "assigned_model_revision_f"):
+        for revision_field in (
+            "model_revision_f",
+            "consensus_median_revision_f",
+            "assigned_model_revision_f",
+        ):
             for horizon, status_field, shift_field in horizons:
                 rows = []
                 for event in scoped:
@@ -590,11 +868,16 @@ def render_report(summary: dict[str, Any]) -> str:
     evidence = summary["evidence_funnel"]
     impact = summary["lineage_impact"]
     classes = summary["event_classes"]
+    markout_statuses = summary["market_markout_status_counts"]
     directional = [
         row
         for row in summary.get("directional_repricing", [])
-        if row["revision_field"] == "consensus_median_revision_f"
-        and row["scope"] in ("all_d1_events", "forward_new_complete_run")
+        if row["revision_field"] == "model_revision_f"
+        and row["scope"]
+        in (
+            "legacy_provider_run_development",
+            "forward_provider_run_first_seen",
+        )
     ]
     directional_rows = [
         "| {scope} | {horizon} | {events} | {dates} | {agreement} | {shift} |".format(
@@ -617,17 +900,17 @@ def render_report(summary: dict[str, Any]) -> str:
     ]
     return "\n".join(
         [
-            "# D-1 forecast revision × market repricing 研究计划与首轮审计 v1",
+            "# D-1 provider-run first-seen × market repricing",
             "",
             "weather-only:",
             "significance=not_run_no_settlement_complete_forward_dates",
             "calibration=W0_reference_unchanged_W1_training_pending",
             "pooled_baseline=retained_negative_control",
-            "forward=collector_accumulating",
+            "forward=provider_run_first_seen_collector_pending_v3_cutover",
             "",
             "market residual:",
             "baseline=same-event complete normalized full ladder",
-            "forward=coverage_only_no_eligible_complete_forward_revision_yet",
+            "forward=legacy_earliest_observed_development_only",
             "execution=not_run_no_probability_gate",
             "",
             "production:",
@@ -636,19 +919,20 @@ def render_report(summary: dict[str, Any]) -> str:
             "",
             "## 数据快照",
             "",
-            f"- forecast rows={impact['raw_forecast_rows']}，raw batches={signal['raw_forecast_batches']}，material batches={signal['material_forecast_batches']}。",
+            f"- forecast rows={impact['raw_forecast_rows']}，unique provider runs={signal['unique_provider_run_keys']}。",
             f"- collector observed window={impact['affected_window_start_utc']}..{impact['affected_window_end_utc']}。",
             f"- market checkpoints={evidence['market_checkpoints']}；complete={evidence['complete_market_checkpoints']}。",
             f"- settlement-complete revision events={signal['settlement_complete_events']}；其余保持 unsettled coverage，missing_bracket=0。",
             "",
             "## 先修的 lineage 根因",
             "",
-            f"旧 state 产生 backward previous-run rows={impact['backward_previous_run_rows']}；另外 forward transition delivery rows={impact['forward_previous_run_rows']}，折叠后 unique transition keys={impact['unique_forward_transition_keys']}，重复={impact['repeated_forward_transition_rows']}。",
-            "根因是每轮从旧 run 重新请求，而 state 只保存最后轮询 run。修复后按 model×city×target×run 保存历史，旧 run 重抓只比较同 run content，不再引用未来 run；原始 payload/run/value 不删除，污染仅限派生 revision lineage。",
+            f"旧 journal 有 unique provider runs={impact['unique_provider_run_keys']}；其中 multi-delivery={impact['multi_delivery_provider_run_keys']}，first_seen 漂移={impact['provider_run_keys_with_first_seen_drift']}；重复轮询 rows={impact['duplicate_delivery_rows']}。",
+            f"same-run content revision rows={impact['content_revision_rows']}，其中 forecast delta=0 的伪 revision={impact['zero_delta_content_revision_rows']}。根因是旧 state 每轮重置 run first_seen，同时把含 provider 动态元数据的 raw payload hash 当成 forecast content identity。",
+            "v3 分开保存 provider-run first_seen 与 same-run content first_seen；逻辑 content hash 只覆盖 target-date 时间温度序列，raw payload hash 仍 append-only 保留审计。旧 JSONL 不重写，只按 earliest-observed 进入 development。",
             "",
             "## 固定研究问题",
             "",
-            "在 D-1 complete exact-run material event 的 first available clock 上，比较事件前最后一份完整 ladder、事件后第一份完整 ladder和 5/10/30/60/90m markout；短窗用于识别薄盘/stale quote，长窗用于判断市场是否持续吸收同一 run。先检验 revision 是否带来方向一致的 market repricing，再在结算后比较 weather posterior 与各 checkpoint 的 M0 market proper score。",
+            "在 D-1 单 provider 新 run 的 first available clock 上，比较事件前最后一份完整 ladder、事件后第一份完整 ladder和 5/10/30/60/90m markout。多模型并非原子发布，因此 rolling as-of consensus 只在该 provider 更新时改变；complete same-run batch 仅保留为覆盖诊断，不再充当市场可观察事件。",
             "",
             "静态 forecast level、revision event 和 market residual 分三层：weather-only challenger 不读取市场；revision 只做连续 feature；M2/M3 只在同 rows、同 labels、同 feature-book 时钟下与 M0 比。",
             "正式 weather score 的主 checkpoint 固定为当地 target 前一日 18:00–24:00 的首个 complete batch（`D-1_18_24`）；12:00–18:00 只作 secondary。revision markout 可保留全部 D-1 events，但不得替代主 checkpoint proper score。",
@@ -671,11 +955,13 @@ def render_report(summary: dict[str, Any]) -> str:
             "|---|---:|",
             *[f"| {key} | {value} |" for key, value in evidence.items()],
             "",
-            f"event classes：`{json.dumps(classes, ensure_ascii=False, sort_keys=True)}`。只有 `forward_new_complete_run` 可进入正式 revision forward；bootstrap 与 partial→complete 继续保留，但不混入 alpha 分母。",
+            f"markout status：`{json.dumps(markout_statuses, ensure_ascii=False, sort_keys=True)}`。post checkpoint 本身晚于目标 horizon 时明确 blocked，不再拿同一 post snapshot 自比并记成 0。",
+            "",
+            f"event classes：`{json.dumps(classes, ensure_ascii=False, sort_keys=True)}`。旧 v2 journal 只能重建 `legacy_provider_run_earliest_observed` development；只有 v3 的 `forward_provider_run_first_seen` 可进入正式 forward。",
             "",
             "## 下一阶段与冻结规则",
             "",
-            "1. collector 修复部署后，从全新 state schema 开始积累 chronological revision；不重写旧 JSONL。",
+            "1. collector v3 修复部署后保持 model×city×target×run 的 first-seen，并把 same-run content first-seen 分开；不重写旧 JSONL。",
             "2. 先累计 complete D-1 run events、完整 pre/post ladders与 settlement；第一段 clean rows 明确作为 development，不冒充 forward。",
             "3. W0 只作锁定 legacy reference；W1 在 clean development 的 inner train/validation 中选择 revision/spread/lead-age、层级收缩和 tail，先跑出 weather-only 结果再决定是否冻结。",
             "4. W1 评审后，在同一 development rows 上比较 M0/M1/M2/M3并选择 residual 正则；两条线都出结果后才生成 freeze artifact。只有 freeze timestamp 之后的新日期进入 untouched forward，且 M2/M3 必须在其 target-date block bootstrap 的 logloss/RPS/calibration 上优于 M0，才进入 ask/fee/depth EV。",
@@ -694,7 +980,8 @@ def render_report(summary: dict[str, Any]) -> str:
 def run_study(
     *,
     capture_dir: Path = DEFAULT_CAPTURE_DIR,
-    snapshot_dir: Path = DEFAULT_SNAPSHOT_DIR,
+    snapshot_dir: Path | None = None,
+    snapshot_dirs: Iterable[Path] | None = None,
     db: Path = DEFAULT_DB,
     output_dir: Path = DEFAULT_OUT,
     report: Path = DEFAULT_REPORT,
@@ -702,8 +989,13 @@ def run_study(
     rows = read_jsonl(capture_dir / "forecast_run_rows.jsonl")
     batches = read_jsonl(capture_dir / "forecast_batches.jsonl")
     blockers = read_jsonl(capture_dir / "blockers.jsonl")
-    events, material_summary = build_revision_events(rows, batches)
-    checkpoints = load_market_checkpoints(snapshot_dir, events)
+    events, provider_summary = build_provider_run_events(rows)
+    complete_batch_events, complete_batch_summary = build_revision_events(rows, batches)
+    resolved_snapshot_dirs = list(
+        snapshot_dirs
+        or ([snapshot_dir] if snapshot_dir is not None else default_snapshot_dirs())
+    )
+    checkpoints = load_market_checkpoints(resolved_snapshot_dirs, events)
     scored_events = attach_market_evidence(events, checkpoints)
     d1_events = [event for event in scored_events if event["horizon_days_local"] == 1]
     settled_city_dates = load_settled_city_dates(
@@ -717,12 +1009,20 @@ def run_study(
     event_classes = Counter(str(event["event_class"]) for event in d1_events)
     directional_repricing = directional_repricing_summary(d1_events)
     signal_funnel = {
-        **material_summary,
-        "d1_complete_run_transition_events": len(d1_events),
+        **provider_summary,
+        "complete_batch_material_forecast_batches": complete_batch_summary[
+            "material_forecast_batches"
+        ],
+        "complete_batch_transition_events_diagnostic_only": len(
+            complete_batch_events
+        ),
+        "d1_provider_run_transition_events": len(d1_events),
         "primary_d1_18_24_transition_events": sum(
             event["checkpoint_policy"] == "D-1_18_24" for event in d1_events
         ),
-        "forward_new_complete_run_events": event_classes["forward_new_complete_run"],
+        "forward_provider_run_first_seen_events": event_classes[
+            "forward_provider_run_first_seen"
+        ],
         "settlement_complete_events": sum(event["settlement_complete"] for event in d1_events),
         "probability_scoreable_events": 0,
     }
@@ -746,12 +1046,41 @@ def run_study(
         "executable": 0,
         "actual_fills": 0,
     }
+    market_markout_status_counts = {
+        "immediate": dict(
+            sorted(Counter(str(event.get("immediate_market_status")) for event in d1_events).items())
+        ),
+        **{
+            f"{minutes}m": dict(
+                sorted(
+                    Counter(
+                        str(event.get(f"markout_{minutes}m_status"))
+                        for event in d1_events
+                    ).items()
+                )
+            )
+            for minutes in MARKOUT_MINUTES
+        },
+    }
     summary = {
-        "schema_version": "d1_forecast_revision_market_repricing_research_v1",
+        "schema_version": "d1_forecast_revision_market_repricing_research_v2",
         "generated_at_utc": _utc_text(datetime.now(timezone.utc)),
+        "denominator_scope": {
+            "event_grain": "provider model run first-seen × city × target_date",
+            "forecast_capture_dir": str(capture_dir),
+            "snapshot_dirs": [str(path) for path in resolved_snapshot_dirs],
+            "db_realpath": str(db.resolve()),
+            "db_device": db.stat().st_dev,
+            "db_inode": db.stat().st_ino,
+            "target_dates": sorted(
+                {str(event.get("target_date") or "") for event in d1_events}
+            ),
+            "cities": sorted({str(event.get("city") or "") for event in d1_events}),
+        },
         "lineage_impact": lineage_impact(rows),
         "signal_funnel": signal_funnel,
         "evidence_funnel": evidence_funnel,
+        "market_markout_status_counts": market_markout_status_counts,
         "event_classes": dict(sorted(event_classes.items())),
         "directional_repricing": directional_repricing,
         "blocker_rows": len(blockers),
@@ -773,14 +1102,20 @@ def run_study(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--capture-dir", type=Path, default=DEFAULT_CAPTURE_DIR)
-    parser.add_argument("--snapshot-dir", type=Path, default=DEFAULT_SNAPSHOT_DIR)
+    parser.add_argument(
+        "--snapshot-dir",
+        type=Path,
+        action="append",
+        dest="snapshot_dirs",
+        help="Repeat for hot/archive roots; defaults resolve from production.yaml",
+    )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args(argv)
     run_study(
         capture_dir=args.capture_dir,
-        snapshot_dir=args.snapshot_dir,
+        snapshot_dirs=args.snapshot_dirs,
         db=args.db,
         output_dir=args.output_dir,
         report=args.report,

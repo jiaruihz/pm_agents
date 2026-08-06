@@ -103,4 +103,23 @@ first-seen 后第一份新鲜完整 ladder = entry / immediate response
 
 immediate 的正方向反应可能是真实首跳，也可能混有同批采集/partial-completion timing；5/10m 完全不动显示现有 book cadence 或 freshness 仍不足；30–90m 没有稳定延续。当前结果不支持交易，但支持继续积累真正的 new-run first-seen forward 后再判断。
 
-2026-08-06 当前生产检查为 `CRITICAL`：canonical JRS permission host 的真实 read/write probe 失败，forecast-run collector 与 full-ladder feed stale，无法生成新的 clean forward event。此次研究没有恢复或改变任何生产进程；恢复 collector 属于生产行为变更，需按 deployment contract 取得显式确认后执行。
+2026-08-06 当时生产检查为 `CRITICAL`：canonical JRS permission host 的真实 read/write probe 失败，forecast-run collector 与 full-ladder feed stale，无法生成新的 clean forward event。该状态已由下方 2026-08-07 迁移后审计取代。
+
+## 2026-08-07 迁移后重跑与根因修复
+
+迁移后的 production manifest 已恢复 `healthy`，canonical DB 解析为 `/Volumes/jrs/pm_agents/runtime/weather.db`（device `16777247`、inode `54444`）。研究 runner 不再把单一热盘目录当作完整历史：它从 production contract 同时解析 hot 与 archive snapshot roots。旧 hot-only 路由只读到 68 个 checkpoint；修复后同一研究分母恢复到 2,243 个，即旧结果漏掉 2,175 个（97.0%）。
+
+collector 原始 append-only journal 的实际污染窗口为 `2026-08-05T07:15:57.703070Z..2026-08-06T16:55:51.268043Z`：
+
+- 56,236 raw rows 折叠为 3,454 个 provider-run keys；3,420 个多次投递 run 的 `first_seen_at_utc` 全部随轮询漂移，共 52,782 条重复 delivery；
+- 1,840 条被标为 same-run content revision 的记录全部 `content_revision_delta_f=0`；根因是把含动态 provider 元数据的 raw payload hash 当作 forecast content identity；
+- 旧 5m/10m markout 分别把 317/316 个事件当作 scoreable；修复“post checkpoint 晚于 horizon 仍自比”后变成 0/7，即 5m 有317个、10m 有309个伪 scoreable；
+- 该 collector 只产研究 forecast rows，没有生成 SignalCandidate、TradeIntent、order 或 fill，因此交易影响为 0 单。
+
+v3 合同把 `provider-run first_seen` 与 `same-run content first_seen` 分开；逻辑 content hash 只覆盖 target-date 时间温度序列，raw payload hash 继续 append-only 保存。旧 journal 不重写，只用每个 run 的 earliest-observed clock 进入 development；只有部署 v3 后新产生的 `collector_exact` rows 才能进入 formal forward。
+
+真实 one-shot sample 已用 `icon_seamless` 同一 run 连续请求两次验证：D-1/D-2 共 4 rows，run first-seen 与 content first-seen 均稳定，两个不同 raw payload hashes 只产生一个 logical content hash，伪 content revision=0。GFS 同次探针由 provider 返回 HTTP 400，已作为结构化 source blocker 保留，未冒充成功。
+
+迁移后 legacy-development 分母为 34 城、3 target dates、1,224 个 D-1 provider-run transitions；其中 262 个落在 D-1 18–24 主窗口。市场证据为 2,243 checkpoints、452 complete；immediate/5m/10m/30m/60m/90m scoreable 分别为259/0/7/156/210/205。`model_revision_f` 的 immediate 同向率为59.0%（249 events/3 dates），30m 49.7%，60m 53.5%，90m 61.2%；日期只有2–3天且时钟只是 legacy earliest-observed，所以结论仍是 `inconclusive`，不能计算或宣称交易 alpha。
+
+下一步不是拿未来 market 当“天气真值”：最终 settlement 继续裁决概率准确度；future 5–90m ladder 只检验 forecast revision 是否领先市场 repricing；只有 formal forward 的 signed repricing 成立后，才用 entry ask→future bid、official fee、slippage 与 depth 检验能否赚钱。当前 `live_action=none`、`orders_changed=0`；collector v3 代码与测试已完成，生产重启仍需显式部署确认。

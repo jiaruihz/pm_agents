@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from weather_data_feed_service.forecast_run_capture import (
     latest_cycle_candidate,
     materialize_capture,
+    upgrade_first_seen_state_from_rows,
 )
 
 
@@ -68,6 +69,95 @@ def test_run_transition_and_same_run_revision_are_separate() -> None:
     d1_transition = next(row for row in transitioned if row["horizon_days_local"] == 1)
     assert d1_transition["run_to_run_delta_f"] == -0.5
     assert d1_transition["previous_content_hash"] is None
+
+
+def test_same_run_poll_preserves_run_and_content_first_seen() -> None:
+    base_args = {
+        "city_inputs": [{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
+        "responses_by_model": {"gfs_global": [_response()]},
+        "expected_models": ["gfs_global"],
+    }
+    first, _, state = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, tzinfo=timezone.utc),
+        metadata_by_model={
+            "gfs_global": {"raw_hash": "volatile-raw-1", "request_key": "request"}
+        },
+        **base_args,
+    )
+    repeated, _, _ = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, 30, tzinfo=timezone.utc),
+        metadata_by_model={
+            "gfs_global": {"raw_hash": "volatile-raw-2", "request_key": "request"}
+        },
+        previous_state=state,
+        **base_args,
+    )
+    first_d1 = next(row for row in first if row["horizon_days_local"] == 1)
+    repeated_d1 = next(row for row in repeated if row["horizon_days_local"] == 1)
+    assert repeated_d1["run_first_seen_at_utc"] == first_d1["run_first_seen_at_utc"]
+    assert repeated_d1["content_first_seen_at_utc"] == first_d1["content_first_seen_at_utc"]
+    assert repeated_d1["content_hash"] == first_d1["content_hash"]
+    assert repeated_d1["previous_content_hash"] is None
+
+
+def test_same_run_real_content_change_keeps_run_first_seen_separate() -> None:
+    base_args = {
+        "city_inputs": [{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
+        "expected_models": ["gfs_global"],
+    }
+    first, _, state = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, tzinfo=timezone.utc),
+        responses_by_model={"gfs_global": [_response()]},
+        metadata_by_model={
+            "gfs_global": {"raw_hash": "raw-1", "request_key": "request"}
+        },
+        **base_args,
+    )
+    changed = _response()
+    changed["hourly"]["temperature_2m"][1] = 88.5
+    revised, _, _ = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, 30, tzinfo=timezone.utc),
+        responses_by_model={"gfs_global": [changed]},
+        metadata_by_model={
+            "gfs_global": {"raw_hash": "raw-2", "request_key": "request"}
+        },
+        previous_state=state,
+        **base_args,
+    )
+    first_d1 = next(row for row in first if row["horizon_days_local"] == 1)
+    revised_d1 = next(row for row in revised if row["horizon_days_local"] == 1)
+    assert revised_d1["run_first_seen_at_utc"] == first_d1["run_first_seen_at_utc"]
+    assert revised_d1["content_first_seen_at_utc"] != first_d1["content_first_seen_at_utc"]
+    assert revised_d1["content_revision_delta_f"] == 0.5
+
+
+def test_legacy_state_upgrade_recovers_earliest_observed_run_clock() -> None:
+    state = upgrade_first_seen_state_from_rows(
+        {},
+        [
+            {
+                "model_key": "gfs_global",
+                "city": "Tokyo",
+                "target_date": "2026-08-06",
+                "forecast_run_at_utc": "2026-08-04T12:00:00Z",
+                "first_seen_at_utc": "2026-08-05T03:30:00Z",
+            },
+            {
+                "model_key": "gfs_global",
+                "city": "Tokyo",
+                "target_date": "2026-08-06",
+                "forecast_run_at_utc": "2026-08-04T12:00:00Z",
+                "first_seen_at_utc": "2026-08-05T03:00:00Z",
+            },
+        ],
+    )
+    key = "gfs_global|Tokyo|2026-08-06|2026-08-04T12:00:00Z"
+    assert state["first_seen_by_run"][key] == "2026-08-05T03:00:00Z"
+    assert state["first_seen_status_by_run"][key] == "legacy_earliest_observed"
 
 
 def test_polling_an_older_run_never_creates_a_backward_transition() -> None:

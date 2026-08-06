@@ -209,7 +209,7 @@ manifest/历史报告指针。需要重放历史研究时，用
 
 ## 模型与 Edge Engine
 
-> D-1 当前口径（2026-08-05）：robust-tail 参数只锁定为 W0 legacy reference；W1 与 M2/M3 已进入 clean development/model-selection，尚未冻结。相同 city-date/ladder 的 checkpoint 配对显示 18–24h market 优于12–18h，但同期 forecast 也变化，正在用 exact-run 同 batch 的5/10/30/60/90m markout拆分市场时间效应。权威状态以 `WEATHER_STRATEGY_REGISTRY.md` 的 `d1_weather_only_probability_challenger` 行为准。
+> D-1 当前口径（2026-08-07）：robust-tail 参数只锁定为 W0 legacy reference；W1 与 M2/M3 尚未冻结。revision 事件已改为单 provider-run first-seen，rolling as-of consensus 随异步 provider 更新；旧 journal 仅作 earliest-observed development。collector v3 修复 run/content first-seen 分离并通过真实 one-shot，需部署后才开始 formal forward。权威状态以 `WEATHER_STRATEGY_REGISTRY.md` 的 `d1_weather_only_probability_challenger` 行为准。
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|

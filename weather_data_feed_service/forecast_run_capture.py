@@ -36,6 +36,13 @@ from weather_data_feed_service.io_utils import append_jsonl, read_json, write_js
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_run_capture"
 
 
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle if line.strip()]
+
+
 def latest_cycle_candidate(now_utc: datetime, *, cycle_hours: int = 6) -> str:
     if cycle_hours <= 0 or 24 % cycle_hours:
         raise ValueError("cycle_hours must divide 24")
@@ -48,16 +55,68 @@ def latest_cycle_candidate(now_utc: datetime, *, cycle_hours: int = 6) -> str:
     return floored.strftime("%Y-%m-%dT%H:00")
 
 
-def _daily_max(response: dict[str, Any], target_date: str) -> float:
+def _target_temperature_content(
+    response: dict[str, Any], target_date: str
+) -> tuple[float, str]:
     hourly = response.get("hourly") or {}
-    values = [
-        float(value)
+    target_values = [
+        (str(timestamp), float(value))
         for timestamp, value in zip(hourly.get("time") or [], hourly.get("temperature_2m") or [])
         if str(timestamp).startswith(target_date) and value is not None
     ]
-    if not values:
+    if not target_values:
         raise ValueError(f"no temperature_2m for target_date={target_date}")
-    return max(values)
+    return max(value for _, value in target_values), stable_content_hash(target_values)
+
+
+def upgrade_first_seen_state_from_rows(
+    state: dict[str, Any], rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Upgrade legacy state without inventing a new first-seen clock.
+
+    V1 keyed first-seen by raw content, so volatile provider metadata made the
+    same model run look newly seen on every poll.  The append-only journal can
+    still recover the earliest *observed* run clock.  We preserve that clock
+    and label it as legacy evidence; future unseen runs are collector-exact.
+    """
+
+    upgraded = dict(state)
+    if upgraded.get("state_schema_version") == "weather_forecast_run_capture_state_v2":
+        return upgraded
+    first_seen_by_run = dict(upgraded.get("first_seen_by_run") or {})
+    first_seen_status_by_run = dict(upgraded.get("first_seen_status_by_run") or {})
+    for row in rows:
+        run_at = str(row.get("forecast_run_at_utc") or "")
+        if not run_at:
+            continue
+        run_identity = "|".join(
+            (
+                str(row.get("model_key") or ""),
+                str(row.get("city") or ""),
+                str(row.get("target_date") or ""),
+                run_at,
+            )
+        )
+        observed = str(
+            row.get("run_first_seen_at_utc")
+            or row.get("first_seen_at_utc")
+            or row.get("available_at_utc")
+            or ""
+        )
+        if not observed:
+            continue
+        prior = first_seen_by_run.get(run_identity)
+        if not prior or observed < str(prior):
+            first_seen_by_run[run_identity] = observed
+        first_seen_status_by_run[run_identity] = "legacy_earliest_observed"
+    upgraded.update(
+        {
+            "state_schema_version": "weather_forecast_run_capture_state_v2",
+            "first_seen_by_run": first_seen_by_run,
+            "first_seen_status_by_run": first_seen_status_by_run,
+        }
+    )
+    return upgraded
 
 
 def materialize_capture(
@@ -80,6 +139,8 @@ def materialize_capture(
         ).items()
     }
     first_seen_by_content = dict(state.get("first_seen_by_content") or {})
+    first_seen_by_run = dict(state.get("first_seen_by_run") or {})
+    first_seen_status_by_run = dict(state.get("first_seen_status_by_run") or {})
     captured_text = captured_at_utc.astimezone(timezone.utc).isoformat()
     contract_rows: list[dict[str, Any]] = []
     for model in expected_models:
@@ -101,7 +162,9 @@ def materialize_capture(
             for horizon in (1, 2):
                 target_date = (local_today + timedelta(days=horizon)).isoformat()
                 try:
-                    forecast_max_f = _daily_max(response, target_date)
+                    forecast_max_f, normalized_content_hash = _target_temperature_content(
+                        response, target_date
+                    )
                 except ValueError:
                     continue
                 sequence_key = "|".join((model, str(city_input["city"]), target_date))
@@ -117,17 +180,29 @@ def materialize_capture(
                     else {}
                 )
                 raw_hash = str(metadata.get("raw_hash") or "")
+                run_identity = "|".join(
+                    (model, str(city_input["city"]), target_date, current_run_ts)
+                )
+                run_first_seen = str(
+                    first_seen_by_run.setdefault(run_identity, available_text)
+                )
+                run_first_seen_status = str(
+                    first_seen_status_by_run.setdefault(
+                        run_identity, "collector_exact"
+                    )
+                )
                 content_identity = stable_content_hash(
                     {
                         "model": model,
                         "city": city_input["city"],
                         "target_date": target_date,
                         "run": evidence["forecast_run_at_utc"],
-                        "forecast_max_f": forecast_max_f,
-                        "raw_payload_hash": raw_hash,
+                        "normalized_content_hash": normalized_content_hash,
                     }
                 )
-                first_seen = str(first_seen_by_content.setdefault(content_identity, available_text))
+                content_first_seen = str(
+                    first_seen_by_content.setdefault(content_identity, available_text)
+                )
                 batch_capture_id = stable_content_hash(
                     {
                         "run": run,
@@ -146,9 +221,12 @@ def materialize_capture(
                     forecast_max_f=forecast_max_f,
                     source_fetched_at_utc=available_text,
                     detected_at_utc=available_text,
-                    first_seen_at_utc=first_seen,
+                    first_seen_at_utc=run_first_seen,
                     available_at_utc=available_text,
                     raw_payload_hash=raw_hash,
+                    normalized_content_hash=normalized_content_hash,
+                    content_first_seen_at_utc=content_first_seen,
+                    run_first_seen_status=run_first_seen_status,
                     producer_build_identity=producer_build_identity,
                     capture_id=capture_id,
                     batch_capture_id=batch_capture_id,
@@ -210,6 +288,9 @@ def materialize_capture(
         "latest_by_model_city_target": latest,
         "run_history_by_model_city_target": run_history,
         "first_seen_by_content": first_seen_by_content,
+        "state_schema_version": "weather_forecast_run_capture_state_v2",
+        "first_seen_by_run": first_seen_by_run,
+        "first_seen_status_by_run": first_seen_status_by_run,
     }
 
 
@@ -290,6 +371,10 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
     state_path = args.output_dir / "state.json"
+    previous_state = upgrade_first_seen_state_from_rows(
+        read_json(state_path, {}),
+        _read_jsonl(args.output_dir / "forecast_run_rows.jsonl"),
+    )
     rows, batches, state = materialize_capture(
         run=run,
         captured_at_utc=now_utc,
@@ -297,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         responses_by_model=responses_by_model,
         metadata_by_model=metadata_by_model,
         expected_models=list(args.models),
-        previous_state=read_json(state_path, {}),
+        previous_state=previous_state,
     )
     append_jsonl(args.output_dir / "forecast_run_rows.jsonl", rows)
     append_jsonl(args.output_dir / "forecast_batches.jsonl", batches)

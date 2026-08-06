@@ -71,10 +71,33 @@ def test_unverified_or_fallback_request_is_blocked(override: dict[str, object], 
 
 def test_clock_constraints_and_lead_run_age() -> None:
     row = build_forecast_row(**BASE)
+    assert row["schema_version"] == "weather_forecast_run_row_v3"
+    assert row["run_first_seen_at_utc"] == row["first_seen_at_utc"]
+    assert row["content_first_seen_at_utc"] == row["first_seen_at_utc"]
     assert row["lead_hours"] == pytest.approx(47.999167, abs=1e-6)
     assert row["model_run_age_hours"] == pytest.approx(6.000833, abs=1e-6)
     with pytest.raises(ValueError, match="first_seen <= available"):
         build_forecast_row(**{**BASE, "first_seen_at_utc": "2026-08-05T00:00:04Z"})
+
+
+def test_normalized_content_hash_ignores_volatile_raw_payload_hash() -> None:
+    first = build_forecast_row(
+        **BASE,
+        normalized_content_hash="stable-normalized-content",
+    )
+    second = build_forecast_row(
+        **{
+            **BASE,
+            "raw_payload_hash": "volatile-raw-2",
+            "capture_id": "capture-gfs-2",
+        },
+        normalized_content_hash="stable-normalized-content",
+        previous_content_hash=first["content_hash"],
+        previous_content_forecast_max_f=88.0,
+        revision_of_content_id=first["capture_id"],
+    )
+    assert second["content_hash"] == first["content_hash"]
+    assert second["previous_content_hash"] is None
 
 
 def test_provider_run_and_same_run_content_revision_never_mix() -> None:
