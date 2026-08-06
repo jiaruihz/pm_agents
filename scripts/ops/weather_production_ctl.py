@@ -799,7 +799,7 @@ def migrate_production_storage(
                 f"/usr/bin/sqlite3 {source_db} \".timeout 30000\" \".backup '{str(target_db_tmp).replace("'", "''")}'\"",
                 f"test \"$(/usr/bin/sqlite3 {shlex.quote(str(target_db_tmp))} 'PRAGMA quick_check;')\" = ok",
                 f"mv -f {shlex.quote(str(target_db_tmp))} {shlex.quote(str(target_db))}",
-                "/usr/bin/sync",
+                "/bin/sync",
                 f"/usr/sbin/diskutil rename {shlex.quote(str(spec.production_storage_root))} {shlex.quote(spec.archive_storage_root.name)}",
                 f"/usr/sbin/diskutil rename {shlex.quote(str(staging_root))} {shlex.quote(spec.production_storage_root.name)}",
                 f"test \"$(/usr/sbin/diskutil info -plist {shlex.quote(str(spec.production_storage_root))} | /usr/bin/plutil -extract VolumeUUID raw -)\" = {shlex.quote(spec.production_storage_volume_uuid)}",
