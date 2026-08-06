@@ -753,7 +753,7 @@ def migrate_production_storage(
                 "set -eu",
                 f"mkdir -p {shlex.quote(str(target_feed_path))} {shlex.quote(str(target_runtime_path))}",
                 f"/usr/bin/rsync -aE --partial --stats --exclude=/history/ --exclude=/migration_archive/ --exclude=/research/ --exclude=/loop/ --exclude=/targeted_output/paper_snapshots/snapshot_202606* --exclude=/targeted_output/paper_snapshots/snapshot_202607* {source_feed} {target_feed}",
-                f"/usr/bin/rsync -aE --partial --stats --exclude=/db_cutover_backups/ --exclude=/_dashboard_logs/ --exclude=/loop/ --exclude=/weather.db --exclude=/weather.db-wal --exclude=/weather.db-shm --exclude=/weather_edge_v1/feature_store/ --exclude=/weather_edge_v1/market_data.pre_external_*/ {source_runtime} {target_runtime}",
+                f"/usr/bin/rsync -aE --partial --stats --exclude=/db_cutover_backups/ --exclude=/_dashboard_logs/ --exclude=/loop/ --exclude=/weather.db --exclude=/weather.db-wal --exclude=/weather.db-shm --exclude=/weather_edge_v1/feature_store/ --exclude=/weather_edge_v1/market_data/ --exclude=/weather_edge_v1/market_data.pre_external_*/ --exclude=/weather_edge_v1/remote_pm_agent/ --exclude=/weather_edge_v1/source_orderbook_timing/ --exclude=/weather_edge_v1/wu_basis_us/ {source_runtime} {target_runtime}",
                 f"rm -f {shlex.quote(str(target_db_tmp))}",
                 f"/usr/bin/sqlite3 {source_db} \".timeout 30000\" \".backup '{str(target_db_tmp).replace("'", "''")}'\"",
                 f"test \"$(/usr/bin/sqlite3 {shlex.quote(str(target_db_tmp))} 'PRAGMA quick_check;')\" = ok",
