@@ -38,6 +38,7 @@ from weather_data_feed.observation_cache import parse_utc  # noqa: E402
 
 STRATEGY_ID = "current_yes_core_carry_v1"
 STRATEGY_INSTANCE = "current_yes_core_carry_pre_live_v1"
+DECISION_MODE = "frozen_core_probability_first_positive_five_share_taker_ev"
 OUTPUT_DIR = ROOT / "runtime/weather_edge_v1" / STRATEGY_INSTANCE
 ARTIFACT_PATH = (
     ROOT / "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v1.json"
@@ -56,7 +57,7 @@ def configure_identity() -> None:
     base.STRATEGY_ID = STRATEGY_ID
     base.STRATEGY_INSTANCE = STRATEGY_INSTANCE
     base.BUILDER_VERSION = STRATEGY_INSTANCE
-    base.DECISION_MODE = "frozen_core_probability_first_positive_five_share_taker_ev"
+    base.DECISION_MODE = DECISION_MODE
 
 
 def checkpoint_clock(row: Mapping[str, Any]) -> tuple[int | None, int | None]:

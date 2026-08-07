@@ -133,6 +133,7 @@ def weather_order_executor_cmd(
     cancel_expired: bool = False,
     no_telegram: bool = True,
     python_executable: str | None = None,
+    market_proxy: str | None = None,
 ) -> list[str]:
     py = python_executable or sys.executable
     cmd = [
@@ -153,6 +154,8 @@ def weather_order_executor_cmd(
         cmd.append("--cancel-expired")
     if no_telegram:
         cmd.append("--no-telegram")
+    if str(market_proxy or "").strip():
+        cmd.extend(["--market-proxy", str(market_proxy)])
     return cmd
 
 
@@ -170,11 +173,11 @@ def run_weather_order_executor(
     timeout_sec: float = 180.0,
     env: dict[str, str] | None = None,
     python_executable: str | None = None,
-) -> dict[str, Any] | None:
-    if not live:
-        return None
+    market_proxy: str | None = None,
+) -> dict[str, Any]:
     if not confirm_live:
-        raise RuntimeError("--live requires --confirm-live")
+        if live:
+            raise RuntimeError("--live requires --confirm-live")
     cmd = weather_order_executor_cmd(
         root=root,
         plans_path=plans_path,
@@ -186,6 +189,7 @@ def run_weather_order_executor(
         cancel_expired=cancel_expired,
         no_telegram=no_telegram,
         python_executable=python_executable,
+        market_proxy=market_proxy,
     )
     proc = subprocess.run(
         cmd,
@@ -362,13 +366,7 @@ class OrderRuntime:
         child: ChildOrderPlan,
         run_context: ExecutionRunContext,
     ) -> ExecutionRuntimeResult:
-        """Submit one already-planned compatibility child through shared controls.
-
-        This is the direct-migration boundary for legacy runners whose strategy
-        code has already fixed child role, shares and quote cap.  It deliberately
-        skips replanning while retaining run-context, risk, dedupe, exposure and
-        attempt-before-side-effect guarantees.
-        """
+        """Submit one already-planned compatibility child through shared controls."""
 
         gate = self._gate(run_context)
         if gate is not None:
@@ -434,7 +432,19 @@ class OrderRuntime:
             book = self.venue.fetch_market_book(order.token_id)
             decision = evaluate_order_lifecycle(profile=profile, order_state=order, market_book=book, lifecycle_context=item.lifecycle_context, now_utc=now)
             if decision.action in {"REST", "TERMINAL"}:
-                actions.append(RuntimeActionResult(status="noop", reason=decision.reason, root_order_id=decision.root_order_id, action=decision.action))
+                actions.append(
+                    RuntimeActionResult(
+                        status="noop",
+                        reason=decision.reason,
+                        root_order_id=decision.root_order_id,
+                        action=decision.action,
+                        payload=(
+                            {"order_state": order.to_json()}
+                            if decision.action == "TERMINAL"
+                            else None
+                        ),
+                    )
+                )
                 continue
             if not decision.lifecycle_action_id or not self.journal.claim_lifecycle_action(decision.lifecycle_action_id, owner, decision.to_json()):
                 actions.append(RuntimeActionResult(status="blocked", reason="lifecycle_action_claim_not_acquired", root_order_id=decision.root_order_id, action=decision.action))

@@ -226,12 +226,27 @@ def evaluate_order_lifecycle(
     fallback_enabled = "taker_fallback" in leg.order_lifecycle_policy
     cancel_final = order_state.status.lower().strip() in {"cancelled", "canceled", "expired"}
     data_epoch_changed = bool(order_state.data_epoch_ref and lifecycle_context.data_epoch_ref and order_state.data_epoch_ref != lifecycle_context.data_epoch_ref)
-    if data_epoch_changed:
+    if data_epoch_changed and profile.data_epoch_policy == "cancel":
         if cancel_final:
             if order_state.status.lower().strip() == "expired":
                 return _decision(action="TERMINAL", reason="expired_order_data_epoch_changed", reconciliation=initial)
             return _rest("cancel_final_data_epoch_changed", initial)
         return _cancel_decision(reason="data_epoch_changed", order_state=order_state, market_book=market_book, lifecycle_context=lifecycle_context)
+    if data_epoch_changed and (
+        not lifecycle_context.token_unchanged or not lifecycle_context.thesis_valid
+    ):
+        if cancel_final:
+            return _rest("cancel_final_invalidated_by_data_epoch", initial)
+        return _cancel_decision(
+            reason=(
+                "token_changed"
+                if not lifecycle_context.token_unchanged
+                else "thesis_invalidated_by_data_epoch"
+            ),
+            order_state=order_state,
+            market_book=market_book,
+            lifecycle_context=lifecycle_context,
+        )
     if cancel_final:
         if fallback_enabled and deadline_passed:
             if not order_state.cancel_confirmed:
@@ -258,7 +273,7 @@ def evaluate_order_lifecycle(
         return _rest("static_maker_profile", initial)
     if not (lifecycle_context.thesis_valid and lifecycle_context.token_unchanged and lifecycle_context.book_fresh and lifecycle_context.price_cap_valid and lifecycle_context.maker_price_cap is not None):
         return _rest("maker_reprice_requirements_not_met", initial)
-    if order_state.reprice_count >= leg.max_reprices:
+    if leg.max_reprices is not None and order_state.reprice_count >= leg.max_reprices:
         return _rest("maker_reprice_limit_reached", initial)
     target = _maker_price(order_state=order_state, market_book=market_book, price_cap=lifecycle_context.maker_price_cap)
     if target is None:

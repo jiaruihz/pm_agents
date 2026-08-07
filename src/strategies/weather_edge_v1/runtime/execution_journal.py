@@ -12,6 +12,9 @@ from typing import Any, Iterator, Mapping, Protocol
 import fcntl
 
 
+ORPHAN_CLAIM_RETRY_AFTER_SEC = 60
+
+
 def _json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, str)):
         return value
@@ -85,28 +88,73 @@ class JsonlExecutionJournal:
     def _claim(self, *, event_type: str, claim_key: str, owner: str, payload: Mapping[str, Any] | None) -> bool:
         with self._locked_file() as handle:
             rows = self._rows_from_handle(handle)
-            prior_claim = any(
-                row.get("event_type") == event_type and row.get("claim_key") == claim_key
+            claim_rows = [
+                row
                 for row in rows
-            )
+                if row.get("event_type")
+                in {event_type, f"{event_type}_retry_claimed", f"{event_type}_orphan_reclaimed"}
+                and row.get("claim_key") == claim_key
+            ]
+            prior_claim = bool(claim_rows)
             retry_claim_type = f"{event_type}_retry_claimed"
-            retry_permitted = any(
-                row.get("event_type") == "outcome"
+            retry_permission_count = sum(
+                1
+                for row in rows
+                if row.get("event_type") == "outcome"
                 and isinstance(row.get("payload"), Mapping)
                 and claim_key in {row["payload"].get("identity_key"), row["payload"].get("live_exposure_key")}
                 and row["payload"].get("status") == "retry_permitted"
+            )
+            retry_claim_count = sum(
+                1
+                for row in rows
+                if row.get("event_type") == retry_claim_type
+                and row.get("claim_key") == claim_key
+            )
+            retry_permitted = retry_permission_count > retry_claim_count
+            attempt_identity = str(
+                claim_key
+                if event_type == "plan_claimed"
+                else dict(payload or {}).get("plan_dedupe_key") or ""
+            )
+            attempt_exists = any(
+                row.get("event_type") == "attempt_before_side_effect"
+                and isinstance(row.get("payload"), Mapping)
+                and row["payload"].get("identity_key") == attempt_identity
                 for row in rows
             )
-            retry_already_claimed = any(
-                row.get("event_type") == retry_claim_type and row.get("claim_key") == claim_key
-                for row in rows
+            latest_claim_at = None
+            if claim_rows:
+                raw_claim_at = str(claim_rows[-1].get("recorded_at_utc") or "")
+                try:
+                    latest_claim_at = datetime.fromisoformat(
+                        raw_claim_at.replace("Z", "+00:00")
+                    )
+                    if latest_claim_at.tzinfo is None:
+                        latest_claim_at = latest_claim_at.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    latest_claim_at = None
+            orphan_reclaim = bool(
+                prior_claim
+                and not attempt_exists
+                and latest_claim_at is not None
+                and (
+                    datetime.now(timezone.utc) - latest_claim_at.astimezone(timezone.utc)
+                ).total_seconds()
+                >= ORPHAN_CLAIM_RETRY_AFTER_SEC
             )
-            if prior_claim and (not retry_permitted or retry_already_claimed):
+            if prior_claim and not retry_permitted and not orphan_reclaim:
                 return False
             handle.seek(0, 2)
             row = {
                 "journal_schema_version": "weather_execution_journal_v1",
-                "event_type": retry_claim_type if prior_claim else event_type,
+                "event_type": (
+                    f"{event_type}_orphan_reclaimed"
+                    if orphan_reclaim
+                    else retry_claim_type
+                    if prior_claim
+                    else event_type
+                ),
                 "claim_key": claim_key,
                 "owner": owner,
                 "payload": dict(payload or {}),

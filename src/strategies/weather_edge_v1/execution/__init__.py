@@ -46,6 +46,7 @@ from .reconciliation import (
     order_chain,
     reconcile_replacement,
 )
+from .engine import allocate_profile_shares
 from .wcir import (
     WCIR_EXECUTION_HANDOFF_SCHEMA_VERSION,
     WCIRExecutionCompatibilityError,
@@ -78,6 +79,7 @@ __all__ = [
     "WCIRExecutionCompatibilityError",
     "WCIRExecutionHandoff",
     "attach_data_update_lifecycle",
+    "allocate_profile_shares",
     "authoritative_remaining_shares",
     "build_data_update_lifecycle_fields",
     "build_wcir_execution_handoff",

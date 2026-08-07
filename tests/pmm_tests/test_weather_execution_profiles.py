@@ -18,6 +18,8 @@ def test_legacy_profile_names_and_behavior_are_preserved_and_json_safe():
         "d1_taker_plus_maker_static_v1": ("fixed_weight_split", 90, (("taker", "d1_yes_high_mid_taker_v1", "taker_now", False, 0.5), ("maker", "d1_yes_high_mid_maker_v1", "maker_until_data_update", True, 0.5))),
         "d1_taker_plus_maker_chase_to_mid_v1": ("fixed_weight_split", 90, (("taker", "d1_yes_high_mid_taker_v1", "taker_now", False, 0.5), ("maker", "d1_yes_high_mid_maker_v1", "maker_until_data_update", True, 0.5))),
         "split_taker_maker_chase_v1": ("fixed_weight_split", 0, (("taker", "current_yes_heat_death_taker_probe_v1", "taker_now", False, 0.5), ("maker", "current_yes_heat_death_maker_probe_v1", "maker_chase_then_taker_fallback_v1", True, 0.5))),
+        "split_taker_maker_chase_capped_no_fallback_v1": ("explicit_leg_shares", 0, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v1", "maker_chase_until_observation_or_ttl_v1", True, 1.0))),
+        "split_taker_maker_edge_capped_no_fallback_v2": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
     }
 
     assert tuple(profiles._PROFILES) == tuple(expected)
@@ -116,3 +118,37 @@ def test_execution_config_id_changes_only_with_fixed_profile_behavior():
     chase_id = profiles.execution_config_id_for_profile("d1_taker_plus_maker_chase_to_mid_v1")
     assert static_id != chase_id
     assert static_id == profiles.execution_config_id_for_profile("D1_TAKER_PLUS_MAKER_STATIC_V1")
+
+
+def test_core_carry_profile_owns_live_cadence_and_unlimited_repricing():
+    profile = profiles.get_execution_profile("split_taker_maker_chase_capped_no_fallback_v1")
+    maker = next(leg for leg in profile.legs if leg.role == "maker")
+    assert profile.allocation_policy == "explicit_leg_shares"
+    assert profile.refresh_sec == 15
+    assert profile.ttl_sec == 900
+    assert profile.data_epoch_policy == "revalidate_and_refresh"
+    assert maker.max_reprices is None
+    assert "taker_fallback" not in maker.order_lifecycle_policy
+
+
+def test_core_carry_edge_capped_profile_owns_price_and_deadline_parameters():
+    profile = profiles.get_execution_profile(
+        "split_taker_maker_edge_capped_no_fallback_v2"
+    )
+    maker = next(leg for leg in profile.legs if leg.role == "maker")
+
+    assert profile.cancel_buffer_sec == 90
+    assert profile.refresh_sec == 15
+    assert profile.ttl_sec == 900
+    assert profile.data_epoch_policy == "cancel"
+    assert dict(profile.fixed_parameters) == {
+        "minimum_taker_improvement_ticks": 1,
+        "retained_edge": "0.01",
+        "stage_midpoint_after_sec": 300,
+        "stage_near_ask_after_sec": 600,
+    }
+    assert maker.reprice_policy == "deadline_staged_follow_best_bid"
+    assert maker.price_cap_policy == (
+        "model_probability_retained_edge_and_taker_improvement"
+    )
+    assert "taker_fallback" not in maker.order_lifecycle_policy

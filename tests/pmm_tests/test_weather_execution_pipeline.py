@@ -11,6 +11,7 @@ from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     build_trade_plan,
     build_trade_plans_for_signal,
     build_execution_comparison_plans,
+    build_live_order_record,
     cancel_expired_live_orders,
     execute_trade_plans,
     import_signals,
@@ -857,6 +858,83 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
 
             row = json.loads(live.read_text().splitlines()[-1])
             self.assertEqual(row["decision_snapshot_ts_utc"], "2026-07-14T15:31:02Z")
+
+    def test_live_order_persists_weather_source_epoch_and_snapshot_aliases(self):
+        signal = normalize_signal(self._paper_decision())
+        assert signal is not None
+        plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10))
+        plan.update(
+            {
+                "source_report_ts_utc": "2026-07-24T04:20:00Z",
+                "source_snapshot_file": "snapshot_20260724_1230.json",
+            }
+        )
+        row = build_live_order_record(
+            plan,
+            {"posted_price": 0.40, "order_id": "live-1"},
+            status="submitted",
+        )
+        self.assertEqual(row["source_report_ts_utc"], "2026-07-24T04:20:00Z")
+        self.assertEqual(row["source_snapshot_file"], "snapshot_20260724_1230.json")
+        self.assertEqual(row["source_snapshot_path"], "snapshot_20260724_1230.json")
+
+    def test_failed_post_after_confirmed_cancel_keeps_repost_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(
+                signal,
+                PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True),
+            )
+            plan.update(
+                {
+                    "allow_duplicate_signal_id": True,
+                    "execution_action": "core_carry_maker_reprice",
+                    "cancel_before_order_id": "old-order-1",
+                    "source_order_id": "old-order-1",
+                    "replacement_requires_order_state": True,
+                    "min_order_shares": 5.0,
+                    "size": 5.0,
+                }
+            )
+            plans = Path(tmp) / "plans.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+
+            class NoRestingPrice(RuntimeError):
+                weather_execution_response = {
+                    "error_classification": "current_yes_residual_maker_no_resting_price",
+                    "error_reason": "fresh book moved",
+                }
+
+            execute_trade_plans(
+                plan_path=plans,
+                paper_out=Path(tmp) / "paper.jsonl",
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda _plan: (_ for _ in ()).throw(NoRestingPrice()),
+                live_cancel_fn=lambda order_id: {
+                    "cancel": {"canceled": [order_id], "not_canceled": {}},
+                    "order_after_cancel": {
+                        "original_size": "5",
+                        "size_matched": "0",
+                        "status": "CANCELED",
+                    },
+                },
+            )
+
+            row = json.loads(live.read_text().splitlines()[-1])
+            self.assertEqual(row["status"], "error")
+            self.assertEqual(
+                row["exchange_response"]["pre_place_cancel_status"],
+                "cancel_confirmed_replacement_not_posted",
+            )
+            self.assertEqual(
+                row["exchange_response"]["pre_place_cancel_response"]["order_after_cancel"][
+                    "size_matched"
+                ],
+                "0",
+            )
 
     def test_execute_trade_plans_blocks_lifecycle_replacement_when_cancel_not_confirmed(self):
         with tempfile.TemporaryDirectory() as tmp:
