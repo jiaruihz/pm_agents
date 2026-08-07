@@ -884,8 +884,8 @@ def summarize_data_feed_semantics(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Normalize the broad legacy feed doctor into production-relevant health."""
 
     critical_reasons: list[str] = []
+    warnings: list[str] = []
     expected_ok = {
-        "observation_cache": "status",
         "live_cross_observation_state": "status",
         "snapshot_parity": "status",
         "snapshot_source_model": "status",
@@ -894,6 +894,17 @@ def summarize_data_feed_semantics(payload: Mapping[str, Any]) -> dict[str, Any]:
         row = payload.get(component)
         if not isinstance(row, Mapping) or row.get(field) != "ok":
             critical_reasons.append(f"{component}_not_ok")
+    observation_cache = payload.get("observation_cache")
+    observation_status = (
+        observation_cache.get("status")
+        if isinstance(observation_cache, Mapping)
+        else None
+    )
+    if observation_status == "warn":
+        inactive_count = int(observation_cache.get("inactive_invalid_record_count") or 0)
+        warnings.append(f"observation_cache_inactive_stale:{inactive_count}")
+    elif observation_status != "ok":
+        critical_reasons.append("observation_cache_not_ok")
     orderbooks = payload.get("orderbook_snapshots")
     if not isinstance(orderbooks, Mapping):
         critical_reasons.append("orderbook_snapshots_missing")
@@ -903,7 +914,6 @@ def summarize_data_feed_semantics(payload: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(source_model, Mapping) and source_model.get("fallback_detected"):
         critical_reasons.append("forecast_source_fallback_detected")
 
-    warnings: list[str] = []
     curves = payload.get("forecast_hourly_curves")
     curve_status = curves.get("status") if isinstance(curves, Mapping) else None
     if curve_status == "incomplete_city_target_coverage":
