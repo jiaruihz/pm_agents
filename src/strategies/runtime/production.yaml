@@ -314,6 +314,18 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: safe
+  - instance_id: market_implied_tail_residual_shadow_v1
+    tmux_session: market_implied_tail_residual_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_tail_prod
+    start_script: scripts/ops/start_market_implied_tail_residual_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    dependencies: [weather_market_books]
+    recovery_policy: safe
   - instance_id: weather_tokyo_current_break_active_ladder_shadow_v1
     tmux_session: weather_tokyo_current_break_active_ladder_shadow_v1
     role: shadow

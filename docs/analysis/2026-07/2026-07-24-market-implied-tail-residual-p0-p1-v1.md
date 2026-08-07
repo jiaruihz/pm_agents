@@ -1,6 +1,6 @@
 # Market-Implied Tail Residual P0/P1 v1
 
-> 2026-07-24; research-only; zero notional; no live change.
+> 2026-07-24 research result; 2026-08-08 deployed as zero-notional telemetry shadow; no order path and no live strategy change.
 
 ## 结论
 
@@ -155,6 +155,21 @@ P1 没有发现同时满足 `>=5 target dates`、calibration residual CI>0、fee
 - P2 应在同一固定分母比较 raw market mid 与 full-ladder market-only model；先不加入 forecast/weather。
 - P2 通过后再做 P3 weather uplift，才能区分 market/base-rate 与 forecast/source alpha。
 - verdict=`inconclusive`; 保持 zero-notional research，不改 HeadA shadow/live。
+
+## 2026-08-08 Forward Shadow
+
+`market_implied_tail_residual_shadow_v1` 已接入当前 canonical `market_books/latest.json` 与同 batch 的
+`market_ladder_snapshots/latest.json`。runner 每个 city-target-date 的本地固定两小时 checkpoint 记录全部 rung，
+包括 direct/effective YES book、lifecycle、price path、盘口众数距离、完整 ladder quote fraction 与 hotter-tail mass。
+
+这只是补 fresh PIT 分母：`execution_mode=shadow_zero_notional`、`notional_usd=0`、`orders_enabled=false`，
+且明确标记 `telemetry_only_model_unfitted`。P0/P1 的 `inconclusive` verdict 未改变；在 settled forward 上证明
+market-only residual 的 OOF probability/fee-adjusted edge 前，不生成 `SignalCandidate`、`TradeIntent` 或订单。
+
+Runtime:
+
+- health: `/Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/latest_summary.json`
+- append-only checkpoints: `/Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/checkpoints.jsonl`
 
 Artifacts:
 
