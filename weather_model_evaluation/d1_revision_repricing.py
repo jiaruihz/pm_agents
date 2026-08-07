@@ -32,6 +32,7 @@ from weather_data_feed.forecast_run_contract import (  # noqa: E402
     parse_utc,
     stable_content_hash,
 )
+from weather_data_feed.market_book_contract import classify_orderbook_clock  # noqa: E402
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
@@ -581,11 +582,30 @@ def load_market_checkpoints(
             row["book_status"] = row.get("yes_book_status")
             groups.setdefault(key, []).append(row)
         for (city, target_date), group in groups.items():
-            checkpoint_ts = str(payload.get("ts_utc") or group[0].get("snapshot_ts_utc") or "")
-            available_at = str(
-                payload.get("available_at_utc")
-                or max(str(row.get("available_at_utc") or "") for row in group)
+            row_clock_exact = all(
+                bool(row.get("event_time_pit_scorable"))
+                and row.get("ladder_available_at_utc")
+                for row in group
             )
+            if row_clock_exact:
+                available_at = max(
+                    str(row["ladder_available_at_utc"]) for row in group
+                )
+                checkpoint_ts = available_at
+                clock_lineage_status = "collector_exact_full_ladder_clock"
+                clock_lineage_blockers: list[str] = []
+            else:
+                # Retain legacy rows for terminal probability/coverage work, but
+                # never infer a response clock from snapshot_ts or a filename.
+                legacy = classify_orderbook_clock(group[0])
+                available_at = str(payload.get("available_at_utc") or "") or None
+                checkpoint_ts = str(
+                    payload.get("ts_utc")
+                    or group[0].get("snapshot_ts_utc")
+                    or ""
+                )
+                clock_lineage_status = str(legacy["clock_lineage_status"])
+                clock_lineage_blockers = list(legacy["clock_lineage_blockers"])
             feature_book_snapshot_id = stable_content_hash(
                 {"path": path.name, "city": city, "target_date": target_date}
             )
@@ -601,6 +621,9 @@ def load_market_checkpoints(
             checkpoint.update(
                 {
                     "available_at_utc": available_at,
+                    "event_time_pit_scorable": row_clock_exact,
+                    "clock_lineage_status": clock_lineage_status,
+                    "clock_lineage_blockers": clock_lineage_blockers,
                     "source_path": str(path),
                     "probabilities": {
                         str(row["label"]): row["normalized_market_probability"]
@@ -659,6 +682,9 @@ def attach_market_evidence(
             item
             for item in checkpoints
             if item.get("city") == event["city"] and item.get("target_date") == event["target_date"]
+            # In-memory callers predating v3 may omit the flag; disk loaders
+            # always materialize it explicitly for both new and legacy rows.
+            and item.get("event_time_pit_scorable") is not False
         ]
         pre_candidates = [
             item
@@ -1196,6 +1222,12 @@ def run_study(
     }
     evidence_funnel = {
         "market_checkpoints": len(checkpoints),
+        "event_time_clock_exact_market_checkpoints": sum(
+            item.get("event_time_pit_scorable") is True for item in checkpoints
+        ),
+        "legacy_or_incomplete_clock_market_checkpoints": sum(
+            item.get("event_time_pit_scorable") is not True for item in checkpoints
+        ),
         "complete_market_checkpoints": sum(
             item.get("rung_completeness") and item.get("market_distribution_complete")
             for item in checkpoints

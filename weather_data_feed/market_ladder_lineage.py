@@ -15,6 +15,80 @@ from weather_data_feed.source_lineage import capture_batch_id
 MARKET_LADDER_MANIFEST_SCHEMA_VERSION = "weather_market_ladder_manifest_v1"
 
 
+def _ladder_clock_manifest(
+    rows: list[Mapping[str, Any]], *, published_at_utc: str
+) -> dict[str, Any]:
+    """Materialize an exact clock contract without guessing legacy clocks."""
+
+    required: list[tuple[str, str]] = [
+        (side, field)
+        for side in ("yes", "no")
+        for field in (
+            "request_started_at_utc",
+            "response_received_at_utc",
+            "parsed_at_utc",
+        )
+    ]
+    blockers: list[str] = []
+    values: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for row in rows:
+        for side, field in required:
+            value = row.get(f"{side}_book_{field}")
+            if value:
+                values[(side, field)].append(str(value))
+            else:
+                blockers.append(f"{side}_book_{field}_missing")
+        if row.get("yes_book_status") != "ok":
+            blockers.append("yes_book_not_ok")
+        if row.get("no_book_status") != "ok":
+            blockers.append("no_book_not_ok")
+    exact = not blockers and bool(rows)
+    assembled_values = [
+        value
+        for side in ("yes", "no")
+        for value in values[(side, "parsed_at_utc")]
+    ]
+    exchange_values = [
+        str(row.get(f"{side}_book_exchange_ts_utc"))
+        for row in rows
+        for side in ("yes", "no")
+        if row.get(f"{side}_book_exchange_ts_utc")
+    ]
+    return {
+        "clock_lineage_status": (
+            "collector_exact_full_ladder_clock"
+            if exact
+            else "legacy_or_incomplete_full_ladder_clock"
+        ),
+        "event_time_pit_scorable": exact and bool(published_at_utc),
+        "clock_lineage_blockers": sorted(set(blockers)),
+        "ladder_request_started_at_utc": (
+            min(
+                value
+                for side in ("yes", "no")
+                for value in values[(side, "request_started_at_utc")]
+            )
+            if exact
+            else None
+        ),
+        "ladder_response_received_at_utc": (
+            max(
+                value
+                for side in ("yes", "no")
+                for value in values[(side, "response_received_at_utc")]
+            )
+            if exact
+            else None
+        ),
+        "ladder_assembled_at_utc": max(assembled_values) if exact else None,
+        "exchange_book_max_ts_utc": max(exchange_values) if exchange_values else None,
+        # With the current snapshot-full publisher, downstream code cannot see
+        # the atomic city ladder before the complete JSON is published.
+        "ladder_available_at_utc": published_at_utc if exact else None,
+        "published_at_utc": published_at_utc or None,
+    }
+
+
 def _mid(row: Mapping[str, Any]) -> float | None:
     bid, ask = row.get("yes_best_bid"), row.get("yes_best_ask")
     try:
@@ -110,6 +184,7 @@ def annotate_market_ladder_snapshot(
         except ValueError:
             horizon_days = -1
         strict_book_checkpoint: dict[str, Any] | None = None
+        clock_manifest = _ladder_clock_manifest(rows, published_at_utc=available_at)
         if native_complete:
             try:
                 strict_book_checkpoint = materialize_full_ladder_checkpoint(
@@ -151,7 +226,9 @@ def annotate_market_ladder_snapshot(
             "rung_count": len(rows),
             "rung_manifest": rung_manifest,
             "rung_manifest_hash": rung_hash,
+            "city_target_ladder_hash": rung_hash,
             "native_lattice_complete": native_complete,
+            "rung_completeness": native_complete,
             "market_distribution_complete": market_complete and total > 0,
             "two_sided_book_distribution_complete": bool(
                 strict_book_checkpoint
@@ -162,6 +239,7 @@ def annotate_market_ladder_snapshot(
             "checkpoint_status": "scorable_probability" if native_complete and normalized is not None else "blocked",
             "checkpoint_blockers": sorted(set(blockers)),
             "strict_book_checkpoint": strict_book_checkpoint,
+            **clock_manifest,
         }
         manifests.append(manifest)
         for row in rows:
@@ -169,10 +247,24 @@ def annotate_market_ladder_snapshot(
             row["batch_capture_id"] = batch_id
             row["book_snapshot_id"] = book_snapshot_id
             row["rung_manifest_hash"] = rung_hash
+            row["city_target_ladder_hash"] = rung_hash
             row["native_lattice_complete"] = native_complete
+            row["rung_completeness"] = native_complete
             row["market_distribution_complete"] = manifest["market_distribution_complete"]
             row["two_sided_book_distribution_complete"] = manifest["two_sided_book_distribution_complete"]
             row["ladder_checkpoint_status"] = manifest["checkpoint_status"]
+            for field in (
+                "clock_lineage_status",
+                "event_time_pit_scorable",
+                "clock_lineage_blockers",
+                "ladder_request_started_at_utc",
+                "ladder_response_received_at_utc",
+                "ladder_assembled_at_utc",
+                "exchange_book_max_ts_utc",
+                "ladder_available_at_utc",
+                "published_at_utc",
+            ):
+                row[field] = manifest[field]
     payload["producer"] = producer
     payload["producer_build_id"] = producer_build_id
     payload["snapshot_capture_id"] = snapshot_capture_id

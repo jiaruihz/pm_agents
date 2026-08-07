@@ -16,7 +16,6 @@ import subprocess
 import urllib.parse
 import httpx
 import numpy as np
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
 from xml.etree import ElementTree
@@ -60,6 +59,10 @@ from weather_data_feed.forecast_hourly_curves import (
 from weather_data_feed.assigned_forecast_models import CITY_MODEL
 from weather_data_feed.information_events import canonical_json_hash
 from weather_data_feed.market_ladder_lineage import annotate_market_ladder_snapshot
+from weather_data_feed.market_book_contract import (
+    materialize_orderbook_capture,
+    utc_now_text,
+)
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
 
@@ -91,6 +94,9 @@ DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "s
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
 DEFAULT_ORDERBOOK_WORKERS = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_WORKERS", "1"))
 DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETRIES", "0"))
+ORDERBOOK_BATCH_MAX_TOKENS = int(
+    os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BATCH_MAX_TOKENS", "500")
+)
 ORDERBOOK_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_TIMEOUT_SEC", "4.0"))
 ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
 WEATHER_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATHER_CURL_TIMEOUT_SEC", "5.0"))
@@ -420,7 +426,7 @@ def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_
     last_error = None
     attempts = max(1, int(retries or 0) + 1)
     for attempt in range(attempts):
-        fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        request_started_at_utc = utc_now_text()
         tmp = Path(f"/tmp/weather_orderbook_{os.getpid()}_{hashlib.sha1(str(token_id).encode()).hexdigest()[:12]}.json")
         try:
             url = f"{PM_CLOB_URL}/book?token_id={urllib.parse.quote(str(token_id), safe='')}"
@@ -440,27 +446,47 @@ def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_
                 cmd.extend(["-x", PROXY])
             cmd.append(url)
             proc = subprocess.run(cmd, text=True, capture_output=True)
+            response_received_at_utc = utc_now_text()
             status_line = (proc.stdout or "").strip().splitlines()[-1] if (proc.stdout or "").strip() else ""
             status_code = int(status_line) if status_line.isdigit() else 0
             if status_code == 404:
                 return {
                     "status": "not_found",
                     "token_id": token_id,
-                    "fetched_at_utc": fetched_at_utc,
+                    "request_started_at_utc": request_started_at_utc,
+                    "response_received_at_utc": response_received_at_utc,
+                    "parsed_at_utc": utc_now_text(),
+                    "fetched_at_utc": response_received_at_utc,
                     "summary": {},
                     "raw": {},
                 }
             if status_code == 200:
                 raw = json.loads(tmp.read_text(encoding="utf-8"))
                 summary = summarize_orderbook(raw, top_n=top_n)
+                parsed_at_utc = utc_now_text()
+                lineage = materialize_orderbook_capture(
+                    token_id=str(token_id),
+                    raw_book=raw,
+                    request_started_at_utc=request_started_at_utc,
+                    response_received_at_utc=response_received_at_utc,
+                    parsed_at_utc=parsed_at_utc,
+                    request_batch_capture_id=canonical_json_hash(
+                        {
+                            "mode": "single_book",
+                            "token_id": str(token_id),
+                            "request_started_at_utc": request_started_at_utc,
+                        }
+                    ),
+                )
                 return {
+                    **lineage,
                     "status": "ok",
-                    "token_id": token_id,
-                    "fetched_at_utc": fetched_at_utc,
                     "summary": summary,
                     "raw": {
                         "bids": summary["bids"],
                         "asks": summary["asks"],
+                        "timestamp": raw.get("timestamp"),
+                        "hash": raw.get("hash"),
                     },
                 }
             if status_code >= 500 or status_code == 429:
@@ -485,11 +511,16 @@ def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_
                 tmp.unlink()
             except FileNotFoundError:
                 pass
-    fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    failed_at_utc = utc_now_text()
     return {
         "status": "error",
         "token_id": token_id,
-        "fetched_at_utc": fetched_at_utc,
+        "request_started_at_utc": request_started_at_utc,
+        "response_received_at_utc": failed_at_utc,
+        "parsed_at_utc": None,
+        "fetched_at_utc": failed_at_utc,
+        "clock_lineage_status": "single_request_failed",
+        "event_time_pit_scorable": False,
         "error": f"{type(last_error).__name__}: {last_error}",
         "summary": {},
         "raw": {},
@@ -500,7 +531,7 @@ def append_orderbook_archive(path, row):
     path.parent.mkdir(parents=True, exist_ok=True)
     row = dict(row)
     raw_payload_hash = canonical_json_hash(row.get("raw") or {})
-    row.setdefault("schema_version", "weather_orderbook_capture_v2")
+    row.setdefault("schema_version", "weather_orderbook_capture_v3")
     row.setdefault("producer", "weather_data_feed_service.legacy_weather_predict.paper_snapshot")
     row.setdefault("producer_build_id", PRODUCER_BUILD_ID)
     row.setdefault("producer_build_id_basis", PRODUCER_BUILD_ID_BASIS)
@@ -515,10 +546,10 @@ def append_orderbook_archive(path, row):
             }
         ),
     )
-    row.setdefault("detected_at_utc", row.get("fetched_at_utc"))
-    row.setdefault("first_seen_at_utc", row.get("fetched_at_utc"))
-    row.setdefault("available_at_utc", row.get("fetched_at_utc"))
-    row.setdefault("source_lineage_status", "collector_exact_orderbook_response")
+    row.setdefault("detected_at_utc", row.get("response_received_at_utc"))
+    row.setdefault("first_seen_at_utc", row.get("response_received_at_utc"))
+    row.setdefault("available_at_utc", row.get("response_received_at_utc"))
+    row.setdefault("source_lineage_status", "collector_exact_orderbook_response_v3")
     with gzip.open(path, "at", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
@@ -555,6 +586,7 @@ def stamp_snapshot_availability(payload, available_at_utc=None):
             or collection_started
         )
         record["available_at_utc"] = available
+        record["published_at_utc"] = available
     return available
 
 
@@ -592,10 +624,8 @@ def fetch_token_orderbook_batch(
 ):
     if not token_archive_rows:
         return {}
-    workers = max(1, int(max_workers or 1))
     rows_by_token = dict(token_archive_rows)
-    results = {}
-    pending_tokens = set(rows_by_token)
+    results: dict[str, tuple[dict, dict]] = {}
 
     def budget_remaining():
         if deadline_monotonic is None:
@@ -606,61 +636,99 @@ def fetch_token_orderbook_batch(
         for token_id in tokens:
             results[token_id] = (rows_by_token[token_id], orderbook_budget_book(token_id))
 
-    if workers <= 1 or len(rows_by_token) <= 1:
-        for token_id, archive_row in rows_by_token.items():
-            remaining = budget_remaining()
-            if remaining is not None and remaining <= 0:
-                mark_budget_exhausted(pending_tokens)
-                break
-            results[token_id] = (archive_row, fetch_token_orderbook(client, token_id, top_n=top_n))
-            pending_tokens.discard(token_id)
-        return results
-
-    def fetch_with_isolated_client(token_id):
-        with httpx.Client(
-            timeout=PM_HTTP_TIMEOUT,
-            limits=PM_HTTP_LIMITS,
-            proxy=PROXY,
-            follow_redirects=True,
-        ) as isolated_client:
-            return fetch_token_orderbook(isolated_client, token_id, top_n=top_n)
-
-    pool = ThreadPoolExecutor(max_workers=min(workers, len(rows_by_token)))
-    futures = {
-        pool.submit(fetch_with_isolated_client, token_id): token_id
-        for token_id in rows_by_token
-    }
-    pending = set(futures)
-    try:
-        while pending:
-            remaining = budget_remaining()
-            if remaining is not None and remaining <= 0:
-                break
-            timeout = remaining if remaining is not None else None
-            done, pending = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
-            if not done:
-                break
-            for future in done:
-                token_id = futures[future]
-                pending_tokens.discard(token_id)
-                try:
-                    book = future.result()
-                except Exception as exc:
+    tokens = list(rows_by_token)
+    chunk_size = max(1, min(int(ORDERBOOK_BATCH_MAX_TOKENS), 500))
+    for offset in range(0, len(tokens), chunk_size):
+        chunk = tokens[offset : offset + chunk_size]
+        remaining = budget_remaining()
+        if remaining is not None and remaining <= 0:
+            mark_budget_exhausted(tokens[offset:])
+            break
+        request_started_at_utc = utc_now_text()
+        batch_capture_id = canonical_json_hash(
+            {
+                "endpoint": "/books",
+                "request_started_at_utc": request_started_at_utc,
+                "token_ids": sorted(chunk),
+            }
+        )
+        try:
+            response = client.post(
+                f"{PM_CLOB_URL}/books",
+                json=[{"token_id": token_id} for token_id in chunk],
+                timeout=min(float(remaining), ORDERBOOK_CURL_TIMEOUT_SEC)
+                if remaining is not None
+                else ORDERBOOK_CURL_TIMEOUT_SEC,
+            )
+            response_received_at_utc = utc_now_text()
+            response.raise_for_status()
+            raw_books = response.json()
+            if not isinstance(raw_books, list):
+                raise ValueError("CLOB /books response is not a list")
+            parsed_at_utc = utc_now_text()
+            by_asset = {
+                str(raw.get("asset_id") or ""): raw
+                for raw in raw_books
+                if isinstance(raw, dict)
+            }
+            for token_id in chunk:
+                raw = by_asset.get(str(token_id))
+                if raw is None:
                     book = {
-                        "status": "error",
+                        "status": "missing_from_batch_response",
                         "token_id": token_id,
-                        "fetched_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                        "error": f"{type(exc).__name__}: {exc}",
+                        "request_started_at_utc": request_started_at_utc,
+                        "response_received_at_utc": response_received_at_utc,
+                        "parsed_at_utc": parsed_at_utc,
+                        "fetched_at_utc": response_received_at_utc,
+                        "request_batch_capture_id": batch_capture_id,
+                        "clock_lineage_status": "collector_exact_response_clock",
+                        "event_time_pit_scorable": False,
                         "summary": {},
                         "raw": {},
                     }
+                else:
+                    summary = summarize_orderbook(raw, top_n=top_n)
+                    lineage = materialize_orderbook_capture(
+                        token_id=str(token_id),
+                        raw_book=raw,
+                        request_started_at_utc=request_started_at_utc,
+                        response_received_at_utc=response_received_at_utc,
+                        parsed_at_utc=parsed_at_utc,
+                        request_batch_capture_id=batch_capture_id,
+                    )
+                    book = {
+                        **lineage,
+                        "status": "ok",
+                        "summary": summary,
+                        "raw": {
+                            "bids": summary["bids"],
+                            "asks": summary["asks"],
+                            "timestamp": raw.get("timestamp"),
+                            "hash": raw.get("hash"),
+                        },
+                    }
                 results[token_id] = (rows_by_token[token_id], book)
-    finally:
-        for future in pending:
-            future.cancel()
-        pool.shutdown(wait=False, cancel_futures=True)
-
-    mark_budget_exhausted(pending_tokens)
+        except Exception as exc:
+            failed_at_utc = utc_now_text()
+            for token_id in chunk:
+                results[token_id] = (
+                    rows_by_token[token_id],
+                    {
+                        "status": "batch_error",
+                        "token_id": token_id,
+                        "request_started_at_utc": request_started_at_utc,
+                        "response_received_at_utc": failed_at_utc,
+                        "parsed_at_utc": None,
+                        "fetched_at_utc": failed_at_utc,
+                        "request_batch_capture_id": batch_capture_id,
+                        "clock_lineage_status": "batch_request_failed",
+                        "event_time_pit_scorable": False,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "summary": {},
+                        "raw": {},
+                    },
+                )
     return results
 
 
@@ -679,6 +747,14 @@ def prefixed_book_fields(prefix, token_id, book, archive_path):
         f"{prefix}_depth_ask_10c": summary.get("depth_ask_10c"),
         f"{prefix}_book_status": book.get("status"),
         f"{prefix}_book_fetched_at_utc": book.get("fetched_at_utc"),
+        f"{prefix}_book_exchange_ts_utc": book.get("exchange_book_ts_utc"),
+        f"{prefix}_book_exchange_hash": book.get("exchange_book_hash"),
+        f"{prefix}_book_request_started_at_utc": book.get("request_started_at_utc"),
+        f"{prefix}_book_response_received_at_utc": book.get("response_received_at_utc"),
+        f"{prefix}_book_parsed_at_utc": book.get("parsed_at_utc"),
+        f"{prefix}_book_batch_capture_id": book.get("request_batch_capture_id"),
+        f"{prefix}_book_clock_lineage_status": book.get("clock_lineage_status"),
+        f"{prefix}_book_event_time_pit_scorable": book.get("event_time_pit_scorable", False),
         f"{prefix}_book_archive_path": str(archive_path) if archive_path else "",
     }
 
@@ -1659,6 +1735,8 @@ def main():
                                 continue
                             token_archive_rows[token_id] = {
                                 "type": "weather_paper_snapshot_orderbook",
+                                "capture_reason": "scheduled_full_ladder_snapshot",
+                                "trigger_event_id": None,
                                 "snapshot_ts_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "snapshot_ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
                                 "city": city,

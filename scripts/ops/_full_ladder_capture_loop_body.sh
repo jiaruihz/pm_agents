@@ -8,8 +8,8 @@ set -uo pipefail
 SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:?}"
 OUTPUT_ROOT="${WEATHER_FULL_LADDER_OUTPUT_ROOT:?}"
 CACHE_ROOT="${WEATHER_FULL_LADDER_CACHE_ROOT:?}"
-INTERVAL_SEC="${WEATHER_FULL_LADDER_INTERVAL_SEC:-1200}"
-ORDERBOOK_BUDGET_SEC="${WEATHER_FULL_LADDER_ORDERBOOK_BUDGET_SEC:-900}"
+INTERVAL_SEC="${WEATHER_FULL_LADDER_INTERVAL_SEC:-300}"
+ORDERBOOK_BUDGET_SEC="${WEATHER_FULL_LADDER_ORDERBOOK_BUDGET_SEC:-240}"
 ORDERBOOK_WORKERS="${WEATHER_FULL_LADDER_ORDERBOOK_WORKERS:-2}"
 LOG_FILE="${WEATHER_FULL_LADDER_LOG_FILE:?}"
 PY="$SERVICE_DIR/.venv/bin/python"
@@ -40,6 +40,7 @@ FAILOVER="$PROJECT_DIR/scripts/ops/weather_market_proxy_failover.py"
 FAILOVER_LOG="${WEATHER_MARKET_PROXY_FAILOVER_LOG:-$OUTPUT_ROOT/market_proxy_failover.jsonl}"
 
 while true; do
+  cycle_started_epoch="$(date +%s)"
   date -u +"[full_ladder] snapshot_start_utc=%Y-%m-%dT%H:%M:%SZ" >> "$LOG_FILE"
   # Ensure the shared proxy controller has a healthy node before snapshotting
   # (best-effort; the main feed also does this, we piggyback on its selection).
@@ -53,6 +54,12 @@ while true; do
     --orderbook-budget-sec "$ORDERBOOK_BUDGET_SEC" \
     --orderbook-workers "$ORDERBOOK_WORKERS" >> "$LOG_FILE" 2>&1
   rc=$?
-  date -u +"[full_ladder] snapshot_done_utc=%Y-%m-%dT%H:%M:%SZ rc=$rc" >> "$LOG_FILE"
-  sleep "$INTERVAL_SEC"
+  cycle_finished_epoch="$(date +%s)"
+  cycle_elapsed_sec="$((cycle_finished_epoch - cycle_started_epoch))"
+  sleep_sec="$((INTERVAL_SEC - cycle_elapsed_sec))"
+  if (( sleep_sec < 0 )); then
+    sleep_sec=0
+  fi
+  date -u +"[full_ladder] snapshot_done_utc=%Y-%m-%dT%H:%M:%SZ rc=$rc elapsed_sec=$cycle_elapsed_sec next_sleep_sec=$sleep_sec" >> "$LOG_FILE"
+  sleep "$sleep_sec"
 done

@@ -42,6 +42,7 @@ from weather_data_feed.information_events import (  # noqa: E402
 
 
 SCHEMA_VERSION = "weather_lmvm_forecast_repricing_shadow_v1"
+CLOCK_CONTRACT_VERSION = "weather_orderbook_capture_v3_available_clock"
 STRATEGY_KEY = "lmvm_forecast_innovation_single_yes_v1"
 POLICY_ID = "delta_model_minus_delta_market_argmax_v1"
 FEATURE_SET_ID = canonical_json_hash(
@@ -59,6 +60,63 @@ DEFAULT_SNAPSHOTS = (
     DEFAULT_RUNTIME / "full_ladder_output/paper_snapshots",
     DEFAULT_RUNTIME / "targeted_output/paper_snapshots",
 )
+
+
+def parse_clock_exact_snapshot_file(
+    path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Keep only v3 ladders with a true downstream-available clock."""
+
+    rows, parsed = parse_snapshot_file(str(path))
+    counters: Counter[str] = Counter(parsed)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        counters["clock_payload_invalid"] += 1
+        return [], dict(counters)
+    records = [row for row in payload.get("records") or [] if isinstance(row, dict)]
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for record in records:
+        key = (
+            str(record.get("city") or ""),
+            str(record.get("target_date") or record.get("event_date") or ""),
+            str(record.get("event_slug") or ""),
+        )
+        groups.setdefault(key, []).append(record)
+    exact: list[dict[str, Any]] = []
+    for source in rows:
+        key = (
+            str(source.get("city") or ""),
+            str(source.get("target_date") or ""),
+            str(source.get("event_slug") or ""),
+        )
+        group = groups.get(key) or []
+        available_values = [
+            str(record.get("ladder_available_at_utc") or "")
+            for record in group
+            if record.get("ladder_available_at_utc")
+        ]
+        clock_exact = bool(group) and len(available_values) == len(group) and all(
+            record.get("event_time_pit_scorable") is True for record in group
+        )
+        if not clock_exact:
+            counters["legacy_or_incomplete_clock_ladders_blocked"] += 1
+            continue
+        decision_ts = max(available_values)
+        decision_dt = parse_utc(decision_ts)
+        if decision_dt is None:
+            counters["invalid_ladder_available_clock"] += 1
+            continue
+        row = dict(source)
+        row["decision_ts_utc"] = decision_dt.isoformat(timespec="seconds").replace(
+            "+00:00", "Z"
+        )
+        row["decision_epoch"] = decision_dt.timestamp()
+        row["clock_lineage_status"] = "collector_exact_full_ladder_clock"
+        row["event_time_pit_scorable"] = True
+        exact.append(row)
+    counters["collector_exact_clock_ladders"] += len(exact)
+    return exact, dict(counters)
 
 
 def utc_now() -> str:
@@ -95,10 +153,27 @@ def load_state(path: Path) -> dict[str, Any]:
             "open_candidates": {},
             "markout_keys": [],
             "totals": {},
+            "clock_contract_version": CLOCK_CONTRACT_VERSION,
+            "legacy_clock_quarantine": None,
         }
     value = json.loads(path.read_text(encoding="utf-8"))
     if value.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"unsupported state schema: {value.get('schema_version')}")
+    if value.get("clock_contract_version") != CLOCK_CONTRACT_VERSION:
+        value["legacy_clock_quarantine"] = {
+            "migrated_at_utc": utc_now(),
+            "prior_stream_count": len(value.get("streams") or {}),
+            "prior_open_candidate_count": len(value.get("open_candidates") or {}),
+            "prior_markout_key_count": len(value.get("markout_keys") or []),
+            "reason": "legacy_snapshot_ts_not_collector_exact_available_clock",
+        }
+        # Preserve append-only journals and seen-file history, but force the
+        # first v3 state in every stream to be a new left-censored baseline.
+        value["streams"] = {}
+        value["open_candidates"] = {}
+        value["markout_keys"] = []
+        value["bootstrapped"] = False
+        value["clock_contract_version"] = CLOCK_CONTRACT_VERSION
     return value
 
 
@@ -247,9 +322,9 @@ def build_update(
         normalized_payload=normalized_payload,
         source_event_ts_utc=current.get("model_init_utc_estimated"),
         issued_at_utc=current.get("model_init_utc_estimated"),
-        detected_at_utc=current["snapshot_ts_utc"],
-        first_seen_at_utc=current["snapshot_ts_utc"],
-        available_at_utc=current["snapshot_ts_utc"],
+        detected_at_utc=current["decision_ts_utc"],
+        first_seen_at_utc=current["decision_ts_utc"],
+        available_at_utc=current["decision_ts_utc"],
         pit_lineage_class="collector_exact",
         raw_source_path=current["source_path"],
         raw_row_hash=current["snapshot_id"],
@@ -258,7 +333,7 @@ def build_update(
         city=current["city"],
         target_date=current["target_date"],
         trigger_event=event,
-        as_of_ts_utc=current["snapshot_ts_utc"],
+        as_of_ts_utc=current["decision_ts_utc"],
         feature_frame_ref={
             "store_frame_id": current["snapshot_id"],
             "feature_row_id": stream_key(current),
@@ -284,7 +359,7 @@ def build_update(
             trigger_event_id=event["information_event_id"],
             city=current["city"],
             target_date=current["target_date"],
-            decision_ts_utc=current["snapshot_ts_utc"],
+            decision_ts_utc=current["decision_ts_utc"],
             target_id=target_id,
             target_kind="market_expression",
             p_model=rung["model_probability_after"],
@@ -297,7 +372,7 @@ def build_update(
             scorable_status="scorable",
             blocker_reason=None,
             market_feature_role="comparison_baseline_and_innovation_offset",
-            market_feature_clock=current["snapshot_ts_utc"],
+            market_feature_clock=current["decision_ts_utc"],
             feature_book_snapshot_id=current["snapshot_id"],
             metadata={
                 "forecast_state_before": previous["forecast_state_key"],
@@ -314,7 +389,7 @@ def build_update(
             trigger_event_id=event["information_event_id"],
             city=current["city"],
             target_date=current["target_date"],
-            decision_ts_utc=current["snapshot_ts_utc"],
+            decision_ts_utc=current["decision_ts_utc"],
             target_id=target_id,
             target_kind="market_expression",
             expression_id=target_id,
@@ -405,6 +480,8 @@ def build_update(
         "forecast_state_after": current["forecast_state_key"],
         "snapshot_id": current["snapshot_id"],
         "snapshot_ts_utc": current["snapshot_ts_utc"],
+        "decision_ts_utc": current["decision_ts_utc"],
+        "clock_lineage_status": current["clock_lineage_status"],
         "source_path": current["source_path"],
         "city": current["city"],
         "target_date": current["target_date"],
@@ -421,8 +498,8 @@ def build_update(
         "stream_key": stream_key(current),
         "condition_id": selected_candidate.condition_id,
         "bracket": selected_candidate.bracket,
-        "decision_ts_utc": current["snapshot_ts_utc"],
-        "decision_epoch": current["snapshot_epoch"],
+        "decision_ts_utc": current["decision_ts_utc"],
+        "decision_epoch": current["decision_epoch"],
         "entry_bid": selected["yes_bid"],
         "entry_ask": selected["yes_ask"],
         "entry_ask_size": selected.get("yes_ask_size"),
@@ -444,7 +521,7 @@ def markouts_for_state(
     for candidate_id, candidate in open_candidates.items():
         if candidate["stream_key"] != stream_key(row):
             continue
-        elapsed = (float(row["snapshot_epoch"]) - float(candidate["decision_epoch"])) / 60.0
+        elapsed = (float(row["decision_epoch"]) - float(candidate["decision_epoch"])) / 60.0
         if elapsed <= 0:
             continue
         if elapsed > follow_minutes:
@@ -465,7 +542,7 @@ def markouts_for_state(
             {
                 "schema_version": SCHEMA_VERSION,
                 "record_type": "lmvm_quote_markout",
-                "observed_at_utc": row["snapshot_ts_utc"],
+                "observed_at_utc": row["decision_ts_utc"],
                 "candidate_id": candidate_id,
                 "city": row["city"],
                 "target_date": row["target_date"],
@@ -494,9 +571,9 @@ def markouts_for_state(
 def bootstrap(files: list[Path], state: dict[str, Any], lookback_files: int) -> dict[str, int]:
     counters: Counter[str] = Counter()
     for path in files[-max(1, lookback_files) :]:
-        rows, parsed = parse_snapshot_file(str(path))
+        rows, parsed = parse_clock_exact_snapshot_file(path)
         counters.update(parsed)
-        for row in sorted(rows, key=lambda item: item["snapshot_epoch"]):
+        for row in sorted(rows, key=lambda item: item["decision_epoch"]):
             state["streams"][stream_key(row)] = row
     state["seen_files"] = [str(path) for path in files]
     state["bootstrapped"] = True
@@ -535,11 +612,11 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
     markout_keys = set(state.get("markout_keys") or [])
     parsed_states = []
     for path in new_files:
-        rows, parsed = parse_snapshot_file(str(path))
+        rows, parsed = parse_clock_exact_snapshot_file(path)
         counts.update(parsed)
         parsed_states.extend(rows)
         seen.add(str(path))
-    for row in sorted(parsed_states, key=lambda item: (item["snapshot_epoch"], item["snapshot_id"])):
+    for row in sorted(parsed_states, key=lambda item: (item["decision_epoch"], item["snapshot_id"])):
         observed, expired = markouts_for_state(row, open_candidates, markout_keys, args.follow_minutes)
         markouts.extend(observed)
         for candidate_id in expired:
@@ -572,7 +649,7 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
     totals.update(counts)
     state["totals"] = dict(totals)
     latest_ts = max(
-        (parse_utc(row.get("snapshot_ts_utc")) for row in state["streams"].values()),
+        (parse_utc(row.get("decision_ts_utc")) for row in state["streams"].values()),
         default=None,
     )
     age = (datetime.now(timezone.utc) - latest_ts).total_seconds() if latest_ts else None
