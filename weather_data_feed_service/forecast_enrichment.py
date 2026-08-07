@@ -58,6 +58,9 @@ from weather_data_feed_service.io_utils import (
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_enrichment"
+DEFAULT_OPEN_METEO_REFRESH_SEC = int(
+    os.environ.get("WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC", "21600")
+)
 
 
 def _taf_valid_time(value: Any) -> str | None:
@@ -168,6 +171,88 @@ def _failed_result(source_key: str, exc: BaseException) -> ForecastFetchResult:
         latency_ms=0.0,
         error=f"{type(exc).__name__}: {exc}",
     )
+
+
+def _reusable_open_meteo_payload(
+    previous: dict[str, Any] | None,
+    *,
+    city: str,
+    target_date: str,
+    now_utc: datetime,
+    max_age_sec: int,
+) -> dict[str, Any] | None:
+    if not isinstance(previous, dict):
+        return None
+    if previous.get("city") != city or previous.get("target_date") != target_date:
+        return None
+    blocks: dict[str, dict[str, Any]] = {}
+    ages: list[float] = []
+    for key in ("open_meteo_multi_model", "open_meteo_weather_context"):
+        block = previous.get(key)
+        result = block.get("result") if isinstance(block, dict) else None
+        fetched = parse_utc(result.get("fetched_at_utc")) if isinstance(result, dict) else None
+        if not isinstance(block, dict) or not isinstance(result, dict) or result.get("status") != "ok" or fetched is None:
+            return None
+        age = (now_utc - fetched).total_seconds()
+        if age < 0 or age > max_age_sec:
+            return None
+        blocks[key] = dict(block)
+        ages.append(age)
+    return {
+        **blocks,
+        "max_age_sec": round(max(ages), 3),
+        "refresh_contract_sec": int(max_age_sec),
+    }
+
+
+def load_reusable_open_meteo_rows(
+    output_dir: Path,
+    *,
+    now_utc: datetime,
+    max_age_sec: int,
+    tail_rows: int = 5000,
+) -> dict[str, dict[str, Any]]:
+    """Recover the latest successful Open-Meteo evidence per city.
+
+    ``latest.json`` may itself be a 429/fetch-failed cycle. The append-only
+    journal is therefore the durable cache owner; falling back only to latest
+    would keep hammering the provider after the first rate-limit response.
+    """
+
+    candidates: list[dict[str, Any]] = []
+    latest = read_json(output_dir / "latest.json", {})
+    candidates.extend(
+        row for row in latest.get("records", []) if isinstance(row, dict)
+    )
+    journal = output_dir / "forecast_enrichment.jsonl"
+    if journal.exists():
+        try:
+            lines = journal.read_text(encoding="utf-8").splitlines()[-max(1, tail_rows) :]
+        except OSError:
+            lines = []
+        for line in reversed(lines):
+            try:
+                row = json.loads(line)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(row, dict):
+                candidates.append(row)
+
+    by_city: dict[str, dict[str, Any]] = {}
+    for row in candidates:
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        if not city or city in by_city or not target_date:
+            continue
+        if _reusable_open_meteo_payload(
+            row,
+            city=city,
+            target_date=target_date,
+            now_utc=now_utc,
+            max_age_sec=max_age_sec,
+        ) is not None:
+            by_city[city] = row
+    return by_city
 
 
 def _compact_multi_model_payload(
@@ -715,6 +800,8 @@ def fetch_city_forecast_enrichment(
     settings: ForecastFetchSettings,
     forecast_days: int,
     include_taf: bool = True,
+    previous: dict[str, Any] | None = None,
+    open_meteo_refresh_sec: int = DEFAULT_OPEN_METEO_REFRESH_SEC,
 ) -> dict[str, Any]:
     target_date = city_local_date(cfg.city, now_utc).isoformat()
     coords = city_coordinates(cfg.city)
@@ -743,30 +830,52 @@ def fetch_city_forecast_enrichment(
             "payload_hash": stable_hash(base),
         }
 
+    reusable = _reusable_open_meteo_payload(
+        previous,
+        city=cfg.city,
+        target_date=target_date,
+        now_utc=now_utc,
+        max_age_sec=open_meteo_refresh_sec,
+    )
     temperature_unit = "fahrenheit"
-    try:
-        multi_model = fetch_open_meteo_multi_model(
-            float(lat),
-            float(lon),
-            forecast_days=forecast_days,
-            temperature_unit=temperature_unit,
-            settings=settings,
-        )
-    except Exception as exc:  # noqa: BLE001
-        multi_model = _failed_result("open_meteo_multi_model", exc)
+    if reusable is None:
+        try:
+            multi_model = fetch_open_meteo_multi_model(
+                float(lat),
+                float(lon),
+                forecast_days=forecast_days,
+                temperature_unit=temperature_unit,
+                settings=settings,
+            )
+        except Exception as exc:  # noqa: BLE001
+            multi_model = _failed_result("open_meteo_multi_model", exc)
 
-    try:
-        context = fetch_open_meteo_weather_context(
-            float(lat),
-            float(lon),
-            forecast_days=forecast_days,
-            temperature_unit=temperature_unit,
-            settings=settings,
-        )
-    except Exception as exc:  # noqa: BLE001
-        context = _failed_result("open_meteo_weather_context", exc)
+        try:
+            context = fetch_open_meteo_weather_context(
+                float(lat),
+                float(lon),
+                forecast_days=forecast_days,
+                temperature_unit=temperature_unit,
+                settings=settings,
+            )
+        except Exception as exc:  # noqa: BLE001
+            context = _failed_result("open_meteo_weather_context", exc)
+        multi_model_payload = _compact_multi_model_payload(multi_model, target_date)
+        context_payload = {
+            "result": _compact_result(context),
+            "timezone": context.payload.get("timezone") if isinstance(context.payload, dict) else None,
+            "timezone_abbreviation": context.payload.get("timezone_abbreviation") if isinstance(context.payload, dict) else None,
+            "utc_offset_seconds": context.payload.get("utc_offset_seconds") if isinstance(context.payload, dict) else None,
+            "daily": context.payload.get("daily", {}) if isinstance(context.payload, dict) else {},
+            "hourly": context.payload.get("hourly", {}) if isinstance(context.payload, dict) else {},
+        }
+    else:
+        multi_model_payload = reusable["open_meteo_multi_model"]
+        context_payload = reusable["open_meteo_weather_context"]
 
-    context_hourly = context.payload.get("hourly") if isinstance(context.payload, dict) else {}
+    multi_status = str((multi_model_payload.get("result") or {}).get("status") or "missing")
+    context_status = str((context_payload.get("result") or {}).get("status") or "missing")
+    context_hourly = context_payload.get("hourly") if isinstance(context_payload, dict) else {}
     hourly_summary = target_day_hourly_summary(context_hourly or {}, target_date)
     local_now = now_utc.astimezone(ZoneInfo(cfg.timezone_name))
     first_peak_hour = hourly_summary.get("first_peak_hour_local")
@@ -792,7 +901,10 @@ def fetch_city_forecast_enrichment(
             taf_signal = build_taf_signal(
                 taf_result.payload,
                 target_date=target_date,
-                utc_offset_seconds=int(context.payload.get("utc_offset_seconds") or local_now.utcoffset().total_seconds()),
+                utc_offset_seconds=int(
+                    context_payload.get("utc_offset_seconds")
+                    or local_now.utcoffset().total_seconds()
+                ),
                 first_peak_hour=int(first_peak_hour),
                 last_peak_hour=int(last_peak_hour),
             )
@@ -801,8 +913,8 @@ def fetch_city_forecast_enrichment(
             taf_signal = {"available": False, "status": "fetch_failed", "error": taf_result.error}
 
     source_statuses = {
-        "open_meteo_multi_model": multi_model.status,
-        "open_meteo_weather_context": context.status,
+        "open_meteo_multi_model": multi_status,
+        "open_meteo_weather_context": context_status,
         "aviationweather_taf": taf_result.status if taf_result else "disabled",
     }
     ok_sources = sum(1 for value in source_statuses.values() if value == "ok")
@@ -811,14 +923,15 @@ def fetch_city_forecast_enrichment(
         **base,
         "status": status,
         "source_statuses": source_statuses,
-        "open_meteo_multi_model": _compact_multi_model_payload(
-            multi_model, target_date
-        ),
+        "open_meteo_multi_model": multi_model_payload,
         "open_meteo_weather_context": {
-            "result": _compact_result(context),
+            **context_payload,
             "target_day_hourly": hourly_summary,
-            "daily": context.payload.get("daily", {}) if isinstance(context.payload, dict) else {},
-            "hourly": context.payload.get("hourly", {}) if isinstance(context.payload, dict) else {},
+        },
+        "open_meteo_reuse": {
+            "reused": reusable is not None,
+            "max_age_sec": reusable.get("max_age_sec") if reusable else 0,
+            "refresh_contract_sec": int(open_meteo_refresh_sec),
         },
         "vertical_profile_signal": vertical_signal,
         "taf": {
@@ -927,6 +1040,11 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         if os.environ.get("WEATHER_DATA_FEED_WEATHER_PROXY")
         else (None,),
     )
+    previous_by_city = load_reusable_open_meteo_rows(
+        Path(args.output_dir),
+        now_utc=now_utc,
+        max_age_sec=args.open_meteo_refresh_sec,
+    )
     rows: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
         futures = {
@@ -937,6 +1055,8 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
                 settings=settings,
                 forecast_days=args.forecast_days,
                 include_taf=not args.no_taf,
+                previous=previous_by_city.get(cfg.city),
+                open_meteo_refresh_sec=args.open_meteo_refresh_sec,
             ): cfg
             for cfg in configs
         }
@@ -972,6 +1092,10 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "cities": len(configs),
         "forecast_days": args.forecast_days,
         "include_taf": not args.no_taf,
+        "open_meteo_reused": sum(
+            1 for row in rows if (row.get("open_meteo_reuse") or {}).get("reused")
+        ),
+        "open_meteo_refresh_sec": args.open_meteo_refresh_sec,
     }
     return {
         **summary,
@@ -1114,6 +1238,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--forecast-days", type=int, default=3)
     parser.add_argument("--timeout-sec", type=float, default=8.0)
     parser.add_argument("--max-workers", type=int, default=6)
+    parser.add_argument(
+        "--open-meteo-refresh-sec",
+        type=int,
+        default=DEFAULT_OPEN_METEO_REFRESH_SEC,
+    )
     parser.add_argument("--no-taf", action="store_true")
     parser.add_argument("--no-single-runs", action="store_true")
     parser.add_argument(

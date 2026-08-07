@@ -203,6 +203,14 @@ def test_mac_start_entries_do_not_default_to_legacy_jrs_symlink():
     assert offenders == []
 
 
+def test_data_feed_loop_has_one_forecast_run_owner_and_bounded_open_meteo_refresh():
+    text = (OPS / "start_mac_weather_data_feed_loop.sh").read_text(encoding="utf-8")
+
+    assert '--open-meteo-refresh-sec "$FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC"' in text
+    assert "--no-single-runs" in text
+    assert "WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC:-21600" in text
+
+
 def test_jrs_start_entries_do_not_create_jrs_directories_outside_tmux():
     offenders = []
     for path in sorted(OPS.glob("start_*.sh")):

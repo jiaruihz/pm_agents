@@ -70,6 +70,61 @@ def test_forecast_429_disables_repeated_live_calls(monkeypatch) -> None:
     assert len(calls) == 1
 
 
+def test_fresh_durable_curve_skips_live_forecast_call(monkeypatch) -> None:
+    calls = []
+
+    def fake_curl(*args, **kwargs):
+        calls.append((args, kwargs))
+        return 200, {}, ""
+
+    monkeypatch.setattr(runner, "curl_json_get", fake_curl)
+    monkeypatch.setattr(
+        runner,
+        "_cached_live_forecast",
+        lambda *_args: {
+            "source_model": "ecmwf",
+            "cache_fallback": True,
+            "cache_age_sec": 900,
+        },
+    )
+    monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
+
+    result = runner._fetch_live_forecast(
+        None,
+        "ecmwf",
+        "Amsterdam",
+        {"lat": 52.31, "lon": 4.76},
+        "2026-08-07",
+    )
+
+    assert result["cache_fallback"] is True
+    assert calls == []
+
+
+def test_forecast_fetch_never_reuses_market_proxy(monkeypatch) -> None:
+    calls = []
+
+    def fake_curl(*args, **kwargs):
+        calls.append((args, kwargs))
+        return 429, None, "rate limited"
+
+    monkeypatch.setattr(runner, "curl_json_get", fake_curl)
+    monkeypatch.setattr(runner, "PROXY", "http://market-proxy.invalid:8080")
+    monkeypatch.setattr(runner, "_cached_live_forecast", lambda *_args: None)
+    monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
+
+    runner._fetch_live_forecast(
+        None,
+        "gfs",
+        "Chengdu",
+        {"lat": 30.67, "lon": 104.07},
+        "2026-07-28",
+    )
+
+    assert len(calls) == 1
+    assert "proxy" not in calls[0][1]
+
+
 def test_cached_curve_is_not_recaptured_as_new_forecast_evidence() -> None:
     assert runner.should_capture_forecast_curve(
         {"hourly_curve": [{"temperature_f": 70.0}], "cache_fallback": False}

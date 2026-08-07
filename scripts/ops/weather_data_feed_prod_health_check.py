@@ -1062,7 +1062,10 @@ def main() -> int:
     parser.add_argument("--runtime-root", default=str(PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1"))
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-orderbook-age-min", type=float, default=75.0)
-    parser.add_argument("--max-forecast-curve-age-min", type=float, default=45.0)
+    # GFS/ECMWF model cycles update on an hours-scale; the collector refreshes
+    # at 30 minutes but a six-hour durable curve remains valid during an
+    # upstream outage. This is a source-cadence SLA, not a process heartbeat.
+    parser.add_argument("--max-forecast-curve-age-min", type=float, default=390.0)
     parser.add_argument("--max-fast-observation-age-min", type=float, default=3.0)
     parser.add_argument("--max-observation-cache-age-min", type=float, default=10.0)
     parser.add_argument("--max-observation-age-min", type=float, default=120.0)

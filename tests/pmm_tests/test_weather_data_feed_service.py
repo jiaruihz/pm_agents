@@ -607,6 +607,48 @@ def test_forecast_enrichment_builds_shadow_rows(monkeypatch, tmp_path) -> None:
     assert (tmp_path / "forecast_enrichment" / "forecast_enrichment.jsonl").exists()
     assert (tmp_path / "forecast_enrichment" / "latest.json").exists()
 
+    def unexpected_open_meteo(*_args, **_kwargs):
+        raise AssertionError("fresh Open-Meteo evidence should be reused")
+
+    monkeypatch.setattr(
+        forecast_enrichment,
+        "fetch_open_meteo_multi_model",
+        unexpected_open_meteo,
+    )
+    monkeypatch.setattr(
+        forecast_enrichment,
+        "fetch_open_meteo_weather_context",
+        unexpected_open_meteo,
+    )
+    reused = forecast_enrichment.fetch_city_forecast_enrichment(
+        cfg,
+        datetime(2026, 7, 7, 3, 0, tzinfo=timezone.utc),
+        settings=forecast_enrichment.ForecastFetchSettings(),
+        forecast_days=3,
+        previous=row,
+        open_meteo_refresh_sec=21600,
+    )
+    assert reused["status"] == "ok"
+    assert reused["open_meteo_reuse"]["reused"] is True
+    assert reused["open_meteo_reuse"]["max_age_sec"] == 3600
+
+    failed_latest = dict(payload)
+    failed_row = dict(row)
+    failed_row["open_meteo_multi_model"] = {
+        "result": {"status": "fetch_failed", "fetched_at_utc": "2026-07-07T03:00:00Z"}
+    }
+    failed_latest["records"] = [failed_row]
+    (tmp_path / "forecast_enrichment" / "latest.json").write_text(
+        json.dumps(failed_latest),
+        encoding="utf-8",
+    )
+    recovered = forecast_enrichment.load_reusable_open_meteo_rows(
+        tmp_path / "forecast_enrichment",
+        now_utc=datetime(2026, 7, 7, 3, 0, tzinfo=timezone.utc),
+        max_age_sec=21600,
+    )
+    assert recovered["Shanghai"]["open_meteo_multi_model"]["result"]["status"] == "ok"
+
 
 def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))

@@ -104,6 +104,9 @@ WEATHER_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATH
 FORECAST_CURVE_CACHE_MAX_AGE_SEC = float(
     os.environ.get("WEATHER_DATA_FEED_FORECAST_CURVE_CACHE_MAX_AGE_SEC", "21600")
 )
+FORECAST_LIVE_REFRESH_SEC = float(
+    os.environ.get("WEATHER_DATA_FEED_FORECAST_LIVE_REFRESH_SEC", "3600")
+)
 FORECAST_CURVE_CACHE_MAX_FILES = int(
     os.environ.get("WEATHER_DATA_FEED_FORECAST_CURVE_CACHE_MAX_FILES", "8")
 )
@@ -980,6 +983,17 @@ def forecast_curve_publish_evidence(records, fresh_curve_rows, cached_curve_refs
 
 def _fetch_live_forecast(client, model, city, cfg, target_date):
     global _FORECAST_LIVE_DISABLED_REASON
+    cached = _cached_live_forecast(city, target_date, model)
+    cached_age = cached.get("cache_age_sec") if isinstance(cached, dict) else None
+    if (
+        cached is not None
+        and cached_age is not None
+        and 0 <= float(cached_age) <= FORECAST_LIVE_REFRESH_SEC
+    ):
+        # Forecast models update on an hours-scale. Reuse durable PIT evidence
+        # inside the refresh window instead of spending one API call per
+        # city/target on every 10-minute market snapshot.
+        return cached
     url = f"https://api.open-meteo.com/v1/{model}"
     params = {
         "latitude": cfg["lat"], "longitude": cfg["lon"],
@@ -1002,7 +1016,7 @@ def _fetch_live_forecast(client, model, city, cfg, target_date):
                 _FORECAST_LIVE_DISABLED_REASON = "open_meteo_http_429"
         except Exception:
             pass
-    return _cached_live_forecast(city, target_date, model)
+    return cached or _cached_live_forecast(city, target_date, model)
 
 
 def fetch_live_gfs(client, city, cfg, target_date):
