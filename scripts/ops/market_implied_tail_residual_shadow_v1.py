@@ -391,6 +391,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "source_ladder_snapshot": str(args.ladder_snapshot),
         "checkpoint_journal": str(args.output_dir / "checkpoints.jsonl"),
         "producer_build_id": build_id,
+        "deployed_repo_sha": build_id,
+        "source_checkout_root": str(ROOT),
+        "live_enabled": False,
         **counters,
     }
     atomic_json(args.output_dir / "latest_summary.json", summary_payload)
