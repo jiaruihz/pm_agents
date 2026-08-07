@@ -759,6 +759,28 @@ report index is persisted in collector state, preventing repeated journal scans
 or duplicate backfills. This was an incremental journal repair; no canonical DB
 or existing raw file was rebuilt.
 
+### 6.9 2026-07-17 Observation Reuse Freshness Semantics
+
+Possible pollution window: `2026-06-20..2026-07-17`. During a transient fetch
+failure, `weather_data_feed_service/observations.py` copied the previous good
+cache row without changing `status=ok`, `age_min`, or the observation clocks.
+If this branch fired, a consumer could interpret a stale observation as a new
+successful refresh.
+
+Impact audit: the current 40-city cache contains `0` reused rows, and the 6,172
+retained current-YES shadow decisions contain `0` observations with known
+availability later than decision time. The cache is a replace-in-place latest
+artifact and historical reuse rows were not journaled, so the number of past
+branch activations and a per-row counterfactual list cannot be reconstructed;
+research covering this window must not infer fetch health from legacy
+`status=ok` alone.
+
+Correction: reused facts now carry `status=reused_after_fetch_error`, retain the
+last successful fetch timestamp, record the failed refresh status/error, and
+recompute `age_min` plus running-max clocks at reuse time. Shared frame builders
+also exclude observations with known availability later than `as_of_ts_utc`.
+No new strategy gate was added.
+
 ### 6.10 2026-07-17 Atlanta MADISHF/OMO Terminal False Cross
 
 Pollution window: the Atlanta `2026-07-17` previous-bracket-NO decision initiated
@@ -801,7 +823,7 @@ sources whose returned history later drops an older high.
 Impact replay over the retained observation journal found 179 polluted cache
 rows across 57 city-days / 40 cities. Five `d1_yes_high_mid` promotion signals
 consumed a regressed maximum: Taipei was zero-notional; Singapore, Beijing,
-Busan, and Chongqing produced 25 filled YES shares with `$24.97` principal.
+Busan, and Chongqing produced 25 filled YES shares with `$24.935` canonical fill cost.
 Their correct d1 mids at the same book snapshots were respectively `0.0070`,
 `0.0065`, `0.0015`, and `0.0040`, all below the frozen `0.80` threshold, so the
 four live counterfactual decisions are all **no order**. These fills must remain
@@ -816,7 +838,278 @@ cache tests pass. The first post-fix production cache at
 returned to zero triggers. Detailed order-level replay is retained in the d1
 strategy living report.
 
-## 7. Immediate Follow-Up Work
+2026-07-20 hardening commits `cc109b02` and `e915a312` close the remaining composition gaps:
+reused observations now advance freshness and retain an explicit
+`reused_after_fetch_error` status; a reused row remains eligible as trusted
+history for the next continuity merge; the live d1 consumer persists an
+independent station-day monotonicity ledger and fails closed on regression; and
+production health now checks the exact observation cache plus recent history;
+the d1 runner also rejects a cache whose generated timestamp is older than ten
+minutes, so a blocked single-loop collector cannot freeze a previously fresh
+row indefinitely.
+The production runner was restarted in a zero-trigger / zero-plan window and
+its first cycle reported 40 invariant records, zero violations, and zero new
+orders. Focused production/develop suites passed `66/66` and `70/70`.
+
+Post-close result audit separates the incident expression from the corrected
+strategy decision. Polymarket's closed events resolved the accidentally bought
+current brackets Singapore `32`, Beijing `33`, Busan `29`, and Chongqing `35`
+YES; canonical fill reconciliation gives 25 shares / `$24.935` cost / `$0.00096`
+fees, implying `$0.06404` payout profit once settlement is ingested. The corrected
+d1 brackets `33/34/30/36` all resolved NO. This does **not** vindicate the bad
+signals: their corrected entry mids were below `0.01`, so the strategy
+counterfactual remains four no-orders. Canonical `settlement_outcomes` had not
+yet ingested 2026-07-19 at audit time; keep the positions tagged incident until
+that bridge catches up.
+
+## 7. 2026-07-29 CLOB Fee-Lineage Repair
+
+Pollution window: `2026-07-18` through `2026-07-29`. The canonical gate found
+12 effective fills with `legacy_unknown` fee lineage, including seven matched
+taker fills recorded with zero fee. Exact public activity also contradicted two
+older non-unknown fee rows. The repair wrote 14 append-only adjustments:
+13 exact (`9` tx-exact and `4` maker-zero) and one explicitly labelled Weather
+fee-curve estimate. No raw fill was updated or deleted.
+
+Affected fill ids:
+
+`c718a47bb0b49612cc862d84c5bb9f934f8188c4ca181e6920058aaf6150d1bd`,
+`11d879dc7dd05f7c814b9e4e991408f2efeaba4d94b53176e78f77dbaf5eea3b`,
+`28014f8e3fe2f5482832129c198695f6d11aa22858724d8109f9d734629eff20`,
+`6054c631023b0e1f27af9e1258119d95d2d96959cc682d980c4c2d40127ea293`,
+`efdd1cec6ac7bde96eb11d8f4bdbe0801fa928275070a915fa31b579fc5c2742`,
+`e087b8fb0447be28dee2c9a51a26f1ece19f01ff2cd46a6a3d0471554cceb840`,
+`90dcde61136db0e7f5751c1e979fca61c289bd18c995f9e83b6b4e387c385017`,
+`d77c494fb8a4fcfc557515889cf179f385aa94bd3b1641a8775e1989df2cbc97`,
+`a7d9e58fa2c67f2115825865f7f93310cc1c94a9b67d7c2417e8c15b734d4305`,
+`cb50ad1249b4391f412b4d28957c69924f378c92c5c812295ba98c43e6aa78e6`,
+`632b52b8341d0c0917ac20148e26a129609207d72518aa5acdb3afc82276bc78`,
+`063c0fd4e53a1295364c68fa0556f9d7447668790c59fd697eb5b566b5bfa3e6`,
+`d6f905d07abb476673ca7a229fbcf78dcea0b3a9a47b8858db8b73453c7b54f2`,
+`afc0f36010f3861d6d1c19c63f8b8356b45bd71ecab22eb366fd0fc92949758e`.
+
+The settled PnL delta is `-$0.06266`; unsettled rows retain fee-adjusted cost
+without publishing realized PnL. After full fact replay the gate reports
+`1321/1321` effective fills, `unknown=0`, matched-taker-zero-without-adjustment
+`=0`, and zero DB/cache/fact cost mismatch. The normal five-minute canonical
+entry then completed with incremental scope `14`, zero additional changes and
+exit status `0`.
+
+## 8. 2026-08-03/04 JRS Production Interruption
+
+Pollution/coverage windows are recorded separately because the two failures had
+different causes:
+
+- JRS permission-context failure: the last successful source event was
+  `2026-08-03T03:34:48Z`; failures began at `03:37:01Z` and the first recovered
+  observation completed at `15:48:42Z` (`12h13m54s`). The last good targeted
+  snapshot was `03:29:09Z`; the first recovered snapshot completed at
+  `15:55:51Z` (`12h26m42s`). Treat this interval as collector coverage missing,
+  not as strategy-filtered opportunity evidence.
+- tmux server crash: macOS crash report
+  `tmux-2026-08-04-002658.ips` proves `SIGSEGV` in
+  `cmd_run_shell_callback -> cmd_run_shell_print` at
+  `2026-08-03T16:26:57Z`. Source events resumed at `16:30:43Z`; the next full
+  targeted snapshot completed at `16:35:54Z` (previous good snapshot
+  `16:12:43Z`). The shared JRS helper no longer uses tmux `run-shell` for
+  probes, mkdir, status bridges or prospective-host checks.
+
+Impact replay: both live raw order files contain zero rows after
+`2026-08-03T01:58:09.698036Z`, authenticated CLOB checks before and after
+recovery both returned zero open orders, and canonical reconciliation found
+zero incremental fills/cancellations/errors. Therefore this incident has
+collector/signal coverage loss but zero evidenced wrong orders or recovery-
+created fills. Post-repair targeted orderbook coverage was `163/163`, canonical
+fill gate passed at `1342/1342` live-real fills with exact DB/fact cost
+`$4022.454778`, and the canonical one-shot exited `0`.
+
+KNMI quota exhaustion was a local notification-consumer amplification bug, not
+an upstream outage or invalid credential. After the JRS recovery, MQTT QoS1
+redeliveries were queued repeatedly before ack; each duplicate called the
+Open Data file-URL endpoint before discovering `no_new_revision`, and every 403
+was amplified to seven HTTP attempts by `--consistency-retries 6`. From
+`15:49Z` through `16:54Z` the journal contains 1,067 processed tasks (952
+no-op revisions, 82 successful events, 33 terminal failures), implying at least
+1,265 Open Data requests. The 403 window was `16:16:00Z..16:47:32Z`.
+
+Four files (`1610`, `1620`, `1630`, `1640`) were recovered 302-826 seconds late
+and are coverage-only, not valid PIT first-seen evidence; `1600` remains absent
+from the live first-seen state and must not be retroactively timestamped. The
+same window contains zero Amsterdam canonical candidates, orders, fills,
+shares, or cost, so the evidenced trading impact is zero wrong orders/fills and
+one irrecoverable first-seen coverage gap. Collector commit `5fcf3f81` adds
+pending plus durable notification-id deduplication, restricts consistency
+retries to successful-but-stale revisions, and applies quota circuit-breaker
+backoff. Controller commits `eb7118bd` and `c90a58e5` add the explicit restart
+contract and align health freshness with the ten-minute source cadence.
+
+## 9. 2026-07-25..08-05 Core Carry Probability-Lineage Pollution
+
+`current_yes_core_carry_tiny_live_v2` writes the selected contract probability
+as `model_token_probability`. The strategy-runtime migration omitted that field
+from its canonical fallback and therefore materialized 22 of the instance's 54
+canonical signals with `model_p_yes=0` between `2026-07-25T01:46:08Z` and
+`2026-08-05T14:35:07Z`. All eight signals after the 2026-08-03 validation cutoff
+are affected. The runner used the correct raw probability before migration, so
+orders, fills, fees, settlement and PnL are unchanged; canonical probability,
+edge and calibration analyses over these rows are polluted.
+
+The migration now reads `model_token_probability`, and targeted regression
+coverage is in place. Existing `signals` rows are append-only and were not
+rewritten without an authorized full rebuild. Until then, exclude these rows
+from canonical calibration/edge reports or join the exact raw runtime lineage.
+The affected signal list and replay are recorded in
+`analysis/2026-08/2026-08-06-current-yes-core-carry-incremental-live-review-v1.md`.
+
+## 10. 2026-08-03..08-05 Core Carry Maker Share-Unit Pollution
+
+Authenticated CLOB order states prove that Miami, NYC and Amsterdam each
+matched 5 maker shares. The fill-sync parser treated camelCase
+`sizeMatched="5"` as legacy token micro-units and divided by 1,000,000, so the
+cache/canonical layer recorded three `0.000005`-share dust fills. Impact:
+14.999985 shares, $14.349986 cost and approximately $0.65 settled PnL were
+missing; maker intent fill rate was reported as 0/8 instead of 3/8. Orders and
+exchange fills were unaffected.
+
+The parser now resolves current v2 share units without relying on field casing
+and retains legacy micro-unit support using submitted-order scale. Historical
+repair is append-only: the three dust fill IDs receive validity exclusions and
+three authenticated 5-share correction fills are appended. Evidence and the
+exact order list are in
+`analysis/2026-08/2026-08-06-current-yes-core-carry-incremental-live-review-v1.md`.
+
+The three correction fills initially inherited `legacy_unknown` fee lineage
+even though their orders retain `maker_only=true` and `place.status=live`.
+On 2026-08-06 they received append-only `maker_zero` adjustments with exact
+order-semantic evidence. Affected grain: three corrected fills in the same
+2026-08-03..08-05 window; fee delta and settled PnL delta are both `$0.00`, so
+no order, fill quantity, strategy decision, or historical PnL conclusion
+changes. The correction only removes those rows from unknown-fee reporting.
+
+## 11. 2026-08-06 JRS → NVMe Production Cutover Coverage Window
+
+Current production storage moved from the old JRS USB volume to the pinned
+NVMe volume while preserving `/Volumes/jrs` as the hot-path mount contract;
+the old disk is mounted at `/Volumes/jrs-archive`. The controller stopped and
+restored the complete 25-session canonical topology. Post-cutover evidence:
+the DB compatibility path and physical canonical DB resolve to the same
+device/inode, SQLite backup `quick_check` passed, storage identity audit has
+zero critical/warning findings, all registered runtime health artifacts are
+healthy, targeted orderbook coverage is `156/156`, forecast curve lineage is
+`103/103`, and the authenticated CLOB read returned zero open orders.
+
+The maintenance window is nevertheless a real collector coverage gap:
+
+- high-frequency observations: `2026-08-06T16:09:02.432765Z` to
+  `16:22:55.913392Z` (`833.481s`);
+- fast-source opportunities: `16:09:02.576302Z` to `16:22:52.917006Z`
+  (`830.341s`);
+- regular source events: `16:07:24.777060Z` to `16:23:19.875636Z`
+  (`955.099s`).
+
+The live order journals contain zero rows in that window, and the post-change
+authenticated exchange check found zero open orders, so there is no evidenced
+wrong order, fill, or orphan-order impact. Missed first-seen events and missed
+opportunities inside the window cannot be reconstructed after the fact.
+Research using source lead time, event arrival, opportunity frequency, or
+signal-funnel denominators must mark this interval as `collector_downtime` and
+exclude it from PIT timing/completeness claims; it must not be counted as a
+strategy-filtered zero-opportunity interval. The adjacent full snapshots
+(`00:03` and `00:24` Beijing time) and the first native-NVMe forecast capture
+are complete, so the gap does not invalidate later snapshot/orderbook or
+forecast-curve rows.
+
+The first hot-tier inventory found that immutable July paper snapshots and
+targeted orderbooks were present only on the archive volume. That layout would
+have silently shortened research runners that still consume the canonical hot
+paths. A bounded `--ignore-existing` fill copied the missing immutable inputs
+to NVMe: the hot tier now contains all `2,860` archive paper snapshots, all
+`2,960` archive targeted orderbooks, all `2,293` forecast-curve captures, and
+all `921` full-ladder orderbooks, plus newer post-cutover files. Filename-set
+verification reports zero archive files missing from the corresponding hot
+canonical directories; no content hash comparison or historical rewrite was
+performed.
+
+The cutover also exposed a control-plane TCC mismatch: direct controller and
+manifest reads from the caller process could report JRS files inaccessible
+while the authorized canonical tmux parent and all producers were healthy.
+DB read probes, runtime health artifacts, and data-feed semantic health now
+retry through a bounded checked session on the canonical context; this changes
+health visibility only and does not create a second producer or permission
+host.
+
+## 12. 2026-08-06/07 Core Carry Snapshot Publish Gap
+
+Between the last successful snapshot at `2026-08-06T20:05:10Z` and the next
+success at `2026-08-07T00:05:34Z`, the data-feed made 20 failed publication
+attempts (`20:15:19Z..23:51:03Z`). Open-Meteo was returning HTTP 429 and the
+snapshot builder correctly loaded durable forecast curves younger than six
+hours, but its final publish guard incorrectly required a nonempty *fresh*
+capture list. It therefore rejected rows whose cached curve archive and hash
+were valid. The stale forecast-enrichment view was a downstream consequence,
+not the root cause.
+
+The affected Core Carry universe contains 39 potential hourly scoring
+checkpoints across 14 cities: Atlanta 2; Austin 3; Buenos Aires 1; Chicago 3;
+Dallas 3; Denver 4; Houston 3; Los Angeles 4; Miami 2; New York City 2; Panama
+City 3; San Francisco 4; São Paulo 1; Seattle 4. These are possible checkpoints,
+not missed signals or orders: the rejected snapshots never persisted complete
+candidates, so exact positive-signal counterfactuals cannot be reconstructed.
+There is no evidenced wrong order, fill, or realized-PnL impact. Research must
+mark this interval `snapshot_publish_gap` rather than count it as a
+strategy-filtered zero-opportunity interval.
+
+The fix verifies every published `(city,target_date,model,values_hash)` against
+either the current capture or its exact durable archive and still fails closed
+when that evidence is absent. Control commit `d1cf1ade`; production commit
+`0f1e6d96`. After restart, `snapshot_20260807_0947.json` published 1,012 rows,
+all with fresh curve evidence, and Core Carry consumed that exact file. The
+production manifest, canonical DB route, JRS probe, data-feed semantics and
+Core Carry health were healthy after the change.
+
+The repair also exposed that the canonical hot market-data symlink target had
+not been recreated after the NVMe cutover. The exact target directory was
+restored and the standard Mac market-only sync completed; this was a storage
+contract repair, not a new producer or live-strategy change.
+
+## 13. 2026-08-07 Open-Meteo Request Amplification / Forecast Freshness
+
+This incident was caused by duplicate and over-frequent local collection, not
+NVMe, JRS, tmux or lock-screen permission loss. The paper-snapshot path fetched
+Open-Meteo once per city and target date on every roughly 12-minute snapshot,
+while forecast enrichment polled two Open-Meteo products for every configured
+city every 30 minutes and also repeated single-run capture already owned by the
+dedicated controller session. Before limiting began, 69 snapshots alone implied
+about 6,900 city forecast requests on 2026-08-07. Open-Meteo first returned 429
+at `2026-08-07T06:23:47.029781Z`; the last observed 429 in the audited window was
+`2026-08-07T09:58:45.451869Z`. The last successful durable curve capture before
+the window was `2026-08-07T06:04:02Z`.
+
+Impact radius: forecast-enrichment logged 984 city rows over 21 cycles, of
+which 374 carried HTTP 429 evidence. Forecast evidence became stale for research
+and monitoring, but the four root live orders created after the first 429 were
+all Core Carry v3 (`current_yes_core_carry_model_v3_no_peak_clock`). That frozen
+artifact scores only market logit, local hour, dewpoint depression and wind
+speed; its explicit contract says forecast peak clock is telemetry and not a
+probability or eligibility feature. Therefore the evidenced decision impact is
+zero changed or wrong orders from forecast staleness. The four roots were two
+Chongqing and two Karachi orders: three matched roots with `$23.10` posted
+principal and one `$4.65` maker root cancelled unfilled. This statement does not
+publish realized PnL and does not claim that the missing newer forecast would
+have been identical; research using forecast freshness must mark this interval
+as upstream coverage degraded.
+
+The root repair gives each mutable target one owner: paper snapshots reuse exact
+durable curve evidence for one hour before attempting a live refresh;
+forecast-enrichment reuses the most recent successful append-only Open-Meteo
+evidence for six hours (including recovery past a failed `latest.json`), while
+TAF continues on its own cadence; and the enrichment loop disables its duplicate
+single-run collection because `weather_forecast_run_capture_v1` owns that chain.
+Forecast-curve health now measures the six-hour source-cadence validity window,
+not the collector heartbeat. It still fails closed once durable evidence exceeds
+that window.
+
+## 14. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
