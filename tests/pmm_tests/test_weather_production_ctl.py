@@ -954,6 +954,28 @@ def test_data_feed_semantics_makes_forecast_fallback_critical():
     assert result["critical_reasons"] == ["forecast_source_fallback_detected"]
 
 
+def test_data_feed_semantics_treats_inactive_observation_staleness_as_warning():
+    payload = {
+        "observation_cache": {
+            "status": "warn",
+            "inactive_invalid_record_count": 1,
+        },
+        "forecast_hourly_curves": {"status": "ok"},
+        "live_cross_observation_state": {"status": "ok"},
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_orderbook_coverage": {"status": "ok"},
+        "snapshot_source_model": {"status": "ok", "fallback_detected": False},
+        "orderbook_snapshots": {"missing": False, "stale": False},
+        "snapshot_city_state_coverage": {"status": "ok"},
+    }
+
+    result = ctl.summarize_data_feed_semantics(payload)
+
+    assert result["status"] == "warning"
+    assert result["critical_reasons"] == []
+    assert result["warnings"] == ["observation_cache_inactive_stale:1"]
+
+
 def test_data_feed_semantics_treats_partial_fresh_coverage_as_warning():
     payload = {
         "observation_cache": {"status": "ok"},
