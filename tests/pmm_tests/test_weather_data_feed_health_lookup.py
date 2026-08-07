@@ -25,6 +25,15 @@ def test_latest_capture_lookup_prefers_newest_nonempty_partition(tmp_path) -> No
     assert latest_forecast_curve_capture(tmp_path) == expected_curve
 
 
+def test_latest_orderbook_snapshot_accepts_canonical_market_books_batch(tmp_path) -> None:
+    partition = tmp_path / "2026-08-08"
+    partition.mkdir()
+    expected_book = partition / "market_books_20260808_005301.jsonl.gz"
+    expected_book.write_bytes(b"canonical")
+
+    assert latest_orderbook_snapshot(tmp_path) == expected_book
+
+
 def test_read_jsonl_tail_reads_only_requested_suffix(tmp_path) -> None:
     journal = tmp_path / "history.jsonl"
     journal.write_text("".join(f'{{"row": {value}}}\n' for value in range(100)))

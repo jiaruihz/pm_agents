@@ -90,7 +90,12 @@ def latest_partitioned_file(root: Path, patterns: tuple[str, ...]) -> Path | Non
 def latest_orderbook_snapshot(root: Path) -> Path | None:
     return latest_partitioned_file(
         root,
-        ("orderbook_snapshot_*.jsonl.gz", "orderbook_snapshot_*.jsonl"),
+        (
+            "market_books_*.jsonl.gz",
+            "market_books_*.jsonl",
+            "orderbook_snapshot_*.jsonl.gz",
+            "orderbook_snapshot_*.jsonl",
+        ),
     )
 
 
