@@ -1109,6 +1109,14 @@ Forecast-curve health now measures the six-hour source-cadence validity window,
 not the collector heartbeat. It still fails closed once durable evidence exceeds
 that window.
 
+Deployment compatibility testing caught two bounded enrichment-only failures at
+`10:29:37Z` (older production branch lacked the newer UTC parser dependency) and
+`10:31:52Z` (that branch did not yet accept the ownership flag). Both were fixed
+git-first before acceptance. Snapshots continued publishing, and the first fully
+corrected enrichment at `10:34:25Z` reported 46/46 rows ok, 46 durable Open-Meteo
+reuses and zero failures; `snapshot_20260807_1834.json` then completed with
+160/160 live-scope orderbooks and was consumed by Core Carry.
+
 ## 14. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
