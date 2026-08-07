@@ -4,9 +4,11 @@ import sqlite3
 from scripts.analysis.reheat_risk.core_carry_llm_transition_card import (
     binary_metrics,
     canonical_settlement_labels,
+    expanded_semantic_audit_selection,
     model_feature_contributions,
     policy_bucket,
     policy_contrast_selection,
+    semantic_alignment_audit,
 )
 from src.strategies.weather_edge_v1.tools.intraday_transition_card import (
     build_transition_packet,
@@ -168,3 +170,78 @@ def test_model_feature_contributions_reconstruct_recorded_probability() -> None:
         round(float(item["logit_contribution"]), 6)
         for item in result["feature_contributions"]
     ] == [1.0, 0.5]
+
+
+def test_expanded_semantic_audit_adds_prelabel_city_day_diversity() -> None:
+    common = {
+        "probability_status": "scored_by_current_yes_core_artifact",
+        "current_bracket": "12",
+        "decision_hour_local": 15.0,
+        "market_mid": 0.9,
+        "model_probability_hold": 0.92,
+        "decision_status": "not_eligible",
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+    }
+    rows = [
+        {
+            **common,
+            "city": "Wellington",
+            "target_date": "2026-08-06",
+            "decision_snapshot_ts_utc": "2026-08-06T02:00:00Z",
+        },
+        {
+            **common,
+            "city": "Wellington",
+            "target_date": "2026-08-06",
+            "decision_snapshot_ts_utc": "2026-08-06T03:00:00Z",
+            "decision_status": "positive_taker_ev",
+            "eligible": True,
+            "reasons": [],
+        },
+        {
+            **common,
+            "city": "Wellington",
+            "target_date": "2026-08-07",
+            "decision_snapshot_ts_utc": "2026-08-07T03:00:00Z",
+        },
+        {
+            **common,
+            "city": "CapeTown",
+            "target_date": "2026-08-07",
+            "decision_snapshot_ts_utc": "2026-08-07T12:00:00Z",
+            "market_mid": 0.6,
+            "model_probability_hold": 0.4,
+            "temp_trend_1h_f": -1.8,
+        },
+    ]
+    roles = expanded_semantic_audit_selection(rows, target_size=4)
+    assert len(roles) == 4
+    assert "semantic_diversity_control" in roles.values()
+
+    for row in rows:
+        row["settlement_label"] = int(row["city"] == "CapeTown")
+    assert expanded_semantic_audit_selection(rows, target_size=4) == roles
+
+
+def test_semantic_alignment_audit_marks_mixing_wind_tension() -> None:
+    result = semantic_alignment_audit(
+        {"model_probability_hold": 0.97, "market_mid": 0.92},
+        {
+            "next_state": "current_high_holds",
+            "reheat_risk": "low",
+            "second_heat_lobe": "none",
+            "wind_role": "mixing_only",
+            "moisture_transition": "stable",
+            "source_conflict": False,
+        },
+        {
+            "feature_contributions": [
+                {"feature": "wind_speed_kt", "logit_contribution": 0.8}
+            ]
+        },
+        ["wind_direction_and_change"],
+    )
+    assert result is not None
+    assert result["alignment"] == "aligned"
+    assert "mixing_only_but_wind_speed_boosts_hold" in result["feature_semantic_flags"]

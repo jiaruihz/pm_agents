@@ -232,6 +232,113 @@ def policy_contrast_selection(rows: list[dict[str, Any]]) -> dict[str, str]:
     return roles
 
 
+def _numeric_band(value: Any, cuts: tuple[float, ...]) -> int:
+    numeric = finite(value)
+    if numeric is None:
+        return -1
+    return sum(numeric >= cut for cut in cuts)
+
+
+def _path_direction(row: dict[str, Any]) -> str:
+    one_hour = finite(row.get("temp_trend_1h_f"))
+    three_hour = finite(row.get("temp_trend_3h_f"))
+    available = [value for value in (one_hour, three_hour) if value is not None]
+    if not available:
+        return "missing"
+    if max(available) >= 0.9:
+        return "warming"
+    if min(available) <= -0.9:
+        return "cooling"
+    return "flat"
+
+
+def _semantic_dimensions(row: dict[str, Any]) -> tuple[tuple[str, Any], ...]:
+    core = finite(row.get("model_probability_hold"))
+    market = finite(row.get("market_mid"))
+    residual = core - market if core is not None and market is not None else None
+    return (
+        ("city", str(row.get("city") or "missing")),
+        ("target_date", str(row.get("target_date") or "missing")),
+        ("policy_bucket", policy_bucket(row)),
+        ("market_band", _numeric_band(market, (0.20, 0.50, 0.80, 0.90, 0.95, 0.98))),
+        ("residual_band", _numeric_band(residual, (-0.05, -0.01, 0.0, 0.01, 0.05))),
+        ("local_hour_band", _numeric_band(row.get("decision_hour_local"), (10, 13, 16, 19))),
+        ("path_direction", _path_direction(row)),
+        ("wind_band", _numeric_band(row.get("wind_speed_kt"), (5, 10, 15, 20))),
+        ("dewpoint_depression_band", _numeric_band(row.get("dewpoint_depression_f"), (5, 10, 20, 30))),
+        ("minutes_since_high_band", _numeric_band(row.get("minutes_since_last_strict_new_high"), (30, 60, 120, 240))),
+        ("forecast_peak_relation", str(row.get("forecast_future_peak_relation") or "missing")),
+        ("intraday_state", str(row.get("intraday_state") or "missing")),
+        ("precip_state", str(row.get("precip_state") or "missing")),
+    )
+
+
+def expanded_semantic_audit_selection(
+    rows: list[dict[str, Any]], target_size: int
+) -> dict[str, str]:
+    """Expand policy contrast with deterministic, pre-label weather diversity.
+
+    The base selection keeps all policy hits and their matched comparisons. Extra
+    cards add at most one representative per previously unseen city-day. The
+    representative is the row where Core makes the largest absolute residual
+    claim, and the greedy expansion covers weather/model-state dimensions without
+    consulting settlement labels.
+    """
+    roles = policy_contrast_selection(rows)
+    if target_size <= len(roles):
+        return roles
+
+    rows_by_id = {checkpoint_id(row): row for row in rows}
+    represented_city_days = {
+        (str(rows_by_id[cid].get("city") or ""), str(rows_by_id[cid].get("target_date") or ""))
+        for cid in roles
+    }
+    city_day_candidates: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        cid = checkpoint_id(row)
+        city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if cid in roles or city_day in represented_city_days:
+            continue
+        if not bounded_exact(row.get("current_bracket")):
+            continue
+        core = finite(row.get("model_probability_hold"))
+        market = finite(row.get("market_mid"))
+        if core is None or market is None:
+            continue
+        candidate = city_day_candidates.get(city_day)
+        candidate_residual = (
+            abs(finite(candidate.get("model_probability_hold")) - finite(candidate.get("market_mid")))
+            if candidate is not None
+            else -1.0
+        )
+        residual = abs(core - market)
+        if candidate is None or (residual, cid) > (candidate_residual, checkpoint_id(candidate)):
+            city_day_candidates[city_day] = row
+
+    covered = set()
+    for cid in roles:
+        covered.update(_semantic_dimensions(rows_by_id[cid]))
+    candidates = list(city_day_candidates.values())
+    while candidates and len(roles) < target_size:
+        def selection_key(row: dict[str, Any]) -> tuple[float, float, str]:
+            dimensions = _semantic_dimensions(row)
+            novelty = sum(
+                3.0 if name == "city" else 1.0
+                for name, value in dimensions
+                if (name, value) not in covered
+            )
+            core = finite(row.get("model_probability_hold")) or 0.0
+            market = finite(row.get("market_mid")) or 0.0
+            return novelty, abs(core - market), checkpoint_id(row)
+
+        chosen = max(candidates, key=selection_key)
+        candidates.remove(chosen)
+        cid = checkpoint_id(chosen)
+        roles[cid] = "semantic_diversity_control"
+        covered.update(_semantic_dimensions(chosen))
+    return roles
+
+
 def checkpoint_id(row: dict[str, Any]) -> str:
     raw = "|".join(
         str(row.get(field) or "")
@@ -432,6 +539,75 @@ def omitted_physical_signals_present(
     return present
 
 
+def semantic_alignment_audit(
+    row: dict[str, Any],
+    card: dict[str, Any] | None,
+    contributions: dict[str, Any] | None,
+    omitted_signals: list[str],
+) -> dict[str, Any] | None:
+    if card is None:
+        return None
+    next_state = str(card.get("next_state") or "unclear")
+    reheat_risk = str(card.get("reheat_risk") or "unclear")
+    second_heat_lobe = str(card.get("second_heat_lobe") or "unclear")
+    if (
+        next_state == "upward_exit"
+        or reheat_risk == "high"
+        or second_heat_lobe == "likely"
+    ):
+        physical_direction = "upward_exit"
+    elif next_state in {"current_high_holds", "fade"} and reheat_risk == "low":
+        physical_direction = "hold"
+    else:
+        physical_direction = "ambiguous"
+
+    core = finite(row.get("model_probability_hold"))
+    market = finite(row.get("market_mid"))
+    delta = core - market if core is not None and market is not None else None
+    core_direction = (
+        "raises_hold"
+        if delta is not None and delta > 0
+        else "lowers_hold"
+        if delta is not None and delta < 0
+        else "neutral_or_missing"
+    )
+    if physical_direction == "ambiguous" or core_direction == "neutral_or_missing":
+        alignment = "ambiguous"
+    else:
+        aligned = (physical_direction == "hold") == (core_direction == "raises_hold")
+        alignment = "aligned" if aligned else "semantic_tension"
+
+    feature_contributions = {
+        str(item.get("feature")): finite(item.get("logit_contribution"))
+        for item in (contributions or {}).get("feature_contributions") or []
+    }
+    flags: list[str] = []
+    wind_contribution = feature_contributions.get("wind_speed_kt")
+    if card.get("wind_role") == "mixing_only" and wind_contribution is not None and wind_contribution > 0:
+        flags.append("mixing_only_but_wind_speed_boosts_hold")
+    if card.get("wind_role") == "cooling_transport" and wind_contribution is not None and wind_contribution < 0:
+        flags.append("cooling_transport_but_low_wind_speed_penalizes_hold")
+    dewpoint_contribution = feature_contributions.get("dewpoint_depression_f")
+    if (
+        card.get("moisture_transition") == "dewpoint_rising"
+        and physical_direction == "upward_exit"
+        and dewpoint_contribution is not None
+        and dewpoint_contribution > 0
+    ):
+        flags.append("rising_dewpoint_upward_exit_but_low_depression_boosts_hold")
+    if card.get("source_conflict"):
+        flags.append("weather_source_conflict_absent_from_core")
+    if omitted_signals:
+        flags.append("observed_transition_signals_absent_from_core")
+    return {
+        "physical_direction": physical_direction,
+        "core_relative_direction": core_direction,
+        "core_minus_market_probability": delta,
+        "alignment": alignment,
+        "feature_semantic_flags": flags,
+    }
+
+
 def summarize_policy_buckets(
     rows: list[dict[str, Any]], labels: dict[tuple[str, str, str], int]
 ) -> dict[str, dict[str, Any]]:
@@ -515,9 +691,10 @@ def main() -> int:
     )
     parser.add_argument(
         "--selection-mode",
-        choices=("first_city_day", "policy_contrast"),
+        choices=("first_city_day", "policy_contrast", "expanded_semantic_audit"),
         default="first_city_day",
     )
+    parser.add_argument("--semantic-audit-size", type=int, default=120)
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--shard-count", type=int, default=1)
     args = parser.parse_args()
@@ -536,7 +713,11 @@ def main() -> int:
         cities=set(args.cities),
         denominator_mode=args.denominator_mode,
     )
-    if args.selection_mode == "policy_contrast":
+    if args.selection_mode == "expanded_semantic_audit":
+        selection_roles = expanded_semantic_audit_selection(
+            rows, args.semantic_audit_size
+        )
+    elif args.selection_mode == "policy_contrast":
         selection_roles = policy_contrast_selection(rows)
     else:
         selected = first_city_day(rows)
@@ -660,6 +841,24 @@ def main() -> int:
                     scored_market.append((market_mid, label))
                 if p_frozen_core is not None:
                     scored_core.append((p_frozen_core, label))
+            contribution_audit = (
+                model_feature_contributions(row, contribution_artifact)
+                if contribution_artifact is not None
+                else None
+            )
+            metar_sequence = (
+                pit_metar_sequence(row, observation_histories)
+                if args.include_metar_history
+                else []
+            )
+            omitted_signals = omitted_physical_signals_present(
+                row,
+                set(contribution_artifact.get("numeric_features") or [])
+                if contribution_artifact is not None
+                else set(),
+                metar_sequence,
+            )
+            llm_card = (cards.get(cid) or {}).get("card")
             item = {
                 "schema_version": "core_carry_llm_transition_challenger_ledger_v1",
                 "checkpoint_id": cid,
@@ -690,22 +889,13 @@ def main() -> int:
                 "llm_selected": bool(record["selected_for_llm"]),
                 "llm_selection_role": record["llm_selection_role"],
                 "policy_bucket": policy_bucket(row),
-                "model_feature_contributions": (
-                    model_feature_contributions(row, contribution_artifact)
-                    if contribution_artifact is not None
-                    else None
-                ),
-                "omitted_physical_signals_present": omitted_physical_signals_present(
-                    row,
-                    set(contribution_artifact.get("numeric_features") or [])
-                    if contribution_artifact is not None
-                    else set(),
-                    pit_metar_sequence(row, observation_histories)
-                    if args.include_metar_history
-                    else [],
-                ),
+                "model_feature_contributions": contribution_audit,
+                "omitted_physical_signals_present": omitted_signals,
                 "llm_card_status": "complete" if cid in cards else "not_collected",
-                "llm_card": (cards.get(cid) or {}).get("card"),
+                "llm_card": llm_card,
+                "semantic_alignment_audit": semantic_alignment_audit(
+                    row, llm_card, contribution_audit, omitted_signals
+                ),
                 "settlement_label": label,
                 "zero_notional": True,
             }
@@ -737,6 +927,7 @@ def main() -> int:
             "cities": sorted(args.cities),
             "denominator_mode": args.denominator_mode,
             "selection_mode": args.selection_mode,
+            "semantic_audit_size": args.semantic_audit_size,
             "shard_index": args.shard_index,
             "shard_count": args.shard_count,
             "include_metar_history": args.include_metar_history,

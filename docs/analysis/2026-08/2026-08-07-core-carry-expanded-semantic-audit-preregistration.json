@@ -1,0 +1,23 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "core_carry_llm_transition_card_v1",
+  "run_id": "expanded_sample_semantic_alignment_gpt54_n120_20260807",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-07T06:20:00Z",
+  "hypothesis": "A pre-label, weather-diverse expansion of the sample audit will identify repeatable production Core v3 feature-semantic tensions and yield one bounded continuous challenger specification without using LLM output as a gate.",
+  "denominator": "All unique production Core-scored checkpoints in 2026-07-24..2026-08-07. Select all policy hits and the existing matched contrast, then expand to 120 cards with at most one additional checkpoint per previously unseen city-day using deterministic coverage of policy bucket, market/residual band, local clock, temperature path, wind, dewpoint depression, time since high, forecast relation, intraday state and precipitation state. Settlement labels are not used for selection.",
+  "information_order": [
+    "LLM receives only PIT METAR observations with report/first-seen clocks, forecast curve and deterministic weather state",
+    "LLM card is frozen",
+    "production model contributions, market probability, policy role and settlement are attached afterward",
+    "structured audit compares relative direction and mechanism semantics; no LLM probability, veto or trade decision is produced"
+  ],
+  "acceptance_gates": {
+    "mechanism": "At least 100 valid cards, zero silent failures, and repeated feature-level tensions across multiple cities and target dates",
+    "probability": "Not tested in this run; any proposed challenger remains research-only until target-date-blocked OOF and frozen forward beat market/Core on the same rows",
+    "execution": "Out of scope",
+    "live": "No change"
+  },
+  "unique_action": "Expand the retrospective sample-level semantic casebook and freeze one continuous market-offset challenger specification.",
+  "live_action": "None"
+}

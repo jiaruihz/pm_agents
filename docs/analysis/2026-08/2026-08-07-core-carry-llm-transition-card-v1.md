@@ -1,123 +1,132 @@
 # Core Carry sample-level semantic alignment audit
 
-Status: `diagnosis complete / feature gaps confirmed / LLM veto rejected / no live change`
+Status: `expanded diagnosis complete / transition-confirmation challenger specified / LLM veto rejected / no live change`
 
 ## 结论
 
-上一版把问题偏成了 selected 与 rejected 的表现对照，没有直接回答“同一个样本中，天气报文的物理语义与模型打分是否一致”。本版已按样本重做。
+这次审计直接回答同一个 checkpoint 上的三个问题：当时的 METAR/forecast 在物理上表达什么，Core v3 的逐特征打分表达什么，两者是否一致。扩展版已完成 120/120 张 weather-only cards，覆盖 40 城、110 个 city-day 和 12 个 target dates，不再只是少量 policy hits。
 
-Core v3 对 63 个预先固定的 checkpoint 逐一完成了三层审计：
+主要结果：
 
-1. `gpt-5.4 / medium` 先只读决策时刻已经 first-seen 的最多 16 份 METAR、forecast curve 和物理状态，不读 market、Core 分数、selection role 或 settlement；
-2. LLM card 冻结后，才附上生产 v3 的逐特征 logit contribution；
-3. 最后对照 `LLM physical direction` 与 `Core probability residual relative to market`，再读 settlement。
+- 120 条中，64 条方向一致、48 条存在 semantic tension、8 条模糊。31 条真实 policy-selected 中为 26/3/2，说明 Core 大多数实盘候选确实在表达 late plateau/fade carry。
+- Core v3 只有 `market_logit + local hour + dewpoint depression + wind speed`。120/120 条当时已经存在的温度路径、距创新高时间、风向/输送、云雨转折、剩余热量和 forecast-observation conflict 都没有进入模型。
+- 风速语义仍然最明显：93/120 被 LLM 判为 `mixing_only`，26/120 为 `cooling_transport`，没有一条具备足够证据判成 `warming_transport`；但生产模型让风速沿固定方向抬高 hold odds。35 条出现“只确认混合维持，风速项却抬高 hold”，5 条出现“冷输送存在，但低风速项反而压低 hold”。
+- 60 条已有 settlement。LLM 判 `upward_exit` 的 14 条只有 6 条最终 NO，8 条是假警报；因此不能把 LLM card、强风解释或某个 transition 标签直接变成 veto/gate。
+- 更重要的共同漏判出现在反方向：Munich、Wuhan、Lucknow、Panama City、Tokyo、Cape Town 六个最终 NO 都被 LLM 判为 hold/fade。它们反复出现同一结构——forecast 说云雨/降温会封顶，但观测端尚未确认 transition，且当前高点很新、路径仍在回升或实际温度已经超过 forecast ceiling。
 
-主要发现：
-
-- 63 个样本中，41 个相对方向一致、21 个存在语义张力、1 个模糊。这里的“张力”只表示 LLM 天气判断和 Core 相对 market 的修正方向相反，不等于 Core 预测错。
-- 28 个真实 policy-selected 样本中，24 个一致、3 个相反、1 个模糊。Core 大多数时候确实在表达 LLM 也认可的 late plateau/fade carry。
-- 但 Core v3 只有 `market_logit + local hour + dewpoint depression + wind speed`。63/63 样本现场已经存在的温度路径、距上次创新高、风向变化、云雨转折、剩余热量、露点趋势和 METAR 反转/持续形态都没有进入 v3。
-- 风速的语义尤其过粗：LLM 将 43/63 判为 `mixing_only`、20/63 判为 `cooling_transport`，没有一个能凭现有证据确认为 `warming_transport`；生产模型却让每增加 1kt 都沿固定方向提高 hold odds。26 个样本出现“LLM 只确认维持混合、风速项却正向抬高 hold logit”。这正是 Wellington 所暴露的“阻止降温不等于推动升温，也不自动等于 exact bracket 更安全”。
-- 两个已结算 upward-exit 样本——Lucknow 32 和 Wuhan 32——LLM 与 Core 都偏向 hold/fade，说明当前 LLM card 不能直接当 veto。两例共同弱点是 forecast/cloud-rain cap 叙事压过了观测路径里的尾部风险。
-
-所以应做的不是给 Core 再加 hard gate，也不是直接让 LLM 决定下不下单，而是训练一个同分母 challenger，把上述连续的路径与 transition 特征作为 market-offset residual 输入。
+因此新增的完善方向不是“再加一个天气 gate”，而是 **transition-confirmation residual challenger**：保留 Core/market prior，用连续变量学习“forecast 所说的封顶是否已经被实时观测确认”，并同时按 settlement-native exact-bracket 边界衡量下一档距离。
 
 ## 审计分母与信息隔离
 
 - 日期：`2026-07-24..2026-08-07`
-- raw rows：2,103
-- Core-scored checkpoints：1,165
-- LLM cards：63/63，错误 0
-- 组成：28 个全部 policy-selected、7 个同城同日 near miss、28 个 never-selected matched controls
-- settlement：37 rows / 8 target dates
-- METAR PIT 条件：`first_seen_utc <= decision_snapshot_ts_utc`
+- raw rows：2,116
+- Core-scored 固定分母：1,178 checkpoints
+- cards：120/120，生成错误 0
+- 样本组成：31 policy-selected、7 same-city-day near miss、31 never-selected matched controls、51 semantic-diversity controls
+- 覆盖：40 cities / 110 city-days / 12 target dates
+- 已结算审计样本：60 rows / 9 target dates
+- METAR PIT：`first_seen_utc <= decision_snapshot_ts_utc`
 
-63 张卡不是训练集，也不是重新挑出来的盈利切片；它们只用于逐样本机制审计。
+样本选择在读取 settlement 前完成：先保留全部 policy hits、near misses 与 matched controls，再以 city/date、market band、Core-market residual、local hour、path、wind、湿度、距创新高时间、forecast relation、intraday state 和 precipitation state 做 deterministic coverage expansion。修改 settlement label 不会改变入选集合。
 
-## 生产模型到底在打什么分
+LLM 在生成 card 时不读 market、Core 分数、selection role 或 settlement；card 冻结后才附上生产模型逐特征 contribution 和最终标签。120 张卡是机制审计 casebook，不是代表性训练集，下面的 Brier 只作描述，不能替代全分母 OOF/forward。
 
-生产 artifact 为 `current_yes_core_carry_model_v3_no_peak_clock`。四个输入及系数为：
+## 生产模型表达的语义
 
-| feature | standardized coefficient | 当前语义问题 |
+生产 artifact 是 `current_yes_core_carry_model_v3_no_peak_clock`：
+
+| feature | standardized coefficient | 当前表达缺口 |
 |---|---:|---|
-| `market_logit` | +1.9273 | 合理作为强 prior，但意味着 Core 不是纯天气模型 |
-| `decision_hour_local` | +0.0934 | 只用线性时钟代替实际 peak clock、太阳衰减和剩余热量 |
-| `dewpoint_depression_f` | -0.1894 | 小露点差一律抬高 hold，无法区分湿稳/云盖与暖湿输送 |
-| `wind_speed_kt` | +0.3168 | 风越大一律抬高 hold，无法区分 mixing、冷输送、暖输送及地形/海陆背景 |
+| `market_logit` | +1.9273 | 合理的强 prior；也说明 Core 本身已含 market |
+| `decision_hour_local` | +0.0934 | 线性时钟替代了真实 peak clock、太阳衰减和剩余热量 |
+| `dewpoint_depression_f` | -0.1894 | 小露点差一律抬高 hold，无法分辨湿稳/云盖与暖湿输送 |
+| `wind_speed_kt` | +0.3168 | 风越大一律抬高 hold，无法区分 mixing、冷/暖输送及城市地形 |
 
-每个样本的 reconstructed probability 与线上记录完全一致，最大 reconstruction error 为 0，因此下面不是用近似模型解释线上分数。
+每个样本 reconstructed probability 与线上记录完全一致，最大 reconstruction error 为 0。
 
-## 代表性逐样本对照
+## 120 条结构化对照
 
-### Wellington 2026-07-29 · 12 YES
-
-PIT METAR 尾段为 `12/07, 12/07, 11/07, 12/08, 12/08, 12/09°C`，北到北东北风持续 `18–23kt`，云层由 BKN/OVC 到最后 SCT+BKN。LLM 读法是：`plateau + mixing_maintenance + current_high_holds`；强风维持边界层混合、阻止快速降温，但没有 upstream thermal/pressure 证据证明暖平流。
-
-Core 从 market `92.15%` 抬到 `96.98%`。logit 中 market `+1.289`、hour `+0.104`、低露点差 `+0.211`、21kt 风速 `+0.789`。最终 hold 方向与 LLM 一致，但模型把“风很大”直接编码成强 hold 支持，无法表达 LLM 给出的关键限定：这是 mixing maintenance，不是 warming transport。该样本尚未结算，不能叫预测错误，但已经是明确的特征语义混写。
-
-### Lucknow 2026-07-31 · 32 YES · settled NO
-
-PIT METAR 依次显示 `30→31→31→31→32→32→31→32°C`；最新为 `09013KT 32/27 FEW030CB BKN100`。也就是 08:30 的回落后，09:00 又回到 32°C，仍有约 260 分钟 daylight，露点长期在 27–28°C。
-
-Core 从 market `83.00%` 抬到 `87.08%`：market `+0.469`、hour `-0.044`、9°F 露点差 `+0.154`、13kt 风速 `+0.255`，加 intercept 后精确还原 87.08%。温度 dip→rebound、露点路径、风向、CB/云层变化和剩余 heating window 均未参与打分。
-
-LLM 也判成 `plateau → fade / low reheat`，因为 forecast max 低于已打印高点且未来云雨概率很高；它虽然把“3h 仍升温、daylight 仍长”列为冲突证据，仍未翻转结论。最终 32 NO，说明这是 **Core 和 LLM 共同漏掉的尾部**，不是“LLM 已看懂但模型没看懂”。最值得测试的特征是 `rebound-after-dip × daylight remaining × forecast-observation conflict`，而不是简单加一个 rain/cloud gate。
-
-### Wuhan 2026-07-28 · 32 YES near miss · settled NO
-
-market 为 `95.00%`，Core 为 `95.43%`；LLM 同样判 `plateau → fade / rain_onset / low reheat`，forecast 给出 98% 云雨概率且 future max 低于当前高点。最终升到 33°C，随后 Core 在 33 档触发并结算 YES。
-
-这与 Lucknow 构成同类失败：问题不只是 Core 没有路径特征，还是 forecast cap 叙事在极端湿热/对流环境中可能系统性低估最后一跳。需要显式建 `forecast says fade but observations have not confirmed transition` 的 innovation，而不是把 forecast path 当真值。
-
-### NYC 2026-07-28 · 80–81 YES · settled YES
-
-LLM 看到 `+1.08°F/1h、+3.06°F/3h`、forecast peak 仅 0.22h 后且高于当前 max，判 `active_warming → upward_exit`。Core 却从 market `91.00%` 抬到 `93.39%`，其中 15kt 风速 `+0.388`、9°F 露点差 `+0.154`。
-
-这是清楚的语义分歧，但最终 exact bracket 仍 YES，Core 的修正方向优于 LLM 的风险提示。它说明“发现模型没表达某个风险”不等于该风险足以成为 veto；直接把 LLM upward-exit 卡成拒单会制造 false negative。
-
-### Cape Town 2026-07-31 · 24 YES control · settled YES
-
-LLM 根据新高后 forecast 转降、云量上升和干燥 mixed layer 判 `plateau → fade / low reheat`。market 为 `89.00%`，Core 反而降到 `82.46%`，主要因为 36°F 大露点差贡献 `-0.278 logit`、7kt 低风速贡献 `-0.146`。最终 24 YES。
-
-这是反方向的候选偏差：模型把“干、风小”机械解释为不利于 hold，但在已经临近峰值且未来曲线下降的语境下，低风速和大露点差并不自动意味着还能升穿。Amsterdam 7/28 和 8/01 也出现 LLM 识别 cooling transport、但仅因风速低于训练均值而给 hold 负贡献，两例最终均 YES。
-
-## 63 个样本的结构化对照
-
-将 LLM 的 `upward_exit/high reheat` 记为物理上反对 hold，将 `current_high_holds/fade + low reheat` 记为支持 hold，再与 `Core p − market` 的符号比较：
+将 LLM 的 `upward_exit/high reheat` 记为物理上反对 hold，将 `current_high_holds/fade + low reheat` 记为支持 hold，再与 `Core p - market` 的符号比较：
 
 | role | rows | aligned | semantic tension | ambiguous |
 |---|---:|---:|---:|---:|
-| policy selected | 28 | 24 | 3 | 1 |
-| same-day near miss | 7 | 4 | 3 | 0 |
-| matched control | 28 | 13 | 15 | 0 |
-| total | 63 | 41 | 21 | 1 |
+| policy selected | 31 | 26 | 3 | 2 |
+| same-city-day near miss | 7 | 4 | 3 | 0 |
+| never-selected matched control | 31 | 14 | 17 | 0 |
+| semantic-diversity control | 51 | 20 | 25 | 6 |
+| total | 120 | 64 | 48 | 8 |
 
-已结算的 tension 行进一步说明不能把 LLM 当 gate：
+物理标签分布不再只剩 hold：86 hold、26 upward-exit、8 ambiguous；next state 为 51 fade、42 current-high-holds、26 upward-exit、1 unclear。证据质量仍有限：96 partial、24 good，48 条存在 source conflict。
 
-- 4 个 `Core raises hold / LLM says upward exit` 全部最终 YES；
-- 8 个 `Core lowers hold / LLM says hold` 也全部最终 YES，且 Core 相对 market 的 Brier 都变差；这组更像“模型低估 hold”的 challenger 候选，但来自小规模 matched controls；
-- 唯一两个最终 NO 都落在 `Core raises hold / LLM says hold`，现有 LLM 没抓住。
+在 60 条 settled cards 上：
 
-## 应进入 challenger 的特征，而不是 gate
+| slice | rows / dates | losses | Core − market Brier | 解释 |
+|---|---:|---:|---:|---|
+| aligned | 34 / 8 | 6 | -0.00880 | Core 点估优于 market |
+| semantic tension | 23 / 5 | 6 | +0.01157 | Core 在 15/23 条上比 market 差，但样本/日期仍小 |
+| ambiguous | 3 / 3 | 0 | +0.08681 | 不可据此下结论 |
+| LLM physical hold | 43 / 8 | 6 | -0.00150 | 37/43 最终 YES |
+| LLM physical upward-exit | 14 / 6 | 6 | +0.00226 | 仅 6/14 最终 NO，不能当 veto |
 
-63/63 样本都有以下现场证据，但生产 v3 全部未使用：
+全 120 条的语义缺口计数为：
 
-- `temperature_path_1h_3h` 与 `rebound_after_dip`；
-- `minutes_since_last_strict_new_high`；
-- `wind_direction/change × city/terrain/season`，输出 warming/cooling/mixing role；
-- cloud ceiling、rain onset/persistence 的 transition，而不是静态 rain=true；
-- daylight、solar decay、forecast peak relation 和 remaining heat；
-- dewpoint trend 与 dewpoint depression 的交互；
-- forecast 与最新 METAR 是否已经确认同一 transition；
-- 完整 METAR path 的 persistence/reversal。
+- observed transition signals absent from Core：120
+- weather/source conflict absent from Core：48
+- mixing-only but wind speed boosts hold：35
+- cooling transport but low wind speed penalizes hold：5
+- rising dewpoint/upward-exit but low depression boosts hold：1
 
-下一版 challenger 应保持 market logit 为 offset，在相同 PIT checkpoint 上加入这些连续特征，并以 target-date blocked OOF/frozen forward 比较 Brier/logloss。LLM card只用来生成机制标签、审查 case 和设计 interaction，不直接输出概率或交易 gate。
+## 代表性 case 与共同偏差
 
-当前动作仍是 `no live change`：这次确认了特征表达缺口，但没有证明新增语义已经能在 forward 上提升概率或 PnL。
+### Wellington 2026-07-29 · 12 YES
+
+PIT METAR 尾段为 `12/07, 12/07, 11/07, 12/08, 12/08, 12/09°C`，北到北东北风持续 `18–23kt`。LLM 读法是 `plateau + mixing_maintenance + current_high_holds`：强风阻止快速贴地降温，但没有 upstream thermal/pressure 证据证明暖平流。
+
+Core 从 market `92.15%` 抬到 `96.98%`，其中 21kt 风速贡献 `+0.789 logit`。最终方向虽一致，但模型把“风很大”直接编码成强 hold 支持，不能区分 mixing maintenance 与 warming transport；这就是 Wellington 暴露的语义混写。
+
+### Lucknow 2026-07-31 · 32 YES · settled NO
+
+PIT 路径为 `30→31→31→31→32→32→31→32°C`，最后一次回落后又回到 32°C，仍有约 260 分钟 daylight。Core 从 market `83.00%` 抬到 `87.08%`，但 dip→rebound、剩余 heating window、CB/云层 transition 均未参与打分。
+
+LLM 也因 forecast cloud/rain cap 判成 `fade / low reheat`。它虽在 conflicting facts 中记录 3h 升温和长 daylight，仍让 forecast cap 叙事主导。最终 32 NO，说明这里缺的是“forecast cap 是否已被观测确认”，而不是一个 rain/cloud hard filter。
+
+### 共同的六个 LLM hold/fade 漏判
+
+- Munich：当前 28°C，而 forecast max 仅 25.3°C；新高只有约 11 分钟，forecast-observation level 明显失配。
+- Wuhan：forecast 给高云雨概率，但最新 METAR 仍是 SCT、无降水；cap transition 尚未落地。
+- Lucknow：`32→31→32°C` rebound，daylight 仍长。
+- Panama City：高点很新，forecast max 高于当前档，但派生 `future_peak_relation` 却写 below，存在 forecast field conflict。
+- Tokyo：1h/3h 路径仍强升温，forecast max 高于当前档，雷暴封顶尚未被观测确认。
+- Cape Town：高点仅约 40 分钟且仍 active warming，forecast 只是略低于当前值。
+
+这些 case 不证明一条新规则已经盈利，却给出比“多放几种天气特征”更具体的可训练假设。
+
+## 新 challenger：transition-confirmation residual
+
+目标不是让 LLM 直接报概率，而是把它反复指出的缺口转换成 deterministic PIT features：
+
+1. **settlement-native boundary**：由 exact bracket 解析 `upward_exit_threshold_native = bracket_high + 0.5 native unit`，构造 forecast/running/current 到下一档的连续 margin；避免把“还会升温”和“足以跨下一 native bracket”混为一谈。
+2. **observation path**：1h/3h slope、`rebound_after_dip`、距 last strict new high、equal-high persistence，表达 fresh runway、plateau、pullback、fade。
+3. **transition confirmation**：forecast 预计云量/降水/降温封顶的时刻，与最新 METAR 是否已经出现对应 cloud/rain/temperature response；未确认时保留 upward-exit tail。
+4. **forecast reliability/innovation**：running max 是否已超过 forecast max、forecast fields 是否内部矛盾、forecast revision/source age，而不是把 forecast curve 当真值。
+5. **remaining heat and transport role**：daylight/solar/forecast peak clock，以及 `wind direction × city/terrain/season` 的 warming/cooling/mixing role；不再单独把 wind speed 当物理方向。
+
+建议模型形式：
+
+```text
+logit(p_hold_challenger) = logit(p_core) +
+  g(boundary_margin, observation_path, transition_confirmation,
+    forecast_innovation, remaining_heat, transport_role)
+```
+
+首轮只比较 compact ridge/monotonic shallow tree，不新增 eligibility threshold。训练和评估必须回到全部 1,178 个 Core-scored checkpoints（扩历史后用更宽固定分母），按 target-date expanding OOF，并保留最终日期 frozen forward；在完全相同 PIT book rows 上同时比较 Core 与 market 的 Brier/logloss、calibration 和 fee-adjusted expression。只有同分母概率质量通过后才研究 sizing/live。
+
+LLM taxonomy 只用于提出和审查 deterministic interaction，不进入线上模型输入，也不作 gate/veto。当前动作仍是 `no live change`。
 
 ## 产物
 
-- prereg: `2026-08-07-core-carry-sample-semantic-alignment-preregistration.json`
+- expanded prereg: `2026-08-07-core-carry-expanded-semantic-audit-preregistration.json`
 - runner: `scripts/analysis/reheat_risk/core_carry_llm_transition_card.py`
 - card contract: `src/strategies/weather_edge_v1/tools/intraday_transition_card.py`
-- machine artifact: `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/core_carry_llm_transition_card_v1/sample_semantic_alignment_gpt54/`
+- expanded artifact: `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/core_carry_llm_transition_card_v1/expanded_sample_semantic_alignment_gpt54_n120/`
+- original 63-card artifact: `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/core_carry_llm_transition_card_v1/sample_semantic_alignment_gpt54/`
