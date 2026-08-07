@@ -22,6 +22,7 @@ _WX_RE = re.compile(
     r"^(?:\+|-|VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?"
     r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP)(?:(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP))?$"
 )
+FORECAST_NEAR_PEAK_TOLERANCE_F = 0.5
 
 
 def _finite(value: Any) -> float | None:
@@ -134,7 +135,6 @@ def metar_physical_features(raw_metar: Any, present_weather: Any = None) -> dict
 
 
 def observation_clock_features(record: Mapping[str, Any]) -> dict[str, Any]:
-    age = _first_float(record, "obs_age_minutes", "obs_age_min", "age_min")
     cadence = _first_float(
         record,
         "expected_report_cadence",
@@ -145,8 +145,9 @@ def observation_clock_features(record: Mapping[str, Any]) -> dict[str, Any]:
     report = _parse_utc(record.get("source_report_ts_utc") or record.get("last_obs_utc"))
     decision = _parse_utc(record.get("decision_snapshot_ts_utc") or record.get("as_of_ts_utc"))
     detect = _parse_utc(record.get("detect_ts_utc") or record.get("fetched_at_utc"))
-    if age is None and report and decision:
-        age = (decision - report).total_seconds() / 60.0
+    age = (decision - report).total_seconds() / 60.0 if report and decision else None
+    if age is None:
+        age = _first_float(record, "obs_age_minutes", "obs_age_min", "age_min")
     latency = (detect - report).total_seconds() / 60.0 if detect and report else None
     return {
         "obs_age_minutes": age,
@@ -229,6 +230,8 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
     peak_hour = _first_float(record, "forecast_peak_hour_local")
     selected: list[Mapping[str, Any]] = []
     remaining_3h: list[Mapping[str, Any]] = []
+    target_day_temperatures: list[tuple[float, float]] = []
+    target_date = str(record.get("target_date") or "").strip()
     peak_passed = decision_hour is not None and peak_hour is not None and peak_hour < decision_hour
     if isinstance(curve, Sequence) and not isinstance(curve, (str, bytes)) and decision_hour is not None:
         remaining_lo = math.floor(decision_hour)
@@ -237,10 +240,15 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(item, Mapping):
                 continue
             time_local = str(item.get("time_local") or "")
+            if target_date and len(time_local) >= 10 and time_local[:10] != target_date:
+                continue
             try:
                 hour = float(time_local[11:13]) + float(time_local[14:16]) / 60.0
             except (ValueError, IndexError):
                 continue
+            temperature_f = _first_float(item, "temperature_f")
+            if temperature_f is not None:
+                target_day_temperatures.append((hour, temperature_f))
             if peak_hour is not None and not peak_passed and decision_hour <= hour <= peak_hour:
                 selected.append(item)
             if remaining_lo <= hour <= remaining_hi:
@@ -262,6 +270,53 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
     remaining_cloud = values(remaining_3h, "cloud_cover_pct", "cloud_cover")
     remaining_wind = values(remaining_3h, "wind_speed_10m_kt", "wind_speed_10m")
     remaining_direction = values(remaining_3h, "wind_direction_10m_deg", "wind_direction_10m")
+    forecast_day_max_f = (
+        max(value for _hour, value in target_day_temperatures)
+        if target_day_temperatures
+        else None
+    )
+    future_temperatures = [
+        (hour, value)
+        for hour, value in target_day_temperatures
+        if decision_hour is not None and hour + 1e-9 >= decision_hour
+    ]
+    forecast_future_max_f = (
+        max(value for _hour, value in future_temperatures)
+        if future_temperatures
+        else None
+    )
+    forecast_future_max_hours = (
+        [
+            hour
+            for hour, value in future_temperatures
+            if abs(value - forecast_future_max_f) <= 1e-9
+        ]
+        if forecast_future_max_f is not None
+        else []
+    )
+    forecast_future_max_hour = (
+        max(forecast_future_max_hours) if forecast_future_max_hours else None
+    )
+    forecast_future_max_gap = (
+        forecast_future_max_f - forecast_day_max_f
+        if forecast_future_max_f is not None and forecast_day_max_f is not None
+        else None
+    )
+    near_peak_hours = (
+        [
+            hour
+            for hour, value in target_day_temperatures
+            if value >= forecast_day_max_f - FORECAST_NEAR_PEAK_TOLERANCE_F - 1e-9
+        ]
+        if forecast_day_max_f is not None
+        else []
+    )
+    effective_peak_hour = max(near_peak_hours) if near_peak_hours else None
+    effective_peak_delta = (
+        decision_hour - effective_peak_hour
+        if decision_hour is not None and effective_peak_hour is not None
+        else None
+    )
     status = (
         "forecast_peak_passed"
         if peak_passed
@@ -284,6 +339,40 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "forecast_wind_speed_remaining_3h_max_kt": max(remaining_wind) if remaining_wind else None,
         "forecast_wind_direction_remaining_3h_mean_deg": _circular_mean(remaining_direction),
+        # The raw source peak remains untouched.  This clock uses the end of
+        # the near-maximum band so a 0.1-0.5F model rounding difference cannot
+        # turn a late secondary peak into "heating ended at midnight".
+        "forecast_effective_peak_hour_local": effective_peak_hour,
+        "forecast_effective_peak_delta_hours_local": effective_peak_delta,
+        "forecast_effective_peak_band_first_hour_local": (
+            min(near_peak_hours) if near_peak_hours else None
+        ),
+        "forecast_effective_peak_band_width_hours": (
+            max(near_peak_hours) - min(near_peak_hours) if near_peak_hours else None
+        ),
+        "forecast_effective_peak_tolerance_f": FORECAST_NEAR_PEAK_TOLERANCE_F,
+        # These continuous fields are the non-brittle representation of the
+        # remaining forecast heat.  Unlike the near-peak band above, 37.0C
+        # versus 36.8C cannot jump between two semantic categories merely
+        # because a fixed tolerance was crossed.
+        "forecast_target_day_max_f": forecast_day_max_f,
+        "forecast_future_max_f": forecast_future_max_f,
+        "forecast_future_max_hour_local": forecast_future_max_hour,
+        "forecast_future_max_delta_hours_local": (
+            forecast_future_max_hour - decision_hour
+            if forecast_future_max_hour is not None and decision_hour is not None
+            else None
+        ),
+        "forecast_future_max_gap_to_day_max_f": forecast_future_max_gap,
+        "forecast_future_peak_relation": (
+            "missing_target_day_curve"
+            if forecast_day_max_f is None
+            else "no_future_forecast_hours"
+            if forecast_future_max_f is None
+            else "future_equals_day_max"
+            if abs(forecast_future_max_gap or 0.0) <= 1e-9
+            else "future_below_day_max"
+        ),
     }
 
 

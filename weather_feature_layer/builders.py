@@ -158,9 +158,17 @@ def _build_state_row(
     decision_snapshot_ts = _iso_utc(as_of_ts_utc or snapshot.get("snapshot_ts_utc"))
     last_obs_iso = _iso_utc(_first_value(obs, "source_report_ts_utc", "last_obs_utc", "report_time_utc", "obs_time_utc"))
     running_obs_iso = _iso_utc(_first_value(obs, "running_max_obs_utc", "running_max_time_utc"))
-    age_minutes = _first_float(obs, "obs_age_minutes", "obs_age_min", "age_min")
+    first_running_obs_iso = _iso_utc(
+        _first_value(obs, "first_running_max_obs_utc", "last_strict_new_high_obs_utc")
+    )
+    last_running_obs_iso = _iso_utc(
+        _first_value(obs, "last_running_max_obs_utc", "running_max_obs_utc")
+    )
+    # Observation age is a decision-clock feature. Cached ``age_min`` values
+    # describe the collector's fetch instant and go stale during PIT replay.
+    age_minutes = _age_minutes(last_obs_iso, decision_snapshot_ts)
     if age_minutes is None:
-        age_minutes = _age_minutes(last_obs_iso, decision_snapshot_ts)
+        age_minutes = _first_float(obs, "obs_age_minutes", "obs_age_min", "age_min")
     cadence_min = _first_float(obs, "expected_report_cadence", "observation_cadence_min", "cadence_min", "estimated_cadence_min")
 
     current_temp_c = _first_float(obs, "current_temp_c", "temp_c_now", "temp_c")
@@ -230,6 +238,20 @@ def _build_state_row(
         "temp_trend_3h_f": _first_float(obs, "temp_trend_3h_f", "d_tmpf_3h"),
         "minutes_since_running_max": _first_float(obs, "minutes_since_running_max"),
         "running_max_obs_utc": running_obs_iso,
+        "first_running_max_obs_utc": first_running_obs_iso,
+        "last_running_max_obs_utc": last_running_obs_iso,
+        "last_strict_new_high_obs_utc": _iso_utc(
+            _first_value(obs, "last_strict_new_high_obs_utc", "first_running_max_obs_utc")
+        ),
+        "minutes_since_first_running_max": _first_float(
+            obs, "minutes_since_first_running_max", "minutes_since_last_strict_new_high"
+        ),
+        "minutes_since_last_running_max": _first_float(
+            obs, "minutes_since_last_running_max", "minutes_since_running_max"
+        ),
+        "minutes_since_last_strict_new_high": _first_float(
+            obs, "minutes_since_last_strict_new_high", "minutes_since_first_running_max"
+        ),
         "cloud_cover_change_1h_code": _first_float(obs, "cloud_cover_change_1h_code", "d_sky_1h"),
         "ceiling_change_1h_ft": _first_float(obs, "ceiling_change_1h_ft"),
         "wind_speed_change_1h_kt": _first_float(obs, "wind_speed_change_1h_kt", "d_wind_speed_1h_kt"),
@@ -288,8 +310,8 @@ def _index_forecast_curves(
             continue
         row = dict(item)
         available = parse_utc(
-            row.get("forecast_first_seen_utc")
-            or row.get("available_at_utc")
+            row.get("available_at_utc")
+            or row.get("forecast_first_seen_utc")
             or row.get("forecast_detected_at_utc")
             or row.get("snapshot_ts_utc")
         )

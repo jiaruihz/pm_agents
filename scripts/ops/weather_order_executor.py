@@ -23,7 +23,10 @@ from src.strategies.weather_edge_v1.tools.execution_policy import (
     build_execution_quote,
     build_execution_quotes,
 )
-from src.strategies.weather_edge_v1.tools.current_yes_core_carry import walk_ask_ladder
+from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (
+    maker_resting_price,
+    walk_ask_ladder,
+)
 
 PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
 MARKET_PROXY_ENV_KEYS = (
@@ -230,13 +233,19 @@ def _current_yes_residual_maker_price(
     best_ask: float,
     tick_size: float,
     price_cap: float,
+    source_posted_price: float = 0.0,
 ) -> float:
-    """Improve best bid by one tick, capped below both ask and trigger-time mid."""
+    """Return a resting price, rejecting replacement quotes that no longer improve."""
 
-    if best_bid <= 0 or best_ask <= best_bid or tick_size <= 0 or price_cap <= 0:
+    price = maker_resting_price(
+        best_bid=best_bid,
+        best_ask=best_ask,
+        tick_size=tick_size,
+        price_cap=price_cap,
+    )
+    if source_posted_price > 0 and price <= source_posted_price + tick_size / 2.0:
         return 0.0
-    candidate = min(best_bid + tick_size, best_ask - tick_size, price_cap)
-    return candidate if candidate > best_bid + 1e-12 else 0.0
+    return price
 
 
 def _get_tick_size(client: Any, token_id: str, fallback: float) -> float:
@@ -621,13 +630,22 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     best_ask=best_ask,
                     tick_size=tick_size,
                     price_cap=price_cap,
+                    source_posted_price=(
+                        _to_float(plan.get("source_posted_price"), 0.0)
+                        if str(plan.get("cancel_before_order_id") or "").strip()
+                        else 0.0
+                    ),
                 )
                 if order_price <= 0:
                     raise WeatherExecutionError(
                         "current_yes_residual_maker_no_improving_resting_price",
                         response=_diagnostics(
                             classification="current_yes_residual_maker_no_resting_price",
-                            reason="best_bid_plus_tick_exceeds_trigger_mid_or_fresh_ask_cap",
+                            reason=(
+                                "fresh_replacement_price_does_not_improve_source_order"
+                                if str(plan.get("cancel_before_order_id") or "").strip()
+                                else "best_bid_plus_tick_exceeds_trigger_mid_or_fresh_ask_cap"
+                            ),
                         ),
                     )
                 maker_only = True

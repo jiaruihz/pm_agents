@@ -259,7 +259,7 @@ class ExecutionLegProfile(JsonContract):
     share_fraction: float = 1.0
     reprice_policy: str = "none"
     price_cap_policy: str = "none"
-    max_reprices: int = 0
+    max_reprices: int | None = 0
     quote_policy: str = ""
     lifecycle_policy: str = ""
     venue_policy: str = "limit_order_v1"
@@ -270,7 +270,7 @@ class ExecutionLegProfile(JsonContract):
             object.__setattr__(self, name, _required(getattr(self, name), name))
         if not 0 < float(self.share_fraction) <= 1:
             raise ExecutionContractError("share_fraction must be in (0, 1]")
-        if self.max_reprices < 0:
+        if self.max_reprices is not None and self.max_reprices < 0:
             raise ExecutionContractError("max_reprices cannot be negative")
         object.__setattr__(self, "quote_policy", self.quote_policy or self.execution_policy)
         object.__setattr__(self, "lifecycle_policy", self.lifecycle_policy or self.order_lifecycle_policy)
@@ -289,6 +289,10 @@ class ExecutionProfile(JsonContract):
     required_venue_capabilities: tuple[str, ...] = ()
     fee_model_version: str = "venue_snapshot_v1"
     tick_model_version: str = "venue_snapshot_v1"
+    refresh_sec: int | None = None
+    ttl_sec: int | None = None
+    data_epoch_policy: str = "cancel"
+    fixed_parameters: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _required(self.name, "name"))
@@ -297,6 +301,12 @@ class ExecutionProfile(JsonContract):
             raise ExecutionContractError("profile requires one or more ExecutionLegProfile values")
         if self.cancel_buffer_sec < 0:
             raise ExecutionContractError("cancel_buffer_sec cannot be negative")
+        if self.refresh_sec is not None and self.refresh_sec <= 0:
+            raise ExecutionContractError("refresh_sec must be positive")
+        if self.ttl_sec is not None and self.ttl_sec <= 0:
+            raise ExecutionContractError("ttl_sec must be positive")
+        if self.data_epoch_policy not in {"cancel", "revalidate_and_refresh"}:
+            raise ExecutionContractError("unsupported data_epoch_policy")
         if self.allocation_policy not in {
             "all_taker",
             "all_maker",
@@ -319,6 +329,11 @@ class ExecutionProfile(JsonContract):
         object.__setattr__(self, "parameter_requirements", tuple(self.parameter_requirements))
         object.__setattr__(self, "allowed_parameters", tuple(self.allowed_parameters))
         object.__setattr__(self, "required_venue_capabilities", tuple(self.required_venue_capabilities))
+        object.__setattr__(
+            self,
+            "fixed_parameters",
+            _freeze_mapping(self.fixed_parameters, "fixed_parameters"),
+        )
 
     @property
     def execution_policy(self) -> str:
@@ -342,17 +357,27 @@ class ExecutionProfile(JsonContract):
             raise ExecutionContractError(f"profile {self.name} received undeclared parameters: {sorted(unknown)}")
         if missing:
             raise ExecutionContractError(f"profile {self.name} is missing required parameters: {sorted(missing)}")
-        return MappingProxyType(
-            {
-                "allocation_policy": self.allocation_policy,
-                "cancel_buffer_sec": self.cancel_buffer_sec,
-                "fee_model_version": self.fee_model_version,
-                "legs": tuple(leg.to_json() for leg in self.legs),
-                "profile_parameters": parameters,
-                "required_venue_capabilities": self.required_venue_capabilities,
-                "tick_model_version": self.tick_model_version,
-            }
-        )
+        behavior = {
+            "allocation_policy": self.allocation_policy,
+            "cancel_buffer_sec": self.cancel_buffer_sec,
+            "fee_model_version": self.fee_model_version,
+            "legs": tuple(leg.to_json() for leg in self.legs),
+            "profile_parameters": parameters,
+            "required_venue_capabilities": self.required_venue_capabilities,
+            "tick_model_version": self.tick_model_version,
+        }
+        # Preserve established config identities for profiles using the original
+        # defaults; only profiles that opt into runtime cadence semantics carry
+        # these fields in their identity.
+        if self.data_epoch_policy != "cancel":
+            behavior["data_epoch_policy"] = self.data_epoch_policy
+        if self.refresh_sec is not None:
+            behavior["refresh_sec"] = self.refresh_sec
+        if self.ttl_sec is not None:
+            behavior["ttl_sec"] = self.ttl_sec
+        if self.fixed_parameters:
+            behavior["fixed_parameters"] = self.fixed_parameters
+        return MappingProxyType(behavior)
 
 
 @dataclass(frozen=True)

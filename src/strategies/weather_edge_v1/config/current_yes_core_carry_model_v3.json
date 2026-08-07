@@ -1,0 +1,113 @@
+{
+  "artifact_version": "current_yes_core_carry_model_v3_no_peak_clock",
+  "lifecycle": "tiny_live_user_authorized_bugfix_probe",
+  "frozen_at_utc": "2026-07-27T11:31:57+00:00",
+  "target": "current exact bracket remains final winning bracket",
+  "numeric_features": [
+    "market_logit",
+    "decision_hour_local",
+    "dewpoint_depression_f",
+    "wind_speed_kt"
+  ],
+  "numeric_medians": [
+    1.3249254147435987,
+    14.0,
+    16.200000000000003,
+    9.0
+  ],
+  "numeric_means": [
+    1.0839591035461542,
+    14.590248707214972,
+    18.62459985225314,
+    9.190787983255357
+  ],
+  "numeric_scales": [
+    2.061387119364978,
+    1.2663288411813927,
+    11.860476252678458,
+    4.73945238749999
+  ],
+  "coef": [
+    1.9273063619083268,
+    0.09336145764550721,
+    -0.18942499511648364,
+    0.3168145250328554
+  ],
+  "intercept": 1.0742283162888948,
+  "estimator": {
+    "type": "median_imputer+standard_scaler+logistic_regression",
+    "C": 0.1,
+    "random_state": 20260722,
+    "sample_weight": "each city-target_date has total training weight one"
+  },
+  "training_snapshot": {
+    "rows": 4061,
+    "city_days": 1305,
+    "cities": 36,
+    "dates": 46,
+    "date_min": "2026-05-19",
+    "date_max": "2026-07-08",
+    "source": "current_yes_core_carry_peak_clock_fix_v3"
+  },
+  "numeric_feature_support": {
+    "market_logit": {
+      "min": -4.498799058824342,
+      "max": 4.545824507879147,
+      "missing_rows": 0,
+      "missing_fraction": 0.0
+    },
+    "decision_hour_local": {
+      "min": 13.0,
+      "max": 17.0,
+      "missing_rows": 0,
+      "missing_fraction": 0.0
+    },
+    "dewpoint_depression_f": {
+      "min": 0.0,
+      "max": 80.0,
+      "missing_rows": 1,
+      "missing_fraction": 0.0002462447672986949
+    },
+    "wind_speed_kt": {
+      "min": 0.0,
+      "max": 42.0,
+      "missing_rows": 1,
+      "missing_fraction": 0.0002462447672986949
+    }
+  },
+  "entry_policy": {
+    "expression": "current_bracket_BUY_YES",
+    "bounded_exact_bracket_only": true,
+    "local_hour_start": 13,
+    "local_hour_end": 17,
+    "checkpoint": "first successfully scored fresh book at or after local minute 30 in each local hour",
+    "one_scored_checkpoint_per_city_day_local_hour": true,
+    "first_positive_ev_locks_city_day": true,
+    "wait_for_second_confirmation": false,
+    "market_mid_floor": 0.8,
+    "market_mid_ceiling": 0.9895,
+    "market_mid_ceiling_basis": "maximum frozen training support",
+    "taker_shares": 10,
+    "min_edge_after_fee_and_depth": 0.0,
+    "price_input": "fresh direct two-sided CLOB book",
+    "cost_input": "full ten-share ask-ladder principal plus official per-level fee",
+    "d1_no_required": false,
+    "maker_enabled": false,
+    "observation_age_probability_feature": false,
+    "forecast_peak_clock_probability_feature": false,
+    "required_nonmissing_live_features": [
+      "dewpoint_depression_f",
+      "wind_speed_kt"
+    ],
+    "enforce_training_support_live_features": [
+      "dewpoint_depression_f",
+      "wind_speed_kt"
+    ],
+    "forecast_peak_clock_reason": "strict daily argmax aliases near-equal midnight and afternoon peaks; corrected effective clock remains telemetry until forward"
+  },
+  "research_lineage": [
+    "docs/analysis/2026-07/2026-07-24-current-yes-core-carry-no-obs-age-freeze-pre-live-v5.md",
+    "docs/analysis/2026-07/2026-07-27-current-yes-core-carry-peak-clock-fix-v3.md"
+  ],
+  "artifact_hash": "40af251fa48d827da294febc5854bde1bfde3f0e82efe93b7119d9886aa2d411"
+}

@@ -98,6 +98,42 @@ def score_probability(features: Mapping[str, Any], artifact: Mapping[str, Any]) 
     return 1.0 / (1.0 + math.exp(-max(-40.0, min(40.0, logit))))
 
 
+def model_input_support(
+    features: Mapping[str, Any], artifact: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Describe train/serve support without inventing weather alpha gates."""
+
+    support = artifact.get("numeric_feature_support")
+    support = support if isinstance(support, Mapping) else {}
+    missing: list[str] = []
+    outside: list[str] = []
+    for name in artifact["numeric_features"]:
+        value = finite(features.get(name))
+        if value is None:
+            missing.append(name)
+            continue
+        bounds = support.get(name)
+        if not isinstance(bounds, Mapping):
+            continue
+        low = finite(bounds.get("min"))
+        high = finite(bounds.get("max"))
+        if (low is not None and value < low) or (high is not None and value > high):
+            outside.append(name)
+    return {
+        "status": (
+            "missing_and_outside_training_support"
+            if missing and outside
+            else "missing_model_inputs"
+            if missing
+            else "outside_training_support"
+            if outside
+            else "within_training_support"
+        ),
+        "missing_features": missing,
+        "outside_training_support_features": outside,
+    }
+
+
 def walk_ask_ladder(
     asks: Sequence[Mapping[str, Any] | Sequence[Any]], quantity: float
 ) -> dict[str, Any]:
@@ -142,6 +178,23 @@ def walk_ask_ladder(
     }
 
 
+def maker_resting_price(
+    *,
+    best_bid: float,
+    best_ask: float,
+    tick_size: float,
+    price_cap: float,
+) -> float:
+    """Improve bid by one tick when possible, otherwise join it without crossing."""
+
+    if best_bid <= 0 or best_ask <= best_bid or tick_size <= 0 or price_cap <= 0:
+        return 0.0
+    candidate = min(best_bid + tick_size, best_ask - tick_size, price_cap)
+    if candidate > best_bid + 1e-12:
+        return candidate
+    return best_bid if best_bid < best_ask and best_bid <= price_cap + 1e-12 else 0.0
+
+
 def evaluate_entry(
     state: Mapping[str, Any],
     asks: Sequence[Mapping[str, Any] | Sequence[Any]],
@@ -155,6 +208,29 @@ def evaluate_entry(
         for name in artifact["numeric_features"]
         if not math.isfinite(float(features.get(name, math.nan)))
     ]
+    input_support = model_input_support(features, artifact)
+    required_nonmissing = {
+        str(name)
+        for name in config.get("required_nonmissing_live_features", [])
+    }
+    missing_required = sorted(required_nonmissing.intersection(imputed_features))
+    if missing_required:
+        policy_reasons.extend(
+            f"missing_required_model_feature:{name}" for name in missing_required
+        )
+    enforced_support = {
+        str(name)
+        for name in config.get("enforce_training_support_live_features", [])
+    }
+    outside_enforced = sorted(
+        enforced_support.intersection(
+            input_support["outside_training_support_features"]
+        )
+    )
+    if outside_enforced:
+        policy_reasons.extend(
+            f"outside_frozen_model_support:{name}" for name in outside_enforced
+        )
     hour = finite(features.get("decision_hour_local"))
     mid = None
     if math.isfinite(features["market_logit"]):
@@ -163,6 +239,9 @@ def evaluate_entry(
         policy_reasons.append("outside_local_hour_window")
     if mid is None or mid < float(config["market_mid_floor"]):
         policy_reasons.append("outside_carry_market_mid_domain")
+    market_mid_ceiling = finite(config.get("market_mid_ceiling"))
+    if mid is not None and market_mid_ceiling is not None and mid > market_mid_ceiling:
+        policy_reasons.append("outside_frozen_market_mid_support")
     if not bool(state.get("checkpoint_eligible", False)):
         policy_reasons.append("checkpoint_not_eligible")
     bracket = str(state.get("current_bracket") or "").strip().lower()
@@ -199,11 +278,27 @@ def evaluate_entry(
         "artifact_hash": artifact["artifact_hash"],
         "features": features,
         "imputed_features": imputed_features,
+        "model_input_support_status": input_support["status"],
+        "model_input_support_missing_features": input_support["missing_features"],
+        "model_input_outside_training_support_features": input_support[
+            "outside_training_support_features"
+        ],
         "market_mid": mid,
         "model_probability_hold": probability,
         "taker_ladder": ladder,
+        "current_yes_effective_cost": effective_cost,
+        "current_yes_fee_per_share": (
+            None
+            if ladder.get("fee") is None
+            else float(ladder["fee"]) / float(ladder["quantity"])
+        ),
         "model_edge_after_fee_and_depth": edge,
         "eligible": eligible,
+        "probability_status": (
+            "scored_by_current_yes_core_artifact"
+            if probability is not None
+            else "not_scored_invalid_market_input"
+        ),
         "decision_status": "positive_taker_ev" if eligible else "not_eligible",
         "reasons": reasons,
     }

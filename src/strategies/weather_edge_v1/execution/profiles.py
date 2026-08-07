@@ -130,6 +130,64 @@ _PROFILES = {
         planner_supported=False,
         allocation_policy="fixed_weight_split",
     ),
+    "split_taker_maker_chase_capped_no_fallback_v1": ExecutionProfile(
+        name="split_taker_maker_chase_capped_no_fallback_v1",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="current_yes_residual_carry_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+            ),
+            ExecutionLegProfile(
+                role="maker",
+                execution_policy="current_yes_residual_carry_maker_v1",
+                order_lifecycle_policy="maker_chase_until_observation_or_ttl_v1",
+                maker_only=True,
+                reprice_policy="follow_best_bid",
+                price_cap_policy="minimum_initial_mid_model_probability",
+                max_reprices=None,
+            ),
+        ),
+        cancel_buffer_sec=0,
+        planner_supported=False,
+        allocation_policy="explicit_leg_shares",
+        refresh_sec=15,
+        ttl_sec=900,
+        data_epoch_policy="revalidate_and_refresh",
+    ),
+    "split_taker_maker_edge_capped_no_fallback_v2": ExecutionProfile(
+        name="split_taker_maker_edge_capped_no_fallback_v2",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="current_yes_residual_carry_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+            ),
+            ExecutionLegProfile(
+                role="maker",
+                execution_policy="current_yes_residual_carry_maker_v2",
+                order_lifecycle_policy="maker_staged_chase_until_pre_data_update_or_ttl_v2",
+                maker_only=True,
+                reprice_policy="deadline_staged_follow_best_bid",
+                price_cap_policy="model_probability_retained_edge_and_taker_improvement",
+                max_reprices=None,
+            ),
+        ),
+        cancel_buffer_sec=90,
+        planner_supported=False,
+        allocation_policy="explicit_leg_shares",
+        refresh_sec=15,
+        ttl_sec=900,
+        data_epoch_policy="cancel",
+        fixed_parameters={
+            "minimum_taker_improvement_ticks": 1,
+            "retained_edge": "0.01",
+            "stage_midpoint_after_sec": 300,
+            "stage_near_ask_after_sec": 600,
+        },
+    ),
 }
 
 # Alias values are (resolved profile name, fixture identity). Keep this empty

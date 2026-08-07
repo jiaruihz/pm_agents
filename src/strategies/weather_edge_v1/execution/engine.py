@@ -13,12 +13,54 @@ from .contracts import (
     make_execution_config_id,
     make_live_exposure_key,
     make_plan_dedupe_key,
+    ExecutionProfile,
 )
 from .profiles import execution_config_id_for_profile, resolve_execution_profile
 
 
 class LegacyPlanCompatibilityError(ValueError):
     """A legacy plan cannot be represented without guessing execution semantics."""
+
+
+def allocate_profile_shares(
+    *,
+    profile: ExecutionProfile,
+    total_shares: Decimal | str | int,
+    leg_share_overrides: Mapping[str, Decimal | str | int] | None = None,
+) -> tuple[tuple[str, Decimal], ...]:
+    """Resolve child quantities once from the registered execution profile."""
+
+    total = Decimal(str(total_shares))
+    if total <= 0:
+        raise LegacyPlanCompatibilityError("total_shares must be positive")
+    overrides = {
+        str(role): Decimal(str(value))
+        for role, value in dict(leg_share_overrides or {}).items()
+    }
+    if profile.allocation_policy == "explicit_leg_shares":
+        expected = {leg.role for leg in profile.legs}
+        if set(overrides) != expected:
+            raise LegacyPlanCompatibilityError(
+                f"explicit leg shares require exactly {sorted(expected)}"
+            )
+        allocated = tuple((leg.role, overrides[leg.role]) for leg in profile.legs)
+    elif profile.allocation_policy == "fixed_weight_split":
+        allocated = tuple(
+            (leg.role, total * Decimal(str(leg.share_fraction))) for leg in profile.legs
+        )
+    elif profile.allocation_policy in {"all_taker", "all_maker"}:
+        if len(profile.legs) != 1:
+            raise LegacyPlanCompatibilityError("all-in allocation requires one leg")
+        allocated = ((profile.legs[0].role, total),)
+    else:
+        raise LegacyPlanCompatibilityError(
+            f"allocation policy is not supported by the shared planner: {profile.allocation_policy}"
+        )
+    if any(shares <= 0 for _role, shares in allocated):
+        raise LegacyPlanCompatibilityError("allocated child shares must be positive")
+    if sum((shares for _role, shares in allocated), Decimal("0")) != total:
+        raise LegacyPlanCompatibilityError("allocated child shares must equal total_shares")
+    return allocated
 
 
 def _required(plan: Mapping[str, Any], name: str) -> str:
@@ -430,11 +472,7 @@ def build_heat_death_legacy_plan_compatibility(
 
 
 def _core_carry_profile_identity(configured_profile: str) -> tuple[str, str, str, str]:
-    """Return an opaque identity for an unregistered legacy profile.
-
-    Core-carry has not yet registered a Phase 1 execution profile.  The
-    identity is therefore comparator-only and cannot supply runtime behavior.
-    """
+    """Resolve a registered core-carry profile or identify an old opaque one."""
 
     try:
         resolution = resolve_execution_profile(configured_profile)
@@ -459,10 +497,10 @@ def build_core_carry_legacy_plan_compatibility(
     *,
     legacy_plans: Sequence[Mapping[str, Any]],
 ) -> CoreCarryLegacyPlanCompatibility:
-    """Convert core-carry entry plans to comparator-only shared contracts.
+    """Convert core-carry entry plans to shared runtime contracts.
 
-    Lifecycle replacements and cancels are intentionally out of scope: they
-    have source-order semantics and must not be represented as new entries.
+    Lifecycle replacements and cancels keep source-order semantics and enter
+    the runtime through its lifecycle path rather than masquerading as entries.
     """
 
     if not legacy_plans:

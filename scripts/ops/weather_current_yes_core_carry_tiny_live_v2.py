@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Tiny-live adapter for the frozen current-YES residual carry v2.
+"""Tiny-live adapter for the current-YES residual carry probe.
 
 The signal/checkpoint contract remains owned by
-``weather_current_yes_core_carry_pre_live_v1.py`` and the no-age v2 artifact.
+``weather_current_yes_core_carry_pre_live_v1.py`` and the no-age/no-peak-clock
+v3 artifact.
 For each first positive-EV city-day signal this adapter submits two separately
-attributed five-share children:
+attributed children:
 
-* taker: fresh full-ladder five-share EV is revalidated immediately before send;
-* maker: best bid + one tick, chased upward every 15 seconds, capped by the
-  trigger-time mid (floored to tick) and model probability.
+* taker: fresh full-ladder ten-share EV is revalidated immediately before send;
+* maker: five shares at best bid + one tick, then staged toward the fresh ask
+  while retaining one cent of model edge and at least one tick of improvement
+  versus the trigger-time taker ask.
 
-Maker replacements never cross the ask and never convert to taker.  They stop
-at the cap and are cancelled when their observation epoch changes or the
-15-minute order TTL expires.  Reprice count is intentionally unlimited inside
-those physical/time/price boundaries.
+Maker replacements never cross the ask and never convert to taker. They are
+cancelled 90 seconds before the next expected weather update, when an
+unexpected observation epoch arrives, or when the 15-minute order TTL expires.
+When one-tick improvement is impossible, the maker joins best bid instead of
+dropping the maker sleeve.
 """
 
 from __future__ import annotations
@@ -38,21 +41,37 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as signal_runner  # noqa: E402
 from scripts.ops import weather_current_yes_heat_death_shadow_v1 as weather_state  # noqa: E402
+from scripts.ops.weather_core_carry_order_runtime import (  # noqa: E402
+    execute_core_carry_plans,
+)
 from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
 from src.strategies.runtime import runtime_state  # noqa: E402
+from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
+    allocate_profile_shares,
+    build_core_carry_legacy_plan_compatibility,
+)
+from src.strategies.weather_edge_v1.execution.profiles import (  # noqa: E402
+    execution_config_id_for_profile,
+    get_execution_profile,
+)
 from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (  # noqa: E402
+    evaluate_entry,
     load_artifact,
+    maker_resting_price,
 )
+from weather_data_feed.observation_cache import index_observation_cache  # noqa: E402
 
 
-STRATEGY_ID = "current_yes_core_carry_v2"
+STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
-CONFIG_ID = "current_yes_core_carry_model_v2_split_5_taker_5_maker"
-EXECUTION_PROFILE = "current_yes_residual_split_5_taker_5_maker_v1"
+CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_edge_cap_v2"
+EXECUTION_PROFILE = "split_taker_maker_edge_capped_no_fallback_v2"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v2"
+MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
+FROZEN_TAKER_SHARES = 10.0
+FROZEN_MAKER_SHARES = 5.0
 OUTPUT_DIR = ROOT / "runtime/weather_edge_v1" / STRATEGY_INSTANCE
-ARTIFACT_PATH = (
-    ROOT / "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v2.json"
-)
+ARTIFACT_PATH = ROOT / "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v3.json"
 LEGACY_FAMILY_LIVE_ORDER_FILES = (
     ROOT
     / "runtime/weather_edge_v1/current_yes_heat_death_tiny_live_h1_late_carry_v1/live_orders.jsonl",
@@ -61,6 +80,31 @@ LEGACY_FAMILY_LIVE_ORDER_FILES = (
     ROOT / "runtime/weather_edge_v1/current_yes_heat_death_tiny_live_v1/live_orders.jsonl",
 )
 BJ = timezone(timedelta(hours=8))
+RETRYABLE_MAKER_POST_FAILURES = {
+    "current_yes_residual_maker_no_resting_price",
+    "maker_only_no_resting_price",
+    "maker_only_price_would_cross",
+    "post_only_crosses_book",
+}
+CRITICAL_SOURCE_PATHS = (
+    "scripts/ops/weather_current_yes_core_carry_tiny_live_v2.py",
+    "scripts/ops/weather_current_yes_core_carry_pre_live_v1.py",
+    "scripts/ops/weather_current_yes_heat_death_shadow_v1.py",
+    "scripts/ops/weather_core_carry_order_runtime.py",
+    "scripts/ops/weather_polymarket_live_transport.py",
+    "weather_data_feed/observation_cache.py",
+    "weather_data_feed/physical_features.py",
+    "weather_feature_layer/builders.py",
+    "src/strategies/weather_edge_v1/execution/contracts.py",
+    "src/strategies/weather_edge_v1/execution/engine.py",
+    "src/strategies/weather_edge_v1/execution/profiles.py",
+    "src/strategies/weather_edge_v1/execution/lifecycle.py",
+    "src/strategies/weather_edge_v1/execution/venue/polymarket.py",
+    "src/strategies/weather_edge_v1/runtime/execution_journal.py",
+    "src/strategies/weather_edge_v1/runtime/order_runtime.py",
+    "src/strategies/weather_edge_v1/tools/current_yes_core_carry.py",
+    "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v3.json",
+)
 
 
 def utc_now() -> str:
@@ -73,6 +117,78 @@ def finite(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return out if math.isfinite(out) else None
+
+
+def deployment_metadata() -> dict[str, Any]:
+    sha = ""
+    dirty = True
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        dirty = (
+            subprocess.run(
+                ["git", "diff", "--quiet", "HEAD", "--", *CRITICAL_SOURCE_PATHS],
+                cwd=ROOT,
+                check=False,
+            ).returncode
+            != 0
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return {
+        "deployment_contract_version": DEPLOYMENT_CONTRACT_VERSION,
+        "deployed_repo_sha": sha,
+        "critical_source_dirty": dirty,
+        "source_checkout_root": str(ROOT),
+    }
+
+
+DEPLOYMENT_METADATA = deployment_metadata()
+
+
+def assert_runtime_contract() -> None:
+    """Fail closed before scoring or ordering if the deployed PIT semantics drift."""
+
+    if not DEPLOYMENT_METADATA["deployed_repo_sha"]:
+        raise RuntimeError("deployment contract failed: repository SHA unavailable")
+    if DEPLOYMENT_METADATA["critical_source_dirty"]:
+        raise RuntimeError("deployment contract failed: critical strategy source is dirty")
+    selected = index_observation_cache(
+        {
+            "decision_as_of_utc": "2026-07-26T12:38:10Z",
+            "records": [
+                {
+                    "city": "London",
+                    "target_date": "2026-07-26",
+                    "fetched_at_utc": "2026-07-26T12:33:00Z",
+                    "last_obs_utc": "2026-07-26T12:20:00Z",
+                    "current_temp_c": 26.0,
+                    "age_min": 13.0,
+                },
+                {
+                    "city": "London",
+                    "target_date": "2026-07-26",
+                    "fetched_at_utc": "2026-07-25T23:58:00Z",
+                    "last_obs_utc": "2026-07-25T23:50:00Z",
+                    "current_temp_c": 20.0,
+                    "age_min": 8.0,
+                },
+            ],
+        }
+    ).get(("London", "2026-07-26"))
+    expected_age = 18.0 + 10.0 / 60.0
+    if (
+        not selected
+        or selected.get("current_temp_c") != 26.0
+        or abs(float(selected.get("obs_age_minutes") or 0.0) - expected_age) > 1e-9
+        or selected.get("obs_age_clock_source") != "decision_asof_minus_source_report"
+    ):
+        raise RuntimeError("deployment contract failed: observation PIT clock semantics drifted")
 
 
 def parse_utc(value: Any) -> datetime | None:
@@ -135,16 +251,6 @@ def line_count(path: Path) -> int:
         return sum(1 for _ in handle)
 
 
-def next_runtime_telemetry_rows(conn: sqlite3.Connection) -> int:
-    """Advance the operational counter without rescanning the growing journal."""
-
-    row = conn.execute(
-        "SELECT telemetry_rows FROM strategy_instance_runtime WHERE instance_id = ?",
-        (STRATEGY_INSTANCE,),
-    ).fetchone()
-    return int(row[0] or 0) + 1 if row else 1
-
-
 def repo_path(path: Path) -> str:
     try:
         return str(path.relative_to(ROOT))
@@ -186,7 +292,7 @@ def publish_runtime_state(
             plan_rows=plan_rows,
             live_order_rows=line_count(output_dir / "live_orders.jsonl"),
             paper_order_rows=line_count(output_dir / "paper_orders.jsonl"),
-            telemetry_rows=next_runtime_telemetry_rows(conn),
+            telemetry_rows=line_count(output_dir / "summary_history.jsonl") + 1,
             live_enabled=int(bool(summary.get("live_enabled"))),
             summary_path=repo_path(output_dir / "latest_summary.json"),
             primary_journal_path=repo_path(output_dir / "live_orders.jsonl"),
@@ -266,6 +372,132 @@ def latest_weather_epochs(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
     return {key: row for key, (_stamp, row) in latest.items()}
 
 
+def maker_lifecycle_root(row: Mapping[str, Any]) -> str:
+    root_created = str(row.get("maker_lifecycle_root_created_at_utc") or "")
+    signal = str(row.get("signal_id") or "")
+    comparison = str(row.get("comparison_group_id") or "")
+    return "|".join((signal, comparison, root_created))
+
+
+def maker_lifecycle_heads(path: Path) -> list[dict[str, Any]]:
+    """Return the latest journal row for every maker intent."""
+
+    heads: dict[str, tuple[datetime, int, dict[str, Any]]] = {}
+    for index, row in enumerate(iter_jsonl(path)):
+        if (
+            str(row.get("strategy_instance") or "") != STRATEGY_INSTANCE
+            or not bool(row.get("maker_only"))
+        ):
+            continue
+        root = maker_lifecycle_root(row)
+        created = parse_utc(row.get("created_at_utc"))
+        if not root or created is None:
+            continue
+        prior = heads.get(root)
+        if prior is None or (created, index) > (prior[0], prior[1]):
+            heads[root] = (created, index, row)
+    return [item[2] for item in heads.values()]
+
+
+def execution_journal_order_states(path: Path) -> dict[str, dict[str, Any]]:
+    """Recover venue-order terminal state from side-effect outcomes.
+
+    The execution journal is written before the legacy ``live_orders`` projection.
+    A process interruption between those writes must not leave an already-cancelled
+    order looking active forever.
+    """
+
+    states: dict[str, dict[str, Any]] = {}
+    for row in iter_jsonl(path):
+        if str(row.get("event_type") or "") != "outcome":
+            continue
+        payload = row.get("payload") if isinstance(row.get("payload"), Mapping) else {}
+        kind = str(payload.get("kind") or "")
+        status = str(payload.get("status") or "").lower()
+        raw = payload.get("raw_response") if isinstance(payload.get("raw_response"), Mapping) else {}
+        recorded_at = str(row.get("recorded_at_utc") or "")
+        if kind == "submit" and status in {"submitted", "accepted", "filled", "reconciled"}:
+            order_id = str(
+                payload.get("venue_order_id")
+                or raw.get("orderID")
+                or raw.get("order_id")
+                or raw.get("id")
+                or ""
+            )
+            if order_id:
+                states[order_id] = {
+                    "status": "filled" if status == "filled" else "submitted",
+                    "recorded_at_utc": recorded_at,
+                    "journal_payload": dict(payload),
+                }
+        if kind not in {"cancel", "cancel_before_replacement"}:
+            continue
+        if status not in {"cancelled", "canceled", "expired", "reconciled"}:
+            continue
+        cancelled = raw.get("canceled") or raw.get("cancelled") or ()
+        for value in cancelled:
+            order_id = str(value or "")
+            if order_id:
+                states[order_id] = {
+                    "status": "cancelled",
+                    "recorded_at_utc": recorded_at,
+                    "journal_payload": dict(payload),
+                }
+    return states
+
+
+def recover_journal_terminal_makers(output_dir: Path) -> int:
+    """Project journal-confirmed terminal heads into the legacy order stream."""
+
+    live_orders = output_dir / "live_orders.jsonl"
+    states = execution_journal_order_states(output_dir / "execution_journal.jsonl")
+    existing_execution_ids = {
+        str(row.get("execution_id") or "") for row in iter_jsonl(live_orders)
+    }
+    written = 0
+    for head in maker_lifecycle_heads(live_orders):
+        if str(head.get("status") or "") != "submitted":
+            continue
+        order_id = live_order_id(head)
+        evidence = states.get(order_id)
+        if not order_id or not evidence or evidence["status"] not in {"cancelled", "filled"}:
+            continue
+        execution_id = "journal-recovery-" + stable_hash(
+            {"order_id": order_id, "terminal_status": evidence["status"]}
+        )
+        if execution_id in existing_execution_ids:
+            continue
+        terminal = {
+            **dict(head),
+            "record_type": "weather_edge_live_order",
+            "created_at_utc": evidence["recorded_at_utc"] or utc_now(),
+            "status": evidence["status"],
+            "child_order_role": "core_carry_maker_terminal",
+            "execution_action": "core_carry_maker_terminal",
+            "execution_id": execution_id,
+            "plan_id": "plan-" + execution_id,
+            "replacement_of_order_id": order_id,
+            "source_order_id": order_id,
+            "exchange_response": {
+                "quote_status": evidence["status"],
+                "quote_reason": "execution_journal_terminal_recovery",
+                "authoritative_execution_journal": evidence["journal_payload"],
+            },
+        }
+        append_jsonl(live_orders, terminal)
+        existing_execution_ids.add(execution_id)
+        written += 1
+    return written
+
+
+def retryable_maker_post_failure(row: Mapping[str, Any]) -> bool:
+    if str(row.get("status") or "") != "error":
+        return False
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
+    classification = str(response.get("error_classification") or "")
+    return classification in RETRYABLE_MAKER_POST_FAILURES
+
+
 def family_live_order_files(output_dir: Path) -> tuple[Path, ...]:
     return (*LEGACY_FAMILY_LIVE_ORDER_FILES, output_dir / "live_orders.jsonl")
 
@@ -286,6 +518,7 @@ def attempted_signal_ids(output_dir: Path) -> set[str]:
         str(row.get("signal_id") or "")
         for row in iter_jsonl(output_dir / "entry_attempts.jsonl")
         if str(row.get("signal_id") or "")
+        and str(row.get("status") or "") == "blocked"
     }
     attempted.update(
         str(row.get("signal_id") or "")
@@ -316,6 +549,111 @@ def daily_family_usage(paths: Iterable[Path], now: datetime) -> tuple[int, float
     return len(city_days), posted
 
 
+def entry_cost_reservation(args: argparse.Namespace, row: Mapping[str, Any]) -> float:
+    """Conservatively reserve both children at the current taker ask."""
+
+    ask = finite(row.get("current_yes_ask")) or 1.0
+    return (float(args.taker_shares) + float(args.maker_shares)) * ask
+
+
+def max_live_child_notional_usd(args: argparse.Namespace) -> float:
+    """Maximum principal for one child at the binary-market price ceiling."""
+
+    return max(float(args.taker_shares), float(args.maker_shares))
+
+
+def maker_profile_parameter(name: str) -> float:
+    profile = get_execution_profile(EXECUTION_PROFILE)
+    value = finite(profile.fixed_parameters.get(name))
+    if value is None:
+        raise RuntimeError(f"missing numeric maker profile parameter: {name}")
+    return value
+
+
+def maker_edge_price_cap(
+    *,
+    best_ask: float,
+    tick_size: float,
+    model_probability: float,
+) -> float:
+    retained_edge = maker_profile_parameter("retained_edge")
+    improvement_ticks = maker_profile_parameter("minimum_taker_improvement_ticks")
+    raw_cap = min(
+        model_probability - retained_edge,
+        best_ask - improvement_ticks * tick_size,
+    )
+    if raw_cap <= 0 or tick_size <= 0:
+        return 0.0
+    return math.floor((raw_cap + 1e-12) / tick_size) * tick_size
+
+
+def maker_deadline_fields(
+    row: Mapping[str, Any],
+    *,
+    now: datetime,
+    order_ttl_min: float,
+) -> dict[str, Any] | None:
+    profile = get_execution_profile(EXECUTION_PROFILE)
+    source_epoch = parse_utc(row.get("source_report_ts_utc"))
+    cadence_min = finite(row.get("observation_cadence_min"))
+    if source_epoch is None or cadence_min is None or cadence_min <= 0:
+        return None
+    next_update = source_epoch + timedelta(minutes=cadence_min)
+    cancel_before_update = next_update - timedelta(seconds=profile.cancel_buffer_sec)
+    ttl_deadline = now + timedelta(minutes=order_ttl_min)
+    deadline = min(cancel_before_update, ttl_deadline)
+    if deadline <= now:
+        return None
+    return {
+        "data_update_source": str(row.get("obs_source") or "weather_observation"),
+        "data_epoch_ref": str(row.get("source_report_ts_utc") or ""),
+        "data_epoch_ts_utc": source_epoch.isoformat(timespec="seconds"),
+        "next_data_update_due_utc": next_update.isoformat(timespec="seconds"),
+        "cancel_before_data_update_utc": cancel_before_update.isoformat(timespec="seconds"),
+        "cancel_buffer_sec": profile.cancel_buffer_sec,
+        "cancel_reason": "pre_data_update",
+        "post_update_reprice_required": True,
+        "expires_at_utc": deadline.isoformat(timespec="seconds"),
+        "maker_lifecycle_deadline_utc": deadline.isoformat(timespec="seconds"),
+    }
+
+
+def staged_maker_resting_price(
+    order: Mapping[str, Any],
+    *,
+    best_bid: float,
+    best_ask: float,
+    tick_size: float,
+    price_cap: float,
+    now: datetime,
+) -> tuple[float, str]:
+    base = maker_resting_price(
+        best_bid=best_bid,
+        best_ask=best_ask,
+        tick_size=tick_size,
+        price_cap=price_cap,
+    )
+    root_created = parse_utc(
+        order.get("maker_lifecycle_root_created_at_utc") or order.get("created_at_utc")
+    )
+    age_sec = max(0.0, (now - root_created).total_seconds()) if root_created else 0.0
+    midpoint_after = maker_profile_parameter("stage_midpoint_after_sec")
+    near_ask_after = maker_profile_parameter("stage_near_ask_after_sec")
+    if age_sec >= near_ask_after:
+        target = min(best_ask - tick_size, price_cap)
+        stage = "near_ask"
+    elif age_sec >= midpoint_after:
+        midpoint = math.floor((((best_bid + best_ask) / 2.0) + 1e-12) / tick_size) * tick_size
+        target = min(max(base, midpoint), best_ask - tick_size, price_cap)
+        stage = "midpoint"
+    else:
+        target = base
+        stage = "queue"
+    if target <= 0 or target >= best_ask:
+        return 0.0, stage
+    return round(target, 6), stage
+
+
 def base_plan_fields(
     row: Mapping[str, Any],
     *,
@@ -329,12 +667,28 @@ def base_plan_fields(
     ask = finite(row.get("current_yes_ask")) or 0.0
     tick = finite(row.get("current_yes_tick_size")) or 0.001
     probability = finite(row.get("model_probability_hold")) or 0.0
-    initial_mid = (bid + ask) / 2.0
-    mid_cap = math.floor((initial_mid + 1e-12) / tick) * tick
-    maker_cap = min(mid_cap, probability)
+    maker_cap = maker_edge_price_cap(
+        best_ask=ask,
+        tick_size=tick,
+        model_probability=probability,
+    )
     sid = signal_id(row)
     maker = child_order_role == "maker"
-    limit = min(bid + tick, ask - tick, maker_cap) if maker else ask
+    limit = (
+        maker_resting_price(
+            best_bid=bid,
+            best_ask=ask,
+            tick_size=tick,
+            price_cap=maker_cap,
+        )
+        if maker
+        else ask
+    )
+    maker_timing = (
+        maker_deadline_fields(row, now=now, order_ttl_min=order_ttl_min)
+        if maker
+        else None
+    )
     expires = now + timedelta(minutes=order_ttl_min)
     return {
         "strategy": "weather_edge_v1",
@@ -342,8 +696,8 @@ def base_plan_fields(
         "strategy_instance": STRATEGY_INSTANCE,
         "config_id": CONFIG_ID,
         "strategy_family": "reheat_risk.current_yes",
-        "decision_mode": "frozen_core_first_positive_five_share_taker_ev",
-        "execution_mode": "tiny_live_split_5_taker_5_maker",
+        "decision_mode": "frozen_core_v3_first_positive_ten_share_taker_ev",
+        "execution_mode": "tiny_live_split_10_taker_5_maker",
         "execution_profile": EXECUTION_PROFILE,
         "comparison_group_id": stable_hash({"signal_id": sid, "token_id": row.get("token_id")}),
         "city": str(row.get("city") or ""),
@@ -358,12 +712,14 @@ def base_plan_fields(
         "order_side": "BUY",
         "child_order_role": child_order_role,
         "execution_policy": (
-            "current_yes_residual_carry_maker_v1"
+            "current_yes_residual_carry_maker_v2"
             if maker
             else "current_yes_residual_carry_taker_v1"
         ),
         "order_lifecycle_policy": (
-            "maker_chase_until_observation_or_ttl_v1" if maker else "taker_now"
+            "maker_staged_chase_until_pre_data_update_or_ttl_v2"
+            if maker
+            else "taker_now"
         ),
         "maker_only": maker,
         "allow_duplicate_signal_id": True,
@@ -375,7 +731,7 @@ def base_plan_fields(
         "quote_best_ask": round(ask, 6),
         "quote_tick_size": round(tick, 6),
         "quote_mode": (
-            "fresh_bid_improve_one_tick_post_only_mid_model_capped"
+            "fresh_bid_improve_one_tick_post_only_retained_edge_capped"
             if maker
             else "fresh_full_ladder_taker_ev_recheck"
         ),
@@ -389,7 +745,7 @@ def base_plan_fields(
         "live_enabled": bool(live_enabled),
         "model_token_probability": round(probability, 12),
         "required_quote_edge": 0.0,
-        "model_version": "current_yes_core_carry_model_v2",
+        "model_version": MODEL_VERSION,
         "artifact_hash": str(row.get("artifact_hash") or ""),
         "checkpoint_key": str(row.get("checkpoint_key") or ""),
         "decision_snapshot_ts_utc": str(row.get("decision_snapshot_ts_utc") or ""),
@@ -397,11 +753,33 @@ def base_plan_fields(
         "source_report_ts_utc": str(row.get("source_report_ts_utc") or ""),
         "obs_status": str(row.get("obs_status") or ""),
         "station_gap_state": str(row.get("station_gap_state") or ""),
-        "expires_at_utc": expires.isoformat(timespec="seconds"),
+        "expires_at_utc": (
+            maker_timing["expires_at_utc"]
+            if maker_timing
+            else expires.isoformat(timespec="seconds")
+        ),
         "maker_price_cap": round(maker_cap, 6) if maker else 0.0,
+        "maker_price_cap_policy": (
+            "model_probability_retained_edge_and_taker_improvement"
+            if maker
+            else ""
+        ),
+        "maker_retained_edge": (
+            maker_profile_parameter("retained_edge") if maker else 0.0
+        ),
+        "maker_minimum_taker_improvement_ticks": (
+            maker_profile_parameter("minimum_taker_improvement_ticks")
+            if maker
+            else 0.0
+        ),
         "maker_lifecycle_root_created_at_utc": now.isoformat(timespec="seconds") if maker else "",
-        "maker_lifecycle_deadline_utc": expires.isoformat(timespec="seconds") if maker else "",
+        "maker_lifecycle_deadline_utc": (
+            maker_timing["maker_lifecycle_deadline_utc"]
+            if maker_timing
+            else ""
+        ),
         "maker_lifecycle_reprice_count": 0,
+        **(maker_timing or {}),
     }
 
 
@@ -416,7 +794,14 @@ def build_entry_plans(
 ) -> list[dict[str, Any]]:
     plans: list[dict[str, Any]] = []
     sid = signal_id(row)
-    for role, shares in (("taker", taker_shares), ("maker", maker_shares)):
+    profile = get_execution_profile(EXECUTION_PROFILE)
+    allocation = allocate_profile_shares(
+        profile=profile,
+        total_shares=taker_shares + maker_shares,
+        leg_share_overrides={"taker": taker_shares, "maker": maker_shares},
+    )
+    for role, allocated_shares in allocation:
+        shares = float(allocated_shares)
         fields = base_plan_fields(
             row,
             child_order_role=role,
@@ -425,7 +810,11 @@ def build_entry_plans(
             now=now,
             order_ttl_min=order_ttl_min,
         )
-        if role == "maker" and finite(fields["limit_price"]) is not None and fields["limit_price"] <= fields["best_bid"]:
+        if role == "maker" and (
+            not str(fields.get("source_report_ts_utc") or "")
+            or not str(fields.get("maker_lifecycle_deadline_utc") or "")
+            or (finite(fields["limit_price"]) or 0.0) <= 0
+        ):
             continue
         plans.append(
             {
@@ -440,61 +829,38 @@ def build_entry_plans(
                 **fields,
             }
         )
+    if plans:
+        compatibility = build_core_carry_legacy_plan_compatibility(legacy_plans=plans)
+        for plan, intent in zip(plans, compatibility.intents):
+            plan.update(
+                {
+                    "execution_schema_version": intent.execution_schema_version,
+                    "resolved_execution_profile": intent.resolved_execution_profile,
+                    "execution_config_id": intent.execution_config_id,
+                    "plan_dedupe_key": intent.plan_dedupe_key,
+                    "live_exposure_key": intent.live_exposure_key,
+                }
+            )
     return plans
 
 
 def execute_plans(args: argparse.Namespace, plans: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
-    command = [
-        sys.executable,
-        str(ROOT / "scripts/ops/weather_order_executor.py"),
-        "--plans",
-        str(plans_path),
-        "--paper-out",
-        str(output_dir / "paper_orders.jsonl"),
-        "--live-out",
-        str(output_dir / "live_orders.jsonl"),
-        "--no-telegram",
-    ]
-    if args.market_proxy is not None:
-        command.extend(["--market-proxy", str(args.market_proxy)])
-    if args.live:
-        command.extend(["--live", "--confirm-live", "--allow-taker", "--cancel-expired"])
-    env = os.environ.copy()
-    env["WEATHER_EXECUTOR_MAX_LIVE_ORDER_NOTIONAL_USD"] = "5.00"
-    env["WEATHER_EXECUTOR_MAX_LIVE_BATCH_NOTIONAL_USD"] = str(args.max_daily_cost_usd)
-    completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=float(args.executor_timeout_sec),
-        check=False,
+    result = execute_core_carry_plans(
+        plans=plans,
+        output_dir=output_dir,
+        live=bool(args.live),
+        market_proxy=args.market_proxy,
+        max_child_shares=max_live_child_notional_usd(args),
+        max_batch_cost_usd=float(args.max_daily_cost_usd),
+        code_commit=str(DEPLOYMENT_METADATA["deployed_repo_sha"]),
     )
-    try:
-        result = json.loads(completed.stdout) if completed.stdout.strip() else {}
-    except json.JSONDecodeError:
-        result = {"stdout": completed.stdout.strip()}
-    return {"exit_code": completed.returncode, "result": result, "stderr": completed.stderr.strip()}
-
-
-def handled_maker_source_ids(path: Path) -> set[str]:
-    handled: set[str] = set()
-    for row in iter_jsonl(path):
-        source_id = str(row.get("source_order_id") or "")
-        action = str(row.get("execution_action") or "")
-        if not source_id or not action.startswith("core_carry_maker_"):
-            continue
-        response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
-        if str(response.get("error_classification") or "") in {
-            "pre_place_cancel_not_confirmed",
-            "cancel_only_not_confirmed",
-        }:
-            continue
-        handled.add(source_id)
-    return handled
+    return {
+        "exit_code": 0 if int(result.get("live_errors") or 0) == 0 else 1,
+        "result": result,
+        "stderr": "" if int(result.get("live_errors") or 0) == 0 else "shared runtime execution error",
+    }
 
 
 def build_maker_lifecycle_plan(
@@ -503,10 +869,12 @@ def build_maker_lifecycle_plan(
     action: str,
     limit_price: float,
     cancel_only: bool,
+    cancel_source_order: bool,
     now: datetime,
     live_enabled: bool,
 ) -> dict[str, Any]:
-    source_id = live_order_id(order)
+    live_source_id = live_order_id(order)
+    lineage_source_id = live_source_id or str(order.get("source_order_id") or "")
     shares = finite(order.get("size")) or 5.0
     fields = {
         **dict(order),
@@ -514,21 +882,21 @@ def build_maker_lifecycle_plan(
         "created_at_utc": now.isoformat(timespec="seconds"),
         "child_order_role": action,
         "execution_action": action,
-        "execution_policy": "current_yes_residual_carry_maker_v1",
-        "order_lifecycle_policy": "maker_chase_until_observation_or_ttl_v1",
+        "execution_policy": "current_yes_residual_carry_maker_v2",
+        "order_lifecycle_policy": "maker_staged_chase_until_pre_data_update_or_ttl_v2",
         "limit_price": round(limit_price, 6),
         "notional": round(shares * limit_price, 6),
         "order_notional_cap": round(shares * limit_price, 6),
         "maker_only": True,
         "paper_enabled": False,
         "live_enabled": bool(live_enabled),
-        "cancel_before_order_id": source_id,
-        "source_order_id": source_id,
+        "cancel_before_order_id": live_source_id if cancel_source_order else "",
+        "source_order_id": lineage_source_id,
         "source_execution_id": str(order.get("execution_id") or ""),
         "source_plan_id": str(order.get("plan_id") or ""),
         "source_posted_price": finite(order.get("posted_price")) or finite(order.get("limit_price")) or 0.0,
         "source_remaining_shares": shares,
-        "replacement_requires_order_state": not cancel_only,
+        "replacement_requires_order_state": bool(cancel_source_order and not cancel_only),
         "cancel_only": cancel_only,
         "allow_duplicate_signal_id": True,
         "maker_lifecycle_reprice_count": int(finite(order.get("maker_lifecycle_reprice_count")) or 0)
@@ -536,7 +904,7 @@ def build_maker_lifecycle_plan(
     }
     fields["plan_id"] = "plan-" + stable_hash(
         {
-            "source_order_id": source_id,
+            "source_order_id": lineage_source_id,
             "action": action,
             "limit_price": limit_price,
             "created_at_utc": fields["created_at_utc"],
@@ -555,24 +923,22 @@ def maker_lifecycle_plans(
     now: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     live_orders = output_dir / "live_orders.jsonl"
-    handled = handled_maker_source_ids(live_orders)
     epochs = latest_weather_epochs(output_dir / "state_decisions.jsonl")
-    candidates: list[dict[str, Any]] = []
-    for row in iter_jsonl(live_orders):
-        if str(row.get("status") or "") != "submitted" or not bool(row.get("maker_only")):
-            continue
-        order_id = live_order_id(row)
-        if not order_id or order_id in handled:
+    candidates: list[tuple[dict[str, Any], bool]] = []
+    for row in maker_lifecycle_heads(live_orders):
+        active_order = str(row.get("status") or "") == "submitted" and bool(live_order_id(row))
+        detached_retry = retryable_maker_post_failure(row)
+        if not active_order and not detached_retry:
             continue
         created = parse_utc(row.get("created_at_utc"))
         if created is None or (now - created).total_seconds() < float(args.maker_refresh_sec):
             continue
-        candidates.append(row)
+        candidates.append((row, active_order))
 
     plans: list[dict[str, Any]] = []
     decisions: list[dict[str, Any]] = []
     with market_httpx_client(args.book_proxy, timeout=float(args.book_timeout_sec)) as client:
-        for order in candidates:
+        for order, active_order in candidates:
             city_day = (str(order.get("city") or ""), str(order.get("target_date") or ""))
             latest = epochs.get(city_day)
             source_epoch = str(order.get("source_report_ts_utc") or "")
@@ -584,12 +950,29 @@ def maker_lifecycle_plans(
             best_bid = 0.0
             best_ask = 0.0
             cancel_only = False
+            reprice_stage = ""
             if deadline is None or now >= deadline:
-                action = "core_carry_maker_cancel_ttl"
-                cancel_only = True
+                if active_order:
+                    cancel_before_update = parse_utc(
+                        order.get("cancel_before_data_update_utc")
+                    )
+                    action = (
+                        "core_carry_maker_cancel_pre_data_update"
+                        if cancel_before_update is not None
+                        and now >= cancel_before_update
+                        else "core_carry_maker_cancel_ttl"
+                    )
+                    cancel_only = True
+                else:
+                    blocker = "detached_maker_retry_ttl_expired"
             elif not latest or not latest_epoch or latest_epoch != source_epoch:
-                action = "core_carry_maker_cancel_new_observation"
-                cancel_only = True
+                if not latest or not latest_epoch:
+                    blocker = "latest_observation_state_unavailable"
+                else:
+                    blocker = "new_observation_requires_fresh_entry"
+                if active_order:
+                    action = "core_carry_maker_cancel_new_observation"
+                    cancel_only = True
             else:
                 quote = weather_state._fetch_token_book(client, str(order.get("token_id") or ""))  # noqa: SLF001
                 best_bid = finite(quote.get("bid")) or 0.0
@@ -603,9 +986,25 @@ def maker_lifecycle_plans(
                 if str(quote.get("book_status") or "") != "ok" or best_bid <= 0 or best_ask <= best_bid:
                     blocker = "bad_fresh_book"
                 else:
-                    next_price = min(best_bid + tick, best_ask - tick, cap)
-                    if next_price > posted + tick - 1e-9:
+                    next_price, reprice_stage = staged_maker_resting_price(
+                        order,
+                        best_bid=best_bid,
+                        best_ask=best_ask,
+                        tick_size=tick,
+                        price_cap=cap,
+                        now=now,
+                    )
+                    if not active_order and next_price > 0:
+                        action = "core_carry_maker_repost"
+                    elif (
+                        reprice_stage == "queue"
+                        and best_bid <= posted + tick / 2.0
+                    ):
+                        blocker = "own_or_same_level_best_bid_keep_queue"
+                    elif next_price > posted + tick / 2.0:
                         action = "core_carry_maker_reprice"
+                    elif best_bid <= posted + tick / 2.0:
+                        blocker = "own_or_same_level_best_bid_keep_queue"
                     else:
                         blocker = "already_at_best_allowed_price"
             decision = {
@@ -623,19 +1022,23 @@ def maker_lifecycle_plans(
                 "next_price": next_price,
                 "action": action,
                 "blocker": blocker,
+                "active_exchange_order": active_order,
+                "new_observation_revalidation_status": "",
+                "new_observation_revalidation_reasons": [],
+                "reprice_stage": reprice_stage,
             }
             decisions.append(decision)
             if action:
-                plans.append(
-                    build_maker_lifecycle_plan(
-                        order,
-                        action=action,
-                        limit_price=next_price,
-                        cancel_only=cancel_only,
-                        now=now,
-                        live_enabled=bool(args.live and args.confirm_live),
-                    )
+                plan = build_maker_lifecycle_plan(
+                    order,
+                    action=action,
+                    limit_price=next_price,
+                    cancel_only=cancel_only,
+                    cancel_source_order=active_order,
+                    now=now,
+                    live_enabled=bool(args.live and args.confirm_live),
                 )
+                plans.append(plan)
     return plans, decisions
 
 
@@ -665,7 +1068,7 @@ def new_entry_plans(
             reason = "family_city_day_conflict"
         elif used_city_days >= int(args.max_city_days_per_bj_day):
             reason = "daily_city_day_cap"
-        elif used_cost + 10.0 * (finite(row.get("current_yes_ask")) or 1.0) > float(args.max_daily_cost_usd):
+        elif used_cost + entry_cost_reservation(args, row) > float(args.max_daily_cost_usd):
             reason = "daily_cost_cap"
         entry_plans = (
             []
@@ -700,41 +1103,50 @@ def new_entry_plans(
         if entry_plans:
             plans.extend(entry_plans)
             used_city_days += 1
-            used_cost += 10.0 * (finite(row.get("current_yes_ask")) or 1.0)
+            used_cost += entry_cost_reservation(args, row)
     return plans, attempts
 
 
 def configure_signal_runner(output_dir: Path) -> None:
     signal_runner.STRATEGY_ID = STRATEGY_ID
     signal_runner.STRATEGY_INSTANCE = STRATEGY_INSTANCE
+    signal_runner.DECISION_MODE = "frozen_core_probability_first_positive_ten_share_taker_ev"
     signal_runner.OUTPUT_DIR = output_dir
     signal_runner.ARTIFACT_PATH = ARTIFACT_PATH
 
 
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
+    assert_runtime_contract()
     if args.live and not args.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
-    if float(args.taker_shares) != 5.0 or float(args.maker_shares) != 5.0:
-        raise RuntimeError("frozen tiny-live split requires exactly 5 taker + 5 maker shares")
+    if (
+        float(args.taker_shares) != FROZEN_TAKER_SHARES
+        or float(args.maker_shares) != FROZEN_MAKER_SHARES
+    ):
+        raise RuntimeError("frozen tiny-live split requires exactly 10 taker + 5 maker shares")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     configure_signal_runner(output_dir)
     signal_summary = signal_runner.run_once(args)
     now = datetime.now(timezone.utc)
+    journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
     entry_plans, attempts = new_entry_plans(args, output_dir, now=now)
-    for attempt in attempts:
-        append_jsonl(output_dir / "entry_attempts.jsonl", attempt)
     lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(args, output_dir, now=now)
     for decision in lifecycle_decisions:
         append_jsonl(output_dir / "maker_lifecycle_decisions.jsonl", decision)
     plans = [*lifecycle_plans, *entry_plans]
     execution = execute_plans(args, plans, output_dir)
+    for attempt in attempts:
+        append_jsonl(output_dir / "entry_attempts.jsonl", attempt)
     summary = {
         "status": "ok" if execution["exit_code"] == 0 else "executor_error",
         "generated_at_utc": utc_now(),
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,
         "config_id": CONFIG_ID,
+        "execution_profile": EXECUTION_PROFILE,
+        "resolved_execution_profile": EXECUTION_PROFILE,
+        "execution_config_id": execution_config_id_for_profile(EXECUTION_PROFILE),
         "mode": "tiny_live" if args.live else "paper_would_order",
         "live_enabled": bool(args.live and args.confirm_live),
         "artifact_hash": load_artifact(ARTIFACT_PATH)["artifact_hash"],
@@ -744,13 +1156,25 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "entry_plans": len(entry_plans),
         "maker_lifecycle_plans": len(lifecycle_plans),
         "maker_lifecycle_decisions": len(lifecycle_decisions),
+        "journal_terminal_recoveries": journal_terminal_recoveries,
         "taker_shares": float(args.taker_shares),
         "maker_shares": float(args.maker_shares),
         "maker_refresh_sec": float(args.maker_refresh_sec),
         "maker_reprice_limit": None,
+        "maker_cancel_buffer_sec": get_execution_profile(
+            EXECUTION_PROFILE
+        ).cancel_buffer_sec,
+        "maker_retained_edge": maker_profile_parameter("retained_edge"),
+        "maker_stage_midpoint_after_sec": maker_profile_parameter(
+            "stage_midpoint_after_sec"
+        ),
+        "maker_stage_near_ask_after_sec": maker_profile_parameter(
+            "stage_near_ask_after_sec"
+        ),
         "max_city_days_per_bj_day": int(args.max_city_days_per_bj_day),
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
         "execution": execution,
+        **DEPLOYMENT_METADATA,
     }
     publish_runtime_state_best_effort(args, output_dir, summary, signal_summary)
     write_json(output_dir / "latest_summary.json", summary)
@@ -768,8 +1192,8 @@ def parser() -> argparse.ArgumentParser:
         summary_filename="signal_latest_summary.json",
         summary_history_filename="signal_summary_history.jsonl",
     )
-    ap.add_argument("--taker-shares", type=float, default=5.0)
-    ap.add_argument("--maker-shares", type=float, default=5.0)
+    ap.add_argument("--taker-shares", type=float, default=FROZEN_TAKER_SHARES)
+    ap.add_argument("--maker-shares", type=float, default=FROZEN_MAKER_SHARES)
     ap.add_argument("--maker-refresh-sec", type=float, default=15.0)
     ap.add_argument("--order-ttl-min", type=float, default=15.0)
     ap.add_argument("--max-city-days-per-bj-day", type=int, default=10)

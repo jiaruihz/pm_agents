@@ -647,13 +647,12 @@ def terminal_order_resolution_from_cancel_response(
     response: Dict[str, Any],
     order_id: str,
 ) -> str:
-    """Return terminal evidence that is safe for *no replacement*.
+    """Return terminal evidence that is safe for no replacement.
 
-    CLOB sometimes drops a completed order from ``get_order`` and answers a
-    later cancel with "already canceled or matched".  That is deliberately
-    not enough evidence to place a replacement because matched and canceled
-    imply different remaining sizes.  It is, however, enough to stop retrying
-    a cancel-only action: either outcome is terminal for the source order.
+    CLOB may drop a completed order from ``get_order`` and answer a later
+    cancel with "already canceled or matched".  That is enough to stop a
+    cancel-only retry, but not enough to place a replacement because matched
+    and canceled imply different remaining sizes.
     """
 
     status = _terminal_order_status_from_cancel_response(response)
@@ -873,6 +872,13 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "execution_policy": safe_str(plan.get("execution_policy")),
         "execution_profile": safe_str(plan.get("execution_profile")),
         "order_lifecycle_policy": safe_str(plan.get("order_lifecycle_policy")),
+        "source_report_ts_utc": safe_str(plan.get("source_report_ts_utc")),
+        "source_snapshot_file": safe_str(
+            plan.get("source_snapshot_file") or plan.get("source_snapshot_path")
+        ),
+        "source_snapshot_path": safe_str(
+            plan.get("source_snapshot_path") or plan.get("source_snapshot_file")
+        ),
         "data_update_source": safe_str(plan.get("data_update_source")),
         "data_epoch_ref": safe_str(plan.get("data_epoch_ref")),
         "data_epoch_ts_utc": safe_str(plan.get("data_epoch_ts_utc")),
@@ -1016,6 +1022,10 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "execution_policy": safe_str(plan.get("execution_policy")),
         "execution_profile": safe_str(plan.get("execution_profile")),
         "order_lifecycle_policy": safe_str(plan.get("order_lifecycle_policy")),
+        "source_report_ts_utc": safe_str(plan.get("source_report_ts_utc")),
+        "source_snapshot_file": safe_str(
+            plan.get("source_snapshot_file") or plan.get("source_snapshot_path")
+        ),
         "data_update_source": safe_str(plan.get("data_update_source")),
         "data_epoch_ref": safe_str(plan.get("data_epoch_ref")),
         "data_epoch_ts_utc": safe_str(plan.get("data_epoch_ts_utc")),
@@ -1082,7 +1092,9 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "maker_lifecycle_reprice_count": int(to_float(plan.get("maker_lifecycle_reprice_count"), 0.0)),
         "snapshot_ts_utc": safe_str(plan.get("snapshot_ts_utc")),
         "decision_snapshot_ts_utc": safe_str(plan.get("decision_snapshot_ts_utc") or plan.get("snapshot_ts_utc")),
-        "source_snapshot_path": safe_str(plan.get("source_snapshot_path")),
+        "source_snapshot_path": safe_str(
+            plan.get("source_snapshot_path") or plan.get("source_snapshot_file")
+        ),
         "decision_local_time": safe_str(plan.get("decision_local_time")),
         "decision_timezone": safe_str(plan.get("decision_timezone")),
         "running_max_obs_utc": safe_str(plan.get("running_max_obs_utc")),
@@ -1464,10 +1476,11 @@ def execute_trade_plans(
             live_result["written"] += result["written"]
             live_result["skipped_existing"] += result["skipped_existing"]
             continue
+        pre_place_cancel_response: Optional[Dict[str, Any]] = None
+        cancel_before_order_id = ""
         try:
             assert live_place_fn is not None
             cancel_before_order_id = safe_str(plan.get("cancel_before_order_id"))
-            pre_place_cancel_response: Optional[Dict[str, Any]] = None
             if cancel_before_order_id:
                 if live_cancel_fn is None:
                     raise RuntimeError("cancel_before_order_id requested but no live_cancel_fn was provided")
@@ -1568,6 +1581,13 @@ def execute_trade_plans(
                 **response,
                 "error": f"{type(exc).__name__}: {exc}",
             }
+            if pre_place_cancel_response is not None:
+                response = {
+                    **response,
+                    "pre_place_cancel_order_id": cancel_before_order_id,
+                    "pre_place_cancel_response": pre_place_cancel_response,
+                    "pre_place_cancel_status": "cancel_confirmed_replacement_not_posted",
+                }
             record = build_live_order_record(
                 plan,
                 response,

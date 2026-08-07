@@ -23,7 +23,7 @@ import os
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -46,6 +46,7 @@ from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
 
 STRATEGY_ID = "current_yes_heat_death_physical_v1"
 STRATEGY_INSTANCE = "current_yes_heat_death_shadow_v1"
+DECISION_MODE = "compare_current_yes_vs_d1_no_after_physical_confirmation"
 BUILDER_VERSION = "current_yes_heat_death_shadow_v1"
 FEE_RATE = 0.05
 RESEARCH_WINDOW_START_HOUR_LOCAL = 13.0
@@ -164,8 +165,53 @@ def pit_observation_cache(payload: Mapping[str, Any], as_of_utc: str) -> tuple[d
     return {
         "schema_version": payload.get("schema_version"),
         "generated_at_utc": payload.get("generated_at_utc"),
+        "decision_as_of_utc": as_of_utc,
         "records": kept,
     }, counts
+
+
+def observation_evidence_asof(path: Path, as_of_utc: str) -> tuple[dict[str, Any], Counter[str]]:
+    """Load immutable observation captures when available, with latest as fallback."""
+
+    latest = read_json(path)
+    as_of = parse_utc(as_of_utc)
+    rows = [dict(row) for row in latest.get("records") or [] if isinstance(row, Mapping)]
+    counts: Counter[str] = Counter()
+    history_paths: list[Path] = []
+    if as_of is not None:
+        for day_offset in (0, -1):
+            day = (as_of + timedelta(days=day_offset)).date().isoformat()
+            history_paths.append(path.parent / day / "observations.jsonl")
+    seen_paths: set[Path] = set()
+    candidate_paths = [history_path for history_path in history_paths if history_path.exists()]
+    if not candidate_paths:
+        candidate_paths = [path.parent / "observations.jsonl"]
+    for history_path in candidate_paths:
+        if history_path in seen_paths or not history_path.exists():
+            continue
+        seen_paths.add(history_path)
+        with history_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    counts["history_parse_error"] += 1
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+                    counts["immutable_history_rows_loaded"] += 1
+    payload = {
+        "schema_version": latest.get("schema_version"),
+        "generated_at_utc": latest.get("generated_at_utc"),
+        "records": rows,
+    }
+    filtered, pit_counts = pit_observation_cache(payload, as_of_utc)
+    counts.update(pit_counts)
+    if seen_paths:
+        counts["immutable_history_files_loaded"] = len(seen_paths)
+    return filtered, counts
 
 
 def _interval(record: Mapping[str, Any]) -> tuple[float, float] | None:
@@ -309,7 +355,18 @@ def _physical_profile(row: Mapping[str, Any]) -> dict[str, Any]:
     if running_c is not None and current_c is not None:
         decline_c = running_c - current_c
     peak_delta = finite(row.get("forecast_peak_delta_hours_local"))
-    minutes_since_max = finite(row.get("minutes_since_running_max"))
+    minutes_since_max = next(
+        (
+            value
+            for key in (
+                "minutes_since_last_strict_new_high",
+                "minutes_since_first_running_max",
+                "minutes_since_running_max",
+            )
+            if (value := finite(row.get(key))) is not None
+        ),
+        None,
+    )
     decision_hour = finite(row.get("decision_hour_local") or row.get("decision_hour_local_float"))
     warming_state = str(row.get("warming_state") or "")
     in_research_window = (
@@ -477,7 +534,7 @@ def build_decisions(
                     "strategy_id": STRATEGY_ID,
                     "strategy_instance": STRATEGY_INSTANCE,
                     "shadow_decision_id": decision_id,
-                    "decision_mode": "compare_current_yes_vs_d1_no_after_physical_confirmation",
+                    "decision_mode": DECISION_MODE,
                     "mode": "zero_notional_shadow",
                     "zero_notional": True,
                     "no_order_placed": True,
@@ -510,7 +567,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     )
     as_of_utc = snapshot_decision_asof(snapshot)
     observation_path = Path(args.observation_cache)
-    observations, pit_counts = pit_observation_cache(read_json(observation_path), as_of_utc)
+    observations, pit_counts = observation_evidence_asof(observation_path, as_of_utc)
     curve_rows = recent_curve_rows(Path(args.forecast_curve_dir), limit=int(args.curve_file_limit))
     same_day_records = [
         dict(row)

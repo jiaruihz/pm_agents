@@ -332,7 +332,39 @@ class PolymarketVenueAdapter:
     ) -> Mapping[str, Any]:
         if self.order_request_builder is None:
             return {"status": "rejected", "reason": "missing_injected_order_request_builder"}
-        request = self.order_request_builder(intent, child, market_book, capabilities, fee_schedule, replacement_of)
+        token_fee_fetcher = getattr(self.transport, "fetch_fee_schedule_for_token", None)
+        if callable(token_fee_fetcher):
+            fresh_fee = token_fee_fetcher(intent.token_id)
+            fee_schedule = (
+                fresh_fee
+                if isinstance(fresh_fee, FeeSchedule)
+                else FeeSchedule(
+                    venue=_required(fresh_fee, "venue"),
+                    fee_schedule_ref=_required(fresh_fee, "fee_schedule_ref"),
+                    fee_schedule_fetched_at_utc=_required(
+                        fresh_fee, "fee_schedule_fetched_at_utc"
+                    ),
+                    fee_formula_id=_required(fresh_fee, "fee_formula_id"),
+                    taker_fee_parameters=fresh_fee.get("taker_fee_parameters", {}),
+                    maker_fee_parameters=fresh_fee.get("maker_fee_parameters", {}),
+                    maker_rebate_program=fresh_fee.get("maker_rebate_program"),
+                )
+            )
+        try:
+            request = self.order_request_builder(
+                intent,
+                child,
+                market_book,
+                capabilities,
+                fee_schedule,
+                replacement_of,
+            )
+        except Exception as exc:
+            return {
+                "status": "rejected",
+                "reason": "order_request_builder_rejected",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
         if (
             request.token_id != intent.token_id
             or request.venue_side != intent.venue_side
@@ -341,6 +373,33 @@ class PolymarketVenueAdapter:
         ):
             return {"status": "rejected", "reason": "injected_order_request_does_not_match_intent_child"}
         prepared = self.prepare_order(request=request, market_book=market_book, capabilities=capabilities, fee_schedule=fee_schedule)
+        if (
+            prepared.status == "blocked"
+            and prepared.reason == "book_epoch_changed_replan_required"
+            and prepared.market_book is not None
+        ):
+            try:
+                request = self.order_request_builder(
+                    intent,
+                    child,
+                    prepared.market_book,
+                    capabilities,
+                    fee_schedule,
+                    replacement_of,
+                )
+            except Exception as exc:
+                return {
+                    "status": "rejected",
+                    "reason": "fresh_book_replan_rejected",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            prepared = self.prepare_order(
+                request=request,
+                market_book=prepared.market_book,
+                capabilities=capabilities,
+                fee_schedule=fee_schedule,
+                revalidate_book=False,
+            )
         if prepared.status != "ready":
             return {"status": "rejected", "reason": prepared.reason, "prepared_order": prepared.to_json()}
         assert prepared.normalized_price is not None and prepared.fee_identity is not None
@@ -358,6 +417,23 @@ class PolymarketVenueAdapter:
             "side": request.venue_side,
             "token_id": request.token_id,
             "expiration_utc": request.expiration_utc,
+            "identity_key": intent.plan_dedupe_key + ":" + child.child_role,
+            "plan_id": intent.metadata.get("legacy_plan_id") or intent.plan_dedupe_key,
+            "legacy_plan_id": intent.metadata.get("legacy_plan_id"),
+            "created_at_utc": intent.created_at_utc,
+            "outcome_side": intent.outcome_side,
+            "execution_profile": intent.resolved_execution_profile,
+            "execution_policy": child.execution_policy,
+            "order_lifecycle_policy": child.order_lifecycle_policy,
+            "data_epoch_ref": intent.data_epoch_ref,
+            "lifecycle_owner": intent.metadata.get("lifecycle_owner"),
+            "reprice_count": intent.metadata.get("reprice_count", 0),
+            "root_order_id": (
+                replacement_of.root_order_id if replacement_of is not None else None
+            ),
+            "source_order_id": (
+                replacement_of.order_id if replacement_of is not None else None
+            ),
         }
         try:
             signed_order = self.transport.create_order(payload)
@@ -374,7 +450,34 @@ class PolymarketVenueAdapter:
             "reason": "post_only_crosses_book" if _post_only_cross(response) else "venue_submit_response",
             "client_order_id": client_order_id,
             "expected_venue_order_id": expected_venue_order_id,
-            "venue_order_id": response.get("order_id", response.get("id")),
+            "venue_order_id": response.get(
+                "order_id", response.get("orderID", response.get("id"))
+            ),
+            "root_order_id": (
+                replacement_of.root_order_id
+                if replacement_of is not None
+                else response.get(
+                    "order_id", response.get("orderID", response.get("id"))
+                )
+            ),
+            "source_order_id": (
+                replacement_of.order_id if replacement_of is not None else None
+            ),
+            "requested_price": request.price,
+            "posted_price": prepared.normalized_price,
+            "requested_shares": request.shares,
+            "maker_only": request.post_only,
+            "order_type": request.order_type,
+            "quote_best_bid": (
+                prepared.market_book.bids[0].price
+                if prepared.market_book and prepared.market_book.bids
+                else None
+            ),
+            "quote_best_ask": (
+                prepared.market_book.asks[0].price
+                if prepared.market_book and prepared.market_book.asks
+                else None
+            ),
             "book_epoch_ref": prepared.market_book.book_epoch_ref if prepared.market_book else None,
             "tick_size": prepared.market_book.tick_size if prepared.market_book else None,
             "fee_schedule_ref": fee_schedule.fee_schedule_ref if fee_schedule else None,
@@ -409,7 +512,9 @@ class PolymarketVenueAdapter:
         requested = _decimal(_required(raw, "requested_shares"), "requested_shares")
         matched = _decimal(_required(raw, "matched_shares"), "matched_shares")
         remaining = _decimal(_required(raw, "remaining_shares"), "remaining_shares")
-        if raw_status == "FILLED" and remaining != 0:
+        if raw_status == "MATCHED" and remaining == 0:
+            normalized = "filled"
+        if raw_status in {"FILLED", "MATCHED"} and remaining != 0:
             normalized = "unknown"
         return RestingOrderState(
             order_id=raw.get("order_id", order_id),
