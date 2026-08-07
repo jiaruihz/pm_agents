@@ -1117,7 +1117,44 @@ corrected enrichment at `10:34:25Z` reported 46/46 rows ok, 46 durable Open-Mete
 reuses and zero failures; `snapshot_20260807_1834.json` then completed with
 160/160 live-scope orderbooks and was consumed by Core Carry.
 
-## 14. Immediate Follow-Up Work
+## 14. 2026-08-07/08 Full-Ladder Forecast Coupling Gap And Canonical Cutover
+
+The legacy `snapshot-full` entrypoint treated forecast-cache validity as a
+precondition for collecting raw market books. After its last complete paper
+snapshot at `2026-08-07 20:04` Beijing time and last full-ladder book archive at
+`20:09`, forecast degradation caused the process to exit before requesting any
+books. It emitted 44 consecutive zero-record partial snapshots through `23:49`.
+This was a producer-boundary bug: raw Gamma/CLOB capture must not depend on
+forecast, METAR, or a downstream strategy join being publishable.
+
+The full-ladder research/PIT coverage gap is `2026-08-07 20:09` through the
+first canonical `market_books` batch at `2026-08-08 00:53` Beijing time
+(approximately 4h44m). The targeted/live path continued during that interval;
+there is no evidenced wrong order, missing fill, or realized-PnL impact. The 44
+empty artifacts are `upstream_market_coverage_gap`, not strategy-filtered
+zero-opportunity cycles, and must be excluded from full-ladder completeness or
+timing claims.
+
+The production cutover replaces both active book writers with one canonical
+owner: `weather_market_books` performs market discovery and writes append-only
+raw batches under `market_books/batches`, independent of all weather inputs.
+`weather_data_feed_jrs` only joins already persisted forecast/observation data
+with `market_books/latest.json` into `strategy_snapshots`; complete ladder views
+are materialized separately under `market_ladder_snapshots`. Historical
+`targeted_output` and `full_ladder_output` remain read-only evidence and are no
+longer production inputs or write targets.
+
+Post-cutover evidence: the first market batch contained 93 events and 2,046
+token books with zero failed books; the first joined strategy snapshot contained
+693 records and reused all 47/47 required strategy books without another CLOB
+request. The canonical DB route and storage identity audit were healthy, all
+registered runtimes restarted from production commit `d2b3fec7`, canonical
+refresh exited zero, fill reconciliation was 1,405/1,405 with zero cost
+difference, and the authenticated exchange check found zero open orders. The
+pre-cutover five-share SELL order was queried by order id and was `MATCHED`, not
+lost or cancelled during restart.
+
+## 15. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
