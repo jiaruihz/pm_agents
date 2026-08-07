@@ -12,6 +12,12 @@ runner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(runner)
 
 
+def test_forecast_cache_survives_one_provider_update_cycle() -> None:
+    assert runner.FORECAST_LIVE_REFRESH_SEC == 3600
+    assert runner.FORECAST_CURVE_CACHE_MAX_AGE_SEC == 43200
+    assert runner.FORECAST_CURVE_CACHE_MAX_AGE_SEC > runner.FORECAST_LIVE_REFRESH_SEC
+
+
 def test_forecast_curve_cache_is_explicit_and_preserves_pit_timestamp() -> None:
     details = runner._forecast_details_from_curve_row(
         {

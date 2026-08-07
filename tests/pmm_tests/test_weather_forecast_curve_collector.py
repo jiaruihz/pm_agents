@@ -55,6 +55,7 @@ def test_dedicated_collector_publishes_operational_curve(monkeypatch, tmp_path) 
     assert result["fresh_city_targets"] == 1
     assert result["reused_city_targets"] == 0
     assert result["owner"] == "weather_forecast_curve_collector_v1"
+    assert result["coverage_ratio"] == 1.0
     assert result["capture_path"]
 
 

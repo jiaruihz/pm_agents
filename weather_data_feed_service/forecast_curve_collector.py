@@ -118,7 +118,11 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
 
     archive = write_forecast_hourly_curve_capture(output_root, rows) if rows else None
     available = len(rows) + reused
-    status = "ok" if expected > 0 and available == expected else "degraded"
+    coverage_ratio = available / expected if expected else 0.0
+    # The operational snapshot contract tolerates a small number of cities
+    # without usable model/error pairing. Keep the exact misses visible while
+    # avoiding a global dependency cascade when at least 95% remains usable.
+    status = "ok" if expected > 0 and coverage_ratio >= 0.95 else "degraded"
     return {
         "schema_version": "weather_forecast_curve_collector_status_v1",
         "status": status,
@@ -128,9 +132,15 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
         "fresh_city_targets": len(rows),
         "reused_city_targets": reused,
         "available_city_targets": available,
+        "coverage_ratio": round(coverage_ratio, 6),
         "failed_count": len(failed),
         "failed_examples": failed[:20],
         "open_meteo_disabled_reason": snapshot._FORECAST_LIVE_DISABLED_REASON,
+        "refresh_status": (
+            "provider_rate_limited"
+            if snapshot._FORECAST_LIVE_DISABLED_REASON == "open_meteo_http_429"
+            else ("fresh_capture" if rows else "cache_reused")
+        ),
         "capture_path": str(archive) if archive else None,
     }
 
