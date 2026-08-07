@@ -61,8 +61,8 @@ def test_forecast_429_disables_repeated_live_calls(monkeypatch) -> None:
     monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
     cfg = {"lat": 1.0, "lon": 2.0}
 
-    first = runner._fetch_live_forecast(None, "ecmwf", "Amsterdam", cfg, "2026-07-19")
-    second = runner._fetch_live_forecast(None, "gfs", "Taipei", cfg, "2026-07-19")
+    first = runner._refresh_live_forecast(None, "ecmwf", "Amsterdam", cfg, "2026-07-19")
+    second = runner._refresh_live_forecast(None, "gfs", "Taipei", cfg, "2026-07-19")
 
     assert first["cache_fallback"] is True
     assert second["cache_fallback"] is True
@@ -89,7 +89,7 @@ def test_fresh_durable_curve_skips_live_forecast_call(monkeypatch) -> None:
     )
     monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
 
-    result = runner._fetch_live_forecast(
+    result = runner._refresh_live_forecast(
         None,
         "ecmwf",
         "Amsterdam",
@@ -113,7 +113,7 @@ def test_forecast_fetch_never_reuses_market_proxy(monkeypatch) -> None:
     monkeypatch.setattr(runner, "_cached_live_forecast", lambda *_args: None)
     monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
 
-    runner._fetch_live_forecast(
+    runner._refresh_live_forecast(
         None,
         "gfs",
         "Chengdu",
@@ -123,6 +123,32 @@ def test_forecast_fetch_never_reuses_market_proxy(monkeypatch) -> None:
 
     assert len(calls) == 1
     assert "proxy" not in calls[0][1]
+
+
+def test_snapshot_forecast_consumer_never_calls_network(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(runner, "curl_json_get", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        runner,
+        "_cached_live_forecast",
+        lambda *_args: {"source_model": "gfs", "cache_fallback": True, "cache_age_sec": 7200},
+    )
+
+    result = runner._fetch_live_forecast(None, "gfs", "Chengdu", {"lat": 1, "lon": 2}, "2026-08-07")
+
+    assert result["cache_fallback"] is True
+    assert calls == []
+
+
+def test_public_snapshot_fetchers_are_cache_only(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(runner, "curl_json_get", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(runner, "_cached_live_forecast", lambda *_args: None)
+
+    cfg = {"lat": 1, "lon": 2}
+    assert runner.fetch_live_gfs(None, "Chengdu", cfg, "2026-08-07") is None
+    assert runner.fetch_live_ecmwf(None, "Amsterdam", cfg, "2026-08-07") is None
+    assert calls == []
 
 
 def test_cached_curve_is_not_recaptured_as_new_forecast_evidence() -> None:

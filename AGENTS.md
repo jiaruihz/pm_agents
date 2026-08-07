@@ -51,7 +51,7 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
   forecast 是**每城固定模型**（`CITY_MODEL`：31 城 ECMWF / 49 城 GFS，按城市历史误差选定），全部 train 证据基于此口径；
   模型 fallback 必须显式告警——7/02-05 曾因 Mac cache 缺 `ecmwf_v4_*` 静默 fallback GFS 污染三天信号（见
   [heada-review-work-order-v1](docs/analysis/2026-07/2026-07-05-heada-review-work-order-v1.md) P0），别再让它静默。
-- **采集 = `weather_data_feed_service` / 历史 `weather-predict`**：调用 `weather_data_feed` 生产 snapshot/cache，**不含策略 / 下单**；当前生产实例在 Mac。
+- **采集 = `weather_data_feed_service` / 历史 `weather-predict`**：调用 `weather_data_feed` 生产 snapshot/cache，**不含策略 / 下单**；当前生产实例在 Mac。天气 forecast 与盘口 snapshot 是两个独立 producer：`weather_forecast_curve_collector_v1` 独占 Open-Meteo/forecast enrichment 网络刷新，`weather_data_feed_jrs` 的 market snapshot 只读已落盘 `forecast_hourly_curves`，不得按 snapshot/city/target cadence 回源天气 API；两者都由 production controller 管理，禁止把天气刷新重新塞回盘口循环。
 - **执行 = `pm_agent` strategy runners**：消费标准数据 → signal → plan → CLOB order → fill；当前实例在 Mac，N100 只保留历史/恢复边界。实例是否 live 必须从进程参数、pause/state、raw order 和 exchange response 动态核对，不能从旧文档标签推断。
 
 机器：

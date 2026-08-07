@@ -10,7 +10,6 @@ OUTPUT_ROOT="${WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT:-$RUNTIME_ROOT/targeted_ou
 OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$RUNTIME_ROOT/output/observations/latest.json}"
 SOURCE_EVENTS_OUTPUT="${WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_events}"
 SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-Seoul HongKong Shenzhen TelAviv Istanbul Moscow}"
-FORECAST_ENRICHMENT_OUTPUT="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OUTPUT_DIR:-$RUNTIME_ROOT/output/forecast_enrichment}"
 RUNWAY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/runway_observations}"
 HIGH_FREQUENCY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/high_frequency_observations}"
 CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
@@ -21,16 +20,13 @@ PY="$SERVICE_DIR/.venv/bin/python"
 
 OBS_INTERVAL_SEC="${WEATHER_DATA_FEED_OBS_INTERVAL_SEC:-300}"
 SOURCE_EVENTS_INTERVAL_SEC="${WEATHER_DATA_FEED_SOURCE_EVENTS_INTERVAL_SEC:-120}"
-FORECAST_ENRICHMENT_ENABLED="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_ENABLED:-1}"
-FORECAST_ENRICHMENT_INTERVAL_SEC="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_INTERVAL_SEC:-900}"
-FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC:-21600}"
 RUNWAY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED:-0}"
 RUNWAY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC:-60}"
 RUNWAY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES:-}"
 HIGH_FREQUENCY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED:-0}"
 HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC:-20}"
-HIGH_FREQUENCY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-amos_runway noaa_madis_hfmetar singapore_mss jma_amedas hko_obs cowin_obs fmi mgm ims_lod}"
-HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC:-jma_amedas=300 noaa_madis_hfmetar=300 fmi=60 mgm=300 ims_lod=300}"
+HIGH_FREQUENCY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-amos_runway noaa_madis_hfmetar singapore_mss jma_amedas hko_obs cowin_obs fmi knmi mgm ims_lod bom_aws}"
+HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC:-jma_amedas=300 noaa_madis_hfmetar=300 fmi=60 knmi=300 mgm=300 ims_lod=300 bom_aws=300}"
 HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC:-jma_amedas=5-8,15-18,25-28,35-38,45-48,55-58:20}"
 FAST_OBS_ACTIVE_LOCAL_START_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_START_HOUR:-6}"
 FAST_OBS_ACTIVE_LOCAL_END_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_END_HOUR:-22}"
@@ -43,10 +39,9 @@ MARKET_PROXY_1X_CANDIDATES="${WEATHER_MARKET_PROXY_1X_CANDIDATES:-🇭🇰 香�
 MARKET_PROXY_FAILOVER_SCRIPT="${WEATHER_MARKET_PROXY_FAILOVER_SCRIPT:-$HOME/projects/pm_agents/scripts/ops/weather_market_proxy_failover.py}"
 OBS_TIMEOUT_SEC="${WEATHER_DATA_FEED_OBS_TIMEOUT_SEC:-90}"
 SOURCE_EVENTS_TIMEOUT_SEC="${WEATHER_DATA_FEED_SOURCE_EVENTS_TIMEOUT_SEC:-120}"
-FORECAST_ENRICHMENT_TIMEOUT_SEC="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_TIMEOUT_SEC:-120}"
 SNAPSHOT_TIMEOUT_SEC="${WEATHER_DATA_FEED_SNAPSHOT_TIMEOUT_SEC:-600}"
 
-mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$FORECAST_ENRICHMENT_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
+mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
 
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
@@ -74,7 +69,7 @@ if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
 fi
 
 echo "$$" > "$PID_FILE"
-date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT source_events=$SOURCE_EVENTS_OUTPUT forecast_enrichment=$FORECAST_ENRICHMENT_OUTPUT forecast_enrichment_enabled=$FORECAST_ENRICHMENT_ENABLED runway_observations=$RUNWAY_OBSERVATIONS_OUTPUT runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED high_frequency_observations=$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED cache=$CACHE_ROOT"
+date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT source_events=$SOURCE_EVENTS_OUTPUT forecast_owner=external_controller_managed runway_observations=$RUNWAY_OBSERVATIONS_OUTPUT runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED high_frequency_observations=$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED cache=$CACHE_ROOT"
 
 {
   cd "$SERVICE_DIR"
@@ -111,7 +106,6 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
   date -u +"[mac_data_feed] runtime_config_utc=%Y-%m-%dT%H:%M:%SZ runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED runway_observations_interval_sec=$RUNWAY_OBSERVATIONS_INTERVAL_SEC runway_observations_sources=${RUNWAY_OBSERVATIONS_SOURCES:-all} source_events_research_cities=${SOURCE_EVENTS_RESEARCH_CITIES:-none} high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED high_frequency_observations_interval_sec=$HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC high_frequency_observations_sources=${HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-all} high_frequency_source_min_interval_sec=$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC high_frequency_source_minute_window_min_interval_sec=${HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC:-none} fast_obs_active_local_start_hour=$FAST_OBS_ACTIVE_LOCAL_START_HOUR fast_obs_active_local_end_hour=$FAST_OBS_ACTIVE_LOCAL_END_HOUR service_dir=$SERVICE_DIR"
   next_obs=0
   next_source_events=0
-  next_forecast_enrichment=0
   next_runway_observations=0
   next_high_frequency_observations=0
   next_snapshot=0
@@ -167,24 +161,6 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
       set -e
       date -u +"[mac_data_feed] source_events_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
       next_source_events=$(( $(date +%s) + SOURCE_EVENTS_INTERVAL_SEC ))
-    fi
-
-    now="$(date +%s)"
-    if [[ "$FORECAST_ENRICHMENT_ENABLED" == "1" ]] && (( now >= next_forecast_enrichment )); then
-      date -u +"[mac_data_feed] forecast_enrichment_start_utc=%Y-%m-%dT%H:%M:%SZ"
-      set +e
-      weather_run_with_timeout "$FORECAST_ENRICHMENT_TIMEOUT_SEC" \
-        "$PY" -u -m weather_data_feed_service \
-        forecast-enrichment -- \
-        --output-dir "$FORECAST_ENRICHMENT_OUTPUT" \
-        --include-station-diff \
-        --open-meteo-refresh-sec "$FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC" \
-        --no-single-runs \
-        --max-workers 4
-      rc=$?
-      set -e
-      date -u +"[mac_data_feed] forecast_enrichment_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
-      next_forecast_enrichment=$(( $(date +%s) + FORECAST_ENRICHMENT_INTERVAL_SEC ))
     fi
 
     now="$(date +%s)"

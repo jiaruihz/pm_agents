@@ -52,6 +52,20 @@ managed_runtimes:
     start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
     max_health_age_sec: 1800
+    dependencies: [weather_forecast_curve_collector_v1]
+    recovery_policy: safe
+
+  - instance_id: weather_forecast_curve_collector_v1
+    tmux_session: weather_forecast_curve_collector_v1
+    role: source_collector
+    execution_mode: collector
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    start_script: scripts/ops/start_weather_forecast_curve_collector_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_curve_collector/latest.json
+    health_format: json
+    max_health_age_sec: 1800
+    accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
 
   - instance_id: weather_forecast_run_capture_v1

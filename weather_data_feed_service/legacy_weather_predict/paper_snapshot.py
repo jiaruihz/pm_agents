@@ -982,6 +982,17 @@ def forecast_curve_publish_evidence(records, fresh_curve_rows, cached_curve_refs
 
 
 def _fetch_live_forecast(client, model, city, cfg, target_date):
+    """Read the durable forecast curve cache without performing network I/O.
+
+    Market snapshots run every few minutes and are not forecast producers.
+    Keeping this function cache-only makes that ownership boundary true even
+    when the legacy runner is invoked outside the production wrapper.
+    """
+    return _cached_live_forecast(city, target_date, model)
+
+
+def _refresh_live_forecast(client, model, city, cfg, target_date):
+    """Refresh one forecast curve for the dedicated forecast collector."""
     global _FORECAST_LIVE_DISABLED_REASON
     cached = _cached_live_forecast(city, target_date, model)
     cached_age = cached.get("cache_age_sec") if isinstance(cached, dict) else None
