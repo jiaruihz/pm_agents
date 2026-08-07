@@ -750,7 +750,7 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
     }
 
 
-def _forecast_details_from_curve_row(row, *, cache_age_sec):
+def _forecast_details_from_curve_row(row, *, cache_age_sec, archive_path=None):
     hourly_curve = row.get("hourly_curve") if isinstance(row.get("hourly_curve"), list) else []
     if not hourly_curve or row.get("forecast_max_f") is None:
         return None
@@ -774,6 +774,7 @@ def _forecast_details_from_curve_row(row, *, cache_age_sec):
         "detected_at_utc": row.get("snapshot_ts_utc"),
         "cache_fallback": True,
         "cache_age_sec": round(float(cache_age_sec), 3),
+        "curve_archive_path": str(archive_path) if archive_path else None,
     }
 
 
@@ -822,7 +823,11 @@ def _load_forecast_curve_cache():
                 pass
             if row_age_sec > FORECAST_CURVE_CACHE_MAX_AGE_SEC:
                 continue
-            details = _forecast_details_from_curve_row(row, cache_age_sec=row_age_sec)
+            details = _forecast_details_from_curve_row(
+                row,
+                cache_age_sec=row_age_sec,
+                archive_path=path,
+            )
             if details is not None:
                 cache[key] = details
     _FORECAST_CURVE_CACHE = cache
@@ -839,6 +844,62 @@ def should_capture_forecast_curve(forecast_info):
     return bool(forecast_info.get("hourly_curve")) and not bool(
         forecast_info.get("cache_fallback")
     )
+
+
+def _forecast_curve_evidence_key(row):
+    return (
+        str(row.get("city") or ""),
+        str(row.get("target_date") or row.get("event_date") or ""),
+        str(row.get("forecast_model") or row.get("model") or "").lower(),
+        str(row.get("forecast_values_hash") or ""),
+    )
+
+
+def forecast_curve_publish_evidence(records, fresh_curve_rows, cached_curve_refs):
+    """Prove every published city/date forecast has durable curve lineage.
+
+    A cached curve is valid PIT evidence when its age was already checked by
+    ``_load_forecast_curve_cache`` and the source archive still exists.  It is
+    not a new forecast observation, so it must not be copied into the current
+    capture merely to satisfy the batch commit guard.
+    """
+    required = {
+        _forecast_curve_evidence_key(row)
+        for row in records
+        if all(_forecast_curve_evidence_key(row))
+    }
+    fresh = {
+        _forecast_curve_evidence_key(row)
+        for row in fresh_curve_rows
+        if all(_forecast_curve_evidence_key(row))
+    }
+    cached = {
+        _forecast_curve_evidence_key(row)
+        for row in cached_curve_refs
+        if all(_forecast_curve_evidence_key(row))
+        and row.get("curve_archive_path")
+        and Path(str(row["curve_archive_path"])).is_file()
+    }
+    covered = fresh | cached
+    missing = sorted(required - covered)
+    return {
+        "schema_version": "forecast_curve_publish_evidence_v1",
+        "status": "ok" if required and not missing else "incomplete",
+        "required_city_target_forecasts": len(required),
+        "fresh_curve_matches": len(required & fresh),
+        "cached_curve_matches": len(required & cached),
+        "missing_count": len(missing),
+        "missing_examples": [
+            {
+                "city": city,
+                "target_date": target_date,
+                "forecast_model": model,
+                "forecast_values_hash": values_hash,
+            }
+            for city, target_date, model, values_hash in missing[:10]
+        ],
+        "publishable": bool(required and not missing),
+    }
 
 
 def _fetch_live_forecast(client, model, city, cfg, target_date):
@@ -1468,8 +1529,10 @@ def main():
                             "target_date": target_date,
                             "forecast_model": cache_key[2],
                             "forecast_source": forecast_info.get("source_api"),
+                            "forecast_values_hash": forecast_info.get("values_hash"),
                             "forecast_detected_at_utc": forecast_info.get("detected_at_utc"),
                             "cache_age_sec": forecast_info.get("cache_age_sec"),
+                            "curve_archive_path": forecast_info.get("curve_archive_path"),
                         }
                     )
             probability_status = (
@@ -1800,6 +1863,14 @@ def main():
                         else None
                     ),
                     "forecast_source": f"open_meteo_live_{model}",
+                    "forecast_model": actual_model,
+                    "forecast_curve_evidence": (
+                        "cached_durable_curve"
+                        if forecast_info.get("cache_fallback")
+                        else "fresh_curve_capture"
+                    ),
+                    "forecast_curve_archive_path": forecast_info.get("curve_archive_path"),
+                    "forecast_curve_cache_age_sec": forecast_info.get("cache_age_sec"),
                     "model_init_utc_estimated": f"{cycle_hour:02d}Z",
                     "model_run_age_hours_estimated": round(model_run_age, 1),
                     "forecast_target_lead_hours_estimated": forecast_lead,
@@ -1854,6 +1925,11 @@ def main():
         0,
         forecast_city_target_expected - source_model_summary["effective_city_target_count"],
     )
+    curve_publish_evidence = forecast_curve_publish_evidence(
+        all_records,
+        forecast_curve_rows,
+        cached_forecast_refs,
+    )
     out_file = OUTPUT_DIR / fname if publish_quality["publishable"] else PARTIAL_OUTPUT_DIR / partial_fname
     output = {
         "ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1861,6 +1937,7 @@ def main():
         "shares_per_trade": args.shares,
         "city_models": all_models,
         "source_model_summary": source_model_summary,
+        "forecast_curve_publish_evidence": curve_publish_evidence,
         "city_pools": CITY_POOL_BY_CITY,
         "trading_t1_cities": sorted(TRADING_T1_CITIES),
         "research_t2_cities": sorted(set(CITIES) - set(TRADING_T1_CITIES)),
@@ -1872,9 +1949,12 @@ def main():
         "orderbook_enrichment_summary": orderbook_enrichment_summary,
     }
     forecast_curve_archive = None
-    if publish_quality["publishable"] and not forecast_curve_rows:
-        raise RuntimeError("refusing to publish snapshot without matching forecast curve rows")
-    if publish_quality["publishable"]:
+    if publish_quality["publishable"] and not curve_publish_evidence["publishable"]:
+        raise RuntimeError(
+            "refusing to publish snapshot without matching forecast curve evidence: "
+            f"missing_count={curve_publish_evidence['missing_count']}"
+        )
+    if publish_quality["publishable"] and forecast_curve_rows:
         forecast_curve_archive = write_forecast_hourly_curve_capture(OUTPUT_ROOT, forecast_curve_rows)
     stamp_snapshot_availability(output)
     annotate_market_ladder_snapshot(
