@@ -1,8 +1,10 @@
 import sqlite3
 
-from scripts.analysis.reheat_risk.research_core_carry_llm_transition_card_v1 import (
+from scripts.analysis.reheat_risk.core_carry_llm_transition_card import (
     binary_metrics,
     canonical_settlement_labels,
+    policy_bucket,
+    policy_contrast_selection,
 )
 from src.strategies.weather_edge_v1.tools.intraday_transition_card import (
     build_transition_packet,
@@ -83,3 +85,48 @@ def test_binary_metrics_use_probability_not_directional_accuracy() -> None:
     assert metrics is not None
     assert metrics["n"] == 2
     assert abs(float(metrics["brier"]) - 0.04) < 1e-12
+
+
+def test_policy_contrast_includes_hit_near_miss_and_never_hit_control() -> None:
+    common = {
+        "probability_status": "scored_by_current_yes_core_artifact",
+        "current_bracket": "12",
+        "decision_hour_local": 15.0,
+        "market_mid": 0.9,
+    }
+    rows = [
+        {
+            **common,
+            "city": "Wellington",
+            "target_date": "2026-08-06",
+            "decision_snapshot_ts_utc": "2026-08-06T02:00:00Z",
+            "decision_status": "not_eligible",
+            "eligible": False,
+            "reasons": ["non_positive_taker_ev"],
+        },
+        {
+            **common,
+            "city": "Wellington",
+            "target_date": "2026-08-06",
+            "decision_snapshot_ts_utc": "2026-08-06T03:00:00Z",
+            "decision_status": "positive_taker_ev",
+            "eligible": True,
+            "reasons": [],
+        },
+        {
+            **common,
+            "city": "Wellington",
+            "target_date": "2026-08-07",
+            "decision_snapshot_ts_utc": "2026-08-07T03:00:00Z",
+            "decision_status": "not_eligible",
+            "eligible": False,
+            "reasons": ["non_positive_taker_ev"],
+        },
+    ]
+    roles = policy_contrast_selection(rows)
+    assert sorted(roles.values()) == [
+        "never_selected_matched_control",
+        "policy_selected",
+        "same_city_day_near_miss",
+    ]
+    assert policy_bucket(rows[1]) == "policy_selected"

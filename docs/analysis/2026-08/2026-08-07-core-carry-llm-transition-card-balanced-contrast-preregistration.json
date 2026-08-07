@@ -1,0 +1,29 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "core_carry_llm_transition_card_v1",
+  "run_id": "balanced_policy_contrast_gpt54_20260807",
+  "supersedes_run_design": "first_city_day_seed_20260807",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-07T02:28:00Z",
+  "hypothesis": "A strong-model weather-only transition card explains reproducible probability residuals between policy-selected and comparable policy-rejected Core Carry checkpoints beyond frozen Core and same-row market probabilities.",
+  "denominator": "Every checkpoint in 2026-07-24..2026-08-07 with probability_status=scored_by_current_yes_core_artifact. All rows remain in the ledger; policy rejection and evidence coverage are separate fields.",
+  "llm_contrast": {
+    "policy_selected": "all policy-selected checkpoints",
+    "same_city_day_near_miss": "nearest earlier same-city-day non-positive-taker-EV checkpoint for each selected checkpoint when available",
+    "never_selected_matched_control": "one pre-label control for each selected checkpoint, from a never-selected city-day, matched on city, market probability and local clock without replacement"
+  },
+  "llm_backend": "Codex CLI gpt-5.4, medium reasoning",
+  "target": "Current exact bracket holds at official settlement (label=1).",
+  "baselines": [
+    "same_row_market_mid",
+    "frozen_core_probability"
+  ],
+  "primary_metrics": [
+    "target_date_equal_weight_brier_delta_vs_market",
+    "target_date_equal_weight_logloss_delta_vs_market",
+    "paired_delta_vs_frozen_core"
+  ],
+  "analysis_boundary": "The 2026-07-24..2026-08-06 portion is retrospective diagnosis and may not be called frozen forward. New cards are generated without settlement/model/market fields, but selection roles are analyzed only after cards are frozen.",
+  "decision_rule": "No live action from this run. Use it to define a compact deterministic/card feature candidate; any probability-head claim requires later OOF plus untouched forward evidence.",
+  "live_action": "None; zero-notional research only."
+}

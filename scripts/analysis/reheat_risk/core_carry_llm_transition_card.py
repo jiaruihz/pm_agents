@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prospective zero-notional Core Carry LLM transition-card collector."""
+"""Reusable prospective zero-notional Core Carry transition-card collector."""
 
 from __future__ import annotations
 
@@ -73,6 +73,7 @@ def fixed_denominator(
     start_date: str,
     end_date: str,
     cities: set[str],
+    denominator_mode: str = "frozen_domain",
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     counts = Counter(raw_rows=len(rows))
     output: list[dict[str, Any]] = []
@@ -89,6 +90,18 @@ def fixed_denominator(
         if row.get("probability_status") != "scored_by_current_yes_core_artifact":
             continue
         counts["core_scored"] += 1
+        if denominator_mode == "all_core_scored":
+            key = (
+                city,
+                target_date,
+                str(row.get("decision_snapshot_ts_utc") or ""),
+                str(row.get("current_bracket") or ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            output.append(dict(row))
+            continue
         market = finite(row.get("market_mid"))
         if market is None or not 0.80 <= market <= 0.9895:
             continue
@@ -130,6 +143,90 @@ def first_city_day(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         selected.append(row)
     return selected
+
+
+def policy_bucket(row: dict[str, Any]) -> str:
+    if row.get("decision_status") == "positive_taker_ev" and bool(row.get("eligible")):
+        return "policy_selected"
+    reasons = set(row.get("reasons") or [])
+    priority = (
+        ("non_positive_taker_ev", "rejected_non_positive_taker_ev"),
+        ("insufficient_ask_ladder_depth", "rejected_depth"),
+        ("missing_required_model_feature", "rejected_missing_model_feature"),
+        ("outside_frozen_model_support", "rejected_model_support"),
+        ("outside_frozen_market_mid_support", "rejected_market_support"),
+        ("outside_carry_market_mid_domain", "rejected_market_domain"),
+        ("open_ended_not_exact_bracket", "rejected_non_exact"),
+    )
+    for prefix, bucket in priority:
+        if any(reason.startswith(prefix) for reason in reasons):
+            return bucket
+    return "rejected_other"
+
+
+def _match_distance(anchor: dict[str, Any], candidate: dict[str, Any]) -> float:
+    anchor_market = finite(anchor.get("market_mid"))
+    candidate_market = finite(candidate.get("market_mid"))
+    anchor_hour = finite(anchor.get("decision_hour_local"))
+    candidate_hour = finite(candidate.get("decision_hour_local"))
+    market_distance = (
+        abs(anchor_market - candidate_market)
+        if anchor_market is not None and candidate_market is not None
+        else 1.0
+    )
+    hour_distance = (
+        abs(anchor_hour - candidate_hour)
+        if anchor_hour is not None and candidate_hour is not None
+        else 12.0
+    )
+    same_city_penalty = 0.0 if anchor.get("city") == candidate.get("city") else 20.0
+    return same_city_penalty + 5.0 * market_distance + hour_distance / 6.0
+
+
+def policy_contrast_selection(rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Select every policy hit plus pre-label near-miss and never-hit controls."""
+    selected_rows = [row for row in rows if policy_bucket(row) == "policy_selected"]
+    selected_city_days = {
+        (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        for row in selected_rows
+    }
+    roles = {checkpoint_id(row): "policy_selected" for row in selected_rows}
+
+    # Same-city-day near misses isolate the EV/price transition around a real hit.
+    for anchor in selected_rows:
+        anchor_ts = str(anchor.get("decision_snapshot_ts_utc") or "")
+        candidates = [
+            row
+            for row in rows
+            if row.get("city") == anchor.get("city")
+            and row.get("target_date") == anchor.get("target_date")
+            and policy_bucket(row) == "rejected_non_positive_taker_ev"
+            and str(row.get("decision_snapshot_ts_utc") or "") <= anchor_ts
+        ]
+        if candidates:
+            match = min(candidates, key=lambda row: _match_distance(anchor, row))
+            roles.setdefault(checkpoint_id(match), "same_city_day_near_miss")
+
+    # Never-selected city-days are chosen without settlement labels and matched on
+    # city, market probability and local clock. A control is used at most once.
+    control_pool = [
+        row
+        for row in rows
+        if (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        not in selected_city_days
+        and policy_bucket(row) == "rejected_non_positive_taker_ev"
+        and bounded_exact(row.get("current_bracket"))
+    ]
+    used_controls: set[str] = set()
+    for anchor in selected_rows:
+        available = [row for row in control_pool if checkpoint_id(row) not in used_controls]
+        if not available:
+            break
+        match = min(available, key=lambda row: _match_distance(anchor, row))
+        cid = checkpoint_id(match)
+        used_controls.add(cid)
+        roles.setdefault(cid, "never_selected_matched_control")
+    return roles
 
 
 def checkpoint_id(row: dict[str, Any]) -> str:
@@ -196,6 +293,57 @@ def binary_metrics(rows: list[tuple[float, int]]) -> dict[str, float | int] | No
     }
 
 
+def summarize_policy_buckets(
+    rows: list[dict[str, Any]], labels: dict[tuple[str, str, str], int]
+) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(policy_bucket(row), []).append(row)
+    result: dict[str, dict[str, Any]] = {}
+    for bucket, bucket_rows in sorted(grouped.items()):
+        labelled: list[tuple[dict[str, Any], int]] = []
+        for row in bucket_rows:
+            key = (
+                str(row.get("city") or ""),
+                str(row.get("target_date") or ""),
+                str(row.get("current_bracket") or ""),
+            )
+            if key in labels:
+                labelled.append((row, labels[key]))
+        market = [
+            (probability, label)
+            for row, label in labelled
+            if (probability := finite(row.get("market_mid"))) is not None
+        ]
+        core = [
+            (probability, label)
+            for row, label in labelled
+            if (probability := finite(row.get("model_probability_hold"))) is not None
+        ]
+        result[bucket] = {
+            "rows": len(bucket_rows),
+            "city_days": len(
+                {(str(row.get("city") or ""), str(row.get("target_date") or "")) for row in bucket_rows}
+            ),
+            "settled_rows": len(labelled),
+            "settled_target_dates": len(
+                {str(row.get("target_date") or "") for row, _ in labelled}
+            ),
+            "hold_rate": (
+                sum(label for _, label in labelled) / len(labelled) if labelled else None
+            ),
+            "mean_market_mid": (
+                sum(probability for probability, _ in market) / len(market) if market else None
+            ),
+            "mean_frozen_core": (
+                sum(probability for probability, _ in core) / len(core) if core else None
+            ),
+            "market_metrics": binary_metrics(market),
+            "frozen_core_metrics": binary_metrics(core),
+        }
+    return result
+
+
 def main() -> int:
     from src.agents.llm.codex_cli_client import run_codex_exec_json
     from src.strategies.weather_edge_v1.tools.intraday_transition_card import (
@@ -210,6 +358,7 @@ def main() -> int:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB)
+    parser.add_argument("--preregistration", type=Path, default=PREREG)
     parser.add_argument("--start-date", default="2026-08-07")
     parser.add_argument("--end-date", default=datetime.now().date().isoformat())
     parser.add_argument("--cities", nargs="*", default=[])
@@ -217,9 +366,25 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--model", default="")
     parser.add_argument("--reasoning-effort", default="low")
+    parser.add_argument(
+        "--denominator-mode",
+        choices=("frozen_domain", "all_core_scored"),
+        default="frozen_domain",
+    )
+    parser.add_argument(
+        "--selection-mode",
+        choices=("first_city_day", "policy_contrast"),
+        default="first_city_day",
+    )
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--shard-count", type=int, default=1)
     args = parser.parse_args()
 
-    prereg = json.loads(PREREG.read_text(encoding="utf-8"))
+    if args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count:
+        raise ValueError("shard-index must be in [0, shard-count)")
+
+    prereg_path = args.preregistration.resolve()
+    prereg = json.loads(prereg_path.read_text(encoding="utf-8"))
     if not prereg.get("frozen_before_formal_run"):
         raise RuntimeError("preregistration is not frozen")
     rows, signal_funnel = fixed_denominator(
@@ -227,9 +392,15 @@ def main() -> int:
         start_date=args.start_date,
         end_date=args.end_date,
         cities=set(args.cities),
+        denominator_mode=args.denominator_mode,
     )
-    selected = first_city_day(rows)
-    selected_ids = {checkpoint_id(row) for row in selected}
+    if args.selection_mode == "policy_contrast":
+        selection_roles = policy_contrast_selection(rows)
+    else:
+        selected = first_city_day(rows)
+        selection_roles = {checkpoint_id(row): "first_city_day" for row in selected}
+    selected_ids = set(selection_roles)
+    selected = [row for row in rows if checkpoint_id(row) in selected_ids]
     packets = []
     for row in rows:
         packet = build_transition_packet(row)
@@ -237,6 +408,7 @@ def main() -> int:
             {
                 "checkpoint_id": checkpoint_id(row),
                 "selected_for_llm": checkpoint_id(row) in selected_ids,
+                "llm_selection_role": selection_roles.get(checkpoint_id(row)),
                 "packet": packet,
             }
         )
@@ -246,6 +418,7 @@ def main() -> int:
         for row in rows
     }
     settlement_labels = canonical_settlement_labels(args.db_path, label_keys)
+    policy_bucket_summary = summarize_policy_buckets(rows, settlement_labels)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     packet_path = args.output_dir / "pit_packets.jsonl"
@@ -259,9 +432,14 @@ def main() -> int:
     generated = 0
     failures = 0
     if args.codex:
+        assigned_ids = {
+            cid
+            for index, cid in enumerate(sorted(selected_ids))
+            if index % args.shard_count == args.shard_index
+        }
         for record in packets:
             cid = str(record["checkpoint_id"])
-            if not record["selected_for_llm"] or cid in cards:
+            if cid not in assigned_ids or cid in cards:
                 continue
             if args.limit is not None and generated >= args.limit:
                 break
@@ -299,6 +477,7 @@ def main() -> int:
                 "llm_backend": "codex_cli",
                 "llm_model": args.model or "codex_cli_default",
                 "llm_reasoning_effort": args.reasoning_effort,
+                "llm_selection_role": record["llm_selection_role"],
                 "card": parsed,
             }
             append_jsonl(card_path, item)
@@ -335,6 +514,16 @@ def main() -> int:
                 "current_bracket": row.get("current_bracket"),
                 "market_mid": market_mid,
                 "p_frozen_core": p_frozen_core,
+                "current_yes_ask": finite(row.get("current_yes_ask")),
+                "current_yes_ask_size": finite(row.get("current_yes_ask_size")),
+                "current_yes_effective_cost": finite(
+                    row.get("current_yes_effective_cost")
+                ),
+                "model_edge_after_fee_and_depth": finite(
+                    row.get("model_edge_after_fee_and_depth")
+                ),
+                "decision_status": row.get("decision_status"),
+                "decision_reasons": row.get("reasons") or [],
                 "deterministic_state": {
                     "intraday_state": row.get("intraday_state"),
                     "warming_state": row.get("warming_state"),
@@ -344,6 +533,8 @@ def main() -> int:
                     "precip_state": row.get("precip_state"),
                 },
                 "llm_selected": bool(record["selected_for_llm"]),
+                "llm_selection_role": record["llm_selection_role"],
+                "policy_bucket": policy_bucket(row),
                 "llm_card_status": "complete" if cid in cards else "not_collected",
                 "llm_card": (cards.get(cid) or {}).get("card"),
                 "settlement_label": label,
@@ -369,17 +560,40 @@ def main() -> int:
         "research_id": prereg["research_id"],
         "input": str(args.input),
         "input_sha256": file_sha256(args.input),
-        "preregistration": str(PREREG.relative_to(ROOT)),
-        "preregistration_sha256": file_sha256(PREREG),
+        "preregistration": str(prereg_path.relative_to(ROOT)),
+        "preregistration_sha256": file_sha256(prereg_path),
         "scope": {
             "start_date": args.start_date,
             "end_date": args.end_date,
             "cities": sorted(args.cities),
+            "denominator_mode": args.denominator_mode,
+            "selection_mode": args.selection_mode,
+            "shard_index": args.shard_index,
+            "shard_count": args.shard_count,
         },
         "signal_funnel": signal_funnel,
+        "settlement_coverage": {
+            "labelled_checkpoints": sum(
+                int(summary["settled_rows"]) for summary in policy_bucket_summary.values()
+            ),
+            "labelled_target_dates": len(
+                {
+                    str(row.get("target_date") or "")
+                    for row in rows
+                    if (
+                        str(row.get("city") or ""),
+                        str(row.get("target_date") or ""),
+                        str(row.get("current_bracket") or ""),
+                    )
+                    in settlement_labels
+                }
+            ),
+        },
+        "policy_bucket_summary": policy_bucket_summary,
         "evidence_funnel": {
             "pit_packets": len(packets),
             "first_city_day_llm_candidates": len(selected),
+            "llm_candidate_roles": dict(Counter(selection_roles.values())),
             "llm_cards_complete": selected_complete,
             "settled_labels": settled_labels_complete,
             "settled_target_dates": len(settled_selected_dates),
