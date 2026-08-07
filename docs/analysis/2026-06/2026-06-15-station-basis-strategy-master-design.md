@@ -153,10 +153,8 @@ fail-closed；day-state 从账本重建，重启不重置额度。
 - **v1 = 唯一生产 runtime**：`weather_station_basis_shadow_v1.py`（5 城、16h YES one-per-day、
   ask≤0.90）+ sidecars（readiness / exec_v1 / pending_monitor / live_prep_gate）。
 - v0 的 standalone 启动脚本已删除（退役）；Mac 上的 v0 shadow loop 已停。
-- **唯一运行点 = N100** `/home/jiarui/projects/pm_agent_station_basis_v1`，
-  `weather_station_basis_shadow_v1_loop.sh`（15 分钟/cycle，nohup + pid file）。
-  管理：`start_weather_station_basis_shadow_v1.sh` 启动；`cat runtime/.../station_basis_shadow_v1/loop.pid` 看 pid；
-  停 = kill pid 或放 PAUSE 文件。注意 nohup loop **不抗重启**，N100 重启后需手动重新 start。
+- **历史运行点 = N100** `/home/jiarui/projects/pm_agent_station_basis_v1`，当时使用 15 分钟 nohup loop。
+  该入口现已退役并删除；本段只保留研究血缘，不能作为当前恢复或启动说明。
 
 ## 9. Path to Live
 

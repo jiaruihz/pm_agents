@@ -1,7 +1,7 @@
 # Weather Mac Mini Runbook
 
 > **状态：`superseded-for-now`，仅保留历史背景。** 本文原先的业务
-> LaunchAgent、`mac_weather_stack.sh start*`、live switch 和外置盘迁移命令不是
+> LaunchAgent、旧 Mac stack、live switch 和外置盘迁移命令不是
 > 当前生产入口。当前事实以 `production.yaml` + `weather_production_ctl.py` +
 > production manifest 为准；JRS runtime 已固定到 `/Volumes/jrs`，不要按本文再次迁盘。
 
@@ -90,10 +90,11 @@ client, so strategy runners should not carry their own unrelated proxy path.
 Set `WEATHER_EXECUTOR_MARKET_PROXY=direct` only for an intentional direct CLOB
 test.
 
-The selected node is controlled by mihomo/TAG. Check it with:
+The selected node was controlled by mihomo/TAG. The old stack/proxy-failover entrypoints have been deleted;
+use the controller health and production manifest network evidence instead:
 
 ```bash
-scripts/ops/mac_weather_stack.sh proxy-status
+.venv/bin/python scripts/ops/weather_production_ctl.py health --json
 ```
 
 Do not run the collector if the latest snapshot has `total_records=0`. The
@@ -120,30 +121,8 @@ mount path:
 /Volumes/WeatherRuntime
 ```
 
-Dry run:
-
-```bash
-scripts/ops/prepare_mac_weather_external_runtime.sh --volume /Volumes/WeatherRuntime
-```
-
-Apply after checking the dry run:
-
-```bash
-scripts/ops/mac_weather_stack.sh stop
-scripts/ops/prepare_mac_weather_external_runtime.sh --volume /Volumes/WeatherRuntime --apply
-scripts/ops/mac_weather_stack.sh start
-scripts/ops/mac_weather_stack.sh verify
-```
-
-Move emergency backups too:
-
-```bash
-scripts/ops/prepare_mac_weather_external_runtime.sh --volume /Volumes/WeatherRuntime --include-backups --apply
-```
-
-This script copies first, renames the old local path to
-`.pre_external_<timestamp>`, then creates a symlink. It does not delete the old
-copy.
+The old migration script and Mac stack have been deleted. Their commands must not be replayed against the current
+NVMe contract; historical implementation remains recoverable from git history.
 
 ## N100 Current State
 

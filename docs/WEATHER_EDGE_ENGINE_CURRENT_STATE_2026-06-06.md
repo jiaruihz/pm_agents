@@ -368,18 +368,16 @@ weather_edge_engine_blended_single_v0
 - `0.03` 交易面更宽，适合 shadow 观察；但 paper 初始先用 `0.05`，降低噪声和账本膨胀。
 - 本机 smoke（2026-06-06 北京时间，使用本机镜像、不同步远端）已能产出 shadow signal / plan / paper order，且 `live_requested=false`。
 
-运行入口：
+历史单次研究入口：
 
 ```bash
 .venv/bin/python scripts/ops/weather_blended_shadow_paper.py --profile all
-scripts/ops/start_weather_blended_shadow_paper_loop.sh
 ```
 
-本机只做 smoke 时可跳过远端同步：
+本机只做 smoke 时可跳过远端同步；旧常驻 loop wrapper 已删除，不得用本报告恢复生产入口：
 
 ```bash
 .venv/bin/python scripts/ops/weather_blended_shadow_paper.py --profile all --no-sync
-WEATHER_BLEND_NO_SYNC=1 INITIAL_DELAY_SEC=0 scripts/ops/start_weather_blended_shadow_paper_loop.sh
 ```
 
 产物路径：

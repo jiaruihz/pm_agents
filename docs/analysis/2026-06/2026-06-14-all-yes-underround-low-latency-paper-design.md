@@ -45,7 +45,7 @@ This is still paper/shadow only. It does not place orders and does not modify N1
 | `scripts/ops/all_yes_underround_paper_exec_v0.py` | Appends all-leg paper baskets, evaluates settlements with the shared resolver, writes live-prep gate and monitor | no |
 | `scripts/ops/all_yes_underround_fresh_paper_cycle_v0.py` | Runs scanner + paper cycle only when snapshot is fresh under TTL | no |
 | `scripts/ops/all_yes_underround_fresh_paper_loop_v0.sh` | Repeats the fresh cycle for same-host low-latency capture | no |
-| `scripts/ops/start_all_yes_underround_fresh_paper_v0.sh` | Starts the loop with pid/log files | no |
+| historical start wrapper (removed) | Started the loop with pid/log files; retained in git history only | no |
 
 ## N100 Snapshot-Side Shape
 
@@ -55,14 +55,12 @@ The source orderbook path is owned by `weather-predict`:
 /home/jiarui/projects/weather-predict/output/orderbook_snapshots/
 ```
 
-The fresh paper loop should run from the `pm_agent` repo but read that source path directly:
+The fresh paper loop historically ran from the `pm_agent` repo and read that source path directly. The direct N100 launcher has been removed; this is provenance, not a current run command:
 
 ```bash
-cd /home/jiarui/projects/pm_agent_all_yes_fresh
-PROJECT_DIR=/home/jiarui/projects/pm_agent_all_yes_fresh \
-DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent \
-SNAPSHOT_ROOT=/home/jiarui/projects/weather-predict/output/orderbook_snapshots \
-  scripts/ops/start_all_yes_underround_fresh_paper_v0.sh
+PROJECT_DIR=/home/jiarui/projects/pm_agent_all_yes_fresh
+DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent
+SNAPSHOT_ROOT=/home/jiarui/projects/weather-predict/output/orderbook_snapshots
 ```
 
 Freshness is based on row-level `fetched_at_utc` when available, not the service-level `snapshot_ts_utc`. The runner also rejects a sidecar that appears to still be writing (`min_file_stable_seconds=10`) or has too few rows (`min_snapshot_rows=500`) so a partial gzip cannot create a false all-YES underround basket.

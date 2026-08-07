@@ -343,29 +343,18 @@ esac
 
 
 def test_legacy_direct_launchagent_stack_cannot_start_jrs_workloads():
-    text = (OPS / "mac_weather_stack.sh").read_text(encoding="utf-8")
-    assert (
-        "refusing dormant direct-LaunchAgent weather stack; "
-        "use scripts/ops/weather_production_ctl.py"
-    ) in text
-    for command in (
-        "install-launchagents",
-        "start",
-        "restart",
-        "start-live",
-        "start-low-price-live",
-        "start-low-price-shadow",
-        "start-low-price-take-profit",
-        "start-low-price-integrated-shadow",
-        "start-runtime-monitor",
+    for retired in (
+        "mac_weather_stack.sh",
+        "start_regime_routed_no_tiny_live.sh",
+        "stop_regime_routed_no_tiny_live.sh",
+        "prepare_mac_weather_external_runtime.sh",
+        "weather_n100_proxy_failover.sh",
+        "install_weather_live_runtime_patrol_launchagent.sh",
+        "start_weather_live_runtime_patrol_tmux.sh",
+        "start_weather_live_runtime_patrol.sh",
+        "run_weather_live_runtime_patrol_launchd.sh",
     ):
-        assert command in text
-
-    patrol_installer = (
-        OPS / "install_weather_live_runtime_patrol_launchagent.sh"
-    ).read_text(encoding="utf-8")
-    assert "refusing retired weather patrol LaunchAgent installer" in patrol_installer
-    assert patrol_installer.index("exit 2") < patrol_installer.index("launchctl bootstrap")
+        assert not (OPS / retired).exists()
 
 
 def test_shared_helper_rejects_legacy_socket():

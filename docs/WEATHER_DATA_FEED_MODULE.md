@@ -1,7 +1,7 @@
 # Weather Data Feed Module
 
 Status: current-source
-Updated: 2026-06-30 source-events signal boundary
+Updated: 2026-07-14 high-frequency airport source audit
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_REPO_BOUNDARY.md; WEATHER_SYSTEM_CONTRACT.md
 
@@ -57,6 +57,9 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `output/forecast_enrichment/latest.json` + append-only `forecast_enrichment.jsonl` | `~/projects/weather_data_feed_service_runtime/output/forecast_enrichment/` | forecast-quality / current-YES / NO carry / reheat/overshoot research 的预测侧 shadow feature capture |
 | `output/runway_observations/latest.json` + append-only `runway_observations.jsonl` | `~/projects/weather_data_feed_service_runtime/output/runway_observations/` | 跑道点位气温与 METAR/WU 报文温度的对齐、滞后、bias 建模研究 |
 | `output/high_frequency_observations/latest.json` + append-only `high_frequency_observations.jsonl` | `~/projects/weather_data_feed_service_runtime/output/high_frequency_observations/` | 机场/官方高频参考站与 METAR/WU/source-events/settlement outcome 的对齐、滞后、bias 建模研究 |
+| `output/wu_history_latency/latest.json` + append-only `wu_history_latency.jsonl` | `~/projects/weather_data_feed_service_runtime/output/wu_history_latency/` | WU/weather.com history 行的 first-seen 延迟、row 特征、与同 timestamp METAR/source-events 的对齐；首轮历史行标记为 `backfill`，不计入真实延迟 |
+| `output/fast_source_stale_book/latest.json` + append-only `events.jsonl` / `quote_snapshots.jsonl` | `~/projects/weather_data_feed_service_runtime/output/fast_source_stale_book/` | 高频源跨过 METAR/WU running max 后，记录 `t-1 NO` 是否仍未被盘口重定价；telemetry only，不下单 |
+| `output/hko_official_tminus1_no_live/latest.json` + `events.jsonl` / `opportunities.jsonl` / `orders.jsonl` | `/Volumes/jrs/weather_data_feed_service_runtime/output/hko_official_tminus1_no_live/` | HK 专用 live：HKO Observatory 已到 floor(T) 后，只买 exact `T-1 NO`；不消费 VHHH/METAR，不买 current YES。 |
 | full market snapshot outputs | `~/projects/weather_data_feed_service_runtime/output/` | mirror / analysis / dashboard sync |
 
 旧路径:
@@ -174,7 +177,7 @@ near-binary siblings。价格是否可交易属于 strategy/execution policy，�
   - AMSC 需要网页登录态 `sessionId`。本地/生产不要把明文写进 git；放在 data-feed service checkout 的 `.env`：
     `WEATHER_DATA_FEED_AMSC_SESSION_ID=<sessionId>`。sessionId 里若有 `$$`，Mac loop 会按 `.env` 原文字面量重读该 key，避免 shell 展开污染。
     Mac tmux loop 可用
-    `WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED=1` 打开周期采集，默认 interval 是 180 秒。
+    `WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED=1` 打开周期采集，默认 interval 是 60 秒。
 - 新增 `weather_data_feed/high_frequency_observation_sources.py` 和 `weather_data_feed_service high-frequency-observations`，
   用于机场/官方高频参考站 capture。当前覆盖：
   - 韩国 AMOS（Seoul/RKSI、Busan/RKPK）；
@@ -182,10 +185,88 @@ near-binary siblings。价格是否可交易属于 strategy/execution policy，�
   - Singapore MSS S24、JMA AMeDAS RJTT/Haneda、HKO、CoWIN 6087、MGM Ankara/Istanbul、IMS Lod、FMI Helsinki；
   - CWA Taipei、KNMI Amsterdam、NCM Jeddah、AEROWEB Paris 已进入统一 registry，但无 key/账号时只产
     `auth_required` / `not_implemented` 状态，不静默当作可用数据。
+  Mac tmux loop 默认每 60 秒调度一轮 curated direct sources：
+  `amos_runway noaa_madis_hfmetar singapore_mss jma_amedas hko_obs cowin_obs fmi mgm ims_lod`。
+  其中 NOAA MADIS/IEM、JMA、FMI、MGM、IMS 默认加 300 秒 source-level cadence，避免 60 秒主 loop 对慢更新/
+  易限流源重复拉取；cadence 内跳过的 source/city 会从上一份 `latest.json` 保留最近记录，并写入
+  `skipped_cadence_jobs` / `cadence_preserved_rows`。CWA Taipei、KNMI Amsterdam、NCM Jeddah、AEROWEB Paris
+  仍保留在 registry，但无 key/账号或未完成实现时不进入默认 loop，避免把 `auth_required` / `not_implemented`
+  噪声混进实时链路。
+  独立 fast-observation tmux loop 默认只在每个城市本地 `06:00 <= hour < 22:00` 采集，Seoul/Tokyo 当前通过
+  `--always-active-cities` 全天保留；窗口由 producer
+  按 city timezone 逐 job 判断，而不是按单一 UTC cron 停整条服务。可用
+  `WEATHER_FAST_OBS_ACTIVE_LOCAL_START_HOUR` / `WEATHER_FAST_OBS_ACTIVE_LOCAL_END_HOUR`
+  调整。夜间/凌晨跳过会写入 `skipped_inactive_jobs`，不把源错误伪装成空数据。
+  `weather_data_feed_service/scheduling.py` 是 runway/high-frequency 生产器共用调度层，当前统一提供 local daytime
+  window、UTC parse 和 source min-interval filtering；后续新增机场源应复用这层，而不是在各 producer 里各写一份 cron/window 逻辑。
   这些产物统一使用 `weather_high_frequency_observation_v1`，研究脚本
   `scripts/analysis/forecast_quality/research_high_frequency_settlement_alignment_v1.py`
   可把它们和 `source-events` 的 METAR-like/WU-like 行、`settlement_outcomes` 的最终落点拼接。
   它们不是 `output/observations/latest.json` 的替代，也不自动进入 live 策略决策。
+
+### 高频同机场源接入审计（2026-07-14）
+
+这里严格区分 `runtime active`、`adapter only` 和 `research candidate`。进入 registry、source profile 或能手工
+fetch 都不等于生产正在采集。
+
+| 数据源 / 机场 | 当前状态 | 2026-07-14 运行证据或缺口 | 研究结论 |
+|---|---|---|---|
+| MADIS OMO / Synoptic HF-ASOS；KLGA/KMIA/KDAL/KSEA/KLAX/KSFO 等美国机场 | **部分 active** | `noaa_madis_hfmetar` 已覆盖 11 城，但当前走 IEM `MADISHF`；当天这些站观测 timestamp 的中位间隔约 20–25 分钟。真正 Synoptic adapter 已实现，生产 primary 目前仅 Austin/Dallas/Houston；手工探针显示 KLGA/KMIA/KLAX/KSEA/KSFO 最近 4 小时各有约 50–53 条、约 5 分钟 cadence，当前 WRH token 请求对应 `ICAO1M` station 均为空。 | 当前 IEM 路径不能称为 1 分钟 OMO。Synoptic 文档称完整 OMO 使用 `ICAO1M` 网络、正常延迟约 2–5 分钟且仍是 experimental；下一步应接正式 token/`*1M` station，保留 IEM 只作 fallback。 |
+| NOAA WRH timeseries；LTFM/UUWW | **adapter active，城市生产状态不同** | 现有 `synopticdata_timeseries` 实际是从 WRH 页面取 token 后请求 Synoptic API，不是独立 NOAA 观测源。LTFM 已进入 source-events research capture；同一探针 LTFM 最近 4 小时 8 条、UUWW 7 条。Moscow 仍未进入生产，因为 settlement basis 尚未解释。 | Istanbul 可继续做 source-specific first-seen；Moscow 只能先采研究数据，不能因 endpoint 可用就解除结算口径 block。 |
+| AWC API + AWC cache | **runtime active** | `aviationweather_metar` 与 `aviationweather_cache_csv` 已进入 `source-events`；AWC cache 官方每分钟更新。 | 已具备两路 first-seen 对照，不需要再建一套 METAR 明细。应在同一 event envelope 内比较 direct API/cache 的 `local_detect_ts_utc`。 |
+| WIS2 aviation first-arrival | **research candidate，未实现** | 仓库无 WIS2 subscriber、topic routing、BUFR/IWXXM decoder 或消息去重状态。航空数据在 WIS2 通常属于 recommended data，可能有 license/access token，且不一定进入 Global Cache。 | 价值在第三条独立传输路径，不是新的温度口径。先做一个全球 broker topic inventory 和 5–10 个机场的可访问性/延迟 probe，再决定是否常驻。 |
+| Météo-France 6 分钟；Paris/LFPB | **research candidate，未采集** | 当前 `aeroweb` 只是 auth-required placeholder；它与 Météo-France `obs-infrahoraire-6m_{station}` API 不是同一个实现。 | P1。先确认 LFPB 的 Météo-France station id 与 API access，再实现 6 分钟 adapter。 |
+| KNMI 10 分钟；Amsterdam/EHAM (06240) | **adapter only，未采集** | registry 和 `fetch_knmi` 占位已存在；无 `KNMI_API_KEY`，NetCDF/EDR parser 未接。 | P1。官方同时提供 Open Data API、EDR 和 MQTT；优先 EDR + MQTT first-seen，避免轮询整包 NetCDF。 |
+| FMI 10 分钟；Helsinki/EFHK (100968) | **runtime active** | `fmi` 当天 77 个 distinct observation timestamp，全部为 10 分钟间隔。 | 已接好，不重复建设；继续做 FMI first-seen -> METAR/WU/盘口 lineage。 |
+| DWD 10 分钟；Munich/EDDM (station 01262) | **research candidate，未采集** | 官方 `now` 文件存在且含 10 分钟值；本次探针 15:20 UTC 看到的最新观测为 14:50，约慢 30 分钟。DWD 公共说明将 `now` 描述为小时更新；未发现可作为 1 分钟机场气温的公开产品。 | P2，不应按“1 分钟快源”排优先级。先连续测一周 file mtime/last-observation lag，再判断是否比 AWC 有领先。 |
+| AEMET 10 分钟；Madrid/LEMD | **research candidate，未采集** | 当前只有 AWC METAR。AEMET OpenData 有 conventional current observations，需 API key；自动站可提供 10 分钟数据，但尚未验证 LEMD 的 station id、实测 cadence 和发布时间。 | P1 probe，验证同机场和 first-seen 后再写 adapter。 |
+| IMS 10/1 分钟；Tel Aviv/LLBG (Lod 225) | **10 分钟 runtime active；1 分钟未接** | 当前 `ims_lod` 使用公开 `hourly_observations_full` payload，实测 43 个 distinct timestamp、中位 cadence 10 分钟；没有配置 IMS `APIToken`，未使用官方 10/1-minute API。 | 现有 10 分钟链可继续 shadow；申请 token 后再对照 1 分钟 API 是否确实更早，注意官方文档特别说明时间字段按 UTC+2 解读。 |
+| MetService 1 分钟；Wellington/NZWN、Auckland/NZAA | **未采集，商业授权** | 仓库无 adapter/key。官方 1-minute API 包含 AWS/机场跑道传感器、约在每分钟后 30–40 秒可用，但当前仅 commercial access。 | 数据质量和延迟价值高，但先询价/申请 trial；拿不到授权不投入生产实现。Auckland 还需先补 city/source profile。 |
+| ECCC SWOB/AMQP；Toronto/CYYZ | **未采集** | 仓库无 SWOB parser/AMQP subscriber。ECCC 支持 SWOB `AUTO-minute` 与 AMQP first-arrival，但 CYYZ 2026-07-14 目录实际只有 hourly `MAN`，约每整点后 0–2 分钟发布。 | AMQP 能减少轮询 overhead，但 CYYZ 本身不是分钟温度快源；只在 first-arrival METAR/SWOB 传输研究中列 P2，不作为高频 cross 源。 |
+
+官方入口：[Synoptic HF-ASOS](https://docs.synopticdata.com/services/high-frequency-asos)、
+[AWC Data API](https://www.connect.aviationweather.gov/data/api/)、
+[WIS2 recommended-data access](https://docs.wis2box.wis.wmo.int/en/latest/user/recommended.html)、
+[Météo-France 6-minute observations](https://donneespubliques.meteofrance.fr/client/document/descriptiftechnique_observations_donneespubliques_v2_20250315_403.pdf)、
+[KNMI 10-minute dataset](https://dataplatform.knmi.nl/dataset/access/10-minute-in-situ-meteorological-observations-1-0)、
+[DWD 10-minute air temperature](https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/air_temperature/DESCRIPTION_obsgermany_climate_10min_air_temperature_en.pdf)、
+[AEMET OpenData](https://opendata.aemet.es/dist/)、
+[IMS 10/1-minute API](https://ims.gov.il/en/ObservationDataAPI)、
+[MetService 1-minute API](https://developer.metservice.com/docs/api-catalog/1min-obs-api/)、
+[ECCC SWOB/AMQP](https://eccc-msc.github.io/open-data/msc-data/obs_station/readme_obs_insitu_swobdatamart_en/)。
+
+接入顺序：先把 Synoptic 美国 `*1M`、KNMI EDR/MQTT、Météo-France 6 分钟、AEMET LEMD 做成独立 probe；
+FMI/IMS 继续现有采集；DWD/ECCC 先量化真实发布延迟；MetService 等授权；WIS2 先做 topic/access inventory。
+
+策略可用性对比见
+[`2026-07-15-high-frequency-strategy-eligibility-v2.md`](analysis/2026-07/2026-07-15-high-frequency-strategy-eligibility-v2.md)：
+按 observation/report first-seen 对齐下一份去重 METAR；美国 2°F range 与摄氏 exact bracket 分开映射，严格信号要求
+连续两次高于当前 bracket 上沿至少 0.5 market unit、最新至少 0.7，并处于下一 routine METAR 时钟前后 20 分钟。
+报告同时列 next-METAR 与真实 winning-bracket 结算命中，明细位于
+`docs/analysis/2026-07/generated/high_frequency_strategy_eligibility_v2/`。该报告只授权 shadow feature research；
+美国 Synoptic 5 分钟源仍缺并行 AWC label，且 range executor 未实现，不直接改变 live city pool 或下单参数。
+
+- 新增 `scripts/ops/weather_wu_history_latency_monitor.py` 和
+  `scripts/ops/start_weather_wu_history_latency_monitor.sh`，用于记录 WU/weather.com history 每个 hourly row 第一次被我们看到的时间：
+  - 输出 `output/wu_history_latency/latest.json` 和 append-only `wu_history_latency.jsonl`；
+  - 字段包含 `valid_time_local/utc`、`first_seen_at_utc`、`first_seen_lag_sec`、`first_seen_type`、
+    WU row 天气特征、日内 running max、payload hash、fetch latency、proxy、以及同 timestamp METAR 的
+    `metar_report_ts_utc` / `metar_detect_ts_utc` / `wu_minus_metar_c`；
+  - 首次启动时当天已存在的 WU rows 会标记 `first_seen_type=backfill`，只用于口径对齐，不用于估计真实发布延迟；
+    真实延迟从 monitor 常驻后新出现的 `live_seen` rows 开始算。
+- `scripts/ops/weather_fast_source_stale_book_observer.py` 用于把高频机场/参考站温度跨档事件和盘口反应对齐；
+  当前运行入口由 production contract 登记为 `weather_fast_source_stale_book`，只通过 controller 管理：
+  - 输入：`output/high_frequency_observations/latest.json`、`output/source_events/sources.jsonl`、
+    latest paper snapshot 的 market/token 映射、latest orderbook snapshot 的 quote fallback；
+  - 触发：同一 `city,target_date` 下 `source_round_c > metar_running_max_round_c`；
+  - 交易表达：记录 `t_minus_1_no_bracket_c = source_round_c - 1` 的 NO bid/ask，并同时保留 source-round / source+1 档位上下文；
+  - 输出：`events.jsonl` 记录首次跨档事件，`quote_snapshots.jsonl` 在 follow window 内每轮记录盘口，`latest.json` 给人工巡检；
+  - 默认每 60 秒跑一轮，`fresh_scope=t_minus_1_no`，优先 fresh CLOB book，fresh 缺失时用 orderbook snapshot 作为
+    `quote_basis=snapshot` fallback；若盘口代理不可用，会显式写 `quote_basis=missing` / `fresh_error`。
+  - Polymarket market access 走统一 market-proxy helper（默认 `WEATHER_DATA_FEED_MARKET_PROXY` /
+    `WEATHER_PREDICT_MARKET_PROXY` / `POLYMARKET_PROXY_URL`，缺省 `http://127.0.0.1:7890`），HTTP client 使用
+    `trust_env=False`，避免全局 `HTTP_PROXY` / `ALL_PROXY` 污染“直连/代理”诊断。天气/机场源默认直连，不跟随 market proxy。
+  该 watcher 是 shadow/telemetry，不提交订单、不碰钱包；任何 live buy 都必须另走策略部署与资金安全评审。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
   fallback 链路按 `source_profiles.json` 展开。默认 AviationWeather 城市为
@@ -256,19 +337,19 @@ aviationweather_cache_csv
 .venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py
 ```
 
-检查内容：
+检查内容:
 
 - current Mac 最新 snapshot 是否满足 `weather_data_feed_snapshot_v1` 协议；
 - snapshot record 是否缺字段、无法 normalize、或出现 `(city,target_date,token_id,bracket)` 重复；
-- snapshot、orderbook、observation、forecast 与注册 producer latest 是否 stale；
-- telemetry 是否 JSON 损坏、缺关键字段、decision key 或 order identity 重复；
-- active live order journal 是否存在重复 `order_id` 或重复策略决策身份。
+- snapshot 是否 stale，默认阈值 45 分钟；
+- current-YES split telemetry 是否 JSON 损坏、缺关键字段、或同一 decision key 重复；
+- current-YES split live order 文件是否有重复 `order_id` 或重复 `(strategy_instance,city,target_date,token_id,side)`。
 
-验收口径：
+验收口径:
 
-- `status=ok`：合同、identity、freshness 和必需 coverage 均通过；
-- `status=warn`：逐项归因，不得冒充全链路健康；
-- `status=fail/critical`：先修数据或生产入口，再讨论策略信号。
+- `status=ok`: 可以继续让策略消费；
+- `status=warn`: 字段/重复没坏，但存在 stale snapshot、summary stale、或非致命重复风险；
+- `status=fail`: 协议、JSON、snapshot 重复或 order_id 重复等结构性问题，先修数据再谈策略信号。
 
 source-event/测速链路改动也必须走 production contract 与 controller；不得恢复 N100 systemd、固定 `18089` proxy、远端
 checkout 或手工常驻 cycle。验收以 manifest 登记 producer 的真实 latest、source/city coverage、first-seen clocks、book

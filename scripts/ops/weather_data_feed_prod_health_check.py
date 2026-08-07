@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
-from collections import Counter, deque
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -29,6 +30,9 @@ DEFAULT_SNAPSHOT_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/paper_snapshots"
 DEFAULT_ORDERBOOK_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/orderbook_snapshots"
 DEFAULT_FORECAST_CURVE_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/forecast_hourly_curves"
 DEFAULT_FAST_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/high_frequency_observations/state.json"
+DEFAULT_LIVE_CROSS_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/live_cross_observations/state.json"
+DEFAULT_OBSERVATION_CACHE = MAC_DATA_FEED_RUNTIME / "output/observations/latest.json"
+DEFAULT_OBSERVATION_HISTORY = MAC_DATA_FEED_RUNTIME / "output/observations/observations.jsonl"
 DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
 DEFAULT_SUMMARY_FILES = tuple(
     runtime.health_path
@@ -185,17 +189,35 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
 
 
 def replaced_order_ids(rows: list[dict[str, Any]]) -> set[str]:
-    """Return order ids that were explicitly replaced by lifecycle rows."""
+    """Return order ids whose lifecycle successor/cancel is exchange-confirmed."""
     out: set[str] = set()
     for row in rows:
-        if str(row.get("status") or "").lower() != "submitted":
-            continue
-        action = str(row.get("execution_action") or "")
-        if not action.startswith("maker_lifecycle_"):
-            continue
         source_order_id = str(row.get("source_order_id") or row.get("cancel_before_order_id") or "").strip()
-        if source_order_id:
-            out.add(source_order_id)
+        if not source_order_id:
+            continue
+        exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+        cancel_status = str(exchange.get("pre_place_cancel_status") or "").lower()
+        cancel_response = (
+            exchange.get("pre_place_cancel_response")
+            if isinstance(exchange.get("pre_place_cancel_response"), dict)
+            else {}
+        )
+        cancel_payload = (
+            cancel_response.get("cancel")
+            if isinstance(cancel_response.get("cancel"), dict)
+            else cancel_response
+        )
+        canceled = {
+            str(value)
+            for value in (cancel_payload.get("canceled") or [])
+        } if isinstance(cancel_payload, dict) else set()
+        confirmed = cancel_status in {
+            "cancel_confirmed",
+            "cancel_submitted",
+        } or source_order_id in canceled
+        if not confirmed:
+            continue
+        out.add(source_order_id)
     return out
 
 
@@ -267,6 +289,12 @@ def check_snapshot_source_model(snapshot_path: Path) -> dict[str, Any]:
     )
     expected_count = int(summary.get("expected_city_target_count") or 0)
     captured_count = int(summary.get("captured_city_target_count") or 0)
+    cached_curve_count = int(summary.get("cached_curve_fallback_count") or 0)
+    effective_count = int(
+        summary.get("effective_city_target_count")
+        if summary.get("effective_city_target_count") is not None
+        else captured_count
+    )
     fallback_count = int(summary.get("fallback_count") or 0)
     missing_count = int(summary.get("missing_count") or 0)
     lineage_errors = []
@@ -276,7 +304,9 @@ def check_snapshot_source_model(snapshot_path: Path) -> dict[str, Any]:
         lineage_errors.append("assigned_count_mismatch")
     if sum(int(value or 0) for value in actual_counts.values()) != captured_count:
         lineage_errors.append("actual_count_mismatch")
-    if captured_count + missing_count != expected_count:
+    if effective_count != captured_count + cached_curve_count:
+        lineage_errors.append("effective_count_mismatch")
+    if effective_count + missing_count != expected_count:
         lineage_errors.append("expected_count_mismatch")
     if fallback_count > 0 and not fallback_reason_counts:
         lineage_errors.append("fallback_reason_missing")
@@ -403,6 +433,40 @@ def check_orderbook_snapshots(orderbook_dir: Path, *, now_utc: datetime, max_age
     }
 
 
+def check_snapshot_orderbook_coverage(snapshot_path: Path) -> dict[str, Any]:
+    payload = load_snapshot(snapshot_path)
+    summary = payload.get("orderbook_enrichment_summary")
+    if not isinstance(summary, dict):
+        return {
+            "path": str(snapshot_path),
+            "status": "missing_summary",
+            "target_count": 0,
+            "target_ok_count": 0,
+            "target_incomplete_count": 0,
+        }
+    target_count = int(summary.get("target_count") or 0)
+    target_ok_count = int(summary.get("target_ok_count") or 0)
+    target_incomplete_count = int(summary.get("target_incomplete_count") or 0)
+    consistent = target_count == target_ok_count + target_incomplete_count
+    status = (
+        "ok"
+        if summary.get("status") == "ok" and target_count > 0 and target_incomplete_count == 0 and consistent
+        else "incomplete"
+    )
+    return {
+        "path": str(snapshot_path),
+        "status": status,
+        "scope": summary.get("scope"),
+        "budget_sec": summary.get("budget_sec"),
+        "spent_sec": summary.get("spent_sec"),
+        "target_count": target_count,
+        "target_ok_count": target_ok_count,
+        "target_incomplete_count": target_incomplete_count,
+        "target_status_counts": summary.get("target_status_counts") or {},
+        "count_consistent": consistent,
+    }
+
+
 def check_fast_observation_state(path: Path, *, now_utc: datetime, max_age_min: float) -> dict[str, Any]:
     if not path.exists():
         return {
@@ -429,6 +493,144 @@ def check_fast_observation_state(path: Path, *, now_utc: datetime, max_age_min: 
         "status": status,
         "updated_at_utc": updated.isoformat() if updated else "",
         "age_min": age_min,
+    }
+
+
+def check_observation_cache(
+    path: Path,
+    *,
+    history_path: Path,
+    now_utc: datetime,
+    max_cache_age_min: float,
+    max_observation_age_min: float,
+    history_window_min: float = 30.0,
+    history_tail_rows: int = 1000,
+) -> dict[str, Any]:
+    """Validate the exact observation cache consumed by live strategies."""
+
+    if not path.exists():
+        return {"path": str(path), "history_path": str(history_path), "status": "fail", "error": "missing"}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "path": str(path),
+            "history_path": str(history_path),
+            "status": "fail",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    generated = parse_utc(payload.get("generated_at_utc"))
+    cache_age_min = round((now_utc - generated).total_seconds() / 60.0, 3) if generated else None
+    rows = [row for row in payload.get("records", []) if isinstance(row, dict)]
+    invalid_rows: list[dict[str, Any]] = []
+    reused_rows: list[str] = []
+    awaiting_first_rows: list[str] = []
+    for row in rows:
+        city = str(row.get("city") or "")
+        status = str(row.get("status") or "")
+        try:
+            running_max = float(row.get("running_max_c"))
+        except (TypeError, ValueError):
+            running_max = math.nan
+        try:
+            current_temp = float(row.get("current_temp_c"))
+        except (TypeError, ValueError):
+            current_temp = math.nan
+        try:
+            observation_age = float(row.get("age_min"))
+        except (TypeError, ValueError):
+            observation_age = math.nan
+        reasons = []
+        awaiting_first = status == "awaiting_first_observation"
+        try:
+            local_day_elapsed_min = float(row.get("local_day_elapsed_min"))
+            first_observation_grace_min = float(row.get("first_observation_grace_min"))
+        except (TypeError, ValueError):
+            local_day_elapsed_min = math.nan
+            first_observation_grace_min = math.nan
+        valid_awaiting_first = (
+            awaiting_first
+            and math.isfinite(local_day_elapsed_min)
+            and math.isfinite(first_observation_grace_min)
+            and 0 <= local_day_elapsed_min <= first_observation_grace_min
+        )
+        if status not in {"ok", "reused_after_fetch_error"} and not valid_awaiting_first:
+            reasons.append(f"status:{status or 'missing'}")
+        if not math.isfinite(running_max) and not valid_awaiting_first:
+            reasons.append("missing_running_max")
+        if math.isfinite(current_temp) and math.isfinite(running_max) and running_max + 1e-9 < current_temp:
+            reasons.append("running_max_below_current")
+        if (
+            not valid_awaiting_first
+            and (not math.isfinite(observation_age) or observation_age < 0 or observation_age > max_observation_age_min)
+        ):
+            reasons.append("observation_stale_or_invalid_age")
+        if reasons:
+            invalid_rows.append({"city": city, "reasons": reasons})
+        if status == "reused_after_fetch_error":
+            reused_rows.append(city)
+        if valid_awaiting_first:
+            awaiting_first_rows.append(city)
+
+    recent_cutoff = now_utc.timestamp() - history_window_min * 60.0
+    previous_by_station_day: dict[tuple[str, str, str], tuple[float, str]] = {}
+    regressions: list[dict[str, Any]] = []
+    for row in read_jsonl_tail(history_path, history_tail_rows):
+        if row.get("_parse_error"):
+            continue
+        key = (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("station") or ""),
+        )
+        try:
+            running_max = float(row.get("running_max_c"))
+        except (TypeError, ValueError):
+            continue
+        if not all(key) or not math.isfinite(running_max):
+            continue
+        row_ts_raw = str(row.get("observation_cache_generated_at_utc") or "")
+        row_ts = parse_utc(row_ts_raw)
+        previous = previous_by_station_day.get(key)
+        if previous and running_max + 1e-9 < previous[0] and row_ts and row_ts.timestamp() >= recent_cutoff:
+            regressions.append(
+                {
+                    "city": key[0],
+                    "target_date": key[1],
+                    "station": key[2],
+                    "previous_running_max_c": previous[0],
+                    "running_max_c": running_max,
+                    "generated_at_utc": row_ts_raw,
+                }
+            )
+        if previous is None or running_max >= previous[0]:
+            previous_by_station_day[key] = (running_max, row_ts_raw)
+
+    fail = (
+        cache_age_min is None
+        or cache_age_min < 0
+        or cache_age_min > max_cache_age_min
+        or bool(invalid_rows)
+        or bool(regressions)
+    )
+    status = "fail" if fail else ("warn" if reused_rows or awaiting_first_rows else "ok")
+    return {
+        "path": str(path),
+        "history_path": str(history_path),
+        "history_tail_rows": history_tail_rows,
+        "status": status,
+        "generated_at_utc": generated.isoformat() if generated else "",
+        "cache_age_min": cache_age_min,
+        "record_count": len(rows),
+        "invalid_record_count": len(invalid_rows),
+        "invalid_record_examples": invalid_rows[:10],
+        "reused_record_count": len(reused_rows),
+        "reused_cities": sorted(reused_rows),
+        "awaiting_first_observation_count": len(awaiting_first_rows),
+        "awaiting_first_observation_cities": sorted(awaiting_first_rows),
+        "recent_running_max_regression_count": len(regressions),
+        "recent_running_max_regressions": regressions[:10],
     }
 
 
@@ -529,6 +731,51 @@ def check_forecast_hourly_curves(
     capture_snapshot_times = {str(row.get("snapshot_ts_utc") or "") for row in valid_rows}
     snapshot_payload = load_snapshot(snapshot_path)
     snapshot_ts = str(snapshot_payload.get("snapshot_ts_utc") or snapshot_payload.get("ts_utc") or "")
+    capture_keys = {
+        (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("forecast_values_hash") or ""),
+        )
+        for row in valid_rows
+    }
+    cached_reuse_pairs: set[tuple[str, str]] = set()
+    invalid_cached_reuse: list[dict[str, str]] = []
+    latest_resolved = latest.resolve()
+    snapshot_records = [
+        row for row in snapshot_payload.get("records", []) if isinstance(row, dict)
+    ]
+    for row in snapshot_records:
+        if row.get("forecast_curve_evidence") != "cached_durable_curve":
+            continue
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        values_hash = str(row.get("forecast_values_hash") or "")
+        archive_raw = str(row.get("forecast_curve_archive_path") or "")
+        pair = (city, target_date)
+        if pair in cached_reuse_pairs:
+            continue
+        archive = Path(archive_raw).expanduser() if archive_raw else None
+        valid = bool(
+            city
+            and target_date
+            and values_hash
+            and archive is not None
+            and archive.exists()
+            and archive.resolve() == latest_resolved
+            and (city, target_date, values_hash) in capture_keys
+        )
+        if valid:
+            cached_reuse_pairs.add(pair)
+        else:
+            invalid_cached_reuse.append(
+                {
+                    "city": city,
+                    "target_date": target_date,
+                    "forecast_values_hash": values_hash,
+                    "forecast_curve_archive_path": archive_raw,
+                }
+            )
     expected_pairs = {
         (str(row.get("city") or ""), str(row.get("target_date") or ""))
         for row in snapshot_payload.get("records", [])
@@ -536,6 +783,7 @@ def check_forecast_hourly_curves(
     }
     captured_pairs = {(str(row.get("city") or ""), str(row.get("target_date") or "")) for row in valid_rows}
     missing_pairs = sorted(expected_pairs - captured_pairs)
+    cached_reuse_complete = bool(expected_pairs) and expected_pairs <= cached_reuse_pairs
 
     status = "ok"
     if parse_errors or not valid_rows:
@@ -551,7 +799,7 @@ def check_forecast_hourly_curves(
         status = "invalid_lineage"
     elif age_min is None or age_min > max_age_min:
         status = "stale"
-    elif snapshot_ts not in capture_snapshot_times:
+    elif snapshot_ts not in capture_snapshot_times and not cached_reuse_complete:
         status = "snapshot_mismatch"
     elif missing_pairs:
         status = "incomplete_city_target_coverage"
@@ -564,6 +812,10 @@ def check_forecast_hourly_curves(
         "latest_capture_age_min": age_min,
         "latest_capture_snapshot_ts_utc": sorted(capture_snapshot_times),
         "latest_snapshot_ts_utc": snapshot_ts,
+        "cached_reuse_complete": cached_reuse_complete,
+        "cached_reuse_city_target_count": len(cached_reuse_pairs),
+        "invalid_cached_reuse_count": len(invalid_cached_reuse),
+        "invalid_cached_reuse_examples": invalid_cached_reuse[:20],
         "capture_row_count": len(valid_rows),
         "capture_city_count": len({row.get("city") for row in valid_rows if row.get("city")}),
         "capture_city_target_count": len(captured_pairs),
@@ -751,8 +1003,14 @@ def overall_status(sections: dict[str, Any]) -> str:
     source_model = sections.get("snapshot_source_model", {})
     city_state = sections.get("snapshot_city_state_coverage", {})
     orderbook = sections.get("orderbook_snapshots", {})
+    orderbook_coverage = sections.get("snapshot_orderbook_coverage", {})
     forecast_curves = sections.get("forecast_hourly_curves", {})
     fast_observations = sections.get("fast_observation_state", {})
+    live_cross_observations = sections.get("live_cross_observation_state", {})
+    active_fast_observations = (
+        live_cross_observations if live_cross_observations else fast_observations
+    )
+    observation_cache = sections.get("observation_cache", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (
@@ -760,8 +1018,13 @@ def overall_status(sections: dict[str, Any]) -> str:
         or (bool(source_model) and source_model.get("status") != "ok")
         or city_state.get("status") == "missing_same_day_weather_state"
         or orderbook.get("missing")
+        or (bool(orderbook_coverage) and orderbook_coverage.get("status") != "ok")
         or (bool(forecast_curves) and forecast_curves.get("status") != "ok")
-        or (bool(fast_observations) and fast_observations.get("status") != "ok")
+        or (
+            bool(active_fast_observations)
+            and active_fast_observations.get("status") != "ok"
+        )
+        or (bool(observation_cache) and observation_cache.get("status") == "fail")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
@@ -776,6 +1039,7 @@ def overall_status(sections: dict[str, Any]) -> str:
         or city_state.get("status") == "missing_non_trading_weather_state"
         or city_state.get("status") == "missing_record_cities"
         or orderbook.get("stale")
+        or (bool(observation_cache) and observation_cache.get("status") == "warn")
         or any(item.get("duplicate_decision_count", 0) > 0 for item in telemetry)
         or any(summary.get("status") == "stale_snapshot" for summary in sections["summaries"])
     )
@@ -789,13 +1053,22 @@ def main() -> int:
     parser.add_argument("--orderbook-dir", default=str(latest_existing_orderbook_dir()))
     parser.add_argument("--forecast-curve-dir", default=str(latest_existing_forecast_curve_dir()))
     parser.add_argument("--fast-observation-state", default=str(DEFAULT_FAST_OBSERVATION_STATE))
+    parser.add_argument(
+        "--live-cross-observation-state",
+        default=str(DEFAULT_LIVE_CROSS_OBSERVATION_STATE),
+    )
+    parser.add_argument("--observation-cache", default=str(DEFAULT_OBSERVATION_CACHE))
+    parser.add_argument("--observation-history", default=str(DEFAULT_OBSERVATION_HISTORY))
     parser.add_argument("--runtime-root", default=str(PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1"))
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-orderbook-age-min", type=float, default=75.0)
     parser.add_argument("--max-forecast-curve-age-min", type=float, default=45.0)
     parser.add_argument("--max-fast-observation-age-min", type=float, default=3.0)
+    parser.add_argument("--max-observation-cache-age-min", type=float, default=10.0)
+    parser.add_argument("--max-observation-age-min", type=float, default=120.0)
     parser.add_argument("--tail-telemetry-rows", type=int, default=5000)
     parser.add_argument("--tail-live-order-rows", type=int, default=2000)
+    parser.add_argument("--tail-observation-history-rows", type=int, default=1000)
     parser.add_argument("--all-live-order-files", action="store_true")
     args = parser.parse_args()
 
@@ -818,6 +1091,7 @@ def main() -> int:
             now_utc=now_utc,
             max_age_min=args.max_orderbook_age_min,
         ),
+        "snapshot_orderbook_coverage": check_snapshot_orderbook_coverage(snapshot_path),
         "forecast_hourly_curves": check_forecast_hourly_curves(
             Path(args.forecast_curve_dir),
             snapshot_path,
@@ -828,6 +1102,19 @@ def main() -> int:
             Path(args.fast_observation_state),
             now_utc=now_utc,
             max_age_min=args.max_fast_observation_age_min,
+        ),
+        "live_cross_observation_state": check_fast_observation_state(
+            Path(args.live_cross_observation_state),
+            now_utc=now_utc,
+            max_age_min=args.max_fast_observation_age_min,
+        ),
+        "observation_cache": check_observation_cache(
+            Path(args.observation_cache),
+            history_path=Path(args.observation_history),
+            now_utc=now_utc,
+            max_cache_age_min=args.max_observation_cache_age_min,
+            max_observation_age_min=args.max_observation_age_min,
+            history_tail_rows=args.tail_observation_history_rows,
         ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],
         "live_orders": check_live_orders(

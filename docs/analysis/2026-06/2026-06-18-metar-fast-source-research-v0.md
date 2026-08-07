@@ -71,18 +71,18 @@ https://tgftp.nws.noaa.gov/data/observations/metar/stations/RJTT.TXT
 - 分离代理：
   - `TIMING_MONITOR_WEATHER_PROXY_MODE` / `TIMING_MONITOR_WEATHER_PROXY`
   - `TIMING_MONITOR_MARKET_PROXY_MODE` / `TIMING_MONITOR_MARKET_PROXY`
-- N100 可用推荐环境：
+- N100 当时使用的环境如下（历史复现记录；直启 wrapper 已删除，不是当前运维入口）：
 
 ```bash
 TIMING_MONITOR_WEATHER_PROXY_MODE=direct \
 TIMING_MONITOR_MARKET_PROXY=http://127.0.0.1:10809 \
 TIMING_MONITOR_SOURCES="profile_primary synopticdata_timeseries noaa_tgftp_station_txt checkwx_html" \
-scripts/ops/start_weather_source_orderbook_timing_monitor.sh
+.venv/bin/python scripts/ops/weather_source_orderbook_timing_monitor.py
 ```
 
 这样天气源直连，市场侧走 xray，不再被一个全局 proxy mode 绑死。
 
-2026-06-18 本机晚间 monitor 配置：
+2026-06-18 本机晚间 monitor 配置（历史单次复现）：
 
 ```bash
 TIMING_MONITOR_CITIES="Shanghai Tokyo Chicago Paris London Moscow Istanbul TelAviv" \
@@ -94,7 +94,7 @@ TIMING_MONITOR_BURST_INTERVAL_SEC=2 \
 TIMING_MONITOR_BURST_WINDOW_MIN=12 \
 TIMING_MONITOR_MAX_WORKERS=16 \
 TIMING_MONITOR_HTTP_TIMEOUT_SEC=6 \
-scripts/ops/start_weather_source_orderbook_timing_monitor.sh
+.venv/bin/python scripts/ops/weather_source_orderbook_timing_monitor.py
 ```
 
 First verified concurrent loop cycle: `cycle_runtime_sec=9.549`, `source_rows=32`, `book_rows=38`, `errors=0`.

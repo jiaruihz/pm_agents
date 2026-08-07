@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from scripts.ops.weather_data_feed_prod_health_check import (
     check_forecast_hourly_curves,
     check_fast_observation_state,
+    check_observation_cache,
+    check_snapshot_orderbook_coverage,
     check_live_orders,
     check_snapshot_city_state_coverage,
     check_snapshot_duplicates,
@@ -49,6 +51,33 @@ def test_prod_health_check_flags_snapshot_duplicates_and_staleness(tmp_path):
     assert report["snapshot_age_min"] == 60.0
 
 
+def test_prod_health_check_fails_incomplete_snapshot_orderbook_coverage(tmp_path):
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "records": [],
+                "orderbook_enrichment_summary": {
+                    "status": "incomplete",
+                    "scope": "strategy_live",
+                    "budget_sec": 120,
+                    "spent_sec": 120.2,
+                    "target_count": 100,
+                    "target_ok_count": 90,
+                    "target_incomplete_count": 10,
+                    "target_status_counts": {"ok": 90, "orderbook_budget_exhausted": 10},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_orderbook_coverage(snapshot)
+
+    assert report["status"] == "incomplete"
+    assert report["target_incomplete_count"] == 10
+
+
 def test_prod_health_check_fails_stale_fast_observation_state(tmp_path):
     state = tmp_path / "state.json"
     state.write_text(json.dumps({"updated_at_utc": "2026-07-18T03:30:00Z"}), encoding="utf-8")
@@ -69,6 +98,126 @@ def test_prod_health_check_fails_stale_fast_observation_state(tmp_path):
         "summaries": [],
     }
     assert overall_status(sections) == "fail"
+
+
+def test_prod_health_check_uses_live_cross_as_active_fast_route():
+    sections = {
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
+        "fast_observation_state": {"status": "stale"},
+        "live_cross_observation_state": {"status": "ok"},
+        "telemetry": [],
+        "live_orders": {},
+        "summaries": [],
+    }
+
+    assert overall_status(sections) == "ok"
+
+
+def test_prod_health_check_fails_recent_running_max_regression(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    now = datetime(2026, 7, 19, 10, 20, tzinfo=timezone.utc)
+    row = {
+        "city": "Singapore",
+        "target_date": "2026-07-19",
+        "station": "WSSS",
+        "status": "ok",
+        "current_temp_c": 31.0,
+        "running_max_c": 31.0,
+        "age_min": 5.0,
+    }
+    cache.write_text(
+        json.dumps({"generated_at_utc": "2026-07-19T10:19:00Z", "records": [row]}),
+        encoding="utf-8",
+    )
+    history_rows = [
+        {**row, "running_max_c": 32.0, "observation_cache_generated_at_utc": "2026-07-19T10:10:00Z"},
+        {**row, "observation_cache_generated_at_utc": "2026-07-19T10:19:00Z"},
+    ]
+    history.write_text("".join(json.dumps(item) + "\n" for item in history_rows), encoding="utf-8")
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=now,
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "fail"
+    assert report["recent_running_max_regression_count"] == 1
+    assert report["history_tail_rows"] == 1000
+
+
+def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache.write_text(
+        json.dumps(
+            {
+                "generated_at_utc": "2026-07-19T10:19:00Z",
+                "records": [
+                    {
+                        "city": "Singapore",
+                        "target_date": "2026-07-19",
+                        "station": "WSSS",
+                        "status": "reused_after_fetch_error",
+                        "current_temp_c": 31.0,
+                        "running_max_c": 32.0,
+                        "age_min": 15.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=datetime(2026, 7, 19, 10, 20, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "warn"
+    assert report["reused_record_count"] == 1
+
+
+def test_prod_health_check_warns_during_expected_first_observation_gap(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache.write_text(
+        json.dumps(
+            {
+                "generated_at_utc": "2026-07-29T05:17:00Z",
+                "records": [
+                    {
+                        "city": "Chicago",
+                        "target_date": "2026-07-29",
+                        "station": "KORD",
+                        "status": "awaiting_first_observation",
+                        "local_day_elapsed_min": 17,
+                        "first_observation_grace_min": 90,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=datetime(2026, 7, 29, 5, 18, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "warn"
+    assert report["invalid_record_count"] == 0
+    assert report["awaiting_first_observation_cities"] == ["Chicago"]
 
 
 def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
@@ -137,6 +286,36 @@ def test_snapshot_source_model_health_validates_lineage_without_rejecting_fallba
 
     assert report["status"] == "ok"
     assert report["fallback_detected"] is True
+    assert report["lineage_errors"] == []
+
+
+def test_snapshot_source_model_counts_explicit_cached_curve_as_effective_coverage(tmp_path):
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "records": [],
+                "source_model_summary": {
+                    "schema_version": "forecast_source_model_summary_v1",
+                    "grain": "city_target_forecast",
+                    "expected_city_target_count": 3,
+                    "captured_city_target_count": 2,
+                    "effective_city_target_count": 3,
+                    "cached_curve_fallback_count": 1,
+                    "assigned_model_counts": {"ecmwf": 2},
+                    "actual_model_counts": {"ecmwf": 2},
+                    "fallback_count": 0,
+                    "fallback_reason_counts": {},
+                    "missing_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_source_model(snapshot)
+
+    assert report["status"] == "ok"
     assert report["lineage_errors"] == []
 
 
@@ -284,6 +463,76 @@ def test_prod_health_check_requires_current_complete_curve_capture(tmp_path):
     assert future["future_first_seen_count"] == 1
 
 
+def test_prod_health_check_accepts_verified_cached_curve_reuse(tmp_path):
+    capture_ts = "2026-07-11T03:00:00Z"
+    row = build_curve_row(
+        snapshot_ts_utc=capture_ts,
+        city="Shanghai",
+        target_date="2026-07-11",
+        forecast_source="open_meteo_live_gfs",
+        forecast_model="gfs",
+        forecast_assigned_model="gfs",
+        forecast_values_hash="hash-a",
+        hourly_curve=[{"time_local": "2026-07-11T12:00", "temperature_f": 88.0}],
+        forecast_max_f=88.0,
+        forecast_peak_hour_local=12,
+        forecast_peak_time_local="2026-07-11T12:00",
+        forecast_peak_hour_utc=4,
+        forecast_peak_time_utc="2026-07-11T04:00:00Z",
+        forecast_timezone="Asia/Shanghai",
+        forecast_timezone_abbreviation="CST",
+        forecast_utc_offset_seconds=28800,
+        forecast_generationtime_ms=1.0,
+        forecast_model_fallback_reason=None,
+        forecast_detected_at_utc="2026-07-11T03:00:02Z",
+    )
+    archive = write_forecast_hourly_curve_capture(
+        tmp_path,
+        [row],
+        available_at_utc=datetime(2026, 7, 11, 3, 0, 4, tzinfo=timezone.utc),
+    )
+    snapshot = tmp_path / "snapshot_20260711_1110.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "ts_utc": "2026-07-11T03:10:00Z",
+                "records": [
+                    {
+                        "city": "Shanghai",
+                        "target_date": "2026-07-11",
+                        "forecast_values_hash": "hash-a",
+                        "forecast_curve_evidence": "cached_durable_curve",
+                        "forecast_curve_archive_path": str(archive),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_forecast_hourly_curves(
+        tmp_path / "forecast_hourly_curves",
+        snapshot,
+        now_utc=datetime(2026, 7, 11, 3, 15, tzinfo=timezone.utc),
+        max_age_min=45,
+    )
+    assert report["status"] == "ok"
+    assert report["cached_reuse_complete"] is True
+    assert report["cached_reuse_city_target_count"] == 1
+
+    payload = json.loads(snapshot.read_text(encoding="utf-8"))
+    payload["records"][0]["forecast_values_hash"] = "wrong-hash"
+    snapshot.write_text(json.dumps(payload), encoding="utf-8")
+    broken = check_forecast_hourly_curves(
+        tmp_path / "forecast_hourly_curves",
+        snapshot,
+        now_utc=datetime(2026, 7, 11, 3, 15, tzinfo=timezone.utc),
+        max_age_min=45,
+    )
+    assert broken["status"] == "snapshot_mismatch"
+    assert broken["invalid_cached_reuse_count"] == 1
+
+
 def test_prod_health_check_allows_reused_run_id_but_flags_duplicate_decisions(tmp_path):
     telemetry = tmp_path / "forward_telemetry.jsonl"
     row = {
@@ -319,7 +568,7 @@ def test_prod_health_overall_status_warns_on_stale_but_fails_on_structural_error
     assert overall_status(sections) == "fail"
 
 
-def test_live_order_check_defaults_to_active_runtime_files_only(tmp_path):
+def test_live_order_check_uses_only_production_declared_extra_files(tmp_path):
     live_dir = tmp_path / "live"
     live_dir.mkdir()
     legacy = live_dir / "theta_current_yes_tiny_live_v1_orders.jsonl"
@@ -332,7 +581,7 @@ def test_live_order_check_defaults_to_active_runtime_files_only(tmp_path):
     report = check_live_orders(live_dir, tail_rows=10, extra_files=[active_runtime])
 
     assert report["scope"] == "active_live_order_files"
-    assert report["files"] == [str(current), str(active_runtime)]
+    assert report["files"] == [str(active_runtime)]
 
     all_report = check_live_orders(live_dir, tail_rows=10, all_files=True)
     assert str(legacy) in all_report["files"]
@@ -368,11 +617,60 @@ def test_live_order_check_treats_lifecycle_replacements_as_single_active_tip(tmp
     report = check_live_orders(
         live_dir,
         tail_rows=10,
+        extra_files=[path],
         now_utc=datetime(2026, 7, 8, tzinfo=timezone.utc),
     )
 
     assert report["effective_current_or_future_rows"] == 1
     assert report["replaced_order_id_count"] == 1
+    assert report["duplicate_current_strategy_city_token_count"] == 0
+
+
+def test_live_order_check_excludes_confirmed_zero_fill_retry_parent(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    base = {
+        "schema_version": "fast_source_prev_no_trial_v2",
+        "strategy_instance": "fast_source_prev_no_trial_v1",
+        "city": "Singapore",
+        "target_date": "2026-08-04",
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "child_order_role": "taker",
+        "execution_policy": "depth_retry",
+        "status": "cross_candidate",
+    }
+    canceled_parent = {
+        **base,
+        "order_id": "parent",
+        "exchange_order_status": "canceled",
+        "immediate_cancel_confirmed": True,
+        "actual_fill_shares": 0.0,
+        "exchange_response": {"place": {"success": True, "status": "live"}},
+    }
+    filled_retry = {
+        **base,
+        "order_id": "retry",
+        "retry_parent_order_id": "parent",
+        "exchange_order_status": "matched",
+        "actual_fill_shares": 13.5,
+        "exchange_response": {"place": {"success": True, "status": "matched"}},
+    }
+    path.write_text(
+        json.dumps(canceled_parent) + "\n" + json.dumps(filled_retry) + "\n",
+        encoding="utf-8",
+    )
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        extra_files=[path],
+        now_utc=datetime(2026, 8, 4, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 1
     assert report["duplicate_current_strategy_city_token_count"] == 0
 
 
@@ -401,6 +699,24 @@ def test_live_order_check_separates_historical_duplicates_from_current_risk(tmp_
     assert report["duplicate_strategy_city_token_count"] == 1
     assert report["duplicate_current_strategy_city_token_count"] == 0
     assert report["current_yes_no_conflict_count"] == 0
+
+
+def test_overall_status_does_not_warn_on_historical_only_order_duplicates():
+    sections = {
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
+        "telemetry": [],
+        "live_orders": {
+            "parse_error_count": 0,
+            "duplicate_order_id_count": 0,
+            "duplicate_strategy_city_token_count": 50,
+            "duplicate_current_strategy_city_token_count": 0,
+            "current_yes_no_conflict_count": 0,
+        },
+        "summaries": [],
+    }
+
+    assert overall_status(sections) == "ok"
 
 
 def test_live_order_check_excludes_blocked_attempts_from_current_risk(tmp_path):

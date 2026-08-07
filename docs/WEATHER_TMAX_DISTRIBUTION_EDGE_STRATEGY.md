@@ -117,6 +117,69 @@ ask source for d1/d2 YES: 1 - sibling NO bid
 这版 bridge 还不是 full ladder target book。真正完整版本需要逐格 hazard / full-ladder 概率、
 实时 sibling book、以及 target-book reconciliation 的平仓成本账本。
 
+## External Baseline / Target-Book v2
+
+2026-07-08 按外部 `polymarket-tmax-lab` 的可迁移概率形状做了一个同分母对照组：
+
+```text
+external_tmax_baseline_v0:
+  daily-max forecast error -> Gaussian outcome probabilities
+  recency-weighted residuals
+  market blend alpha selected on pre-cutoff expanding CV
+  no live / no executor / no external ROI claims
+```
+
+结果见
+[2026-07-08-external-tmax-baseline-v0.md](analysis/2026-07/2026-07-08-external-tmax-baseline-v0.md)：
+
+- 外部 raw Gaussian/recency 概率明显输给 market-local；pre-cutoff CV 选出的 blend alpha = `0.0`。
+- 结论是 `external_baseline_shadow_only`：不能把外部模型当 alpha 替代；可借鉴的是 previous-runs/source-profile/calibration checker 的工程方法。
+
+同日新增
+[2026-07-08-tmax-target-book-v2.md](analysis/2026-07/2026-07-08-tmax-target-book-v2.md)：
+
+```text
+our_tmax_target_book_v2:
+  probability_source -> expression candidates -> target_book ledger
+  open: first eligible city-day target only
+  hold: default after posterior update
+  close/reopen: only if close_value + new_value - old_hold_value > buffer
+  current_yes: not active in primary set; only for revalue/complement cost
+```
+
+关键结果：
+
+- `our_current / v2_first_lock_no_current_yes` verified: 126 rows / 12 dates / ROI +9.7% / CI [-1.5%, +21.4%]。
+- `our_current_ext_guard` verified 点估更高且 CI 为正，但只有 39 rows，dev-CV 仍不稳；作为 shadow diagnostic，不作为主策略。
+- `v2_rebalance_ev02` 低于 first-lock，说明后续 posterior flip 不能直接当翻仓 alpha。
+- ABCD 汇总见
+  [2026-07-08-tmax-abcd-comparison-v1.md](analysis/2026-07/2026-07-08-tmax-abcd-comparison-v1.md)：6/21+ 重算后 A/B 概率分母扩到 12 dates / 1,729 rows；
+  `mkt_city_source_blend` logloss 0.578 vs A 0.644，`loo_no_city_source_blend` logloss 0.579；外部 raw 仍显著输 market。
+- 概率模型 review 见
+  [2026-07-08-tmax-probability-model-review-v1.md](analysis/2026-07/2026-07-08-tmax-probability-model-review-v1.md)：模型本体保留；
+  `mkt_city_source_blend` 是 proper-score 最优，`loo_no_city_source_blend` 是当前 target-book 执行概率源且表达 EV 更稳。下一步不是换外部模型，
+  而是在 zero-notional target-book 里双写 B_score/B_exec，并推进 full-ladder / hazard-chain 概率。
+- 第一性原理模型实验见
+  [2026-07-08-tmax-hazard-chain-v0.md](analysis/2026-07/2026-07-08-tmax-hazard-chain-v0.md) 和
+  [2026-07-08-tmax-full-ladder-v1.md](analysis/2026-07/2026-07-08-tmax-full-ladder-v1.md)：hazard overlay 在 dev-CV 退回 alpha=0；
+  direct full-ladder v1 的 dev-CV 也选 alpha=0，不能升格执行。但 forward 诊断 alpha=0.25 在 exact-step / overshoot / tail 切片改善，
+  说明方向有信号，下一版应做 monotone survival + 真实 sibling book/source-basis，而不是直接用多分类输出替换 B_exec。
+- monotone survival 版见
+  [2026-07-08-tmax-full-ladder-survival-v2.md](analysis/2026-07/2026-07-08-tmax-full-ladder-survival-v2.md)：把 full-ladder 改成逐档 conditional survival，
+  接入 sibling book / source-basis / cadence 特征。dev-CV 按 bucket logloss 仍选 alpha=0，所以不能升格执行；但 verified-forward
+  细 alpha sweep 后 `survival_city` alpha=0.35 同时改善 exact logloss 0.6680→0.6494 和四桶 bucket logloss 0.5791→0.5755，
+  bucket delta date-CI [-0.0199,-0.0008]，overshoot/tail/reanchor 切片均同号改善。效应量是小幅校准改善：true bucket 几何均值概率约
+  0.5604→0.5624，不是单笔巨大 edge。结论：v2 是当前最强 full-ladder 研究候选，
+  下一步应进入 zero-notional target-book 双写验证，而不是直接替换 B_exec。
+
+当前动作：
+
+```text
+live_action = none
+promotion = no live
+next = zero-notional target-book shadow runner / position_book telemetry
+```
+
 ## 2026-07-10 Lineage Repair
 
 [2026-07-10-tmax-lineage-repair-replay-v1.md](analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.md)
@@ -178,6 +241,61 @@ selected/blocked = shadow 记录
 
 这样不会因为某天错了就继续加 gate，也不会因为当前 runner 没成交就误判没有机会。
 
+## State-Transition Card / LLM 前置节点（research design）
+
+2026-07-21 对外部“站点底座＋十类动态天气过程＋日内状态机”的审阅结论是：它与当前
+distribution-first 主线高度一致，但新增的是 **状态转变时钟**，不是另一套固定 regime route。
+
+当前 `day_regime`、`intraday_state`、peak clock、remaining heat、cloud/moisture、wind/solar 和
+source reliability 描述的是决策时刻的多轴 state；下一版研究应再估计：
+
+```text
+P(next_state | PIT state)
+P(transition occurs within 1h / 2h / 3h)
+transition_time_quantiles
+```
+
+日照混合、低云、清云反弹、持续降雨、雷暴冷池、海风、锋面、焚风、逆温和下垫面只作
+multi-label diagnostic processes。一天可以经历 `low_cloud -> clearing -> sea_breeze_cap`；process label
+不直接决定买 current YES、current NO 或 d1/d2 表达。
+
+推荐的策略前置链路：
+
+```text
+PIT raw/source snapshots
+  -> deterministic weather_state + transition features
+  -> versioned LLM state-card synthesis
+  -> calibrated exact-bracket distribution
+  -> P(outcome)-market residual
+  -> fresh executable expression EV / target book
+```
+
+LLM 只负责结构化综合 source conflict、三情景和 invalidation signals；native-unit settlement lattice、
+source-to-settlement basis、概率校准、fresh ask/depth、fee 和执行仍由确定性代码负责。LLM 不直接给 live
+selector 发单，也不能把自然语言 confidence 当 `p_win`。最终日报里的 exact-bracket probability 和
+expression edge 分别由 downstream calibrated model 与 execution evaluator 注入，不由 LLM 填写。
+
+每天不是只生成一篇静态报告。每个 active city-day 应冻结 `morning_map`、`state_confirmed`、
+`pre_transition_or_key_report`、`post_update/end_of_day` 四类 checkpoint，并在 TAF amend、METAR/SPECI、
+云雨/风转、source conflict 或盘口跳变后追加 event-driven card。全 universe 的 observed/selected/blocked
+都要保留，避免 LLM selection bias。
+
+验证必须同 rows A/B：
+
+```text
+raw market
+vs current Tmax probability model
+vs + deterministic transition features
+vs + LLM state card
+```
+
+先比较 exact/bucket logloss、Brier、calibration 与 transition-time coverage，再比较 fee-adjusted executable
+residual。现有 weather-climate forward ablation 没有打败 raw market，因此“日报更完整”不等于 alpha 更强。
+当前动作是补 PIT collector 与 zero-notional card；`live_action=none`。
+
+完整映射、card schema 和 acceptance：
+[2026-07-21-intraday-state-transition-agent-review-v1.md](analysis/2026-07/2026-07-21-intraday-state-transition-agent-review-v1.md)。
+
 ## 当前候选配置
 
 | config | method | edge threshold | 角色 |
@@ -230,10 +348,10 @@ next_action = zero-notional shadow
 .venv/bin/python scripts/ops/tmax_distribution_edge_shadow_v1.py run
 ```
 
-循环运行：
+循环运行由 production contract/controller 管理，历史直启 wrapper 已删除：
 
 ```bash
-scripts/ops/start_tmax_distribution_edge_shadow_v1.sh
+.venv/bin/python scripts/ops/weather_production_ctl.py health
 ```
 
 当前本机 shadow loop：
@@ -348,8 +466,9 @@ current snapshot -> candidate event -> fresh CLOB ask -> weather_order_executor
 
 ```bash
 .venv/bin/python scripts/ops/tmax_distribution_edge_live_candidate_v1.py run --execute --max-orders 1
-scripts/ops/start_tmax_distribution_edge_live_candidate_v1.sh
 ```
+
+上式仅用于离线/单次研究复现；常驻或生产状态变更必须走 controller，不再提供独立启动脚本。
 
 默认 runtime：
 
@@ -466,5 +585,5 @@ fill selection bias：能成交的票可能正是价格朝我们不利方向移�
 - Report: `docs/analysis/2026-07/2026-07-03-tmax-distribution-research-synthesis-v1.md`
 - Shadow telemetry report: `docs/analysis/2026-07/2026-07-03-tmax-distribution-p6-shadow-telemetry-v1.md`
 - Runner: `scripts/ops/tmax_distribution_edge_shadow_v1.py`
-- Start script: `scripts/ops/start_tmax_distribution_edge_shadow_v1.sh`
+- Runtime owner: production contract + `weather_production_ctl.py`
 - Runtime journal: `runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1/shadow_events.jsonl`
