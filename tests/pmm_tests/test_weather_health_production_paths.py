@@ -14,7 +14,7 @@ from src.strategies.runtime.production import load_production_spec
 
 def test_health_paths_come_from_production_spec_without_historical_fallback() -> None:
     spec = load_production_spec()
-    assert DEFAULT_SNAPSHOT_DIR == spec.data_feed_runtime_root / "targeted_output/paper_snapshots"
+    assert DEFAULT_SNAPSHOT_DIR == spec.strategy_paper_snapshot_dir()
     assert ACTIVE_RUNTIME_LIVE_ORDER_FILES == spec.active_live_order_paths()
     assert "weather-predict" not in str(DEFAULT_SNAPSHOT_DIR)
 

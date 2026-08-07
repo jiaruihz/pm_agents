@@ -65,7 +65,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["current_yes_core_carry_tiny_live_v2"].expected_live is True
     assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
-        "/Users/deepsleep/projects/pm_agents_prod/scripts/ops/"
+        "/Users/deepsleep/projects/pm_agents_market_books_prod/scripts/ops/"
         "start_weather_current_yes_core_carry_tiny_live_v2.sh"
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
@@ -94,7 +94,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_city_probability_runtime_v3"].max_health_age_sec == 1200
     assert by_id["weather_current_yes_heat_death_shadow_v1"].max_health_age_sec == 2400
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_knmi_first_seen_prod"
+        "/Users/deepsleep/projects/pm_agents_market_books_prod"
     )
 
 
@@ -133,7 +133,7 @@ def test_migrated_historical_runtimes_remain_non_live():
         "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
         "weather_current_yes_heat_death_shadow_v1",
         "weather_fast_source_stale_book",
-        "weather_full_ladder_capture",
+        "weather_market_books",
         "weather_helsinki_pre_cross_active_ladder_shadow",
         "weather_korea_first_seen_state_v1",
         "weather_runtime_monitor",

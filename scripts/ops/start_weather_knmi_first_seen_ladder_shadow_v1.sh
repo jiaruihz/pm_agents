@@ -5,7 +5,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
-SOURCE_DIR="${WEATHER_KNMI_LADDER_SOURCE_DIR:-/Users/deepsleep/projects/pm_agents_knmi_first_seen_prod}"
+SOURCE_DIR="${WEATHER_KNMI_LADDER_SOURCE_DIR:-$PROJECT_DIR}"
 SESSION="${WEATHER_KNMI_LADDER_SESSION:-weather_knmi_first_seen_ladder_v1}"
 SOCKET="$(weather_jrs_tmux_start_socket)"
 PY="${WEATHER_KNMI_LADDER_PYTHON:-/Users/deepsleep/projects/pm_agents/.venv/bin/python}"

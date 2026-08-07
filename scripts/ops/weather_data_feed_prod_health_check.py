@@ -26,9 +26,9 @@ from src.strategies.runtime.production import load_production_spec
 
 PRODUCTION_SPEC = load_production_spec()
 MAC_DATA_FEED_RUNTIME = PRODUCTION_SPEC.data_feed_runtime_root
-DEFAULT_SNAPSHOT_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/paper_snapshots"
-DEFAULT_ORDERBOOK_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/orderbook_snapshots"
-DEFAULT_FORECAST_CURVE_DIR = MAC_DATA_FEED_RUNTIME / "targeted_output/forecast_hourly_curves"
+DEFAULT_SNAPSHOT_DIR = PRODUCTION_SPEC.strategy_paper_snapshot_dir()
+DEFAULT_ORDERBOOK_DIR = PRODUCTION_SPEC.resolved_market_books_root() / "batches"
+DEFAULT_FORECAST_CURVE_DIR = PRODUCTION_SPEC.forecast_hourly_curve_dir()
 DEFAULT_FAST_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/high_frequency_observations/state.json"
 DEFAULT_LIVE_CROSS_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/live_cross_observations/state.json"
 DEFAULT_OBSERVATION_CACHE = MAC_DATA_FEED_RUNTIME / "output/observations/latest.json"
