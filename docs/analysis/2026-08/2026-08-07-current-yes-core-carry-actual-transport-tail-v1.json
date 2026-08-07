@@ -1,0 +1,388 @@
+{
+  "schema_version": "current_yes_core_carry_actual_transport_tail_v1",
+  "generated_at_utc": "2026-08-07T10:27:32.062723+00:00",
+  "research_id": "current_yes_core_carry_actual_transport_tail_v1",
+  "run_id": "iem_actual_transition_monotone_tail_20260807",
+  "denominator": {
+    "checkpoints": 1349,
+    "state_entries": 801,
+    "cities": 36,
+    "dates": 31,
+    "date_min": "2026-06-02",
+    "date_max": "2026-07-08",
+    "selected_entries": 136,
+    "selected_losses": 6
+  },
+  "coverage": {
+    "complete_actual_transition": 0.9985174203113417,
+    "forecast_exit_pressure": 0.9985174203113417,
+    "fresh_high_heat": 0.9985174203113417,
+    "warm_moist_transport": 0.9629355077835434,
+    "hemisphere_warm_transport": 0.9629355077835434,
+    "dewpoint_surge_heat": 0.9985174203113417,
+    "dry_warming_transport": 0.9985174203113417,
+    "clearing_reheat": 0.7724240177909563,
+    "frontal_warm_transition": 0.865826538176427,
+    "cold_transport_protection": 0.9629355077835434,
+    "cloud_cooling_protection": 0.7724240177909563,
+    "rain_cooling_protection": 0.9985174203113417,
+    "gust_warming_transport": 0.029651593773165306,
+    "falling_pressure_warm_transition": 0.7183098591549296
+  },
+  "lineage": {
+    "stations": 36,
+    "base_rows": 49478,
+    "merged_rows": 49478,
+    "base_files": 36,
+    "base_sha256": {
+      "iem_ext_EDDM_2026-06-02_2026-07-08.csv": "43468c4489bdcc385c68a86483b4984f6e2f8b69cc4b813ad91b18bf6cbc0657",
+      "iem_ext_EFHK_2026-06-02_2026-07-08.csv": "7a149df80eca0e4f1336eadfd2ac98f9f08333208142680c8375691135aff2e4",
+      "iem_ext_EHAM_2026-06-02_2026-07-08.csv": "214dcf4fab9143f0dd368d2c81c203440bcc4d0354b54dc01e74e1d7cc9d34b9",
+      "iem_ext_EPWA_2026-06-02_2026-07-08.csv": "b7c7847827c51304df3650c75d32b338f873b7a7aa872a4dcd71deb99a518d1d",
+      "iem_ext_FACT_2026-06-02_2026-07-08.csv": "40ae66f17ac13ca5e9ca4ef7d41d8ebfcb391cd15aaea1a5030aac5563cdaaaa",
+      "iem_ext_KATL_2026-06-02_2026-07-08.csv": "1891b20c778ef7f867e5a3417e4a9377aabde5481c9396c2bfa29476a63f3a68",
+      "iem_ext_KAUS_2026-06-02_2026-07-08.csv": "05b3753a78fdbed7b5720fdcc51983d452b84dcf356f22a52bdce594643fc697",
+      "iem_ext_KBKF_2026-06-02_2026-07-08.csv": "278a9903d06f07ee33e7bd308265a4d78ad198383b54ed05aeb96d2b98be161a",
+      "iem_ext_KDAL_2026-06-02_2026-07-08.csv": "602f8b2c4a2fb16e2e22f997f85ed1b32030430c51befe1b88e95c9e209e2f4a",
+      "iem_ext_KHOU_2026-06-02_2026-07-08.csv": "fb386703b261018ac5ef836d502100a0332bc047754ae6b09cdb090314ffb941",
+      "iem_ext_KLAX_2026-06-02_2026-07-08.csv": "3a4d298426e30e2fff07871dd6fa49cc278af840c1d12b9cab0e3d0ac390bcb9",
+      "iem_ext_KLGA_2026-06-02_2026-07-08.csv": "ce3d146c553313e5a0a8bcde5cf826cec066492b42607216d67b730abe7763da",
+      "iem_ext_KMIA_2026-06-02_2026-07-08.csv": "e2f5bf3b9d06bf72380e7b413486b00d0eaf43a69891bb6fe7370af70c287745",
+      "iem_ext_KSEA_2026-06-02_2026-07-08.csv": "4db4e9e5ccdae8f55d40258147c008c2be39b63503e95d63fb523f197e4d01b7",
+      "iem_ext_KSFO_2026-06-02_2026-07-08.csv": "df9490ac40ac436f2d4df5ed4888a36d33e38225288639582b8b3c56520d4519",
+      "iem_ext_LEMD_2026-06-02_2026-07-08.csv": "11ddb65b7e9b760b2f2347693c3d7db94d7d39b3bceb8708a50c60f8bffb7922",
+      "iem_ext_LLBG_2026-06-02_2026-07-08.csv": "178c6c8ae4ab312593a017bcb3ad53f32cebf89ffbb6a010aeceb084be18b93c",
+      "iem_ext_LTAC_2026-06-02_2026-07-08.csv": "0fc62fa1746f796408a32a17d52b59e4774f3b79a63516624a0833933f9b1aeb",
+      "iem_ext_LTFM_2026-06-02_2026-07-08.csv": "c5f5732b90bd6651f0d32bfc20cdb639bbb169ca3953b5e37ca99b547bc9ee6c",
+      "iem_ext_NZWN_2026-06-02_2026-07-08.csv": "861055fba070256e5303c56d274ddecfc292fe3fda1207c29e82fcddf5a20e24",
+      "iem_ext_OEJN_2026-06-02_2026-07-08.csv": "465b9d489de17071f62513ac0e9b45310b4a3713264eabf8b3fd3e8070699151",
+      "iem_ext_OPKC_2026-06-02_2026-07-08.csv": "628928a8775d78d729083bc89c356ea625b5c03fbacf6f8aaaa963618b8351f0",
+      "iem_ext_RCSS_2026-06-02_2026-07-08.csv": "6af6c72916e8afcaf8afb77842cc47135abfad314908379a4bc9646c8f8e9d3b",
+      "iem_ext_RJTT_2026-06-02_2026-07-08.csv": "0c583bc1dbdfab261ae6eb9bb4788a666a8d4d98ce23d6c3fd6568161db4ec08",
+      "iem_ext_RKPK_2026-06-02_2026-07-08.csv": "2896d0a42c32f2d435357b9f9c2f366969447831361cb907356a123c25db3d9d",
+      "iem_ext_RPLL_2026-06-02_2026-07-08.csv": "f28767dfa68fdc2eb6a67035ce49b834632a8a75233b4351a021d3b7c52d4589",
+      "iem_ext_SAEZ_2026-06-02_2026-07-08.csv": "0abefe8287fab2cce786b7480fc8cbe82a560e8fa61c6660e01d6613e5031ad7",
+      "iem_ext_SBGR_2026-06-02_2026-07-08.csv": "766fd3cca913f9b8a59474bb4aa41eb7ef19c1d24765c7ab92dae6b57bab72d3",
+      "iem_ext_VILK_2026-06-02_2026-07-08.csv": "5b8b2cf8120a9752555eb4321c2cd5bf3070950b7cb27446e80266d6c269c5e3",
+      "iem_ext_WSSS_2026-06-02_2026-07-08.csv": "fedc2b0d8a65605c147ee7ef6f3db680170be8b124d9c934530d4c56f0d10d5b",
+      "iem_ext_ZBAA_2026-06-02_2026-07-08.csv": "4a99a8a36296c8d762288e2e577f5f605f415fb2f4368a117d580c3f412695e6",
+      "iem_ext_ZGGG_2026-06-02_2026-07-08.csv": "0ea872cda9e3b5d1ae796335099cc31b14e00e9f27b859ebc3d2329feb917e56",
+      "iem_ext_ZHHH_2026-06-02_2026-07-08.csv": "31f5d50708dde35502adf44822cfd9ed9821587f81479055184c0794e12ea8de",
+      "iem_ext_ZSPD_2026-06-02_2026-07-08.csv": "4a9d1dd541ffab91aca4dbd82dd3e53b944b790f357825fbb21c90265887a56d",
+      "iem_ext_ZUCK_2026-06-02_2026-07-08.csv": "d166489fe8cb6d911887f8ec43f5f25588a1315bc479668aaf1529b7a7d151ed",
+      "iem_ext_ZUUU_2026-06-02_2026-07-08.csv": "473744f4ab229dc4572f2101a05f839e5cbbedb9aaab0b6eaa5b022fdc2c4c01"
+    },
+    "augmented_sha256": "889d98b66e249be89c5f98f28dd9010bed2630870f965c5a2ee9a656fd379aa1",
+    "pit_limit": "report-time observation timestamps; original first-seen ingestion latency unavailable"
+  },
+  "development_dates": [
+    "2026-06-10",
+    "2026-06-11",
+    "2026-06-12",
+    "2026-06-13",
+    "2026-06-14",
+    "2026-06-15",
+    "2026-06-16",
+    "2026-06-17",
+    "2026-06-18",
+    "2026-06-19",
+    "2026-06-20",
+    "2026-06-21",
+    "2026-06-22",
+    "2026-06-23",
+    "2026-06-25"
+  ],
+  "forward_dates": [
+    "2026-06-26",
+    "2026-06-27",
+    "2026-06-29",
+    "2026-06-30",
+    "2026-07-01",
+    "2026-07-06",
+    "2026-07-07",
+    "2026-07-08"
+  ],
+  "development": {
+    "tail_challenger": {
+      "state_entries": 417,
+      "high_risk_entries": 125,
+      "selected_fraction": 0.2997601918465228,
+      "overshoots": 34,
+      "overshoots_captured": 22,
+      "overshoot_recall": 0.6470588235294118,
+      "winner_false_positive_rate": 0.2689295039164491,
+      "overall_overshoot_rate": 0.0815347721822542,
+      "high_risk_overshoot_rate": 0.176,
+      "lift": 2.1585882352941175
+    },
+    "tail_core": {
+      "state_entries": 417,
+      "high_risk_entries": 119,
+      "selected_fraction": 0.2853717026378897,
+      "overshoots": 34,
+      "overshoots_captured": 23,
+      "overshoot_recall": 0.6764705882352942,
+      "winner_false_positive_rate": 0.2506527415143603,
+      "overall_overshoot_rate": 0.0815347721822542,
+      "high_risk_overshoot_rate": 0.19327731092436976,
+      "lift": 2.3704893722194758
+    },
+    "policy": {
+      "entries": 67,
+      "dates": 15,
+      "losses": 2,
+      "fixed10_pnl": 38.41146909999999,
+      "challenger_overlay": {
+        "downsize_entries": 16,
+        "downsize_losses": 1,
+        "downsize_winners": 15,
+        "pnl": 32.53136799999999,
+        "pnl_delta_vs_fixed10": -5.880101099999997,
+        "loss_capital_saved": 4.378299999999999,
+        "winner_profit_sacrificed": 10.258401099999999,
+        "net_tail_value": -5.880101099999999
+      },
+      "core_risk_overlay": {
+        "downsize_entries": 11,
+        "downsize_losses": 1,
+        "downsize_winners": 10,
+        "pnl": 35.207618,
+        "pnl_delta_vs_fixed10": -3.2038510999999943,
+        "loss_capital_saved": 4.378299999999999,
+        "winner_profit_sacrificed": 7.582151099999997,
+        "net_tail_value": -3.203851099999998
+      }
+    },
+    "probability_challenger": {
+      "state_entries": 417,
+      "dates": 15,
+      "brier": 0.06612547263819181,
+      "logloss": 0.23957799411690547
+    },
+    "probability_core": {
+      "state_entries": 417,
+      "dates": 15,
+      "brier": 0.06531137517930347,
+      "logloss": 0.23770493932269196
+    }
+  },
+  "forward": {
+    "tail_challenger": {
+      "state_entries": 138,
+      "high_risk_entries": 32,
+      "selected_fraction": 0.2318840579710145,
+      "overshoots": 14,
+      "overshoots_captured": 7,
+      "overshoot_recall": 0.5,
+      "winner_false_positive_rate": 0.20161290322580644,
+      "overall_overshoot_rate": 0.10144927536231885,
+      "high_risk_overshoot_rate": 0.21875,
+      "lift": 2.15625
+    },
+    "tail_core": {
+      "state_entries": 138,
+      "high_risk_entries": 32,
+      "selected_fraction": 0.2318840579710145,
+      "overshoots": 14,
+      "overshoots_captured": 7,
+      "overshoot_recall": 0.5,
+      "winner_false_positive_rate": 0.20161290322580644,
+      "overall_overshoot_rate": 0.10144927536231885,
+      "high_risk_overshoot_rate": 0.21875,
+      "lift": 2.15625
+    },
+    "policy": {
+      "entries": 22,
+      "dates": 7,
+      "losses": 1,
+      "fixed10_pnl": 9.529720900000003,
+      "challenger_overlay": {
+        "downsize_entries": 6,
+        "downsize_losses": 1,
+        "downsize_winners": 5,
+        "pnl": 10.220720900000003,
+        "pnl_delta_vs_fixed10": 0.6910000000000007,
+        "loss_capital_saved": 4.2336,
+        "winner_profit_sacrificed": 3.542600000000001,
+        "net_tail_value": 0.690999999999999
+      },
+      "core_risk_overlay": {
+        "downsize_entries": 6,
+        "downsize_losses": 1,
+        "downsize_winners": 5,
+        "pnl": 10.220720900000003,
+        "pnl_delta_vs_fixed10": 0.6910000000000007,
+        "loss_capital_saved": 4.2336,
+        "winner_profit_sacrificed": 3.542600000000001,
+        "net_tail_value": 0.690999999999999
+      }
+    },
+    "probability_challenger": {
+      "state_entries": 138,
+      "dates": 8,
+      "brier": 0.07587821867122249,
+      "logloss": 0.26784794949007873
+    },
+    "probability_core": {
+      "state_entries": 138,
+      "dates": 8,
+      "brier": 0.07518205227841415,
+      "logloss": 0.26567722127106863
+    },
+    "probability_delta_bootstrap": {
+      "dates": 8,
+      "brier_delta": {
+        "mean": 0.0006961663928083416,
+        "ci95": [
+          -0.00017016012053082082,
+          0.0015237510404401164
+        ]
+      },
+      "logloss_delta": {
+        "mean": 0.002170728219010113,
+        "ci95": [
+          -0.0017798572655758759,
+          0.005747674494824195
+        ]
+      }
+    }
+  },
+  "frozen_fit": {
+    "columns": [
+      "calibration_intercept",
+      "forecast_exit_pressure",
+      "fresh_high_heat",
+      "warm_moist_transport",
+      "hemisphere_warm_transport",
+      "dewpoint_surge_heat",
+      "dry_warming_transport",
+      "clearing_reheat",
+      "frontal_warm_transition",
+      "cold_transport_protection",
+      "cloud_cooling_protection",
+      "rain_cooling_protection",
+      "gust_warming_transport",
+      "falling_pressure_warm_transition"
+    ],
+    "transforms": {
+      "forecast_exit_pressure": {
+        "median": -2.0000000000000027,
+        "mean": -1.7023978685612788,
+        "scale": 2.9625884471294235
+      },
+      "fresh_high_heat": {
+        "median": 0.24711730933846474,
+        "mean": 0.3551579332557247,
+        "scale": 0.3421002827838937
+      },
+      "warm_moist_transport": {
+        "median": 0.0,
+        "mean": 0.054036965913428825,
+        "scale": 0.16857190280490983
+      },
+      "hemisphere_warm_transport": {
+        "median": 0.0,
+        "mean": 0.12602825306985543,
+        "scale": 0.24781885531620895
+      },
+      "dewpoint_surge_heat": {
+        "median": 0.0,
+        "mean": 0.40422042407698827,
+        "scale": 0.9616779021434722
+      },
+      "dry_warming_transport": {
+        "median": 0.0,
+        "mean": 0.1080350068343457,
+        "scale": 0.7739213172895121
+      },
+      "clearing_reheat": {
+        "median": 0.0,
+        "mean": 0.2944263859128511,
+        "scale": 0.8218038578917362
+      },
+      "frontal_warm_transition": {
+        "median": 0.09259259259259259,
+        "mean": 0.26212639519329867,
+        "scale": 0.5488320000338466
+      },
+      "cold_transport_protection": {
+        "median": 0.0,
+        "mean": -0.054465206664448144,
+        "scale": 0.24232338995204833
+      },
+      "cloud_cooling_protection": {
+        "median": 0.0,
+        "mean": -0.07588316558121179,
+        "scale": 0.6161525958294876
+      },
+      "rain_cooling_protection": {
+        "median": 0.0,
+        "mean": -0.10843694493783305,
+        "scale": 0.7426309675854854
+      },
+      "gust_warming_transport": {
+        "median": 0.0,
+        "mean": 0.002902703349634945,
+        "scale": 0.043902664383386907
+      },
+      "falling_pressure_warm_transition": {
+        "median": 0.1693194999999861,
+        "mean": 0.2404958439905233,
+        "scale": 0.3418618378379077
+      }
+    },
+    "coefficients": [
+      -0.06933901265075443,
+      0.06573380419828573,
+      0.01245284520655821,
+      0.0321228963725554,
+      0.059455351079136944,
+      0.04879073553615493,
+      0.07905015959061788,
+      0.008766269971104256,
+      0.0,
+      0.002141984705688233,
+      0.016253520644792286,
+      0.008284095504276792,
+      0.0,
+      0.0
+    ],
+    "coefficient_map": {
+      "calibration_intercept": -0.06933901265075443,
+      "forecast_exit_pressure": 0.06573380419828573,
+      "fresh_high_heat": 0.01245284520655821,
+      "warm_moist_transport": 0.0321228963725554,
+      "hemisphere_warm_transport": 0.059455351079136944,
+      "dewpoint_surge_heat": 0.04879073553615493,
+      "dry_warming_transport": 0.07905015959061788,
+      "clearing_reheat": 0.008766269971104256,
+      "frontal_warm_transition": 0.0,
+      "cold_transport_protection": 0.002141984705688233,
+      "cloud_cooling_protection": 0.016253520644792286,
+      "rain_cooling_protection": 0.008284095504276792,
+      "gust_warming_transport": 0.0,
+      "falling_pressure_warm_transition": 0.0
+    },
+    "l2": 0.2,
+    "train_rows": 1126,
+    "train_dates": 23
+  },
+  "limitations": [
+    "Historical METAR report timestamps are PIT by observation time but original collector first-seen latency is unavailable.",
+    "Gust values are sparse and missingness is not treated as no gust.",
+    "Hemisphere warm-direction is a coarse transport prior, not a city terrain model.",
+    "Only six frozen selected losses exist; sizing PnL is descriptive and cannot authorize live changes."
+  ],
+  "live_action": "none",
+  "artifacts": {
+    "artifact_dir": "/Volumes/jrs-archive/pm_agents/research/artifact_store/active/current_yes_core_carry_actual_transport_tail_v1/iem_actual_transition_monotone_tail_20260807",
+    "preregistration": "docs/analysis/2026-08/2026-08-07-current-yes-core-carry-actual-transport-tail-preregistration.json"
+  },
+  "materiality_checks": {
+    "absolute_tail_pass": true,
+    "incremental_tail_vs_core_pass": false,
+    "incremental_policy_vs_core_pass": false
+  },
+  "materiality_rule_pass": false,
+  "verdict": "no_incremental_tail_value"
+}
