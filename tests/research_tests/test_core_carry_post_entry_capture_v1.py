@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from scripts.analysis.reheat_risk.research_core_carry_post_entry_capture_v1 import (
+    first_new_report_event,
     official_weather_fee_per_share,
+    replay_one_report_confirmation,
+    top_of_book,
     walk_sell_ladder,
 )
 from scripts.ops.weather_current_yes_core_carry_post_entry_capture_shadow_v1 import (
@@ -89,3 +92,46 @@ def test_active_entry_uses_city_local_target_date() -> None:
     assert not entry_is_active(
         {"target_date": "2026-08-07", "timezone": "Pacific/Auckland"}, now
     )
+
+
+def test_top_of_book_accepts_archived_sequence_levels() -> None:
+    assert top_of_book(
+        {"bids": [["0.88", "4"], ["0.90", "8"]], "asks": [["0.93", "9"]]}
+    ) == (0.90, 0.93)
+
+
+def test_first_new_report_confirmation_cancels_after_cross() -> None:
+    entry = {
+        "city": "Chengdu",
+        "target_date": "2026-07-27",
+        "current_bracket": "29",
+        "current_condition_id": "condition",
+        "current_yes_token_id": "token",
+        "source_report_ts_utc": "2026-07-27T09:00:00Z",
+        "created_at_utc": "2026-07-27T09:33:00Z",
+        "taker_ladder": {"effective_cost_per_share": 0.9298},
+    }
+    crossed = {
+        "city": "Chengdu",
+        "target_date": "2026-07-27",
+        "current_bracket": "30",
+        "source_report_ts_utc": "2026-07-27T10:00:00Z",
+        "as_of_ts_utc": "2026-07-27T10:16:00Z",
+    }
+    states = {("Chengdu", "2026-07-27"): [crossed]}
+
+    assert first_new_report_event(entry, states) == crossed
+    row = replay_one_report_confirmation(
+        [entry],
+        states,
+        {},
+        {"condition": 0.0},
+        {},
+        quantity=10,
+        max_book_lag_min=30,
+    )[0]
+    assert row["confirmation_covered"] is True
+    assert row["confirmation_entered"] is False
+    assert row["confirmation_reason"] == "held_bracket_invalidated_by_first_new_report"
+    assert row["candidate_pnl_usd"] == 0.0
+    assert row["pnl_delta_usd"] == 9.298

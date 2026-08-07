@@ -72,6 +72,7 @@ FEATURE_COLUMNS = [
     "plateau_confirmation",
     "wind_boost_transition_risk",
 ]
+FORECAST_UNDERPREDICTION_FEATURE = "forecast_underprediction_ticks"
 
 
 def file_sha256(path: Path) -> str:
@@ -101,7 +102,7 @@ def upper_exit_geometry(
     bracket_label: str,
     running_native: float,
     forecast_max_native: float,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     """Return running distance and forecast margin to the next exact bracket.
 
     Celsius markets are mapped to their underlying integer-F observation
@@ -115,12 +116,17 @@ def upper_exit_geometry(
         threshold_f = math.ceil((float(bracket.high) + 0.5) * 9.0 / 5.0 + 32.0 - EPS)
         running_f = math.floor(float(running_native) * 9.0 / 5.0 + 32.0 + 0.5)
         forecast_f = float(forecast_max_native) * 9.0 / 5.0 + 32.0
-        return float(threshold_f - running_f), float(forecast_f - threshold_f)
+        return (
+            float(threshold_f - running_f),
+            float(forecast_f - threshold_f),
+            float(running_f - forecast_f),
+        )
     if unit == "F":
         threshold_f = float(bracket.high) + 1.0
         return (
             float(threshold_f - float(running_native)),
             float(forecast_max_native) - threshold_f,
+            float(running_native) - float(forecast_max_native),
         )
     raise ValueError(f"unsupported temperature unit: {unit!r}")
 
@@ -143,6 +149,9 @@ def add_transition_features(frame: pd.DataFrame) -> pd.DataFrame:
     )
     output["forecast_upper_exit_margin_ticks"] = np.clip(
         [item[1] for item in geometry], -10.0, 10.0
+    )
+    output[FORECAST_UNDERPREDICTION_FEATURE] = np.clip(
+        [item[2] for item in geometry], 0.0, 10.0
     )
 
     numeric = lambda name: pd.to_numeric(output[name], errors="coerce")
@@ -441,10 +450,15 @@ def format_delta(item: dict[str, Any]) -> str:
 
 
 def main() -> int:
+    global FEATURE_COLUMNS
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--challenger-run-id", default=RUN_ID)
     parser.add_argument("--challenger-output-dir", type=Path)
+    parser.add_argument("--diagnostic-forecast-underprediction", action="store_true")
+    parser.add_argument("--no-write-report", action="store_true")
     args, _ = parser.parse_known_args()
+    if args.diagnostic_forecast_underprediction:
+        FEATURE_COLUMNS = [*FEATURE_COLUMNS, FORECAST_UNDERPREDICTION_FEATURE]
     prereg = json.loads(PREREG.read_text(encoding="utf-8"))
     if not prereg.get("frozen_before_formal_run"):
         raise RuntimeError("preregistration is not frozen")
@@ -584,6 +598,13 @@ def main() -> int:
         "decision_rule_pass": positive,
         "live_action": "none",
         "limitations": [
+            *(
+                [
+                    "forecast_underprediction_ticks was added after inspecting later live failures; this run is exploratory diagnostic evidence, not the frozen preregistered v1 challenger."
+                ]
+                if args.diagnostic_forecast_underprediction
+                else []
+            ),
             "The ledger ends on 2026-07-08 and does not include the later Wellington, Lucknow or Manila live cases on the same fixed denominator.",
             "Historical first-seen cloud/rain transitions, dewpoint trend and wind-direction by terrain are unavailable, so they are not imputed or proxied.",
             "The last eight dates were frozen before this run but their outcomes were seen by the wider research program; this is not clean program-wide forward evidence.",
@@ -595,7 +616,8 @@ def main() -> int:
             "preregistration_sha256": file_sha256(PREREG),
         },
     }
-    RESULT.write_text(json.dumps(json_ready(payload), indent=2) + "\n", encoding="utf-8")
+    if not args.no_write_report:
+        RESULT.write_text(json.dumps(json_ready(payload), indent=2) + "\n", encoding="utf-8")
 
     fm = forward_metrics
     lines = [
@@ -608,7 +630,7 @@ def main() -> int:
         f"- 分母：{len(frame):,} checkpoints、{len(state_entries)} 个 city-date-bracket state entries、{frame['city'].nunique()} 城、{len(dates)} 个 target dates（{dates[0]}–{dates[-1]}）。",
         f"- 开发窗：{development['target_date'].nunique()} 个 expanding OOF dates；历史 forward：{len(forward_dates)} dates（{forward_dates[0]}–{forward_dates[-1]}）。",
         "- 训练权重：target_date 等权 → date 内 state entry 等权 → state 内 checkpoint 等权；主评测同样按 target_date 等权。",
-        "- 模型：frozen Core logit offset + 10 个连续物理/语义特征 + L2=0.5；K=1，无 forward 选型。",
+        f"- 模型：frozen Core logit offset + {len(FEATURE_COLUMNS)} 个连续物理/语义特征 + L2=0.5；K=1，无 forward 选型。",
         "",
         "## 加入的表达",
         "",
@@ -645,7 +667,8 @@ def main() -> int:
         "",
         f"大文件产物：`{out_dir}`",
     ]
-    REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if not args.no_write_report:
+        REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(
         json.dumps(
             json_ready(

@@ -17,6 +17,7 @@ import gzip
 import json
 import math
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,8 +25,18 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (
+    DEFAULT_ARTIFACT,
+    load_artifact,
+    market_features,
+    score_probability,
+    walk_ask_ladder,
+)
+
 RUNTIME = Path(
     "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
     "current_yes_core_carry_tiny_live_v2"
@@ -118,6 +129,39 @@ def walk_sell_ladder(
         "best_bid": levels[0][0] if levels else None,
         "min_bid": min_bid if executable else None,
     }
+
+
+def top_of_book(book: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    def prices(levels: Sequence[Mapping[str, Any] | Sequence[Any]]) -> list[float]:
+        out: list[float] = []
+        for level in levels:
+            if isinstance(level, Mapping):
+                price = finite(level.get("price"))
+            else:
+                try:
+                    price = finite(level[0])
+                except (IndexError, TypeError):
+                    price = None
+            if price is not None and 0 < price < 1:
+                out.append(price)
+        return out
+
+    bids = prices(book.get("bids") or [])
+    asks = prices(book.get("asks") or [])
+    return (max(bids) if bids else None, min(asks) if asks else None)
+
+
+def post_event_probability(
+    event: Mapping[str, Any],
+    book: Mapping[str, Any],
+    artifact: Mapping[str, Any],
+) -> float | None:
+    bid, ask = top_of_book(book)
+    state = {**event, "current_yes_bid": bid, "current_yes_ask": ask}
+    features, fatal = market_features(state)
+    if fatal:
+        return None
+    return score_probability(features, artifact)
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -227,9 +271,11 @@ def load_books(
                     summary = row.get("summary") if isinstance(row.get("summary"), dict) else {}
                     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
                     bids = summary.get("bids") or raw.get("bids") or []
+                    asks = summary.get("asks") or raw.get("asks") or []
                     candidate = {
                         "snapshot_ts_utc": timestamp,
                         "bids": bids,
+                        "asks": asks,
                         "source_path": str(path),
                     }
                     prior = books[token].get(timestamp)
@@ -271,6 +317,32 @@ def post_entry_events(
     return sorted(by_report.values(), key=lambda row: parse_utc(row.get("as_of_ts_utc")))
 
 
+def first_new_report_event(
+    entry: Mapping[str, Any], states: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]]
+) -> Mapping[str, Any] | None:
+    entry_report = parse_utc(entry.get("source_report_ts_utc"))
+    if entry_report is None:
+        return None
+    key = (str(entry.get("city") or ""), str(entry.get("target_date") or ""))
+    by_report: dict[str, Mapping[str, Any]] = {}
+    for state in states.get(key, []):
+        report = parse_utc(state.get("source_report_ts_utc"))
+        available = parse_utc(state.get("as_of_ts_utc"))
+        if report is None or available is None or report <= entry_report:
+            continue
+        report_key = str(state.get("source_report_ts_utc"))
+        prior = by_report.get(report_key)
+        if prior is None or available < parse_utc(prior.get("as_of_ts_utc")):
+            by_report[report_key] = state
+    if not by_report:
+        return None
+    return min(
+        by_report.values(),
+        key=lambda row: parse_utc(row.get("as_of_ts_utc"))
+        or datetime.max.replace(tzinfo=timezone.utc),
+    )
+
+
 def match_book_after_event(
     event: Mapping[str, Any], books: Sequence[Mapping[str, Any]], max_lag_min: float
 ) -> Mapping[str, Any] | None:
@@ -297,10 +369,13 @@ def replay_entries(
     states: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
     books: Mapping[str, Sequence[Mapping[str, Any]]],
     settlements: Mapping[str, float],
+    artifact: Mapping[str, Any],
     *,
     quantity: float,
     gain_floor: float,
     max_book_lag_min: float,
+    exit_policy: str = "gain_floor",
+    model_edge_margin: float = 0.0,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for entry in entries:
@@ -320,6 +395,7 @@ def replay_entries(
             execution = walk_sell_ladder(book.get("bids") or [], quantity)
             if not execution["executable"]:
                 continue
+            probability = post_event_probability(event, book, artifact)
             available = parse_utc(event.get("as_of_ts_utc"))
             book_ts = parse_utc(book.get("snapshot_ts_utc"))
             quotes.append(
@@ -333,21 +409,43 @@ def replay_entries(
                     "exit_fee_usd": execution["fee"],
                     "best_bid": execution["best_bid"],
                     "min_bid": execution["min_bid"],
+                    "post_event_model_probability_hold": probability,
+                    "sell_minus_model_per_share": (
+                        None
+                        if probability is None
+                        else execution["net_proceeds_per_share"] - probability
+                    ),
                     "source_path": book.get("source_path"),
                     "minutes_since_running_max": event.get("minutes_since_running_max"),
                     "daylight_remaining_minutes": event.get("daylight_remaining_minutes"),
                     "forecast_gap_to_running_native": event.get("forecast_gap_to_running_native"),
                     "temp_trend_1h_f": event.get("temp_trend_1h_f"),
                     "temp_trend_3h_f": event.get("temp_trend_3h_f"),
+                    "forecast_peak_clock_state": event.get("forecast_peak_clock_state"),
+                    "running_max_state": event.get("running_max_state"),
+                    "intraday_state": event.get("intraday_state"),
+                    "heating_done_bucket_v1": event.get("heating_done_bucket_v1"),
                     "raw_metar": event.get("raw_metar"),
                 }
             )
         chosen = None
-        if cost is not None:
+        if exit_policy == "gain_floor" and cost is not None:
             chosen = next(
                 (quote for quote in quotes if quote["net_proceeds_per_share"] >= cost + gain_floor),
                 None,
             )
+        elif exit_policy == "model_edge_reversal":
+            chosen = next(
+                (
+                    quote
+                    for quote in quotes
+                    if quote["sell_minus_model_per_share"] is not None
+                    and quote["sell_minus_model_per_share"] >= model_edge_margin
+                ),
+                None,
+            )
+        elif exit_policy != "gain_floor":
+            raise ValueError(f"unsupported exit_policy={exit_policy!r}")
         settled = payoff is not None and cost is not None
         baseline_pnl = quantity * (payoff - cost) if settled else None
         capture_pnl = (
@@ -374,6 +472,30 @@ def replay_entries(
                 "capture_event_report_ts_utc": None if chosen is None else chosen["event_report_ts_utc"],
                 "capture_book_ts_utc": None if chosen is None else chosen["book_snapshot_ts_utc"],
                 "capture_net_proceeds_per_share": None if chosen is None else chosen["net_proceeds_per_share"],
+                "capture_model_probability_hold": (
+                    None if chosen is None else chosen["post_event_model_probability_hold"]
+                ),
+                "capture_sell_minus_model_per_share": (
+                    None if chosen is None else chosen["sell_minus_model_per_share"]
+                ),
+                "exit_policy": exit_policy,
+                "model_edge_margin_per_share": float(model_edge_margin),
+                "min_post_event_model_probability_hold": min(
+                    (
+                        float(quote["post_event_model_probability_hold"])
+                        for quote in quotes
+                        if quote["post_event_model_probability_hold"] is not None
+                    ),
+                    default=None,
+                ),
+                "max_sell_minus_model_per_share": max(
+                    (
+                        float(quote["sell_minus_model_per_share"])
+                        for quote in quotes
+                        if quote["sell_minus_model_per_share"] is not None
+                    ),
+                    default=None,
+                ),
                 "baseline_pnl_usd": baseline_pnl,
                 "capture_pnl_usd": capture_pnl,
                 "pnl_delta_usd": (
@@ -382,6 +504,191 @@ def replay_entries(
             }
         )
     return rows
+
+
+def replay_one_report_confirmation(
+    entries: Sequence[Mapping[str, Any]],
+    states: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    books: Mapping[str, Sequence[Mapping[str, Any]]],
+    settlements: Mapping[str, float],
+    artifact: Mapping[str, Any],
+    *,
+    quantity: float,
+    max_book_lag_min: float,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for entry in entries:
+        condition = str(entry.get("current_condition_id") or "")
+        original_cost = entry_cost(entry)
+        payoff = settlements.get(condition)
+        event = first_new_report_event(entry, states)
+        covered = False
+        entered = False
+        reason = "missing_new_report"
+        confirmation_cost = None
+        confirmation_probability = None
+        confirmation_edge = None
+        book_ts = None
+        if event is not None and str(event.get("current_bracket") or "") != str(
+            entry.get("current_bracket") or ""
+        ):
+            covered = True
+            reason = "held_bracket_invalidated_by_first_new_report"
+        elif event is not None:
+            event_bid = finite(event.get("current_yes_bid"))
+            event_ask = finite(event.get("current_yes_ask"))
+            event_ask_size = finite(event.get("current_yes_ask_size"))
+            if (
+                event_bid is not None
+                and event_ask is not None
+                and 0 < event_bid <= event_ask < 1
+                and event_ask_size is not None
+                and event_ask_size >= quantity
+            ):
+                features, fatal = market_features(event)
+                confirmation_probability = (
+                    None if fatal else score_probability(features, artifact)
+                )
+                confirmation_cost = event_ask + official_weather_fee_per_share(event_ask)
+                book_ts = event.get("as_of_ts_utc")
+                if confirmation_probability is None:
+                    reason = "missing_post_report_probability"
+                else:
+                    covered = True
+                    confirmation_edge = confirmation_probability - confirmation_cost
+                    entered = confirmation_edge > 0
+                    reason = (
+                        "positive_post_report_taker_ev"
+                        if entered
+                        else "non_positive_post_report_taker_ev"
+                    )
+            else:
+                book = match_book_after_event(
+                    event,
+                    books.get(str(entry.get("current_yes_token_id") or ""), []),
+                    max_book_lag_min,
+                )
+                if book is None:
+                    reason = "missing_post_report_book"
+                else:
+                    ladder = walk_ask_ladder(book.get("asks") or [], quantity)
+                    confirmation_probability = post_event_probability(event, book, artifact)
+                    confirmation_cost = ladder.get("effective_cost_per_share")
+                    book_ts = book.get("snapshot_ts_utc")
+                    if confirmation_probability is None:
+                        reason = "missing_post_report_probability"
+                    elif not ladder["executable"]:
+                        reason = "insufficient_post_report_ask_depth"
+                    else:
+                        covered = True
+                        confirmation_edge = confirmation_probability - float(confirmation_cost)
+                        entered = confirmation_edge > 0
+                        reason = (
+                            "positive_post_report_taker_ev"
+                            if entered
+                            else "non_positive_post_report_taker_ev"
+                        )
+        settled = payoff is not None and original_cost is not None
+        baseline_pnl = quantity * (payoff - original_cost) if settled and covered else None
+        candidate_pnl = (
+            quantity * (payoff - confirmation_cost)
+            if settled and covered and entered and confirmation_cost is not None
+            else (0.0 if settled and covered else None)
+        )
+        rows.append(
+            {
+                "city": entry.get("city"),
+                "target_date": entry.get("target_date"),
+                "bracket": entry.get("current_bracket"),
+                "condition_id": condition,
+                "entry_source_report_ts_utc": entry.get("source_report_ts_utc"),
+                "entry_created_at_utc": entry.get("created_at_utc"),
+                "entry_cost_per_share": original_cost,
+                "entry_model_probability_hold": entry.get("model_probability_hold"),
+                "settlement_payoff": payoff,
+                "settled": settled,
+                "confirmation_covered": covered,
+                "confirmation_entered": entered,
+                "confirmation_reason": reason,
+                "confirmation_report_ts_utc": None if event is None else event.get("source_report_ts_utc"),
+                "confirmation_available_at_utc": None if event is None else event.get("as_of_ts_utc"),
+                "confirmation_current_bracket": None if event is None else event.get("current_bracket"),
+                "confirmation_book_ts_utc": book_ts,
+                "confirmation_cost_per_share": confirmation_cost,
+                "confirmation_model_probability_hold": confirmation_probability,
+                "confirmation_model_edge_after_fee_and_depth": confirmation_edge,
+                "confirmation_forecast_gap_to_running_native": (
+                    None if event is None else event.get("forecast_gap_to_running_native")
+                ),
+                "confirmation_forecast_peak_delta_hours_local": (
+                    None if event is None else event.get("forecast_peak_delta_hours_local")
+                ),
+                "confirmation_running_max_state": (
+                    None if event is None else event.get("running_max_state")
+                ),
+                "confirmation_intraday_state": None if event is None else event.get("intraday_state"),
+                "baseline_pnl_usd": baseline_pnl,
+                "candidate_pnl_usd": candidate_pnl,
+                "pnl_delta_usd": (
+                    None
+                    if baseline_pnl is None or candidate_pnl is None
+                    else candidate_pnl - baseline_pnl
+                ),
+            }
+        )
+    return rows
+
+
+def summarize_confirmation(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    settled = [row for row in rows if row["settled"]]
+    covered = [row for row in settled if row["confirmation_covered"]]
+    entered = [row for row in covered if row["confirmation_entered"]]
+    skipped = [row for row in covered if not row["confirmation_entered"]]
+    dates = sorted({str(row["target_date"]) for row in covered})
+    baseline = sum(float(row["baseline_pnl_usd"]) for row in covered)
+    candidate = sum(float(row["candidate_pnl_usd"]) for row in covered)
+    daily = np.array(
+        [
+            sum(float(row["pnl_delta_usd"]) for row in covered if row["target_date"] == date)
+            for date in dates
+        ],
+        dtype=float,
+    )
+    ci = [None, None]
+    if len(dates) >= 2:
+        rng = np.random.default_rng(SEED + 1)
+        indices = rng.integers(0, len(daily), size=(BOOTSTRAP_REPS, len(daily)))
+        draws = daily[indices].sum(axis=1)
+        ci = [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))]
+    return {
+        "settled_entries": len(settled),
+        "confirmation_covered_entries": len(covered),
+        "confirmation_covered_target_dates": len(dates),
+        "candidate_entries": len(entered),
+        "candidate_final_winners": sum(float(row["settlement_payoff"]) == 1.0 for row in entered),
+        "candidate_final_losses": sum(float(row["settlement_payoff"]) == 0.0 for row in entered),
+        "skipped_entries": len(skipped),
+        "skipped_final_winners": sum(float(row["settlement_payoff"]) == 1.0 for row in skipped),
+        "skipped_final_losses": sum(float(row["settlement_payoff"]) == 0.0 for row in skipped),
+        "invalidated_on_first_report": sum(
+            row["confirmation_reason"] == "held_bracket_invalidated_by_first_new_report"
+            for row in covered
+        ),
+        "baseline_hold_pnl_usd": baseline,
+        "candidate_confirmation_pnl_usd": candidate,
+        "pnl_delta_usd": candidate - baseline,
+        "pnl_delta_target_date_bootstrap_ci95": ci,
+        "winner_profit_sacrificed_or_skipped_usd": sum(
+            max(0.0, -float(row["pnl_delta_usd"]))
+            for row in covered
+            if float(row["settlement_payoff"]) == 1.0
+        ),
+        "loss_capital_saved_usd": sum(
+            max(0.0, float(row["pnl_delta_usd"]))
+            for row in covered
+            if float(row["settlement_payoff"]) == 0.0
+        ),
+    }
 
 
 def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -448,6 +755,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     db_path = Path(args.db)
     entries = selected_entries(runtime)
     states = load_states(runtime)
+    artifact = load_artifact(DEFAULT_ARTIFACT)
     settlements, db_identity = settlement_map(db_path, entries)
     target_dates = sorted(str(entry["target_date"]) for entry in entries)
     date_min = (datetime.fromisoformat(target_dates[0]) - timedelta(days=1)).date().isoformat()
@@ -463,6 +771,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         states,
         books,
         settlements,
+        artifact,
         quantity=float(args.quantity),
         gain_floor=float(args.gain_floor),
         max_book_lag_min=float(args.max_book_lag_min),
@@ -475,11 +784,41 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             states,
             books,
             settlements,
+            artifact,
             quantity=float(args.quantity),
             gain_floor=gain,
             max_book_lag_min=float(args.max_book_lag_min),
         )
         sweep.append({"gain_floor_per_share": gain, **summarize(rows)})
+    edge_reversal_rows: dict[float, list[dict[str, Any]]] = {}
+    edge_reversal_sweep = []
+    for margin in (0.0, 0.01, 0.02, 0.03):
+        rows = replay_entries(
+            entries,
+            states,
+            books,
+            settlements,
+            artifact,
+            quantity=float(args.quantity),
+            gain_floor=float(args.gain_floor),
+            max_book_lag_min=float(args.max_book_lag_min),
+            exit_policy="model_edge_reversal",
+            model_edge_margin=margin,
+        )
+        edge_reversal_rows[margin] = rows
+        edge_reversal_sweep.append(
+            {"model_edge_margin_per_share": margin, **summarize(rows)}
+        )
+    confirmation_rows = replay_one_report_confirmation(
+        entries,
+        states,
+        books,
+        settlements,
+        artifact,
+        quantity=float(args.quantity),
+        max_book_lag_min=float(args.max_book_lag_min),
+    )
+    confirmation = summarize_confirmation(confirmation_rows)
     physical_crosses = []
     for entry in entries:
         key = (str(entry["city"]), str(entry["target_date"]))
@@ -511,6 +850,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "research_status": "diagnostic_in_sample_threshold_selection",
+        "model_artifact": {
+            "path": str(DEFAULT_ARTIFACT),
+            "artifact_version": artifact["artifact_version"],
+            "artifact_hash": artifact["artifact_hash"],
+        },
         "policy": {
             "entry": "unchanged frozen Core Carry first positive-EV city-day signal",
             "event_clock": "each newly available official report after entry while held bracket remains current",
@@ -533,6 +877,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "book_coverage": coverage,
         "primary": primary,
         "threshold_sweep": sweep,
+        "model_edge_reversal_sweep": edge_reversal_sweep,
+        "one_report_confirmation": confirmation,
         "physical_cross_cases": physical_crosses,
         "limitations": [
             "The +3c operating point was selected after inspecting this window; it is not frozen-forward evidence.",
@@ -549,11 +895,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "conclusion": "inconclusive",
         },
     }
-    return {"payload": payload, "rows": primary_rows}
+    return {
+        "payload": payload,
+        "rows": primary_rows,
+        "model_edge_reversal_zero_margin_rows": edge_reversal_rows[0.0],
+        "one_report_confirmation_rows": confirmation_rows,
+    }
 
 
 def markdown(payload: Mapping[str, Any]) -> str:
     p = payload["primary"]
+    confirmation = payload["one_report_confirmation"]
     cross_lines = [
         f"| {row['city']} | {row['target_date']} | {row['held_bracket']} | {row['capture_triggered']} | {row['capture_event_report_ts_utc'] or ''} |"
         for row in payload["physical_cross_cases"]
@@ -561,6 +913,10 @@ def markdown(payload: Mapping[str, Any]) -> str:
     sweep_lines = [
         f"| {row['gain_floor_per_share'] * 100:.0f}c | {row['capture_triggers']} | ${row['candidate_capture_pnl_usd']:+.2f} | ${row['pnl_delta_usd']:+.2f} |"
         for row in payload["threshold_sweep"]
+    ]
+    reversal_lines = [
+        f"| {row['model_edge_margin_per_share'] * 100:.0f}c | {row['capture_triggers']} | {row['capture_triggered_final_winners']} | {row['capture_triggered_final_losses']} | ${row['candidate_capture_pnl_usd']:+.2f} | ${row['pnl_delta_usd']:+.2f} |"
+        for row in payload["model_edge_reversal_sweep"]
     ]
     return "\n".join(
         [
@@ -593,6 +949,22 @@ def markdown(payload: Mapping[str, Any]) -> str:
             "",
             "`3c` 是本窗口诊断后选出的 shadow operating point，不是 clean forward 结果；因此不能据此上线。",
             "",
+            "## 持仓后 model-edge 反转",
+            "",
+            "更原则化的候选是每份新报文后用冻结 Core v2 重新算 held-bracket probability，并仅在完整 10-share sell ladder 的净回收高于该概率时退出。该比较使用同一份执行盘口重算 market-anchored probability，不使用固定盈利目标。",
+            "",
+            "| sell net − refreshed model p | exits | final winners | final losses | candidate PnL | delta vs hold |",
+            "|---:|---:|---:|---:|---:|---:|",
+            *reversal_lines,
+            "",
+            "结果为 `0` 次退出：冻结 Core 的 market-offset 概率在全部可重算状态中都高于 fee-adjusted sell bid。因此同一个 Core 不能同时充当 entry scorer 和独立 stop model；它会随 market prior 一起移动。",
+            "",
+            "## 首份新报文确认后再入场",
+            "",
+            "反事实策略：原 Core 首次正 EV 只建立 pending intent；等下一份官方报文。若 held bracket 已改变则取消；若未改变，则用新状态和完整 10-share ask ladder 重算 frozen Core，只有 post-report taker EV 仍为正才买入。",
+            "",
+            f"可评估 `{confirmation['confirmation_covered_entries']}` 笔 / `{confirmation['confirmation_covered_target_dates']}` dates；实际重新入场 `{confirmation['candidate_entries']}` 笔（winner `{confirmation['candidate_final_winners']}` / loss `{confirmation['candidate_final_losses']}`），跳过 `{confirmation['skipped_entries']}` 笔（winner `{confirmation['skipped_final_winners']}` / loss `{confirmation['skipped_final_losses']}`）。hold baseline `${confirmation['baseline_hold_pnl_usd']:+.2f}`，confirmation candidate `${confirmation['candidate_confirmation_pnl_usd']:+.2f}`，delta `${confirmation['pnl_delta_usd']:+.2f}`，date-block CI `[{confirmation['pnl_delta_target_date_bootstrap_ci95'][0]:+.2f}, {confirmation['pnl_delta_target_date_bootstrap_ci95'][1]:+.2f}]`。",
+            "",
             "## 已跨档案例",
             "",
             "| city | target_date | held | capture before cross | capture report |",
@@ -622,17 +994,49 @@ def parser() -> argparse.ArgumentParser:
     out.add_argument("--quantity", type=float, default=10.0)
     out.add_argument("--gain-floor", type=float, default=GAIN_FLOOR)
     out.add_argument("--max-book-lag-min", type=float, default=MAX_BOOK_LAG_MIN)
+    out.add_argument("--confirmation-only", action="store_true")
     return out
 
 
 def main() -> int:
     args = parser().parse_args()
+    if args.confirmation_only:
+        entries = selected_entries(Path(args.runtime))
+        states = load_states(Path(args.runtime))
+        settlements, _db_identity = settlement_map(Path(args.db), entries)
+        artifact = load_artifact(DEFAULT_ARTIFACT)
+        rows = replay_one_report_confirmation(
+            entries,
+            states,
+            {},
+            settlements,
+            artifact,
+            quantity=float(args.quantity),
+            max_book_lag_min=float(args.max_book_lag_min),
+        )
+        summary = summarize_confirmation(rows)
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        write_csv(OUT_DIR / "one_report_confirmation_raw_top_depth.csv", rows)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
     if args.book_root is None:
         args.book_root = [str(path) for path in BOOK_ROOTS]
     result = run(args)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     write_csv(OUT_DIR / "entry_replay.csv", result["rows"])
     write_csv(OUT_DIR / "threshold_sweep.csv", result["payload"]["threshold_sweep"])
+    write_csv(
+        OUT_DIR / "model_edge_reversal_sweep.csv",
+        result["payload"]["model_edge_reversal_sweep"],
+    )
+    write_csv(
+        OUT_DIR / "model_edge_reversal_zero_margin.csv",
+        result["model_edge_reversal_zero_margin_rows"],
+    )
+    write_csv(
+        OUT_DIR / "one_report_confirmation.csv",
+        result["one_report_confirmation_rows"],
+    )
     OUT_JSON.write_text(json.dumps(result["payload"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     OUT_MD.write_text(markdown(result["payload"]) + "\n", encoding="utf-8")
     print(json.dumps(result["payload"]["primary"], ensure_ascii=False, indent=2))

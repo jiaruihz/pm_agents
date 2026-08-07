@@ -24,8 +24,18 @@ def test_upper_exit_geometry_uses_settlement_native_lattice() -> None:
     celsius = challenger.upper_exit_geometry("C", "23", 22.7777777778, 24.0)
     fahrenheit = challenger.upper_exit_geometry("F", "68-69", 69.0, 70.5)
 
-    assert celsius == (2.0, 0.20000000000000284)
-    assert fahrenheit == (1.0, 0.5)
+    assert celsius == (2.0, 0.20000000000000284, -2.200000000000003)
+    assert fahrenheit == (1.0, 0.5, -1.5)
+
+
+def test_forecast_underprediction_is_a_separate_continuous_feature() -> None:
+    distance, exit_margin, underprediction = challenger.upper_exit_geometry(
+        "C", "32", 32.0, 30.9
+    )
+
+    assert distance == 1.0
+    assert exit_margin < 0
+    assert underprediction > 0
 
 
 def test_state_entry_collapse_keeps_distinct_rebrackets() -> None:
