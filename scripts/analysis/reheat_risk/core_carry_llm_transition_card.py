@@ -10,7 +10,7 @@ import math
 import sqlite3
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +31,9 @@ PREREG = ROOT / (
     "2026-08-07-core-carry-llm-transition-card-v1-preregistration.json"
 )
 DEFAULT_DB = ROOT / "runtime/weather.db"
+DEFAULT_OBSERVATION_ROOT = Path(
+    "/Volumes/jrs/weather_data_feed_service_runtime/output/observations"
+)
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -293,6 +296,142 @@ def binary_metrics(rows: list[tuple[float, int]]) -> dict[str, float | int] | No
     }
 
 
+def load_observation_histories(
+    root: Path, start_date: str, end_date: str
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    start = date.fromisoformat(start_date) - timedelta(days=1)
+    end = date.fromisoformat(end_date) + timedelta(days=1)
+    histories: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+    current = start
+    while current <= end:
+        path = root / current.isoformat() / "observations.jsonl"
+        if path.exists():
+            for item in read_jsonl(path):
+                raw_metar = str(item.get("raw_metar") or "")
+                city = str(item.get("city") or "")
+                target_date = str(item.get("target_date") or "")
+                if not raw_metar or not city or not target_date:
+                    continue
+                key = (city, target_date)
+                existing = histories.setdefault(key, {}).get(raw_metar)
+                if existing is None or str(item.get("fetched_at_utc") or "") < str(
+                    existing.get("fetched_at_utc") or ""
+                ):
+                    histories[key][raw_metar] = item
+        current += timedelta(days=1)
+    return {
+        key: sorted(values.values(), key=lambda item: str(item.get("last_obs_utc") or ""))
+        for key, values in histories.items()
+    }
+
+
+def pit_metar_sequence(
+    row: dict[str, Any],
+    histories: dict[tuple[str, str], list[dict[str, Any]]],
+    limit: int = 16,
+) -> list[dict[str, Any]]:
+    decision_ts = str(row.get("decision_snapshot_ts_utc") or "")
+    key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+    eligible = [
+        item
+        for item in histories.get(key, [])
+        if str(item.get("fetched_at_utc") or "") <= decision_ts
+    ]
+    return eligible[-limit:]
+
+
+def model_feature_contributions(
+    row: dict[str, Any], artifact: dict[str, Any]
+) -> dict[str, Any]:
+    features = row.get("features") if isinstance(row.get("features"), dict) else row
+    names = list(artifact["numeric_features"])
+    means = [float(value) for value in artifact["numeric_means"]]
+    scales = [float(value) for value in artifact["numeric_scales"]]
+    medians = [float(value) for value in artifact["numeric_medians"]]
+    coefficients = [float(value) for value in artifact["coef"]]
+    intercept = float(artifact["intercept"])
+    contributions: list[dict[str, Any]] = []
+    logit = intercept
+    for name, mean, scale, median, coefficient in zip(
+        names, means, scales, medians, coefficients, strict=True
+    ):
+        value = finite(features.get(name))
+        used_value = median if value is None else value
+        normalized = 0.0 if abs(scale) < 1e-12 else (used_value - mean) / scale
+        contribution = coefficient * normalized
+        logit += contribution
+        contributions.append(
+            {
+                "feature": name,
+                "raw_value": value,
+                "used_value": used_value,
+                "imputed": value is None,
+                "normalized_value": normalized,
+                "coefficient": coefficient,
+                "logit_contribution": contribution,
+            }
+        )
+    probability = 1.0 / (1.0 + math.exp(-max(-40.0, min(40.0, logit))))
+    recorded = finite(row.get("model_probability_hold"))
+    return {
+        "artifact_version": artifact.get("artifact_version"),
+        "artifact_hash_used": artifact.get("artifact_hash"),
+        "row_artifact_hash": row.get("artifact_hash"),
+        "intercept_logit": intercept,
+        "feature_contributions": contributions,
+        "reconstructed_logit": logit,
+        "reconstructed_probability": probability,
+        "recorded_probability": recorded,
+        "reconstruction_abs_error": (
+            abs(probability - recorded) if recorded is not None else None
+        ),
+    }
+
+
+def omitted_physical_signals_present(
+    row: dict[str, Any], model_features: set[str], metar_sequence: list[dict[str, Any]]
+) -> list[str]:
+    present: list[str] = []
+    candidates = {
+        "temperature_path_1h_3h": any(
+            finite(row.get(name)) is not None for name in ("temp_trend_1h_f", "temp_trend_3h_f")
+        ),
+        "time_since_strict_new_high": finite(row.get("minutes_since_last_strict_new_high"))
+        is not None,
+        "wind_direction_and_change": any(
+            finite(row.get(name)) is not None for name in ("wind_dir_deg", "wind_speed_change_1h_kt")
+        ),
+        "cloud_ceiling_transition": bool(row.get("sky_state"))
+        or finite(row.get("cloud_cover_change_1h_code")) is not None,
+        "observed_or_forecast_precipitation": bool(row.get("precip_observed"))
+        or finite(row.get("forecast_precip_probability_remaining_3h_max_pct")) is not None,
+        "remaining_heat_and_solar_decay": any(
+            finite(row.get(name)) is not None
+            for name in (
+                "forecast_future_max_gap_to_day_max_f",
+                "solar_elevation_delta_2h_deg",
+                "daylight_remaining_minutes",
+            )
+        ),
+        "dewpoint_trend": any(finite(item.get("d_dwpf_3h")) is not None for item in metar_sequence),
+        "metar_path_reversal_or_persistence": len(metar_sequence) >= 3,
+    }
+    model_concepts = {
+        "temperature_path_1h_3h": {"temp_trend_1h_f", "temp_trend_3h_f"},
+        "time_since_strict_new_high": {"minutes_since_last_strict_new_high"},
+        "wind_direction_and_change": {"wind_dir_deg", "wind_speed_change_1h_kt"},
+        "cloud_ceiling_transition": {"sky_state", "cloud_cover_change_1h_code"},
+        "observed_or_forecast_precipitation": {"precip_observed", "forecast_precip_probability_remaining_3h_max_pct"},
+        "remaining_heat_and_solar_decay": {"forecast_future_max_gap_to_day_max_f", "solar_elevation_delta_2h_deg"},
+        "dewpoint_trend": {"dewpoint_trend"},
+        "metar_path_reversal_or_persistence": {"metar_path"},
+    }
+    for concept, is_present in candidates.items():
+        if is_present and not (model_concepts[concept] & model_features):
+            present.append(concept)
+    return present
+
+
 def summarize_policy_buckets(
     rows: list[dict[str, Any]], labels: dict[tuple[str, str, str], int]
 ) -> dict[str, dict[str, Any]]:
@@ -359,6 +498,9 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB)
     parser.add_argument("--preregistration", type=Path, default=PREREG)
+    parser.add_argument("--observation-root", type=Path, default=DEFAULT_OBSERVATION_ROOT)
+    parser.add_argument("--include-metar-history", action="store_true")
+    parser.add_argument("--model-artifact", type=Path, default=None)
     parser.add_argument("--start-date", default="2026-08-07")
     parser.add_argument("--end-date", default=datetime.now().date().isoformat())
     parser.add_argument("--cities", nargs="*", default=[])
@@ -401,9 +543,22 @@ def main() -> int:
         selection_roles = {checkpoint_id(row): "first_city_day" for row in selected}
     selected_ids = set(selection_roles)
     selected = [row for row in rows if checkpoint_id(row) in selected_ids]
+    observation_histories = (
+        load_observation_histories(args.observation_root, args.start_date, args.end_date)
+        if args.include_metar_history
+        else {}
+    )
+    contribution_artifact = (
+        json.loads(args.model_artifact.read_text(encoding="utf-8"))
+        if args.model_artifact is not None
+        else None
+    )
     packets = []
     for row in rows:
-        packet = build_transition_packet(row)
+        enriched_row = dict(row)
+        if args.include_metar_history:
+            enriched_row["metar_sequence"] = pit_metar_sequence(row, observation_histories)
+        packet = build_transition_packet(enriched_row)
         packets.append(
             {
                 "checkpoint_id": checkpoint_id(row),
@@ -535,6 +690,20 @@ def main() -> int:
                 "llm_selected": bool(record["selected_for_llm"]),
                 "llm_selection_role": record["llm_selection_role"],
                 "policy_bucket": policy_bucket(row),
+                "model_feature_contributions": (
+                    model_feature_contributions(row, contribution_artifact)
+                    if contribution_artifact is not None
+                    else None
+                ),
+                "omitted_physical_signals_present": omitted_physical_signals_present(
+                    row,
+                    set(contribution_artifact.get("numeric_features") or [])
+                    if contribution_artifact is not None
+                    else set(),
+                    pit_metar_sequence(row, observation_histories)
+                    if args.include_metar_history
+                    else [],
+                ),
                 "llm_card_status": "complete" if cid in cards else "not_collected",
                 "llm_card": (cards.get(cid) or {}).get("card"),
                 "settlement_label": label,
@@ -570,6 +739,9 @@ def main() -> int:
             "selection_mode": args.selection_mode,
             "shard_index": args.shard_index,
             "shard_count": args.shard_count,
+            "include_metar_history": args.include_metar_history,
+            "observation_root": str(args.observation_root),
+            "model_artifact": str(args.model_artifact) if args.model_artifact else None,
         },
         "signal_funnel": signal_funnel,
         "settlement_coverage": {

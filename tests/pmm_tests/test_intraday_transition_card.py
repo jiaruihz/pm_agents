@@ -1,8 +1,10 @@
+import math
 import sqlite3
 
 from scripts.analysis.reheat_risk.core_carry_llm_transition_card import (
     binary_metrics,
     canonical_settlement_labels,
+    model_feature_contributions,
     policy_bucket,
     policy_contrast_selection,
 )
@@ -31,6 +33,14 @@ def test_transition_packet_excludes_market_model_and_label() -> None:
             "wind_dir_deg": 10.0,
             "forecast_peak_delta_hours_local": -6.45,
             "pressure_trend_3h_hpa": 0.0,
+            "metar_sequence": [
+                {
+                    "last_obs_utc": "2026-08-07T00:30:00Z",
+                    "fetched_at_utc": "2026-08-07T00:35:00Z",
+                    "raw_metar": "METAR NZWN 070030Z 01016KT 9999 SCT028 11/06 Q1030",
+                    "current_temp_c": 11.0,
+                }
+            ],
         }
     )
 
@@ -40,6 +50,7 @@ def test_transition_packet_excludes_market_model_and_label() -> None:
     assert "label" not in text
     assert packet["input_hash"]
     assert "pressure_trend_or_upstream_station_network" not in packet["known_missing_evidence"]
+    assert len(packet["observed_state"]["metar_sequence"]) == 1
 
 
 def test_prompt_forbids_probability_and_trade_output() -> None:
@@ -130,3 +141,30 @@ def test_policy_contrast_includes_hit_near_miss_and_never_hit_control() -> None:
         "same_city_day_near_miss",
     ]
     assert policy_bucket(rows[1]) == "policy_selected"
+
+
+def test_model_feature_contributions_reconstruct_recorded_probability() -> None:
+    artifact = {
+        "artifact_version": "test",
+        "artifact_hash": "hash",
+        "numeric_features": ["market_logit", "wind_speed_kt"],
+        "numeric_means": [0.0, 10.0],
+        "numeric_scales": [1.0, 2.0],
+        "numeric_medians": [0.0, 10.0],
+        "coef": [1.0, 0.5],
+        "intercept": 0.0,
+    }
+    expected = 1.0 / (1.0 + math.exp(-1.5))
+    result = model_feature_contributions(
+        {
+            "features": {"market_logit": 1.0, "wind_speed_kt": 12.0},
+            "model_probability_hold": expected,
+            "artifact_hash": "row-hash",
+        },
+        artifact,
+    )
+    assert float(result["reconstruction_abs_error"]) < 1e-12
+    assert [
+        round(float(item["logit_contribution"]), 6)
+        for item in result["feature_contributions"]
+    ] == [1.0, 0.5]

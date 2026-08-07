@@ -1,106 +1,123 @@
-# Core Carry LLM Transition Card v1
+# Core Carry sample-level semantic alignment audit
 
-Status: `balanced retrospective diagnosis complete / challenger not promoted / no live change`
+Status: `diagnosis complete / feature gaps confirmed / LLM veto rejected / no live change`
 
 ## 结论
 
-Core Carry 不是“纯天气模型”。冻结 v2 已把同刻 `market_logit` 放进概率模型，且标准化系数
-`1.838` 明显大于 forecast peak、wind、dewpoint 等单项；执行时再用完整 ask ladder 和 fee
-计算 net EV。当前缺口不是“完全没用市场”，而是天气语义仍只有 local hour、peak clock、
-dewpoint depression 和 wind speed，不能直接表达路径转折。
+上一版把问题偏成了 selected 与 rejected 的表现对照，没有直接回答“同一个样本中，天气报文的物理语义与模型打分是否一致”。本版已按样本重做。
 
-本轮选择的 challenger 是 weather-only LLM transition card：LLM 只把 PIT 天气包压成版本化
-类别，不输出概率、EV、gate 或订单。后续概率头在同一行上比较：market、冻结 Core、
-market+deterministic transition、market+deterministic+LLM card。盘口继续作为概率 prior；
-spread/depth/imbalance/price drift 留在执行与成交质量层，避免 LLM 偷看市场后循环论证。
+Core v3 对 63 个预先固定的 checkpoint 逐一完成了三层审计：
 
-## 新增语义
+1. `gpt-5.4 / medium` 先只读决策时刻已经 first-seen 的最多 16 份 METAR、forecast curve 和物理状态，不读 market、Core 分数、selection role 或 settlement；
+2. LLM card 冻结后，才附上生产 v3 的逐特征 logit contribution；
+3. 最后对照 `LLM physical direction` 与 `Core probability residual relative to market`，再读 settlement。
 
-- `fresh_runway / active_warming / plateau / pullback / fade` 与未来 0–1h、1–3h 转换；
-- warm/cold advection 与 boundary-layer mixing maintenance 分离，不按风向单独判平流；
-- clearing/clouding、rain onset/persistence、dewpoint rise/fall；
-- second heat lobe、reheat risk、source conflict、缺失证据和 invalidation signals；
-- pressure/upstream network 与 TAF 缺失时显式记 `unclear`，不做静默推断。
+主要发现：
 
-## 初版撤回与 balanced contrast
+- 63 个样本中，41 个相对方向一致、21 个存在语义张力、1 个模糊。这里的“张力”只表示 LLM 天气判断和 Core 相对 market 的修正方向相反，不等于 Core 预测错。
+- 28 个真实 policy-selected 样本中，24 个一致、3 个相反、1 个模糊。Core 大多数时候确实在表达 LLM 也认可的 late plateau/fade carry。
+- 但 Core v3 只有 `market_logit + local hour + dewpoint depression + wind speed`。63/63 样本现场已经存在的温度路径、距上次创新高、风向变化、云雨转折、剩余热量、露点趋势和 METAR 反转/持续形态都没有进入 v3。
+- 风速的语义尤其过粗：LLM 将 43/63 判为 `mixing_only`、20/63 判为 `cooling_transport`，没有一个能凭现有证据确认为 `warming_transport`；生产模型却让每增加 1kt 都沿固定方向提高 hold odds。26 个样本出现“LLM 只确认维持混合、风速项却正向抬高 hold logit”。这正是 Wellington 所暴露的“阻止降温不等于推动升温，也不自动等于 exact bracket 更安全”。
+- 两个已结算 upward-exit 样本——Lucknow 32 和 Wuhan 32——LLM 与 Core 都偏向 hold/fade，说明当前 LLM card 不能直接当 veto。两例共同弱点是 forecast/cloud-rain cap 叙事压过了观测路径里的尾部风险。
 
-初版只在四城两日的 first city-day 上生成 3 张 `gpt-5.4-mini` 卡，遗漏了真实 policy hits
-和大量 policy rejects 的对照，不能回答 challenger 问题；该 seed 设计已撤回，不再作为证据。
+所以应做的不是给 Core 再加 hard gate，也不是直接让 LLM 决定下不下单，而是训练一个同分母 challenger，把上述连续的路径与 transition 特征作为 market-offset residual 输入。
 
-修订 prereg 固定 `2026-07-24..2026-08-07` 当前 raw universe。2,103 rows 中有 1,165 个
-`scored_by_current_yes_core_artifact` checkpoint，覆盖 357 city-days、12 target dates；28 个
-policy selected，1,137 个 rejected。所有 1,165 行均进入 ledger，473 行/10 target dates
-已有 canonical settlement。
+## 审计分母与信息隔离
 
-强模型层使用 `gpt-5.4 / medium reasoning`，不读取 market、Core 概率、selection role 或 label。
-为避免让 1,137 个重复 checkpoint 淹没 28 个真实 hit，预先固定 63 个对照点：全部 28 个
-selected、7 个同城同日较早的 non-positive-EV near miss、28 个来自 never-selected city-day 的
-城市/market/时钟匹配控制。63/63 卡生成成功，错误 0；其中 37 行已结算、覆盖 8 个日期。
+- 日期：`2026-07-24..2026-08-07`
+- raw rows：2,103
+- Core-scored checkpoints：1,165
+- LLM cards：63/63，错误 0
+- 组成：28 个全部 policy-selected、7 个同城同日 near miss、28 个 never-selected matched controls
+- settlement：37 rows / 8 target dates
+- METAR PIT 条件：`first_seen_utc <= decision_snapshot_ts_utc`
 
-## 全分母与执行结果
+63 张卡不是训练集，也不是重新挑出来的盈利切片；它们只用于逐样本机制审计。
 
-| bucket | rows | settled | hold rate | mean market | mean Core | market Brier/logloss | Core Brier/logloss |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| selected | 28 | 19 | 94.7% | 92.35% | 94.92% | .04292/.16446 | .04309/.15342 |
-| non-positive taker EV | 384 | 156 | 96.2% | 92.52% | 90.75% | .03873/.16319 | .04188/.17459 |
-| market domain reject | 464 | 184 | 29.9% | 34.57% | 33.57% | .14054/.42350 | .14434/.43638 |
-| market support reject | 208 | 85 | 100% | 99.57% | 99.49% | .00002/.00428 | .00004/.00507 |
+## 生产模型到底在打什么分
 
-checkpoint-weighted 473 行总体 market Brier/logloss 为 `.07690/.24791`，Core 为
-`.07934/.25607`。这只是 retrospective 描述，未做 target-date equal-weight bootstrap，但足以
-否定“未选中的 YES 都是模型漏单”：non-positive-EV 组虽然经常最终 YES，market 平均已经
-92.5%，且在同 rows 上明显比 Core 更准。
+生产 artifact 为 `current_yes_core_carry_model_v3_no_peak_clock`。四个输入及系数为：
 
-63-card matched slice 的 fixed-10、effective-cost 反事实也说明“方向正确”和“值得买”不同：
+| feature | standardized coefficient | 当前语义问题 |
+|---|---:|---|
+| `market_logit` | +1.9273 | 合理作为强 prior，但意味着 Core 不是纯天气模型 |
+| `decision_hour_local` | +0.0934 | 只用线性时钟代替实际 peak clock、太阳衰减和剩余热量 |
+| `dewpoint_depression_f` | -0.1894 | 小露点差一律抬高 hold，无法区分湿稳/云盖与暖湿输送 |
+| `wind_speed_kt` | +0.3168 | 风越大一律抬高 hold，无法区分 mixing、冷输送、暖输送及地形/海陆背景 |
 
-| role | settled / dates | wins | fixed-10 PnL | ROI |
+每个样本的 reconstructed probability 与线上记录完全一致，最大 reconstruction error 为 0，因此下面不是用近似模型解释线上分数。
+
+## 代表性逐样本对照
+
+### Wellington 2026-07-29 · 12 YES
+
+PIT METAR 尾段为 `12/07, 12/07, 11/07, 12/08, 12/08, 12/09°C`，北到北东北风持续 `18–23kt`，云层由 BKN/OVC 到最后 SCT+BKN。LLM 读法是：`plateau + mixing_maintenance + current_high_holds`；强风维持边界层混合、阻止快速降温，但没有 upstream thermal/pressure 证据证明暖平流。
+
+Core 从 market `92.15%` 抬到 `96.98%`。logit 中 market `+1.289`、hour `+0.104`、低露点差 `+0.211`、21kt 风速 `+0.789`。最终 hold 方向与 LLM 一致，但模型把“风很大”直接编码成强 hold 支持，无法表达 LLM 给出的关键限定：这是 mixing maintenance，不是 warming transport。该样本尚未结算，不能叫预测错误，但已经是明确的特征语义混写。
+
+### Lucknow 2026-07-31 · 32 YES · settled NO
+
+PIT METAR 依次显示 `30→31→31→31→32→32→31→32°C`；最新为 `09013KT 32/27 FEW030CB BKN100`。也就是 08:30 的回落后，09:00 又回到 32°C，仍有约 260 分钟 daylight，露点长期在 27–28°C。
+
+Core 从 market `83.00%` 抬到 `87.08%`：market `+0.469`、hour `-0.044`、9°F 露点差 `+0.154`、13kt 风速 `+0.255`，加 intercept 后精确还原 87.08%。温度 dip→rebound、露点路径、风向、CB/云层变化和剩余 heating window 均未参与打分。
+
+LLM 也判成 `plateau → fade / low reheat`，因为 forecast max 低于已打印高点且未来云雨概率很高；它虽然把“3h 仍升温、daylight 仍长”列为冲突证据，仍未翻转结论。最终 32 NO，说明这是 **Core 和 LLM 共同漏掉的尾部**，不是“LLM 已看懂但模型没看懂”。最值得测试的特征是 `rebound-after-dip × daylight remaining × forecast-observation conflict`，而不是简单加一个 rain/cloud gate。
+
+### Wuhan 2026-07-28 · 32 YES near miss · settled NO
+
+market 为 `95.00%`，Core 为 `95.43%`；LLM 同样判 `plateau → fade / rain_onset / low reheat`，forecast 给出 98% 云雨概率且 future max 低于当前高点。最终升到 33°C，随后 Core 在 33 档触发并结算 YES。
+
+这与 Lucknow 构成同类失败：问题不只是 Core 没有路径特征，还是 forecast cap 叙事在极端湿热/对流环境中可能系统性低估最后一跳。需要显式建 `forecast says fade but observations have not confirmed transition` 的 innovation，而不是把 forecast path 当真值。
+
+### NYC 2026-07-28 · 80–81 YES · settled YES
+
+LLM 看到 `+1.08°F/1h、+3.06°F/3h`、forecast peak 仅 0.22h 后且高于当前 max，判 `active_warming → upward_exit`。Core 却从 market `91.00%` 抬到 `93.39%`，其中 15kt 风速 `+0.388`、9°F 露点差 `+0.154`。
+
+这是清楚的语义分歧，但最终 exact bracket 仍 YES，Core 的修正方向优于 LLM 的风险提示。它说明“发现模型没表达某个风险”不等于该风险足以成为 veto；直接把 LLM upward-exit 卡成拒单会制造 false negative。
+
+### Cape Town 2026-07-31 · 24 YES control · settled YES
+
+LLM 根据新高后 forecast 转降、云量上升和干燥 mixed layer 判 `plateau → fade / low reheat`。market 为 `89.00%`，Core 反而降到 `82.46%`，主要因为 36°F 大露点差贡献 `-0.278 logit`、7kt 低风速贡献 `-0.146`。最终 24 YES。
+
+这是反方向的候选偏差：模型把“干、风小”机械解释为不利于 hold，但在已经临近峰值且未来曲线下降的语境下，低风速和大露点差并不自动意味着还能升穿。Amsterdam 7/28 和 8/01 也出现 LLM 识别 cooling transport、但仅因风速低于训练均值而给 hold 负贡献，两例最终均 YES。
+
+## 63 个样本的结构化对照
+
+将 LLM 的 `upward_exit/high reheat` 记为物理上反对 hold，将 `current_high_holds/fade + low reheat` 记为支持 hold，再与 `Core p − market` 的符号比较：
+
+| role | rows | aligned | semantic tension | ambiguous |
 |---|---:|---:|---:|---:|
-| selected | 19 / 8 | 18 | +$1.85 | +1.04% |
-| same-city-day near miss | 6 / 5 | 5 | -$5.89 | -10.55% |
-| never-selected matched control | 12 / 5 | 12 | +$4.64 | +4.02% |
+| policy selected | 28 | 24 | 3 | 1 |
+| same-day near miss | 7 | 4 | 3 | 0 |
+| matched control | 28 | 13 | 15 | 0 |
+| total | 63 | 41 | 21 | 1 |
 
-最后一组只有 5 个日期且是 retrospective matched slice，不能据此放宽 entry；它只是下一轮
-forward collector 需要重点覆盖的 candidate。near-miss 组则直接显示：5/6 方向猜对仍会因买得
-太贵而亏钱，net-EV gate 不是多余过滤。
+已结算的 tension 行进一步说明不能把 LLM 当 gate：
 
-## 强模型卡是否补到了天气语义
+- 4 个 `Core raises hold / LLM says upward exit` 全部最终 YES；
+- 8 个 `Core lowers hold / LLM says hold` 也全部最终 YES，且 Core 相对 market 的 Brier 都变差；这组更像“模型低估 hold”的 challenger 候选，但来自小规模 matched controls；
+- 唯一两个最终 NO 都落在 `Core raises hold / LLM says hold`，现有 LLM 没抓住。
 
-没有形成可用区分。selected 中 28/28 被判 `current_high_holds/fade`，27/28 为 low reheat；
-matched controls 中也有 26/28 被判 `current_high_holds/fade`，24/28 为 low reheat。60/63 卡的
-evidence quality 只有 `partial`，主要缺 pressure/upstream network、TAF transition 与更密集的
-dewpoint/source path。
+## 应进入 challenger 的特征，而不是 gate
 
-更关键的是，两个已结算失败 case 都没被强模型识别：Lucknow selected loss 和 Wuhan near-miss
-loss 均被判为 `fade + low reheat`。也就是说，换掉 mini 后，当前 PIT packet 仍不能把真正的
-upward-exit 尾部风险与普通 carry 区分开；问题不只是 LLM 大小，还包括输入证据缺失和该类风险
-本身的低频性。
+63/63 样本都有以下现场证据，但生产 v3 全部未使用：
 
-## 验收与下一动作
+- `temperature_path_1h_3h` 与 `rebound_after_dip`；
+- `minutes_since_last_strict_new_high`；
+- `wind_direction/change × city/terrain/season`，输出 warming/cooling/mixing role；
+- cloud ceiling、rain onset/persistence 的 transition，而不是静态 rain=true；
+- daylight、solar decay、forecast peak relation 和 remaining heat；
+- dewpoint trend 与 dewpoint depression 的交互；
+- forecast 与最新 METAR 是否已经确认同一 transition；
+- 完整 METAR path 的 persistence/reversal。
 
-当前动作是 **不把 LLM card 加入 Core、不改 gate、不改 live**。保留 full-ledger collector，
-但下一轮优先补 upstream/pressure/TAF/dewpoint transition 的 first-seen coverage，然后把这些
-字段变成 deterministic features；只有它们能在 OOF/frozen forward 上相对 market 改善
-Brier/logloss，才值得重新测试 LLM residual。现有 63-card retrospective slice 只用于 failure
-taxonomy，不用于训练或 live veto。
+下一版 challenger 应保持 market logit 为 offset，在相同 PIT checkpoint 上加入这些连续特征，并以 target-date blocked OOF/frozen forward 比较 Brier/logloss。LLM card只用来生成机制标签、审查 case 和设计 interaction，不直接输出概率或交易 gate。
 
-`significance=FAIL baseline=FAIL forward=FAIL conclusion=inconclusive`。
+当前动作仍是 `no live change`：这次确认了特征表达缺口，但没有证明新增语义已经能在 forward 上提升概率或 PnL。
 
-## 血缘与产物
+## 产物
 
-- original seed prereg: `2026-08-07-core-carry-llm-transition-card-v1-preregistration.json`
-- balanced prereg: `2026-08-07-core-carry-llm-transition-card-balanced-contrast-preregistration.json`
+- prereg: `2026-08-07-core-carry-sample-semantic-alignment-preregistration.json`
 - runner: `scripts/analysis/reheat_risk/core_carry_llm_transition_card.py`
 - card contract: `src/strategies/weather_edge_v1/tools/intraday_transition_card.py`
-- machine artifacts: `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/core_carry_llm_transition_card_v1/balanced_policy_contrast_gpt54/`
-
-## 同轮生产数据缺口
-
-`2026-08-06T20:05:10Z..2026-08-07T00:05:34Z` 的 snapshot 发布中断约四小时：
-Open-Meteo 429 后，builder 已正确读到小于六小时且有 archive/hash 的缓存 forecast curve，
-但 publish guard 错把“本轮 fresh capture 非空”当成唯一证据，连续拒绝 20 次发布。受影响的
-Core universe 是 14 城、39 个潜在小时 checkpoint；失败 snapshot 未保存完整 candidate，
-因此这 39 个不能写成 missed signal/order，也没有已证实的错误订单、fill 或 realized-PnL 影响。
-
-修复后 publish guard 会逐个核对 fresh 或 exact durable archive evidence，缺证据仍 fail closed。
-控制仓 commit `d1cf1ade`，生产 commit `0f1e6d96`；重启后的
-`snapshot_20260807_0947.json` 发布 1,012 rows，Core Carry 已消费该文件。
+- machine artifact: `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/core_carry_llm_transition_card_v1/sample_semantic_alignment_gpt54/`

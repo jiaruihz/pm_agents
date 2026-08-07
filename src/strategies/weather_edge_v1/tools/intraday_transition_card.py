@@ -84,6 +84,34 @@ def _compact_hourly_curve(row: dict[str, Any]) -> list[dict[str, Any]]:
     return selected
 
 
+def _compact_metar_sequence(row: dict[str, Any]) -> list[dict[str, Any]]:
+    sequence = row.get("metar_sequence")
+    if not isinstance(sequence, list):
+        return []
+    output: list[dict[str, Any]] = []
+    for item in sequence[-16:]:
+        if not isinstance(item, dict) or not item.get("raw_metar"):
+            continue
+        output.append(
+            {
+                "report_ts_utc": item.get("last_obs_utc"),
+                "first_seen_utc": item.get("fetched_at_utc"),
+                "raw_metar": item.get("raw_metar"),
+                "temperature_c": _finite(item.get("current_temp_c")),
+                "dewpoint_f": _finite(item.get("dwpf_now")),
+                "wind_speed_kt": _finite(item.get("wind_speed_kt")),
+                "wind_direction_deg": _finite(item.get("wind_dir_deg")),
+                "sky_cover_code": item.get("sky_cover_code"),
+                "precip_state": item.get("precip_state"),
+                "running_max_c": _finite(item.get("running_max_c")),
+                "temp_change_1h_f": _finite(item.get("d_tmpf_1h")),
+                "temp_change_3h_f": _finite(item.get("d_tmpf_3h")),
+                "dewpoint_change_3h_f": _finite(item.get("d_dwpf_3h")),
+            }
+        )
+    return output
+
+
 def build_transition_packet(row: dict[str, Any]) -> dict[str, Any]:
     """Build a PIT weather packet that intentionally excludes market/model/label."""
     missing: list[str] = []
@@ -145,6 +173,7 @@ def build_transition_packet(row: dict[str, Any]) -> dict[str, Any]:
             "intraday_state": row.get("intraday_state"),
             "warming_state": row.get("warming_state"),
             "running_max_state": row.get("running_max_state"),
+            "metar_sequence": _compact_metar_sequence(row),
         },
         "forecast_state": {
             "source": row.get("forecast_source"),
