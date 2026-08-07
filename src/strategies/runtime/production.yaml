@@ -58,7 +58,7 @@ managed_runtimes:
     tmux_session: weather_forecast_run_capture_v1
     role: source_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_forecast_run_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     start_script: scripts/ops/start_weather_forecast_run_capture_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/latest.json
     health_format: json
@@ -233,7 +233,7 @@ managed_runtimes:
     tmux_session: weather_full_ladder_capture
     role: collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     start_script: scripts/ops/start_full_ladder_orderbook_capture.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/full_ladder_capture.log
     health_format: mtime
