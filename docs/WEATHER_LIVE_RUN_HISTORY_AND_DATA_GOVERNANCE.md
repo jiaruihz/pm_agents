@@ -1147,10 +1147,11 @@ longer production inputs or write targets.
 Post-cutover evidence: the first market batch contained 93 events and 2,046
 token books with zero failed books; the first joined strategy snapshot contained
 693 records and reused all 47/47 required strategy books without another CLOB
-request. The canonical DB route and storage identity audit were healthy, all
-registered runtimes restarted from production commit `d2b3fec7`, canonical
-refresh exited zero, fill reconciliation was 1,405/1,405 with zero cost
-difference, and the authenticated exchange check found zero open orders. The
+request. The canonical DB route and storage identity audit were healthy,
+canonical refresh exited zero, fill reconciliation was 1,405/1,405 with zero
+cost difference, and the authenticated exchange check found zero open orders.
+All consumers migrated in this cutover restarted from production commit
+`d2b3fec7`; the controller also reported every registered runtime healthy. The
 pre-cutover five-share SELL order was queried by order id and was `MATCHED`, not
 lost or cancelled during restart.
 
