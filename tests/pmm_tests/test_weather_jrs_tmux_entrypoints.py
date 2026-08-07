@@ -204,11 +204,17 @@ def test_mac_start_entries_do_not_default_to_legacy_jrs_symlink():
 
 
 def test_data_feed_loop_has_one_forecast_run_owner_and_bounded_open_meteo_refresh():
-    text = (OPS / "start_mac_weather_data_feed_loop.sh").read_text(encoding="utf-8")
+    data_feed = (OPS / "start_mac_weather_data_feed_loop.sh").read_text(encoding="utf-8")
+    forecast_owner = (OPS / "start_weather_forecast_curve_collector_v1.sh").read_text(
+        encoding="utf-8"
+    )
 
-    assert '--open-meteo-refresh-sec "$FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC"' in text
-    assert "--no-single-runs" in text
-    assert "WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC:-21600" in text
+    assert "forecast_owner=external_controller_managed" in data_feed
+    assert "forecast-enrichment" not in data_feed
+    assert "weather_data_feed_service.forecast_curve_collector" in forecast_owner
+    assert "forecast-enrichment" in forecast_owner
+    assert "WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OPEN_METEO_REFRESH_SEC:-21600" in forecast_owner
+    assert "--no-single-runs" in forecast_owner
 
 
 def test_jrs_start_entries_do_not_create_jrs_directories_outside_tmux():
