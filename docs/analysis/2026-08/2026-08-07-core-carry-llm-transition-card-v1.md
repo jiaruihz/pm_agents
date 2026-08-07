@@ -90,6 +90,14 @@ PIT 路径为 `30→31→31→31→32→32→31→32°C`，最后一次回落后
 
 LLM 也因 forecast cloud/rain cap 判成 `fade / low reheat`。它虽在 conflicting facts 中记录 3h 升温和长 daylight，仍让 forecast cap 叙事主导。最终 32 NO，说明这里缺的是“forecast cap 是否已被观测确认”，而不是一个 rain/cloud hard filter。
 
+### Manila 2026-08-07 · 28 YES · live upward exit
+
+13:40 local 的 live checkpoint 使用 13:00 METAR：`28°C → 28°C/-RA → 27°C/-RA`，看似形成 rain fade；但仍有 283 分钟 daylight、太阳高度 66°，deterministic state 已标为 `false_fade_risk`。更直接的是 PIT forecast curve 当时预报 14:00 为 84.4°F（约 29.1°C），相对 28°C running max 仍有 `+0.7°C` room。14:00 routine METAR 随降雨停止打印 29°C，随后 15:00 又回落到 28°C：这是短暂对流降雨造成的 dip→rebound/second-lobe，而不是稳定 heat death。
+
+Core 却从 market `86.0%` 抬到 `91.92%`；逐项 logit 中，17kt 风速贡献 `+0.522`、1.8°F 小露点差贡献 `+0.269`，而 forecast margin、`false_fade_risk`、剩余辐射和下一报文时钟均未进入模型。weather-only LLM card 在读取结果前已给出 `moderate reheat / second heat lobe possible / source conflict / ambiguous`，并明确列出 forecast 仍允许 retest/exceed；这不是可靠 veto，却准确暴露了 Core 的过度自信来源。
+
+执行链本身按配置运行：fresh-book taker recheck 拒绝 10-share child，maker 5 shares 挂 0.83 并由 authenticated order state 确认全部成交，因此实际暴露被限制在 `$4.15`。这例直接支持 `transition-confirmation residual`，不支持新增 rain/cloud hard gate。
+
 ### 共同的六个 LLM hold/fade 漏判
 
 - Munich：当前 28°C，而 forecast max 仅 25.3°C；新高只有约 11 分钟，forecast-observation level 明显失配。
