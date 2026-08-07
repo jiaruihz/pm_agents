@@ -820,6 +820,36 @@ def test_controller_can_restart_safe_non_live_runtime_from_start_contract(
     assert marker.read_text(encoding="utf-8") == "started"
 
 
+def test_controller_restart_starts_missing_safe_runtime(monkeypatch, tmp_path):
+    marker = tmp_path / "started.txt"
+    script = tmp_path / "start.sh"
+    script.write_text(f"#!/bin/sh\nprintf started > {marker}\n", encoding="utf-8")
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="collector",
+        tmux_session="collector",
+        role="collector",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: subprocess.CompletedProcess(
+            args, 1, "can't find session: collector", ""
+        ),
+    )
+
+    result = ctl._run_restart(spec, runtime, confirm_live=False)
+
+    assert result["status"] == "restarted"
+    assert result["restart_mode"] == "controller_registered_start_missing_session"
+    assert marker.read_text(encoding="utf-8") == "started"
+
+
 def test_controller_does_not_synthesize_live_restart_contract(tmp_path):
     runtime = WeatherManagedRuntimeSpec(
         instance_id="live",

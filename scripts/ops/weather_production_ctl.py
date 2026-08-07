@@ -1105,7 +1105,11 @@ def _run_restart(
         stopped = _tmux(
             spec, "kill-session", "-t", f"={runtime.tmux_session}"
         )
-        if stopped.returncode != 0:
+        session_was_missing = (
+            stopped.returncode != 0
+            and "can't find session" in stopped.stdout.lower()
+        )
+        if stopped.returncode != 0 and not session_was_missing:
             return {
                 "instance_id": runtime.instance_id,
                 "status": "error",
@@ -1119,7 +1123,11 @@ def _run_restart(
             "status": (
                 "restarted" if started.get("status") == "started" else started.get("status")
             ),
-            "restart_mode": "controller_stop_then_registered_start",
+            "restart_mode": (
+                "controller_registered_start_missing_session"
+                if session_was_missing
+                else "controller_stop_then_registered_start"
+            ),
         }
     if runtime.expected_live and not confirm_live:
         return {
