@@ -67,6 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run the snapshot collector with full all-bracket orderbook enrichment",
     )
     snapshot_full.add_argument("runner_args", nargs=argparse.REMAINDER)
+    market_books = subparsers.add_parser(
+        "market-books",
+        help="Capture canonical raw market books without forecast or observation dependencies",
+    )
+    market_books.add_argument("runner_args", nargs=argparse.REMAINDER)
     daily = subparsers.add_parser("daily", help="Run the daily cache pipeline")
     daily.add_argument("runner_args", nargs=argparse.REMAINDER)
     observations = subparsers.add_parser("observations", help="Build the fast observation cache")
@@ -103,6 +108,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "strategy_live"))
     if args.command == "snapshot-full":
         return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "all"))
+    if args.command == "market-books":
+        from weather_data_feed_service.market_books import main as market_books_main
+
+        return market_books_main(runner_args)
     if args.command == "daily":
         return _run_legacy("daily_pipeline", runner_args)
     if args.command == "observations":

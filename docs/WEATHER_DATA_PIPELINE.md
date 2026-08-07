@@ -47,8 +47,10 @@ Current production has four explicit ownership stages:
                               Mac production controller
                               ├── production.yaml desired state
                               ├── /Volumes/jrs/weather_data_feed_service_runtime
-                              │   ├── targeted_output/paper_snapshots
-                              │   ├── targeted_output/orderbook_snapshots
+                              │   ├── market_books (single raw owner)
+                              │   ├── market_ladder_snapshots
+                              │   ├── targeted_output/paper_snapshots (strategy view compatibility path)
+                              │   ├── targeted_output/orderbook_snapshots (same physical raw captures)
                               │   └── targeted_output/forecast_hourly_curves
                               └── production-declared strategy runtimes
                                   ├── health_path / live_order_path
@@ -121,8 +123,10 @@ unless matched by a real row in `fills`.
 
 | Path | Producer | Refresh | What it is |
 |---|---|---|---|
-| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | current production market snapshots |
-| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | current production orderbook history; not backfillable if missed |
+| `/Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json` + `batches/YYYY-MM-DD/*.jsonl.gz` | Mac tmux `weather_market_books` | 5-minute base cadence, hot tokens first | canonical raw Gamma/CLOB books; no forecast dependency; not backfillable if missed |
+| `/Volumes/jrs/weather_data_feed_service_runtime/market_ladder_snapshots/` | Mac tmux `weather_market_books` | market-books cadence | complete event/rung/two-sided book view and batch completeness |
+| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | strategy snapshot cadence | forecast/observation/model joined strategy view; reads canonical market books |
+| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | compatibility alias | market-books cadence | legacy consumer path to canonical physical orderbook capture; not a second writer |
 | `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
 | `production.yaml.managed_runtimes[*].live_order_path` | corresponding controller-managed live runtime | live strategy cadence | complete current live order-journal set; no second hard-coded list |
 | `production.yaml.managed_runtimes[*].health_path` | corresponding controller-managed runtime | role cadence | current raw pulse/summary; the control repo is not assumed to be its storage root |

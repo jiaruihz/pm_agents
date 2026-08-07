@@ -16,6 +16,7 @@ import subprocess
 import urllib.parse
 import httpx
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
 from xml.etree import ElementTree
@@ -570,6 +571,83 @@ def publish_json_atomic(path, payload):
         temporary.unlink(missing_ok=True)
 
 
+def load_canonical_orderbook_latest(path, *, now_utc, max_age_sec):
+    """Load one canonical market-books batch for view materialization."""
+    source = Path(path)
+    if not source.exists():
+        return {}, {"status": "missing", "reason": "canonical_market_books_missing", "path": str(source)}
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, {
+            "status": "invalid",
+            "reason": f"canonical_market_books_invalid:{type(exc).__name__}",
+            "path": str(source),
+        }
+    available_raw = payload.get("available_at_utc")
+    try:
+        available = datetime.fromisoformat(str(available_raw).replace("Z", "+00:00"))
+        if available.tzinfo is None:
+            available = available.replace(tzinfo=timezone.utc)
+        age_sec = max(0.0, (now_utc - available.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return {}, {
+            "status": "invalid",
+            "reason": "canonical_market_books_missing_available_clock",
+            "path": str(source),
+        }
+    if max_age_sec >= 0 and age_sec > max_age_sec:
+        return {}, {
+            "status": "stale",
+            "reason": "canonical_market_books_stale",
+            "path": str(source),
+            "age_sec": age_sec,
+            "max_age_sec": max_age_sec,
+            "batch_capture_id": payload.get("batch_capture_id"),
+        }
+    books = {}
+    book_keys = (
+        "status", "token_id", "request_started_at_utc", "response_received_at_utc",
+        "parsed_at_utc", "fetched_at_utc", "request_batch_capture_id",
+        "clock_lineage_status", "event_time_pit_scorable", "exchange_book_timestamp",
+        "exchange_book_hash", "raw_payload_hash", "book_capture_id", "summary", "raw", "error",
+    )
+    for row in payload.get("records") or []:
+        if not isinstance(row, dict):
+            continue
+        token_id = str(row.get("token_id") or "")
+        if token_id:
+            books[token_id] = {key: row.get(key) for key in book_keys if key in row}
+    return books, {
+        "status": "ok",
+        "path": str(source),
+        "age_sec": age_sec,
+        "max_age_sec": max_age_sec,
+        "batch_capture_id": payload.get("batch_capture_id"),
+        "archive_path": payload.get("archive_path"),
+        "available_at_utc": available_raw,
+        "book_count": len(books),
+    }
+
+
+def publish_legacy_orderbook_alias(source_archive, destination):
+    """Expose a canonical capture at a legacy path without duplicating bytes."""
+    if not source_archive:
+        return None
+    source = Path(source_archive)
+    destination = Path(destination)
+    if not source.exists():
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        return destination
+    try:
+        os.link(source, destination)
+    except OSError:
+        return None
+    return destination
+
+
 def stamp_snapshot_availability(payload, available_at_utc=None):
     available = available_at_utc or datetime.now(timezone.utc).isoformat(
         timespec="milliseconds"
@@ -629,6 +707,20 @@ def fetch_token_orderbook_batch(
         return {}
     rows_by_token = dict(token_archive_rows)
     results: dict[str, tuple[dict, dict]] = {}
+
+    # Retain the public helper's single-book mode for tests and callers that do
+    # not own an HTTP batch client. Production canonical capture always passes
+    # one shared client and uses the /books endpoint below.
+    if client is None:
+        with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as executor:
+            futures = {
+                executor.submit(fetch_token_orderbook, None, token_id, top_n=top_n): token_id
+                for token_id in rows_by_token
+            }
+            for future in as_completed(futures):
+                token_id = futures[future]
+                results[token_id] = (rows_by_token[token_id], future.result())
+        return results
 
     def budget_remaining():
         if deadline_monotonic is None:
@@ -1114,15 +1206,13 @@ def orderbook_disabled_book(status):
 
 def orderbook_for_entry(orderbook_cache, token_id, *, label, outcome, targets, disabled_reason=None):
     """Return a fetched book or the correct status for this ladder entry."""
+    targeted = targets is None or (label, outcome) in targets
+    if not targeted:
+        return orderbook_disabled_book("orderbook_scope_skipped")
     book = orderbook_cache.get(token_id)
     if book is not None:
         return book
-    targeted = targets is None or (label, outcome) in targets
-    return orderbook_disabled_book(
-        (disabled_reason or "orderbook_missing")
-        if targeted
-        else "orderbook_scope_skipped"
-    )
+    return orderbook_disabled_book(disabled_reason or "orderbook_missing")
 
 
 def orderbook_targets_for_current_yes(markets, unit, metar_state):
@@ -1468,6 +1558,17 @@ def main():
         help="Concurrent token orderbook workers per city/event; keep at 1 for legacy serial behavior.",
     )
     parser.add_argument("--no-orderbook", action="store_true", help="Disable CLOB orderbook enrichment.")
+    parser.add_argument(
+        "--orderbook-source-latest",
+        default="",
+        help="Read canonical market_books/latest.json instead of issuing CLOB requests.",
+    )
+    parser.add_argument(
+        "--orderbook-source-max-age-sec",
+        type=float,
+        default=420.0,
+        help="Maximum accepted age for the canonical market-books batch.",
+    )
     parser.add_argument("--now-utc", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
@@ -1497,10 +1598,24 @@ def main():
         trust_env=False,
     )
     orderbook_cache = {}
+    canonical_orderbook_source = None
+    external_orderbook_only = bool(args.orderbook_source_latest)
+    if external_orderbook_only:
+        orderbook_cache, canonical_orderbook_source = load_canonical_orderbook_latest(
+            args.orderbook_source_latest,
+            now_utc=now_utc,
+            max_age_sec=args.orderbook_source_max_age_sec,
+        )
+        publish_legacy_orderbook_alias(
+            canonical_orderbook_source.get("archive_path"),
+            orderbook_archive,
+        )
     # Count only time spent inside CLOB batches. Forecast/Gamma work between
     # cities must not consume the orderbook enrichment budget.
     orderbook_spent_sec = 0.0
     orderbook_disabled_reason = "disabled" if args.no_orderbook else None
+    if external_orderbook_only and canonical_orderbook_source.get("status") != "ok":
+        orderbook_disabled_reason = canonical_orderbook_source.get("reason")
 
     print(f"{'='*90}")
     print(f" Paper Snapshot | Beijing {now_beijing.strftime('%Y-%m-%d %H:%M:%S')} | Shares: {args.shares}")
@@ -1748,7 +1863,7 @@ def main():
                     orderbook_disabled_reason = "orderbook_budget_exhausted"
 
                 token_archive_rows = {}
-                if orderbook_disabled_reason is None:
+                if orderbook_disabled_reason is None and not external_orderbook_only:
                     for entry in market_entries:
                         label = entry["label"]
                         for outcome_name, token_id in (("yes", entry["yes_token_id"]), ("no", entry["no_token_id"])):
@@ -2050,6 +2165,7 @@ def main():
         "data_feed_schema_version": SNAPSHOT_SCHEMA_VERSION,
         "snapshot_publish_quality": publish_quality,
         "orderbook_enrichment_summary": orderbook_enrichment_summary,
+        "canonical_orderbook_source": canonical_orderbook_source,
     }
     forecast_curve_archive = None
     if publish_quality["publishable"] and not curve_publish_evidence["publishable"]:

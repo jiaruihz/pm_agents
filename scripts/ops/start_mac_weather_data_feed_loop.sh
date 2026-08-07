@@ -13,6 +13,7 @@ SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES
 RUNWAY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/runway_observations}"
 HIGH_FREQUENCY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/high_frequency_observations}"
 CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
+MARKET_BOOKS_LATEST="${WEATHER_MARKET_BOOKS_LATEST:-$RUNTIME_ROOT/market_books/latest.json}"
 LOOP_DIR="${WEATHER_DATA_FEED_LOOP_DIR:-$RUNTIME_ROOT/loop}"
 PID_FILE="$LOOP_DIR/data_feed_loop.pid"
 LOG_FILE="$LOOP_DIR/data_feed_loop.log"
@@ -251,6 +252,8 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
         --output-root "$OUTPUT_ROOT" \
         --cache-root "$CACHE_ROOT" \
         "$SNAPSHOT_COMMAND" -- \
+        --orderbook-source-latest "$MARKET_BOOKS_LATEST" \
+        --orderbook-source-max-age-sec 420 \
         --orderbook-budget-sec "$SNAPSHOT_ORDERBOOK_BUDGET_SEC" \
         --orderbook-workers "$SNAPSHOT_ORDERBOOK_WORKERS"
       snapshot_supervisor_pid="$WEATHER_ASYNC_PID"
