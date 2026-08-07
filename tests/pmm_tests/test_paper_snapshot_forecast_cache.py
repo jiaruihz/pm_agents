@@ -107,7 +107,7 @@ def test_fresh_durable_curve_skips_live_forecast_call(monkeypatch) -> None:
     assert calls == []
 
 
-def test_forecast_fetch_never_reuses_market_proxy(monkeypatch) -> None:
+def test_forecast_fetch_uses_only_dedicated_forecast_proxy(monkeypatch) -> None:
     calls = []
 
     def fake_curl(*args, **kwargs):
@@ -116,6 +116,7 @@ def test_forecast_fetch_never_reuses_market_proxy(monkeypatch) -> None:
 
     monkeypatch.setattr(runner, "curl_json_get", fake_curl)
     monkeypatch.setattr(runner, "PROXY", "http://market-proxy.invalid:8080")
+    monkeypatch.setattr(runner, "FORECAST_PROXY", "http://forecast-proxy.invalid:8081")
     monkeypatch.setattr(runner, "_cached_live_forecast", lambda *_args: None)
     monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
 
@@ -128,7 +129,7 @@ def test_forecast_fetch_never_reuses_market_proxy(monkeypatch) -> None:
     )
 
     assert len(calls) == 1
-    assert "proxy" not in calls[0][1]
+    assert calls[0][1]["proxy"] == "http://forecast-proxy.invalid:8081"
 
 
 def test_snapshot_forecast_consumer_never_calls_network(monkeypatch) -> None:

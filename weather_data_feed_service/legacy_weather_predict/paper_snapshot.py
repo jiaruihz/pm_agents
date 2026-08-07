@@ -114,6 +114,7 @@ FORECAST_CURVE_CACHE_MAX_AGE_SEC = float(
 FORECAST_LIVE_REFRESH_SEC = float(
     os.environ.get("WEATHER_DATA_FEED_FORECAST_LIVE_REFRESH_SEC", "3600")
 )
+FORECAST_PROXY = os.environ.get("WEATHER_DATA_FEED_FORECAST_PROXY") or None
 FORECAST_CURVE_CACHE_MAX_FILES = int(
     os.environ.get("WEATHER_DATA_FEED_FORECAST_CURVE_CACHE_MAX_FILES", "8")
 )
@@ -1116,6 +1117,7 @@ def _refresh_live_forecast(client, model, city, cfg, target_date):
             status_code, payload, _error = curl_json_get(
                 url,
                 params=params,
+                proxy=FORECAST_PROXY,
                 timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
                 connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
             )
