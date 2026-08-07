@@ -566,6 +566,36 @@ def test_tmux_new_host_uses_audited_bash_default_shell(monkeypatch, tmp_path):
     assert captured["command"][:3] == [str(spec.canonical_tmux_binary), "-L", "probe"]
 
 
+def test_checked_tmux_sessions_use_unique_names(monkeypatch, tmp_path):
+    spec = production_spec(tmp_path, ())
+    session_names = []
+
+    def fake_tmux_on_socket(_spec, _socket, *args):
+        if args[0] == "new-session":
+            session_names.append(str(args[3]))
+            completed = subprocess.run(
+                ["/bin/sh", "-c", str(args[-1])],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return subprocess.CompletedProcess(args, 0, completed.stdout, completed.stderr)
+        if args[0] == "has-session":
+            return subprocess.CompletedProcess(args, 1, "", "")
+        raise AssertionError(args)
+
+    monkeypatch.setattr(ctl, "_tmux_on_socket", fake_tmux_on_socket)
+
+    first = ctl._run_tmux_checked(spec, "probe", "health", "printf first", timeout_sec=1)
+    second = ctl._run_tmux_checked(spec, "probe", "health", "printf second", timeout_sec=1)
+
+    assert first.stdout == "first"
+    assert second.stdout == "second"
+    assert session_names[0].startswith("health_")
+    assert session_names[1].startswith("health_")
+    assert session_names[0] != session_names[1]
+
+
 def test_prospective_probe_reports_first_io_failure(monkeypatch, tmp_path):
     base = production_spec(tmp_path, ())
     base.canonical_db_path.write_bytes(b"x")

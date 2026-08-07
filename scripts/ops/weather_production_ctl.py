@@ -398,6 +398,10 @@ def _run_tmux_checked(
 ) -> subprocess.CompletedProcess[str]:
     """Run one detached command without tmux run-shell and bridge its status."""
 
+    # Health may be requested concurrently (for example directly and through
+    # run_stack). A fixed helper session name makes the second probe fail with
+    # "duplicate session", which then looks like invalid producer JSON.
+    session_name = f"{session}_{os.getpid()}_{time.monotonic_ns()}"
     with tempfile.TemporaryDirectory(prefix=f"weather-{session}-") as bridge_dir:
         status_path = Path(bridge_dir) / "status"
         output_path = Path(bridge_dir) / "output"
@@ -409,14 +413,14 @@ def _run_tmux_checked(
             "exit \"$rc\""
         )
         started = _tmux_on_socket(
-            spec, socket, "new-session", "-d", "-s", session, wrapped
+            spec, socket, "new-session", "-d", "-s", session_name, wrapped
         )
         if started.returncode != 0:
             return started
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
             present = _tmux_on_socket(
-                spec, socket, "has-session", "-t", f"={session}"
+                spec, socket, "has-session", "-t", f"={session_name}"
             )
             if present.returncode != 0:
                 break
@@ -434,7 +438,7 @@ def _run_tmux_checked(
         except OSError:
             output = "migration command exited without output bridge"
         return subprocess.CompletedProcess(
-            ["tmux", "-L", socket, session], returncode, output
+            ["tmux", "-L", socket, session_name], returncode, output
         )
 
 
