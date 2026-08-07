@@ -63,6 +63,18 @@ DEFAULT_OPEN_METEO_REFRESH_SEC = int(
 )
 
 
+def _parse_cache_utc(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _taf_valid_time(value: Any) -> str | None:
     if value is None or value == "":
         return None
@@ -190,7 +202,7 @@ def _reusable_open_meteo_payload(
     for key in ("open_meteo_multi_model", "open_meteo_weather_context"):
         block = previous.get(key)
         result = block.get("result") if isinstance(block, dict) else None
-        fetched = parse_utc(result.get("fetched_at_utc")) if isinstance(result, dict) else None
+        fetched = _parse_cache_utc(result.get("fetched_at_utc")) if isinstance(result, dict) else None
         if not isinstance(block, dict) or not isinstance(result, dict) or result.get("status") != "ok" or fetched is None:
             return None
         age = (now_utc - fetched).total_seconds()
