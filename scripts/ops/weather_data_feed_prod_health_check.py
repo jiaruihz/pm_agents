@@ -508,6 +508,7 @@ def check_observation_cache(
     now_utc: datetime,
     max_cache_age_min: float,
     max_observation_age_min: float,
+    required_cities: set[str] | None = None,
     history_window_min: float = 30.0,
     history_tail_rows: int = 1000,
 ) -> dict[str, Any]:
@@ -612,14 +613,28 @@ def check_observation_cache(
         if previous is None or running_max >= previous[0]:
             previous_by_station_day[key] = (running_max, row_ts_raw)
 
+    blocking_invalid_rows = [
+        row
+        for row in invalid_rows
+        if required_cities is None or str(row.get("city") or "") in required_cities
+    ]
+    inactive_invalid_rows = [row for row in invalid_rows if row not in blocking_invalid_rows]
     fail = (
         cache_age_min is None
         or cache_age_min < 0
         or cache_age_min > max_cache_age_min
-        or bool(invalid_rows)
+        or bool(blocking_invalid_rows)
         or bool(regressions)
     )
-    status = "fail" if fail else ("warn" if reused_rows or awaiting_first_rows else "ok")
+    status = (
+        "fail"
+        if fail
+        else (
+            "warn"
+            if reused_rows or awaiting_first_rows or inactive_invalid_rows
+            else "ok"
+        )
+    )
     return {
         "path": str(path),
         "history_path": str(history_path),
@@ -630,6 +645,11 @@ def check_observation_cache(
         "record_count": len(rows),
         "invalid_record_count": len(invalid_rows),
         "invalid_record_examples": invalid_rows[:10],
+        "blocking_invalid_record_count": len(blocking_invalid_rows),
+        "blocking_invalid_record_examples": blocking_invalid_rows[:10],
+        "inactive_invalid_record_count": len(inactive_invalid_rows),
+        "inactive_invalid_record_examples": inactive_invalid_rows[:10],
+        "required_cities": sorted(required_cities) if required_cities is not None else None,
         "reused_record_count": len(reused_rows),
         "reused_cities": sorted(reused_rows),
         "awaiting_first_observation_count": len(awaiting_first_rows),
@@ -745,8 +765,10 @@ def check_forecast_hourly_curves(
         for row in valid_rows
     }
     cached_reuse_pairs: set[tuple[str, str]] = set()
+    seen_reuse_pairs: set[tuple[str, str]] = set()
     invalid_cached_reuse: list[dict[str, str]] = []
-    latest_resolved = latest.resolve()
+    curve_root = curve_dir.resolve()
+    archive_keys: dict[Path, set[tuple[str, str, str]]] = {}
     snapshot_records = [
         row for row in snapshot_payload.get("records", []) if isinstance(row, dict)
     ]
@@ -758,17 +780,32 @@ def check_forecast_hourly_curves(
         values_hash = str(row.get("forecast_values_hash") or "")
         archive_raw = str(row.get("forecast_curve_archive_path") or "")
         pair = (city, target_date)
-        if pair in cached_reuse_pairs:
+        if pair in seen_reuse_pairs:
             continue
+        seen_reuse_pairs.add(pair)
         archive = Path(archive_raw).expanduser() if archive_raw else None
+        resolved_archive: Path | None = None
+        if archive is not None and archive.exists():
+            resolved_archive = archive.resolve()
+            if not resolved_archive.is_relative_to(curve_root):
+                resolved_archive = None
+        if resolved_archive is not None and resolved_archive not in archive_keys:
+            archive_rows = read_jsonl_tail(resolved_archive, 10000)
+            archive_keys[resolved_archive] = {
+                (
+                    str(archive_row.get("city") or ""),
+                    str(archive_row.get("target_date") or ""),
+                    str(archive_row.get("forecast_values_hash") or ""),
+                )
+                for archive_row in archive_rows
+                if not archive_row.get("_parse_error")
+            }
         valid = bool(
             city
             and target_date
             and values_hash
-            and archive is not None
-            and archive.exists()
-            and archive.resolve() == latest_resolved
-            and (city, target_date, values_hash) in capture_keys
+            and resolved_archive is not None
+            and (city, target_date, values_hash) in archive_keys[resolved_archive]
         )
         if valid:
             cached_reuse_pairs.add(pair)
@@ -787,7 +824,7 @@ def check_forecast_hourly_curves(
         if isinstance(row, dict) and row.get("city") and row.get("target_date")
     }
     captured_pairs = {(str(row.get("city") or ""), str(row.get("target_date") or "")) for row in valid_rows}
-    missing_pairs = sorted(expected_pairs - captured_pairs)
+    missing_pairs = sorted(expected_pairs - captured_pairs - cached_reuse_pairs)
     cached_reuse_complete = bool(expected_pairs) and expected_pairs <= cached_reuse_pairs
 
     status = "ok"
@@ -1082,6 +1119,14 @@ def main() -> int:
 
     now_utc = datetime.now(timezone.utc)
     snapshot_path = Path(args.snapshot) if args.snapshot else latest_snapshot(Path(args.snapshot_dir))
+    snapshot_payload = load_snapshot(snapshot_path)
+    required_observation_cities = {
+        str(row.get("city") or "")
+        for row in snapshot_payload.get("records", [])
+        if isinstance(row, dict)
+        and row.get("city")
+        and row.get("target_date") == row.get("city_local_date_at_snapshot")
+    }
     runtime_root = Path(args.runtime_root)
     telemetry_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_TELEMETRY_FILES]
     summary_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_SUMMARY_FILES]
@@ -1122,6 +1167,7 @@ def main() -> int:
             now_utc=now_utc,
             max_cache_age_min=args.max_observation_cache_age_min,
             max_observation_age_min=args.max_observation_age_min,
+            required_cities=required_observation_cities,
             history_tail_rows=args.tail_observation_history_rows,
         ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],

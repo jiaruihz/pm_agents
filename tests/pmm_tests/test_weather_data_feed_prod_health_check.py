@@ -185,6 +185,44 @@ def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
     assert report["reused_record_count"] == 1
 
 
+def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache.write_text(
+        json.dumps(
+            {
+                "generated_at_utc": "2026-08-07T17:12:00Z",
+                "records": [
+                    {
+                        "city": "Denver",
+                        "target_date": "2026-08-07",
+                        "station": "KBKF",
+                        "status": "ok",
+                        "current_temp_c": 24.9,
+                        "running_max_c": 24.9,
+                        "age_min": 134.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=datetime(2026, 8, 7, 17, 13, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+        required_cities={"Shanghai"},
+    )
+
+    assert report["status"] == "warn"
+    assert report["invalid_record_count"] == 1
+    assert report["blocking_invalid_record_count"] == 0
+    assert report["inactive_invalid_record_count"] == 1
+
+
 def test_prod_health_check_warns_during_expected_first_observation_gap(tmp_path):
     cache = tmp_path / "latest.json"
     history = tmp_path / "observations.jsonl"
@@ -508,6 +546,33 @@ def test_prod_health_check_accepts_verified_cached_curve_reuse(tmp_path):
             }
         ),
         encoding="utf-8",
+    )
+
+    newer_row = build_curve_row(
+        snapshot_ts_utc="2026-07-11T03:12:00Z",
+        city="Beijing",
+        target_date="2026-07-11",
+        forecast_source="open_meteo_live_ecmwf",
+        forecast_model="ecmwf",
+        forecast_assigned_model="ecmwf",
+        forecast_values_hash="hash-newer",
+        hourly_curve=[{"time_local": "2026-07-11T12:00", "temperature_f": 90.0}],
+        forecast_max_f=90.0,
+        forecast_peak_hour_local=12,
+        forecast_peak_time_local="2026-07-11T12:00",
+        forecast_peak_hour_utc=4,
+        forecast_peak_time_utc="2026-07-11T04:00:00Z",
+        forecast_timezone="Asia/Shanghai",
+        forecast_timezone_abbreviation="CST",
+        forecast_utc_offset_seconds=28800,
+        forecast_generationtime_ms=1.0,
+        forecast_model_fallback_reason=None,
+        forecast_detected_at_utc="2026-07-11T03:12:02Z",
+    )
+    write_forecast_hourly_curve_capture(
+        tmp_path,
+        [newer_row],
+        available_at_utc=datetime(2026, 7, 11, 3, 12, 4, tzinfo=timezone.utc),
     )
 
     report = check_forecast_hourly_curves(
