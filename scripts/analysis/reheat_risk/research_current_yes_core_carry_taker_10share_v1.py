@@ -208,6 +208,7 @@ def main() -> int:
     parser.add_argument("--net-ev-sizing", action="store_true")
     parser.add_argument("--descriptive-audit", action="store_true")
     parser.add_argument("--semantic-challenger", action="store_true")
+    parser.add_argument("--transition-confirmation-challenger", action="store_true")
     parser.add_argument("--overshoot-survival", action="store_true")
     args, _ = parser.parse_known_args()
     if args.net_ev_sizing:
@@ -228,6 +229,12 @@ def main() -> int:
         )
 
         return semantic_challenger_main()
+    if args.transition_confirmation_challenger:
+        from scripts.analysis.reheat_risk.core_carry_transition_confirmation_challenger import (
+            main as transition_confirmation_challenger_main,
+        )
+
+        return transition_confirmation_challenger_main()
     if args.overshoot_survival:
         from scripts.analysis.reheat_risk.core_carry_overshoot_survival import (
             main as overshoot_survival_main,

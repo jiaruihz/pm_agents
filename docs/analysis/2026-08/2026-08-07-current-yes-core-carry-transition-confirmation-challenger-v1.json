@@ -1,0 +1,384 @@
+{
+  "schema_version": "current_yes_core_carry_transition_confirmation_challenger_v1",
+  "generated_at_utc": "2026-08-07T08:24:00.726259+00:00",
+  "research_id": "current_yes_core_carry_transition_confirmation_challenger_v1",
+  "run_id": "historical_parent_1349_state_entry_offset_ridge_20260807",
+  "denominator": {
+    "rows": 1349,
+    "state_entries": 801,
+    "city_days": 772,
+    "cities": 36,
+    "dates": 31,
+    "date_min": "2026-06-02",
+    "date_max": "2026-07-08",
+    "input": "docs/analysis/2026-07/generated/current_yes_core_carry_overshoot_risk_sizing_overlay_v1/opportunity_ledger.csv",
+    "input_sha256": "d453fa4127459f15ad47656b799baa8826a50cdfaaeb3b5a9f81f8195253b570"
+  },
+  "funnel": {
+    "signal": [
+      {
+        "stage": "fixed PIT checkpoint parent",
+        "grain": "checkpoint",
+        "rows": 1349
+      },
+      {
+        "stage": "exact-bracket state entries",
+        "grain": "state_entry",
+        "rows": 801
+      },
+      {
+        "stage": "development expanding OOF",
+        "grain": "checkpoint",
+        "rows": 686
+      },
+      {
+        "stage": "historical frozen forward",
+        "grain": "checkpoint",
+        "rows": 223
+      }
+    ],
+    "evidence": "The fixed parent already has model, same-state market and settlement coverage. No execution or fill filter is applied."
+  },
+  "feature_columns": [
+    "upper_exit_distance_ticks",
+    "forecast_upper_exit_margin_ticks",
+    "fresh_high_remaining_heat",
+    "dip_rebound_score",
+    "forecast_exit_during_pullback",
+    "forecast_reheat_runway",
+    "confirmed_reheat_runway",
+    "peak_ahead_heat",
+    "plateau_confirmation",
+    "wind_boost_transition_risk"
+  ],
+  "feature_coverage": [
+    {
+      "feature": "upper_exit_distance_ticks",
+      "coverage": 1.0,
+      "unique_non_null": 2
+    },
+    {
+      "feature": "forecast_upper_exit_margin_ticks",
+      "coverage": 1.0,
+      "unique_non_null": 162
+    },
+    {
+      "feature": "fresh_high_remaining_heat",
+      "coverage": 1.0,
+      "unique_non_null": 1343
+    },
+    {
+      "feature": "dip_rebound_score",
+      "coverage": 0.9985174203113417,
+      "unique_non_null": 132
+    },
+    {
+      "feature": "forecast_exit_during_pullback",
+      "coverage": 1.0,
+      "unique_non_null": 299
+    },
+    {
+      "feature": "forecast_reheat_runway",
+      "coverage": 1.0,
+      "unique_non_null": 379
+    },
+    {
+      "feature": "confirmed_reheat_runway",
+      "coverage": 1.0,
+      "unique_non_null": 194
+    },
+    {
+      "feature": "peak_ahead_heat",
+      "coverage": 1.0,
+      "unique_non_null": 763
+    },
+    {
+      "feature": "plateau_confirmation",
+      "coverage": 0.9985174203113417,
+      "unique_non_null": 1181
+    },
+    {
+      "feature": "wind_boost_transition_risk",
+      "coverage": 0.9985174203113417,
+      "unique_non_null": 507
+    }
+  ],
+  "development_dates": [
+    "2026-06-10",
+    "2026-06-11",
+    "2026-06-12",
+    "2026-06-13",
+    "2026-06-14",
+    "2026-06-15",
+    "2026-06-16",
+    "2026-06-17",
+    "2026-06-18",
+    "2026-06-19",
+    "2026-06-20",
+    "2026-06-21",
+    "2026-06-22",
+    "2026-06-23",
+    "2026-06-25"
+  ],
+  "forward_dates": [
+    "2026-06-26",
+    "2026-06-27",
+    "2026-06-29",
+    "2026-06-30",
+    "2026-07-01",
+    "2026-07-06",
+    "2026-07-07",
+    "2026-07-08"
+  ],
+  "development_metrics": {
+    "challenger": {
+      "grain": "state_entry",
+      "rows": 686,
+      "units": 417,
+      "dates": 15,
+      "brier": 0.06570590162776284,
+      "logloss": 0.2385352782074444,
+      "mean_probability": 0.9093042268546143,
+      "actual_rate": 0.9210946794317205
+    },
+    "core": {
+      "grain": "state_entry",
+      "rows": 686,
+      "units": 417,
+      "dates": 15,
+      "brier": 0.06531137517930347,
+      "logloss": 0.23770493932269196,
+      "mean_probability": 0.9122938206176301,
+      "actual_rate": 0.9210946794317205
+    },
+    "market": {
+      "grain": "state_entry",
+      "rows": 686,
+      "units": 417,
+      "dates": 15,
+      "brier": 0.06824187886845814,
+      "logloss": 0.24731948177934318,
+      "mean_probability": 0.9230178701460825,
+      "actual_rate": 0.9210946794317205
+    }
+  },
+  "forward_metrics": {
+    "challenger": {
+      "state_entry": {
+        "grain": "state_entry",
+        "rows": 223,
+        "units": 138,
+        "dates": 8,
+        "brier": 0.07517944967520207,
+        "logloss": 0.2660868966319225,
+        "mean_probability": 0.9176665009928484,
+        "actual_rate": 0.9134380908070424
+      },
+      "checkpoint": {
+        "grain": "checkpoint",
+        "rows": 223,
+        "units": 223,
+        "dates": 8,
+        "brier": 0.06684669382995517,
+        "logloss": 0.24260780594695572,
+        "mean_probability": 0.9264130591534555,
+        "actual_rate": 0.9245275776710309
+      }
+    },
+    "core": {
+      "state_entry": {
+        "grain": "state_entry",
+        "rows": 223,
+        "units": 138,
+        "dates": 8,
+        "brier": 0.07518205227841415,
+        "logloss": 0.2656772212710687,
+        "mean_probability": 0.9126777220823483,
+        "actual_rate": 0.9134380908070424
+      },
+      "checkpoint": {
+        "grain": "checkpoint",
+        "rows": 223,
+        "units": 223,
+        "dates": 8,
+        "brier": 0.06687533554560643,
+        "logloss": 0.24237446936080542,
+        "mean_probability": 0.9220901007526967,
+        "actual_rate": 0.9245275776710309
+      }
+    },
+    "market": {
+      "state_entry": {
+        "grain": "state_entry",
+        "rows": 223,
+        "units": 138,
+        "dates": 8,
+        "brier": 0.0767426471694573,
+        "logloss": 0.27824389681598993,
+        "mean_probability": 0.9247020829179221,
+        "actual_rate": 0.9134380908070424
+      },
+      "checkpoint": {
+        "grain": "checkpoint",
+        "rows": 223,
+        "units": 223,
+        "dates": 8,
+        "brier": 0.06890447390789618,
+        "logloss": 0.2580228169521777,
+        "mean_probability": 0.9273154941983938,
+        "actual_rate": 0.9245275776710309
+      }
+    }
+  },
+  "forward_comparisons": {
+    "p_core_hold": {
+      "dates": 8,
+      "brier_delta": {
+        "mean": -2.602603212080532e-06,
+        "ci95": [
+          -0.0011505251506138687,
+          0.001127651591676731
+        ],
+        "win_date_fraction": 0.625
+      },
+      "logloss_delta": {
+        "mean": 0.00040967536085379766,
+        "ci95": [
+          -0.003645124926731295,
+          0.004539682303553108
+        ],
+        "win_date_fraction": 0.375
+      }
+    },
+    "p_market_hold": {
+      "dates": 8,
+      "brier_delta": {
+        "mean": -0.0015631974942552332,
+        "ci95": [
+          -0.007296910950832416,
+          0.0035798076501323546
+        ],
+        "win_date_fraction": 0.5
+      },
+      "logloss_delta": {
+        "mean": -0.012157000184067481,
+        "ci95": [
+          -0.033074667381334945,
+          0.007545182022034168
+        ],
+        "win_date_fraction": 0.625
+      }
+    }
+  },
+  "frozen_fit": {
+    "columns": [
+      "calibration_intercept",
+      "upper_exit_distance_ticks",
+      "forecast_upper_exit_margin_ticks",
+      "fresh_high_remaining_heat",
+      "dip_rebound_score",
+      "forecast_exit_during_pullback",
+      "forecast_reheat_runway",
+      "confirmed_reheat_runway",
+      "peak_ahead_heat",
+      "plateau_confirmation",
+      "wind_boost_transition_risk"
+    ],
+    "transforms": {
+      "upper_exit_distance_ticks": {
+        "median": 1.0,
+        "mean": 1.4564831261101243,
+        "scale": 0.49810268187076917
+      },
+      "forecast_upper_exit_margin_ticks": {
+        "median": -2.400000000000002,
+        "mean": -2.0637655417406746,
+        "scale": 2.9659706527640735
+      },
+      "fresh_high_remaining_heat": {
+        "median": 0.24711730933846474,
+        "mean": 0.3551579332557247,
+        "scale": 0.3421002827838937
+      },
+      "dip_rebound_score": {
+        "median": 0.0,
+        "mean": 0.20954847476233518,
+        "scale": 1.197937526009666
+      },
+      "forecast_exit_during_pullback": {
+        "median": 0.0,
+        "mean": 0.8146294211850145,
+        "scale": 2.816570699111597
+      },
+      "forecast_reheat_runway": {
+        "median": 0.0,
+        "mean": 0.37735665011514197,
+        "scale": 1.1743880992938165
+      },
+      "confirmed_reheat_runway": {
+        "median": 0.0,
+        "mean": 0.4186570616267493,
+        "scale": 1.1715322482277184
+      },
+      "peak_ahead_heat": {
+        "median": 0.5881643478027099,
+        "mean": 1.3393068386808786,
+        "scale": 2.594819461223479
+      },
+      "plateau_confirmation": {
+        "median": 0.9596487557755512,
+        "mean": 2.047393319095706,
+        "scale": 3.125802854306017
+      },
+      "wind_boost_transition_risk": {
+        "median": 0.0,
+        "mean": 0.14436314280133983,
+        "scale": 0.46392173015183547
+      }
+    },
+    "coefficients": [
+      0.05313626734905111,
+      0.012178499478685387,
+      -0.030926281333470106,
+      -0.009297449656497647,
+      0.024478171817984385,
+      0.0145945558305327,
+      0.015303586951898379,
+      -0.017050413747756354,
+      -0.022292585944164382,
+      -0.022013545390174968,
+      -0.004097619622142535
+    ],
+    "coefficient_map": {
+      "calibration_intercept": 0.05313626734905111,
+      "upper_exit_distance_ticks": 0.012178499478685387,
+      "forecast_upper_exit_margin_ticks": -0.030926281333470106,
+      "fresh_high_remaining_heat": -0.009297449656497647,
+      "dip_rebound_score": 0.024478171817984385,
+      "forecast_exit_during_pullback": 0.0145945558305327,
+      "forecast_reheat_runway": 0.015303586951898379,
+      "confirmed_reheat_runway": -0.017050413747756354,
+      "peak_ahead_heat": -0.022292585944164382,
+      "plateau_confirmation": -0.022013545390174968,
+      "wind_boost_transition_risk": -0.004097619622142535
+    },
+    "l2": 0.5,
+    "optimizer_iterations": 7,
+    "train_rows": 1126,
+    "train_dates": 23
+  },
+  "verdict": "rejected",
+  "decision_rule_pass": false,
+  "live_action": "none",
+  "limitations": [
+    "The ledger ends on 2026-07-08 and does not include the later Wellington, Lucknow or Manila live cases on the same fixed denominator.",
+    "Historical first-seen cloud/rain transitions, dewpoint trend and wind-direction by terrain are unavailable, so they are not imputed or proxied.",
+    "The last eight dates were frozen before this run but their outcomes were seen by the wider research program; this is not clean program-wide forward evidence.",
+    "Probability quality alone does not authorize an eligibility, sizing, maker or live change."
+  ],
+  "artifacts": {
+    "artifact_dir": "/Volumes/jrs-archive/pm_agents/research/artifact_store/active/current_yes_core_carry_transition_confirmation_challenger_v1/historical_parent_1349_state_entry_offset_ridge_20260807",
+    "preregistration": "docs/analysis/2026-08/2026-08-07-current-yes-core-carry-transition-confirmation-challenger-preregistration.json",
+    "preregistration_sha256": "f75d225966ca9a7223d52537358e525c837765a7b4199c61dfdd688704d3a623"
+  }
+}
