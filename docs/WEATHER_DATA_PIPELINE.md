@@ -19,11 +19,11 @@ Last updated: 2026-08-04
 >
 > 2026-06-07 更新: 修正 CLOB fill recovery 口径。public activity 不是逐 order 权威来源；旧 fallback 在 split child order / partial fill 场景会少算或多算。新增 `weather_clob_fill_coverage_gate.py`，refresh/rebuild 后必须 fail-closed 校验 order_id、order cap、DB/cache/fact 成本一致性。
 >
-> 2026-07-04 更新: N100 7/1 发生 ext4 emergency read-only / IO error 事故后，Mac 临时接管生产。当前 market snapshot/orderbook 源为 `/Users/deepsleep/projects/weather_data_feed_service_runtime/targeted_output/`，live order 源为 `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/live/` 和 active strategy runtime dirs。同步当前生产 market data 用 `scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`。
+> 2026-07-04 更新: N100 7/1 发生 ext4 emergency read-only / IO error 事故后，Mac 临时接管生产。该次接管最初使用 `targeted_output`；当前路径已由 `production.yaml` 拆分为 `strategy_snapshots`、`market_books` 与 `forecast`。live order 源为 active strategy runtime dirs。同步当前生产 market data 用 `scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`。
 >
 > 2026-07-06 更新: Mac data-feed runtime 和本地 `runtime/weather_edge_v1/market_data` mirror 已迁到 APFS 外置盘 `/Volumes/jrs`。旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 和 `runtime/weather_edge_v1/market_data` 保留为 symlink。macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，所以 data-feed 当前由 `tmux -L weather-data-feed-jrs` session `weather_data_feed_jrs` 常驻；重启/拔插盘后用 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 恢复。
 >
-> 2026-07-11 更新: full snapshot producer now persists immutable decision-time hourly forecast curves as `targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. Corrected `forecast_hourly_curve_v3` rows separate source-response `forecast_detected_at_utc` from capture publication-boundary `available_at_utc`; a new exact hash first appears at detected time, or at available time only when no reliable detected time exists, and later captures preserve the earliest reliable first-seen. `available_at_utc` is sampled immediately before final serialization/fsync and atomic link, while file mtime is the external completion evidence. Rows also record explicit model fallback and an honest `forecast_run_lineage_status` when the upstream live API does not expose a run timestamp. `weather_data_feed_prod_health_check.py` fails when the latest curve capture is stale, misaligned with the latest snapshot, incomplete, missing lineage, or has impossible detected/first-seen/available ordering. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
+> 2026-07-11 更新: forecast producer persists immutable decision-time hourly forecast curves; the current canonical path is `forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. Corrected `forecast_hourly_curve_v3` rows separate source-response `forecast_detected_at_utc` from capture publication-boundary `available_at_utc`; a new exact hash first appears at detected time, or at available time only when no reliable detected time exists, and later captures preserve the earliest reliable first-seen. `available_at_utc` is sampled immediately before final serialization/fsync and atomic link, while file mtime is the external completion evidence. Rows also record explicit model fallback and an honest `forecast_run_lineage_status` when the upstream live API does not expose a run timestamp. `weather_data_feed_prod_health_check.py` fails when the latest curve capture is stale, misaligned with the latest snapshot, incomplete, missing lineage, or has impossible detected/first-seen/available ordering. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
 >
 > 2026-07-16 更新: 在线 runtime health 与分析派生层 freshness 已拆开。`weather_runtime_monitor.py` 只检查当前 live/shadow 进程及其 raw pulse；`weather_analysis_freshness_monitor.py` 只读检查 local mirror、`fact_signal_candidates` 和 `settlement_outcomes`。日常补数使用 `refresh_weather_analysis_incremental.sh`，按日期同步 settlement 并替换最近 event-date partition；它不会调用 `run_stack.sh --rebuild` 或 drop 全量 fact 表。
 >
@@ -49,9 +49,8 @@ Current production has four explicit ownership stages:
                               ├── /Volumes/jrs/weather_data_feed_service_runtime
                               │   ├── market_books (single raw owner)
                               │   ├── market_ladder_snapshots
-                              │   ├── targeted_output/paper_snapshots (strategy view compatibility path)
-                              │   ├── targeted_output/orderbook_snapshots (same physical raw captures)
-                              │   └── targeted_output/forecast_hourly_curves
+                              │   ├── strategy_snapshots (strategy consumption view)
+                              │   └── forecast/forecast_hourly_curves
                               └── production-declared strategy runtimes
                                   ├── health_path / live_order_path
                                   └── runtime monitor (read-only)
@@ -125,9 +124,8 @@ unless matched by a real row in `fills`.
 |---|---|---|---|
 | `/Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json` + `batches/YYYY-MM-DD/*.jsonl.gz` | Mac tmux `weather_market_books` | 5-minute base cadence, hot tokens first | canonical raw Gamma/CLOB books; no forecast dependency; not backfillable if missed |
 | `/Volumes/jrs/weather_data_feed_service_runtime/market_ladder_snapshots/` | Mac tmux `weather_market_books` | market-books cadence | complete event/rung/two-sided book view and batch completeness |
-| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | strategy snapshot cadence | forecast/observation/model joined strategy view; reads canonical market books |
-| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | compatibility alias | market-books cadence | legacy consumer path to canonical physical orderbook capture; not a second writer |
-| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
+| `/Volumes/jrs/weather_data_feed_service_runtime/strategy_snapshots/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | strategy snapshot cadence | forecast/observation/model joined strategy view; reads canonical market books |
+| `/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_forecast_curve_collector_v1` | forecast cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
 | `production.yaml.managed_runtimes[*].live_order_path` | corresponding controller-managed live runtime | live strategy cadence | complete current live order-journal set; no second hard-coded list |
 | `production.yaml.managed_runtimes[*].health_path` | corresponding controller-managed runtime | role cadence | current raw pulse/summary; the control repo is not assumed to be its storage root |
 
@@ -202,9 +200,9 @@ they go stale unless someone reruns `settle_t24_paper.py`. See
 
 | Remote | Local | Notes |
 |---|---|---|
-| `weather_data_feed_service_runtime/targeted_output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | current Mac production snapshots |
-| `weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/` | `runtime/weather_edge_v1/market_data/orderbook_snapshots/` | current Mac production orderbook history |
-| `weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/` | `runtime/weather_edge_v1/market_data/forecast_hourly_curves/` | current Mac production hourly forecast curves |
+| `weather_data_feed_service_runtime/strategy_snapshots/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | current Mac production snapshots |
+| `weather_data_feed_service_runtime/market_books/batches/` | `runtime/weather_edge_v1/market_data/orderbook_snapshots/` | current Mac canonical orderbook history |
+| `weather_data_feed_service_runtime/forecast/forecast_hourly_curves/` | `runtime/weather_edge_v1/market_data/forecast_hourly_curves/` | current Mac production hourly forecast curves |
 | `weather-predict/output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | 30-min snapshots |
 | `weather-predict/output/paper_trades/` | `runtime/weather_edge_v1/market_data/paper_trades/` | paper ledger |
 | `weather-predict/output/research/` | `runtime/weather_edge_v1/market_data/research/` | derived CSVs + analysis reports |

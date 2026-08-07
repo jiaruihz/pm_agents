@@ -37,8 +37,10 @@ became the current market-data production source. Since 2026-07-06 the actual
 runtime lives on `/Volumes/jrs/weather_data_feed_service_runtime`; the old
 `~/projects/weather_data_feed_service_runtime` path is a symlink.
 
-- `targeted_output/paper_snapshots/`
-- `targeted_output/orderbook_snapshots/`
+- `strategy_snapshots/paper_snapshots/`
+- `market_books/{latest.json,batches/}`
+- `market_ladder_snapshots/`
+- `forecast/forecast_hourly_curves/`
 
 Sync it into the canonical mirror with:
 
@@ -71,7 +73,7 @@ Local dashboard analysis consumes current Mac market data and historical N100
 mirrors through `scripts/ops/sync_weather_remote.sh`:
 
 ```text
-Mac weather_data_feed_service_runtime/targeted_output/* -> runtime/weather_edge_v1/market_data/
+Mac weather_data_feed_service_runtime/{strategy_snapshots,market_books,forecast} -> runtime/weather_edge_v1/market_data/
 N100 weather-predict/*              -> runtime/weather_edge_v1/market_data/   (historical/recovery)
 N100 pm_agent/runtime/weather_edge_v1 -> runtime/weather_edge_v1/remote_pm_agent/
 ```

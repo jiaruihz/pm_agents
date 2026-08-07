@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
-RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$ROOT" data_feed_runtime_root)}"
+SNAPSHOT_DIR="${CURRENT_YES_CORE_CARRY_SNAPSHOT_DIR:-$(weather_production_path "$ROOT" strategy_paper_snapshot_dir)}"
+OBSERVATION_CACHE="${CURRENT_YES_CORE_CARRY_OBSERVATION_CACHE:-$(weather_production_path "$ROOT" observation_cache_path)}"
+FORECAST_CURVE_DIR="${CURRENT_YES_CORE_CARRY_FORECAST_CURVE_DIR:-$(weather_production_path "$ROOT" forecast_hourly_curve_dir)}"
 PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-/Volumes/jrs/pm_agents/runtime}"
 OUTPUT_DIR="${CURRENT_YES_CORE_CARRY_TINY_LIVE_V2_OUTPUT_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/current_yes_core_carry_tiny_live_v2}"
 SESSION="${CURRENT_YES_CORE_CARRY_TINY_LIVE_V2_TMUX_SESSION:-weather_current_yes_core_carry_tiny_live_v2}"
@@ -17,9 +20,9 @@ PREFLIGHT="$("$PY" -c \
 echo "deployment preflight passed: $PREFLIGHT"
 
 session_cmd="cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_core_carry_tiny_live_v2.py loop \
-    --snapshot-dir '$RUNTIME_ROOT/targeted_output/paper_snapshots' \
-    --observation-cache '$RUNTIME_ROOT/output/observations/latest.json' \
-    --forecast-curve-dir '$RUNTIME_ROOT/targeted_output/forecast_hourly_curves' \
+    --snapshot-dir '$SNAPSHOT_DIR' \
+    --observation-cache '$OBSERVATION_CACHE' \
+    --forecast-curve-dir '$FORECAST_CURVE_DIR' \
     --output-dir '$OUTPUT_DIR' \
     --taker-shares 10 \
     --maker-shares 5 \

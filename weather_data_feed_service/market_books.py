@@ -416,23 +416,6 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     _publish_json_atomic(ladder_path, ladder_payload)
     _publish_json_atomic(Path(args.market_ladder_root) / "latest.json", ladder_payload)
 
-    legacy_path = None
-    if args.legacy_full_orderbook_root:
-        legacy_path = (
-            Path(args.legacy_full_orderbook_root)
-            / day
-            / f"orderbook_snapshot_{bj_dt.strftime('%Y%m%d_%H%M')}.jsonl.gz"
-        )
-        legacy_path.parent.mkdir(parents=True, exist_ok=True)
-        if legacy_path.exists():
-            legacy_path.unlink()
-        try:
-            os.link(archive_path, legacy_path)
-        except OSError:
-            with gzip.open(legacy_path, "wt", encoding="utf-8") as handle:
-                for row in records:
-                    handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-
     result = {
         "status": batch_status,
         "schema_version": SCHEMA_VERSION,
@@ -440,7 +423,6 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "latest_path": str(output_root / "latest.json"),
         "archive_path": str(archive_path),
         "market_ladder_path": str(ladder_path),
-        "legacy_orderbook_path": str(legacy_path) if legacy_path else None,
         **latest_payload["summary"],
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
@@ -451,7 +433,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--market-ladder-root", required=True)
-    parser.add_argument("--legacy-full-orderbook-root", default="")
     parser.add_argument("--observation-cache", default="")
     parser.add_argument("--target-date", default=None)
     parser.add_argument("--now-utc", default=None)

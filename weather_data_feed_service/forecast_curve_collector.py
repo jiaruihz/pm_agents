@@ -150,8 +150,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--output-root",
         default=os.environ.get(
-            "WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT",
-            "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output",
+            "WEATHER_DATA_FEED_FORECAST_OUTPUT_ROOT",
+            str(Path(__file__).resolve().parent / "runtime/forecast"),
         ),
     )
     parser.add_argument(

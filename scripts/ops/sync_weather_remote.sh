@@ -69,7 +69,9 @@ case "$WEATHER_MARKET_SOURCE" in
       WEATHER_REMOTE="local"
     fi
     WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-/Volumes/jrs/weather_data_feed_service_runtime}"
-    MARKET_OUTPUT_PREFIX="${WEATHER_DATA_FEED_OUTPUT_PREFIX:-targeted_output}"
+    MARKET_SNAPSHOT_SUBDIR="${WEATHER_STRATEGY_SNAPSHOT_SUBDIR:-strategy_snapshots/paper_snapshots}"
+    MARKET_BOOK_SUBDIR="${WEATHER_MARKET_BOOK_SUBDIR:-market_books/batches}"
+    FORECAST_CURVE_SUBDIR="${WEATHER_FORECAST_CURVE_SUBDIR:-forecast/forecast_hourly_curves}"
     MARKET_OPTIONAL_OUTPUTS=1
     ;;
   *)
@@ -154,26 +156,30 @@ sync_market() {
   }
 
   # ---- Output ----
-  _sync_dir  "$MARKET_OUTPUT_PREFIX/paper_snapshots"    "paper_snapshots"
-  # d1 scans the separate all-city full-ladder collector.  Its completed
-  # paper snapshots are part of the canonical opportunity universe too;
-  # without this merge, live fills outside the targeted collector become
-  # orphan fact_trades with no fact_signal_candidates row.
   if [[ "$WEATHER_MARKET_SOURCE" == "mac-weather-data-feed" ]]; then
-    _sync_dir_optional "full_ladder_output/paper_snapshots" "paper_snapshots"
+    _sync_dir "$MARKET_SNAPSHOT_SUBDIR" "paper_snapshots"
+    _sync_dir "$MARKET_BOOK_SUBDIR" "orderbook_snapshots"
+  else
+    _sync_dir "$MARKET_OUTPUT_PREFIX/paper_snapshots" "paper_snapshots"
+    _sync_dir "$MARKET_OUTPUT_PREFIX/orderbook_snapshots" "orderbook_snapshots"
   fi
-  _sync_dir  "$MARKET_OUTPUT_PREFIX/orderbook_snapshots" "orderbook_snapshots"
   if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
-    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/forecast_hourly_curves" "forecast_hourly_curves"
-    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/paper_trades" "paper_trades"
-    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/research"     "research"
+    if [[ "$WEATHER_MARKET_SOURCE" == "mac-weather-data-feed" ]]; then
+      _sync_dir_optional "$FORECAST_CURVE_SUBDIR" "forecast_hourly_curves"
+    else
+      _sync_dir_optional "$MARKET_OUTPUT_PREFIX/forecast_hourly_curves" "forecast_hourly_curves"
+      _sync_dir_optional "$MARKET_OUTPUT_PREFIX/paper_trades" "paper_trades"
+      _sync_dir_optional "$MARKET_OUTPUT_PREFIX/research"     "research"
+    fi
   else
     _sync_dir_optional "output/forecast_hourly_curves" "forecast_hourly_curves"
     _sync_dir "output/paper_trades" "paper_trades"
     _sync_dir "output/research"     "research"
   fi
   if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
-    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/logs" "logs"
+    if [[ "$WEATHER_MARKET_SOURCE" != "mac-weather-data-feed" ]]; then
+      _sync_dir_optional "$MARKET_OUTPUT_PREFIX/logs" "logs"
+    fi
   else
     _sync_dir "output/logs" "logs"
   fi

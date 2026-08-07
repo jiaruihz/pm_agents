@@ -8,7 +8,9 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 
-RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
+PAPER_SNAPSHOT_DIR="${WEATHER_STRATEGY_PAPER_SNAPSHOT_DIR:-$(weather_production_path "$PROJECT_DIR" strategy_paper_snapshot_dir)}"
+MARKET_BOOK_BATCH_ROOT="${WEATHER_MARKET_BOOK_BATCH_ROOT:-$(weather_production_path "$PROJECT_DIR" market_books_root)/batches}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 TMUX_SESSION="weather_fast_source_stale_book"
 OUTPUT_DIR="$RUNTIME_ROOT/output/fast_source_stale_book"
@@ -22,6 +24,9 @@ if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "=$TMUX_SESSION" 2>/dev/null; 
 fi
 
 cmd=(
+  env
+  "WEATHER_STRATEGY_PAPER_SNAPSHOT_DIR=$PAPER_SNAPSHOT_DIR"
+  "WEATHER_MARKET_BOOK_BATCH_ROOT=$MARKET_BOOK_BATCH_ROOT"
   "$PY"
   "$PROJECT_DIR/scripts/ops/weather_fast_source_stale_book_observer.py"
   --loop

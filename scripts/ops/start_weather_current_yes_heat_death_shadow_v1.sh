@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
-RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$ROOT" data_feed_runtime_root)}"
+SNAPSHOT_DIR="${CURRENT_YES_HEAT_DEATH_SNAPSHOT_DIR:-$(weather_production_path "$ROOT" strategy_paper_snapshot_dir)}"
+OBSERVATION_CACHE="${CURRENT_YES_HEAT_DEATH_OBSERVATION_CACHE:-$(weather_production_path "$ROOT" observation_cache_path)}"
+FORECAST_CURVE_DIR="${CURRENT_YES_HEAT_DEATH_FORECAST_CURVE_DIR:-$(weather_production_path "$ROOT" forecast_hourly_curve_dir)}"
 OUTPUT_DIR="${CURRENT_YES_HEAT_DEATH_OUTPUT_DIR:-$ROOT/runtime/weather_edge_v1/current_yes_heat_death_shadow_v1}"
 SESSION="${CURRENT_YES_HEAT_DEATH_TMUX_SESSION:-weather_current_yes_heat_death_shadow_v1}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
@@ -18,9 +21,9 @@ fi
 
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" \
   "cd '$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_heat_death_shadow_v1.py loop \
-    --snapshot-dir '$RUNTIME_ROOT/targeted_output/paper_snapshots' \
-    --observation-cache '$RUNTIME_ROOT/output/observations/latest.json' \
-    --forecast-curve-dir '$RUNTIME_ROOT/targeted_output/forecast_hourly_curves' \
+    --snapshot-dir '$SNAPSHOT_DIR' \
+    --observation-cache '$OBSERVATION_CACHE' \
+    --forecast-curve-dir '$FORECAST_CURVE_DIR' \
     --output-dir '$OUTPUT_DIR' \
     --interval-seconds 30 >> '$LOG_FILE' 2>&1"
 

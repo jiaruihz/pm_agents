@@ -8,6 +8,15 @@ WEATHER_JRS_TMUX_SOCKET_CANONICAL="weather-data-feed-jrs"
 WEATHER_JRS_TMUX_BIN_CANONICAL="/opt/homebrew/Cellar/tmux/3.6b/bin/tmux"
 WEATHER_JRS_TMUX_BIN_CANONICAL_SHA256="74e47d00267734a47daffd0c6d92e6841c671ee88b54aab6c13d239ba8741584"
 
+weather_production_path() {
+  local project_root="$1"
+  local path_name="$2"
+  local python_bin="$project_root/.venv/bin/python"
+  [[ -x "$python_bin" ]] || python_bin="python3"
+  PYTHONPATH="$project_root${PYTHONPATH:+:$PYTHONPATH}" \
+    "$python_bin" "$project_root/scripts/ops/weather_production_path.py" "$path_name"
+}
+
 weather_jrs_tmux_bin() {
   if [[ -n "${WEATHER_JRS_TMUX_BIN:-}" ]]; then
     if [[ "${WEATHER_JRS_TMUX_TEST_OVERRIDE:-0}" != "1" ]]; then

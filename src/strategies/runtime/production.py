@@ -62,6 +62,10 @@ class WeatherProductionSpec:
     pm_runtime_root: Path
     canonical_tmux_socket: str
     canonical_tmux_binary: Path
+    market_books_root: Path | None = None
+    strategy_snapshot_root: Path | None = None
+    market_ladder_snapshot_root: Path | None = None
+    forecast_output_root: Path | None = None
     production_storage_root: Path = Path("/Volumes/jrs")
     production_storage_volume_uuid: str | None = None
     archive_storage_root: Path = Path("/Volumes/jrs-archive")
@@ -72,6 +76,27 @@ class WeatherProductionSpec:
     )
     managed_runtimes: tuple[WeatherManagedRuntimeSpec, ...] = field(default_factory=tuple)
     allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
+
+    def resolved_market_books_root(self) -> Path:
+        return self.market_books_root or self.data_feed_runtime_root / "market_books"
+
+    def resolved_strategy_snapshot_root(self) -> Path:
+        return self.strategy_snapshot_root or self.data_feed_runtime_root / "strategy_snapshots"
+
+    def resolved_market_ladder_snapshot_root(self) -> Path:
+        return self.market_ladder_snapshot_root or self.data_feed_runtime_root / "market_ladder_snapshots"
+
+    def resolved_forecast_output_root(self) -> Path:
+        return self.forecast_output_root or self.data_feed_runtime_root / "forecast"
+
+    def strategy_paper_snapshot_dir(self) -> Path:
+        return self.resolved_strategy_snapshot_root() / "paper_snapshots"
+
+    def forecast_hourly_curve_dir(self) -> Path:
+        return self.resolved_forecast_output_root() / "forecast_hourly_curves"
+
+    def observation_cache_path(self) -> Path:
+        return self.data_feed_runtime_root / "output/observations/latest.json"
 
     def resolved_compatibility_db_paths(
         self, repo_root: Path | None = None
@@ -192,6 +217,24 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         pm_runtime_root=Path(raw["pm_runtime_root"]),
         canonical_tmux_socket=str(raw["canonical_tmux_socket"]),
         canonical_tmux_binary=Path(raw["canonical_tmux_binary"]),
+        market_books_root=(
+            Path(raw["market_books_root"]) if raw.get("market_books_root") else None
+        ),
+        strategy_snapshot_root=(
+            Path(raw["strategy_snapshot_root"])
+            if raw.get("strategy_snapshot_root")
+            else None
+        ),
+        market_ladder_snapshot_root=(
+            Path(raw["market_ladder_snapshot_root"])
+            if raw.get("market_ladder_snapshot_root")
+            else None
+        ),
+        forecast_output_root=(
+            Path(raw["forecast_output_root"])
+            if raw.get("forecast_output_root")
+            else None
+        ),
         production_storage_root=Path(
             raw.get("production_storage_root") or "/Volumes/jrs"
         ),
@@ -231,6 +274,17 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("canonical_db_path must live under production_storage_root")
     if not spec.data_feed_runtime_root.is_relative_to(spec.production_storage_root):
         raise ValueError("data_feed_runtime_root must live under production_storage_root")
+    data_roots = {
+        "market_books_root": spec.resolved_market_books_root(),
+        "strategy_snapshot_root": spec.resolved_strategy_snapshot_root(),
+        "market_ladder_snapshot_root": spec.resolved_market_ladder_snapshot_root(),
+        "forecast_output_root": spec.resolved_forecast_output_root(),
+    }
+    for name, data_root in data_roots.items():
+        if not data_root.is_absolute() or not data_root.is_relative_to(spec.data_feed_runtime_root):
+            raise ValueError(f"{name} must live under data_feed_runtime_root")
+    if len({str(path) for path in data_roots.values()}) != len(data_roots):
+        raise ValueError("weather production data roots must be distinct")
     if (
         spec.canonical_refresh_checkout_root is not None
         and not spec.canonical_refresh_checkout_root.is_absolute()

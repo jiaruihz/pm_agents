@@ -78,6 +78,12 @@ PARTIAL_OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots_partial"
 PARTIAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ORDERBOOK_OUTPUT_DIR = OUTPUT_ROOT / "orderbook_snapshots"
 ORDERBOOK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+FORECAST_CURVE_ROOT = Path(
+    os.environ.get(
+        "WEATHER_DATA_FEED_FORECAST_CURVE_ROOT",
+        OUTPUT_ROOT / "forecast_hourly_curves",
+    )
+)
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(Path(__file__).resolve().parents[2])
 PM_HTTP_TIMEOUT = httpx.Timeout(
     connect=float(os.environ.get("WEATHER_DATA_FEED_PM_CONNECT_TIMEOUT_SEC", "2.0")),
@@ -954,7 +960,7 @@ def _load_forecast_curve_cache():
     if _FORECAST_CURVE_CACHE is not None:
         return _FORECAST_CURVE_CACHE
     cache = {}
-    root = OUTPUT_ROOT / "forecast_hourly_curves"
+    root = FORECAST_CURVE_ROOT
     now_ts = time.time()
     files = sorted(
         root.rglob("forecast_hourly_curves*.jsonl") if root.exists() else [],

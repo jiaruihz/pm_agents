@@ -129,7 +129,7 @@ def latest_orderbook_archive_at_or_before(
     expected_condition_ids: set[str] | None = None,
 ) -> tuple[Path | None, list[dict[str, Any]]]:
     latest_partial: tuple[Path, list[dict[str, Any]]] | None = None
-    for path in sorted(root.rglob("orderbook_snapshot_*.jsonl*"), reverse=True):
+    for path in sorted(root.rglob("*.jsonl*"), reverse=True):
         opener = gzip.open if path.suffix == ".gz" else open
         try:
             with opener(path, "rt", encoding="utf-8") as handle:

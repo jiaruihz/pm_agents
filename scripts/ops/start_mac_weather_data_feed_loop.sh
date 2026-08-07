@@ -5,15 +5,16 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 source "$PROJECT_DIR/scripts/ops/weather_process_supervision.sh"
 SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
-RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-OUTPUT_ROOT="${WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT:-$RUNTIME_ROOT/targeted_output}"
-OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$RUNTIME_ROOT/output/observations/latest.json}"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
+OUTPUT_ROOT="${WEATHER_STRATEGY_SNAPSHOT_ROOT:-$(weather_production_path "$PROJECT_DIR" strategy_snapshot_root)}"
+FORECAST_CURVE_ROOT="${WEATHER_DATA_FEED_FORECAST_CURVE_ROOT:-$(weather_production_path "$PROJECT_DIR" forecast_hourly_curve_dir)}"
+OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$(weather_production_path "$PROJECT_DIR" observation_cache_path)}"
 SOURCE_EVENTS_OUTPUT="${WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_events}"
 SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-Seoul HongKong Shenzhen TelAviv Istanbul Moscow}"
 RUNWAY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/runway_observations}"
 HIGH_FREQUENCY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/high_frequency_observations}"
 CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
-MARKET_BOOKS_LATEST="${WEATHER_MARKET_BOOKS_LATEST:-$RUNTIME_ROOT/market_books/latest.json}"
+MARKET_BOOKS_LATEST="${WEATHER_MARKET_BOOKS_LATEST:-$(weather_production_path "$PROJECT_DIR" market_books_latest)}"
 LOOP_DIR="${WEATHER_DATA_FEED_LOOP_DIR:-$RUNTIME_ROOT/loop}"
 PID_FILE="$LOOP_DIR/data_feed_loop.pid"
 LOG_FILE="$LOOP_DIR/data_feed_loop.log"
@@ -32,7 +33,7 @@ HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_F
 FAST_OBS_ACTIVE_LOCAL_START_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_START_HOUR:-6}"
 FAST_OBS_ACTIVE_LOCAL_END_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_END_HOUR:-22}"
 SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
-SNAPSHOT_COMMAND="${WEATHER_DATA_FEED_SNAPSHOT_COMMAND:-snapshot-targeted}"
+SNAPSHOT_COMMAND="${WEATHER_DATA_FEED_SNAPSHOT_COMMAND:-strategy-snapshot}"
 SNAPSHOT_ORDERBOOK_BUDGET_SEC="${WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC:-120}"
 SNAPSHOT_ORDERBOOK_WORKERS="${WEATHER_DATA_FEED_ORDERBOOK_WORKERS:-4}"
 MARKET_PROXY_PROBE_TIMEOUT_SEC="${WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC:-5}"
@@ -56,14 +57,10 @@ if [[ ! -x "$PY" ]]; then
   PY="python3"
 fi
 
-case "$SNAPSHOT_COMMAND" in
-  snapshot|snapshot-targeted|snapshot-full)
-    ;;
-  *)
-    echo "unsupported WEATHER_DATA_FEED_SNAPSHOT_COMMAND=$SNAPSHOT_COMMAND" >&2
-    exit 2
-    ;;
-esac
+if [[ "$SNAPSHOT_COMMAND" != "strategy-snapshot" ]]; then
+  echo "unsupported production snapshot command: $SNAPSHOT_COMMAND (required: strategy-snapshot)" >&2
+  exit 2
+fi
 
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
   exec "$PROJECT_DIR/scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh"
@@ -248,6 +245,7 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
         fi
       fi
       weather_start_with_timeout_async "$SNAPSHOT_TIMEOUT_SEC" \
+        env WEATHER_DATA_FEED_FORECAST_CURVE_ROOT="$FORECAST_CURVE_ROOT" \
         "$PY" -u -m weather_data_feed_service \
         --output-root "$OUTPUT_ROOT" \
         --cache-root "$CACHE_ROOT" \

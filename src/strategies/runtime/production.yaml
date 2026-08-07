@@ -14,6 +14,10 @@ canonical_db_path: /Volumes/jrs/pm_agents/runtime/weather.db
 compatibility_db_paths:
   - runtime/weather.db
 data_feed_runtime_root: /Volumes/jrs/weather_data_feed_service_runtime
+market_books_root: /Volumes/jrs/weather_data_feed_service_runtime/market_books
+strategy_snapshot_root: /Volumes/jrs/weather_data_feed_service_runtime/strategy_snapshots
+market_ladder_snapshot_root: /Volumes/jrs/weather_data_feed_service_runtime/market_ladder_snapshots
+forecast_output_root: /Volumes/jrs/weather_data_feed_service_runtime/forecast
 pm_runtime_root: /Volumes/jrs/pm_agents/runtime
 research_artifact_root: /Volumes/jrs-archive/pm_agents/research/artifact_store
 canonical_tmux_socket: weather-data-feed-jrs

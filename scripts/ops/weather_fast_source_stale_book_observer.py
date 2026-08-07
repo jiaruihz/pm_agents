@@ -39,13 +39,19 @@ from weather_data_feed.source_event_incremental_state import (  # noqa: E402
     metar_running_max_from_state,
     refresh_source_event_state,
 )
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
-RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
+PRODUCTION = load_production_spec()
+RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", str(PRODUCTION.data_feed_runtime_root)))
 HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
 HIGH_FREQUENCY_JSONL = RUNTIME_ROOT / "output/high_frequency_observations/high_frequency_observations.jsonl"
 SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
-PAPER_SNAPSHOT_DIR = RUNTIME_ROOT / "targeted_output/paper_snapshots"
-ORDERBOOK_SNAPSHOT_ROOT = RUNTIME_ROOT / "targeted_output/orderbook_snapshots"
+PAPER_SNAPSHOT_DIR = Path(
+    os.environ.get("WEATHER_STRATEGY_PAPER_SNAPSHOT_DIR", str(PRODUCTION.strategy_paper_snapshot_dir()))
+)
+ORDERBOOK_SNAPSHOT_ROOT = Path(
+    os.environ.get("WEATHER_MARKET_BOOK_BATCH_ROOT", str(PRODUCTION.resolved_market_books_root() / "batches"))
+)
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_stale_book"
 PM_CLOB_URL = os.environ.get("WEATHER_STALE_BOOK_CLOB_URL", "https://clob.polymarket.com")
 PM_GAMMA_URL = os.environ.get("WEATHER_STALE_BOOK_GAMMA_URL", "https://gamma-api.polymarket.com")

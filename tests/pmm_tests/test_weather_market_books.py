@@ -50,12 +50,10 @@ def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
 
     books = tmp_path / "market_books"
     ladders = tmp_path / "market_ladder_snapshots"
-    legacy = tmp_path / "full_ladder_output" / "orderbook_snapshots"
     result = market_books.collect(
         argparse.Namespace(
             output_root=str(books),
             market_ladder_root=str(ladders),
-            legacy_full_orderbook_root=str(legacy),
             observation_cache="",
             target_date=None,
             now_utc="2026-08-07T12:00:00Z",
@@ -71,7 +69,7 @@ def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
     assert latest["summary"]["cold_tokens"] == 1
     assert latest["summary"]["forecast_dependency"] is False
     assert ladder["records"][0]["market_distribution_complete"] is True
-    assert result["legacy_orderbook_path"]
+    assert "legacy_orderbook_path" not in result
 
 
 def test_strategy_view_reads_canonical_books_but_keeps_target_scope(tmp_path):

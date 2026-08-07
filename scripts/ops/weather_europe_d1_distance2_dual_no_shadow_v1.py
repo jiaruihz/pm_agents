@@ -22,10 +22,11 @@ if str(ROOT) not in sys.path:
 
 from weather_data_feed.market_brackets import parse_market_bracket
 from weather_data_feed_service.io_utils import append_jsonl, read_json, write_json
+from src.strategies.runtime.production import load_production_spec
 
 
 RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
-DEFAULT_BOOK_ROOT = RUNTIME_ROOT / "full_ladder_output/orderbook_snapshots"
+DEFAULT_BOOK_ROOT = load_production_spec().resolved_market_books_root() / "batches"
 DEFAULT_VERSIONS = (
     RUNTIME_ROOT / "output/forecast_enrichment/forecast_versions.jsonl"
 )
