@@ -41,6 +41,22 @@ def test_pm_runtime_path_cli_uses_the_shared_loader() -> None:
     assert result.stdout.strip() == "/Volumes/jrs/pm_agents/runtime"
 
 
+def test_archive_paths_cli_uses_the_shared_loader() -> None:
+    expected = {
+        "archive_storage_root": "/Volumes/jrs-archive",
+        "research_artifact_root": "/Volumes/jrs-archive/pm_agents/research/artifact_store",
+    }
+    for name, path in expected.items():
+        result = subprocess.run(
+            [sys.executable, "scripts/ops/weather_production_path.py", name],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert result.stdout.strip() == path
+
+
 def test_managed_runtime_artifacts_stay_on_contract_storage() -> None:
     spec = load_production_spec()
     for runtime in spec.managed_runtimes:
