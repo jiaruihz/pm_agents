@@ -1155,7 +1155,45 @@ All consumers migrated in this cutover restarted from production commit
 pre-cutover five-share SELL order was queried by order id and was `MATCHED`, not
 lost or cancelled during restart.
 
-## 15. Immediate Follow-Up Work
+## 15. 2026-08-07/08 Target-Day Market Retention Regression
+
+At `2026-08-07T16:50Z` the canonical data-feed checkout changed to a target
+selection path that treated Gamma `endDate` as the market's tradability cutoff.
+For temperature events that field is exchange metadata, not the city-day
+collection horizon. The first affected snapshot published at
+`2026-08-07T16:58:29Z`; raw `market_books` still contained the markets, while
+the derived strategy snapshot dropped them before the local Core Carry scoring
+window had finished.
+
+The malformed snapshot omitted 29 `2026-08-07` city-days: Amsterdam, Ankara,
+Atlanta, Austin, Buenos Aires, Cape Town, Chicago, Dallas, Denver, Helsinki,
+Houston, Istanbul, Jeddah, Los Angeles, London, Madrid, Mexico City, Miami,
+Milan, Moscow, Munich, New York City, Panama City, Paris, San Francisco, São
+Paulo, Seattle, Tel Aviv and Warsaw. Fourteen European/Middle-East/African
+city-days had already completed the 13:30..17:30 Core window. The remaining 15
+Americas city-days lost 73 scheduled hourly checkpoints: four each for Buenos
+Aires and São Paulo (hours 14..17), and five each (hours 13..17) for Atlanta,
+Austin, Chicago, Dallas, Denver, Houston, Los Angeles, Mexico City, Miami, New
+York City, Panama City, San Francisco and Seattle.
+
+These are missed scheduled checkpoints, not proven positive signals: the
+malformed derived snapshots never persisted the feature rows needed for an
+exact candidate counterfactual. Audited Core journals contain zero scores,
+entry attempts, would-orders or live orders for those 15 city-days after the
+first bad snapshot. Therefore evidenced wrong orders, fills and submitted
+notional are all zero; missed-order/PnL impact is unknown and this interval must
+be labelled `target_day_snapshot_coverage_gap`, not strategy-filtered no-signal.
+
+The repair separates exchange end metadata from collection timing and retains
+each temperature market through the configured city-local 22:00 horizon.
+Cross-timezone regression tests cover Los Angeles, New York City, London,
+Istanbul and Wellington. Production commit `f4907781` published
+`snapshot_20260808_1104.json` from the corrected build; it restored the still-
+local-current 2026-08-07 markets for Denver, Los Angeles, Mexico City, San
+Francisco and Seattle, and Core Carry consumed that snapshot. Pre/post manifest
+comparison found no missing production sessions and no DB-route change.
+
+## 16. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
