@@ -65,6 +65,29 @@ JRS/TCC、canonical tmux crash、历史入口与验收记录统一维护在
   --instance INSTANCE --apply --reason "named runtime restart"
 ```
 
+Market proxy 端口只通过统一入口切换；禁止再编辑多个 `.env` 或逐脚本改
+`--market-proxy`：
+
+```bash
+# 只读：代理探测、旧端口残留、12 个 proxy consumer 和全部 managed runtime 健康矩阵
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py status
+
+# 自动在候选 endpoint 中选择可用项；涉及 live，必须显式确认
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py auto --apply --confirm-live \
+  --reason "named proxy failover"
+
+# 指定 endpoint
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py switch http://127.0.0.1:7897 \
+  --apply --confirm-live --reason "named proxy switch"
+```
+
+切换成功条件不是“端口能连”：目标 Gamma probe、切换后新 `market-books` batch、
+manifest、live strategy artifact freshness、全部 consumer 进程和 proxy binding 必须同时通过；
+失败自动写回旧 endpoint 并重载。稀疏 shadow 在无信号时按 process/dependency/proxy binding
+验收，不因业务 summary 未刷新产生假回滚。机器可读矩阵写到 production contract 解析出的
+`output/market_proxy_control/latest.json`，覆盖每个 managed runtime 的 role、health trigger、
+dependency、artifact age、issues 与 proxy-consumer 标记。
+
 `health` 同时检查 canonical DB/进程 manifest、全部 required tmux sessions、
 关键 runtime artifact freshness、checkout、live flags、`live_enabled`、上游依赖，
 以及 observation/forecast/orderbook/snapshot/source-model 的 data-feed 语义健康。
