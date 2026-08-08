@@ -14,6 +14,7 @@ import asyncio
 import gzip
 import json
 import os
+import signal
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -335,6 +336,7 @@ def _message_token_ids(message: Any) -> set[str]:
 class HourlyWriter:
     def __init__(self, root: Path) -> None:
         self.root = root
+        self.stream_id = f"{time.time_ns()}_{os.getpid()}"
         self.hour = ""
         self.path: Path | None = None
         self.handle: Any = None
@@ -345,7 +347,7 @@ class HourlyWriter:
             self.close()
             day_root = self.root / now_utc.strftime("%Y-%m-%d")
             day_root.mkdir(parents=True, exist_ok=True)
-            self.path = day_root / f"market_books_ws_{hour}.jsonl.gz"
+            self.path = day_root / f"market_books_ws_{hour}_{self.stream_id}.jsonl.gz"
             self.handle = gzip.open(self.path, "at", encoding="utf-8", compresslevel=1)
             self.hour = hour
         self.handle.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
@@ -664,8 +666,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
-    asyncio.run(collector.run())
+    asyncio.run(_run_until_stopped(collector))
     return 0
+
+
+async def _run_until_stopped(collector: Collector) -> None:
+    loop = asyncio.get_running_loop()
+    task = asyncio.create_task(collector.run())
+    installed: list[signal.Signals] = []
+    for stop_signal in (signal.SIGTERM, signal.SIGHUP):
+        try:
+            loop.add_signal_handler(stop_signal, task.cancel)
+        except (NotImplementedError, RuntimeError):
+            continue
+        installed.append(stop_signal)
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    finally:
+        for stop_signal in installed:
+            loop.remove_signal_handler(stop_signal)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
+import gzip
 from datetime import datetime, timedelta, timezone
 
-from weather_data_feed_service.market_books_ws import select_tokens
+from weather_data_feed_service.market_books_ws import HourlyWriter, select_tokens
 
 
 NOW = datetime(2026, 8, 9, 3, 0, tzinfo=timezone.utc)
@@ -83,3 +84,13 @@ def test_missing_settlement_facing_observation_fails_open_to_full_ladder() -> No
     selected = _select()
     assert len(selected.tokens) == 14
     assert selected.missing_observation_cities == ["Busan"]
+
+
+def test_hourly_writer_uses_restart_safe_stream_file(tmp_path) -> None:
+    writer = HourlyWriter(tmp_path)
+    path = writer.write({"message": "one"}, NOW)
+    writer.close()
+
+    assert writer.stream_id in path.name
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        assert handle.read().strip() == '{"message":"one"}'
