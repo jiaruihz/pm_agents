@@ -1,4 +1,3 @@
-import gzip
 from datetime import datetime, timedelta, timezone
 
 from weather_data_feed_service.market_books_ws import HourlyWriter, select_tokens
@@ -92,5 +91,5 @@ def test_hourly_writer_uses_restart_safe_stream_file(tmp_path) -> None:
     writer.close()
 
     assert writer.stream_id in path.name
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        assert handle.read().strip() == '{"message":"one"}'
+    assert path.suffix == ".jsonl"
+    assert path.read_text(encoding="utf-8").strip() == '{"message":"one"}'

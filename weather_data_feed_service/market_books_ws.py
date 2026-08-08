@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import gzip
 import json
 import os
 import signal
@@ -339,7 +338,7 @@ class HourlyWriter:
         self.stream_id = f"{time.time_ns()}_{os.getpid()}"
         self.hour = ""
         self.path: Path | None = None
-        self.handle: Any = None
+        self.fd: int | None = None
 
     def write(self, payload: dict[str, Any], now_utc: datetime) -> Path:
         hour = now_utc.strftime("%Y%m%d_%H")
@@ -347,17 +346,26 @@ class HourlyWriter:
             self.close()
             day_root = self.root / now_utc.strftime("%Y-%m-%d")
             day_root.mkdir(parents=True, exist_ok=True)
-            self.path = day_root / f"market_books_ws_{hour}_{self.stream_id}.jsonl.gz"
-            self.handle = gzip.open(self.path, "at", encoding="utf-8", compresslevel=1)
+            self.path = day_root / f"market_books_ws_{hour}_{self.stream_id}.jsonl"
+            self.fd = os.open(
+                self.path,
+                os.O_APPEND | os.O_CREAT | os.O_WRONLY,
+                0o644,
+            )
             self.hour = hour
-        self.handle.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
-        self.handle.flush()
+        encoded = (
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        pending = memoryview(encoded)
+        while pending:
+            written = os.write(self.fd, pending)
+            pending = pending[written:]
         return self.path
 
     def close(self) -> None:
-        if self.handle is not None:
-            self.handle.close()
-        self.handle = None
+        if self.fd is not None:
+            os.close(self.fd)
+        self.fd = None
 
 
 def _rest_health(path: Path, *, now_utc: datetime, max_age_sec: float) -> dict[str, Any]:
