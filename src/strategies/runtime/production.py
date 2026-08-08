@@ -334,6 +334,28 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"runtime cannot declare both health_path and health_url: {item.instance_id}"
             )
+        if item.health_path:
+            if not item.health_path.is_absolute():
+                raise ValueError(
+                    f"runtime health_path must be absolute: {item.instance_id}"
+                )
+            if not (
+                item.health_path.is_relative_to(spec.data_feed_runtime_root)
+                or item.health_path.is_relative_to(spec.pm_runtime_root)
+            ):
+                raise ValueError(
+                    "runtime health_path must live under data_feed_runtime_root "
+                    f"or pm_runtime_root: {item.instance_id}"
+                )
+        if item.live_order_path:
+            if not item.live_order_path.is_absolute() or not (
+                item.live_order_path.is_relative_to(spec.pm_runtime_root)
+                or item.live_order_path.is_relative_to(spec.data_feed_runtime_root)
+            ):
+                raise ValueError(
+                    "live_order_path must live under pm_runtime_root or "
+                    f"data_feed_runtime_root: {item.instance_id}"
+                )
         if item.expected_live and item.live_order_path is None:
             raise ValueError(
                 f"live runtime must declare live_order_path: {item.instance_id}"

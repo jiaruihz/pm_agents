@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 source "$ROOT/scripts/ops/weather_market_proxy_env.sh"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
+PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$ROOT" pm_runtime_root)}"
 cd "$ROOT"
 
 RUN_MODE="${1:-live}"
@@ -14,10 +15,10 @@ if [[ "$RUN_MODE" != "live" && "$RUN_MODE" != "--shadow" ]]; then
 fi
 TMUX_SESSION="${LOW_PRICE_YES_LOTTERY_TMUX_SESSION:-low_price_yes_lottery_${RUN_MODE#--}_v1}"
 
-RUNTIME_DIR="${LOW_PRICE_YES_LOTTERY_RUNTIME_DIR:-runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1}"
+RUNTIME_DIR="${LOW_PRICE_YES_LOTTERY_RUNTIME_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/low_price_yes_lottery_tiny_live_v1}"
 PID_FILE="$RUNTIME_DIR/loop.pid"
 LOG_FILE="$RUNTIME_DIR/loop.log"
-mkdir -p "$RUNTIME_DIR" "runtime/weather_edge_v1/live"
+mkdir -p "$RUNTIME_DIR" "$PM_RUNTIME_ROOT/weather_edge_v1/live"
 
 if [[ "${LOW_PRICE_YES_LOTTERY_LOOP_CHILD:-0}" != "1" && -s "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE")"

@@ -3,9 +3,10 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" pm_runtime_root)}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_RUNTIME_MONITOR_TMUX_SESSION:-weather_runtime_monitor}"
-RUNTIME_DIR="${WEATHER_RUNTIME_MONITOR_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/runtime_monitor}"
+RUNTIME_DIR="${WEATHER_RUNTIME_MONITOR_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/runtime_monitor}"
 PID_FILE="$RUNTIME_DIR/loop.pid"
 OUT_FILE="$RUNTIME_DIR/loop.out"
 PY="$PROJECT_DIR/.venv/bin/python"

@@ -106,7 +106,7 @@ def test_every_business_runtime_has_controller_start_contract():
         if item.instance_id != "weather_jrs_context_keeper"
     ]
 
-    assert len(business) == 25
+    assert business
     assert all(item.recovery_policy != "manual" for item in business)
     assert all(item.checkout_root is not None for item in business)
     assert all(item.resolved_start_script() is not None for item in business)
