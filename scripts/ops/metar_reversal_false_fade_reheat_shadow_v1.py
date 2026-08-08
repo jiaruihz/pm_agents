@@ -68,6 +68,15 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def configure_runtime_dir(runtime_dir: Path) -> None:
+    """Route every mutable artifact through the controller-provided runtime root."""
+
+    global RUNTIME_DIR, DECISIONS_OUT, HISTORY_OUT
+    RUNTIME_DIR = runtime_dir
+    DECISIONS_OUT = runtime_dir / "state_decisions.jsonl"
+    HISTORY_OUT = runtime_dir / "summary_history.jsonl"
+
+
 def to_float(value: Any, default: float = math.nan) -> float:
     try:
         if value is None or value == "":
@@ -293,8 +302,10 @@ def main() -> int:
     parser.add_argument("command", choices=["run", "loop"], nargs="?", default="run")
     parser.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR_DEFAULT))
     parser.add_argument("--observation-cache", default=str(OBS_DEFAULT))
+    parser.add_argument("--runtime-dir", default=str(RUNTIME_DIR))
     parser.add_argument("--interval-seconds", type=float, default=900.0)
     args = parser.parse_args()
+    configure_runtime_dir(Path(args.runtime_dir).expanduser().resolve())
     if args.command == "run":
         run_once(args)
         return 0

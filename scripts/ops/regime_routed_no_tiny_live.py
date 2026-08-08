@@ -77,6 +77,12 @@ ACCEPTED_OUT = RUNTIME_DIR / "accepted_candidates.jsonl"
 LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
+
+
+def display_path(path: Path) -> str:
+    """Keep repo paths compact while allowing controller-owned external roots."""
+
+    return str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path)
 HIST_FORECAST_BIAS_SUMMARY = (
     ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/city_model_error_summary.csv"
 )
@@ -2014,13 +2020,13 @@ def main() -> int:
         "blocked_candidate_rows": blocked_candidate_rows,
         "candidate_by_regime": candidates["day_regime"].value_counts(dropna=False).to_dict() if not candidates.empty else {},
         "skip_reasons": candidates["execution_skip_reason"].value_counts(dropna=False).to_dict() if not candidates.empty else {},
-        "plans_path": str(PLAN_OUT.relative_to(ROOT)),
-        "paper_out": str(PAPER_OUT.relative_to(ROOT)),
-        "live_out": str(LIVE_OUT.relative_to(ROOT)),
-        "blocked_out": str(BLOCKED_OUT.relative_to(ROOT)),
-        "shadow_out": str(SHADOW_OUT.relative_to(ROOT)),
-        "accepted_out": str(ACCEPTED_OUT.relative_to(ROOT)),
-        "latest_candidates_out": str(LATEST_CANDIDATES_OUT.relative_to(ROOT)),
+        "plans_path": display_path(PLAN_OUT),
+        "paper_out": display_path(PAPER_OUT),
+        "live_out": display_path(LIVE_OUT),
+        "blocked_out": display_path(BLOCKED_OUT),
+        "shadow_out": display_path(SHADOW_OUT),
+        "accepted_out": display_path(ACCEPTED_OUT),
+        "latest_candidates_out": display_path(LATEST_CANDIDATES_OUT),
         "meta": meta,
         "executor_result": executor_result,
     }
