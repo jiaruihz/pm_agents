@@ -124,7 +124,8 @@ def chain_health() -> dict:
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
     payload = json.loads(result.stdout)
     wanted = {item.instance_id for item in consumers()}
-    runtimes = {row["instance_id"]: row for row in payload.get("runtimes", []) if row["instance_id"] in wanted}
+    all_rows = payload.get("runtimes", [])
+    runtimes = {row["instance_id"]: row for row in all_rows if row["instance_id"] in wanted}
     required_fresh = {"weather_market_books"} | {
         item.instance_id for item in consumers() if item.expected_live
     }
@@ -145,8 +146,28 @@ def chain_health() -> dict:
         }
         if not ok:
             blocking[name] = row.get("issues") or [row.get("status")]
+    full_runtime_health = {
+        row["instance_id"]: {
+            "role": row.get("role"),
+            "execution_mode": row.get("execution_mode"),
+            "health_trigger": (
+                "process_plus_artifact_or_http_freshness"
+                if row.get("health_path") or row.get("health_url")
+                else "process_presence"
+            ),
+            "status": row.get("status"),
+            "process_present": bool(row.get("present")),
+            "artifact_age_sec": row.get("health_age_sec"),
+            "dependencies": row.get("dependencies") or [],
+            "issues": row.get("issues") or [],
+            "uses_market_proxy": row["instance_id"] in wanted,
+        }
+        for row in all_rows
+    }
     return {"manifest_status": payload.get("manifest_status"), "blocking_consumers": blocking,
-            "consumer_health": consumer_health, "consumer_count": len(runtimes)}
+            "consumer_health": consumer_health, "consumer_count": len(runtimes),
+            "full_runtime_health": full_runtime_health,
+            "full_runtime_count": len(full_runtime_health)}
 
 
 def wait_for_chain(proxy_url: str, *, not_before: float, timeout_sec: float = 360.0) -> dict:
