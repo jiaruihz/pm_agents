@@ -14,6 +14,7 @@ import argparse
 import importlib.util
 import json
 import math
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 RESEARCH_ID = "current_yes_core_carry_europe_mid_replay_v1"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated" / RESEARCH_ID
 REPORT = (
@@ -427,12 +430,58 @@ def write_report(payload: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--study",
+        choices=("europe-historical", "global-live-forward"),
+        default="europe-historical",
+    )
     parser.add_argument("--v3-module", type=Path, default=DEFAULT_V3_MODULE)
     parser.add_argument("--costed-oof", type=Path, default=DEFAULT_COSTED)
     parser.add_argument("--live-scores", type=Path, default=DEFAULT_LIVE_SCORES)
     parser.add_argument("--source-profiles", type=Path, default=DEFAULT_SOURCE_PROFILES)
     parser.add_argument("--observations", type=Path, default=DEFAULT_OBSERVATIONS)
+    parser.add_argument("--db-path", type=Path, default=ROOT / "runtime/weather.db")
+    parser.add_argument(
+        "--deployed-artifact",
+        type=Path,
+        default=Path(
+            "/Users/deepsleep/projects/pm_agents_market_books_prod/"
+            "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v3.json"
+        ),
+    )
+    parser.add_argument("--start-date", default="2026-07-31")
+    parser.add_argument("--end-date", default="2026-08-07")
+    parser.add_argument(
+        "--ledger-dir",
+        type=Path,
+        default=Path(
+            "/Volumes/jrs-archive/pm_agents/research/artifact_store/"
+            "current_yes_core_carry_mid_floor_forward_v1"
+        ),
+    )
     args = parser.parse_args()
+
+    if args.study == "global-live-forward":
+        from src.strategies.weather_edge_v1.research import (
+            core_carry_mid_floor_forward,
+        )
+
+        return core_carry_mid_floor_forward.main(
+            [
+                "--scores",
+                str(args.live_scores),
+                "--db-path",
+                str(args.db_path),
+                "--artifact",
+                str(args.deployed_artifact),
+                "--start-date",
+                args.start_date,
+                "--end-date",
+                args.end_date,
+                "--ledger-dir",
+                str(args.ledger_dir),
+            ]
+        )
 
     v3 = load_v3_module(args.v3_module)
     all_oof = load_costed_v3(v3, args.costed_oof)
