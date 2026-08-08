@@ -217,6 +217,15 @@ def test_data_feed_loop_has_one_forecast_run_owner_and_bounded_open_meteo_refres
     assert "--no-single-runs" in forecast_owner
 
 
+def test_data_feed_snapshot_join_does_not_probe_or_switch_market_proxy():
+    data_feed = (OPS / "start_mac_weather_data_feed_loop.sh").read_text(encoding="utf-8")
+
+    assert "weather_market_proxy_failover.py" not in data_feed
+    assert "market_proxy_check_start_utc" not in data_feed
+    assert "--orderbook-source-latest" in data_feed
+    assert "--orderbook-source-max-age-sec" in data_feed
+
+
 def test_jrs_start_entries_do_not_create_jrs_directories_outside_tmux():
     offenders = []
     for path in sorted(OPS.glob("start_*.sh")):

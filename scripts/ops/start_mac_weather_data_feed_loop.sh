@@ -36,9 +36,6 @@ SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
 SNAPSHOT_COMMAND="${WEATHER_DATA_FEED_SNAPSHOT_COMMAND:-strategy-snapshot}"
 SNAPSHOT_ORDERBOOK_BUDGET_SEC="${WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC:-120}"
 SNAPSHOT_ORDERBOOK_WORKERS="${WEATHER_DATA_FEED_ORDERBOOK_WORKERS:-4}"
-MARKET_PROXY_PROBE_TIMEOUT_SEC="${WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC:-5}"
-MARKET_PROXY_1X_CANDIDATES="${WEATHER_MARKET_PROXY_1X_CANDIDATES:-🇭🇰 香港 01丨1x HK,🇭🇰 香港 02丨1x HK,🇭🇰 香港 03丨1x HK,🇭🇰 香港家宽 01丨1x HK,🇭🇰 香港家宽 02丨1x HK,🇭🇰 香港家宽 03丨1x HK,🇭🇰 香港家宽 04丨1x HK,🇯🇵 日本 01丨1x JP,🇯🇵 日本 02丨1x JP,🇯🇵 日本 03丨1x JP}"
-MARKET_PROXY_FAILOVER_SCRIPT="${WEATHER_MARKET_PROXY_FAILOVER_SCRIPT:-$HOME/projects/pm_agents/scripts/ops/weather_market_proxy_failover.py}"
 OBS_TIMEOUT_SEC="${WEATHER_DATA_FEED_OBS_TIMEOUT_SEC:-90}"
 SOURCE_EVENTS_TIMEOUT_SEC="${WEATHER_DATA_FEED_SOURCE_EVENTS_TIMEOUT_SEC:-120}"
 SNAPSHOT_TIMEOUT_SEC="${WEATHER_DATA_FEED_SNAPSHOT_TIMEOUT_SEC:-600}"
@@ -227,23 +224,9 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
     now="$(date +%s)"
     if [[ -z "$snapshot_supervisor_pid" ]] && (( now >= next_snapshot )); then
       date -u +"[mac_data_feed] snapshot_start_utc=%Y-%m-%dT%H:%M:%SZ"
-      if [[ -x "$MARKET_PROXY_FAILOVER_SCRIPT" ]]; then
-        date -u +"[mac_data_feed] market_proxy_check_start_utc=%Y-%m-%dT%H:%M:%SZ"
-        set +e
-        WEATHER_DATA_FEED_SNAPSHOT_DIR="$OUTPUT_ROOT/paper_snapshots" \
-        WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC="$MARKET_PROXY_PROBE_TIMEOUT_SEC" \
-        WEATHER_MARKET_PROXY_1X_CANDIDATES="$MARKET_PROXY_1X_CANDIDATES" \
-          "$MARKET_PROXY_FAILOVER_SCRIPT"
-        proxy_rc=$?
-        set -e
-        date -u +"[mac_data_feed] market_proxy_check_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$proxy_rc"
-        if [[ "$proxy_rc" -ne 0 ]]; then
-          date -u +"[mac_data_feed] snapshot_skipped_utc=%Y-%m-%dT%H:%M:%SZ reason=market_proxy_unhealthy"
-          next_snapshot=$(( $(date +%s) + SNAPSHOT_INTERVAL_SEC ))
-          sleep 10
-          continue
-        fi
-      fi
+      # This view only joins canonical on-disk weather and market-books data.
+      # Network/proxy health belongs to the market-books owner; freshness is
+      # enforced below by --orderbook-source-max-age-sec.
       weather_start_with_timeout_async "$SNAPSHOT_TIMEOUT_SEC" \
         env WEATHER_DATA_FEED_FORECAST_CURVE_ROOT="$FORECAST_CURVE_ROOT" \
         "$PY" -u -m weather_data_feed_service \
