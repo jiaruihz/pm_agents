@@ -56,3 +56,12 @@ def test_chain_health_uses_artifact_freshness_only_for_live_and_primary_books(mo
     result = ctl.chain_health()
     assert result["blocking_consumers"] == {}
     assert result["consumer_health"]["low_price_yes_lottery_shadow_v1"]["verification_mode"] == "process_and_proxy_binding"
+
+
+def test_publish_health_is_atomic_and_machine_readable(tmp_path, monkeypatch):
+    spec = __import__("dataclasses").replace(load_production_spec(), data_feed_runtime_root=tmp_path)
+    monkeypatch.setattr(ctl, "load_production_spec", lambda: spec)
+    path = ctl.publish_health({"probe": {"ok": True}})
+    payload = __import__("json").loads(path.read_text())
+    assert payload["schema_version"] == "weather_market_proxy_health_v1"
+    assert payload["probe"]["ok"] is True

@@ -171,7 +171,27 @@ def status_payload() -> dict:
     url = state["proxy_url"]
     return {"state": state, "probe": probe(url),
             "consumers": [item.instance_id for item in consumers()],
-            "process_mismatches": process_mismatches(url)}
+            "process_mismatches": process_mismatches(url),
+            "chain_health": chain_health()}
+
+
+def publish_health(payload: dict) -> Path:
+    spec = load_production_spec()
+    path = spec.data_feed_runtime_root / "output/market_proxy_control/latest.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    enriched = {"schema_version": "weather_market_proxy_health_v1",
+                "generated_at_utc": utc_now(), **payload}
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(enriched, handle, ensure_ascii=False, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return path
 
 
 def main() -> int:
@@ -191,6 +211,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == "status":
         payload = status_payload()
+        payload["health_artifact"] = str(publish_health(payload))
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0 if payload["probe"]["ok"] and not payload["process_mismatches"] else 1
 
@@ -228,8 +249,10 @@ def main() -> int:
             restart_consumer(instance, proxy_url=current, reason=f"rollback:{args.reason}",
                              confirm_live=args.confirm_live)
         raise
-    print(json.dumps({**preview, "status": "ok", "restarted": restarted,
-                      "verification": final}, ensure_ascii=False, indent=2))
+    result = {**preview, "status": "ok", "restarted": restarted,
+              "verification": final}
+    result["health_artifact"] = str(publish_health(status_payload()))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
