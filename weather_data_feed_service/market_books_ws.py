@@ -238,6 +238,7 @@ def select_tokens(
     missing_observation_cities: list[str] = []
     now_epoch = now_utc.timestamp()
     live_state_keys: set[str] = set()
+    next_invalidation_state: dict[str, float] = {}
 
     for (city, target_date), rows in grouped.items():
         by_label: dict[str, list[dict[str, Any]]] = {}
@@ -262,6 +263,10 @@ def select_tokens(
             # affordable while the complete REST ladder remains authoritative.
             selected_labels.update(ordered)
             missing_observation_cities.append(city)
+            for label in ordered:
+                state_key = f"{city}|{target_date}|{label}"
+                live_state_keys.add(state_key)
+                next_invalidation_state[state_key] = 0.0
         else:
             possible = [
                 label
@@ -279,12 +284,25 @@ def select_tokens(
                 selected_labels.update(possible[:active_bracket_count])
             for label in ordered:
                 parsed = parsed_by_label[label]
-                if parsed.top or parsed.high is None or float(parsed.high) >= running_max:
-                    continue
                 state_key = f"{city}|{target_date}|{label}"
                 live_state_keys.add(state_key)
-                invalidated_at = invalidation_state.setdefault(state_key, now_epoch)
-                if now_epoch - invalidated_at <= post_invalidation_sec:
+                if parsed.top or parsed.high is None or float(parsed.high) >= running_max:
+                    next_invalidation_state[state_key] = 0.0
+                    continue
+                previous_state = invalidation_state.get(state_key)
+                if previous_state is None:
+                    # Already-impossible on the first observed selector state:
+                    # don't spend a synthetic five-minute grace window on it.
+                    invalidated_at = -1.0
+                elif previous_state == 0.0:
+                    invalidated_at = now_epoch
+                else:
+                    invalidated_at = previous_state
+                next_invalidation_state[state_key] = invalidated_at
+                if (
+                    invalidated_at > 0
+                    and now_epoch - invalidated_at <= post_invalidation_sec
+                ):
                     selected_labels.add(label)
                     grace_labels.add(label)
 
@@ -301,9 +319,7 @@ def select_tokens(
         grace_brackets[city] = sorted(grace_labels)
 
     invalidation_state = {
-        key: value
-        for key, value in invalidation_state.items()
-        if key in live_state_keys and now_epoch - value <= post_invalidation_sec
+        key: value for key, value in next_invalidation_state.items() if key in live_state_keys
     }
     return Selection(
         tokens=tokens,

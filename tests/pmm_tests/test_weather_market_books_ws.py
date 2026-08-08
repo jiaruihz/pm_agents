@@ -37,24 +37,49 @@ def _select(*, now=NOW, observations=None, bursts=frozenset(), state=None):
 
 
 def test_physically_invalid_lower_brackets_expire_after_markout_grace() -> None:
+    before_cross = {
+        ("Busan", "2026-08-09"): {
+            "status": "ok",
+            "running_max_c": 30.0,
+        }
+    }
+    baseline = _select(observations=before_cross)
     observations = {
         ("Busan", "2026-08-09"): {
             "status": "ok",
             "running_max_c": 32.0,
         }
     }
-    first = _select(observations=observations)
+    first = _select(
+        now=NOW + timedelta(seconds=1),
+        observations=observations,
+        state=baseline.invalidation_state,
+    )
     assert len(first.tokens) == 10
     assert first.grace_brackets["Busan"] == ["30", "31"]
 
     after_grace = _select(
-        now=NOW + timedelta(seconds=301),
+        now=NOW + timedelta(seconds=302),
         observations=observations,
         state=first.invalidation_state,
     )
     assert len(after_grace.tokens) == 6
     assert after_grace.active_brackets["Busan"] == ["32", "33", "34"]
     assert after_grace.grace_brackets["Busan"] == []
+
+
+def test_already_invalid_on_start_is_not_subscribed() -> None:
+    observations = {
+        ("Busan", "2026-08-09"): {
+            "status": "ok",
+            "running_max_c": 32.0,
+        }
+    }
+    selected = _select(observations=observations)
+
+    assert len(selected.tokens) == 6
+    assert selected.active_brackets["Busan"] == ["32", "33", "34"]
+    assert selected.grace_brackets["Busan"] == []
 
 
 def test_recent_source_event_temporarily_promotes_full_ladder() -> None:
