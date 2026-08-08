@@ -234,7 +234,10 @@ def main() -> int:
         payload = status_payload()
         payload["health_artifact"] = str(publish_health(payload))
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0 if payload["probe"]["ok"] and not payload["process_mismatches"] else 1
+        chain = payload["chain_health"]
+        return 0 if (payload["probe"]["ok"] and not payload["process_mismatches"]
+                     and chain["manifest_status"] == "healthy"
+                     and not chain["blocking_consumers"]) else 1
 
     if args.command == "auto":
         tested = [(validate_proxy_url(url), probe(validate_proxy_url(url))) for url in args.candidates]
