@@ -81,7 +81,7 @@ managed_runtimes:
     execution_mode: collector
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
     start_script: scripts/ops/start_weather_market_books.sh
-    health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
     health_format: json
     max_health_age_sec: 420
     accepted_health_statuses: [ok]

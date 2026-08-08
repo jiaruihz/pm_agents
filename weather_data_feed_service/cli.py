@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Capture canonical raw market books without forecast or observation dependencies",
     )
     market_books.add_argument("runner_args", nargs=argparse.REMAINDER)
+    market_books_ws = subparsers.add_parser(
+        "market-books-ws",
+        help="Capture selective weather-market WebSocket microstructure",
+    )
+    market_books_ws.add_argument("runner_args", nargs=argparse.REMAINDER)
     daily = subparsers.add_parser("daily", help="Run the daily cache pipeline")
     daily.add_argument("runner_args", nargs=argparse.REMAINDER)
     observations = subparsers.add_parser("observations", help="Build the fast observation cache")
@@ -117,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
         from weather_data_feed_service.market_books import main as market_books_main
 
         return market_books_main(runner_args)
+    if args.command == "market-books-ws":
+        from weather_data_feed_service.market_books_ws import main as market_books_ws_main
+
+        return market_books_ws_main(runner_args)
     if args.command == "daily":
         return _run_legacy("daily_pipeline", runner_args)
     if args.command == "observations":

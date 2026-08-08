@@ -15,6 +15,16 @@ SOURCE_MAX_AGE_SEC="${WEATHER_MARKET_BOOKS_SOURCE_MAX_AGE_SEC:-420}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 TMUX_SESSION="${WEATHER_MARKET_BOOKS_TMUX_SESSION:-weather_market_books}"
 LOG_FILE="${WEATHER_MARKET_BOOKS_LOG_FILE:-$RUNTIME_ROOT/market_books/collector.log}"
+WS_OUTPUT_ROOT="${WEATHER_MARKET_BOOKS_WS_OUTPUT_ROOT:-$MARKET_BOOKS_ROOT/ws_incremental}"
+WS_HEALTH_PATH="${WEATHER_MARKET_BOOKS_WS_HEALTH_PATH:-$MARKET_BOOKS_ROOT/collector_health.json}"
+WS_LOG_FILE="${WEATHER_MARKET_BOOKS_WS_LOG_FILE:-$MARKET_BOOKS_ROOT/ws_collector.log}"
+WS_SOURCE_EVENTS="${WEATHER_MARKET_BOOKS_WS_SOURCE_EVENTS:-$RUNTIME_ROOT/output/source_events/sources.jsonl}"
+WS_CITIES="${WEATHER_MARKET_BOOKS_WS_CITIES:-Amsterdam Tokyo Helsinki Busan Seoul}"
+WS_ACTIVE_BRACKET_COUNT="${WEATHER_MARKET_BOOKS_WS_ACTIVE_BRACKET_COUNT:-5}"
+WS_POST_INVALIDATION_SEC="${WEATHER_MARKET_BOOKS_WS_POST_INVALIDATION_SEC:-300}"
+WS_EVENT_BURST_SEC="${WEATHER_MARKET_BOOKS_WS_EVENT_BURST_SEC:-600}"
+WS_DAILY_PAYLOAD_BUDGET_BYTES="${WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES:-500000000}"
+STARTED_EPOCH="$(date +%s)"
 
 if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
   echo "already running: tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
@@ -32,8 +42,47 @@ weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
      WEATHER_MARKET_BOOKS_BUDGET_SEC='$ORDERBOOK_BUDGET_SEC' \
      WEATHER_MARKET_BOOKS_SOURCE_MAX_AGE_SEC='$SOURCE_MAX_AGE_SEC' \
      WEATHER_MARKET_BOOKS_LOG_FILE='$LOG_FILE' \
+     WEATHER_MARKET_BOOKS_WS_OUTPUT_ROOT='$WS_OUTPUT_ROOT' \
+     WEATHER_MARKET_BOOKS_WS_HEALTH_PATH='$WS_HEALTH_PATH' \
+     WEATHER_MARKET_BOOKS_WS_LOG_FILE='$WS_LOG_FILE' \
+     WEATHER_MARKET_BOOKS_WS_SOURCE_EVENTS='$WS_SOURCE_EVENTS' \
+     WEATHER_MARKET_BOOKS_WS_CITIES='$WS_CITIES' \
+     WEATHER_MARKET_BOOKS_WS_ACTIVE_BRACKET_COUNT='$WS_ACTIVE_BRACKET_COUNT' \
+     WEATHER_MARKET_BOOKS_WS_POST_INVALIDATION_SEC='$WS_POST_INVALIDATION_SEC' \
+     WEATHER_MARKET_BOOKS_WS_EVENT_BURST_SEC='$WS_EVENT_BURST_SEC' \
+     WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES='$WS_DAILY_PAYLOAD_BUDGET_BYTES' \
    && exec bash '$PROJECT_DIR/scripts/ops/_weather_market_books_loop_body.sh'"
 
-sleep 1
-weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null
-echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"
+for _ in {1..20}; do
+  weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null || exit 1
+  if "$PROJECT_DIR/.venv/bin/python" - "$WS_HEALTH_PATH" "$STARTED_EPOCH" <<'PY'
+import json
+import os
+import sys
+
+path, started_epoch = sys.argv[1], int(sys.argv[2])
+try:
+    with open(path, encoding="utf-8") as handle:
+        payload = json.load(handle)
+except (OSError, ValueError):
+    raise SystemExit(1)
+fresh = os.path.getmtime(path) >= started_epoch
+raise SystemExit(0 if fresh and payload.get("status") == "ok" else 1)
+PY
+  then
+    break
+  fi
+  sleep 1
+done
+"$PROJECT_DIR/.venv/bin/python" - "$WS_HEALTH_PATH" "$STARTED_EPOCH" <<'PY'
+import json
+import os
+import sys
+
+path, started_epoch = sys.argv[1], int(sys.argv[2])
+with open(path, encoding="utf-8") as handle:
+    payload = json.load(handle)
+assert os.path.getmtime(path) >= started_epoch, "WebSocket health was not refreshed"
+assert payload.get("status") == "ok", payload
+PY
+echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE ws_health=$WS_HEALTH_PATH"
