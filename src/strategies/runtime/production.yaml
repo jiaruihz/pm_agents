@@ -54,7 +54,7 @@ managed_runtimes:
     tmux_session: weather_data_feed_jrs
     role: data_feed
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
     start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
     max_health_age_sec: 1800
@@ -79,7 +79,7 @@ managed_runtimes:
     tmux_session: weather_market_books
     role: market_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_prod
     start_script: scripts/ops/start_weather_market_books.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
     health_format: json
