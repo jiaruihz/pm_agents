@@ -43,6 +43,7 @@ def test_pm_runtime_path_cli_uses_the_shared_loader() -> None:
 
 def test_archive_paths_cli_uses_the_shared_loader() -> None:
     expected = {
+        "feature_store_root": "/Volumes/jrs/pm_agents/runtime/weather_feature_store",
         "archive_storage_root": "/Volumes/jrs-archive",
         "research_artifact_root": "/Volumes/jrs-archive/pm_agents/research/artifact_store",
     }
@@ -127,3 +128,15 @@ def test_runtime_monitor_probes_controller_runtime_root() -> None:
         encoding="utf-8"
     )
     assert '--runtime-root "$PM_RUNTIME_ROOT/weather_edge_v1"' in text
+
+
+def test_active_feature_writers_use_controller_feature_store() -> None:
+    entrypoints = {
+        "start_low_price_yes_integrated_tail_shadow_v2.sh": "WEATHER_FEATURE_STORE_DIR",
+        "start_low_price_yes_lottery_tiny_live.sh": "WEATHER_FEATURE_STORE_DIR",
+        "start_weather_current_yes_heat_death_shadow_v1.sh": "--feature-store",
+    }
+    for name, marker in entrypoints.items():
+        text = (ROOT / "scripts/ops" / name).read_text(encoding="utf-8")
+        assert "feature_store_root" in text, name
+        assert marker in text, name
