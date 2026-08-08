@@ -61,7 +61,8 @@ cleanup() {
   kill "$ws_pid" 2>/dev/null || true
   wait "$ws_pid" 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM HUP
+trap cleanup EXIT
+trap 'exit 0' INT TERM HUP
 
 while true; do
   cycle_started_epoch="$(date +%s)"
