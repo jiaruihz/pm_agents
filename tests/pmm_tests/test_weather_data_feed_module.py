@@ -19,6 +19,7 @@ from weather_data_feed import (
     load_source_profiles,
     local_settle_utc,
     resolve_market_end_utc,
+    temperature_market_collection_timing,
     market_snapshot_record,
     normalize_snapshot_record,
     parse_market_event_date,
@@ -65,6 +66,33 @@ def test_market_end_prefers_gamma_event_over_calendar_approximation():
 
     assert resolved.isoformat() == "2026-07-18T12:00:00+00:00"
     assert source == "gamma_event_endDate"
+
+
+def test_temperature_market_collection_horizon_ignores_gamma_end_metadata():
+    timing = temperature_market_collection_timing(
+        "NYC",
+        "2026-07-18",
+        {"endDate": "2026-07-18T12:00:00Z"},
+    )
+    assert timing["settle_utc"].isoformat() == "2026-07-19T02:00:00+00:00"
+    assert timing["market_end_source"] == "city_local_22h_collection_horizon"
+    assert timing["exchange_end_metadata_utc"].isoformat() == "2026-07-18T12:00:00+00:00"
+    assert timing["exchange_end_metadata_source"] == "gamma_event_endDate"
+
+
+def test_temperature_market_collection_horizon_is_city_local_across_timezones():
+    gamma = {"endDate": "2026-07-18T12:00:00Z"}
+    expected = {
+        "LA": "2026-07-19T05:00:00+00:00",
+        "NYC": "2026-07-19T02:00:00+00:00",
+        "London": "2026-07-18T21:00:00+00:00",
+        "Istanbul": "2026-07-18T19:00:00+00:00",
+        "Wellington": "2026-07-18T10:00:00+00:00",
+    }
+    for city, horizon in expected.items():
+        timing = temperature_market_collection_timing(city, "2026-07-18", gamma)
+        assert timing["settle_utc"].isoformat() == horizon
+        assert timing["market_end_source"] == "city_local_22h_collection_horizon"
 
 
 def test_market_end_uses_earliest_child_market_then_explicit_fallback():

@@ -176,14 +176,15 @@ def resolve_market_end_utc(
     *,
     fallback: datetime,
 ) -> tuple[datetime, str]:
-    """Resolve the tradable event cutoff, preferring exchange metadata.
+    """Read Gamma's event-date metadata, falling back to a supplied horizon.
 
-    Gamma weather events normally expose one event-level ``endDate``. Some
-    responses only expose it on the child markets, so use the earliest child
-    cutoff as the conservative event cutoff. The city-local 22:00 calendar is
-    only an explicit approximation when neither level exposes a cutoff.
+    Gamma weather events normally expose one event-level ``endDate``. It is
+    *not* a CLOB ``accepting_orders`` cutoff: temperature markets can continue
+    trading for hours after that timestamp. Callers may retain it as exchange
+    metadata, but must not use it to drop a target-date market or determine
+    tradability. The fallback is returned only when Gamma exposes no metadata.
 
-    A present but malformed exchange cutoff is an upstream contract failure;
+    A present but malformed exchange timestamp is an upstream contract failure;
     do not silently replace it with the calendar approximation.
     """
     payload = event if isinstance(event, Mapping) else {}
@@ -209,6 +210,24 @@ def resolve_market_end_utc(
         return min(market_ends), "gamma_market_endDate"
 
     return parse_now_utc(fallback), "city_local_22h_approximation"
+
+
+def temperature_market_collection_timing(
+    city: str,
+    target_date: str | date,
+    event: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Separate the city-local collection horizon from Gamma end metadata."""
+
+    horizon = local_settle_utc(city, target_date)
+    exchange_end, exchange_source = resolve_market_end_utc(event, fallback=horizon)
+    has_exchange_metadata = exchange_source.startswith("gamma_")
+    return {
+        "settle_utc": horizon,
+        "market_end_source": "city_local_22h_collection_horizon",
+        "exchange_end_metadata_utc": exchange_end if has_exchange_metadata else None,
+        "exchange_end_metadata_source": exchange_source if has_exchange_metadata else None,
+    }
 
 
 def city_scan_dates(

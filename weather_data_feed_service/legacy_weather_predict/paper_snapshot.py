@@ -48,7 +48,7 @@ from weather_data_feed import (
     local_settle_utc,
     load_city_configs,
     parse_now_utc,
-    resolve_market_end_utc,
+    temperature_market_collection_timing,
     unique_city_scan_dates as data_feed_unique_city_scan_dates,
 )
 from weather_data_feed.forecast_hourly_curves import (
@@ -1672,7 +1672,9 @@ def main():
             city_local_date_at_snapshot = data_feed_city_local_date(city, now_utc).isoformat()
             approximate_settle_utc = local_settle_utc(city, target_date)
             settle_utc = approximate_settle_utc
-            market_end_source = "city_local_22h_approximation"
+            market_end_source = "city_local_22h_collection_horizon"
+            exchange_end_metadata_utc = None
+            exchange_end_metadata_source = None
             hours_to_settle = (settle_utc - now_utc).total_seconds() / 3600
 
             if hours_to_settle < 0 or hours_to_settle > 50:
@@ -1787,10 +1789,15 @@ def main():
                 ev_raw = {}
                 markets = []
 
-            settle_utc, market_end_source = resolve_market_end_utc(
+            timing = temperature_market_collection_timing(
+                city,
+                target_date,
                 ev_raw if isinstance(ev_raw, dict) else None,
-                fallback=approximate_settle_utc,
             )
+            settle_utc = timing["settle_utc"]
+            market_end_source = timing["market_end_source"]
+            exchange_end_metadata_utc = timing["exchange_end_metadata_utc"]
+            exchange_end_metadata_source = timing["exchange_end_metadata_source"]
             hours_to_settle = (settle_utc - now_utc).total_seconds() / 3600
             window = classify_window(hours_to_settle)
             time_bucket = classify_time_bucket(hours_to_settle)
@@ -2103,6 +2110,12 @@ def main():
                     "settle_utc": settle_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "settle_local": city_local_datetime(city, settle_utc).isoformat(),
                     "market_end_source": market_end_source,
+                    "exchange_end_metadata_utc": (
+                        exchange_end_metadata_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        if exchange_end_metadata_utc is not None
+                        else None
+                    ),
+                    "exchange_end_metadata_source": exchange_end_metadata_source,
                     "metar_current_max_f": metar_state["metar_current_max_f"],
                     "metar_latest_temp_f": metar_state["metar_latest_temp_f"],
                     "metar_latest_ts_utc": metar_state["metar_latest_ts_utc"],
