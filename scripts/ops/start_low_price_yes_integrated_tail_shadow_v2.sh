@@ -5,6 +5,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
 PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" pm_runtime_root)}"
+FEATURE_STORE_ROOT="${WEATHER_FEATURE_STORE_DIR:-$(weather_production_path "$PROJECT_DIR" feature_store_root)}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 TMUX_SESSION="${LOW_PRICE_YES_INTEGRATED_TAIL_TMUX_SESSION:-low_price_yes_integrated_tail_shadow_v2}"
 RUNTIME_DIR="${LOW_PRICE_YES_INTEGRATED_TAIL_SHADOW_RUNTIME_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2}"
@@ -22,6 +23,6 @@ if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; t
 fi
 
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
-  "cd $(printf '%q' "$PROJECT_DIR") && exec env LOW_PRICE_YES_INTEGRATED_TAIL_SHADOW_RUNTIME_DIR=$(printf '%q' "$RUNTIME_DIR") $(printf '%q' "$PROJECT_DIR/.venv/bin/python") -u scripts/ops/low_price_yes_integrated_tail_shadow_v2.py loop --observation-cache $(printf '%q' "$OBSERVATION_CACHE") --snapshot-dir $(printf '%q' "$SNAPSHOT_DIR") --interval-seconds $(printf '%q' "$INTERVAL_SECONDS") --book-timeout-sec $(printf '%q' "$BOOK_TIMEOUT_SECONDS") --book-proxy $(printf '%q' "$BOOK_PROXY") --min-ask 0.05 --max-ask 0.20 --min-edge -1.0 --max-candidates-per-run 80 >> $(printf '%q' "$LOG_FILE") 2>&1"
+  "cd $(printf '%q' "$PROJECT_DIR") && exec env LOW_PRICE_YES_INTEGRATED_TAIL_SHADOW_RUNTIME_DIR=$(printf '%q' "$RUNTIME_DIR") WEATHER_FEATURE_STORE_DIR=$(printf '%q' "$FEATURE_STORE_ROOT") $(printf '%q' "$PROJECT_DIR/.venv/bin/python") -u scripts/ops/low_price_yes_integrated_tail_shadow_v2.py loop --observation-cache $(printf '%q' "$OBSERVATION_CACHE") --snapshot-dir $(printf '%q' "$SNAPSHOT_DIR") --interval-seconds $(printf '%q' "$INTERVAL_SECONDS") --book-timeout-sec $(printf '%q' "$BOOK_TIMEOUT_SECONDS") --book-proxy $(printf '%q' "$BOOK_PROXY") --min-ask 0.05 --max-ask 0.20 --min-edge -1.0 --max-candidates-per-run 80 >> $(printf '%q' "$LOG_FILE") 2>&1"
 
 echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"

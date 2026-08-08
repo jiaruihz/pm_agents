@@ -6,6 +6,8 @@ source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 source "$ROOT/scripts/ops/weather_market_proxy_env.sh"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$ROOT" pm_runtime_root)}"
+WEATHER_FEATURE_STORE_DIR="${WEATHER_FEATURE_STORE_DIR:-$(weather_production_path "$ROOT" feature_store_root)}"
+export WEATHER_FEATURE_STORE_DIR
 cd "$ROOT"
 
 RUN_MODE="${1:-live}"

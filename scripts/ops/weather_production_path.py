@@ -19,6 +19,7 @@ def paths() -> dict[str, str]:
     return {
         "data_feed_runtime_root": str(spec.data_feed_runtime_root),
         "pm_runtime_root": str(spec.pm_runtime_root),
+        "feature_store_root": str(spec.pm_runtime_root / "weather_feature_store"),
         "archive_storage_root": str(spec.archive_storage_root),
         "research_artifact_root": str(spec.research_artifact_root),
         "market_books_root": str(spec.resolved_market_books_root()),
