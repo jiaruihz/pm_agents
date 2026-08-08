@@ -574,90 +574,11 @@ The `pm_history_settlements` ingest skips null files automatically.
 
 ---
 
-## 7. N100 automation gap（历史记录；当前禁止按此部署）
+## 7. N100 automation history
 
-本节仅保留事故前自动化设计，不能作为当前 action item。N100 未进入独立灾备恢复合同前，不安装下述 timer/service。
-
-### 7.1 settle_t24_paper.py manual rerun
-
-`settle_t24_paper.py` is **manual** today. The derived CSVs
-(`t24_paper_ledger_trades.csv`, `t24_paper_snapshot_replay_trades.csv`)
-go stale whenever no one reruns them.
-
-Recommended: add a systemd timer on N100:
-
-```ini
-# ~/.config/systemd/user/settle-t24-paper.timer
-[Unit]
-Description=Daily settle_t24_paper regenerate
-
-[Timer]
-OnCalendar=daily
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```ini
-# ~/.config/systemd/user/settle-t24-paper.service
-[Unit]
-Description=Regenerate settle_t24_paper CSVs
-
-[Service]
-Type=oneshot
-WorkingDirectory=/home/jiarui/projects/weather-predict
-ExecStart=/usr/bin/python3 scripts/analysis/settle_t24_paper.py --source ledger
-ExecStart=/usr/bin/python3 scripts/analysis/settle_t24_paper.py --source snapshots
-```
-
-Until this is installed, run by hand after major paper-ledger movements:
-
-```bash
-ssh 192.168.0.200 'cd ~/projects/weather-predict && \
-  python3 scripts/analysis/settle_t24_paper.py --source ledger && \
-  python3 scripts/analysis/settle_t24_paper.py --source snapshots'
-```
-
-> **Side note:** `pm_history_settlements.py` reads pm_history directly, so
-> the settlements table stays current without the CSV refresh. The CSVs are
-> still needed for the paper backtest equity curve (the legacy_research
-> config). If you only care about live PnL, the CSV refresh is optional.
-
-### 7.2 backup_data.sh has stalled
-
-`scripts/ops/backup_data.sh` on N100 hasn't been rerun since **2026-05-12**.
-The disaster-recovery tar archives in `/home/jiarui/weather-predict-backups/`
-are 24+ days stale — cache and output growth since then has no backup.
-
-Fix: install a weekly systemd timer on N100:
-
-```ini
-# ~/.config/systemd/user/backup-weather-data.timer
-[Unit]
-Description=Weekly weather-predict data backup
-
-[Timer]
-OnCalendar=weekly
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```ini
-# ~/.config/systemd/user/backup-weather-data.service
-[Unit]
-Description=Tar weather-predict data + sha256
-
-[Service]
-Type=oneshot
-WorkingDirectory=/home/jiarui/projects/weather-predict
-ExecStart=/usr/bin/bash scripts/ops/backup_data.sh
-```
-
-After the timer runs, the local mirror picks up new tars automatically via
-`scripts/ops/sync_n100_backups.sh` (safe to also schedule weekly).
+旧 N100 `settle_t24_paper`、backup timer 和 systemd unit 是 2026-06 事故前设计，不再保留可复制执行块。
+当前 canonical settlement/fill 由 Mac bounded refresh 管理；N100 仅能在独立恢复合同中作为历史输入。需要追查旧部署时
+读 [WEATHER_DATA_COLLECTION_INVENTORY.md](WEATHER_DATA_COLLECTION_INVENTORY.md) 或 git history，不能把旧 timer 当当前修复。
 
 ---
 
@@ -711,13 +632,7 @@ In order:
 
 ---
 
-## 9. Cleanup follow-ups (not blocking, "顺手优化")
+## 9. Cleanup routing
 
-Items already filed for cleanup; track in a future commit:
-
-1. Delete `weather_dashboard/db/apply_schema.py` and `weather_dashboard/ingest/settlements.py` (legacy v1, wrong schema, dead code).
-2. Done: the `BFF on port 8011` block was removed from `scripts/weather_dashboard/run_stack.sh` (old PMM framework, not used by the weather dashboard).
-3. Move `legacy_migration/` → `ingest/` (it's not legacy, it's the current path; the name is misleading).
-4. Fold `weather_dashboard/ingest/canonical.py` + `weather_dashboard/contract/canonical.py` into one `weather_dashboard/contract/` module — they only differ by usage site.
-5. Done: `scripts/weather_dashboard/run_stack.sh` now calls `pm_history_settlements` and `consolidate_configs` during rebuild.
-6. `clob_fill_sync.py`: `DEFAULT_MAKER_ADDRESS` is hardcoded to a wallet that isn't the current live signer. Current mitigation: when authenticated CLOB returns zero maker trades, fall back to funder activity matching. Follow-up: auto-derive the signer/maker from the keystore or require `--maker-address`.
+未实施的代码重构不在 current-source 数据流文档维护 TODO 清单。确认仍有效的工程债进入现有 issue/work-order；
+已经完成或被当前 controller/canonical 架构取代的事项只留在 git history，避免模型把旧建议重新实现一遍。
