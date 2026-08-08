@@ -1,5 +1,13 @@
 # Copy Trade Wallet Research Execution Plan
 
+Status: `current-reference / research-only / non-weather`
+Source of truth: schema and runnable behavior are in `scripts/copy_trade/`; this document explains research intent
+Production authority: none; does not authorize live follow orders or modify the weather production controller
+
+> 本文不是 weather 策略文档，也不进入 `WEATHER_DOCS_INDEX.md`。它对应独立的通用钱包发现/评审工具，
+> 使用 `runtime/db/research.db` 的 `copy_trade_*` 表。外部天气钱包的完整历史采集与 ladder 复盘走
+> `WEATHER_EXTERNAL_WALLET_RESEARCH_PIPELINE.md`；两条链共享 `Address != Entity` 边界，但不共享数据正本。
+
 ## 1. 策略定位
 
 当前阶段做 `wallet-centric smart money research`，不做重型 entity clustering。
@@ -300,4 +308,3 @@ P0 成功标准：
 | paper 记录完整性 | 每笔有入场理由和退出计划 |
 | reject 可解释性 | 每个拒绝都有明确原因 |
 | address/entity 风险 | 每个 follow 信号都有风险等级 |
-
