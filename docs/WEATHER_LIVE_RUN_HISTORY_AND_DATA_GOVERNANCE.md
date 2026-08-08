@@ -1193,7 +1193,33 @@ local-current 2026-08-07 markets for Denver, Los Angeles, Mexico City, San
 Francisco and Seattle, and Core Carry consumed that snapshot. Pre/post manifest
 comparison found no missing production sessions and no DB-route change.
 
-## 16. Immediate Follow-Up Work
+## 16. 2026-08-09 Strategy-Snapshot Legacy Proxy Coupling Gap
+
+After the market proxy endpoint moved from `127.0.0.1:7890` to the unified
+`7897` control-plane state, the derived strategy-snapshot loop still ran its own
+legacy `7890`/Clash-controller preflight. The canonical market-books owner and
+observation cache remained fresh, but the join view skipped 11 scheduled
+publications from `2026-08-08T17:23:03Z` through `19:07:54Z`. The last good
+artifact was `snapshot_20260809_0109.json` (available at
+`2026-08-08T17:12:37Z`); the first recovered artifact was
+`snapshot_20260809_0318.json` (available at `19:22:18Z`). Label this interval
+`strategy_snapshot_proxy_coupling_gap`, not strategy-filtered no-signal.
+
+Core Carry ran 443 cycles between those two artifact times but only re-read the
+old immutable snapshot: 0 entry plans, 0 entry attempts, 0 live orders and 0
+live execution errors. The first recovered 946-row snapshot was consumed at
+`19:22:37Z` and also produced 0 entry plans. Therefore there are no evidenced
+wrong orders; intragap missed-opportunity count remains unknown because the 11
+derived PIT join artifacts were never published and must not be reconstructed
+from later observations.
+
+Root repair commit `7dfdf61c` removes network/proxy probing from the derived
+join. `weather_market_books` exclusively owns market network health, while the
+snapshot builder fails closed on canonical on-disk book age via
+`--orderbook-source-max-age-sec`. Production checkout commit `cc0d279e` was
+restarted through the controller and produced the recovered artifact above.
+
+## 17. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
