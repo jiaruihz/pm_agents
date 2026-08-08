@@ -1,178 +1,115 @@
 # Weather Repo Boundary
 
 Status: current-source
-Updated: 2026-07-29 production identity manifest and JRS canonical DB boundary
+Updated: 2026-08-08 Mac controller, NVMe runtime and historical recovery boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-07-04（Mac 临时生产接管 + N100 磁盘事故边界）
+## 结论
 
-This document defines the runtime boundary between the weather modules. It is
-meant to prevent agents from treating similar file names as shared runtime code,
-and to keep the **data layer / collection / execution** separate.
+边界按职责划分，不按旧机器或相似文件名划分：
 
-模块边界（按职责，不按机器）：`weather_data_feed/`（数据逻辑包）· weather-predict（采集运行，
-调用 feed）· pm_agent（消费 → 策略/执行）· Mac pm_agents（分析/看板）。采集运行正按
-[WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md](WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md)
-从 weather-predict 迁到独立 `weather_data_feed_service/`，迁完 weather-predict 转 dormant；
-**迁移期 weather-predict 仍在采集**。模块设计见 [WEATHER_DATA_FEED_MODULE.md](WEATHER_DATA_FEED_MODULE.md)。
+```text
+weather_data_feed/          shared data logic and schemas
+production collectors      forecast / observation / raw market producers
+pm_agent runners            signal / risk / execution / order lineage
+weather_dashboard           canonical derived facts / API / UI
+N100 + old JRS archive      historical evidence and explicit recovery inputs only
+```
+
+当前生产主机是 Mac；NVMe `/Volumes/jrs` 承载 mutable hot runtime，旧 JRS 只作为 `/Volumes/jrs-archive`
+的历史归档层。`src/strategies/runtime/production.yaml` 声明期望 identity，strict manifest 报告当前事实。
 
 ## Runtime Roles
 
-| Repo / host path | Runtime role | Owns | Must not own |
-|---|---|---|---|
-| `weather_data_feed/`（pm_agents 包，vendored 到 N100） | Data layer (逻辑) | city calendar, source profiles, observation parsers, snapshot protocol normalization | strategy/sizing/order/wallet/dashboard 逻辑 |
-| Mac `/Volumes/jrs/weather_data_feed_service_runtime`（old `/Users/deepsleep/projects/weather_data_feed_service_runtime` is a symlink） | **Temporary production data collection**（2026-07-04 incident handoff; moved to JRS APFS disk on 2026-07-06） | paper snapshots, orderbook snapshots, live data-feed runtime output | strategy/sizing/order/wallet/dashboard logic |
-| Local Mac `/Users/deepsleep/projects/pm_agents` | **Temporary production execution + dashboard**, analysis, staging | dashboard DB, ingest/migration, fact tables, strategy research, dynamically discovered live probe/paper/shadow runners | N100 disk recovery |
-| N100 `weather_data_feed_service/`（step-3 后新建） | Data collection runtime（paused until disk trust restored） | snapshot + daily-pipeline standard data products after recovery | 策略/下单 |
-| N100 `/home/jiarui/projects/weather-predict` | Historical production source / recovery target after 2026-07-01 disk incident | historical market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
-| N100 `/home/jiarui/projects/pm_agent` | Historical production live execution / recovery target after 2026-07-01 disk incident | historical live signal files, trade plans, real CLOB order submissions, strategy instances, pause state, Telegram/live doctor | current live execution until disk trust restored |
-| Local Mac `/Users/deepsleep/projects/weather-predict` | Development copy for weather-predict | local edits/tests for N100 `weather-predict` scripts | production truth |
-| Historical WSL `/home/rui/projects/pm_agent` | Legacy analysis path, only when the actual shell is WSL/Linux | same local-analysis role as above | direct production data collection |
+| physical/code boundary | 当前职责 | 不得承担 |
+|---|---|---|
+| `weather_data_feed/` | city/source/calendar/parser/schema 等共享数据逻辑 | 常驻调度、策略、下单、钱包、PnL |
+| `/Volumes/jrs/weather_data_feed_service_runtime` | 当前 forecast/observation/market raw 与消费视图 runtime | 策略选择、资金逻辑、历史归档正本 |
+| `/Volumes/jrs/pm_agents/runtime` | 当前策略 runtime、canonical DB、health artifacts | 大型历史研究归档 |
+| `/Users/deepsleep/projects/pm_agents` | controller/development checkout、代码、文档 | 被硬编码为所有 running process checkout 或 physical DB |
+| `/Volumes/jrs-archive` | historical archive、backups、large research artifacts | 当前 producer/consumer 依赖、mutable live journal |
+| N100 `weather-predict` / `pm_agent` | 历史正本与独立恢复输入 | 当前生产 truth、默认 fallback、直接部署目标 |
+| historical WSL paths | git history 中的旧环境证据 | 当前命令或路径合同 |
+
+业务进程的实际 checkout、PID、tmux session、LaunchAgent 与文件句柄必须动态读取 manifest，不能从表中的开发路径推断。
 
 ## Data Boundary
 
-During the 2026-07-04 emergency handoff, Mac `weather_data_feed_service_runtime`
-became the current market-data production source. Since 2026-07-06 the actual
-runtime lives on `/Volumes/jrs/weather_data_feed_service_runtime`; the old
-`~/projects/weather_data_feed_service_runtime` path is a symlink.
-
-- `strategy_snapshots/paper_snapshots/`
-- `market_books/{latest.json,batches/}`
-- `market_ladder_snapshots/`
-- `forecast/forecast_hourly_curves/`
-
-Sync it into the canonical mirror with:
-
-```bash
-scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
-```
-
-Because macOS LaunchAgent jobs currently hit `Operation not permitted` when
-writing the external APFS volume, the active data-feed collector is the tmux
-session `weather_data_feed_jrs` on socket `weather-data-feed-jrs`, started with
-`scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`.
-
-Before the N100 disk incident, `weather-predict` was the source for market-data truth:
-
-- `output/paper_snapshots/`
-- `output/orderbook_snapshots/`
-- `output/paper_trades/paper_orders.jsonl`
-- `cache/pm_history/`
-- `cache/wu_obs/`
-- `cache/iem_v2_*.csv`
-
-`pm_agent` is the source for live-execution lineage:
-
-- `runtime/weather_edge_v1/signals/`
-- `runtime/weather_edge_v1/plans/`
-- `runtime/weather_edge_v1/live/`
-- `runtime/weather_edge_v1/live_cycle/`
-
-Local dashboard analysis consumes current Mac market data and historical N100
-mirrors through `scripts/ops/sync_weather_remote.sh`:
+当前 physical products：
 
 ```text
-Mac weather_data_feed_service_runtime/{strategy_snapshots,market_books,forecast} -> runtime/weather_edge_v1/market_data/
-N100 weather-predict/*              -> runtime/weather_edge_v1/market_data/   (historical/recovery)
-N100 pm_agent/runtime/weather_edge_v1 -> runtime/weather_edge_v1/remote_pm_agent/
+/Volumes/jrs/weather_data_feed_service_runtime/
+  forecast/forecast_hourly_curves/
+  output/observations/ and source-specific append-only families
+  market_books/{latest.json,batches/}
+  strategy_snapshots/
+  market_ladder_snapshots/
+
+/Volumes/jrs/pm_agents/runtime/
+  weather.db
+  weather_edge_v1/ strategy/order/health runtime
 ```
 
-The local dashboard DB is derived from these mirrors plus Mac live order files.
-During the handoff, Mac is a production writer for data-feed and selected live
-strategy order logs; N100 is not production truth until disk health and backups
-are verified.
+仓库 `runtime/weather.db` 只是兼容入口，健康时必须与 physical canonical DB 解析到同一 device/inode。
+发现独立可写 DB、共享 live journal、volume UUID 错配或 consumer 指向 archive/N100 mirror 时均视为 P0。
 
-The desired physical canonical DB lives at
-`/Volumes/jrs/pm_agents/runtime/weather.db`. The repo path `runtime/weather.db`
-is compatibility-only and must resolve to the same device/inode. Desired
-topology is committed in `src/strategies/runtime/production.yaml`; observed
-processes, checkouts, tmux sessions, LaunchAgents, and SQLite handles are
-reported by `scripts/ops/weather_production_manifest.py --strict`. A split
-identity blocks canonical analysis, rebuild, and production deployment.
+当前 mutable root、canonical DB、active order journal 与 artifact roots 只从 production loader 解析；禁止在 health、refresh、
+analysis 或 strategy 脚本维护第二份路径/策略清单。旧硬编码若暂时需要兼容，只可通过明确的只读 alias，并注明删除条件。
+
+N100 mirrors、旧 `weather-predict/output`、`targeted_output`、`full_ladder_output` 和 repo-local historical runtime
+只用于明确的历史恢复/研究；不得被 freshness fallback 自动选中。
 
 ## Code Boundary
 
-Shared weather data primitives live in the local `pm_agents` git worktree under:
+新的共享逻辑按以下归属：
 
-- `weather_data_feed/`
+| 需求 | owner |
+|---|---|
+| source adapter、timezone、calendar、raw normalization、schema | `weather_data_feed/` |
+| forecast/observation/market 网络采集与落盘 | production manifest 登记的 collector |
+| feature/probability/signal/eligibility/sizing/order | strategy/feature/execution packages |
+| fill/fee/settlement/canonical analysis/API | canonical ETL + `weather_dashboard/` |
 
-This package is the staging source for cross-repo data logic: city timezone and
-target-date calendar, source profiles, bracket parsing, observation clock
-guards, and snapshot protocol normalization. It must not contain strategy
-selection, sizing, live order submission, wallet logic, or dashboard PnL logic.
+旧 `src/strategies/weather_edge_v1/official_observation_feed/` 只允许 compatibility re-export。研究 cache bridge 只能显式
+用于历史数据操作，不能让 live runner import 或启动 `weather-predict`。一个新城市/策略不得另建 collector、盘口 cache、
+回放时钟或 order/fill/PnL 链。
 
-`pm_agent` may call weather-predict only through explicit bridge tooling:
+## Process Ownership
 
-- `scripts/ops/weather_predict_bridge.py`
-- `src/strategies/weather_edge_v1/tools/weather_predict_bridge.py`
+所有读写 JRS 的常驻 collector、strategy、shadow、monitor、patrol 与 API 必须由 controller 管理，并复用 canonical
+`tmux -L weather-data-feed-jrs` context。禁止默认 tmux、`weather-jrs`、私有 socket、screen、nohup、直接常驻
+LaunchAgent 或手工脚本绕过 controller。
 
-That bridge is for local research/data-cache operations. The normal N100 live
-execution loop does not import weather-predict modules.
-
-`weather-predict` should not import pm_agent code. It writes files that pm_agent
-later consumes.
-
-The temporary strategy-path observation modules under
-`src/strategies/weather_edge_v1/official_observation_feed/` are compatibility
-re-exports of `weather_data_feed`. New shared data code should be added to
-`weather_data_feed`, not under a strategy directory.
+LaunchAgent 只可请求 production contract 登记的 bounded one-shot。server 缺失时 fail closed；只有 controller 的
+`recover-jrs-context` 可在授权维护窗口创建或重建 canonical server。canonical tmux 内禁止 `run-shell`。
 
 ## Deployment Boundary
 
-Use `weather-strategy-deploy` for any production behavior change.
+生产行为变更使用 `weather-strategy-deploy`，遵守 git-first：
 
-- Mac 当前生产变更必须先在本 checkout 形成 scoped commit，再按已登记的 LaunchAgent/tmux/screen/start-stop 脚本重载；启停 live 或改变资金行为需显式确认。
-- Changes under N100 `pm_agent` must be deployed git-first to
-  `/home/jiarui/projects/pm_agent`，但只在磁盘健康、备份和服务链恢复验证后执行。
-- Changes under N100 `weather-predict` must be committed locally first. If the
-  remote repo is still not a git worktree, backup + rsync is only a temporary
-  fallback and must be reported as such.
-- Do not deploy a weather-predict code change by editing only pm_agent docs, and
-  do not deploy a pm_agent live-execution change by copying files into
-  weather-predict.
+- 先提交 scoped code/config change；
+- controller plan/health 确认实例、依赖与实际 checkout；
+- 资金行为变更保留显式确认、pause、notional cap 与可追溯 raw order；
+- 重载后验证 code SHA、PID、JRS write/read、producer/consumer freshness、raw order 与 exchange response；
+- 不用 `scp`/`rsync` 直推，不直接启动底层 runner，不把 N100 当默认目标。
 
-## Known Duplication To Treat Carefully
+## Strategy And Historical Ownership
 
-`weather-predict` currently has a production paper runner plus a compatibility
-wrapper:
+策略研究状态以 `WEATHER_STRATEGY_REGISTRY.md` 为准；当前实例是否 live/shadow/paused 以 manifest、进程参数、state、
+raw order 与 exchange response 为准。旧文档里的 active label、`weather-predict` paper policy 或 systemd service 名称
+都不是 present-state evidence。
 
-```text
-paper_policy.py                         # wrapper for historical top-level imports
-scripts/analysis/paper_policy.py        # active policy implementation
-scripts/analysis/paper_trigger_runner.py # active runner
+历史 dashboard migration 可以识别旧 strategy id 以保持旧行可读；这不授权生成新行。暂停或转向的研究默认标
+`dormant` / `superseded-for-now`，不因不在主线就删除其 canonical facts 或血缘。
+
+## Verification
+
+```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
 ```
 
-The systemd paper snapshot service runs:
-
-```text
-scripts/ops/run_paper_snapshot.sh
-  -> paper_snapshot.py
-  -> scripts/analysis/paper_trigger_runner.py
-```
-
-Because `scripts/analysis/paper_trigger_runner.py` imports `paper_policy` from
-its own script directory first, the active production paper policy is
-`scripts/analysis/paper_policy.py`.
-
-The root `paper_policy.py` is intentionally only a wrapper around the active
-implementation. Do not add strategy logic there.
-
-## Strategy Ownership（实例状态动态发现）
-
-Retired:
-
-- `maker_queue_v1` is historical only. New production paper/live runners should
-  not generate or accept it.
-
-Active weather-predict paper policy:
-
-- `mid_price_core_v1`
-
-当前 strategy instance 是否 running/live 以 Mac `ps` + LaunchAgent/tmux/screen + pause/state + raw orders/exchange response 为准。`WEATHER_STRATEGY_ENTRYPOINT.md` 给盘点方法，`WEATHER_STRATEGY_REGISTRY.md` 给研究状态；两者都不替代 present-state evidence。
-
-旧 `mid_price_core_v1_25_75 / _side_band / v2_25_75` 已**因实盘亏损停用**（live_real 成交停在 2026-06-11），
-转历史；不是证伪，是停用决策。
-
-Historical dashboard migrations may still recognize `maker_queue_v1` so old
-rows remain readable. That is not permission to generate new rows.
+只有 DB route、volume UUID、canonical JRS context 与目标 producer/consumer 均通过，才能把系统描述为当前健康。
+历史 N100/systemd 迁移细节见 `WEATHER_DATA_COLLECTION_INVENTORY.md` 与 git history；不得从中复制当前操作命令。
