@@ -54,7 +54,9 @@ while true; do
   tmp_out="$RUNTIME_DIR/last_run.out.tmp"
   last_out="$RUNTIME_DIR/last_run.out"
   set +e
-  "$PY" -u scripts/ops/weather_runtime_monitor.py --runtime-dir "$RUNTIME_DIR" >"$tmp_out" 2>>"$OUT_FILE"
+  "$PY" -u scripts/ops/weather_runtime_monitor.py \
+    --runtime-root "$PM_RUNTIME_ROOT/weather_edge_v1" \
+    --runtime-dir "$RUNTIME_DIR" >"$tmp_out" 2>>"$OUT_FILE"
   rc=$?
   set -e
   if [[ "$rc" -eq 0 ]]; then

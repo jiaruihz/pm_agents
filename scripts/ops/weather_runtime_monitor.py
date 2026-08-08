@@ -25,7 +25,6 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RUNTIME_DIR = ROOT / "runtime" / "weather_edge_v1" / "runtime_monitor"
 TOKEN_RESOLUTION_BLOCKERS = frozenset(
     {
         "missing_yes_token_id",
@@ -38,6 +37,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+
+_PRODUCTION_SPEC = load_production_spec()
+DEFAULT_RUNTIME_ROOT = _PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1"
+DEFAULT_RUNTIME_DIR = DEFAULT_RUNTIME_ROOT / "runtime_monitor"
 
 
 @dataclass(frozen=True)
@@ -839,7 +843,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runtime-root", type=Path, default=ROOT / "runtime/weather_edge_v1")
+    parser.add_argument("--runtime-root", type=Path, default=DEFAULT_RUNTIME_ROOT)
     parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME_DIR)
     parser.add_argument("--instance", action="append", help="Limit monitoring to one strategy_instance; repeatable.")
     parser.add_argument("--loop", action="store_true")
