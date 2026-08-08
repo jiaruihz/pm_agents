@@ -56,6 +56,8 @@ def test_chain_health_uses_artifact_freshness_only_for_live_and_primary_books(mo
     result = ctl.chain_health()
     assert result["blocking_consumers"] == {}
     assert result["consumer_health"]["low_price_yes_lottery_shadow_v1"]["verification_mode"] == "process_and_proxy_binding"
+    assert result["full_runtime_health"]["weather_market_books"]["health_trigger"] == "process_presence"
+    assert result["full_runtime_count"] == 4
 
 
 def test_publish_health_is_atomic_and_machine_readable(tmp_path, monkeypatch):
