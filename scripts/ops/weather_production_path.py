@@ -30,6 +30,7 @@ def paths() -> dict[str, str]:
         "forecast_output_root": str(spec.resolved_forecast_output_root()),
         "forecast_hourly_curve_dir": str(spec.forecast_hourly_curve_dir()),
         "observation_cache_path": str(spec.observation_cache_path()),
+        "market_proxy_state_path": str(spec.market_proxy_state_path),
     }
 
 

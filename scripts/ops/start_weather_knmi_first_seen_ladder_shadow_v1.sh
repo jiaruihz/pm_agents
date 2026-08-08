@@ -3,6 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
 SOURCE_DIR="${WEATHER_KNMI_LADDER_SOURCE_DIR:-$PROJECT_DIR}"
@@ -13,7 +14,7 @@ SOURCE="${WEATHER_KNMI_LADDER_SOURCE:-$RUNTIME_ROOT/output/knmi_open_data/knmi_o
 PAPER="${WEATHER_KNMI_LADDER_PAPER_SNAPSHOTS:-$(weather_production_path "$PROJECT_DIR" strategy_paper_snapshot_dir)}"
 ORDERBOOKS="${WEATHER_KNMI_LADDER_ORDERBOOK_SNAPSHOTS:-$(weather_production_path "$PROJECT_DIR" market_books_root)/batches}"
 OUTPUT="${WEATHER_KNMI_LADDER_OUTPUT:-$RUNTIME_ROOT/output/knmi_first_seen_ladder_v1}"
-MARKET_PROXY="${WEATHER_KNMI_LADDER_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}}"
+MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
 ACTION="${1:-start}"
 
 if [[ "$ACTION" == "status" ]]; then

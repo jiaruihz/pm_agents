@@ -3,6 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
 PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" pm_runtime_root)}"
 FEATURE_STORE_ROOT="${WEATHER_FEATURE_STORE_DIR:-$(weather_production_path "$PROJECT_DIR" feature_store_root)}"
@@ -14,7 +15,7 @@ OBSERVATION_CACHE="${LOW_PRICE_YES_INTEGRATED_TAIL_OBSERVATION_CACHE:-$(weather_
 SNAPSHOT_DIR="${LOW_PRICE_YES_INTEGRATED_TAIL_SNAPSHOT_DIR:-$(weather_production_path "$PROJECT_DIR" strategy_paper_snapshot_dir)}"
 INTERVAL_SECONDS="${LOW_PRICE_YES_INTEGRATED_TAIL_INTERVAL_SECONDS:-300}"
 BOOK_TIMEOUT_SECONDS="${LOW_PRICE_YES_INTEGRATED_TAIL_BOOK_TIMEOUT_SEC:-5}"
-BOOK_PROXY="${LOW_PRICE_YES_INTEGRATED_TAIL_MARKET_PROXY:-http://127.0.0.1:7890}"
+BOOK_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
 
 mkdir -p "$RUNTIME_DIR"
 if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then

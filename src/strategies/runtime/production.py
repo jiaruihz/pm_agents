@@ -31,6 +31,7 @@ class WeatherManagedRuntimeSpec:
     live_order_path: Path | None = None
     dependencies: tuple[str, ...] = ()
     recovery_policy: str = "manual"
+    uses_market_proxy: bool = False
 
     def resolved_start_script(self) -> Path | None:
         if self.start_script is None:
@@ -62,6 +63,8 @@ class WeatherProductionSpec:
     pm_runtime_root: Path
     canonical_tmux_socket: str
     canonical_tmux_binary: Path
+    market_proxy_state_path: Path
+    market_proxy_default_url: str
     market_books_root: Path | None = None
     strategy_snapshot_root: Path | None = None
     market_ladder_snapshot_root: Path | None = None
@@ -202,6 +205,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     str(value) for value in (item.get("dependencies") or [])
                 ),
                 recovery_policy=str(item.get("recovery_policy") or "manual"),
+                uses_market_proxy=bool(item.get("uses_market_proxy", False)),
             )
         )
     allowed_unmanaged = raw.get("allowed_unmanaged_sessions") or []
@@ -217,6 +221,8 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         pm_runtime_root=Path(raw["pm_runtime_root"]),
         canonical_tmux_socket=str(raw["canonical_tmux_socket"]),
         canonical_tmux_binary=Path(raw["canonical_tmux_binary"]),
+        market_proxy_state_path=Path(raw["market_proxy_state_path"]),
+        market_proxy_default_url=str(raw["market_proxy_default_url"]),
         market_books_root=(
             Path(raw["market_books_root"]) if raw.get("market_books_root") else None
         ),

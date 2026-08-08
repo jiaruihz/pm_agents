@@ -3,6 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 # Reuse the data-feed tmux server so child processes inherit the macOS permission
 # context that can read and write the external JRS runtime volume.
@@ -36,7 +37,7 @@ ADDITIONAL_SOURCE_NOTIFY_PATHS="${WEATHER_FAST_PREV_NO_ADDITIONAL_SOURCE_NOTIFY_
 SOURCE_EVENTS_JSONL="${WEATHER_FAST_PREV_NO_SOURCE_EVENTS_JSONL:-$RUNTIME_ROOT/output/source_events/sources.jsonl}"
 NOTIFY_POLL_SEC="${WEATHER_FAST_PREV_NO_NOTIFY_POLL_SEC:-0.1}"
 OPPORTUNITY_HEARTBEAT_SEC="${WEATHER_FAST_PREV_NO_OPPORTUNITY_HEARTBEAT_SEC:-300}"
-MARKET_PROXY="${WEATHER_FAST_PREV_NO_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-${WEATHER_PREDICT_MARKET_PROXY:-http://127.0.0.1:7890}}}"
+MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
 ENABLE_LIVE="${WEATHER_FAST_PREV_NO_LIVE:-1}"
 CONFIRM_LIVE="${WEATHER_FAST_PREV_NO_CONFIRM_LIVE:-1}"
 ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS="${WEATHER_FAST_PREV_NO_ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS:-1}"
