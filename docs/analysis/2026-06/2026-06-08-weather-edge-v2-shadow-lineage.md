@@ -62,7 +62,7 @@
 ## 使用方式
 
 - 人看摘要: 本 Markdown。
-- 程序/后续 forward settled: `/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.jsonl`。
+- 程序/后续 forward settled: `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.jsonl.gz`（gzip 无损压缩；解压后 SHA-256 `322aee80185bc1a30f9caf0e69d4621695a613b9251b549e571f0cda95ba5f6c`）。
 - 看板展示应挂在 Weather Research，而不是 Strategies/Live 绩效卡；当前仍是 shadow/offline evidence。
 
 ## 结论
