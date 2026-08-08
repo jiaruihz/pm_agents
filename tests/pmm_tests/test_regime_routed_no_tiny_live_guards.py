@@ -8,6 +8,11 @@ import pandas as pd
 from scripts.ops import regime_routed_no_tiny_live as live
 
 
+def test_display_path_accepts_external_runtime_root(tmp_path):
+    path = tmp_path / "trade_plans.jsonl"
+    assert live.display_path(path) == str(path)
+
+
 def test_live_runner_import_closure_excludes_training_labels():
     sys.modules.pop("weather_feature_layer.labels", None)
     importlib.reload(live)

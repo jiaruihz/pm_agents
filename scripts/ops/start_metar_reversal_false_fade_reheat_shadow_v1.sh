@@ -20,6 +20,6 @@ if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; t
 fi
 
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
-  "cd $(printf '%q' "$PROJECT_DIR") && exec $(printf '%q' "$PROJECT_DIR/.venv/bin/python") -u scripts/ops/metar_reversal_false_fade_reheat_shadow_v1.py loop --snapshot-dir $(printf '%q' "$SNAPSHOT_DIR") --observation-cache $(printf '%q' "$OBSERVATION_CACHE") --interval-seconds $(printf '%q' "$INTERVAL_SECONDS") >> $(printf '%q' "$LOG_FILE") 2>&1"
+  "cd $(printf '%q' "$PROJECT_DIR") && exec $(printf '%q' "$PROJECT_DIR/.venv/bin/python") -u scripts/ops/metar_reversal_false_fade_reheat_shadow_v1.py loop --snapshot-dir $(printf '%q' "$SNAPSHOT_DIR") --observation-cache $(printf '%q' "$OBSERVATION_CACHE") --runtime-dir $(printf '%q' "$RUNTIME_DIR") --interval-seconds $(printf '%q' "$INTERVAL_SECONDS") >> $(printf '%q' "$LOG_FILE") 2>&1"
 
 echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"

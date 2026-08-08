@@ -96,3 +96,11 @@ def test_current_entrypoints_do_not_depend_on_retired_data_roots() -> None:
         assert "full_ladder_output" not in text, name
         assert "$PROJECT_DIR/runtime/weather_edge_v1" not in text, name
         assert "$ROOT/runtime/weather_edge_v1" not in text, name
+
+
+def test_metar_reversal_entrypoint_passes_controller_runtime_dir() -> None:
+    text = (
+        ROOT / "scripts/ops/start_metar_reversal_false_fade_reheat_shadow_v1.sh"
+    ).read_text(encoding="utf-8")
+    assert "--runtime-dir" in text
+    assert '$(printf \'%q\' "$RUNTIME_DIR")' in text
