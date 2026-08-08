@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import gzip
+import json
+
 from weather_model_evaluation import d1_revision_repricing as subject
 
 
@@ -250,3 +253,82 @@ def test_markout_does_not_compare_late_post_checkpoint_to_itself() -> None:
     assert result["markout_10m_status"] == "post_checkpoint_after_markout_horizon"
     assert result["markout_30m_status"] == "scoreable"
     assert abs(result["markout_30m_mean_rung_shift"] - 0.1) < 1e-12
+
+
+def test_canonical_market_books_join_materializes_exact_checkpoint(tmp_path) -> None:
+    books_root = tmp_path / "market_books"
+    ladder_root = tmp_path / "market_ladder_snapshots"
+    day = "2026-08-08"
+    (books_root / "batches" / day).mkdir(parents=True)
+    (ladder_root / day).mkdir(parents=True)
+    stamp = "20260808_120000"
+    book_path = books_root / "batches" / day / f"market_books_{stamp}.jsonl.gz"
+    ladder_path = ladder_root / day / f"market_ladder_snapshot_{stamp}.json"
+
+    rungs = []
+    books = []
+    for index, bracket in enumerate(("29", "30", "31+")):
+        yes_id = f"yes-{index}"
+        no_id = f"no-{index}"
+        rungs.append(
+            {
+                "bracket": bracket,
+                "condition_id": f"condition-{index}",
+                "yes_token_id": f"yes-token-{index}",
+                "no_token_id": f"no-token-{index}",
+                "yes_book_capture_id": yes_id,
+                "no_book_capture_id": no_id,
+            }
+        )
+        yes_bid = 0.1 + 0.1 * index
+        yes_ask = 0.12 + 0.1 * index
+        for capture_id, bid, ask in (
+            (yes_id, yes_bid, yes_ask),
+            (no_id, 1.0 - yes_ask, 1.0 - yes_bid),
+        ):
+            books.append(
+                {
+                    "book_capture_id": capture_id,
+                    "status": "ok",
+                    "event_time_pit_scorable": True,
+                    "request_started_at_utc": "2026-08-08T04:00:00Z",
+                    "response_received_at_utc": "2026-08-08T04:00:01Z",
+                    "parsed_at_utc": "2026-08-08T04:00:02Z",
+                    "summary": {"best_bid": bid, "best_ask": ask},
+                }
+            )
+    with gzip.open(book_path, "wt", encoding="utf-8") as handle:
+        for row in books:
+            handle.write(json.dumps(row) + "\n")
+    ladder_path.write_text(
+        json.dumps(
+            {
+                "available_at_utc": "2026-08-08T04:00:03Z",
+                "batch_capture_id": "batch-1",
+                "records": [
+                    {
+                        "city": "Tokyo",
+                        "target_date": "2026-08-09",
+                        "event_id": "event-1",
+                        "rungs": rungs,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    checkpoints = subject.load_canonical_market_checkpoints(
+        books_root=books_root,
+        ladder_root=ladder_root,
+        events=[{"city": "Tokyo", "target_date": "2026-08-09"}],
+    )
+    assert len(checkpoints) == 1
+    checkpoint = checkpoints[0]
+    assert checkpoint["event_time_pit_scorable"] is True
+    assert checkpoint["source_contract"] == "canonical_market_books_v1"
+    assert checkpoint["native_lattice_ordering"] == ["29", "30", "31+"]
+    assert checkpoint["rung_manifest"][0]["bottom"] is True
+    assert checkpoint["rung_manifest"][-1]["top"] is True
+    assert checkpoint["market_distribution_complete"] is True
+    assert sum(checkpoint["probabilities"].values()) == 1.0

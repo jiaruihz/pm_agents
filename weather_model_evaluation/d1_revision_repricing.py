@@ -12,6 +12,7 @@ import argparse
 from collections import Counter
 import csv
 from datetime import datetime, timedelta, timezone
+import gzip
 import json
 import math
 from pathlib import Path
@@ -62,6 +63,14 @@ def default_snapshot_dirs() -> list[Path]:
         spec.archive_storage_root / relative / "full_ladder_output" / "paper_snapshots",
     ]
     return list(dict.fromkeys(path for path in roots if path.exists()))
+
+
+def default_canonical_market_roots() -> tuple[Path, Path]:
+    spec = load_production_spec()
+    return (
+        spec.resolved_market_books_root(),
+        spec.resolved_market_ladder_snapshot_root(),
+    )
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -625,6 +634,7 @@ def load_market_checkpoints(
                     "clock_lineage_status": clock_lineage_status,
                     "clock_lineage_blockers": clock_lineage_blockers,
                     "source_path": str(path),
+                    "source_contract": "legacy_paper_snapshot",
                     "probabilities": {
                         str(row["label"]): row["normalized_market_probability"]
                         for row in checkpoint["rung_manifest"]
@@ -645,6 +655,199 @@ def load_market_checkpoints(
         deduplicated.values(),
         key=lambda item: str(item.get("checkpoint_ts_utc") or ""),
     )
+
+
+def _read_market_book_rows(path: Path) -> list[dict[str, Any]]:
+    if path.suffix == ".gz":
+        handle = gzip.open(path, "rt", encoding="utf-8")
+    else:
+        handle = path.open("r", encoding="utf-8")
+    with handle:
+        return [json.loads(line) for line in handle if line.strip()]
+
+
+def _canonical_ladder_paths(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    return sorted(root.glob("20??-??-??/market_ladder_snapshot_*.json"))
+
+
+def _canonical_book_path(books_root: Path, ladder_path: Path) -> Path | None:
+    stem = ladder_path.stem.replace("market_ladder_snapshot_", "market_books_", 1)
+    day = ladder_path.parent.name
+    candidates = (
+        books_root / "batches" / day / f"{stem}.jsonl.gz",
+        books_root / "batches" / day / f"{stem}.jsonl",
+    )
+    return next((path for path in candidates if path.exists()), None)
+
+
+def _effective_yes_quote(
+    yes_book: dict[str, Any] | None,
+    no_book: dict[str, Any] | None,
+) -> tuple[float | None, float | None]:
+    yes_summary = dict((yes_book or {}).get("summary") or {})
+    no_summary = dict((no_book or {}).get("summary") or {})
+    bid_candidates: list[float] = []
+    ask_candidates: list[float] = []
+    if yes_summary.get("best_bid") is not None:
+        bid_candidates.append(float(yes_summary["best_bid"]))
+    if no_summary.get("best_ask") is not None:
+        bid_candidates.append(1.0 - float(no_summary["best_ask"]))
+    if yes_summary.get("best_ask") is not None:
+        ask_candidates.append(float(yes_summary["best_ask"]))
+    if no_summary.get("best_bid") is not None:
+        ask_candidates.append(1.0 - float(no_summary["best_bid"]))
+    bid = max(bid_candidates) if bid_candidates else None
+    ask = min(ask_candidates) if ask_candidates else None
+    if bid is not None and ask is not None and ask < bid:
+        return None, None
+    return bid, ask
+
+
+def _canonical_book_clock_exact(
+    row: dict[str, Any] | None,
+    *,
+    published_at_utc: str,
+) -> bool:
+    if (
+        row is None
+        or row.get("status") != "ok"
+        or row.get("event_time_pit_scorable") is not True
+    ):
+        return False
+    try:
+        request = parse_utc(row.get("request_started_at_utc"), field="request_started_at_utc")
+        response = parse_utc(
+            row.get("response_received_at_utc"), field="response_received_at_utc"
+        )
+        parsed = parse_utc(row.get("parsed_at_utc"), field="parsed_at_utc")
+        published = parse_utc(published_at_utc, field="published_at_utc")
+    except (TypeError, ValueError):
+        return False
+    return request <= response <= parsed <= published
+
+
+def load_canonical_market_checkpoints(
+    *,
+    books_root: Path,
+    ladder_root: Path,
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Join canonical ladder manifests to their immutable market-book batch.
+
+    The current production contract separates raw books from the ladder view.
+    Research must consume both artifacts and must not fall back to the retired
+    paper-snapshot producer or re-request the exchange.
+    """
+
+    target_keys = {(event["city"], event["target_date"]) for event in events}
+    checkpoints: list[dict[str, Any]] = []
+    for ladder_path in _canonical_ladder_paths(ladder_root):
+        payload = json.loads(ladder_path.read_text(encoding="utf-8"))
+        relevant = [
+            row
+            for row in payload.get("records") or []
+            if isinstance(row, dict)
+            and (str(row.get("city") or ""), str(row.get("target_date") or ""))
+            in target_keys
+        ]
+        if not relevant:
+            continue
+        book_path = _canonical_book_path(books_root, ladder_path)
+        book_rows = _read_market_book_rows(book_path) if book_path else []
+        book_index = {
+            str(row.get("book_capture_id") or ""): row
+            for row in book_rows
+            if row.get("book_capture_id")
+        }
+        published_at = str(payload.get("available_at_utc") or "")
+        for event in relevant:
+            rungs = list(event.get("rungs") or [])
+            material_rows: list[dict[str, Any]] = []
+            exact = bool(rungs) and bool(published_at) and book_path is not None
+            for index, rung in enumerate(rungs):
+                yes = book_index.get(str(rung.get("yes_book_capture_id") or ""))
+                no = book_index.get(str(rung.get("no_book_capture_id") or ""))
+                referenced = (yes, no)
+                exact = exact and all(
+                    _canonical_book_clock_exact(
+                        row,
+                        published_at_utc=published_at,
+                    )
+                    for row in referenced
+                )
+                bid, ask = _effective_yes_quote(yes, no)
+                bracket = str(rung.get("bracket") or "")
+                if index == 0:
+                    question = f"Will Tmax be {bracket} or below?"
+                elif index == len(rungs) - 1:
+                    question = f"Will Tmax be {bracket} or higher?"
+                else:
+                    question = f"Will Tmax be {bracket}?"
+                material_rows.append(
+                    {
+                        "bracket": bracket,
+                        "question": question,
+                        "condition_id": rung.get("condition_id"),
+                        "token_id": rung.get("yes_token_id"),
+                        "yes_best_bid": bid,
+                        "yes_best_ask": ask,
+                        "book_status": (
+                            "effective_yes_two_sided"
+                            if bid is not None and ask is not None
+                            else "missing_effective_yes_two_sided"
+                        ),
+                    }
+                )
+            city = str(event.get("city") or "")
+            target_date = str(event.get("target_date") or "")
+            feature_book_snapshot_id = stable_content_hash(
+                {
+                    "batch_capture_id": payload.get("batch_capture_id"),
+                    "event_id": event.get("event_id"),
+                    "city": city,
+                    "target_date": target_date,
+                }
+            )
+            checkpoint = materialize_full_ladder_checkpoint(
+                material_rows,
+                city=city,
+                target_date=target_date,
+                event_id=str(event.get("event_id") or event.get("event_slug") or ""),
+                checkpoint_ts_utc=published_at,
+                feature_book_snapshot_id=feature_book_snapshot_id,
+                horizon_days=1,
+            )
+            checkpoint.update(
+                {
+                    "available_at_utc": published_at or None,
+                    "event_time_pit_scorable": bool(exact),
+                    "clock_lineage_status": (
+                        "collector_exact_market_books_clock"
+                        if exact
+                        else "missing_or_incomplete_market_books_clock"
+                    ),
+                    "clock_lineage_blockers": (
+                        []
+                        if exact
+                        else [
+                            "missing_market_book_batch"
+                            if book_path is None
+                            else "missing_or_inexact_referenced_book"
+                        ]
+                    ),
+                    "source_path": str(ladder_path),
+                    "source_book_path": str(book_path) if book_path else None,
+                    "source_contract": "canonical_market_books_v1",
+                    "probabilities": {
+                        str(row["label"]): row["normalized_market_probability"]
+                        for row in checkpoint["rung_manifest"]
+                    },
+                }
+            )
+            checkpoints.append(checkpoint)
+    return sorted(checkpoints, key=lambda item: str(item.get("checkpoint_ts_utc") or ""))
 
 
 def _probability_markout(
@@ -1088,14 +1291,14 @@ def render_report(summary: dict[str, Any]) -> str:
             "# D-1 provider-run first-seen × market repricing",
             "",
             "weather-only:",
-            "significance=not_run_no_settlement_complete_forward_dates",
+            "significance=not_run_clean_probability_dataset_not_materialized",
             "calibration=W0_reference_unchanged_W1_training_pending",
             "pooled_baseline=retained_negative_control",
-            "forward=provider_run_first_seen_collector_pending_v3_cutover",
+            "forward=clean_development_only_not_frozen",
             "",
             "market residual:",
             "baseline=same-event complete normalized full ladder",
-            "forward=legacy_earliest_observed_development_only",
+            "forward=collector_exact_repricing_development_low_independent_dates",
             "execution=not_run_no_probability_gate",
             "",
             "production:",
@@ -1150,11 +1353,11 @@ def render_report(summary: dict[str, Any]) -> str:
             "",
             f"markout status：`{json.dumps(markout_statuses, ensure_ascii=False, sort_keys=True)}`。post checkpoint 本身晚于目标 horizon 时明确 blocked，不再拿同一 post snapshot 自比并记成 0。",
             "",
-            f"event classes：`{json.dumps(classes, ensure_ascii=False, sort_keys=True)}`。旧 v2 journal 只能重建 `legacy_provider_run_earliest_observed` development；只有 v3 的 `forward_provider_run_first_seen` 可进入正式 forward。",
+            f"event classes：`{json.dumps(classes, ensure_ascii=False, sort_keys=True)}`。旧 v2 journal 只能重建 `legacy_provider_run_earliest_observed` development；v3 的 `forward_provider_run_first_seen` 表示 collector-exact lineage，但 freeze 前仍属于 clean development，不能事后改称 untouched forward。",
             "",
             "## 下一阶段与冻结规则",
             "",
-            "1. collector v3 修复部署后保持 model×city×target×run 的 first-seen，并把 same-run content first-seen 分开；不重写旧 JSONL。",
+            "1. collector v3 已部署并保持 model×city×target×run 的 first-seen；canonical market_books 五分钟盘口已接入本 runner，旧 JSONL 与旧 snapshot 只保留为 development evidence。",
             "2. 先累计 complete D-1 run events、完整 pre/post ladders与 settlement；第一段 clean rows 明确作为 development，不冒充 forward。",
             "3. W0 只作锁定 legacy reference；W1 在 clean development 的 inner train/validation 中选择 revision/spread/lead-age、层级收缩和 tail，先跑出 weather-only 结果再决定是否冻结。",
             "4. W1 评审后，在同一 development rows 上比较 M0/M1/M2/M3并选择 residual 正则；两条线都出结果后才生成 freeze artifact。只有 freeze timestamp 之后的新日期进入 untouched forward，且 M2/M3 必须在其 target-date block bootstrap 的 logloss/RPS/calibration 上优于 M0，才进入 ask/fee/depth EV。",
@@ -1162,9 +1365,9 @@ def render_report(summary: dict[str, Any]) -> str:
             "",
             "## 8 环与结论",
             "",
-            "本轮覆盖 lineage、signal/evidence coverage、market checkpoint contract；统计推断因 0 个 eligible settled forward events 未启动，执行、容量、fills、组合相关性均未覆盖。",
+            "本轮覆盖 lineage、signal/evidence coverage、market checkpoint contract 与 collector-exact repricing 描述统计；独立 target dates 只有3–4个，尚未进入 target-date block 推断。概率模型、execution、容量、fills 与组合相关性均未覆盖。",
             "",
-            "结论：`inconclusive / collector-and-lineage-repair`。研究已经启动，但旧 revision 字段不能使用；修复代码需经生产确认后部署，随后才开始干净 forward clock。",
+            "结论：`inconclusive / clean-development-low-independent-dates`。采集与研究 join 已跑通，但当前 revision 对5–90分钟盘口方向没有稳定领先；继续积累并训练 W1/repricing head，不改 live。",
             "",
         ]
     )
@@ -1175,6 +1378,8 @@ def run_study(
     capture_dir: Path = DEFAULT_CAPTURE_DIR,
     snapshot_dir: Path | None = None,
     snapshot_dirs: Iterable[Path] | None = None,
+    market_books_root: Path | None = None,
+    market_ladder_snapshot_root: Path | None = None,
     db: Path = DEFAULT_DB,
     output_dir: Path = DEFAULT_OUT,
     report: Path = DEFAULT_REPORT,
@@ -1188,7 +1393,30 @@ def run_study(
         snapshot_dirs
         or ([snapshot_dir] if snapshot_dir is not None else default_snapshot_dirs())
     )
+    resolved_books_root, resolved_ladder_root = default_canonical_market_roots()
+    resolved_books_root = market_books_root or resolved_books_root
+    resolved_ladder_root = market_ladder_snapshot_root or resolved_ladder_root
     checkpoints = load_market_checkpoints(resolved_snapshot_dirs, events)
+    checkpoints.extend(
+        load_canonical_market_checkpoints(
+            books_root=resolved_books_root,
+            ladder_root=resolved_ladder_root,
+            events=events,
+        )
+    )
+    checkpoint_dedup: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for checkpoint in checkpoints:
+        key = (
+            str(checkpoint.get("city") or ""),
+            str(checkpoint.get("target_date") or ""),
+            str(checkpoint.get("checkpoint_ts_utc") or ""),
+            str(checkpoint.get("ladder_hash") or ""),
+        )
+        checkpoint_dedup[key] = checkpoint
+    checkpoints = sorted(
+        checkpoint_dedup.values(),
+        key=lambda item: str(item.get("checkpoint_ts_utc") or ""),
+    )
     scored_events = attach_market_evidence(events, checkpoints)
     d1_events = [event for event in scored_events if event["horizon_days_local"] == 1]
     settled_city_dates = load_settled_city_dates(
@@ -1222,6 +1450,12 @@ def run_study(
     }
     evidence_funnel = {
         "market_checkpoints": len(checkpoints),
+        "legacy_paper_market_checkpoints": sum(
+            item.get("source_contract") == "legacy_paper_snapshot" for item in checkpoints
+        ),
+        "canonical_market_book_checkpoints": sum(
+            item.get("source_contract") == "canonical_market_books_v1" for item in checkpoints
+        ),
         "event_time_clock_exact_market_checkpoints": sum(
             item.get("event_time_pit_scorable") is True for item in checkpoints
         ),
@@ -1269,6 +1503,8 @@ def run_study(
             "event_grain": "provider model run first-seen × city × target_date",
             "forecast_capture_dir": str(capture_dir),
             "snapshot_dirs": [str(path) for path in resolved_snapshot_dirs],
+            "market_books_root": str(resolved_books_root),
+            "market_ladder_snapshot_root": str(resolved_ladder_root),
             "db_realpath": str(db.resolve()),
             "db_device": db.stat().st_dev,
             "db_inode": db.stat().st_ino,
@@ -1285,7 +1521,7 @@ def run_study(
         "directional_repricing": directional_repricing,
         "market_transition_repricing": market_transition_repricing,
         "blocker_rows": len(blockers),
-        "conclusion": "inconclusive_collector_and_lineage_repair",
+        "conclusion": "inconclusive_clean_development_low_independent_dates",
         "production": {"live_action": "none", "orders_changed": 0},
     }
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1311,12 +1547,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Repeat for hot/archive roots; defaults resolve from production.yaml",
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
+    parser.add_argument("--market-books-root", type=Path)
+    parser.add_argument("--market-ladder-snapshot-root", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args(argv)
     run_study(
         capture_dir=args.capture_dir,
         snapshot_dirs=args.snapshot_dirs,
+        market_books_root=args.market_books_root,
+        market_ladder_snapshot_root=args.market_ladder_snapshot_root,
         db=args.db,
         output_dir=args.output_dir,
         report=args.report,
