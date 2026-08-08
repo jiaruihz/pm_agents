@@ -32,6 +32,7 @@ if [[ -f "$SERVICE_DIR/.env" ]]; then
   source "$SERVICE_DIR/.env"
   set +a
 fi
+export WEATHER_DATA_FEED_BUILD_ID="$(git -C "$SERVICE_DIR" rev-parse HEAD)"
 source "$SERVICE_DIR/scripts/ops/weather_market_proxy_env.sh"
 export WEATHER_DATA_FEED_MARKET_PROXY="$(weather_resolve_market_proxy "$SERVICE_DIR")"
 
