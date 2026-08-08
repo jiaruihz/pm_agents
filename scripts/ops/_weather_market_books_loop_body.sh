@@ -23,7 +23,8 @@ if [[ -f "$SERVICE_DIR/.env" ]]; then
   source "$SERVICE_DIR/.env"
   set +a
 fi
-export WEATHER_DATA_FEED_MARKET_PROXY="${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}"
+source "$SERVICE_DIR/scripts/ops/weather_market_proxy_env.sh"
+export WEATHER_DATA_FEED_MARKET_PROXY="$(weather_resolve_market_proxy "$SERVICE_DIR")"
 
 while true; do
   cycle_started_epoch="$(date +%s)"

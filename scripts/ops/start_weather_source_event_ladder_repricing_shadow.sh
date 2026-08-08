@@ -8,6 +8,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_EVENT_LADDER_TMUX_SESSION:-weather_source_event_ladder_repricing_shadow}"
@@ -19,7 +20,7 @@ FOLLOW_MINUTES="${WEATHER_EVENT_LADDER_FOLLOW_MINUTES:-90}"
 SOURCES="${WEATHER_EVENT_LADDER_SOURCES:-amos_runway noaa_madis_hfmetar singapore_mss jma_amedas hko_obs cowin_obs fmi mgm ims_lod}"
 LOWEST_CITIES="${WEATHER_EVENT_LADDER_LOWEST_CITIES:-Seoul Tokyo}"
 LOWEST_SOURCES="${WEATHER_EVENT_LADDER_LOWEST_SOURCES:-amos_runway jma_amedas}"
-MARKET_PROXY="${WEATHER_EVENT_LADDER_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-${WEATHER_PREDICT_MARKET_PROXY:-http://127.0.0.1:7890}}}"
+MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
 LOG_FILE="$RUNTIME_ROOT/loop/source_event_ladder_repricing_shadow.log"
 LOWEST_LOG_FILE="$RUNTIME_ROOT/loop/source_event_ladder_repricing_lowest_shadow.log"
 

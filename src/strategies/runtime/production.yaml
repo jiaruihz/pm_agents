@@ -22,6 +22,8 @@ pm_runtime_root: /Volumes/jrs/pm_agents/runtime
 research_artifact_root: /Volumes/jrs-archive/pm_agents/research/artifact_store
 canonical_tmux_socket: weather-data-feed-jrs
 canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
+market_proxy_state_path: /Volumes/jrs/weather_data_feed_service_runtime/config/market_proxy.json
+market_proxy_default_url: http://127.0.0.1:7897
 
 # This is the current Mac production desired state. Historical/research
 # metadata remains in instances.yaml; only runtimes listed here are required to
@@ -73,6 +75,7 @@ managed_runtimes:
     recovery_policy: safe
 
   - instance_id: weather_market_books
+    uses_market_proxy: true
     tmux_session: weather_market_books
     role: market_collector
     execution_mode: collector
@@ -121,6 +124,7 @@ managed_runtimes:
     recovery_policy: safe
 
   - instance_id: weather_knmi_first_seen_ladder_v1
+    uses_market_proxy: true
     tmux_session: weather_knmi_first_seen_ladder_v1
     role: market_collector
     execution_mode: collector
@@ -132,6 +136,7 @@ managed_runtimes:
     recovery_policy: safe
 
   - instance_id: current_yes_core_carry_tiny_live_v2
+    uses_market_proxy: true
     tmux_session: weather_current_yes_core_carry_tiny_live_v2
     role: strategy
     execution_mode: live
@@ -147,6 +152,7 @@ managed_runtimes:
     recovery_policy: guarded_live
 
   - instance_id: fast_source_prev_no_trial_v1
+    uses_market_proxy: true
     tmux_session: weather_fast_source_prev_no_trial
     role: strategy
     execution_mode: live
@@ -188,6 +194,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: low_price_yes_integrated_tail_shadow_v2
+    uses_market_proxy: true
     tmux_session: low_price_yes_integrated_tail_shadow_v2
     role: shadow
     execution_mode: shadow
@@ -198,6 +205,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: low_price_yes_lottery_shadow_v1
+    uses_market_proxy: true
     tmux_session: low_price_yes_lottery_shadow_v1
     role: shadow
     execution_mode: shadow
@@ -239,6 +247,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_current_yes_heat_death_shadow_v1
+    uses_market_proxy: true
     tmux_session: weather_current_yes_heat_death_shadow_v1
     role: shadow
     execution_mode: shadow
@@ -250,6 +259,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_fast_source_stale_book
+    uses_market_proxy: true
     tmux_session: weather_fast_source_stale_book
     role: collector
     execution_mode: shadow
@@ -261,6 +271,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_helsinki_pre_cross_active_ladder_shadow
+    uses_market_proxy: true
     tmux_session: weather_helsinki_pre_cross_active_ladder_shadow
     role: shadow
     execution_mode: shadow
@@ -282,6 +293,7 @@ managed_runtimes:
     max_health_age_sec: 900
     recovery_policy: safe
   - instance_id: weather_korea_first_seen_state_v1
+    uses_market_proxy: true
     tmux_session: weather_korea_first_seen_state_v1
     role: collector
     execution_mode: collector
@@ -304,6 +316,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_source_event_ladder_repricing_shadow
+    uses_market_proxy: true
     tmux_session: weather_source_event_ladder_repricing_shadow
     role: shadow
     execution_mode: shadow
@@ -315,6 +328,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: safe
   - instance_id: weather_tokyo_current_break_active_ladder_shadow_v1
+    uses_market_proxy: true
     tmux_session: weather_tokyo_current_break_active_ladder_shadow_v1
     role: shadow
     execution_mode: shadow

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+source "$ROOT/scripts/ops/weather_market_proxy_env.sh"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$ROOT" data_feed_runtime_root)}"
 SNAPSHOT_DIR="${CURRENT_YES_CORE_CARRY_SNAPSHOT_DIR:-$(weather_production_path "$ROOT" strategy_paper_snapshot_dir)}"
@@ -13,6 +14,7 @@ OUTPUT_DIR="${CURRENT_YES_CORE_CARRY_TINY_LIVE_V2_OUTPUT_DIR:-$PM_RUNTIME_ROOT/w
 SESSION="${CURRENT_YES_CORE_CARRY_TINY_LIVE_V2_TMUX_SESSION:-weather_current_yes_core_carry_tiny_live_v2}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$PM_RUNTIME_ROOT")"
 LOG_FILE="$OUTPUT_DIR/runner.log"
+MARKET_PROXY="$(weather_resolve_market_proxy "$ROOT")"
 
 weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 PREFLIGHT="$("$PY" -c \
@@ -31,6 +33,7 @@ session_cmd="cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u scripts/op
     --max-city-days-per-bj-day 10 \
     --max-daily-cost-usd 100 \
     --interval-seconds 15 \
+    --book-proxy '$MARKET_PROXY' \
     --live --confirm-live >> '$LOG_FILE' 2>&1"
 weather_jrs_tmux_guarded_replace_session "$TMUX_SOCKET" "$SESSION" "$session_cmd"
 

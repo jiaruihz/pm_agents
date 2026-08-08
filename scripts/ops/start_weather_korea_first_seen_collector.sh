@@ -5,6 +5,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
@@ -13,7 +14,7 @@ OUTPUT_DIR="${WEATHER_KOREA_FIRST_SEEN_OUTPUT_DIR:-$RUNTIME_ROOT/output/korea_fi
 SOURCE_JSONL="${WEATHER_KOREA_FIRST_SEEN_SOURCE_JSONL:-$RUNTIME_ROOT/output/live_cross_observations/high_frequency_observations.jsonl}"
 FORECAST_ROOT="${WEATHER_KOREA_FIRST_SEEN_FORECAST_ROOT:-$(weather_production_path "$PROJECT_DIR" forecast_hourly_curve_dir)}"
 CONFIG="${WEATHER_KOREA_FIRST_SEEN_CONFIG:-$PROJECT_DIR/configs/weather/korea_first_seen_collector_v1.json}"
-MARKET_PROXY="${WEATHER_KOREA_FIRST_SEEN_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}}"
+MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
 INTERVAL_SECONDS="${WEATHER_KOREA_FIRST_SEEN_INTERVAL_SECONDS:-5}"
 LOG_FILE="$RUNTIME_ROOT/loop/korea_first_seen_state_v1.log"
 
