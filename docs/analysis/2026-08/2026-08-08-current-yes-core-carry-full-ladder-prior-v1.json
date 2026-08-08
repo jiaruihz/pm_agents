@@ -1,0 +1,261 @@
+{
+  "schema_version": "current_yes_core_carry_full_ladder_prior_v1",
+  "generated_at_utc": "2026-08-08T03:56:37.561679+00:00",
+  "research_id": "current_yes_core_carry_full_ladder_prior_v1",
+  "run_id": "historical_parent_1349_full_ladder_20260808",
+  "readiness": {
+    "pit_state_four_clocks": "READY exact parent decision snapshot",
+    "canonical_build_identity": "READY production manifest strict critical=0; parent artifact hash frozen",
+    "fresh_market_quote_depth": "READY historical exact decision-time archive; current production collector healthy",
+    "settlement_labels": "READY on parent ledger",
+    "independent_target_dates": 29,
+    "clean_frozen_forward": "BLOCKED hypothesis frozen on 2026-08-08; historical secondary holdout is not clean forward"
+  },
+  "denominator": {
+    "parent_rows": 1349,
+    "parent_dates": 31,
+    "scorable_rows": 898,
+    "scorable_dates": 29,
+    "coverage_rate": 0.6656782802075611,
+    "parent_sha256": "d453fa4127459f15ad47656b799baa8826a50cdfaaeb3b5a9f81f8195253b570",
+    "preregistration_sha256": "9f9464fc3757d8d918ae4e8564c28b026e9843ed2341e4742c688fab0f148def",
+    "date_min": "2026-06-02",
+    "date_max": "2026-07-08"
+  },
+  "signal_funnel": [
+    {
+      "stage": "frozen Core PIT checkpoints",
+      "grain": "checkpoint",
+      "rows": 1349,
+      "dates": 31
+    },
+    {
+      "stage": "full-ladder scorable",
+      "grain": "checkpoint",
+      "rows": 898,
+      "dates": 29
+    },
+    {
+      "stage": "historical secondary state entries",
+      "grain": "state_entry",
+      "rows": 119,
+      "dates": 8
+    }
+  ],
+  "evidence_funnel": [
+    {
+      "ladder_status": "scorable",
+      "rows": 898,
+      "dates": 29
+    },
+    {
+      "ladder_status": "too_few_rungs",
+      "rows": 451,
+      "dates": 31
+    }
+  ],
+  "development": {
+    "rows": 421,
+    "dates": 13,
+    "metrics": {
+      "p_market_hold": {
+        "rows": 421,
+        "state_entries": 285,
+        "target_dates": 13,
+        "holds": 258,
+        "actual_rate": 0.913308536881738,
+        "mean_probability": 0.9009245293746784,
+        "brier": 0.0756936808886321,
+        "logloss": 0.2718686432481855
+      },
+      "p_ladder_feasible_hold": {
+        "rows": 421,
+        "state_entries": 285,
+        "target_dates": 13,
+        "holds": 258,
+        "actual_rate": 0.913308536881738,
+        "mean_probability": 0.8927255434252607,
+        "brier": 0.07807165266101945,
+        "logloss": 0.2825177504914722
+      },
+      "p_core_hold": {
+        "rows": 421,
+        "state_entries": 285,
+        "target_dates": 13,
+        "holds": 258,
+        "actual_rate": 0.913308536881738,
+        "mean_probability": 0.8872933465922321,
+        "brier": 0.07465579530870749,
+        "logloss": 0.26768415026287584
+      },
+      "p_core_plus_ladder": {
+        "rows": 421,
+        "state_entries": 285,
+        "target_dates": 13,
+        "holds": 258,
+        "actual_rate": 0.913308536881738,
+        "mean_probability": 0.8872671799689109,
+        "brier": 0.07579140997127523,
+        "logloss": 0.2709565184937798
+      }
+    },
+    "challenger_vs_core": {
+      "brier": {
+        "delta": 0.0011356146625677505,
+        "ci_low": 0.00010248707466534983,
+        "ci_high": 0.0021892028263899525,
+        "draws": 5000,
+        "target_dates": 13
+      },
+      "logloss": {
+        "delta": 0.0032723682309040132,
+        "ci_low": -0.0002663099842389458,
+        "ci_high": 0.006979926157243998,
+        "draws": 5000,
+        "target_dates": 13
+      }
+    }
+  },
+  "historical_secondary_holdout_dates": [
+    "2026-06-23",
+    "2026-06-25",
+    "2026-06-26",
+    "2026-06-27",
+    "2026-06-29",
+    "2026-06-30",
+    "2026-07-01",
+    "2026-07-06"
+  ],
+  "historical_secondary_metrics": {
+    "p_market_hold": {
+      "rows": 179,
+      "state_entries": 119,
+      "target_dates": 8,
+      "holds": 111,
+      "actual_rate": 0.935166742979243,
+      "mean_probability": 0.9185526947878511,
+      "brier": 0.058716393339342955,
+      "logloss": 0.22640176379689358
+    },
+    "p_ladder_feasible_hold": {
+      "rows": 179,
+      "state_entries": 119,
+      "target_dates": 8,
+      "holds": 111,
+      "actual_rate": 0.935166742979243,
+      "mean_probability": 0.9103828864386202,
+      "brier": 0.0607803808163443,
+      "logloss": 0.23535184913020393
+    },
+    "p_core_hold": {
+      "rows": 179,
+      "state_entries": 119,
+      "target_dates": 8,
+      "holds": 111,
+      "actual_rate": 0.935166742979243,
+      "mean_probability": 0.9085154999963748,
+      "brier": 0.0565834468863394,
+      "logloss": 0.212863269857947
+    },
+    "p_core_plus_ladder": {
+      "rows": 179,
+      "state_entries": 119,
+      "target_dates": 8,
+      "holds": 111,
+      "actual_rate": 0.935166742979243,
+      "mean_probability": 0.9152811625989361,
+      "brier": 0.05633494509731704,
+      "logloss": 0.21081225518258268
+    }
+  },
+  "historical_secondary_comparisons": {
+    "challenger_vs_core": {
+      "brier": {
+        "delta": -0.0002485017890223493,
+        "ci_low": -0.0008418983229267265,
+        "ci_high": 0.0004399764912789164,
+        "draws": 5000,
+        "target_dates": 8
+      },
+      "logloss": {
+        "delta": -0.0020510146753643533,
+        "ci_low": -0.004134792111474866,
+        "ci_high": 6.11022121923223e-05,
+        "draws": 5000,
+        "target_dates": 8
+      }
+    },
+    "challenger_vs_market": {
+      "brier": {
+        "delta": -0.0023814482420259093,
+        "ci_low": -0.0065012021562439815,
+        "ci_high": 0.0013951259627371362,
+        "draws": 5000,
+        "target_dates": 8
+      },
+      "logloss": {
+        "delta": -0.015589508614310955,
+        "ci_low": -0.03280216734952248,
+        "ci_high": 0.0016062237336314153,
+        "draws": 5000,
+        "target_dates": 8
+      }
+    },
+    "ladder_prior_vs_market": {
+      "brier": {
+        "delta": 0.0020639874770013488,
+        "ci_low": -9.638129369446501e-05,
+        "ci_high": 0.0041569416435517925,
+        "draws": 5000,
+        "target_dates": 8
+      },
+      "logloss": {
+        "delta": 0.00895008533331032,
+        "ci_low": -0.0032666493482980566,
+        "ci_high": 0.02086601735275541,
+        "draws": 5000,
+        "target_dates": 8
+      }
+    }
+  },
+  "ladder_diagnostics": {
+    "median_total_mid_mass": 1.0045,
+    "mean_lower_impossible_mid_mass": 0.0004883073496659243,
+    "median_lower_impossible_mid_mass": 0.0,
+    "mean_direct_two_sided_rung_fraction": 0.8622073021015114
+  },
+  "frozen_fit": {
+    "columns": [
+      "intercept",
+      "feasible_prior_shift",
+      "far_vs_adjacent_upper_log_ratio"
+    ],
+    "coefficients_standardized": [
+      0.08828750150144274,
+      0.0,
+      0.0
+    ],
+    "means": [
+      -0.07737591575004005,
+      -1.7185329942330225
+    ],
+    "scales": [
+      0.2874076091942667,
+      0.8793670555660464
+    ],
+    "train_rows": 719,
+    "train_dates": 21
+  },
+  "gates": {
+    "historical_probability": "FAIL",
+    "market_baseline": "PASS",
+    "coverage": "FAIL",
+    "clean_forward": "FAIL_NOT_YET_AVAILABLE",
+    "execution": "NOT_RUN_PROBABILITY_GATE_FAILED"
+  },
+  "verdict": "reject_full_ladder_challenger_v1",
+  "production_action": "no_live_change",
+  "artifacts": {
+    "root": "/Volumes/jrs-archive/pm_agents/research/artifact_store/current_yes_core_carry_full_ladder_prior_v1/historical_parent_1349_full_ladder_20260808"
+  }
+}

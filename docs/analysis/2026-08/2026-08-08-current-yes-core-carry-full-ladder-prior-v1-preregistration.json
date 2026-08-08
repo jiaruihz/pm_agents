@@ -1,0 +1,57 @@
+{
+  "schema_version": "weather_research_preregistration_v1",
+  "research_id": "current_yes_core_carry_full_ladder_prior_v1",
+  "frozen_at_utc": "2026-08-08T04:00:00Z",
+  "frozen_before_formal_run": true,
+  "hypothesis": "At the identical Core Carry checkpoint, conditioning the complete exact-bracket YES ladder on outcomes still physically feasible after the observed running maximum supplies incremental information about whether the current exact bracket will remain the final winner.",
+  "target": {
+    "target_id": "current_exact_bracket_holds_eod",
+    "target_kind": "settlement_outcome",
+    "label": "1 iff the final winning exact bracket equals the current bracket at decision time",
+    "primary_grain": "first checkpoint per city x target_date x current_bracket state",
+    "diagnostic_grain": "all PIT checkpoints, target-date equal"
+  },
+  "denominator": {
+    "input": "docs/analysis/2026-07/generated/current_yes_core_carry_overshoot_risk_sizing_overlay_v1/opportunity_ledger.csv",
+    "input_sha256": "d453fa4127459f15ad47656b799baa8826a50cdfaaeb3b5a9f81f8195253b570",
+    "rows": 1349,
+    "target_dates": 31,
+    "snapshot_contract": "Use only the exact archived orderbook_file named by each parent row. Never substitute a later snapshot.",
+    "coverage_rule": "Missing snapshot, missing current rung, fewer than four YES rungs, or no upper rung is an evidence coverage gap rather than a strategy exclusion. Boundary midpoint uses missing bid=0 and missing ask=1 only when the opposite side exists; direct two-sided coverage is reported separately."
+  },
+  "market_features": {
+    "role": "decision_current_joint_feature",
+    "feature_book_clock": "the parent row's exact decision-time orderbook snapshot",
+    "definitions": {
+      "p_ladder_feasible_hold": "current YES midpoint / (current YES midpoint + sum of all higher-rung YES midpoints); already-impossible lower rungs are excluded",
+      "feasible_prior_shift": "logit(p_ladder_feasible_hold) - logit(raw current-rung midpoint)",
+      "far_vs_adjacent_upper_log_ratio": "log((upper mass beyond the nearest higher rung + eps) / (nearest-higher-rung mass + eps))"
+    }
+  },
+  "models": {
+    "baselines": [
+      "same-row raw current-rung market midpoint",
+      "no-fit feasible-ladder prior",
+      "frozen Core Carry v2 no-observation-age probability"
+    ],
+    "primary_challenger": "logit(p) = logit(p_core) + intercept + beta_shift * feasible_prior_shift + beta_tail * far_vs_adjacent_upper_log_ratio",
+    "constraints": "beta_shift >= 0; beta_tail <= 0; fixed L2=0.2; intercept weak L2=0.01; no feature or penalty selection after results",
+    "warmup_target_dates": 8,
+    "historical_secondary_holdout_target_dates": 8,
+    "bootstrap_draws": 5000,
+    "bootstrap_unit": "target_date"
+  },
+  "acceptance_gates": {
+    "historical_probability": "On the historical secondary holdout, challenger minus frozen Core has negative date-equal Brier and logloss and both target-date bootstrap CI upper bounds are below zero.",
+    "market_baseline": "On identical rows, challenger minus raw market has negative date-equal Brier and logloss.",
+    "coverage": "At least 80% of parent checkpoints and at least 24 independent target dates have scorable full-ladder evidence.",
+    "clean_forward": "Not available at preregistration. No shadow/live promotion is permitted from this run even if historical gates pass. A later clean-forward start must be registered separately.",
+    "execution": "Only run a fee/depth expression replay if the probability and market-baseline gates pass; otherwise stop at model diagnosis."
+  },
+  "out_of_scope": [
+    "first-seen latency or markout alpha",
+    "new weather hard gates",
+    "maker policy, sizing, eligibility, or production changes",
+    "using post-decision observations or quotes"
+  ]
+}

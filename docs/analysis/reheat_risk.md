@@ -32,6 +32,30 @@ Current corrective references:
 - `2026-07/2026-07-25-d1-bounded-reheat-overshoot-v2.md`
 - `2026-07/2026-07-27-current-yes-core-carry-overshoot-missing-mechanisms-v2.md`
 
+### 2026-08-08 Core Carry full-ladder prior audit
+
+The static complete exact-bracket ladder is not the missing Core Carry model
+input.  A preregistered same-checkpoint audit resolved the exact archived book
+named by each frozen parent row.  It scored 898/1,349 checkpoints across 29
+target dates; the 451 coverage gaps were old snapshots that captured only two
+or three local rungs, not missing files or later-quote substitutions.
+
+On the historical eight-date secondary holdout, the Core-plus-ladder candidate
+had small point improvements versus Core (Brier/logloss delta
+`-0.000249/-0.002051`), but both date-block intervals crossed zero.  Development
+OOF was worse, and the constrained ladder coefficients froze at exactly zero;
+the secondary improvement came only from a calibration intercept.  The no-fit
+feasible-ladder prior itself was worse than the raw current-rung midpoint.
+
+The mechanism diagnosis is useful: already-impossible lower brackets carried
+median market mass `0` (mean `0.000488`), while median full-ladder midpoint mass
+was `1.0045`.  The market had already incorporated the observed running-max
+constraint, so conditioning the static ladder did not reveal a new persistence
+residual.  Reject this challenger, do not connect full-ladder shape to Core or
+run an execution replay, and do not repair the failed coverage gate by
+post-hoc loosening it to a three-rung model.  Full report:
+`2026-08/2026-08-08-current-yes-core-carry-full-ladder-prior-v1.md`.
+
 ### Family synthesis after the July challenger sequence
 
 The durable conclusion from the 80 dated current-YES reports is shorter than
