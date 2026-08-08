@@ -67,3 +67,10 @@ def test_publish_health_is_atomic_and_machine_readable(tmp_path, monkeypatch):
     payload = __import__("json").loads(path.read_text())
     assert payload["schema_version"] == "weather_market_proxy_health_v1"
     assert payload["probe"]["ok"] is True
+
+
+def test_runtime_monitor_refreshes_proxy_health_matrix():
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "scripts/ops/start_weather_runtime_monitor.sh").read_text(encoding="utf-8")
+    assert "weather_market_proxy_ctl.py status" in text
+    assert "market_proxy_health_failed_utc" in text
