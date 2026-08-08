@@ -86,7 +86,7 @@ def consumers() -> list:
 
 def restart_consumer(instance, *, proxy_url: str, reason: str, confirm_live: bool) -> dict:
     command = [sys.executable, str(ROOT / "scripts/ops/weather_production_ctl.py"),
-               "restart", "--apply", "--instance", instance.instance_id, "--reason", reason]
+               "restart", "--apply", "--json", "--instance", instance.instance_id, "--reason", reason]
     if instance.expected_live:
         if not confirm_live:
             raise RuntimeError(f"--confirm-live required for {instance.instance_id}")
@@ -103,7 +103,14 @@ def restart_consumer(instance, *, proxy_url: str, reason: str, confirm_live: boo
         "WEATHER_STALE_BOOK_MARKET_PROXY": proxy_url,
     })
     result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
+    try:
+        controller = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        controller = {}
+    action = (controller.get("actions") or [{}])[0]
     return {"instance_id": instance.instance_id, "returncode": result.returncode,
+            "action_status": action.get("status"),
+            "controller_global_status": controller.get("status"),
             "stdout_tail": (result.stdout or "")[-1000:], "stderr_tail": (result.stderr or "")[-1000:]}
 
 
