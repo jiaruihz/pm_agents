@@ -19,6 +19,8 @@ def paths() -> dict[str, str]:
     return {
         "data_feed_runtime_root": str(spec.data_feed_runtime_root),
         "pm_runtime_root": str(spec.pm_runtime_root),
+        "archive_storage_root": str(spec.archive_storage_root),
+        "research_artifact_root": str(spec.research_artifact_root),
         "market_books_root": str(spec.resolved_market_books_root()),
         "market_books_latest": str(spec.resolved_market_books_root() / "latest.json"),
         "strategy_snapshot_root": str(spec.resolved_strategy_snapshot_root()),
