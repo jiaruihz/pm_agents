@@ -1,6 +1,6 @@
 # LMVM D-1 forecast-repricing maker probe v1
 
-significance=`POINT_POSITIVE_CI_FAIL`：secondary holdout conditional ROI `+0.96%`，target-date bootstrap 95% CI `[-1.88%, +2.84%]`
+significance=`POINT_POSITIVE_CI_FAIL`：secondary holdout conditional ROI `+0.96%`，target-date bootstrap 95% CI `[-1.87%, +2.71%]`
 
 calibration=holdout 全行 predicted/actual 30m net markout mean `-0.50c/-0.67c`，MAE `0.96c`；这不是 probability calibration，也不能替代真实 fill 校准
 
@@ -65,9 +65,9 @@ orders_changed=`0`
 
 | period / policy | signals | dates | cost | PnL | ROI | positive dates | 95% CI |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| development expanding OOF | 75 | 10 | $20.20 | +$0.57 | **+2.84%** | 60.0% | `[+0.13%, +5.28%]` |
-| secondary chronological holdout | 83 | 7 | $17.49 | +$0.17 | **+0.96%** | 57.1% | `[-1.88%, +2.84%]` |
-| holdout mechanical maker baseline | 140 | 7 | $140.42 | -$5.37 | **-3.82%** | 0.0% | `[-4.41%, -2.88%]` |
+| development expanding OOF | 75 | 10 | $20.20 | +$0.57 | **+2.84%** | 60.0% | `[+0.13%, +5.25%]` |
+| secondary chronological holdout | 83 | 7 | $17.49 | +$0.17 | **+0.96%** | 57.1% | `[-1.87%, +2.71%]` |
+| holdout mechanical maker baseline | 140 | 7 | $140.42 | -$5.37 | **-3.82%** | 0.0% | `[-4.42%, -2.86%]` |
 
 原始 mechanical taker 的 30m/60m ROI 分别为 `-15.53%/-15.44%`；模型赛马中没有 taker 版本达到冻结要求。因此不能通过调 threshold 把这条路包装成可交易策略。
 
