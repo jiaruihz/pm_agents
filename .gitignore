@@ -85,6 +85,9 @@ runtime/verify_market_analysis_cn/
 # Generated analysis artifacts; keep Markdown conclusions in git.
 docs/analysis/**/*.json
 docs/analysis/**/*.jsonl
+# Raw HTTP/API caches are replay inputs, not reviewable repository content.
+# Keep them local until the owning run is promoted to the JRS artifact store.
+docs/analysis/**/generated/**/cache/
 !docs/analysis/2026-07/generated/intraday_decision_casebook_v1/*.json
 !docs/analysis/2026-07/generated/intraday_decision_casebook_v1/*.jsonl
 # Reproducible analysis CSVs under generated/ are bulky (~270MB); scripts
