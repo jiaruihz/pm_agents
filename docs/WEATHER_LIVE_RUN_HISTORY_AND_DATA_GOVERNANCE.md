@@ -1219,6 +1219,14 @@ snapshot builder fails closed on canonical on-disk book age via
 `--orderbook-source-max-age-sec`. Production checkout commit `cc0d279e` was
 restarted through the controller and produced the recovered artifact above.
 
+The first recovered run also exposed a second legacy dependency: the derived
+view still fetched METAR city by city and transiently omitted current weather
+state for trading cities London and Madrid. Commit `9ec26969` changes the view
+to fail-closed loading of the canonical observation cache; production commit
+`9bab95e4` published `snapshot_20260809_0327.json`. Final health showed 135/135
+strategy books complete, zero missing trading-city weather states, fresh
+observations/books and Core Carry consumption at `2026-08-08T19:29:49Z`.
+
 ## 17. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
