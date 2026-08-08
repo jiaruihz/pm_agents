@@ -1,11 +1,17 @@
 # Weather Data Feed — Step 3 迁移设计与执行计划（weather-predict 采集退役）
 
-Status: `phase2-parallel-running`
-Updated: 2026-06-19
-Source of truth: 设计计划；执行前以 N100 实际 unit/脚本为准（见 §2 探查步骤）
-Used by: WEATHER_DATA_FEED_MODULE.md（step 3 的具体落地）
+Status: `historical-snapshot / superseded`
+Updated: 2026-08-08 authority correction
+Source of truth: no
+Superseded by: `WEATHER_DATA_FEED_MODULE.md`; `WEATHER_DATA_PIPELINE.md`; production controller/manifest
 
-> **给执行者（Codex）的前置说明**：本文档自包含，可冷启动执行，但**涉及 N100 生产采集（硬边界）**。
+> **禁止按本文执行。** 本文固定保存 2026-06-19 的 N100/systemd 迁移计划，所列 unit、安装脚本、
+> `weather-predict` 并行运行和 N100 探查命令均已退出当前生产合同。当前生产在 Mac，由
+> `src/strategies/runtime/production.yaml` 和 `weather_production_ctl.py` 管理；盘口、天气 forecast 与策略 join
+> 分别由 `weather_market_books`、`weather_forecast_curve_collector_v1`、`weather_data_feed_jrs` 单独负责。
+> 需要 N100 灾备恢复时必须重新建立独立恢复合同，不能从本文恢复旧 timers。
+
+> **以下为历史原计划，不是当前执行说明**：原计划曾设计为自包含冷启动，并涉及 N100 生产采集（硬边界）。
 > 必须遵守：① 走 `weather-strategy-deploy` 的 **git-first** 流程，**禁止 `scp`/`rsync` 直推**；
 > ② **并行验证通过前不切换**；③ weather-predict **转 dormant 保留，不删**；④ 每个不可逆步骤前显式确认。
 > 本计划的目标是**部署隔离**，不是数据/模型提纯（见 §5 已知债）。先做 §2 探查，**不要假设**脚本/unit 细节。

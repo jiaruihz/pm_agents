@@ -1,30 +1,31 @@
 # Weather Data Feed Module
 
 Status: current-source
-Updated: 2026-07-14 high-frequency airport source audit
+Updated: 2026-08-08 canonical producer boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_REPO_BOUNDARY.md; WEATHER_SYSTEM_CONTRACT.md
 
 ## 结论
 
-新数据层先放在 `pm_agents` 同一个 git 仓库里，作为独立 Python package:
+共享数据逻辑位于 `pm_agents` 同一个 git 仓库的独立 Python package：
 
 ```text
 weather_data_feed/
 ```
 
-理由很直接：现在 `pm_agents` 是有 git 审计、测试和 N100 `pm_agent` 部署链的那一侧；`weather-predict`
-当前仍存在非 git worktree 的生产现实。先把共用数据逻辑收进一个可测试、可 review、可提交的包，比新建一个孤立 repo 更稳。
-
-这不等于部署上永远绑死。目标边界是:
+当前运行边界不是旧 `weather-predict` 或 N100 systemd 迁移计划，而是 production controller 登记的三类 owner：
 
 ```text
 weather_data_feed  ->  标准化城市日历 / source profile / official obs / forecast / market snapshot 协议
-weather-predict    ->  调用数据层生产 snapshot/cache，不包含策略或下单
-pm_agent           ->  消费标准数据，做策略、风控、下单、事实表和看板
+weather_forecast_curve_collector_v1 -> 独占 forecast 网络刷新，写 forecast/
+weather_market_books                -> 独占 Gamma/CLOB discovery + book，写 market_books/
+weather_data_feed_jrs               -> 只读 join，写 strategy_snapshots/ 和 market_ladder_snapshots/
+pm_agent strategy runners           -> 消费标准视图，做信号、风控、下单与血缘
 ```
 
-后续要做到“数据模块不变，只改策略部署”，靠的是包边界和服务边界，不一定靠第一天就拆 git repo。
+`forecast`/METAR 缺失不得阻塞 raw 盘口，join 不得重新请求盘口；`targeted_output`、`full_ladder_output` 和
+N100 timers 仅保留历史证据，不是当前 producer 或 fallback。路径和实例身份只从
+`src/strategies/runtime/production.yaml` 解析，实时状态只认 controller/manifest/raw runtime。
 
 ## 当前落地范围
 
