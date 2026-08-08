@@ -125,10 +125,28 @@ def chain_health() -> dict:
     payload = json.loads(result.stdout)
     wanted = {item.instance_id for item in consumers()}
     runtimes = {row["instance_id"]: row for row in payload.get("runtimes", []) if row["instance_id"] in wanted}
-    unhealthy = {name: row.get("issues") or [row.get("status")] for name, row in runtimes.items()
-                 if row.get("status") != "healthy"}
-    return {"manifest_status": payload.get("manifest_status"), "unhealthy_consumers": unhealthy,
-            "consumer_count": len(runtimes)}
+    required_fresh = {"weather_market_books"} | {
+        item.instance_id for item in consumers() if item.expected_live
+    }
+    blocking = {}
+    consumer_health = {}
+    for name, row in runtimes.items():
+        process_ok = bool(row.get("present"))
+        artifact_ok = row.get("status") == "healthy"
+        verification_mode = "artifact_fresh" if name in required_fresh else "process_and_proxy_binding"
+        ok = process_ok and (artifact_ok if name in required_fresh else True)
+        consumer_health[name] = {
+            "ok": ok,
+            "verification_mode": verification_mode,
+            "process_present": process_ok,
+            "artifact_status": row.get("status"),
+            "artifact_age_sec": row.get("health_age_sec"),
+            "issues": row.get("issues") or [],
+        }
+        if not ok:
+            blocking[name] = row.get("issues") or [row.get("status")]
+    return {"manifest_status": payload.get("manifest_status"), "blocking_consumers": blocking,
+            "consumer_health": consumer_health, "consumer_count": len(runtimes)}
 
 
 def wait_for_chain(proxy_url: str, *, not_before: float, timeout_sec: float = 360.0) -> dict:
@@ -142,7 +160,7 @@ def wait_for_chain(proxy_url: str, *, not_before: float, timeout_sec: float = 36
                   "chain_health": chain_health(), "market_books_post_switch": books_fresh}
         if (latest["probe"]["ok"] and not latest["process_mismatches"] and books_fresh
                 and latest["chain_health"]["manifest_status"] == "healthy"
-                and not latest["chain_health"]["unhealthy_consumers"]):
+                and not latest["chain_health"]["blocking_consumers"]):
             return latest
         time.sleep(5)
     raise RuntimeError(f"full-chain verification timed out: {latest}")

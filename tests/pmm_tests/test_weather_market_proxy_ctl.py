@@ -38,3 +38,21 @@ def test_active_entrypoints_do_not_hardcode_old_proxy_port():
         text = (root / "scripts/ops" / name).read_text(encoding="utf-8")
         assert "127.0.0.1:7890" not in text, name
         assert "weather_resolve_market_proxy" in text, name
+
+
+def test_chain_health_uses_artifact_freshness_only_for_live_and_primary_books(monkeypatch):
+    payload = {
+        "manifest_status": "healthy",
+        "runtimes": [
+            {"instance_id": "weather_market_books", "present": True, "status": "healthy", "health_age_sec": 1, "issues": []},
+            {"instance_id": "current_yes_core_carry_tiny_live_v2", "present": True, "status": "healthy", "health_age_sec": 1, "issues": []},
+            {"instance_id": "fast_source_prev_no_trial_v1", "present": True, "status": "healthy", "health_age_sec": 1, "issues": []},
+            {"instance_id": "low_price_yes_lottery_shadow_v1", "present": True, "status": "critical", "health_age_sec": 9999, "issues": ["health_artifact_stale"]},
+        ],
+    }
+    class Result:
+        stdout = __import__("json").dumps(payload)
+    monkeypatch.setattr(ctl.subprocess, "run", lambda *a, **k: Result())
+    result = ctl.chain_health()
+    assert result["blocking_consumers"] == {}
+    assert result["consumer_health"]["low_price_yes_lottery_shadow_v1"]["verification_mode"] == "process_and_proxy_binding"
