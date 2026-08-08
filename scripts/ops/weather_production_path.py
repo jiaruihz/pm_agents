@@ -17,6 +17,7 @@ from src.strategies.runtime.production import load_production_spec
 def paths() -> dict[str, str]:
     spec = load_production_spec()
     return {
+        "operational_repo_root": str(spec.operational_repo_root),
         "data_feed_runtime_root": str(spec.data_feed_runtime_root),
         "pm_runtime_root": str(spec.pm_runtime_root),
         "feature_store_root": str(spec.pm_runtime_root / "weather_feature_store"),

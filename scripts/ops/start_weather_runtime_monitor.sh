@@ -10,6 +10,9 @@ RUNTIME_DIR="${WEATHER_RUNTIME_MONITOR_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/run
 PID_FILE="$RUNTIME_DIR/loop.pid"
 OUT_FILE="$RUNTIME_DIR/loop.out"
 PY="$PROJECT_DIR/.venv/bin/python"
+CONTROL_ROOT="$(weather_production_path "$PROJECT_DIR" operational_repo_root)"
+CONTROL_PY="$CONTROL_ROOT/.venv/bin/python"
+[[ -x "$CONTROL_PY" ]] || CONTROL_PY="python3"
 
 mkdir -p "$RUNTIME_DIR"
 
@@ -67,7 +70,7 @@ while true; do
   fi
   proxy_out="$RUNTIME_DIR/market_proxy_health.out.tmp"
   set +e
-  "$PY" -u scripts/ops/weather_market_proxy_ctl.py status >"$proxy_out" 2>>"$OUT_FILE"
+  "$CONTROL_PY" -u "$CONTROL_ROOT/scripts/ops/weather_market_proxy_ctl.py" status >"$proxy_out" 2>>"$OUT_FILE"
   proxy_rc=$?
   set -e
   if [[ -s "$proxy_out" ]]; then
