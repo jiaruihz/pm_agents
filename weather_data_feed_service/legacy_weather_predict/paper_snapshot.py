@@ -64,6 +64,11 @@ from weather_data_feed.market_book_contract import (
     materialize_orderbook_capture,
     utc_now_text,
 )
+from weather_data_feed.observation_cache import (
+    index_observation_cache,
+    load_observation_cache,
+    parse_utc as parse_observation_utc,
+)
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
 
@@ -1541,6 +1546,53 @@ def fetch_live_metar_state(client, icao, target_date_local, city, now_utc):
     return result
 
 
+def load_strategy_observation_index(path, now_utc, max_age_sec):
+    cache = load_observation_cache(Path(path))
+    generated_at = parse_observation_utc(cache.get("generated_at_utc"))
+    if generated_at is None:
+        raise RuntimeError("observation cache missing generated_at_utc")
+    age_sec = (now_utc - generated_at).total_seconds()
+    if age_sec < -1 or age_sec > float(max_age_sec):
+        raise RuntimeError(
+            f"observation cache stale: age_sec={age_sec:.1f} max_age_sec={float(max_age_sec):.1f}"
+        )
+    return index_observation_cache(cache)
+
+
+def metar_state_from_observation_cache(observation_index, city, target_date):
+    result = {
+        "metar_current_max_f": None,
+        "metar_latest_temp_f": None,
+        "metar_latest_ts_utc": None,
+        "metar_obs_count_today": 0,
+        "metar_source": "none",
+    }
+    row = observation_index.get((str(city), str(target_date)))
+    if not row or str(row.get("status") or "") != "ok":
+        return result
+
+    running_max_c = row.get("running_max_c")
+    current_temp_c = row.get("current_temp_c")
+    try:
+        result["metar_current_max_f"] = int(round(float(running_max_c) * 9 / 5 + 32))
+    except (TypeError, ValueError):
+        pass
+    try:
+        result["metar_latest_temp_f"] = int(round(float(current_temp_c) * 9 / 5 + 32))
+    except (TypeError, ValueError):
+        try:
+            result["metar_latest_temp_f"] = int(round(float(row.get("tmpf_now"))))
+        except (TypeError, ValueError):
+            pass
+    result["metar_latest_ts_utc"] = row.get("last_obs_utc")
+    try:
+        result["metar_obs_count_today"] = int(row.get("n_obs") or row.get("record_count") or 0)
+    except (TypeError, ValueError):
+        pass
+    result["metar_source"] = f"observation_cache:{row.get('source') or 'unknown'}"
+    return result
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -1577,10 +1629,30 @@ def main():
         default=420.0,
         help="Maximum accepted age for the canonical market-books batch.",
     )
+    parser.add_argument(
+        "--observation-cache",
+        default="",
+        help="Join canonical observation-cache state instead of fetching METAR in this view.",
+    )
+    parser.add_argument(
+        "--observation-cache-max-age-sec",
+        type=float,
+        default=900.0,
+        help="Maximum accepted age for the canonical observation cache.",
+    )
     parser.add_argument("--now-utc", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     now_utc = parse_now_utc(args.now_utc)
+    observation_index = (
+        load_strategy_observation_index(
+            args.observation_cache,
+            now_utc,
+            args.observation_cache_max_age_sec,
+        )
+        if args.observation_cache
+        else {}
+    )
     now_beijing = now_utc + timedelta(hours=8)
     now_utc_naive = now_utc.replace(tzinfo=None)
     now_utc_hour = now_utc_naive.hour + now_utc_naive.minute / 60.0
@@ -1847,13 +1919,20 @@ def main():
             # Fetch METAR state (live or cache)
             icao = cfg.get("icao", "")
             observation_station = resolve_observation_station(city, cfg, official_observation_configs)
-            metar_state = fetch_live_metar_state(
-                weather_client,
-                observation_station["metar_icao"],
-                target_date,
-                city,
-                now_utc,
-            )
+            if args.observation_cache:
+                metar_state = metar_state_from_observation_cache(
+                    observation_index,
+                    city,
+                    target_date,
+                )
+            else:
+                metar_state = fetch_live_metar_state(
+                    weather_client,
+                    observation_station["metar_icao"],
+                    target_date,
+                    city,
+                    now_utc,
+                )
             if args.orderbook_scope == "strategy_live":
                 orderbook_targets = orderbook_targets_for_strategy_live(markets, unit, metar_state)
             elif args.orderbook_scope == "current_d1":
