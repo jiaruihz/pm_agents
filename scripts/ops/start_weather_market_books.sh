@@ -42,6 +42,12 @@ weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
      WEATHER_MARKET_BOOKS_BUDGET_SEC='$ORDERBOOK_BUDGET_SEC' \
      WEATHER_MARKET_BOOKS_SOURCE_MAX_AGE_SEC='$SOURCE_MAX_AGE_SEC' \
      WEATHER_MARKET_BOOKS_LOG_FILE='$LOG_FILE' \
+   && exec bash '$PROJECT_DIR/scripts/ops/_weather_market_books_loop_body.sh'"
+
+if ! weather_jrs_tmux "$TMUX_SOCKET" new-window -d -t "=$TMUX_SESSION" -n ws \
+  "export WEATHER_DATA_FEED_SERVICE_DIR='$SERVICE_DIR' \
+     WEATHER_MARKET_BOOKS_ROOT='$MARKET_BOOKS_ROOT' \
+     WEATHER_OBSERVATION_CACHE='$OBSERVATION_CACHE' \
      WEATHER_MARKET_BOOKS_WS_OUTPUT_ROOT='$WS_OUTPUT_ROOT' \
      WEATHER_MARKET_BOOKS_WS_HEALTH_PATH='$WS_HEALTH_PATH' \
      WEATHER_MARKET_BOOKS_WS_LOG_FILE='$WS_LOG_FILE' \
@@ -51,7 +57,11 @@ weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
      WEATHER_MARKET_BOOKS_WS_POST_INVALIDATION_SEC='$WS_POST_INVALIDATION_SEC' \
      WEATHER_MARKET_BOOKS_WS_EVENT_BURST_SEC='$WS_EVENT_BURST_SEC' \
      WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES='$WS_DAILY_PAYLOAD_BUDGET_BYTES' \
-   && exec bash '$PROJECT_DIR/scripts/ops/_weather_market_books_loop_body.sh'"
+   && exec bash '$PROJECT_DIR/scripts/ops/_weather_market_books_ws_body.sh'"
+then
+  weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "=$TMUX_SESSION" 2>/dev/null || true
+  exit 1
+fi
 
 for _ in {1..20}; do
   weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null || exit 1
