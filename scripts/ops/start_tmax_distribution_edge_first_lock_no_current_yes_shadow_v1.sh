@@ -3,7 +3,8 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
-RUNTIME_DIR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
+PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" pm_runtime_root)}"
+RUNTIME_DIR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_RUNTIME_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
 LOG_FILE="$RUNTIME_DIR/first_lock_no_current_yes_shadow_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
 SESSION="${TMAX_FIRST_LOCK_NO_CURRENT_YES_SESSION:-tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
