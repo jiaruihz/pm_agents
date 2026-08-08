@@ -120,3 +120,10 @@ def test_metar_reversal_entrypoint_passes_controller_runtime_dir() -> None:
     ).read_text(encoding="utf-8")
     assert "--runtime-dir" in text
     assert '$(printf \'%q\' "$RUNTIME_DIR")' in text
+
+
+def test_runtime_monitor_probes_controller_runtime_root() -> None:
+    text = (ROOT / "scripts/ops/start_weather_runtime_monitor.sh").read_text(
+        encoding="utf-8"
+    )
+    assert '--runtime-root "$PM_RUNTIME_ROOT/weather_edge_v1"' in text
