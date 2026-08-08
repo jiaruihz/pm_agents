@@ -1,6 +1,6 @@
 # Weather State Frame Parity v1
 
-Status: current-reference
+Status: snapshot
 Generated: 2026-07-06
 Scope: offline parity only; no live runner rewiring
 

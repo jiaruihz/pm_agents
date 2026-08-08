@@ -1,6 +1,6 @@
 # Weather Research Structure Hygiene
 
-Status: current-reference
+Status: snapshot
 Created: 2026-06-16
 
 ## Scope

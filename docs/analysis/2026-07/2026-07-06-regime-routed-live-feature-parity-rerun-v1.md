@@ -1,6 +1,6 @@
 # Regime-Routed Live Feature Parity Rerun v1
 
-Status: current-reference
+Status: snapshot
 Generated: 2026-07-06
 Scope: offline replay; no live order path touched
 

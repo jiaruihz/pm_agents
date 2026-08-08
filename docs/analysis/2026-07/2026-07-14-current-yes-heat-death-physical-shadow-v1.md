@@ -1,6 +1,6 @@
 # Current YES Heat-Death Physical Shadow v1
 
-Status: current-reference
+Status: snapshot
 Date: 2026-07-14
 Verdict: `inconclusive_forward_shadow_only`
 

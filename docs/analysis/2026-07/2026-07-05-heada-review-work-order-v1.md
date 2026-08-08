@@ -1,7 +1,7 @@
 # HeadA 审阅工单 v1（交 Codex 执行）
 
 Generated: 2026-07-05
-Status: `current-reference`（工单；证据权威性以引用的各 doc 为准）
+Status: `snapshot / completed-work-order`（历史工单；证据权威性以引用的各 doc 为准）
 背景输入：本日 HeadA 全链路审阅（执行链代码审 + canonical ROI + hot 子集 TP 重放 + ECMWF 采集回归定位）。
 证据 doc：[hot 子集 TP 重放 v1](2026-07-05-low-price-yes-hot-subset-tp-replay-v1.md) ·
 [数据审计+边界 v1](2026-07-04-low-price-yes-data-audit-hot-tail-boundary-v1.md) ·

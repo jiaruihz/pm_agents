@@ -1,7 +1,7 @@
 # HeadA / HeadB Forward Plan v1（实验方向 · 计划 · 待完善点）
 
 Generated: 2026-07-05
-Status: `current-reference`（计划文档；各项结论权威性以对应 living doc 为准）
+Status: `snapshot / superseded-for-current-action`（历史计划；当前动作以对应 living doc/registry 为准）
 输入：[数据审计+边界 v1](2026-07-04-low-price-yes-data-audit-hot-tail-boundary-v1.md) ·
 [live case review v1](2026-07-05-heada-headb-live-case-review-v1.md) ·
 [tail review v1](2026-07-02-low-price-yes-tail-research-review-v1.md) ·

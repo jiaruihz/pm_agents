@@ -1,6 +1,6 @@
 # Station-Basis 天气策略 · 完整设计与思路（主文档）
 
-Status: current-reference
+Status: snapshot / dormant strategy design
 Updated: 2026-06-15
 Source of truth: 策略设计与决策依据（实盘状态以 live-prep gate / 实际部署为准）
 Used by: WEATHER_DOCS_INDEX.md

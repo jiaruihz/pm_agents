@@ -1,6 +1,6 @@
 # Heat-Death Early Event Replay v1
 
-Status: current-reference
+Status: snapshot
 Verdict: `inconclusive_tiny_live_probe_only`
 
 ## 结论

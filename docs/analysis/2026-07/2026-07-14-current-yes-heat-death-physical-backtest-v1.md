@@ -1,6 +1,6 @@
 # Current YES Heat-Death Physical Backtest v1
 
-Status: current-reference
+Status: snapshot
 Date: 2026-07-14
 Verdict: `historical_proxy_positive_but_no_incremental_alpha`
 

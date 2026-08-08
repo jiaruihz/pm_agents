@@ -1,7 +1,7 @@
 # Mac Source-Events Gap Audit V1
 
 Date: 2026-07-06
-Status: current-reference
+Status: snapshot / superseded-by-current-data-pipeline
 
 ## Question
 

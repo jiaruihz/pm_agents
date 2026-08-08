@@ -1,6 +1,6 @@
 # d1_yes_high_mid：live/shadow 链路 vs 回测链路 Parity 审计 v1
 
-Status: `current-reference`
+Status: `snapshot`
 Date: 2026-07-15
 Runner: [scripts/ops/d1_yes_high_mid_shadow_v1.py](../../../scripts/ops/d1_yes_high_mid_shadow_v1.py)
 Backtest: [scripts/analysis/market_structure_edge/research_market_calibration_curve_v1.py](../../../scripts/analysis/market_structure_edge/research_market_calibration_curve_v1.py) · 策略 doc [2026-07-15-d1-yes-high-mid-strategy-v1.md](2026-07-15-d1-yes-high-mid-strategy-v1.md)
