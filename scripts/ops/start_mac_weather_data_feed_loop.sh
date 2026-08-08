@@ -233,6 +233,8 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
         --output-root "$OUTPUT_ROOT" \
         --cache-root "$CACHE_ROOT" \
         "$SNAPSHOT_COMMAND" -- \
+        --observation-cache "$OBS_OUTPUT" \
+        --observation-cache-max-age-sec 900 \
         --orderbook-source-latest "$MARKET_BOOKS_LATEST" \
         --orderbook-source-max-age-sec 420 \
         --orderbook-budget-sec "$SNAPSHOT_ORDERBOOK_BUDGET_SEC" \
