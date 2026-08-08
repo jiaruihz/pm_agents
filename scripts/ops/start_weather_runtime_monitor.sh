@@ -65,6 +65,19 @@ while true; do
     date -u +"[weather_runtime_monitor] runner_failed_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
     rm -f "$tmp_out"
   fi
+  proxy_out="$RUNTIME_DIR/market_proxy_health.out.tmp"
+  set +e
+  "$PY" -u scripts/ops/weather_market_proxy_ctl.py status >"$proxy_out" 2>>"$OUT_FILE"
+  proxy_rc=$?
+  set -e
+  if [[ -s "$proxy_out" ]]; then
+    mv "$proxy_out" "$RUNTIME_DIR/market_proxy_health.out"
+  else
+    rm -f "$proxy_out"
+  fi
+  if [[ "$proxy_rc" -ne 0 ]]; then
+    date -u +"[weather_runtime_monitor] market_proxy_health_failed_utc=%Y-%m-%dT%H:%M:%SZ returncode=$proxy_rc"
+  fi
   date -u +"[weather_runtime_monitor] cycle_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
   sleep "$INTERVAL_SECONDS"
 done
