@@ -40,6 +40,8 @@ def test_active_live_order_paths_follow_production_manifest(tmp_path) -> None:
         pm_runtime_root=tmp_path / "runtime",
         canonical_tmux_socket="test",
         canonical_tmux_binary=Path("/usr/bin/tmux"),
+        market_proxy_state_path=tmp_path / "runtime/market_proxy_state.json",
+        market_proxy_default_url="http://127.0.0.1:7897",
         managed_runtimes=(
             WeatherManagedRuntimeSpec(
                 instance_id="active", tmux_session="active", role="strategy",

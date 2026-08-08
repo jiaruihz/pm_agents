@@ -612,11 +612,12 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
 def write_report(reports: list[StrategyRuntimeOrderMigrationReport], report_dir: str | Path) -> Path:
     out_dir = Path(report_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = out_dir / f"strategy_runtime_order_migration_{ts}.json"
+    out_path = out_dir / "strategy_runtime_order_migration_latest.json"
+    pending_path = out_dir / ".strategy_runtime_order_migration_latest.json.tmp"
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "reports": [report.as_dict() for report in reports],
     }
-    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    pending_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    pending_path.replace(out_path)
     return out_path
