@@ -254,37 +254,39 @@ def select_tokens(
         selected_labels: set[str] = set()
         grace_labels: set[str] = set()
 
-        if (city, target_date) in burst_keys:
+        unit = _unit_for_records(rows)
+        running_max = _running_max_native(observations.get((city, target_date)), unit)
+        if running_max is None:
+            # Missing settlement-facing state must not silently prune a real
+            # expression.  The bounded five-city universe makes this fail-open
+            # affordable while the complete REST ladder remains authoritative.
             selected_labels.update(ordered)
-            burst_cities.append(city)
+            missing_observation_cities.append(city)
         else:
-            unit = _unit_for_records(rows)
-            running_max = _running_max_native(observations.get((city, target_date)), unit)
-            if running_max is None:
-                # Missing settlement-facing state must not silently prune a real
-                # expression.  The bounded five-city universe makes this fail-open
-                # affordable while the complete REST ladder remains authoritative.
-                selected_labels.update(ordered)
-                missing_observation_cities.append(city)
+            possible = [
+                label
+                for label in ordered
+                if parsed_by_label[label].top
+                or parsed_by_label[label].high is None
+                or float(parsed_by_label[label].high) >= running_max
+            ]
+            if (city, target_date) in burst_keys:
+                # A source event promotes the full still-possible distribution,
+                # never brackets that the running maximum has already invalidated.
+                selected_labels.update(possible)
+                burst_cities.append(city)
             else:
-                possible = [
-                    label
-                    for label in ordered
-                    if parsed_by_label[label].top
-                    or parsed_by_label[label].high is None
-                    or float(parsed_by_label[label].high) >= running_max
-                ]
                 selected_labels.update(possible[:active_bracket_count])
-                for label in ordered:
-                    parsed = parsed_by_label[label]
-                    if parsed.top or parsed.high is None or float(parsed.high) >= running_max:
-                        continue
-                    state_key = f"{city}|{target_date}|{label}"
-                    live_state_keys.add(state_key)
-                    invalidated_at = invalidation_state.setdefault(state_key, now_epoch)
-                    if now_epoch - invalidated_at <= post_invalidation_sec:
-                        selected_labels.add(label)
-                        grace_labels.add(label)
+            for label in ordered:
+                parsed = parsed_by_label[label]
+                if parsed.top or parsed.high is None or float(parsed.high) >= running_max:
+                    continue
+                state_key = f"{city}|{target_date}|{label}"
+                live_state_keys.add(state_key)
+                invalidated_at = invalidation_state.setdefault(state_key, now_epoch)
+                if now_epoch - invalidated_at <= post_invalidation_sec:
+                    selected_labels.add(label)
+                    grace_labels.add(label)
 
         for label in selected_labels:
             for row in by_label.get(label, []):
@@ -631,11 +633,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cities", nargs="+", default=list(DEFAULT_CITIES))
     parser.add_argument("--active-bracket-count", type=int, default=5)
     parser.add_argument("--post-invalidation-sec", type=float, default=300.0)
-    parser.add_argument("--event-burst-sec", type=float, default=600.0)
+    parser.add_argument("--event-burst-sec", type=float, default=120.0)
     parser.add_argument("--reconcile-sec", type=float, default=5.0)
     parser.add_argument("--health-interval-sec", type=float, default=10.0)
     parser.add_argument("--rest-max-age-sec", type=float, default=420.0)
-    parser.add_argument("--daily-payload-budget-bytes", type=int, default=500_000_000)
+    parser.add_argument("--daily-payload-budget-bytes", type=int, default=1_000_000_000)
     parser.add_argument("--select-once", action="store_true")
     return parser
 
