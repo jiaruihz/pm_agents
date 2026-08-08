@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import scripts.ops.weather_fast_source_stale_book_observer as observer
 from scripts.ops.weather_fast_source_stale_book_observer import (
     MarketToken,
+    active_source_window_health,
     build_active_bracket_book_rows,
     bracket_from_question,
     bracket_lookup,
@@ -48,6 +49,28 @@ def test_target_date_routes_per_city_local_calendar():
     assert target_date_for_city("Atlanta", now) == "2026-07-13"
     assert target_date_for_city("Tokyo", now) == "2026-07-14"
     assert target_date_for_city("Atlanta", now, "2026-07-20") == "2026-07-20"
+
+
+def test_active_source_window_health_distinguishes_idle_from_outage(tmp_path):
+    latest = tmp_path / "latest.json"
+    latest.write_text(
+        json.dumps({"active_job_cities": ["Atlanta"]}),
+        encoding="utf-8",
+    )
+
+    idle = active_source_window_health({}, {"Helsinki"}, latest)
+    outage = active_source_window_health({}, {"Atlanta"}, latest)
+
+    assert idle == {
+        "status": "idle_outside_source_window",
+        "missing_active_source_cities": [],
+        "outside_source_window_cities": ["Helsinki"],
+    }
+    assert outage == {
+        "status": "degraded_missing_active_source",
+        "missing_active_source_cities": ["Atlanta"],
+        "outside_source_window_cities": [],
+    }
 
 
 def test_source_latest_keeps_simultaneous_local_dates_and_market_units(tmp_path):

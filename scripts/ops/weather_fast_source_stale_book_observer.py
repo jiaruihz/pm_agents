@@ -942,6 +942,43 @@ def build_active_bracket_book_rows(
     return rows
 
 
+def active_source_window_health(
+    source_rows: dict[tuple[str, str], dict[str, Any]],
+    active_cities: set[str],
+    high_frequency_latest: Path,
+) -> dict[str, Any]:
+    """Separate an expected off-hours idle from an in-window source outage."""
+    present = {city for city, _target_date in source_rows}
+    missing = active_cities - present
+    if not missing:
+        return {
+            "status": "ok",
+            "missing_active_source_cities": [],
+            "outside_source_window_cities": [],
+        }
+
+    try:
+        payload = json.loads(high_frequency_latest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    raw_active_jobs = payload.get("active_job_cities")
+    if not isinstance(raw_active_jobs, list):
+        return {
+            "status": "degraded_missing_active_source",
+            "missing_active_source_cities": sorted(missing),
+            "outside_source_window_cities": [],
+        }
+
+    active_job_cities = {market_city(str(city)) for city in raw_active_jobs}
+    expected_now = missing & active_job_cities
+    outside_window = missing - active_job_cities
+    return {
+        "status": "degraded_missing_active_source" if expected_now else "idle_outside_source_window",
+        "missing_active_source_cities": sorted(expected_now),
+        "outside_source_window_cities": sorted(outside_window),
+    }
+
+
 def classify_t_minus_1_no(quotes: dict[str, Any], stale_no_ask_max: float, bot_priced_no_bid_min: float) -> dict[str, Any]:
     no_quote = ((quotes.get("t_minus_1") or {}).get("no") or {})
     ask = safe_float(no_quote.get("fresh_best_ask"))
@@ -1109,6 +1146,20 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             gamma_on_missing_city_dates.append(f"{city}|{target_date}")
     snapshot_quotes = build_snapshot_quote_index(orderbook_path, target_dates)
 
+    active_bracket_cities = {market_city(city) for city in (args.active_bracket_cities or [])}
+    source_window_health = (
+        active_source_window_health(
+            source_rows,
+            active_bracket_cities,
+            Path(args.high_frequency_latest),
+        )
+        if args.continuous_active_brackets
+        else {
+            "status": "ok",
+            "missing_active_source_cities": [],
+            "outside_source_window_cities": [],
+        }
+    )
     active_bracket_rows: list[dict[str, Any]] = []
     if args.continuous_active_brackets and not args.no_fresh_orderbook:
         active_bracket_rows = build_active_bracket_book_rows(
@@ -1116,7 +1167,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             metar_rows=metar_rows,
             market_index=market_index,
             market_proxy=args.market_proxy or "",
-            active_cities={market_city(city) for city in (args.active_bracket_cities or [])},
+            active_cities=active_bracket_cities,
             offsets=list(args.active_bracket_offsets),
             extreme_kind=extreme_kind,
         )
@@ -1364,7 +1415,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     }
     save_state(state_path, state)
     latest = {
-        "status": "ok",
+        "status": source_window_health["status"],
         "schema_version": "fast_source_stale_book_latest_v2",
         "generated_at_utc": iso(),
         "target_date": args.target_date or "per_city_local",
@@ -1386,7 +1437,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "quote_snapshots": len(quote_rows),
         "active_bracket_book_snapshots": len(active_bracket_rows),
         "continuous_active_brackets": bool(args.continuous_active_brackets),
-        "active_bracket_cities": sorted({market_city(city) for city in (args.active_bracket_cities or [])}),
+        "active_bracket_cities": sorted(active_bracket_cities),
+        "missing_active_source_cities": source_window_health["missing_active_source_cities"],
+        "outside_source_window_cities": source_window_health["outside_source_window_cities"],
+        "high_frequency_latest_path": str(args.high_frequency_latest),
         "active_bracket_offsets": list(args.active_bracket_offsets),
         "fresh_orderbook_enabled": not args.no_fresh_orderbook,
         "fresh_scope": args.fresh_scope,
