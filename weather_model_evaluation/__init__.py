@@ -6,6 +6,19 @@ from .calibration import (
     simplex_log_ratio_features,
 )
 from .lineage import gzip_content_sha256
+from .ordinal_model import OrderedThresholdClassifier
+from .prior_model import EmpiricalPriorModel
+from .model_governance import (
+    AdmissionDecision,
+    AdmissionEvidence,
+    ExperimentRun,
+    FeatureDefinition,
+    MechanismHypothesis,
+    StableModelSpec,
+    decide_hypothesis_admission,
+    experiment_alias_manifest,
+    validate_hypothesis_registry,
+)
 from .contracts import (
     EVENT_SCHEMA_VERSION,
     PREDICTION_SCHEMA_VERSION,
@@ -41,6 +54,8 @@ from .replay import (
 from .reporting import build_evaluation_report
 
 __all__ = [
+    "AdmissionDecision",
+    "AdmissionEvidence",
     "binary_calibration_table",
     "binary_loss_values",
     "binary_score",
@@ -52,17 +67,22 @@ __all__ = [
     "composite_grain_weights",
     "date_block_bootstrap_delta",
     "EVENT_SCHEMA_VERSION",
+    "EmpiricalPriorModel",
     "EventEnvelope",
+    "ExperimentRun",
     "event_bin_from_cumulative_labels",
     "event_probabilities_to_cumulative",
     "fit_simplex_logit_calibrator",
     "FixtureCheckpointBuilder",
     "FixtureInputCatalog",
+    "FeatureDefinition",
     "gzip_content_sha256",
     "hazards_to_event_probabilities",
     "integrated_horizon_score",
+    "MechanismHypothesis",
     "ordinal_loss_values",
     "ordinal_score",
+    "OrderedThresholdClassifier",
     "PREDICTION_SCHEMA_VERSION",
     "predict_simplex_logit_calibrator",
     "ReplayResult",
@@ -70,6 +90,10 @@ __all__ = [
     "simplex_log_ratio_features",
     "stable_json",
     "stable_sha256",
+    "StableModelSpec",
+    "decide_hypothesis_admission",
+    "experiment_alias_manifest",
     "validate_prediction_row",
+    "validate_hypothesis_registry",
     "VirtualClock",
 ]
