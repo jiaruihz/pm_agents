@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train and evaluate a plateau-aware peak-forming hazard model for current YES.
+"""Train the plateau-aware current-YES peak-forming hazard family.
 
 The model answers a narrower question than the generic current-YES artifact:
 when the observed temperature is still at the running max, will that current
@@ -53,8 +53,8 @@ OUT_ARTIFACT = OUT_DIR / "peak_forming_hazard_plateau_model.json"
 OUT_SCORED = OUT_DIR / "peak_forming_plateau_scored_rows.csv"
 OUT_METRICS = OUT_DIR / "model_metrics.csv"
 OUT_RULES = OUT_DIR / "rule_comparison.csv"
-OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-21-current-yes-peak-forming-hazard-v2.json"
-OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-21-current-yes-peak-forming-hazard-v2.md"
+OUT_JSON = OUT_DIR / "summary.json"
+OUT_MD = OUT_DIR / "report.md"
 
 SEED = 20260621
 TRAIN_END = "2026-05-31"

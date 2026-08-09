@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train and evaluate current-YES future-break hazard v3.
+"""Train the direct current-YES future-break hazard family.
 
 V3 deliberately separates the weather question from the trade question:
 
@@ -37,8 +37,8 @@ OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_yes_future_break_hazar
 OUT_SCORED = OUT_DIR / "future_break_hazard_v3_scored_rows.csv"
 OUT_METRICS = OUT_DIR / "future_break_hazard_v3_model_metrics.csv"
 OUT_RULES = OUT_DIR / "future_break_hazard_v3_rule_comparison.csv"
-OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-23-current-yes-future-break-hazard-v3.json"
-OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-23-current-yes-future-break-hazard-v3.md"
+OUT_JSON = OUT_DIR / "summary.json"
+OUT_MD = OUT_DIR / "report.md"
 
 SEED = 20260623
 TRAIN_END = "2026-05-31"

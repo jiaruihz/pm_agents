@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train and evaluate current-YES future-break hazard v3.1.
+"""Train the market-residual current-YES future-break hazard family.
 
 V3.1 keeps the V3 future-break label, but changes the modeling target:
 the model first calibrates the market ask, then lets weather/plateau
@@ -23,7 +23,10 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, brier_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-import train_current_yes_future_break_hazard_v3 as v3
+if __package__:
+    from . import current_yes_future_break_hazard as v3
+else:
+    import current_yes_future_break_hazard as v3
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,8 +34,8 @@ OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_yes_future_break_hazar
 OUT_SCORED = OUT_DIR / "future_break_hazard_v31_scored_rows.csv"
 OUT_METRICS = OUT_DIR / "future_break_hazard_v31_model_metrics.csv"
 OUT_RULES = OUT_DIR / "future_break_hazard_v31_rule_comparison.csv"
-OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-23-current-yes-future-break-hazard-v31.json"
-OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-23-current-yes-future-break-hazard-v31.md"
+OUT_JSON = OUT_DIR / "summary.json"
+OUT_MD = OUT_DIR / "report.md"
 
 SEED = 20260623
 INNER_VALID_START = "2026-05-28"

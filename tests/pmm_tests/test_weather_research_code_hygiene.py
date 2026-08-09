@@ -7,13 +7,20 @@ import pytest
 
 from scripts.analysis.reheat_risk import late_window_shared
 from scripts.analysis.reheat_risk import peak_forming_hazard_shared
+from scripts.analysis.reheat_risk import peak_yes_timing_shared
 from scripts.analysis.reheat_risk import weather_research_data_shared
 from scripts.analysis.reheat_risk import (
     research_late_window_residual_capture_feature_layer_v2 as feature_layer_v2,
 )
 from scripts.analysis.reheat_risk import research_late_window_residual_capture_v1 as legacy_v1
 from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v1 as peak_v1
-from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v2 as peak_v2
+from scripts.analysis.reheat_risk import current_yes_peak_forming_hazard as peak_v2
+from scripts.analysis.reheat_risk import (
+    research_current_yes_peak_yes_execution_timing_v1 as peak_yes_execution,
+)
+from scripts.analysis.reheat_risk import (
+    research_current_yes_peak_yes_timing_shadow_telemetry_v1 as peak_yes_telemetry,
+)
 from scripts.analysis.reheat_risk import research_tmax_cross_hour_coherence_audit_v1 as coherence_v1
 from scripts.analysis.reheat_risk import research_tmax_cross_hour_coherence_audit_v2 as coherence_v2
 from scripts.ops import check_weather_docs
@@ -108,6 +115,13 @@ def test_peak_forming_versions_use_shared_version_neutral_helpers():
     assert v1["orders"] == v2["orders"] == 2
     assert v1["cost"] == pytest.approx(1.2)
     assert v1["pnl"] == pytest.approx(-0.2)
+
+
+def test_peak_yes_timing_variants_share_serialization_helpers():
+    for variant in (peak_yes_execution, peak_yes_telemetry):
+        assert variant.json_ready is peak_yes_timing_shared.json_ready
+        assert variant.pct is peak_yes_timing_shared.pct
+        assert variant.num is peak_yes_timing_shared.num
 
 
 def test_weather_research_data_helpers_keep_one_read_only_contract(tmp_path):

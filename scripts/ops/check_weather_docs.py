@@ -231,6 +231,8 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
         ),
     }
     for path, phrases in ambiguous_history_claims.items():
+        if not (ROOT / path).is_file():
+            continue
         text = read(path)
         for phrase in phrases:
             if phrase in text:
@@ -380,6 +382,11 @@ def active_code_corpus(tracked: set[str]) -> str:
         path = ROOT / relative
         if path.suffix.lower() not in {".py", ".sh", ".yaml", ".yml", ".json"}:
             continue
+        # During a cleanup batch the real index still lists files deleted in
+        # the worktree.  Treat them as absent from active code; otherwise the
+        # governance check crashes before it can validate the pending diff.
+        if not path.is_file():
+            continue
         chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
     return "\n".join(chunks)
 
@@ -514,6 +521,7 @@ def check_research_script_debt(
         for relative in tracked
         if relative.startswith(("scripts/analysis/", "scripts/wallets/"))
         and relative.endswith(".py")
+        and (ROOT / relative).exists()
     )
     entrypoints = [
         relative for relative in scripts if Path(relative).name.startswith(prefixes)

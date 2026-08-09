@@ -112,15 +112,50 @@ Current routing:
   `WEATHER_INTRADAY_DECISION_CASEBOOK.md`;
 - July challenger evidence:
   [v3 performance](2026-07/2026-07-29-current-yes-core-carry-v3-upgrade-and-performance-v1.md),
-  [semantic v2](2026-07/2026-07-29-current-yes-core-carry-physical-semantic-audit-v2.md),
-  [synoptic/advection v3](2026-07/2026-07-29-current-yes-core-carry-synoptic-advection-v3.md),
-  [late plateau](2026-07/2026-07-29-current-yes-late-semantic-plateau-challenger-v1.md),
   [post-rebracket A/B](2026-07/2026-07-30-current-yes-core-carry-post-rebracket-event-ab-v1.md),
   and [maker lineage](2026-07/2026-07-29-current-yes-core-carry-maker-fill-lineage-v2.md).
 
-This section is the semantic replacement for treating
-`2026-06-21-current-yes-model-map-and-version-guide.md` as a living model map.
-That dated document remains a historical snapshot.
+The three small semantic reports are consolidated here rather than retained as
+parallel dated references:
+
+- precipitation/gust/pressure augmentation: overall Brier `0.07494` versus
+  core `0.07445`; frozen `0.08811` versus `0.08749`; rejected;
+- synoptic advection + vertical mixing: 1,349 checkpoints / 31 dates, overall
+  Brier `0.07638` versus core `0.07445`, frozen `0.08837` versus `0.08749`;
+  rejected, with partial PBL coverage retained as a mechanism clue;
+- late semantic plateau: historical OOF improved (`0.0032` vs `0.0039`) but
+  frozen worsened (`0.000037` vs `0.000029`); Wellington-only upward exits and
+  report-time proxy prevent promotion.
+
+The June Codex-preflight prompt experiments are also consolidated here. They
+used only 24 settled matched rows from 2026-06-18..21; the best inspected prompt
+kept 17 rows (15-2, estimated ROI `+15.31%`) but was chosen after comparing
+three prompts, had no frozen forward denominator, and was never a live gate.
+The durable result is `inconclusive / do not use LLM output as a blocking
+label`; prompt transcripts and replay cache are machine artifacts, not two
+separate strategy documents.
+
+Historical Helsinki reversal incident: the branch bought 20°C YES and EFHK
+printed 21°C two minutes later. The actionable bugs were fixed UTC+2 instead of
+`Europe/Helsinki` DST and trading immediately before the next routine report
+with stale observation context. The reusable outcome was the shared IANA
+timezone/observation-clock contract; the old one-city guard values and runner
+status are not current production configuration.
+
+The two July 30 Core Carry operational slices are consolidated here as well.
+The live funnel had 324 completed checkpoints over three target dates: 42 had
+positive model-minus-mid residual, but only 11 remained positive after the
+full five-share ask ladder and official fee; all 11 became first-positive
+city-day signals. This was expected selector/execution-cost attrition, not a
+collector outage. In the complementary historical slice, all 318 checkpoints
+with `market_mid < model_p <= taker_cost` lost 2.42% fee-adjusted ROI; even the
+unexecutable midpoint/zero-fee upper bound returned only +0.18%. Therefore the
+filtered delta is not missing taker alpha and does not justify a wider live
+gate; maker-only evidence still requires actual fill/adverse-selection data.
+
+This section replaces the deleted 2026-06-21 numbered model map; the version
+sequence remains recoverable from git history but is no longer a current or
+parallel documentation entrypoint.
 
 ### What first-seen transition research is for
 
@@ -288,24 +323,13 @@ Current conclusion:
   local and N100 `weather-predict` copies are not git worktrees, so this is a
   deploy/repo-state blocker rather than a modeling blocker. Do not claim
   production native peak fields are live until this is resolved.
-- Current-YES forecast peak live fallback v16 is complete in
-  `docs/analysis/2026-06/2026-06-18-theta-current-yes-forecast-peak-live-fallback-v16.md`.
-  The `pm_agent` runner can now derive forecast peak fields itself from
-  Open-Meteo hourly forecast when snapshots lack native `forecast_peak_*`,
-  cache the payload, and log `forecast_peak_fetch_status` into plans/forward
-  telemetry. This does not change the v9 trading rule; it only makes forward
-  telemetry complete enough to score forecast-clock features before
-  `weather-predict` native fields are deployed. Runtime activation still
-  requires the N100 current-YES loop to load the new code.
-- Telemetry activation runbook v17 is complete in
-  `docs/analysis/2026-06/2026-06-18-theta-current-yes-telemetry-activation-runbook-v17.md`.
-  The start script now has an explicit `THETA_CURRENT_YES_MODE=telemetry` path
-  that omits live flags and can accumulate forward would-order rows with
-  forecast peak fields. The default remains `live`, so this is not a silent
-  production behavior change. A read-only status helper now reports loop state,
-  latest summary counts, telemetry decision-status distribution, and forecast
-  peak fetch status. N100 activation still needs explicit deploy/start
-  confirmation.
+- Historical v16-v21 telemetry rollout is retained only as incident history:
+  the old runner added forecast-peak fallback, telemetry mode and a separate
+  N100 runtime; the first remote cycles produced audit rows but no plans. A
+  forecast hard guard was then briefly deployed and removed the next day by
+  v22. Those N100 paths, PIDs and start commands are retired and are not a
+  recovery contract; current process truth comes only from the Mac controller,
+  manifest and raw/exchange evidence.
 - Feature-factory forecast peak slices v18 are complete in
   `docs/analysis/2026-06/2026-06-18-reheat-feature-factory-forecast-peak-slices-v18.md`.
   The shared `reheat_feature_factory_v1` now consumes
@@ -316,26 +340,6 @@ Current conclusion:
   24.6% and ROI -18.0%, while `diagnostic_gfs_1_to_4h_after_peak` has win rate
   80.8% and ROI +0.8% with CI still crossing zero. This keeps forecast-clock in
   the model/telemetry layer, not as a live hard gate.
-- Parallel forecast telemetry rollout v19 is deployment-ready in
-  `docs/analysis/2026-06/2026-06-18-theta-current-yes-parallel-telemetry-rollout-v19.md`.
-  The runner and wrappers now support a separate
-  `theta_current_yes_forecast_telemetry_v1` runtime via
-  `THETA_CURRENT_YES_RUNTIME_DIR` and `THETA_CURRENT_YES_STRATEGY_INSTANCE`.
-  This allows no-live forward telemetry to run alongside the existing
-  `theta_current_yes_tiny_live_v1` loop instead of sharing its PID/output files.
-- Parallel telemetry deploy v20 is complete in
-  `docs/analysis/2026-06/2026-06-18-theta-current-yes-parallel-telemetry-deploy-v20.md`.
-  N100 now runs `theta_current_yes_forecast_telemetry_v1` as telemetry-only
-  alongside the old live loop. First remote cycle wrote 42 audit rows with
-  `live_enabled=False` and `plans=0`; useful forecast-peak rows require future
-  active local windows.
-- Forecast guard live upgrade v21 is deployed in
-  `docs/analysis/2026-06/2026-06-18-theta-current-yes-forecast-guard-live-upgrade-v21.md`.
-  The default live rule now rejects missing forecast peak and rejects forecast
-  peak delta `< -1.999h`, blocking the clearest v18 danger bucket before any
-  tiny-live order. The old live process was replaced by a single new
-  `theta_current_yes_tiny_live_v1` process on N100; first post-restart cycle had
-  `plans=0`, and the live order file stayed at 5 historical rows.
 - Peak-forming hazard v1 is complete in
   `docs/analysis/2026-06/2026-06-19-current-yes-peak-forming-hazard-v1.md`.
   It trains a dedicated peak-forming model on the shared feature factory instead
@@ -348,6 +352,18 @@ Current conclusion:
   note: after sync + DB rebuild, orderbook/pm_history are newer, but the shared
   observed-detail input still materializes only through 2026-06-14; next work is
   extending official observation/observed-detail coverage before retraining.
+- Peak-forming hazard v2 added plateau duration/count semantics on the same
+  early-window denominator, but failed its forward gate: the primary rule was
+  283 rows / 17 dates / ROI -0.9% with date-bootstrap CI [-8.9%, +7.5%]. Its
+  reproducible report now belongs under
+  `docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v2/report.md`;
+  it is historical lineage, not a current shadow candidate.
+- Future-break V3/V3.1 are consolidated into this family record. V3's primary
+  rule was ROI +0.2% with date CI [-7.5%, +7.9%], and its positive tail had
+  only three forward dates. V3.1's residual rule was 141 rows / ROI -1.6% with
+  CI [-9.8%, +5.7%]. Both are `superseded`, and their rerunnable reports now
+  route to the matching `generated/current_yes_future_break_hazard_v3*`
+  artifact directories rather than human-facing dated documents.
 - Data freshness audit v1 is complete in
   `docs/analysis/2026-06/2026-06-19-reheat-feature-data-freshness-v1.md`.
   It explains why the 2026-06-19 run still trained on a feature table ending

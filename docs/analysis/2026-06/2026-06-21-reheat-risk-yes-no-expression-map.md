@@ -1,7 +1,13 @@
 # Reheat-Risk YES/NO 表达地图
 
 日期：2026-06-21
-状态：人工阅读入口 / 共享数据层与策略头分层说明
+状态：`historical architecture reference / superseded_for_decision_use`
+
+> ⚠️ “共享物理底座、不同交易 label/表达头”的架构原则仍有效；本文列出的策略
+> 状态、晋级判断和历史数字已被 7 月 canonical/PIT/fee/forward 审计取代。当前状态
+> 读 `WEATHER_STRATEGY_REGISTRY.md`，current-YES/hazard 结论读
+> `analysis/reheat_risk.md` 顶部 correction。不要据此恢复旧 live 或把多个表达强行
+> 合并。
 
 ## 一句话
 
@@ -118,7 +124,7 @@ target_yes_wins / target_hit
 
 | 表达头 | 当前状态 | 读哪个文档 |
 |---|---|---|
-| current YES | tiny-live / fragile / 需要 execution 与状态层修正 | `2026-06-21-current-yes-model-map-and-version-guide.md` |
+| current YES | historical tiny-live / fragile；当前状态读 registry/controller | `../reheat_risk.md` |
 | higher NO carry | shadow telemetry only | `2026-06-16-higher-no-carry-expression-selector-v1.md` |
 | low-price YES reheat reversal | research / runner ready locally / forward shadow blocked | `2026-06-18-low-price-yes-reheat-shadow-v1.md` |
 | trend-signal reheat reversal | planned v2 research | `2026-06-19-reheat-tail-mechanism-feature-gap-v1.md` future direction B |
@@ -164,7 +170,7 @@ target YES ask
 
 ```text
 current-YES 专文
-  docs/analysis/2026-06/2026-06-21-current-yes-model-map-and-version-guide.md
+  docs/analysis/reheat_risk.md
 
 本表达地图
   docs/analysis/2026-06/2026-06-21-reheat-risk-yes-no-expression-map.md

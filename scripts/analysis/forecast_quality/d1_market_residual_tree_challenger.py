@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Nested expanding-OOF nonlinear tree challengers for D-1 market residuals.
+"""Reusable nested-OOF nonlinear tree challenger for the D-1 tournament.
 
 The tree learns rung-level nonlinear interactions.  Its normalized probability
 vector is combined with the contemporaneous market in log space.  Blend alpha
@@ -251,7 +251,7 @@ def render(summary: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def run_experiment() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--forecasts", type=Path, default=hierarchy.DEFAULT_FORECASTS)
     parser.add_argument("--history", type=Path, default=hierarchy.DEFAULT_HISTORY)
@@ -302,7 +302,3 @@ def main() -> int:
     args.report.write_text(render(summary), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import numpy as np
 
-from scripts.analysis.forecast_quality import research_d1_market_residual_tree_v3 as subject
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts/analysis/forecast_quality/d1_market_residual_tree_challenger.py"
+SPEC = importlib.util.spec_from_file_location("d1_market_residual_tree_challenger", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+subject = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(subject)
 
 
 def test_zero_blend_returns_market_exactly() -> None:

@@ -9,13 +9,17 @@ no-reheat states?
 from __future__ import annotations
 
 import json
-import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+if __package__:
+    from .peak_yes_timing_shared import json_ready, num, pct
+else:
+    from peak_yes_timing_shared import json_ready, num, pct
 
 ROOT = Path(__file__).resolve().parents[3]
 SCORED = ROOT / "docs/analysis/2026-06/generated/current_yes_peak_yes_mechanism_v4/peak_yes_mechanism_v4_scored_rows.csv"
@@ -35,43 +39,6 @@ def now_utc() -> str:
 
 def rel(path: Path) -> str:
     return str(path.relative_to(ROOT))
-
-
-def json_ready(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): json_ready(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [json_ready(v) for v in value]
-    if isinstance(value, (np.integer,)):
-        return int(value)
-    if isinstance(value, (np.floating, float)):
-        out = float(value)
-        return None if not math.isfinite(out) else out
-    return value
-
-
-def pct(value: Any) -> str:
-    if value is None:
-        return "NA"
-    try:
-        out = float(value)
-    except Exception:
-        return "NA"
-    if not math.isfinite(out):
-        return "NA"
-    return f"{out * 100:+.1f}%"
-
-
-def num(value: Any, digits: int = 3) -> str:
-    if value is None:
-        return "NA"
-    try:
-        out = float(value)
-    except Exception:
-        return "NA"
-    if not math.isfinite(out):
-        return "NA"
-    return f"{out:.{digits}f}"
 
 
 def date_bootstrap_roi(frame: pd.DataFrame, reps: int = 4000) -> list[float | None]:
