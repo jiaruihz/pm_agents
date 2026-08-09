@@ -121,9 +121,6 @@ class WeatherProductionSpec:
     def forecast_enrichment_root(self) -> Path:
         return self.data_feed_output_root() / "forecast_enrichment"
 
-    def high_frequency_observations_root(self) -> Path:
-        return self.data_feed_output_root() / "high_frequency_observations"
-
     def live_cross_observations_root(self) -> Path:
         return self.data_feed_output_root() / "live_cross_observations"
 

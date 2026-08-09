@@ -114,7 +114,7 @@ def test_prod_health_check_fails_incomplete_snapshot_orderbook_coverage(tmp_path
     assert report["target_incomplete_count"] == 10
 
 
-def test_prod_health_check_fails_stale_fast_observation_state(tmp_path):
+def test_prod_health_check_fails_stale_live_cross_observation_state(tmp_path):
     state = tmp_path / "state.json"
     state.write_text(json.dumps({"updated_at_utc": "2026-07-18T03:30:00Z"}), encoding="utf-8")
     report = check_fast_observation_state(
@@ -128,7 +128,7 @@ def test_prod_health_check_fails_stale_fast_observation_state(tmp_path):
     sections = {
         "snapshot_parity": {"status": "ok"},
         "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
-        "fast_observation_state": report,
+        "live_cross_observation_state": report,
         "telemetry": [],
         "live_orders": {},
         "summaries": [],
@@ -136,11 +136,10 @@ def test_prod_health_check_fails_stale_fast_observation_state(tmp_path):
     assert overall_status(sections) == "fail"
 
 
-def test_prod_health_check_uses_live_cross_as_active_fast_route():
+def test_prod_health_check_has_one_active_fast_route():
     sections = {
         "snapshot_parity": {"status": "ok"},
         "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
-        "fast_observation_state": {"status": "stale"},
         "live_cross_observation_state": {"status": "ok"},
         "telemetry": [],
         "live_orders": {},
@@ -148,6 +147,18 @@ def test_prod_health_check_uses_live_cross_as_active_fast_route():
     }
 
     assert overall_status(sections) == "ok"
+
+
+def test_prod_health_check_fails_when_active_fast_route_is_missing():
+    sections = {
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
+        "telemetry": [],
+        "live_orders": {},
+        "summaries": [],
+    }
+
+    assert overall_status(sections) == "fail"
 
 
 def test_prod_health_check_fails_recent_running_max_regression(tmp_path):
@@ -730,6 +741,7 @@ def test_prod_health_overall_status_warns_on_stale_but_fails_on_structural_error
     sections = {
         "snapshot_parity": {"status": "ok"},
         "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": True},
+        "live_cross_observation_state": {"status": "ok"},
         "telemetry": [{"parse_error_count": 0, "duplicate_decision_count": 0}],
         "live_orders": {"parse_error_count": 0, "duplicate_order_id_count": 0, "duplicate_strategy_city_token_count": 0},
         "summaries": [],
@@ -877,6 +889,7 @@ def test_overall_status_does_not_warn_on_historical_only_order_duplicates():
     sections = {
         "snapshot_parity": {"status": "ok"},
         "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
+        "live_cross_observation_state": {"status": "ok"},
         "telemetry": [],
         "live_orders": {
             "parse_error_count": 0,

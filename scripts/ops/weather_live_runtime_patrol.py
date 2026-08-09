@@ -15,10 +15,13 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+PRODUCTION_SPEC = load_production_spec()
+DEFAULT_RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
 RUNNER_PATTERN = "scripts/ops/weather_fast_source_prev_no_trial.py --loop"
 DETERMINISTIC_SUBMIT_ERRORS = (
     "invalid expiration value",
@@ -229,7 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--failure-threshold", type=int, default=3)
     parser.add_argument(
         "--fast-source-state",
-        default=str(DEFAULT_RUNTIME_ROOT / "output/high_frequency_observations/state.json"),
+        default=str(PRODUCTION_SPEC.live_cross_observations_root() / "state.json"),
     )
     parser.add_argument("--max-fast-source-age-sec", type=float, default=180.0)
     parser.add_argument("--stop-runner-on-submit-failure", action="store_true")

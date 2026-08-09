@@ -29,7 +29,6 @@ MAC_DATA_FEED_RUNTIME = PRODUCTION_SPEC.data_feed_runtime_root
 DEFAULT_SNAPSHOT_DIR = PRODUCTION_SPEC.strategy_paper_snapshot_dir()
 DEFAULT_ORDERBOOK_DIR = PRODUCTION_SPEC.resolved_market_books_root() / "batches"
 DEFAULT_FORECAST_CURVE_DIR = PRODUCTION_SPEC.forecast_hourly_curve_dir()
-DEFAULT_FAST_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/high_frequency_observations/state.json"
 DEFAULT_LIVE_CROSS_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/live_cross_observations/state.json"
 DEFAULT_OBSERVATION_CACHE = MAC_DATA_FEED_RUNTIME / "output/observations/latest.json"
 DEFAULT_OBSERVATION_HISTORY = MAC_DATA_FEED_RUNTIME / "output/observations/observations.jsonl"
@@ -1217,11 +1216,7 @@ def overall_status(sections: dict[str, Any]) -> str:
     orderbook = sections.get("orderbook_snapshots", {})
     orderbook_coverage = sections.get("snapshot_orderbook_coverage", {})
     forecast_curves = sections.get("forecast_hourly_curves", {})
-    fast_observations = sections.get("fast_observation_state", {})
     live_cross_observations = sections.get("live_cross_observation_state", {})
-    active_fast_observations = (
-        live_cross_observations if live_cross_observations else fast_observations
-    )
     observation_cache = sections.get("observation_cache", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
@@ -1232,10 +1227,7 @@ def overall_status(sections: dict[str, Any]) -> str:
         or orderbook.get("missing")
         or (bool(orderbook_coverage) and orderbook_coverage.get("status") != "ok")
         or (bool(forecast_curves) and forecast_curves.get("status") != "ok")
-        or (
-            bool(active_fast_observations)
-            and active_fast_observations.get("status") != "ok"
-        )
+        or live_cross_observations.get("status") != "ok"
         or (bool(observation_cache) and observation_cache.get("status") == "fail")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
@@ -1267,7 +1259,6 @@ def main() -> int:
     parser.add_argument("--snapshot-dir", default=str(latest_existing_snapshot_dir()))
     parser.add_argument("--orderbook-dir", default=str(latest_existing_orderbook_dir()))
     parser.add_argument("--forecast-curve-dir", default=str(latest_existing_forecast_curve_dir()))
-    parser.add_argument("--fast-observation-state", default=str(DEFAULT_FAST_OBSERVATION_STATE))
     parser.add_argument(
         "--live-cross-observation-state",
         default=str(DEFAULT_LIVE_CROSS_OBSERVATION_STATE),
@@ -1324,11 +1315,6 @@ def main() -> int:
             snapshot_path,
             now_utc=now_utc,
             max_age_min=args.max_forecast_curve_age_min,
-        ),
-        "fast_observation_state": check_fast_observation_state(
-            Path(args.fast_observation_state),
-            now_utc=now_utc,
-            max_age_min=args.max_fast_observation_age_min,
         ),
         "live_cross_observation_state": check_fast_observation_state(
             Path(args.live_cross_observation_state),

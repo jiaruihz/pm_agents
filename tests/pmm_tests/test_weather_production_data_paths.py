@@ -196,6 +196,31 @@ def test_current_entrypoints_do_not_depend_on_retired_data_roots() -> None:
         assert "$ROOT/runtime/weather_edge_v1" not in text, name
 
 
+def test_current_executable_consumers_do_not_use_retired_fast_observation_root() -> None:
+    current_consumers = [
+        "weather_data_feed_prod_health_check.py",
+        "weather_fast_source_stale_book_observer.py",
+        "tmax_distribution_edge_live_candidate_v1.py",
+        "start_weather_fast_source_stale_book_production.sh",
+    ]
+    for name in current_consumers:
+        text = (ROOT / "scripts/ops" / name).read_text(encoding="utf-8")
+        assert "output/high_frequency_observations" not in text, name
+
+
+def test_data_feed_entrypoint_cannot_start_duplicate_fast_observation_owner() -> None:
+    direct = (ROOT / "scripts/ops/start_mac_weather_data_feed_loop.sh").read_text(
+        encoding="utf-8"
+    )
+    tmux = (ROOT / "scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "high-frequency-observations --" not in direct
+    assert "duplicate high-frequency producer is retired" in direct
+    assert "WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED='" not in tmux
+    assert "fast_observation_owner=weather_live_cross_observations" in tmux
+
+
 def test_executable_consumers_do_not_embed_retired_weather_data_paths() -> None:
     forbidden = (
         "targeted_output/",

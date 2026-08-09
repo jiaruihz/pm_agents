@@ -12,7 +12,6 @@ OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$(weather_production_path "$
 SOURCE_EVENTS_OUTPUT="${WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_events}"
 SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-Seoul HongKong Shenzhen TelAviv Istanbul Moscow}"
 RUNWAY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/runway_observations}"
-HIGH_FREQUENCY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/high_frequency_observations}"
 CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
 MARKET_BOOKS_LATEST="${WEATHER_MARKET_BOOKS_LATEST:-$(weather_production_path "$PROJECT_DIR" market_books_latest)}"
 LOOP_DIR="${WEATHER_DATA_FEED_LOOP_DIR:-$RUNTIME_ROOT/loop}"
@@ -25,11 +24,6 @@ SOURCE_EVENTS_INTERVAL_SEC="${WEATHER_DATA_FEED_SOURCE_EVENTS_INTERVAL_SEC:-120}
 RUNWAY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED:-0}"
 RUNWAY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC:-60}"
 RUNWAY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES:-}"
-HIGH_FREQUENCY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED:-0}"
-HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC:-20}"
-HIGH_FREQUENCY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-amos_runway noaa_madis_hfmetar singapore_mss jma_amedas hko_obs cowin_obs fmi knmi mgm ims_lod bom_aws}"
-HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC:-jma_amedas=300 noaa_madis_hfmetar=300 fmi=60 knmi=300 mgm=300 ims_lod=300 bom_aws=300}"
-HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC:-jma_amedas=5-8,15-18,25-28,35-38,45-48,55-58:20}"
 FAST_OBS_ACTIVE_LOCAL_START_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_START_HOUR:-6}"
 FAST_OBS_ACTIVE_LOCAL_END_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_END_HOUR:-22}"
 SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
@@ -41,7 +35,7 @@ OBSERVATION_ADDITIONAL_CITIES="${WEATHER_DATA_FEED_OBSERVATION_ADDITIONAL_CITIES
 SOURCE_EVENTS_TIMEOUT_SEC="${WEATHER_DATA_FEED_SOURCE_EVENTS_TIMEOUT_SEC:-120}"
 SNAPSHOT_TIMEOUT_SEC="${WEATHER_DATA_FEED_SNAPSHOT_TIMEOUT_SEC:-600}"
 
-mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
+mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
 
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
@@ -60,12 +54,17 @@ if [[ "$SNAPSHOT_COMMAND" != "strategy-snapshot" ]]; then
   exit 2
 fi
 
+if [[ "${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED:-0}" != "0" ]]; then
+  echo "duplicate high-frequency producer is retired; use controller instance weather_live_cross_observations" >&2
+  exit 2
+fi
+
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
   exec "$PROJECT_DIR/scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh"
 fi
 
 echo "$$" > "$PID_FILE"
-date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT source_events=$SOURCE_EVENTS_OUTPUT forecast_owner=external_controller_managed runway_observations=$RUNWAY_OBSERVATIONS_OUTPUT runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED high_frequency_observations=$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED cache=$CACHE_ROOT"
+date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT source_events=$SOURCE_EVENTS_OUTPUT forecast_owner=external_controller_managed fast_observation_owner=weather_live_cross_observations runway_observations=$RUNWAY_OBSERVATIONS_OUTPUT runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED cache=$CACHE_ROOT"
 
 {
   cd "$SERVICE_DIR"
@@ -89,23 +88,16 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
   RUNWAY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC:-$RUNWAY_OBSERVATIONS_INTERVAL_SEC}"
   RUNWAY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES:-$RUNWAY_OBSERVATIONS_SOURCES}"
   SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-$SOURCE_EVENTS_RESEARCH_CITIES}"
-  HIGH_FREQUENCY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED:-$HIGH_FREQUENCY_OBSERVATIONS_ENABLED}"
-  HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC:-$HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC}"
-  HIGH_FREQUENCY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-$HIGH_FREQUENCY_OBSERVATIONS_SOURCES}"
-  HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC:-$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC}"
-  HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC:-$HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC}"
   FAST_OBS_ACTIVE_LOCAL_START_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_START_HOUR:-$FAST_OBS_ACTIVE_LOCAL_START_HOUR}"
   FAST_OBS_ACTIVE_LOCAL_END_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_END_HOUR:-$FAST_OBS_ACTIVE_LOCAL_END_HOUR}"
   OBSERVATION_ADDITIONAL_CITIES="${WEATHER_DATA_FEED_OBSERVATION_ADDITIONAL_CITIES:-$OBSERVATION_ADDITIONAL_CITIES}"
   read -r -a RUNWAY_OBSERVATIONS_SOURCE_ARGS <<< "$RUNWAY_OBSERVATIONS_SOURCES"
   read -r -a SOURCE_EVENTS_RESEARCH_CITY_ARGS <<< "$SOURCE_EVENTS_RESEARCH_CITIES"
-  read -r -a HIGH_FREQUENCY_OBSERVATIONS_SOURCE_ARGS <<< "$HIGH_FREQUENCY_OBSERVATIONS_SOURCES"
   read -r -a OBSERVATION_ADDITIONAL_CITY_ARGS <<< "$OBSERVATION_ADDITIONAL_CITIES"
-  date -u +"[mac_data_feed] runtime_config_utc=%Y-%m-%dT%H:%M:%SZ runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED runway_observations_interval_sec=$RUNWAY_OBSERVATIONS_INTERVAL_SEC runway_observations_sources=${RUNWAY_OBSERVATIONS_SOURCES:-all} source_events_research_cities=${SOURCE_EVENTS_RESEARCH_CITIES:-none} high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED high_frequency_observations_interval_sec=$HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC high_frequency_observations_sources=${HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-all} high_frequency_source_min_interval_sec=$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC high_frequency_source_minute_window_min_interval_sec=${HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC:-none} fast_obs_active_local_start_hour=$FAST_OBS_ACTIVE_LOCAL_START_HOUR fast_obs_active_local_end_hour=$FAST_OBS_ACTIVE_LOCAL_END_HOUR service_dir=$SERVICE_DIR"
+  date -u +"[mac_data_feed] runtime_config_utc=%Y-%m-%dT%H:%M:%SZ runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED runway_observations_interval_sec=$RUNWAY_OBSERVATIONS_INTERVAL_SEC runway_observations_sources=${RUNWAY_OBSERVATIONS_SOURCES:-all} source_events_research_cities=${SOURCE_EVENTS_RESEARCH_CITIES:-none} fast_observation_owner=weather_live_cross_observations fast_obs_active_local_start_hour=$FAST_OBS_ACTIVE_LOCAL_START_HOUR fast_obs_active_local_end_hour=$FAST_OBS_ACTIVE_LOCAL_END_HOUR service_dir=$SERVICE_DIR"
   next_obs=0
   next_source_events=0
   next_runway_observations=0
-  next_high_frequency_observations=0
   next_snapshot=0
   snapshot_supervisor_pid=""
   while true; do
@@ -186,43 +178,6 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
       set -e
       date -u +"[mac_data_feed] runway_observations_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
       next_runway_observations=$(( $(date +%s) + RUNWAY_OBSERVATIONS_INTERVAL_SEC ))
-    fi
-
-    now="$(date +%s)"
-    if [[ "$HIGH_FREQUENCY_OBSERVATIONS_ENABLED" == "1" ]] && (( now >= next_high_frequency_observations )); then
-      date -u +"[mac_data_feed] high_frequency_observations_start_utc=%Y-%m-%dT%H:%M:%SZ"
-      set +e
-      read -r -a HIGH_FREQUENCY_SOURCE_INTERVAL_ARGS <<< "$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC"
-      HIGH_FREQUENCY_SOURCE_INTERVAL_CLI=()
-      for interval_arg in "${HIGH_FREQUENCY_SOURCE_INTERVAL_ARGS[@]}"; do
-        HIGH_FREQUENCY_SOURCE_INTERVAL_CLI+=(--source-min-interval-sec "$interval_arg")
-      done
-      read -r -a HIGH_FREQUENCY_SOURCE_WINDOW_INTERVAL_ARGS <<< "$HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC"
-      for interval_arg in "${HIGH_FREQUENCY_SOURCE_WINDOW_INTERVAL_ARGS[@]}"; do
-        HIGH_FREQUENCY_SOURCE_INTERVAL_CLI+=(--source-minute-window-min-interval-sec "$interval_arg")
-      done
-      if [[ -n "$HIGH_FREQUENCY_OBSERVATIONS_SOURCES" ]]; then
-        "$PY" -u -m weather_data_feed_service \
-          high-frequency-observations -- \
-          --output-dir "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" \
-          --sources "${HIGH_FREQUENCY_OBSERVATIONS_SOURCE_ARGS[@]}" \
-          --active-local-start-hour "$FAST_OBS_ACTIVE_LOCAL_START_HOUR" \
-          --active-local-end-hour "$FAST_OBS_ACTIVE_LOCAL_END_HOUR" \
-          "${HIGH_FREQUENCY_SOURCE_INTERVAL_CLI[@]}" \
-          --max-workers 4
-      else
-        "$PY" -u -m weather_data_feed_service \
-          high-frequency-observations -- \
-          --output-dir "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" \
-          --active-local-start-hour "$FAST_OBS_ACTIVE_LOCAL_START_HOUR" \
-          --active-local-end-hour "$FAST_OBS_ACTIVE_LOCAL_END_HOUR" \
-          "${HIGH_FREQUENCY_SOURCE_INTERVAL_CLI[@]}" \
-          --max-workers 4
-      fi
-      rc=$?
-      set -e
-      date -u +"[mac_data_feed] high_frequency_observations_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
-      next_high_frequency_observations=$(( $(date +%s) + HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC ))
     fi
 
     now="$(date +%s)"

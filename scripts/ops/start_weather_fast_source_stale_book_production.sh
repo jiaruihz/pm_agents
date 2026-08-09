@@ -12,6 +12,7 @@ source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
 PAPER_SNAPSHOT_DIR="${WEATHER_STRATEGY_PAPER_SNAPSHOT_DIR:-$(weather_production_path "$PROJECT_DIR" strategy_paper_snapshot_dir)}"
 MARKET_BOOK_BATCH_ROOT="${WEATHER_MARKET_BOOK_BATCH_ROOT:-$(weather_production_path "$PROJECT_DIR" market_books_root)/batches}"
+LIVE_CROSS_OBSERVATIONS_ROOT="${WEATHER_LIVE_CROSS_OBSERVATIONS_ROOT:-$(weather_production_path "$PROJECT_DIR" live_cross_observations_root)}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 TMUX_SESSION="weather_fast_source_stale_book"
 OUTPUT_DIR="$RUNTIME_ROOT/output/fast_source_stale_book"
@@ -33,6 +34,8 @@ cmd=(
   "$PROJECT_DIR/scripts/ops/weather_fast_source_stale_book_observer.py"
   --loop
   --output-dir "$OUTPUT_DIR"
+  --high-frequency-latest "$LIVE_CROSS_OBSERVATIONS_ROOT/latest.json"
+  --high-frequency-jsonl "$LIVE_CROSS_OBSERVATIONS_ROOT"
   --interval-seconds 60
   --follow-minutes 20
   --fresh-scope t_minus_1_no

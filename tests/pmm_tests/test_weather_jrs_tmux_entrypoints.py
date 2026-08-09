@@ -418,6 +418,10 @@ def test_controller_contracts_separate_historical_stale_book_modes():
 
     assert 'TMUX_SESSION="weather_fast_source_stale_book"' in broad
     assert "--fresh-scope t_minus_1_no" in broad
+    assert "--high-frequency-latest" in broad
+    assert "--high-frequency-jsonl" in broad
+    assert "live_cross_observations_root" in broad
+    assert "output/high_frequency_observations" not in broad
     assert "--continuous-active-brackets" not in broad
     assert "--live" not in broad
     assert 'TMUX_SESSION="weather_helsinki_pre_cross_active_ladder_shadow"' in helsinki

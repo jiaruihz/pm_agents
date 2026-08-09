@@ -35,7 +35,6 @@ def paths() -> dict[str, str]:
         "observation_cache_path": str(spec.observation_cache_path()),
         "source_events_root": str(spec.source_events_root()),
         "forecast_enrichment_root": str(spec.forecast_enrichment_root()),
-        "high_frequency_observations_root": str(spec.high_frequency_observations_root()),
         "live_cross_observations_root": str(spec.live_cross_observations_root()),
         "historical_full_ladder_root": str(spec.historical_full_ladder_root()),
         "historical_targeted_root": str(spec.historical_targeted_root()),

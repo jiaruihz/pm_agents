@@ -234,7 +234,7 @@ managed_runtimes:
     start_script: scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1/latest_summary.json
     max_health_age_sec: 1800
-    dependencies: [weather_data_feed_jrs]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: safe
   - instance_id: weather_current_yes_heat_death_shadow_v1
     uses_market_proxy: true
@@ -258,7 +258,7 @@ managed_runtimes:
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_stale_book/latest.json
     max_health_age_sec: 180
     accepted_health_statuses: [ok]
-    dependencies: [weather_data_feed_jrs]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: safe
   - instance_id: weather_helsinki_pre_cross_active_ladder_shadow
     uses_market_proxy: true

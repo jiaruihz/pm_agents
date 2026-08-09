@@ -60,7 +60,7 @@ PRODUCTION_SPEC = load_production_spec()
 SNAPSHOT_DIR_CANDIDATES = [PRODUCTION_SPEC.strategy_paper_snapshot_dir()]
 OBS_CACHE_CANDIDATES = [PRODUCTION_SPEC.observation_cache_path()]
 DATA_FEED_RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
-HIGH_FREQUENCY_LATEST_CANDIDATES = [PRODUCTION_SPEC.high_frequency_observations_root() / "latest.json"]
+HIGH_FREQUENCY_LATEST_CANDIDATES = [PRODUCTION_SPEC.live_cross_observations_root() / "latest.json"]
 SOURCE_EVENTS_LATEST_CANDIDATES = [PRODUCTION_SPEC.source_events_root() / "latest.json"]
 FORECAST_ENRICHMENT_LATEST_CANDIDATES = [PRODUCTION_SPEC.forecast_enrichment_root() / "latest.json"]
 
