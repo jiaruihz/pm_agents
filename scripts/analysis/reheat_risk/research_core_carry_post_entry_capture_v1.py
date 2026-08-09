@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import math
 import sqlite3
@@ -24,6 +25,12 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
+import pandas as pd
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -35,6 +42,11 @@ from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (
     market_features,
     score_probability,
     walk_ask_ladder,
+)
+from src.strategies.runtime.production import load_production_spec
+from scripts.analysis.versioned_artifact_output import (
+    prepare_new_run_output,
+    resolve_run_output,
 )
 
 RUNTIME = Path(
@@ -62,6 +74,45 @@ GAIN_FLOOR = 0.03
 MAX_BOOK_LAG_MIN = 30.0
 BOOTSTRAP_REPS = 5000
 SEED = 20260807
+
+LIFECYCLE_SCHEMA_VERSION = "current_yes_core_carry_event_lifecycle_v2"
+LIFECYCLE_FAMILY = "current_yes_core_carry_event_lifecycle_v2"
+LIFECYCLE_LEDGER = Path(
+    "/Volumes/jrs-archive/pm_agents/research/artifact_store/active/"
+    "current_yes_core_carry_actual_transport_tail_v1/"
+    "iem_actual_transition_monotone_tail_20260807/"
+    "actual_transition_feature_ledger.csv"
+)
+LIFECYCLE_REPORT = ROOT / (
+    "docs/analysis/2026-08/"
+    "2026-08-09-current-yes-core-carry-event-lifecycle-v2.md"
+)
+LIFECYCLE_METADATA = LIFECYCLE_REPORT.with_suffix(".json")
+LIFECYCLE_FEATURES = (
+    "decision_hour_local",
+    "exit_ticks_required",
+    "dual_forecast_max_margin_ticks",
+    "dual_forecast_spread_ticks",
+    "dual_curve_max_heat_area_ticks",
+    "assigned_curve_hours_above_exit",
+    "forecast_peak_delta_hours_local",
+    "minutes_since_running_max",
+    "temp_trend_1h_f",
+    "temp_trend_3h_f",
+    "solar_elevation_deg",
+    "solar_elevation_delta_2h_deg",
+    "daylight_remaining_minutes",
+    "source_latest_temp_change_f",
+    "source_latest_new_high_surprise_f",
+    "actual_dewpoint_3h_f",
+    "actual_wind_speed_kt",
+    "actual_wind_persistence_3h",
+    "actual_wind_shift_3h_deg",
+    "actual_sky_delta_3h",
+    "actual_precip_1h",
+    "actual_gust_excess_kt",
+    "actual_pressure_3h_hpa",
+)
 
 
 def parse_utc(value: Any) -> datetime | None:
@@ -986,6 +1037,608 @@ def markdown(payload: Mapping[str, Any]) -> str:
     )
 
 
+def lifecycle_sample_weights(frame: pd.DataFrame) -> np.ndarray:
+    """Give every target date equal weight and every state equal weight within it."""
+    work = frame[["target_date", "state_key"]].copy()
+    state_rows = work.groupby("state_key")["state_key"].transform("size")
+    state_date_count = (
+        work.drop_duplicates(["target_date", "state_key"])
+        .set_index("state_key")["target_date"]
+        .map(work.drop_duplicates(["target_date", "state_key"]).groupby("target_date").size())
+    )
+    weights = 1.0 / (
+        state_rows.to_numpy(dtype=float)
+        * work["state_key"].map(state_date_count).to_numpy(dtype=float)
+    )
+    return weights / np.mean(weights)
+
+
+def lifecycle_model(kind: str) -> Pipeline:
+    if kind == "ridge":
+        return Pipeline(
+            [
+                ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
+                ("scale", StandardScaler()),
+                (
+                    "model",
+                    LogisticRegression(
+                        C=0.25,
+                        solver="lbfgs",
+                        max_iter=2000,
+                        random_state=SEED,
+                    ),
+                ),
+            ]
+        )
+    if kind == "hgb":
+        return Pipeline(
+            [
+                ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
+                (
+                    "model",
+                    HistGradientBoostingClassifier(
+                        learning_rate=0.04,
+                        max_iter=120,
+                        max_leaf_nodes=7,
+                        max_depth=2,
+                        min_samples_leaf=30,
+                        l2_regularization=10.0,
+                        random_state=SEED,
+                    ),
+                ),
+            ]
+        )
+    raise ValueError(f"unknown lifecycle model kind: {kind}")
+
+
+def fit_lifecycle_model(kind: str, train: pd.DataFrame) -> Pipeline:
+    model = lifecycle_model(kind)
+    fit_key = "model__sample_weight"
+    model.fit(
+        train.loc[:, LIFECYCLE_FEATURES],
+        train["label"].astype(int),
+        **{fit_key: lifecycle_sample_weights(train)},
+    )
+    return model
+
+
+def prepare_lifecycle_ledger(path: Path) -> pd.DataFrame:
+    frame = pd.read_csv(path, low_memory=False)
+    required = set(LIFECYCLE_FEATURES) | {
+            "city",
+            "target_date",
+            "decision_snapshot_ts_utc",
+            "current_bracket",
+            "label",
+            "p_core",
+            "market_mid",
+            "frozen_baseline_selected",
+            "ten_share_executable",
+            "ten_share_cost_per_share",
+            "current_yes_bid",
+            "quote_best_bid_size",
+        }
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(f"lifecycle ledger missing required columns: {missing}")
+    frame["target_date"] = frame["target_date"].astype(str)
+    frame["decision_ts"] = pd.to_datetime(
+        frame["decision_snapshot_ts_utc"], utc=True, errors="coerce"
+    )
+    frame["state_key"] = (
+        frame["city"].astype(str)
+        + "|"
+        + frame["target_date"]
+        + "|"
+        + frame["current_bracket"].astype(str)
+    )
+    frame = frame.sort_values(
+        ["target_date", "city", "current_bracket", "decision_ts"]
+    ).reset_index(drop=True)
+    frame["state_entry"] = ~frame.duplicated("state_key")
+    frame["frozen_baseline_selected"] = (
+        frame["frozen_baseline_selected"].fillna(False).astype(bool)
+    )
+    frame["ten_share_executable"] = (
+        frame["ten_share_executable"].fillna(False).astype(bool)
+    )
+    return frame
+
+
+def lifecycle_predictions(frame: pd.DataFrame, frozen_dates: int = 8) -> pd.DataFrame:
+    dates = sorted(frame["target_date"].unique())
+    if len(dates) <= frozen_dates + 8:
+        raise ValueError("not enough target dates for warm-up and frozen lifecycle window")
+    dev_dates = dates[:-frozen_dates]
+    holdout_dates = dates[-frozen_dates:]
+    output = frame.copy()
+    output["evaluation_scope"] = "warmup"
+    output["p_hold_ridge"] = np.nan
+    output["p_hold_hgb"] = np.nan
+
+    for index, date in enumerate(dev_dates):
+        if index < 8:
+            continue
+        train = frame[frame["target_date"].isin(dev_dates[:index])]
+        test_mask = frame["target_date"].eq(date)
+        for kind in ("ridge", "hgb"):
+            model = fit_lifecycle_model(kind, train)
+            output.loc[test_mask, f"p_hold_{kind}"] = model.predict_proba(
+                frame.loc[test_mask, LIFECYCLE_FEATURES]
+            )[:, 1]
+        output.loc[test_mask, "evaluation_scope"] = "development_oof"
+
+    train = frame[frame["target_date"].isin(dev_dates)]
+    holdout_mask = frame["target_date"].isin(holdout_dates)
+    for kind in ("ridge", "hgb"):
+        model = fit_lifecycle_model(kind, train)
+        output.loc[holdout_mask, f"p_hold_{kind}"] = model.predict_proba(
+            frame.loc[holdout_mask, LIFECYCLE_FEATURES]
+        )[:, 1]
+    output.loc[holdout_mask, "evaluation_scope"] = "frozen_last8"
+    return output
+
+
+def _probability_loss(y: np.ndarray, p: np.ndarray, metric: str) -> np.ndarray:
+    clipped = np.clip(p.astype(float), 1e-6, 1 - 1e-6)
+    if metric == "brier":
+        return (clipped - y.astype(float)) ** 2
+    if metric == "logloss":
+        return -(y * np.log(clipped) + (1 - y) * np.log(1 - clipped))
+    raise ValueError(metric)
+
+
+def probability_score_summary(
+    predictions: pd.DataFrame, scope: str, reps: int = BOOTSTRAP_REPS
+) -> dict[str, Any]:
+    rows = predictions[
+        predictions["evaluation_scope"].eq(scope)
+        & predictions["state_entry"]
+        & predictions["p_hold_ridge"].notna()
+    ].copy()
+    result: dict[str, Any] = {
+        "rows": int(len(rows)),
+        "target_dates": int(rows["target_date"].nunique()),
+        "date_min": str(rows["target_date"].min()),
+        "date_max": str(rows["target_date"].max()),
+        "held_losses": int((rows["label"] == 0).sum()),
+    }
+    predictors = {
+        "market": "market_mid",
+        "core": "p_core",
+        "market_free_ridge": "p_hold_ridge",
+        "market_free_hgb": "p_hold_hgb",
+    }
+    rng = np.random.default_rng(SEED + (1 if scope == "frozen_last8" else 0))
+    dates = sorted(rows["target_date"].unique())
+    for metric in ("brier", "logloss"):
+        by_date: dict[str, dict[str, float]] = {}
+        for date in dates:
+            daily = rows[rows["target_date"].eq(date)]
+            y = daily["label"].to_numpy(dtype=float)
+            by_date[date] = {
+                name: float(
+                    np.mean(_probability_loss(y, daily[column].to_numpy(), metric))
+                )
+                for name, column in predictors.items()
+            }
+        result[metric] = {
+            name: float(np.mean([by_date[date][name] for date in dates]))
+            for name in predictors
+        }
+        for challenger in ("market_free_ridge", "market_free_hgb"):
+            short = challenger.removeprefix("market_free_")
+            for reference in ("market", "core"):
+                values = np.array(
+                    [
+                        by_date[date][challenger] - by_date[date][reference]
+                        for date in dates
+                    ],
+                    dtype=float,
+                )
+                draws = values[
+                    rng.integers(0, len(values), size=(reps, len(values)))
+                ].mean(axis=1)
+                result[metric][f"{short}_minus_{reference}_delta"] = float(
+                    values.mean()
+                )
+                result[metric][f"{short}_minus_{reference}_ci95"] = [
+                    float(np.quantile(draws, 0.025)),
+                    float(np.quantile(draws, 0.975)),
+                ]
+    return result
+
+
+def lifecycle_exit_pnl(
+    entry_cost: float,
+    payoff: float,
+    net_exit_bid: float | None,
+    *,
+    quantity: float,
+    exit_fraction: float,
+) -> float:
+    if net_exit_bid is None:
+        return quantity * (payoff - entry_cost)
+    exited = quantity * exit_fraction
+    held = quantity - exited
+    return exited * (net_exit_bid - entry_cost) + held * (payoff - entry_cost)
+
+
+def replay_lifecycle_positions(
+    predictions: pd.DataFrame, scope: str, quantity: float = 10.0
+) -> list[dict[str, Any]]:
+    scope_rows = predictions[predictions["evaluation_scope"].eq(scope)]
+    selected = scope_rows[
+        scope_rows["frozen_baseline_selected"]
+        & scope_rows["ten_share_executable"]
+        & scope_rows["ten_share_cost_per_share"].notna()
+    ].drop_duplicates("state_key", keep="first")
+    out: list[dict[str, Any]] = []
+    for _, entry in selected.iterrows():
+        later = predictions[
+            predictions["state_key"].eq(entry["state_key"])
+            & predictions["decision_ts"].gt(entry["decision_ts"])
+            & predictions["evaluation_scope"].eq(scope)
+            & predictions["p_hold_hgb"].notna()
+        ].sort_values("decision_ts")
+        executable_events: list[dict[str, float | str]] = []
+        for _, event in later.iterrows():
+            bid = finite(event["current_yes_bid"])
+            size = finite(event["quote_best_bid_size"])
+            if bid is None or size is None or size < quantity:
+                continue
+            executable_events.append(
+                {
+                    "decision_ts": str(event["decision_snapshot_ts_utc"]),
+                    "net_bid": bid - official_weather_fee_per_share(bid),
+                    "p_hold": float(event["p_hold_hgb"]),
+                }
+            )
+        cost = float(entry["ten_share_cost_per_share"])
+        payoff = float(entry["label"])
+        static = next(
+            (
+                event
+                for event in executable_events
+                if float(event["net_bid"]) >= cost + GAIN_FLOOR
+            ),
+            None,
+        )
+        value = next(
+            (
+                event
+                for event in executable_events
+                if float(event["net_bid"]) >= float(event["p_hold"])
+            ),
+            None,
+        )
+        hold_pnl = lifecycle_exit_pnl(
+            cost, payoff, None, quantity=quantity, exit_fraction=0.0
+        )
+        out.append(
+            {
+                "scope": scope,
+                "city": str(entry["city"]),
+                "target_date": str(entry["target_date"]),
+                "current_bracket": str(entry["current_bracket"]),
+                "entry_ts": str(entry["decision_snapshot_ts_utc"]),
+                "entry_cost_per_share": cost,
+                "settlement_payoff": payoff,
+                "post_entry_rows": int(len(later)),
+                "executable_event_rows": int(len(executable_events)),
+                "hold_pnl_usd": hold_pnl,
+                "static_triggered": static is not None,
+                "static_exit_ts": static["decision_ts"] if static else None,
+                "static_net_bid": static["net_bid"] if static else None,
+                "static_full_exit_pnl_usd": lifecycle_exit_pnl(
+                    cost,
+                    payoff,
+                    float(static["net_bid"]) if static else None,
+                    quantity=quantity,
+                    exit_fraction=1.0,
+                ),
+                "model_triggered": value is not None,
+                "model_exit_ts": value["decision_ts"] if value else None,
+                "model_p_hold": value["p_hold"] if value else None,
+                "model_net_bid": value["net_bid"] if value else None,
+                "model_full_exit_pnl_usd": lifecycle_exit_pnl(
+                    cost,
+                    payoff,
+                    float(value["net_bid"]) if value else None,
+                    quantity=quantity,
+                    exit_fraction=1.0,
+                ),
+                "model_reduce50_pnl_usd": lifecycle_exit_pnl(
+                    cost,
+                    payoff,
+                    float(value["net_bid"]) if value else None,
+                    quantity=quantity,
+                    exit_fraction=0.5,
+                ),
+            }
+        )
+    return out
+
+
+def summarize_lifecycle_replay(
+    rows: Sequence[Mapping[str, Any]], reps: int = BOOTSTRAP_REPS
+) -> dict[str, Any]:
+    covered = [row for row in rows if int(row["executable_event_rows"]) > 0]
+    dates = sorted({str(row["target_date"]) for row in covered})
+    policies = {
+        "static_full_exit": "static_full_exit_pnl_usd",
+        "model_full_exit": "model_full_exit_pnl_usd",
+        "model_reduce50": "model_reduce50_pnl_usd",
+    }
+    result: dict[str, Any] = {
+        "selected_entries": len(rows),
+        "selected_entries_with_later_checkpoint": sum(
+            int(row["post_entry_rows"]) > 0 for row in rows
+        ),
+        "selected_entries_with_executable_event_quote": len(covered),
+        "target_dates_with_executable_event_quote": len(dates),
+        "settled_losses_with_executable_event_quote": sum(
+            float(row["settlement_payoff"]) == 0 for row in covered
+        ),
+        "hold_pnl_usd": float(sum(float(row["hold_pnl_usd"]) for row in covered)),
+    }
+    rng = np.random.default_rng(SEED + 11)
+    for policy, field in policies.items():
+        triggers = [row for row in covered if bool(row["static_triggered" if policy == "static_full_exit" else "model_triggered"])]
+        deltas_by_date = np.array(
+            [
+                sum(
+                    float(row[field]) - float(row["hold_pnl_usd"])
+                    for row in covered
+                    if str(row["target_date"]) == date
+                )
+                for date in dates
+            ],
+            dtype=float,
+        )
+        if len(deltas_by_date) >= 2:
+            draws = deltas_by_date[
+                rng.integers(0, len(deltas_by_date), size=(reps, len(deltas_by_date)))
+            ].sum(axis=1)
+            ci = [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))]
+        else:
+            ci = [None, None]
+        result[policy] = {
+            "triggered_entries": len(triggers),
+            "triggered_final_winners": sum(
+                float(row["settlement_payoff"]) == 1 for row in triggers
+            ),
+            "triggered_final_losses": sum(
+                float(row["settlement_payoff"]) == 0 for row in triggers
+            ),
+            "pnl_usd": float(sum(float(row[field]) for row in covered)),
+            "delta_vs_hold_usd": float(deltas_by_date.sum()),
+            "delta_target_date_bootstrap_ci95": ci,
+            "loss_capital_saved_usd": float(
+                sum(
+                    max(0.0, float(row[field]) - float(row["hold_pnl_usd"]))
+                    for row in triggers
+                    if float(row["settlement_payoff"]) == 0
+                )
+            ),
+            "winner_profit_sacrificed_usd": float(
+                sum(
+                    max(0.0, float(row["hold_pnl_usd"]) - float(row[field]))
+                    for row in triggers
+                    if float(row["settlement_payoff"]) == 1
+                )
+            ),
+        }
+    return result
+
+
+def lifecycle_markdown(payload: Mapping[str, Any]) -> str:
+    dev = payload["probability_scores"]["development_oof"]
+    frozen = payload["probability_scores"]["frozen_last8"]
+    historical = payload["historical_lifecycle_replay"]
+    current = payload["current_unified_book_replay"]
+    frozen_replay = historical["frozen_last8"]
+    return "\n".join(
+        [
+            "# Core Carry event-driven lifecycle v2",
+            "",
+            "## 结论与动作",
+            "",
+            "**保持当前 10-share Core Carry 的 HOLD 语义，不部署止盈、减仓或天气风险退出。**",
+            "",
+            "这轮同时否掉了两个看似合理的退出办法：静态 +3c 止盈在最新统一盘口回放中显著伤害赢家；独立 market-free 存活概率头在固定分母上没有打赢 Core，也没有稳定打赢 market。当前不是缺少一个更聪明的阈值，而是缺少足够多的“入场后状态变化且最终失败”的训练/验证事件。下一步只应继续采集 zero-notional lifecycle evidence，不改变真实订单。",
+            "",
+            "## 研究问题和固定动作空间",
+            "",
+            "- target metric：同一 Core entry 下，退出 overlay 相对 hold-to-settlement 的 10-share fee-adjusted PnL delta。",
+            "- 动作：`HOLD/NO_ADD`、首次净 bid ≥ entry+3c 时全退、首次净 bid ≥ market-free P(held wins) 时减半或全退。",
+            "- model head：仅使用 23 个天气/路径/forecast/transport 特征，不输入 market mid、bid/ask、Core p 或入场盈亏。",
+            "- 训练：按 target_date 等权、date 内 state 等权；前 8 日 warm-up，development expanding OOF；最后 8 日为预留窗口。",
+            "- 执行：只有 top bid size ≥10 才视为可执行，退出扣官方 Weather taker fee；无深度不 fallback。",
+            "",
+            "## 概率门（state-entry 固定分母）",
+            "",
+            "| window | rows / dates / losses | model | Brier | logloss |",
+            "|---|---:|---|---:|---:|",
+            f"| development OOF | {dev['rows']} / {dev['target_dates']} / {dev['held_losses']} | market | {dev['brier']['market']:.6f} | {dev['logloss']['market']:.6f} |",
+            f"| development OOF | {dev['rows']} / {dev['target_dates']} / {dev['held_losses']} | Core | {dev['brier']['core']:.6f} | {dev['logloss']['core']:.6f} |",
+            f"| development OOF | {dev['rows']} / {dev['target_dates']} / {dev['held_losses']} | market-free ridge | {dev['brier']['market_free_ridge']:.6f} | {dev['logloss']['market_free_ridge']:.6f} |",
+            f"| development OOF | {dev['rows']} / {dev['target_dates']} / {dev['held_losses']} | market-free HGB | {dev['brier']['market_free_hgb']:.6f} | {dev['logloss']['market_free_hgb']:.6f} |",
+            f"| last-8 secondary window | {frozen['rows']} / {frozen['target_dates']} / {frozen['held_losses']} | market | {frozen['brier']['market']:.6f} | {frozen['logloss']['market']:.6f} |",
+            f"| last-8 secondary window | {frozen['rows']} / {frozen['target_dates']} / {frozen['held_losses']} | Core | {frozen['brier']['core']:.6f} | {frozen['logloss']['core']:.6f} |",
+            f"| last-8 secondary window | {frozen['rows']} / {frozen['target_dates']} / {frozen['held_losses']} | market-free ridge | {frozen['brier']['market_free_ridge']:.6f} | {frozen['logloss']['market_free_ridge']:.6f} |",
+            f"| last-8 secondary window | {frozen['rows']} / {frozen['target_dates']} / {frozen['held_losses']} | market-free HGB | {frozen['brier']['market_free_hgb']:.6f} | {frozen['logloss']['market_free_hgb']:.6f} |",
+            "",
+            f"按 development 预先选择表现更好的 HGB 用于 lifecycle replay。最后 8 日 HGB−Core Brier delta `{frozen['brier']['hgb_minus_core_delta']:+.6f}`，date-block CI `[{frozen['brier']['hgb_minus_core_ci95'][0]:+.6f}, {frozen['brier']['hgb_minus_core_ci95'][1]:+.6f}]`；HGB−market `{frozen['brier']['hgb_minus_market_delta']:+.6f}`，CI `[{frozen['brier']['hgb_minus_market_ci95'][0]:+.6f}, {frozen['brier']['hgb_minus_market_ci95'][1]:+.6f}]`。负数才是改善；这里概率门没有通过。",
+            "",
+            "注：最后 8 日概率分数先被查看过，随后才完成 lifecycle PnL 汇总，因此它是 secondary historical window，不冒充 pristine frozen forward。",
+            "",
+            "## 历史 post-entry 执行证据",
+            "",
+            f"完整 ledger 有 `{payload['denominator']['historical_checkpoints']}` checkpoints / `{payload['denominator']['historical_states']}` states / `{payload['denominator']['historical_dates']}` dates；frozen Core selected entries `{payload['denominator']['historical_selected_entries']}`，其中最终 loss `{payload['denominator']['historical_selected_losses']}`。但能在入场后继续看到 checkpoint 的 position 只有 `{payload['denominator']['selected_with_later_checkpoint']}`，且这些 post-entry 路径中最终 loss 只有 `{payload['denominator']['selected_losses_with_later_checkpoint']}`。",
+            "",
+            f"最后 8 日可执行 lifecycle 分母仅 `{frozen_replay['selected_entries_with_executable_event_quote']}` entries / `{frozen_replay['target_dates_with_executable_event_quote']}` dates / `{frozen_replay['settled_losses_with_executable_event_quote']}` losses。market-free 全退 delta `{frozen_replay['model_full_exit']['delta_vs_hold_usd']:+.2f}`，CI `{frozen_replay['model_full_exit']['delta_target_date_bootstrap_ci95']}`；减半 delta `{frozen_replay['model_reduce50']['delta_vs_hold_usd']:+.2f}`，CI `{frozen_replay['model_reduce50']['delta_target_date_bootstrap_ci95']}`。这个分母不足以验证“能否救错单”。",
+            "",
+            "## 最新统一盘口反事实（外部验证静态止盈）",
+            "",
+            f"截至 `{payload['generated_at_utc']}`，Core raw 有 `{current['signal_entries']}` signals，settled `{current['settled_entries']}`；其中 `{current['settled_entries_with_executable_event_quote']}` entries / `{current['settled_dates_with_executable_event_quote']}` target dates 有新报文后的完整 10-share bid。hold PnL `{current['baseline_hold_pnl_usd']:+.2f}`，+3c 全退 `{current['candidate_capture_pnl_usd']:+.2f}`，delta `{current['pnl_delta_usd']:+.2f}`，date-block CI `[{current['pnl_delta_target_date_bootstrap_ci95'][0]:+.2f}, {current['pnl_delta_target_date_bootstrap_ci95'][1]:+.2f}]`。",
+            "",
+            f"+3c 共退出 `{current['capture_triggers']}` 笔：final winners `{current['capture_triggered_final_winners']}`、losses `{current['capture_triggered_final_losses']}`；saved loss capital `{current['loss_capital_saved_usd']:.2f}`，sacrificed winner profit `{current['winner_profit_sacrificed_usd']:.2f}`。这不是轻微噪声：当前同分母中它只卖掉赢家，没有救到一笔亏损。",
+            "",
+            "## Signal / evidence funnel",
+            "",
+            "- signal funnel：1,349 continuous checkpoints → 801 first city-date-bracket states → 136 frozen selected entries。",
+            "- evidence funnel：136 selected → 有 later checkpoint 的 positions → 有可卖 10-share bid 的 positions → settled losses；coverage 缺口没有伪装成策略过滤。",
+            "- 当前 raw static replay 是另一条外部时间窗，只用于检验 +3c 表达；因为历史 feature schema 与当前 raw 尚未逐字段 parity，market-free head 没有事后套到当前 live signals。",
+            "",
+            "## Gate 与后续",
+            "",
+            "- probability gate：FAIL；market-free head 未在 development/secondary window 稳定胜 Core/market。",
+            "- execution gate：静态 +3c FAIL；其 current unified-book delta CI 完全为负。",
+            "- lifecycle loss evidence：FAIL；post-entry selected-loss 路径太少。",
+            "- action：Core 继续 `10-share taker + existing maker` 的既有入场和 hold；不加 exit/reduce；只恢复/完善 zero-notional post-entry event ledger 时，需单独走部署确认。",
+            "",
+            "## 8 环",
+            "",
+            "描述性=PASS；统计推断=PASS（target-date block）；信号判别=FAIL；概率分布=FAIL；执行微结构=PASS for +3c / historical lifecycle limited；容量=PASS 到10 shares；组合=PASS；同分母 market/Core baseline=PASS；fresh frozen forward=FAIL。",
+            "",
+            "## 可复现产物",
+            "",
+            f"- run directory：`{payload['artifact']['run_dir']}`",
+            f"- feature ledger SHA-256：`{payload['artifact']['feature_ledger_sha256']}`",
+            "- `state_predictions.csv`：全部 checkpoint 的 OOF/secondary predictions。",
+            "- `historical_lifecycle_positions.csv`：selected position 的 HOLD/static/model exit 逐笔反事实。",
+            "- `result.json`：本报告全部数字。",
+        ]
+    )
+
+
+def run_market_free_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
+    ledger_path = Path(args.feature_ledger)
+    frame = prepare_lifecycle_ledger(ledger_path)
+    predictions = lifecycle_predictions(frame)
+    score_dev = probability_score_summary(predictions, "development_oof")
+    score_frozen = probability_score_summary(predictions, "frozen_last8")
+    lifecycle_rows = {
+        scope: replay_lifecycle_positions(predictions, scope, float(args.quantity))
+        for scope in ("development_oof", "frozen_last8")
+    }
+    lifecycle_summary = {
+        scope: summarize_lifecycle_replay(rows)
+        for scope, rows in lifecycle_rows.items()
+    }
+
+    later_counts = []
+    selected = predictions[predictions["frozen_baseline_selected"]].drop_duplicates(
+        "state_key", keep="first"
+    )
+    for _, entry in selected.iterrows():
+        later = predictions[
+            predictions["state_key"].eq(entry["state_key"])
+            & predictions["decision_ts"].gt(entry["decision_ts"])
+        ]
+        later_counts.append((len(later), float(entry["label"])))
+
+    current_args = argparse.Namespace(
+        runtime=args.runtime,
+        db=args.db,
+        book_root=[
+            str(load_production_spec().resolved_market_books_root() / "batches")
+        ],
+        quantity=float(args.quantity),
+        gain_floor=GAIN_FLOOR,
+        max_book_lag_min=float(args.max_book_lag_min),
+    )
+    current_result = run(current_args)
+    current = current_result["payload"]["primary"]
+    current["signal_entries"] = current_result["payload"]["denominator"][
+        "signal_entries"
+    ]
+
+    run_dir = prepare_new_run_output(
+        resolve_run_output(
+            LIFECYCLE_FAMILY,
+            run_id=args.run_id,
+            explicit_output=Path(args.output_dir) if args.output_dir else None,
+        )
+    )
+    sha256 = hashlib.sha256(ledger_path.read_bytes()).hexdigest()
+    payload = {
+        "schema_version": LIFECYCLE_SCHEMA_VERSION,
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "research_status": "rejected_for_current_expression_no_live_change",
+        "brief": {
+            "hypothesis": "a market-free weather survival head can improve Core post-entry hold/reduce/exit lifecycle decisions",
+            "target_metric": "10-share fee-adjusted PnL delta versus hold-to-settlement on fixed post-entry executable denominator",
+            "decision": "do not deploy any lifecycle overlay",
+        },
+        "feature_contract": {
+            "features": list(LIFECYCLE_FEATURES),
+            "forbidden_market_inputs": [
+                "market_mid",
+                "current_yes_bid",
+                "current_yes_ask",
+                "p_core",
+                "entry_cost",
+                "unrealized_pnl",
+            ],
+            "ridge": "L2 logistic C=0.25, median+missing indicator, standardized",
+            "hgb_selected_on_development": "depth=2, max_leaf_nodes=7, min_samples_leaf=30, l2=10",
+        },
+        "denominator": {
+            "historical_checkpoints": int(len(predictions)),
+            "historical_states": int(predictions["state_key"].nunique()),
+            "historical_dates": int(predictions["target_date"].nunique()),
+            "historical_date_min": str(predictions["target_date"].min()),
+            "historical_date_max": str(predictions["target_date"].max()),
+            "historical_selected_entries": int(len(selected)),
+            "historical_selected_losses": int((selected["label"] == 0).sum()),
+            "selected_with_later_checkpoint": int(sum(count > 0 for count, _ in later_counts)),
+            "selected_losses_with_later_checkpoint": int(
+                sum(count > 0 and label == 0 for count, label in later_counts)
+            ),
+        },
+        "probability_scores": {
+            "development_oof": score_dev,
+            "frozen_last8": score_frozen,
+        },
+        "historical_lifecycle_replay": lifecycle_summary,
+        "current_unified_book_replay": current,
+        "gates": {
+            "market_free_probability": "FAIL",
+            "static_profit_capture_execution": "FAIL",
+            "post_entry_selected_loss_coverage": "FAIL",
+            "live_change": "none",
+        },
+        "artifact": {
+            "run_dir": str(run_dir),
+            "feature_ledger": str(ledger_path),
+            "feature_ledger_sha256": sha256,
+        },
+        "limitations": [
+            "The last-eight probability scores were analyst-opened before lifecycle PnL aggregation and are secondary historical evidence, not pristine forward.",
+            "Historical selected post-entry losses are too sparse to validate loss avoidance.",
+            "Current raw feature parity is not complete, so the market-free head was not retrofitted onto current live signals.",
+            "All PnL values are counterfactual replay, not actual live realized PnL.",
+        ],
+    }
+
+    predictions.to_csv(run_dir / "state_predictions.csv", index=False)
+    pd.concat(
+        [pd.DataFrame(rows) for rows in lifecycle_rows.values()], ignore_index=True
+    ).to_csv(run_dir / "historical_lifecycle_positions.csv", index=False)
+    (run_dir / "result.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    report_path = Path(args.report) if args.report else LIFECYCLE_REPORT
+    metadata_path = Path(args.metadata) if args.metadata else LIFECYCLE_METADATA
+    report_path.write_text(lifecycle_markdown(payload) + "\n", encoding="utf-8")
+    metadata_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return payload
+
+
 def parser() -> argparse.ArgumentParser:
     out = argparse.ArgumentParser()
     out.add_argument("--runtime", default=str(RUNTIME))
@@ -995,11 +1648,23 @@ def parser() -> argparse.ArgumentParser:
     out.add_argument("--gain-floor", type=float, default=GAIN_FLOOR)
     out.add_argument("--max-book-lag-min", type=float, default=MAX_BOOK_LAG_MIN)
     out.add_argument("--confirmation-only", action="store_true")
+    out.add_argument("--market-free-lifecycle", action="store_true")
+    out.add_argument("--feature-ledger", default=str(LIFECYCLE_LEDGER))
+    out.add_argument("--run-id", default=None)
+    out.add_argument("--output-dir", default=None)
+    out.add_argument("--report", default=None)
+    out.add_argument("--metadata", default=None)
     return out
 
 
 def main() -> int:
     args = parser().parse_args()
+    if args.market_free_lifecycle:
+        if not args.run_id and not args.output_dir:
+            raise SystemExit("--market-free-lifecycle requires --run-id or --output-dir")
+        result = run_market_free_lifecycle(args)
+        print(json.dumps(result["gates"], ensure_ascii=False, indent=2))
+        return 0
     if args.confirmation_only:
         entries = selected_entries(Path(args.runtime))
         states = load_states(Path(args.runtime))

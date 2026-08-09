@@ -56,6 +56,28 @@ run an execution replay, and do not repair the failed coverage gate by
 post-hoc loosening it to a three-rung model.  Full report:
 `2026-08/2026-08-08-current-yes-core-carry-full-ladder-prior-v1.md`.
 
+### 2026-08-09 Core Carry event-driven lifecycle audit
+
+The earlier `+3c/share` post-entry capture idea is now rejected for the current
+expression.  Replaying the current Core raw against the unified
+`market_books/batches` source produced 34 settled, post-report executable
+entries across 11 target dates: hold PnL was `+$15.37`, while the static exit
+was `+$11.28`, a `-$4.09` delta with target-date CI `[-$7.47,-$1.36]`.
+All 25 exits were final winners and no loss was saved.  The old positive point
+estimate came from a narrower archived-book denominator and must not be used.
+
+An independent market-free lifecycle head was also tested on the maintained
+1,349-checkpoint actual-transport ledger.  The best development candidate
+(shallow HGB using weather/path/forecast/transport only) remained worse than
+Core and market on the last-eight secondary window, and both full-exit and
+50%-reduce replay sold only eventual winners.  Only one of 82 selected
+positions with a later checkpoint was a final loss, so post-entry loss evidence
+is not sufficient to learn or validate an invalidation policy.  Keep the
+current hold behavior; do not deploy profit capture, reduce, or weather exit.
+The direction remains eligible only for zero-notional event-ledger collection.
+Full report:
+`2026-08/2026-08-09-current-yes-core-carry-event-lifecycle-v2.md`.
+
 ### Family synthesis after the July challenger sequence
 
 The durable conclusion from the 80 dated current-YES reports is shorter than

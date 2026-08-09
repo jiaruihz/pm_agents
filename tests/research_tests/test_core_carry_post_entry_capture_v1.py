@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from scripts.analysis.reheat_risk.research_core_carry_post_entry_capture_v1 import (
+    LIFECYCLE_FEATURES,
     first_new_report_event,
+    lifecycle_exit_pnl,
+    lifecycle_sample_weights,
     official_weather_fee_per_share,
     replay_one_report_confirmation,
     top_of_book,
@@ -12,6 +15,8 @@ from scripts.ops.weather_current_yes_core_carry_post_entry_capture_shadow_v1 imp
     evaluate_event,
 )
 from datetime import datetime, timezone
+import pandas as pd
+import pytest
 
 
 def test_walk_sell_ladder_uses_depth_and_exit_fee() -> None:
@@ -135,3 +140,40 @@ def test_first_new_report_confirmation_cancels_after_cross() -> None:
     assert row["confirmation_reason"] == "held_bracket_invalidated_by_first_new_report"
     assert row["candidate_pnl_usd"] == 0.0
     assert row["pnl_delta_usd"] == 9.298
+
+
+def test_lifecycle_exit_pnl_supports_hold_reduce_and_full_exit() -> None:
+    assert lifecycle_exit_pnl(
+        0.80, 1.0, None, quantity=10, exit_fraction=0.0
+    ) == pytest.approx(2.0)
+    assert lifecycle_exit_pnl(
+        0.80, 1.0, 0.90, quantity=10, exit_fraction=0.5
+    ) == pytest.approx(1.5)
+    assert lifecycle_exit_pnl(
+        0.80, 1.0, 0.90, quantity=10, exit_fraction=1.0
+    ) == pytest.approx(1.0)
+
+
+def test_lifecycle_training_weights_equalize_dates_and_states() -> None:
+    frame = pd.DataFrame(
+        {
+            "target_date": ["2026-01-01"] * 3 + ["2026-01-02"],
+            "state_key": ["a", "a", "b", "c"],
+        }
+    )
+    frame["weight"] = lifecycle_sample_weights(frame)
+    date_mass = frame.groupby("target_date")["weight"].sum()
+    state_mass = frame.groupby("state_key")["weight"].sum()
+    assert date_mass.iloc[0] == date_mass.iloc[1]
+    assert state_mass["a"] == state_mass["b"]
+
+
+def test_market_free_lifecycle_features_exclude_market_and_core() -> None:
+    forbidden = {
+        "market_mid",
+        "current_yes_bid",
+        "current_yes_ask",
+        "p_core",
+        "ten_share_cost_per_share",
+    }
+    assert forbidden.isdisjoint(LIFECYCLE_FEATURES)
