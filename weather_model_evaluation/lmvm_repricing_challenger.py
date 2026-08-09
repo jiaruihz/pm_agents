@@ -17,6 +17,7 @@ import hashlib
 import json
 import math
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,11 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 SEED = 20260809
@@ -1598,10 +1604,21 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="evaluate every D-2/D-1 ladder rung on a fixed forecast-event denominator",
     )
+    source.add_argument(
+        "--mass-transport-db",
+        type=Path,
+        help="run the canonical PIT ladder-mass-transport M0-M3 evaluation",
+    )
+    source.add_argument(
+        "--mass-transport-postprocess-dir",
+        type=Path,
+        help="write reporting-only tables from an already frozen validation run",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--min-train-dates", type=int, default=15)
     parser.add_argument("--holdout-fraction", type=float, default=0.20)
     parser.add_argument("--draws", type=int, default=2_000)
+    parser.add_argument("--mass-transport-identity-db", type=Path, default=Path("runtime/weather.db"))
     parser.add_argument(
         "--score-model-dir",
         type=Path,
@@ -1612,6 +1629,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.mass_transport_postprocess_dir is not None:
+        from weather_model_evaluation.ladder_mass_transport import postprocess_artifact
+
+        result = postprocess_artifact(args.mass_transport_postprocess_dir, draws=args.draws, db=args.mass_transport_identity_db)
+        print(json.dumps({"status": result["status"], "output_dir": str(args.mass_transport_postprocess_dir)}, ensure_ascii=False))
+        return 0
+    if args.mass_transport_db is not None:
+        if args.score_model_dir is not None:
+            raise ValueError("--score-model-dir is not supported with --mass-transport-db")
+        from weather_model_evaluation.ladder_mass_transport import run
+
+        result = run(args.mass_transport_db, args.output_dir, draws=args.draws)
+        print(json.dumps({"status": result["status"], "output_dir": str(args.output_dir)}, ensure_ascii=False))
+        return 0
     input_path = args.full_ladder_event_csv or args.candidate_csv
     assert input_path is not None
     rows = pd.read_csv(input_path, low_memory=False)
