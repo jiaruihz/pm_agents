@@ -408,6 +408,49 @@ def git_metadata(root: Path, cache: dict[str, dict[str, Any]]) -> dict[str, Any]
     return payload
 
 
+def inspect_persistent_worktrees(spec: WeatherProductionSpec) -> list[dict[str, Any]]:
+    """Find top-level pm_agents worktrees not owned by the production contract."""
+    proc = run_command(
+        [
+            "git",
+            "-C",
+            str(spec.operational_repo_root),
+            "worktree",
+            "list",
+            "--porcelain",
+        ],
+        timeout=5.0,
+        stderr=None,
+    )
+    if proc.returncode != 0:
+        return []
+    allowed = {spec.operational_repo_root.resolve()}
+    if spec.canonical_refresh_checkout_root is not None:
+        allowed.add(spec.canonical_refresh_checkout_root.resolve())
+    allowed.update(
+        runtime.checkout_root.resolve()
+        for runtime in spec.managed_runtimes
+        if runtime.checkout_root is not None
+    )
+    parent = spec.operational_repo_root.parent.resolve()
+    prefix = spec.operational_repo_root.name
+    rows: list[dict[str, Any]] = []
+    for line in proc.stdout.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        root = Path(line.removeprefix("worktree ")).resolve()
+        if root.parent != parent or not root.name.startswith(prefix):
+            continue
+        rows.append(
+            {
+                "root": str(root),
+                "registered": root in allowed,
+                "exists": root.exists(),
+            }
+        )
+    return sorted(rows, key=lambda row: str(row["root"]))
+
+
 def runtime_summary(tokens: Sequence[str]) -> dict[str, Any]:
     output_values = option_values(tokens, OUTPUT_OPTIONS)
     for value in output_values:
@@ -574,6 +617,19 @@ def build_manifest(
     git_cache: dict[str, dict[str, Any]] = {}
     observed_processes: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
+    persistent_worktrees = inspect_persistent_worktrees(spec)
+    unregistered_worktrees = [
+        row for row in persistent_worktrees if not bool(row["registered"])
+    ]
+    if unregistered_worktrees:
+        findings.append(
+            finding(
+                "warning",
+                "unregistered_persistent_worktrees",
+                "top-level pm_agents worktrees exist outside the production contract",
+                {"worktrees": unregistered_worktrees},
+            )
+        )
 
     production_volume = inspect_volume_identity(spec.production_storage_root)
     archive_volume = inspect_volume_identity(spec.archive_storage_root)
@@ -821,6 +877,7 @@ def build_manifest(
         "db_route": dict(db_route),
         "db_consumers": sorted(db_consumers.values(), key=lambda row: int(row["pid"])),
         "checkouts": checkouts,
+        "persistent_worktrees": persistent_worktrees,
         "processes": sorted(observed_processes, key=lambda row: int(row["pid"])),
         "tmux_sessions": list(tmux_rows),
         "launch_agents": list(launchctl_rows),

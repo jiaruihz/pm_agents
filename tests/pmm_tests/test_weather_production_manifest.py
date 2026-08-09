@@ -20,6 +20,8 @@ def production_spec(tmp_path: Path) -> WeatherProductionSpec:
         pm_runtime_root=tmp_path / "jrs",
         canonical_tmux_socket="weather-data-feed-jrs",
         canonical_tmux_binary=tmp_path / "tmux",
+        market_proxy_state_path=tmp_path / "market_proxy_state.json",
+        market_proxy_default_url="http://127.0.0.1:7897",
     )
 
 
@@ -191,6 +193,17 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     local.symlink_to(spec.canonical_db_path)
     db_route = manifest.inspect_db_route(spec, repo_root=tmp_path / "repo")
     monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(
+        manifest,
+        "inspect_persistent_worktrees",
+        lambda _spec: [
+            {
+                "root": "/Users/deepsleep/projects/pm_agents_old_fix",
+                "registered": False,
+                "exists": True,
+            }
+        ],
+    )
 
     payload = manifest.build_manifest(
         spec=spec,
@@ -212,6 +225,7 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     findings = {item["kind"]: item for item in payload["findings"]}
     assert findings["tmux_sessions_missing_from_instance_registry"]["severity"] == "warning"
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
+    assert findings["unregistered_persistent_worktrees"]["severity"] == "warning"
 
 
 def test_prechange_comparison_fails_when_existing_session_disappears():

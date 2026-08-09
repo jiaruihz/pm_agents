@@ -120,6 +120,13 @@ one-shot，并确认没有在跑的同名任务）。
 
 worktree 已脏时保留用户改动。若目标文件已有无关修改，先分离范围；不能把整棵脏树一并提交。
 
+部署或修复任务使用的临时 worktree 必须在交付时收口：已提交代码保留 branch/SHA，未提交代码先做
+content-addressed snapshot，ignored 研究产物通过 `weather_research_artifact_ctl.py archive --source-root ...`
+迁到 archive，然后移除非 `production.yaml` 登记的实体 worktree 并 prune 失效 metadata。不得长期在
+`/Users/deepsleep/projects` 顶层留下 `pm_agents_<task>`；manifest 出现
+`unregistered_persistent_worktrees` 时，先确认无进程/LaunchAgent/cwd 引用再清理。当前登记的生产 checkout
+只能在明确生产维护授权下变更或移除。
+
 ## 本地验证
 
 按目标选择：

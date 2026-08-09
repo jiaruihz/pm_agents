@@ -608,16 +608,104 @@ def select_artifacts() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return rows, summary
 
 
-def git_snapshot() -> dict[str, Any]:
+def git_snapshot(root: Path = ROOT) -> dict[str, Any]:
     head = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
     ).strip()
     status = subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "-z"], cwd=ROOT
+        ["git", "status", "--porcelain=v1", "-z"], cwd=root
     ).decode("utf-8", errors="replace")
     return {
         "head": head,
         "dirty_entry_count": len([item for item in status.split("\0") if item]),
+    }
+
+
+def validate_archive_source_root(source_root: Path) -> Path:
+    """Require an external archive source to be a worktree of this repository."""
+    resolved = source_root.expanduser().resolve()
+    top_level = Path(
+        subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], cwd=resolved, text=True
+        ).strip()
+    ).resolve()
+    if top_level != resolved:
+        raise ValueError(f"source root is not a worktree root: {resolved}")
+
+    def common_dir(root: Path) -> Path:
+        value = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root,
+            text=True,
+        ).strip()
+        return Path(value).resolve()
+
+    if common_dir(resolved) != common_dir(ROOT):
+        raise ValueError(f"source root belongs to a different repository: {resolved}")
+    return resolved
+
+
+def select_worktree_artifacts(
+    source_root: Path,
+    selected_paths: set[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Select explicit ignored generated artifacts from a historical worktree."""
+    if not selected_paths:
+        raise ValueError("external worktree archive requires at least one --path")
+    tracked = git_tracked_files()
+    corpus = active_code_corpus(tracked)
+    authoritative_targets = authoritative_link_targets(tracked)
+    rows: list[dict[str, Any]] = []
+    for raw in sorted(selected_paths):
+        relative = Path(raw)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"archive path must be repository-relative: {raw}")
+        normalized = relative.as_posix()
+        if not normalized.startswith("docs/analysis/") or "/generated/" not in normalized:
+            raise ValueError(
+                f"external worktree archive only accepts generated research artifacts: {raw}"
+            )
+        source = source_root / relative
+        if source.is_symlink() or not source.is_file():
+            raise ValueError(f"archive source must be a regular file: {source}")
+        tracked_output = subprocess.check_output(
+            ["git", "ls-files", "--", normalized], cwd=source_root, text=True
+        ).strip()
+        if tracked_output:
+            raise ValueError(f"refusing to remove tracked worktree file: {normalized}")
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--quiet", "--", normalized],
+            cwd=source_root,
+            check=False,
+        ).returncode == 0
+        if not ignored:
+            raise ValueError(f"external worktree artifact is not ignored: {normalized}")
+        if generated_artifact_required_in_worktree(
+            normalized,
+            corpus=corpus,
+            authoritative_targets=authoritative_targets,
+        ):
+            raise ValueError(f"active code or docs still require artifact: {normalized}")
+        rows.append(
+            {
+                "path": normalized,
+                "size_bytes": source.stat().st_size,
+                "git_tracked": False,
+                "repo_eligible": False,
+                "required_in_worktree": False,
+                "selected": True,
+            }
+        )
+    size = sum(int(row["size_bytes"]) for row in rows)
+    return rows, {
+        "all_file_count": len(rows),
+        "all_bytes": size,
+        "selected_file_count": len(rows),
+        "selected_bytes": size,
+        "selected_tracked_file_count": 0,
+        "selected_tracked_bytes": 0,
+        "selected_untracked_file_count": len(rows),
+        "selected_untracked_bytes": size,
     }
 
 
@@ -653,10 +741,18 @@ def archive(
     run_id: str,
     *,
     selected_paths: set[str] | None = None,
+    source_root: Path | None = None,
     apply: bool,
 ) -> dict[str, Any]:
-    rows, summary = select_artifacts()
-    if selected_paths:
+    archive_source_root = ROOT
+    if source_root is not None:
+        archive_source_root = validate_archive_source_root(source_root)
+        rows, summary = select_worktree_artifacts(
+            archive_source_root, selected_paths or set()
+        )
+    else:
+        rows, summary = select_artifacts()
+    if selected_paths and source_root is None:
         eligible_paths = {row["path"] for row in rows}
         unknown = sorted(selected_paths - eligible_paths)
         if unknown:
@@ -689,9 +785,9 @@ def archive(
         "schema_version": ARTIFACT_MANIFEST_SCHEMA,
         "run_id": run_id,
         "generated_at_utc": utc_now(),
-        "repo_root": str(ROOT),
+        "repo_root": str(archive_source_root),
         "artifact_root": str(artifact_root),
-        "git": git_snapshot(),
+        "git": git_snapshot(archive_source_root),
         "selection": summary,
         "applied": False,
         "files": rows,
@@ -712,7 +808,7 @@ def archive(
     # make restore ambiguous and poison all later dependency audits.
     active_archive = archived_artifact_rows(artifact_root)
     for row in rows:
-        source = ROOT / row["path"]
+        source = archive_source_root / row["path"]
         digest = sha256_file(source)
         previous = active_archive.get(row["path"])
         if previous and previous["sha256"] != digest:
@@ -724,7 +820,7 @@ def archive(
 
     archived_bytes = 0
     for index, row in enumerate(rows, start=1):
-        source = ROOT / row["path"]
+        source = archive_source_root / row["path"]
         before = source.stat()
         digest = row["sha256"]
         destination = store_object(source, object_root, digest)
@@ -748,7 +844,7 @@ def archive(
 
     removed_bytes = 0
     for row in rows:
-        source = ROOT / row["path"]
+        source = archive_source_root / row["path"]
         if sha256_file(source) != row["sha256"]:
             raise RuntimeError(f"source changed before removal: {source}")
         source.unlink()
@@ -879,13 +975,37 @@ def dirty_worktree_paths() -> list[Path]:
     return sorted(ROOT / relative for relative in relative_paths)
 
 
-def snapshot_worktree(run_id: str, *, apply: bool) -> dict[str, Any]:
+def snapshot_worktree(
+    run_id: str,
+    *,
+    apply: bool,
+    source_root: Path | None = None,
+    selected_paths: set[str] | None = None,
+) -> dict[str, Any]:
     spec = load_production_spec()
     artifact_root = spec.research_artifact_root
-    paths = dirty_worktree_paths()
+    snapshot_root = ROOT
+    if source_root is None:
+        if selected_paths:
+            raise ValueError("--path for snapshot-worktree requires --source-root")
+        paths = dirty_worktree_paths()
+    else:
+        snapshot_root = validate_archive_source_root(source_root)
+        if not selected_paths:
+            raise ValueError("external worktree snapshot requires at least one --path")
+        paths = []
+        for raw in sorted(selected_paths):
+            relative = Path(raw)
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError(f"snapshot path must be repository-relative: {raw}")
+            normalized = relative.as_posix()
+            path = snapshot_root / relative
+            if not path.is_file() and not path.is_symlink():
+                raise ValueError(f"snapshot source is absent: {path}")
+            paths.append(path)
     rows: list[dict[str, Any]] = []
     for path in paths:
-        relative = str(path.relative_to(ROOT))
+        relative = str(path.relative_to(snapshot_root))
         if path.is_symlink():
             rows.append(
                 {
@@ -910,9 +1030,9 @@ def snapshot_worktree(run_id: str, *, apply: bool) -> dict[str, Any]:
         "snapshot_kind": "dirty_worktree",
         "run_id": run_id,
         "generated_at_utc": utc_now(),
-        "repo_root": str(ROOT),
+        "repo_root": str(snapshot_root),
         "artifact_root": str(artifact_root),
-        "git": git_snapshot(),
+        "git": git_snapshot(snapshot_root),
         "applied": False,
         "files": rows,
         "selection": {
@@ -928,7 +1048,7 @@ def snapshot_worktree(run_id: str, *, apply: bool) -> dict[str, Any]:
     for row in rows:
         if row["kind"] != "file":
             continue
-        source = ROOT / row["path"]
+        source = snapshot_root / row["path"]
         before = source.stat()
         digest = sha256_file(source)
         destination = store_object(source, object_root, digest)
@@ -980,6 +1100,11 @@ def parse_args() -> argparse.Namespace:
         help="execute archive/removal or restore; otherwise print a read-only plan",
     )
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument(
+        "--source-root",
+        type=Path,
+        help="registered historical worktree root used only by archive with explicit --path",
+    )
     parser.add_argument("--producer")
     parser.add_argument("--reproduced-root", type=Path)
     parser.add_argument("--code-revision")
@@ -1054,7 +1179,12 @@ def main() -> int:
         restore_dependencies(set(args.script), apply=args.apply)
         return 0
     if args.command == "snapshot-worktree":
-        snapshot_worktree(args.run_id, apply=args.apply)
+        snapshot_worktree(
+            args.run_id,
+            apply=args.apply,
+            source_root=args.source_root,
+            selected_paths=set(args.path),
+        )
         return 0
     if args.command == "prune-corrupt":
         prune_corrupt(
@@ -1081,7 +1211,12 @@ def main() -> int:
             apply=args.apply,
         )
         return 0
-    archive(args.run_id, selected_paths=set(args.path), apply=args.apply)
+    archive(
+        args.run_id,
+        selected_paths=set(args.path),
+        source_root=args.source_root,
+        apply=args.apply,
+    )
     return 0
 
 

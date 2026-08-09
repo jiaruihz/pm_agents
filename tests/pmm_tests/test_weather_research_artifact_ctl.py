@@ -1,6 +1,7 @@
 import hashlib
 import gzip
 import json
+import subprocess
 from pathlib import Path
 
 from scripts.ops import weather_research_artifact_ctl as artifact_ctl
@@ -60,7 +61,7 @@ def test_archive_filters_exact_paths_and_removes_only_selected(tmp_path, monkeyp
     monkeypatch.setattr(
         artifact_ctl,
         "git_snapshot",
-        lambda: {"head": "abc", "dirty_entry_count": 2},
+        lambda root=repo: {"head": "abc", "dirty_entry_count": 2},
     )
 
     result = artifact_ctl.archive(
@@ -72,6 +73,73 @@ def test_archive_filters_exact_paths_and_removes_only_selected(tmp_path, monkeyp
     assert result["selection"]["selected_file_count"] == 1
     assert not selected.exists()
     assert retained.read_bytes() == b"current rows\n"
+
+
+def test_archive_reads_explicit_ignored_artifact_from_historical_worktree(
+    tmp_path, monkeypatch
+):
+    control_repo = tmp_path / "control"
+    control_repo.mkdir()
+    historical = tmp_path / "historical"
+    artifact = historical / "docs/analysis/2026-08/generated/old/summary.json"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text('{"result": "kept"}\n', encoding="utf-8")
+    artifact_root = tmp_path / "artifact_store"
+    relative = str(artifact.relative_to(historical))
+    monkeypatch.setattr(artifact_ctl, "ROOT", control_repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "validate_archive_source_root",
+        lambda root: root.resolve(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "select_worktree_artifacts",
+        lambda root, paths: (
+            [
+                {
+                    "path": relative,
+                    "size_bytes": artifact.stat().st_size,
+                    "git_tracked": False,
+                    "repo_eligible": False,
+                    "required_in_worktree": False,
+                    "selected": True,
+                }
+            ],
+            {
+                "all_file_count": 1,
+                "all_bytes": artifact.stat().st_size,
+                "selected_file_count": 1,
+                "selected_bytes": artifact.stat().st_size,
+                "selected_tracked_file_count": 0,
+                "selected_tracked_bytes": 0,
+                "selected_untracked_file_count": 1,
+                "selected_untracked_bytes": artifact.stat().st_size,
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "load_production_spec",
+        lambda: type("Spec", (), {"research_artifact_root": artifact_root})(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "git_snapshot",
+        lambda root=control_repo: {"head": "abc", "dirty_entry_count": 0},
+    )
+
+    result = artifact_ctl.archive(
+        "historical_worktree",
+        selected_paths={relative},
+        source_root=historical,
+        apply=True,
+    )
+
+    assert result["repo_root"] == str(historical.resolve())
+    assert not artifact.exists()
+    archived = Path(result["files"][0]["object_path"])
+    assert archived.read_text(encoding="utf-8") == '{"result": "kept"}\n'
 
 
 def test_archive_refuses_different_hash_for_existing_path(tmp_path, monkeypatch):
@@ -136,7 +204,7 @@ def test_archive_refuses_different_hash_for_existing_path(tmp_path, monkeypatch)
     monkeypatch.setattr(
         artifact_ctl,
         "git_snapshot",
-        lambda: {"head": "abc", "dirty_entry_count": 1},
+        lambda root=repo: {"head": "abc", "dirty_entry_count": 1},
     )
 
     try:
@@ -257,6 +325,47 @@ def test_restore_recreates_symlink_from_snapshot(tmp_path, monkeypatch):
     assert restored.is_symlink()
     assert restored.readlink() == Path("/Volumes/jrs/research/source.jsonl.gz")
     assert result["restored_file_count"] == 1
+
+
+def test_external_worktree_snapshot_preserves_runtime_without_removing_source(
+    tmp_path, monkeypatch
+):
+    control_repo = tmp_path / "control"
+    control_repo.mkdir()
+    historical = tmp_path / "historical"
+    state = historical / "runtime/strategy/state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text('{"state": "historical"}\n', encoding="utf-8")
+    artifact_root = tmp_path / "artifact_store"
+    monkeypatch.setattr(artifact_ctl, "ROOT", control_repo)
+    monkeypatch.setattr(
+        artifact_ctl,
+        "validate_archive_source_root",
+        lambda root: root.resolve(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "load_production_spec",
+        lambda: type("Spec", (), {"research_artifact_root": artifact_root})(),
+    )
+    monkeypatch.setattr(
+        artifact_ctl,
+        "git_snapshot",
+        lambda root=control_repo: {"head": "abc", "dirty_entry_count": 0},
+    )
+    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "")
+
+    result = artifact_ctl.snapshot_worktree(
+        "historical_runtime",
+        apply=True,
+        source_root=historical,
+        selected_paths={"runtime/strategy/state.json"},
+    )
+
+    assert result["snapshot_kind"] == "dirty_worktree"
+    assert state.read_text(encoding="utf-8") == '{"state": "historical"}\n'
+    archived = Path(result["files"][0]["object_path"])
+    assert archived.read_bytes() == state.read_bytes()
 
 
 def test_dependency_scan_resolves_split_path_joins_and_directory_reads(
