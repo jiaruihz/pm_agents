@@ -27,6 +27,10 @@ from .probability import (
     binary_score,
     date_block_bootstrap_delta,
 )
+from .ladder_microstructure import (
+    LADDER_FEATURES,
+    add_ladder_microstructure_features,
+)
 
 
 EPSILON = 1e-5
@@ -454,6 +458,17 @@ NUMERIC_MARKET_OFFSET = [
     "event_age_min",
     "quote_spread",
 ]
+LADDER_INTERACTION_CORE = [
+    "weather_shock",
+    "signed_mode_distance",
+    "rung_relative_markout",
+    "neighbor_propagation",
+    "shock_x_mode_distance",
+    "shock_x_neighbor_propagation",
+    "shock_x_mode_x_neighbor_propagation",
+]
+NUMERIC_MARKET_OFFSET_LADDER = NUMERIC_MARKET_OFFSET + LADDER_INTERACTION_CORE
+NUMERIC_MARKET_POSTERIOR_LADDER = NUMERIC_MARKET_POSTERIOR + LADDER_FEATURES
 CATEGORICAL = ["event_source"]
 
 
@@ -482,7 +497,9 @@ def _preprocessor(numeric: list[str], *, scale: bool) -> ColumnTransformer:
     )
 
 
-def _candidate_models() -> dict[str, tuple[Pipeline, list[str]]]:
+def _candidate_models(
+    *, include_ladder_features: bool = False
+) -> dict[str, tuple[Pipeline, list[str]]]:
     logistic = lambda numeric: Pipeline(  # noqa: E731
         [
             ("features", _preprocessor(numeric, scale=True)),
@@ -508,7 +525,7 @@ def _candidate_models() -> dict[str, tuple[Pipeline, list[str]]]:
             ),
         ]
     )
-    return {
+    models = {
         "compact_logistic_model_only": (
             logistic(NUMERIC_MODEL_ONLY),
             NUMERIC_MODEL_ONLY + CATEGORICAL,
@@ -522,6 +539,39 @@ def _candidate_models() -> dict[str, tuple[Pipeline, list[str]]]:
             NUMERIC_MARKET_POSTERIOR + CATEGORICAL,
         ),
     }
+    if include_ladder_features:
+        ladder_hgb = Pipeline(
+            [
+                (
+                    "features",
+                    _preprocessor(NUMERIC_MARKET_POSTERIOR_LADDER, scale=False),
+                ),
+                (
+                    "classifier",
+                    HistGradientBoostingClassifier(
+                        learning_rate=0.05,
+                        max_iter=80,
+                        max_leaf_nodes=7,
+                        min_samples_leaf=30,
+                        l2_regularization=3.0,
+                        random_state=20260809,
+                    ),
+                ),
+            ]
+        )
+        models.update(
+            {
+                "compact_logistic_market_prior_ladder": (
+                    logistic(NUMERIC_MARKET_POSTERIOR_LADDER),
+                    NUMERIC_MARKET_POSTERIOR_LADDER + CATEGORICAL,
+                ),
+                "shallow_hgb_market_prior_ladder": (
+                    ladder_hgb,
+                    NUMERIC_MARKET_POSTERIOR_LADDER + CATEGORICAL,
+                ),
+            }
+        )
+    return models
 
 
 def _date_equal_fit_weights(frame: pd.DataFrame) -> np.ndarray:
@@ -534,14 +584,17 @@ def _fit_market_offset_logistic(
     train: pd.DataFrame,
     test: pd.DataFrame,
     weights: np.ndarray,
+    *,
+    numeric_features: list[str] = NUMERIC_MARKET_OFFSET,
+    l2_strength: float = 0.05,
 ) -> np.ndarray:
     """Fit a regularized residual while fixing the market-logit coefficient at 1."""
 
-    transformer = _preprocessor(NUMERIC_MARKET_OFFSET, scale=True)
+    transformer = _preprocessor(numeric_features, scale=True)
     train_design = transformer.fit_transform(
-        train[NUMERIC_MARKET_OFFSET + CATEGORICAL]
+        train[numeric_features + CATEGORICAL]
     )
-    test_design = transformer.transform(test[NUMERIC_MARKET_OFFSET + CATEGORICAL])
+    test_design = transformer.transform(test[numeric_features + CATEGORICAL])
     train_design = np.column_stack([np.ones(len(train_design)), train_design])
     test_design = np.column_stack([np.ones(len(test_design)), test_design])
     y = train["won_no"].to_numpy(dtype=float)
@@ -553,10 +606,10 @@ def _fit_market_offset_logistic(
         loss = np.average(
             np.logaddexp(0.0, linear) - y * linear,
             weights=weights,
-        ) + 0.05 * float(beta[1:] @ beta[1:])
+        ) + l2_strength * float(beta[1:] @ beta[1:])
         residual = weights * (probability - y) / weights.sum()
         gradient = train_design.T @ residual
-        gradient[1:] += 0.1 * beta[1:]
+        gradient[1:] += 2.0 * l2_strength * beta[1:]
         return float(loss), gradient
 
     fitted = minimize(
@@ -689,6 +742,7 @@ def run_market_prior_posterior_research(
     timezone: str,
     min_train_dates: int = 3,
     bootstrap_draws: int = 4000,
+    include_ladder_features: bool = False,
 ) -> PosteriorResearchResult:
     """Run expanding target-date OOF A/B on the supplied fixed denominator."""
 
@@ -697,10 +751,13 @@ def run_market_prior_posterior_research(
     if bootstrap_draws <= 0:
         raise ValueError("bootstrap_draws must be positive")
     prepared, denominator = prepare_expression_grain(frame, timezone=timezone)
+    if include_ladder_features:
+        prepared, ladder_coverage = add_ladder_microstructure_features(prepared)
+        denominator["ladder_microstructure"] = ladder_coverage
     dates = sorted(prepared["target_date"].unique())
     if len(dates) <= min_train_dates:
         raise ValueError("not enough target dates for expanding OOF evaluation")
-    models = _candidate_models()
+    models = _candidate_models(include_ladder_features=include_ladder_features)
     prediction_rows = []
     fold_rows = []
     for fold_index in range(min_train_dates, len(dates)):
@@ -717,6 +774,16 @@ def run_market_prior_posterior_research(
         output["p_compact_logistic_market_offset"] = _fit_market_offset_logistic(
             train, test, weights
         )
+        if include_ladder_features:
+            output["p_compact_logistic_market_offset_ladder"] = (
+                _fit_market_offset_logistic(
+                    train,
+                    test,
+                    weights,
+                    numeric_features=NUMERIC_MARKET_OFFSET_LADDER,
+                    l2_strength=0.5,
+                )
+            )
         for name, (model, features) in models.items():
             model.fit(
                 train[features],
@@ -741,7 +808,10 @@ def run_market_prior_posterior_research(
         "p_raw_market",
         "p_raw_a8",
         "p_compact_logistic_market_offset",
-    ] + [
+    ]
+    if include_ladder_features:
+        probability_columns.append("p_compact_logistic_market_offset_ladder")
+    probability_columns += [
         f"p_{name}" for name in models
     ]
     score_rows = []
@@ -780,6 +850,7 @@ def run_market_prior_posterior_research(
             bootstrap_rows.append(
                 {
                     "model": probability_column.removeprefix("p_"),
+                    "baseline_model": "raw_market",
                     "metric": metric,
                     **date_block_bootstrap_delta(
                         predictions,
@@ -790,6 +861,44 @@ def run_market_prior_posterior_research(
                     ),
                 }
             )
+    if include_ladder_features:
+        ladder_pairs = [
+            (
+                "compact_logistic_market_offset_ladder",
+                "compact_logistic_market_offset",
+            ),
+            (
+                "compact_logistic_market_prior_ladder",
+                "compact_logistic_market_prior",
+            ),
+            ("shallow_hgb_market_prior_ladder", "shallow_hgb_market_prior"),
+        ]
+        for candidate_name, baseline_name in ladder_pairs:
+            for metric in ("brier", "logloss"):
+                candidate_loss = binary_loss_values(
+                    predictions["won_no"].astype(int),
+                    predictions[f"p_{candidate_name}"],
+                    metric=metric,
+                )
+                baseline_loss = binary_loss_values(
+                    predictions["won_no"].astype(int),
+                    predictions[f"p_{baseline_name}"],
+                    metric=metric,
+                )
+                bootstrap_rows.append(
+                    {
+                        "model": candidate_name,
+                        "baseline_model": baseline_name,
+                        "metric": metric,
+                        **date_block_bootstrap_delta(
+                            predictions,
+                            candidate_loss,
+                            baseline_loss,
+                            draws=bootstrap_draws,
+                            seed=20260809,
+                        ),
+                    }
+                )
     all_trades = []
     trade_summaries = []
     for probability_column in probability_columns:
@@ -820,6 +929,7 @@ def run_market_prior_posterior_research(
             "oof_test_dates": int(predictions["target_date"].nunique()),
             "min_train_dates": int(min_train_dates),
             "fit_weighting": "equal total sample weight per target_date",
+            "include_ladder_features": bool(include_ladder_features),
             "eligibility": (
                 "valid causal event/book clocks, binary settlement, valid probabilities, "
                 "two-sided ordered quote; caller-supplied source scope; no internal "

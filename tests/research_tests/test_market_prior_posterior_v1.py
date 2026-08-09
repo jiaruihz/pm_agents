@@ -16,6 +16,10 @@ from weather_model_evaluation.market_prior_posterior import (
     run_market_prior_posterior_research,
     select_city_rows,
 )
+from weather_model_evaluation.ladder_microstructure import (
+    LADDER_FEATURES,
+    add_ladder_microstructure_features,
+)
 from weather_model_evaluation.cli import main as evaluation_cli_main
 
 
@@ -117,6 +121,55 @@ def test_shared_cli_writes_city_scoped_strict_json(tmp_path) -> None:
     assert len(summary["producer"]["build_id"]) == 64
 
 
+def test_shared_cli_requires_explicit_assertion_for_legacy_cityless_input(
+    tmp_path,
+) -> None:
+    input_path = tmp_path / "helsinki_legacy.csv"
+    _fixture().to_csv(input_path, index=False)
+    output_dir = tmp_path / "output"
+    with __import__("pytest").raises(ValueError, match="input-city-assertion"):
+        evaluation_cli_main(
+            [
+                "market-prior",
+                "--input",
+                str(input_path),
+                "--output-dir",
+                str(output_dir),
+                "--city",
+                "Helsinki",
+                "--timezone",
+                "Europe/Helsinki",
+            ]
+        )
+    assert (
+        evaluation_cli_main(
+            [
+                "market-prior",
+                "--input",
+                str(input_path),
+                "--output-dir",
+                str(output_dir),
+                "--city",
+                "Helsinki",
+                "--input-city-assertion",
+                "Helsinki",
+                "--timezone",
+                "Europe/Helsinki",
+                "--min-train-dates",
+                "3",
+                "--bootstrap-draws",
+                "20",
+            ]
+        )
+        == 0
+    )
+    summary = json.loads((output_dir / "summary.json").read_text())
+    assert (
+        summary["input_scope"]["city_scope_origin"]
+        == "explicit_legacy_cityless_input_assertion"
+    )
+
+
 def test_prepare_expression_grain_accepts_mixed_iso_precision() -> None:
     frame = _fixture().iloc[:2].copy()
     frame.loc[frame.index[0], "event_decision_ts_utc"] = "2026-08-01T07:01:02+00:00"
@@ -164,6 +217,45 @@ def test_market_prior_research_is_blocked_by_target_date() -> None:
     }
     assert set(result.trade_summary["model"]) == set(result.scores["model"])
     assert "valid causal event/book clocks" in result.denominator["eligibility"]
+
+
+def test_ladder_features_keep_denominator_and_use_only_prior_checkpoint() -> None:
+    frame = _fixture()
+    frame["current_x"] = frame.groupby(["target_date", "event_id"]).ngroup() % 4 + 18
+    prepared, _ = prepare_expression_grain(frame, timezone="Europe/Helsinki")
+    featured, coverage = add_ladder_microstructure_features(prepared)
+    assert len(featured) == len(prepared)
+    assert set(LADDER_FEATURES).issubset(featured.columns)
+    assert coverage["events_with_prior_checkpoint"] > 0
+    first_event = featured.sort_values("event_decision_ts_utc")["event_id"].iloc[0]
+    assert featured.loc[
+        featured["event_id"].eq(first_event), "rung_relative_markout"
+    ].isna().all()
+
+
+def test_ladder_ablation_uses_same_oof_rows() -> None:
+    frame = _fixture()
+    event_number = frame["event_id"].str.rsplit("-", n=1).str[-1].astype(int)
+    frame["current_x"] = 18 + (event_number // 3)
+    result = run_market_prior_posterior_research(
+        frame,
+        timezone="Europe/Helsinki",
+        min_train_dates=3,
+        bootstrap_draws=20,
+        include_ladder_features=True,
+    )
+    assert result.denominator["include_ladder_features"] is True
+    assert result.denominator["oof_test_rows"] == 3 * 12 * 4
+    assert {
+        "compact_logistic_market_offset_ladder",
+        "compact_logistic_market_prior_ladder",
+        "shallow_hgb_market_prior_ladder",
+    }.issubset(set(result.scores["model"]))
+    paired = result.bootstrap.loc[
+        result.bootstrap["baseline_model"].eq("compact_logistic_market_offset")
+    ]
+    assert set(paired["model"]) == {"compact_logistic_market_offset_ladder"}
+    assert set(paired["metric"]) == {"brier", "logloss"}
 
 
 def test_fmi_entry_metar_correction_keeps_source_roles_separate() -> None:

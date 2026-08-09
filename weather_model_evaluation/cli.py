@@ -101,6 +101,13 @@ def _add_market_prior_parser(subparsers: Any) -> None:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--city", required=True)
+    parser.add_argument(
+        "--input-city-assertion",
+        help=(
+            "Explicit city identity for a legacy city-scoped input that lacks a "
+            "city column; must exactly match --city and is recorded in lineage."
+        ),
+    )
     parser.add_argument("--timezone", required=True)
     parser.add_argument("--min-train-dates", type=int, default=3)
     parser.add_argument("--bootstrap-draws", type=int, default=4000)
@@ -111,6 +118,14 @@ def _add_market_prior_parser(subparsers: Any) -> None:
     )
     parser.add_argument("--research-entry-cost-min-exclusive", type=float)
     parser.add_argument("--research-entry-cost-max-exclusive", type=float)
+    parser.add_argument(
+        "--include-ladder-features",
+        action="store_true",
+        help=(
+            "Add reusable mode-distance, neighbor, relative-markout, and "
+            "weather-shock interaction features without changing the row universe."
+        ),
+    )
     parser.set_defaults(handler=run_market_prior)
 
 
@@ -190,9 +205,29 @@ def run_first_seen_panel(args: argparse.Namespace) -> int:
 
 def run_market_prior(args: argparse.Namespace) -> int:
     input_frame = pd.read_csv(args.input)
+    city_scope_origin = "input_city_column"
+    if "city" not in input_frame.columns:
+        if args.input_city_assertion != args.city:
+            raise ValueError(
+                "cityless research input requires --input-city-assertion "
+                "matching --city"
+            )
+        input_frame = input_frame.copy()
+        input_frame["city"] = args.city
+        city_scope_origin = "explicit_legacy_cityless_input_assertion"
+    elif args.input_city_assertion is not None:
+        raise ValueError(
+            "--input-city-assertion is only valid when the input lacks a city column"
+        )
     frame = select_city_rows(input_frame, args.city)
     input_sha256 = sha256_file(args.input)
     producer_sha256 = sha256_file(Path(__file__).resolve())
+    model_source_path = Path(__file__).with_name("market_prior_posterior.py").resolve()
+    model_source_sha256 = sha256_file(model_source_path)
+    ladder_source_path = Path(__file__).with_name("ladder_microstructure.py").resolve()
+    ladder_source_sha256 = (
+        sha256_file(ladder_source_path) if args.include_ladder_features else None
+    )
     probability_frame = frame
     if args.probability_event_source:
         probability_frame = frame.loc[
@@ -206,6 +241,7 @@ def run_market_prior(args: argparse.Namespace) -> int:
         timezone=args.timezone,
         min_train_dates=args.min_train_dates,
         bootstrap_draws=args.bootstrap_draws,
+        include_ladder_features=args.include_ladder_features,
     )
     source_role_replay, source_role_summary = replay_fmi_entry_metar_correction(
         frame, bootstrap_draws=args.bootstrap_draws
@@ -269,6 +305,8 @@ def run_market_prior(args: argparse.Namespace) -> int:
         {
             "input_sha256": input_sha256,
             "producer_sha256": producer_sha256,
+            "model_source_sha256": model_source_sha256,
+            "ladder_source_sha256": ladder_source_sha256,
             "city": args.city,
             "timezone": args.timezone,
             "probability_event_source": args.probability_event_source,
@@ -280,6 +318,8 @@ def run_market_prior(args: argparse.Namespace) -> int:
             "research_entry_cost_max_exclusive": (
                 args.research_entry_cost_max_exclusive
             ),
+            "include_ladder_features": args.include_ladder_features,
+            "input_city_assertion": args.input_city_assertion,
         }
     )
     summary = {
@@ -291,6 +331,7 @@ def run_market_prior(args: argparse.Namespace) -> int:
             "raw_rows": int(len(input_frame)),
             "city_rows": int(len(frame)),
             "city_filter": args.city,
+            "city_scope_origin": city_scope_origin,
             "input_sha256": input_sha256,
             "target_date_start": str(frame["target_date"].astype(str).min()),
             "target_date_end": str(frame["target_date"].astype(str).max()),
@@ -299,6 +340,7 @@ def run_market_prior(args: argparse.Namespace) -> int:
             ),
         },
         "probability_event_source": args.probability_event_source or "all",
+        "include_ladder_features": args.include_ladder_features,
         "denominator": result.denominator,
         "scores": result.scores.to_dict(orient="records"),
         "market_paired_bootstrap": result.bootstrap.to_dict(orient="records"),
@@ -310,6 +352,10 @@ def run_market_prior(args: argparse.Namespace) -> int:
             "entrypoint": "weather_model_evaluation.cli:market-prior",
             "source_path": str(Path(__file__).resolve().relative_to(REPO_ROOT)),
             "source_sha256": producer_sha256,
+            "source_components": {
+                "market_prior_posterior.py": model_source_sha256,
+                "ladder_microstructure.py": ladder_source_sha256,
+            },
             "build_id": build_id,
             "observed_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
