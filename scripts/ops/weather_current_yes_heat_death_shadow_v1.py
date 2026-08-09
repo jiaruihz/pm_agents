@@ -3,7 +3,7 @@
 
 This is the forward-practice path for the thesis that the remaining heating
 runway is exhausted.  It records the full same-day denominator, canonical
-``weather_state_v2`` physical features, and direct CLOB quotes for the two
+``weather_state_v3`` physical features, and direct CLOB quotes for the two
 relevant expressions:
 
 * current bracket BUY_YES
@@ -23,7 +23,7 @@ import os
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -47,6 +47,7 @@ from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
 STRATEGY_ID = "current_yes_heat_death_physical_v1"
 STRATEGY_INSTANCE = "current_yes_heat_death_shadow_v1"
 BUILDER_VERSION = "current_yes_heat_death_shadow_v1"
+DECISION_MODE = "compare_current_yes_vs_d1_no_after_physical_confirmation"
 FEE_RATE = 0.05
 RESEARCH_WINDOW_START_HOUR_LOCAL = 13.0
 RESEARCH_WINDOW_END_HOUR_LOCAL = 17.0
@@ -56,6 +57,7 @@ RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/j
 SNAPSHOT_DIR_DEFAULT = RUNTIME_ROOT / "targeted_output" / "paper_snapshots"
 OBSERVATION_CACHE_DEFAULT = RUNTIME_ROOT / "output" / "observations" / "latest.json"
 FORECAST_CURVE_DIR_DEFAULT = RUNTIME_ROOT / "targeted_output" / "forecast_hourly_curves"
+FORECAST_ENRICHMENT_DIR_DEFAULT = RUNTIME_ROOT / "output" / "forecast_enrichment"
 OUTPUT_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / STRATEGY_INSTANCE
 FEATURE_STORE_DEFAULT = ROOT / "runtime" / "weather_feature_store"
 
@@ -138,6 +140,46 @@ def snapshot_decision_asof(snapshot: Mapping[str, Any]) -> str:
     )
 
 
+def pit_forecast_enrichment_rows(enrichment_dir: Path, as_of_utc: str) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """Load immutable TAF/forecast captures whose snapshot clock is PIT."""
+
+    as_of = parse_utc(as_of_utc)
+    counts: Counter[str] = Counter()
+    if as_of is None:
+        return [], Counter({"invalid_asof": 1})
+    paths = [
+        enrichment_dir / as_of.date().isoformat() / "forecast_enrichment.jsonl",
+        enrichment_dir / (as_of - timedelta(days=1)).date().isoformat() / "forecast_enrichment.jsonl",
+    ]
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        if not path.exists():
+            counts["missing_history_file"] += 1
+            continue
+        counts["history_files_loaded"] += 1
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    counts["history_parse_error"] += 1
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                captured = parse_utc(row.get("snapshot_ts_utc"))
+                if captured is None:
+                    counts["missing_capture_clock"] += 1
+                    continue
+                if captured > as_of:
+                    counts["capture_after_snapshot"] += 1
+                    continue
+                rows.append(row)
+                counts["pit_rows"] += 1
+    return rows, counts
+
+
 def pit_observation_cache(payload: Mapping[str, Any], as_of_utc: str) -> tuple[dict[str, Any], Counter[str]]:
     """Keep only cache rows whose fetch completion is provably PIT."""
 
@@ -164,8 +206,53 @@ def pit_observation_cache(payload: Mapping[str, Any], as_of_utc: str) -> tuple[d
     return {
         "schema_version": payload.get("schema_version"),
         "generated_at_utc": payload.get("generated_at_utc"),
+        "decision_as_of_utc": as_of_utc,
         "records": kept,
     }, counts
+
+
+def observation_evidence_asof(path: Path, as_of_utc: str) -> tuple[dict[str, Any], Counter[str]]:
+    """Load immutable observation captures when available, with latest as fallback."""
+
+    latest = read_json(path)
+    as_of = parse_utc(as_of_utc)
+    rows = [dict(row) for row in latest.get("records") or [] if isinstance(row, Mapping)]
+    counts: Counter[str] = Counter()
+    history_paths: list[Path] = []
+    if as_of is not None:
+        for day_offset in (0, -1):
+            day = (as_of + timedelta(days=day_offset)).date().isoformat()
+            history_paths.append(path.parent / day / "observations.jsonl")
+    seen_paths: set[Path] = set()
+    candidate_paths = [history_path for history_path in history_paths if history_path.exists()]
+    if not candidate_paths:
+        candidate_paths = [path.parent / "observations.jsonl"]
+    for history_path in candidate_paths:
+        if history_path in seen_paths or not history_path.exists():
+            continue
+        seen_paths.add(history_path)
+        with history_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    counts["history_parse_error"] += 1
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+                    counts["immutable_history_rows_loaded"] += 1
+    payload = {
+        "schema_version": latest.get("schema_version"),
+        "generated_at_utc": latest.get("generated_at_utc"),
+        "records": rows,
+    }
+    filtered, pit_counts = pit_observation_cache(payload, as_of_utc)
+    counts.update(pit_counts)
+    if seen_paths:
+        counts["immutable_history_files_loaded"] = len(seen_paths)
+    return filtered, counts
 
 
 def _interval(record: Mapping[str, Any]) -> tuple[float, float] | None:
@@ -194,13 +281,21 @@ def _rung_sort(record: Mapping[str, Any]) -> tuple[float, float, str]:
 
 def _direct_quote(record: Mapping[str, Any] | None, side: str) -> dict[str, Any]:
     if not record:
-        return {"ask": None, "ask_size": None, "bid": None, "bid_size": None, "book_status": "missing_rung"}
+        return {
+            "ask": None,
+            "ask_size": None,
+            "bid": None,
+            "bid_size": None,
+            "tick_size": None,
+            "book_status": "missing_rung",
+        }
     prefix = side.lower()
     return {
         "ask": finite(record.get(f"{prefix}_best_ask")),
         "ask_size": finite(record.get(f"{prefix}_ask_size")),
         "bid": finite(record.get(f"{prefix}_best_bid")),
         "bid_size": finite(record.get(f"{prefix}_bid_size")),
+        "tick_size": finite(record.get(f"{prefix}_tick_size")),
         "book_status": str(record.get(f"{prefix}_book_status") or ""),
         "book_fetched_at_utc": record.get(f"{prefix}_book_fetched_at_utc"),
         "token_id": str(record.get(f"{prefix}_token_id") or ""),
@@ -289,7 +384,15 @@ def refresh_candidate_quotes(
             current = _fetch_token_book(client, str(row.get("current_yes_token_id") or ""))
             d1 = _fetch_token_book(client, str(row.get("d1_no_token_id") or ""))
             for prefix, quote in (("current_yes", current), ("d1_no", d1)):
-                for field in ("ask", "ask_size", "bid", "bid_size", "book_status", "book_fetched_at_utc"):
+                for field in (
+                    "ask",
+                    "ask_size",
+                    "bid",
+                    "bid_size",
+                    "tick_size",
+                    "book_status",
+                    "book_fetched_at_utc",
+                ):
                     row[f"{prefix}_{field}"] = quote.get(field)
                 row[f"{prefix}_fee_per_share"] = _fee_per_share(quote.get("ask"))
                 row[f"{prefix}_effective_cost"] = _effective_cost(quote.get("ask"))
@@ -380,6 +483,107 @@ def _physical_profile(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _transition_carry_profile(
+    state: Mapping[str, Any],
+    market_fields: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Compare forecast-transition exposure with a high-price carry's loss budget.
+
+    This is deliberately a continuous diagnostic, not an eligibility gate or
+    a calibrated outcome probability.
+    """
+
+    exposure = finite(state.get("temperature_transition_risk_score"))
+    effective_cost = finite(market_fields.get("current_yes_effective_cost"))
+    tail_budget = None if effective_cost is None else max(0.0, 1.0 - effective_cost)
+    fragility = None
+    adjusted_budget = None
+    if exposure is not None and tail_budget is not None:
+        fragility = exposure / max(tail_budget, 1e-6)
+        adjusted_budget = tail_budget - exposure
+    ask = finite(market_fields.get("current_yes_ask"))
+    bid = finite(market_fields.get("current_yes_bid"))
+    ask_size = finite(market_fields.get("current_yes_ask_size"))
+    bid_size = finite(market_fields.get("current_yes_bid_size"))
+    tick_size = finite(market_fields.get("current_yes_tick_size"))
+    baseline_h1 = bool(state.get("physical_confirmation_strong")) and ask is not None and 0.95 <= ask <= 0.99
+    decision_hour = finite(
+        state.get("decision_hour_local") or state.get("decision_hour_local_float")
+    )
+    if decision_hour is None:
+        timing_bucket = "missing_local_clock"
+        timing_progress = None
+    elif decision_hour < RESEARCH_WINDOW_START_HOUR_LOCAL:
+        timing_bucket = "before_13_local"
+        timing_progress = 0.0
+    elif decision_hour < 15.0:
+        timing_bucket = "13_to_15_local"
+        timing_progress = (decision_hour - RESEARCH_WINDOW_START_HOUR_LOCAL) / 4.0
+    elif decision_hour <= RESEARCH_WINDOW_END_HOUR_LOCAL:
+        timing_bucket = "15_to_17_local"
+        timing_progress = (decision_hour - RESEARCH_WINDOW_START_HOUR_LOCAL) / 4.0
+    else:
+        timing_bucket = "after_17_local"
+        timing_progress = 1.0
+
+    interval = _interval({"bracket": market_fields.get("current_bracket")})
+    interval_low = None if interval is None or not math.isfinite(interval[0]) else interval[0]
+    interval_high = None if interval is None or not math.isfinite(interval[1]) else interval[1]
+    running = finite(state.get("running_native") or state.get("running_max_native"))
+    running_headroom = (
+        None if running is None or interval_high is None else interval_high - running
+    )
+    cadence = finite(
+        state.get("expected_report_cadence")
+        or state.get("observation_cadence_min")
+    )
+    daylight = finite(state.get("daylight_remaining_minutes"))
+    remaining_reports = (
+        None
+        if cadence is None or cadence <= 0 or daylight is None
+        else max(0.0, daylight / cadence)
+    )
+    spread = None if ask is None or bid is None else ask - bid
+    maker_price = None
+    maker_headroom = None
+    queue_ahead_proxy = None
+    if ask is not None and bid is not None and tick_size is not None and tick_size > 0:
+        candidate = round(bid + tick_size, 6)
+        if candidate < ask - 1e-9:
+            maker_price = candidate
+            maker_headroom = ask - candidate
+            queue_ahead_proxy = 0.0 if candidate > bid + 1e-9 else bid_size
+    if not bool(state.get("taf_transition_available")):
+        status = "taf_coverage_gap"
+    elif exposure is None:
+        status = "transition_exposure_unavailable"
+    else:
+        status = "measured_not_calibrated"
+    return {
+        "late_carry_diagnostics_version": "transition_carry_profile_v2",
+        "baseline_h1_late_carry_candidate": baseline_h1,
+        "late_carry_market_tail_budget": tail_budget,
+        "late_carry_transition_fragility_ratio": fragility,
+        "late_carry_transition_adjusted_tail_budget_proxy": adjusted_budget,
+        "transition_aware_score_status": status,
+        "transition_aware_is_hard_gate": False,
+        "late_carry_timing_bucket": timing_bucket,
+        "late_carry_timing_progress_13_17": timing_progress,
+        "late_carry_current_bracket_interval_low_native": interval_low,
+        "late_carry_current_bracket_interval_high_native": interval_high,
+        "late_carry_running_to_upper_boundary_native": running_headroom,
+        "late_carry_remaining_daylight_expected_reports": remaining_reports,
+        "late_carry_current_yes_spread": spread,
+        "late_carry_current_yes_ask_depth": ask_size,
+        "late_carry_current_yes_bid_depth": bid_size,
+        "late_carry_tick_size": tick_size,
+        "late_carry_fresh_maker_price_proxy": maker_price,
+        "late_carry_maker_headroom_vs_ask": maker_headroom,
+        "late_carry_maker_queue_ahead_proxy": queue_ahead_proxy,
+        "late_carry_action": "shadow_measure_only",
+    }
+
+
 def build_decisions(
     snapshot: Mapping[str, Any],
     feature_rows: list[dict[str, Any]],
@@ -442,10 +646,15 @@ def build_decisions(
             "current_bracket": str(current.get("bracket") or ""),
             "current_question": str(current.get("question") or ""),
             "current_condition_id": str(current.get("condition_id") or ""),
+            "current_yes_fact_candidate_id": (
+                f"{str(current.get('condition_id') or '')}|BUY_YES" if current.get("condition_id") else ""
+            ),
             "current_market_id": str(current.get("market_id") or ""),
             "current_yes_ask": current_yes.get("ask"),
             "current_yes_ask_size": current_yes.get("ask_size"),
             "current_yes_bid": current_yes.get("bid"),
+            "current_yes_bid_size": current_yes.get("bid_size"),
+            "current_yes_tick_size": current_yes.get("tick_size"),
             "current_yes_book_status": current_yes.get("book_status"),
             "current_yes_token_id": current_yes.get("token_id"),
             "current_yes_fee_per_share": _fee_per_share(current_yes.get("ask")),
@@ -454,10 +663,15 @@ def build_decisions(
             "d1_bracket": str(d1.get("bracket") or "") if d1 else "",
             "d1_question": str(d1.get("question") or "") if d1 else "",
             "d1_condition_id": str(d1.get("condition_id") or "") if d1 else "",
+            "d1_no_fact_candidate_id": (
+                f"{str(d1.get('condition_id') or '')}|BUY_NO" if d1 and d1.get("condition_id") else ""
+            ),
             "d1_market_id": str(d1.get("market_id") or "") if d1 else "",
             "d1_no_ask": d1_no.get("ask"),
             "d1_no_ask_size": d1_no.get("ask_size"),
             "d1_no_bid": d1_no.get("bid"),
+            "d1_no_bid_size": d1_no.get("bid_size"),
+            "d1_no_tick_size": d1_no.get("tick_size"),
             "d1_no_book_status": d1_no.get("book_status"),
             "d1_no_token_id": d1_no.get("token_id"),
             "d1_no_fee_per_share": _fee_per_share(d1_no.get("ask")),
@@ -467,17 +681,21 @@ def build_decisions(
             ),
             "direct_quote_pair_available": current_yes.get("ask") is not None and d1_no.get("ask") is not None,
         }
+        transition_profile = _transition_carry_profile({**state, **profile}, market_fields)
         decisions.append(
             json_ready(
                 {
                     **state,
                     **market_fields,
                     **profile,
+                    **transition_profile,
                     "record_type": "weather_strategy_shadow_decision",
                     "strategy_id": STRATEGY_ID,
                     "strategy_instance": STRATEGY_INSTANCE,
+                    "fact_signal_candidate_id": market_fields["current_yes_fact_candidate_id"],
+                    "fact_signal_candidate_side": "BUY_YES",
                     "shadow_decision_id": decision_id,
-                    "decision_mode": "compare_current_yes_vs_d1_no_after_physical_confirmation",
+                    "decision_mode": DECISION_MODE,
                     "mode": "zero_notional_shadow",
                     "zero_notional": True,
                     "no_order_placed": True,
@@ -510,8 +728,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     )
     as_of_utc = snapshot_decision_asof(snapshot)
     observation_path = Path(args.observation_cache)
-    observations, pit_counts = pit_observation_cache(read_json(observation_path), as_of_utc)
+    observations, pit_counts = observation_evidence_asof(observation_path, as_of_utc)
     curve_rows = recent_curve_rows(Path(args.forecast_curve_dir), limit=int(args.curve_file_limit))
+    enrichment_rows, enrichment_counts = pit_forecast_enrichment_rows(
+        Path(getattr(args, "forecast_enrichment_dir", FORECAST_ENRICHMENT_DIR_DEFAULT)),
+        as_of_utc,
+    )
     same_day_records = [
         dict(row)
         for row in snapshot.get("records") or []
@@ -523,8 +745,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         same_day_records,
         observations,
         forecast_curve_rows=curve_rows,
+        forecast_enrichment_rows=enrichment_rows,
         as_of_ts_utc=as_of_utc,
-        source_profile_id="weather_data_feed_observation_cache+forecast_hourly_curve_v4",
+        source_profile_id="weather_data_feed_observation_cache+forecast_hourly_curve_v4+forecast_enrichment_taf_v1",
         input_snapshot_id=snapshot_path.name,
         pit_provenance=PIT_PROVENANCE_LIVE_CAPTURE,
         builder_version=BUILDER_VERSION,
@@ -572,16 +795,14 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "direct_quote_refresh_counts": dict(sorted(quote_refresh_counts.items())),
         "physical_profile_counts": dict(sorted(profile_counts.items())),
         "pit_observation_counts": dict(sorted(pit_counts.items())),
+        "pit_forecast_enrichment_counts": dict(sorted(enrichment_counts.items())),
         "build_audit_counts": dict(sorted(Counter(audit.reason for audit in audits).items())),
         "weather_physical_feature_fields": list(WEATHER_PHYSICAL_FEATURE_FIELDS),
         "probability_status": "not_fitted_forward_collection",
         "live_action": "none",
     }
-    write_json(output_dir / str(getattr(args, "summary_filename", "latest_summary.json")), summary)
-    append_jsonl(
-        output_dir / str(getattr(args, "summary_history_filename", "summary_history.jsonl")),
-        [summary],
-    )
+    write_json(output_dir / "latest_summary.json", summary)
+    append_jsonl(output_dir / "summary_history.jsonl", [summary])
     write_json(state_path, {"last_snapshot_file": snapshot_path.name, "updated_at_utc": utc_now()})
     return summary
 
@@ -592,9 +813,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR_DEFAULT))
     ap.add_argument("--observation-cache", default=str(OBSERVATION_CACHE_DEFAULT))
     ap.add_argument("--forecast-curve-dir", default=str(FORECAST_CURVE_DIR_DEFAULT))
+    ap.add_argument("--forecast-enrichment-dir", default=str(FORECAST_ENRICHMENT_DIR_DEFAULT))
     ap.add_argument("--output-dir", default=str(OUTPUT_DIR_DEFAULT))
-    ap.add_argument("--summary-filename", default="latest_summary.json")
-    ap.add_argument("--summary-history-filename", default="summary_history.jsonl")
     ap.add_argument("--feature-store", default=str(FEATURE_STORE_DEFAULT))
     ap.add_argument("--curve-file-limit", type=int, default=16)
     ap.add_argument("--book-proxy", default=None)

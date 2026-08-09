@@ -186,12 +186,17 @@ def test_busan_like_state_is_strong_shadow_candidate_with_two_expressions(tmp_pa
     assert row["forecast_precip_probability_remaining_3h_max_pct"] == 91
     assert row["current_bracket"] == "30"
     assert row["current_yes_ask"] == 0.84
+    assert row["current_yes_bid_size"] == 15
+    assert row["fact_signal_candidate_id"] == "c1|BUY_YES"
+    assert row["fact_signal_candidate_side"] == "BUY_YES"
     assert row["d1_bracket"] == "31"
     assert row["d1_no_ask"] == 0.83
     assert row["direct_quote_pair_available"] is True
     assert row["zero_notional"] is True
     assert row["no_order_placed"] is True
     assert row["probability_status"] == "not_fitted_forward_collection"
+    assert row["late_carry_action"] == "shadow_measure_only"
+    assert row["late_carry_running_to_upper_boundary_native"] == 0.5
 
 
 def test_mechanism_confirmed_after_window_remains_in_denominator_not_candidate() -> None:
@@ -227,6 +232,7 @@ def test_missing_candidate_quotes_are_refreshed_read_only(monkeypatch) -> None:
             "yes30": {
                 "bids": [{"price": "0.80", "size": "11"}, {"price": "0.82", "size": "7"}],
                 "asks": [{"price": "0.86", "size": "4"}, {"price": "0.84", "size": "9"}],
+                "tick_size": "0.001",
             },
             "no31": {
                 "bids": [{"price": "0.79", "size": "8"}],
@@ -241,9 +247,46 @@ def test_missing_candidate_quotes_are_refreshed_read_only(monkeypatch) -> None:
     assert counts == {"pair_attempts": 1, "pair_successes": 1}
     assert decisions[0]["current_yes_ask"] == 0.84
     assert decisions[0]["current_yes_bid"] == 0.82
+    assert decisions[0]["current_yes_bid_size"] == 7
+    assert decisions[0]["current_yes_tick_size"] == 0.001
     assert decisions[0]["d1_no_ask"] == 0.83
     assert decisions[0]["direct_quote_pair_available"] is True
     assert decisions[0]["direct_quote_refresh_attempted"] is True
+
+
+def test_transition_carry_profile_keeps_h1_microstructure_as_diagnostic() -> None:
+    profile = shadow._transition_carry_profile(
+        {
+            "physical_confirmation_strong": True,
+            "decision_hour_local": 15.5,
+            "running_native": 78.98,
+            "expected_report_cadence": 60,
+            "daylight_remaining_minutes": 240,
+            "taf_transition_available": True,
+            "temperature_transition_risk_score": 0.01,
+        },
+        {
+            "current_bracket": "78-79",
+            "current_yes_ask": 0.975,
+            "current_yes_ask_size": 9,
+            "current_yes_bid": 0.941,
+            "current_yes_bid_size": 22,
+            "current_yes_tick_size": 0.001,
+            "current_yes_effective_cost": 0.976,
+        },
+    )
+
+    assert profile["baseline_h1_late_carry_candidate"] is True
+    assert profile["late_carry_timing_bucket"] == "15_to_17_local"
+    assert profile["late_carry_timing_progress_13_17"] == 0.625
+    assert abs(profile["late_carry_running_to_upper_boundary_native"] - 0.52) < 1e-9
+    assert profile["late_carry_remaining_daylight_expected_reports"] == 4
+    assert abs(profile["late_carry_current_yes_spread"] - 0.034) < 1e-9
+    assert profile["late_carry_fresh_maker_price_proxy"] == 0.942
+    assert abs(profile["late_carry_maker_headroom_vs_ask"] - 0.033) < 1e-9
+    assert profile["late_carry_maker_queue_ahead_proxy"] == 0.0
+    assert profile["late_carry_action"] == "shadow_measure_only"
+    assert profile["transition_aware_is_hard_gate"] is False
 
 
 def test_run_once_rejects_observation_cache_fetched_after_snapshot(tmp_path: Path) -> None:
@@ -276,3 +319,29 @@ def test_run_once_rejects_observation_cache_fetched_after_snapshot(tmp_path: Pat
     assert summary["feature_rows"] == 0
     assert summary["decision_rows"] == 0
     assert summary["pit_observation_counts"] == {"cache_fetched_after_snapshot": 1}
+
+
+def test_run_once_uses_snapshot_availability_as_decision_clock(tmp_path: Path) -> None:
+    snapshot = _snapshot()
+    snapshot["collection_started_at_utc"] = snapshot["ts_utc"]
+    snapshot["available_at_utc"] = "2026-07-14T04:10:00Z"
+    assert shadow.snapshot_decision_asof(snapshot) == "2026-07-14T04:10:00Z"
+
+
+def test_immutable_observation_history_recovers_snapshot_asof_row(tmp_path: Path) -> None:
+    latest = _observations()
+    latest["records"][0]["fetched_at_utc"] = "2026-07-14T04:09:00Z"
+    path = tmp_path / "observations" / "latest.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(latest), encoding="utf-8")
+    history_dir = path.parent / "2026-07-14"
+    history_dir.mkdir()
+    historical = {**latest["records"][0], "fetched_at_utc": "2026-07-14T04:07:00Z"}
+    (history_dir / "observations.jsonl").write_text(json.dumps(historical) + "\n", encoding="utf-8")
+
+    evidence, counts = shadow.observation_evidence_asof(path, "2026-07-14T04:08:00Z")
+
+    assert len(evidence["records"]) == 1
+    assert evidence["records"][0]["fetched_at_utc"] == "2026-07-14T04:07:00Z"
+    assert counts["immutable_history_rows_loaded"] == 1
+    assert counts["cache_fetched_after_snapshot"] == 1
