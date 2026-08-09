@@ -298,6 +298,7 @@ def test_source_context_does_not_expose_rows_newer_than_decision_snapshot(monkey
     assert math.isnan(row["ecmwf_gap_to_running_native"])
     assert math.isclose(row["gfs_forecast_max_native_latest"], 33.0)
     assert summary["counters"]["forecast_enrichment_newer_than_snapshot"] == 1
+    assert summary["status"] == "ok"
 
 
 def test_source_context_exposes_rows_known_by_decision_snapshot(monkeypatch) -> None:

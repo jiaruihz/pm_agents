@@ -621,6 +621,7 @@ class ShadowRuntime:
                     first_intents.add(position_key)
         summary = {
             **self._contract_fields("summary"),
+            "status": "ok" if errors == 0 else "error",
             "framework_id": self.config.get("framework_id"),
             "strategy_family": self.config.get("strategy_family"),
             "execution_mode": "zero_notional_shadow",

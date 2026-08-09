@@ -471,8 +471,18 @@ def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[st
                 }
             )
         enriched.append(row)
+    component_statuses = {
+        "high_frequency": hf_meta.get("status"),
+        "source_events": source_meta.get("status"),
+        "forecast_enrichment": forecast_meta.get("status"),
+    }
     summary = {
-        "status": "ok",
+        "status": (
+            "ok"
+            if all(status == "ok" for status in component_statuses.values())
+            else "degraded_source_context"
+        ),
+        "component_statuses": component_statuses,
         "high_frequency": hf_meta,
         "source_events": source_meta,
         "forecast_enrichment": forecast_meta,
@@ -1771,6 +1781,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     if isinstance(executor_result, dict) and isinstance(executor_result.get("executor_result"), dict):
         live_orders_written = int(executor_result["executor_result"].get("live_written") or 0)
     summary = {
+        "status": (
+            "ok"
+            if source_context_summary.get("status") == "ok"
+            else "degraded_source_context"
+        ),
         "generated_at_utc": utc_now(),
         "strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,

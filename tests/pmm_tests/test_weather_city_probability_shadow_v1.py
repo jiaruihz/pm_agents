@@ -42,6 +42,7 @@ def test_zero_notional_runtime_is_deduplicated(tmp_path):
     first = runtime.run_once(datetime(2026,7,31,10,tzinfo=timezone.utc))
     second = runtime.run_once(datetime(2026,7,31,10,1,tzinfo=timezone.utc))
     assert first["new_evaluations"] == 1 and first["new_paper_intents"] == 1
+    assert first["status"] == "ok"
     assert second["new_evaluations"] == 0 and second["new_paper_intents"] == 0
     evaluation = json.loads((tmp_path/"evaluations.jsonl").read_text().splitlines()[0])
     intent = json.loads((tmp_path/"paper_intents.jsonl").read_text().splitlines()[0])
@@ -61,6 +62,20 @@ def test_nonzero_execution_configuration_is_rejected(tmp_path):
             "execution_mode": "live",
             "orders_submitted": 1,
         }, {})
+
+
+def test_adapter_error_marks_latest_summary_unhealthy(tmp_path):
+    class Broken:
+        def score(self, profile, now):
+            raise RuntimeError("fixture failure")
+
+    summary = ShadowRuntime(
+        _config(tmp_path, [{"adapter": "broken", "city": "Test"}]),
+        {"broken": Broken()},
+    ).run_once(datetime(2026, 7, 31, 10, tzinfo=timezone.utc))
+
+    assert summary["status"] == "error"
+    assert summary["errors"] == 1
 
 
 def test_weather_fee_formula():

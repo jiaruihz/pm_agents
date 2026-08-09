@@ -94,6 +94,13 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert by_id["weather_knmi_open_data_jrs"].max_health_age_sec == 900
     assert by_id["weather_city_probability_runtime_v3"].max_health_age_sec == 1200
+    assert by_id["weather_city_probability_runtime_v3"].accepted_health_statuses == ("ok",)
+    assert by_id[
+        "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1"
+    ].accepted_health_statuses == ("ok",)
+    assert by_id["weather_fast_source_stale_book"].health_path == Path(
+        "/Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_stale_book/health.json"
+    )
     assert by_id["weather_current_yes_heat_death_shadow_v1"].max_health_age_sec == 2400
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_market_books_prod"

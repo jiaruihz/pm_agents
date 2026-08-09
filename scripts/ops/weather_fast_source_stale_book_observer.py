@@ -989,6 +989,56 @@ def active_source_window_health(
     }
 
 
+def fast_source_runtime_health(
+    *,
+    latest_input: Path,
+    history_input: Path,
+    expected_root: Path,
+    now: datetime,
+    max_input_age_sec: float,
+    source_status: str,
+    source_city_count: int,
+    generated_at_utc: str,
+) -> dict[str, Any]:
+    expected_root = expected_root.resolve()
+    route_ok = (
+        latest_input.resolve() == expected_root / "latest.json"
+        and history_input.resolve() == expected_root
+    )
+    try:
+        input_age_sec = max(0.0, now.timestamp() - latest_input.stat().st_mtime)
+        input_fresh = input_age_sec <= float(max_input_age_sec)
+        input_exists = True
+    except OSError:
+        input_age_sec = None
+        input_fresh = False
+        input_exists = False
+    if not route_ok:
+        status = "invalid_input_route"
+    elif not input_exists:
+        status = "input_missing"
+    elif not input_fresh:
+        status = "input_stale"
+    else:
+        status = source_status
+    return {
+        "status": status,
+        "schema_version": "fast_source_stale_book_health_v1",
+        "generated_at_utc": generated_at_utc,
+        "execution_mode": "telemetry_only_no_orders",
+        "orders_submitted": 0,
+        "expected_high_frequency_root": str(expected_root),
+        "high_frequency_latest_path": str(latest_input),
+        "high_frequency_history_root": str(history_input),
+        "input_route_status": "ok" if route_ok else "mismatch",
+        "input_exists": input_exists,
+        "input_age_sec": round(input_age_sec, 3) if input_age_sec is not None else None,
+        "max_input_age_sec": float(max_input_age_sec),
+        "source_status": source_status,
+        "source_city_count": int(source_city_count),
+    }
+
+
 def classify_t_minus_1_no(quotes: dict[str, Any], stale_no_ask_max: float, bot_priced_no_bid_min: float) -> dict[str, Any]:
     no_quote = ((quotes.get("t_minus_1") or {}).get("no") or {})
     ask = safe_float(no_quote.get("fresh_best_ask"))
@@ -1468,6 +1518,23 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "latest_active_bracket_books": active_bracket_rows[-20:],
     }
     (out_dir / "latest.json").write_text(json.dumps(latest, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
+    latest_input = Path(args.high_frequency_latest)
+    history_input = Path(args.high_frequency_jsonl)
+    health = fast_source_runtime_health(
+        latest_input=latest_input,
+        history_input=history_input,
+        expected_root=PRODUCTION.live_cross_observations_root(),
+        now=now,
+        max_input_age_sec=args.max_high_frequency_input_age_sec,
+        source_status=source_window_health["status"],
+        source_city_count=len(latest["source_cities"]),
+        generated_at_utc=latest["generated_at_utc"],
+    )
+    (out_dir / "health.json").write_text(
+        json.dumps(health, ensure_ascii=False, sort_keys=True, indent=2),
+        encoding="utf-8",
+    )
+    latest["health"] = health
     return latest
 
 
@@ -1477,6 +1544,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--high-frequency-latest", default=str(HIGH_FREQUENCY_LATEST))
     parser.add_argument("--high-frequency-jsonl", default=str(HIGH_FREQUENCY_JSONL))
+    parser.add_argument("--max-high-frequency-input-age-sec", type=float, default=180.0)
     parser.add_argument("--source-events-jsonl", default=str(SOURCE_EVENTS_JSONL))
     parser.add_argument(
         "--signal-basis",

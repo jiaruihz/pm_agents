@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 
 import scripts.ops.weather_fast_source_stale_book_observer as observer
@@ -11,6 +12,7 @@ from scripts.ops.weather_fast_source_stale_book_observer import (
     bracket_from_question,
     bracket_lookup,
     build_market_index,
+    fast_source_runtime_health,
     market_date_has_tokens,
     relative_market_token,
     source_market_episode_key,
@@ -72,6 +74,41 @@ def test_active_source_window_health_distinguishes_idle_from_outage(tmp_path):
         "missing_active_source_cities": ["Atlanta"],
         "outside_source_window_cities": [],
     }
+
+
+def test_fast_source_runtime_health_requires_canonical_fresh_input(tmp_path):
+    root = tmp_path / "live_cross_observations"
+    root.mkdir()
+    latest = root / "latest.json"
+    latest.write_text("{}", encoding="utf-8")
+    now = datetime(2026, 7, 13, 16, 49, tzinfo=timezone.utc)
+    os.utime(latest, (now.timestamp() - 10, now.timestamp() - 10))
+
+    healthy = fast_source_runtime_health(
+        latest_input=latest,
+        history_input=root,
+        expected_root=root,
+        now=now,
+        max_input_age_sec=180,
+        source_status="ok",
+        source_city_count=2,
+        generated_at_utc=now.isoformat(),
+    )
+    wrong_route = fast_source_runtime_health(
+        latest_input=tmp_path / "retired" / "latest.json",
+        history_input=tmp_path / "retired",
+        expected_root=root,
+        now=now,
+        max_input_age_sec=180,
+        source_status="ok",
+        source_city_count=0,
+        generated_at_utc=now.isoformat(),
+    )
+
+    assert healthy["status"] == "ok"
+    assert healthy["input_route_status"] == "ok"
+    assert wrong_route["status"] == "invalid_input_route"
+    assert wrong_route["input_route_status"] == "mismatch"
 
 
 def test_source_latest_keeps_simultaneous_local_dates_and_market_units(tmp_path):
