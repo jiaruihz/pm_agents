@@ -38,6 +38,7 @@ import research_tmax_distribution_p2_ev_shadow_v1 as p2  # noqa: E402
 import research_tmax_distribution_p3_feature_ablation_v1 as p3  # noqa: E402
 import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: E402
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 from src.strategies.weather_edge_v1.tools.execution_pipeline import stable_hash  # noqa: E402
 from src.strategies.weather_edge_v1.tools import tmax_coherent_calibrator as coherent_cal  # noqa: E402
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
@@ -55,28 +56,13 @@ FIRST_LOCK_NO_CURRENT_YES_EXPRESSIONS = ["current_no", "d1_no", "d2_no", "d1_yes
 _CALIBRATOR_META_CACHE: tuple[tuple[int, str], pd.DataFrame, dict[str, Any]] | None = None
 
 RUNTIME_DEFAULT = ROOT / "runtime/weather_edge_v1/tmax_distribution_edge_live_candidate_v1"
-SNAPSHOT_DIR_CANDIDATES = [
-    Path("~/projects/weather_data_feed_service_runtime/targeted_output/paper_snapshots").expanduser(),
-    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
-]
-OBS_CACHE_CANDIDATES = [
-    Path("~/projects/weather_data_feed_service_runtime/output/observations/latest.json").expanduser(),
-    ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
-    ROOT / "runtime/weather_edge_v1/observations/latest.json",
-]
-DATA_FEED_RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
-HIGH_FREQUENCY_LATEST_CANDIDATES = [
-    DATA_FEED_RUNTIME_ROOT / "output/high_frequency_observations/latest.json",
-    Path("~/projects/weather_data_feed_service_runtime/output/high_frequency_observations/latest.json").expanduser(),
-]
-SOURCE_EVENTS_LATEST_CANDIDATES = [
-    DATA_FEED_RUNTIME_ROOT / "output/source_events/latest.json",
-    Path("~/projects/weather_data_feed_service_runtime/output/source_events/latest.json").expanduser(),
-]
-FORECAST_ENRICHMENT_LATEST_CANDIDATES = [
-    DATA_FEED_RUNTIME_ROOT / "output/forecast_enrichment/latest.json",
-    Path("~/projects/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json").expanduser(),
-]
+PRODUCTION_SPEC = load_production_spec()
+SNAPSHOT_DIR_CANDIDATES = [PRODUCTION_SPEC.strategy_paper_snapshot_dir()]
+OBS_CACHE_CANDIDATES = [PRODUCTION_SPEC.observation_cache_path()]
+DATA_FEED_RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
+HIGH_FREQUENCY_LATEST_CANDIDATES = [PRODUCTION_SPEC.high_frequency_observations_root() / "latest.json"]
+SOURCE_EVENTS_LATEST_CANDIDATES = [PRODUCTION_SPEC.source_events_root() / "latest.json"]
+FORECAST_ENRICHMENT_LATEST_CANDIDATES = [PRODUCTION_SPEC.forecast_enrichment_root() / "latest.json"]
 
 
 def utc_now() -> str:

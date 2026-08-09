@@ -49,13 +49,14 @@ from weather_data_feed.observation_sources import (  # noqa: E402
     parse_tgftp_header_time,
     stable_hash,
 )
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 DATA_ROOT = Path(os.environ.get("METAR_CROSS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/metar_cross_prev_no_shadow"
 DEFAULT_SOURCE_EVENTS_LATEST = Path(
     os.environ.get("METAR_CROSS_SOURCE_EVENTS_PATH")
-    or "/home/jiarui/projects/weather_data_feed_service_runtime/output/source_events/latest.json"
+    or load_production_spec().source_events_root() / "latest.json"
 )
 FAST_HTTP_TIMEOUT_SEC = float(os.environ.get("METAR_CROSS_HTTP_TIMEOUT_SEC", "3.0"))
 FAST_PROXY_MODE = os.environ.get("METAR_CROSS_PROXY_MODE", "direct").strip().lower()

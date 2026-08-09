@@ -75,25 +75,22 @@ from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
 from src.strategies.weather_edge_v1.runtime.non_live import (  # noqa: E402
     execute_legacy_compatibility_paper,
 )
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 STRATEGY_ID = "d1_yes_high_mid_shadow_v1"
 RULE_ID = "d1_yes_mid_ge_0p80_first_per_city_date_taker_v1"
 SOURCE_REPORT = "docs/analysis/2026-07/2026-07-15-market-calibration-curve-v1.md"
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
-RUNTIME_ROOT = Path(
-    os.environ.get(
-        "WEATHER_DATA_FEED_RUNTIME_ROOT",
-        str(Path.home() / "projects/weather_data_feed_service_runtime"),
-    )
-)
-OBS_DEFAULT = RUNTIME_ROOT / "output/observations/latest.json"
-# Prefer the dedicated full-ladder capture (all cities); fall back to the
-# targeted feed (~5 cities) when the full-ladder loop is not running.  The
-# runner picks the freshest snapshot file across these dirs each cycle.
+PRODUCTION_SPEC = load_production_spec()
+RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
+OBS_DEFAULT = PRODUCTION_SPEC.observation_cache_path()
+# This dormant replay runner consumes immutable pre-canonical orderbook
+# evidence through the production contract. Current production uses
+# market_books/market_ladder_snapshots instead.
 ORDERBOOK_DIRS_DEFAULT = [
-    RUNTIME_ROOT / "full_ladder_output/orderbook_snapshots",
-    RUNTIME_ROOT / "targeted_output/orderbook_snapshots",
+    PRODUCTION_SPEC.historical_full_ladder_root() / "orderbook_snapshots",
+    PRODUCTION_SPEC.historical_targeted_root() / "orderbook_snapshots",
 ]
 ORDERBOOK_DEFAULT = ORDERBOOK_DIRS_DEFAULT[0]
 
@@ -352,7 +349,11 @@ def completion_marker(orderbook_file: Path) -> Path | None:
 
 
 def is_full_ladder_dir(orderbook_dir: Path) -> bool:
-    return orderbook_dir.parent.name == "full_ladder_output"
+    return (
+        orderbook_dir.resolve() == ORDERBOOK_DIRS_DEFAULT[0].resolve()
+        or orderbook_dir.parent.name
+        == PRODUCTION_SPEC.historical_full_ladder_root().name
+    )
 
 
 def _latest_in_dir(orderbook_dir: Path, *, require_complete: bool = False) -> Path | None:

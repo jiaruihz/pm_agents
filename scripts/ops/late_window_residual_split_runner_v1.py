@@ -50,6 +50,7 @@ from scripts.analysis.reheat_risk.research_late_window_residual_heating_done_v1 
     safe_float,
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 from weather_data_feed import (  # noqa: E402
     index_forecast_enrichment,
     index_observation_cache,
@@ -71,19 +72,10 @@ RUNTIME_DIR = Path(
         str(ROOT / "runtime/weather_edge_v1/late_window_residual_split_v1"),
     )
 )
-DEFAULT_SNAPSHOT_DIRS = [
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
-    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
-]
-DEFAULT_OBSERVATION_CACHE_PATHS = [
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json"),
-    ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
-    ROOT / "runtime/weather_edge_v1/observations/latest.json",
-]
-DEFAULT_FORECAST_ENRICHMENT_PATHS = [
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json"),
-    ROOT / "runtime/weather_edge_v1/market_data/forecast_enrichment/latest.json",
-]
+PRODUCTION_SPEC = load_production_spec()
+DEFAULT_SNAPSHOT_DIRS = [PRODUCTION_SPEC.strategy_paper_snapshot_dir()]
+DEFAULT_OBSERVATION_CACHE_PATHS = [PRODUCTION_SPEC.observation_cache_path()]
+DEFAULT_FORECAST_ENRICHMENT_PATHS = [PRODUCTION_SPEC.forecast_enrichment_root() / "latest.json"]
 FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")
 TRAIN_ROWS = ROOT / "docs/analysis/2026-07/generated/late_window_residual_heating_done_v1/first_cross_rows.csv"
 

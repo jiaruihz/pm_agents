@@ -34,6 +34,8 @@ def write_snapshot(
                 "forecast_values_hash": forecast_hash,
                 "model_init_utc_estimated": "2026-08-04T00:00:00Z",
                 "model_prob": model_probability,
+                "ladder_available_at_utc": ts_utc,
+                "event_time_pit_scorable": True,
                 "yes_best_bid": market_mid - 0.01,
                 "yes_best_ask": market_mid + 0.01,
                 "yes_bid_size": 10.0 + index,

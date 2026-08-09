@@ -42,6 +42,7 @@ from weather_feature_layer.contracts import (  # noqa: E402
 from weather_feature_layer.market import parse_bracket, settlement_interval  # noqa: E402
 from weather_feature_layer.store import write_feature_frame_store  # noqa: E402
 from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 STRATEGY_ID = "current_yes_heat_death_physical_v1"
@@ -53,11 +54,12 @@ RESEARCH_WINDOW_START_HOUR_LOCAL = 13.0
 RESEARCH_WINDOW_END_HOUR_LOCAL = 17.0
 CLOB_BOOK_API = "https://clob.polymarket.com/book"
 
-RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
-SNAPSHOT_DIR_DEFAULT = RUNTIME_ROOT / "targeted_output" / "paper_snapshots"
-OBSERVATION_CACHE_DEFAULT = RUNTIME_ROOT / "output" / "observations" / "latest.json"
-FORECAST_CURVE_DIR_DEFAULT = RUNTIME_ROOT / "targeted_output" / "forecast_hourly_curves"
-FORECAST_ENRICHMENT_DIR_DEFAULT = RUNTIME_ROOT / "output" / "forecast_enrichment"
+PRODUCTION_SPEC = load_production_spec()
+RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
+SNAPSHOT_DIR_DEFAULT = PRODUCTION_SPEC.strategy_paper_snapshot_dir()
+OBSERVATION_CACHE_DEFAULT = PRODUCTION_SPEC.observation_cache_path()
+FORECAST_CURVE_DIR_DEFAULT = PRODUCTION_SPEC.forecast_hourly_curve_dir()
+FORECAST_ENRICHMENT_DIR_DEFAULT = PRODUCTION_SPEC.forecast_enrichment_root()
 OUTPUT_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / STRATEGY_INSTANCE
 FEATURE_STORE_DEFAULT = ROOT / "runtime" / "weather_feature_store"
 

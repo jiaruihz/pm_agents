@@ -38,19 +38,13 @@ from weather_data_feed.korea_amos_features import (  # noqa: E402
     rolling_path_features,
 )
 from weather_data_feed.physical_features import forecast_window_features  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
-RUNTIME_ROOT = Path(
-    os.environ.get(
-        "WEATHER_DATA_FEED_RUNTIME_ROOT",
-        "/Volumes/jrs/weather_data_feed_service_runtime",
-    )
-)
-DEFAULT_SOURCE_JSONL = (
-    RUNTIME_ROOT
-    / "output/live_cross_observations/high_frequency_observations.jsonl"
-)
-DEFAULT_FORECAST_ROOT = RUNTIME_ROOT / "targeted_output/forecast_hourly_curves"
+PRODUCTION_SPEC = load_production_spec()
+RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
+DEFAULT_SOURCE_JSONL = PRODUCTION_SPEC.live_cross_observations_root() / "high_frequency_observations.jsonl"
+DEFAULT_FORECAST_ROOT = PRODUCTION_SPEC.forecast_hourly_curve_dir()
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/korea_first_seen_state_v1"
 DEFAULT_CONFIG = ROOT / "configs/weather/korea_first_seen_collector_v1.json"
 SEOUL_TZ = ZoneInfo("Asia/Seoul")

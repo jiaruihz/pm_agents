@@ -39,6 +39,7 @@ from weather_data_feed.information_events import (  # noqa: E402
     build_information_event,
     canonical_json_hash,
 )
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 SCHEMA_VERSION = "weather_lmvm_forecast_repricing_shadow_v1"
@@ -54,11 +55,12 @@ FEATURE_SET_ID = canonical_json_hash(
         "lead_days",
     ]
 )
-DEFAULT_RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+PRODUCTION_SPEC = load_production_spec()
+DEFAULT_RUNTIME = PRODUCTION_SPEC.data_feed_runtime_root
 DEFAULT_OUTPUT = DEFAULT_RUNTIME / "output/lmvm_forecast_repricing_shadow_v1"
 DEFAULT_SNAPSHOTS = (
-    DEFAULT_RUNTIME / "full_ladder_output/paper_snapshots",
-    DEFAULT_RUNTIME / "targeted_output/paper_snapshots",
+    PRODUCTION_SPEC.historical_full_ladder_root() / "paper_snapshots",
+    PRODUCTION_SPEC.resolved_historical_paper_snapshot_root(),
 )
 
 
