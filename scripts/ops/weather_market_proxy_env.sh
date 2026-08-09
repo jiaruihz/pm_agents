@@ -11,10 +11,13 @@ weather_resolve_market_proxy() {
   local project_root="$1"
   local python_bin="$project_root/.venv/bin/python"
   [[ -x "$python_bin" ]] || python_bin="python3"
-  PYTHONPATH="$project_root${PYTHONPATH:+:$PYTHONPATH}" "$python_bin" - <<'PY'
+  (
+    cd "$project_root" || exit 1
+    PYTHONPATH="$project_root${PYTHONPATH:+:$PYTHONPATH}" "$python_bin" - <<'PY'
 from scripts.ops.weather_market_proxy_ctl import read_state
 print(read_state()["proxy_url"])
 PY
+  )
 }
 
 weather_export_market_proxy_env() {

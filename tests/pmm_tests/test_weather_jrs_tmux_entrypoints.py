@@ -292,6 +292,7 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
         encoding="utf-8"
     )
     assert "weather_resolve_market_proxy()" in proxy_helper
+    assert 'cd "$project_root"' in proxy_helper
     assert "from scripts.ops.weather_market_proxy_ctl import read_state" in proxy_helper
 
 
