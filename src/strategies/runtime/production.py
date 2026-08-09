@@ -73,6 +73,9 @@ class WeatherProductionSpec:
     production_storage_volume_uuid: str | None = None
     archive_storage_root: Path = Path("/Volumes/jrs-archive")
     archive_storage_volume_uuid: str | None = None
+    historical_data_feed_runtime_root: Path | None = None
+    historical_full_ladder_data_root: Path | None = None
+    historical_targeted_data_root: Path | None = None
     historical_paper_snapshot_root: Path | None = None
     canonical_refresh_checkout_root: Path | None = None
     research_artifact_root: Path = Path(
@@ -100,10 +103,39 @@ class WeatherProductionSpec:
         return self.resolved_forecast_output_root() / "forecast_hourly_curves"
 
     def resolved_historical_paper_snapshot_root(self) -> Path:
-        return self.historical_paper_snapshot_root or (
-            self.archive_storage_root
-            / "pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots"
-        )
+        if self.historical_paper_snapshot_root is None:
+            raise ValueError("production spec requires historical_paper_snapshot_root")
+        return self.historical_paper_snapshot_root
+
+    def resolved_historical_data_feed_runtime_root(self) -> Path:
+        if self.historical_data_feed_runtime_root is None:
+            raise ValueError("production spec requires historical_data_feed_runtime_root")
+        return self.historical_data_feed_runtime_root
+
+    def data_feed_output_root(self) -> Path:
+        return self.data_feed_runtime_root / "output"
+
+    def source_events_root(self) -> Path:
+        return self.data_feed_output_root() / "source_events"
+
+    def forecast_enrichment_root(self) -> Path:
+        return self.data_feed_output_root() / "forecast_enrichment"
+
+    def high_frequency_observations_root(self) -> Path:
+        return self.data_feed_output_root() / "high_frequency_observations"
+
+    def live_cross_observations_root(self) -> Path:
+        return self.data_feed_output_root() / "live_cross_observations"
+
+    def historical_full_ladder_root(self) -> Path:
+        if self.historical_full_ladder_data_root is None:
+            raise ValueError("production spec requires historical_full_ladder_data_root")
+        return self.historical_full_ladder_data_root
+
+    def historical_targeted_root(self) -> Path:
+        if self.historical_targeted_data_root is None:
+            raise ValueError("production spec requires historical_targeted_data_root")
+        return self.historical_targeted_data_root
 
     def observation_cache_path(self) -> Path:
         return self.data_feed_runtime_root / "output/observations/latest.json"
@@ -264,6 +296,21 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             if raw.get("archive_storage_volume_uuid")
             else None
         ),
+        historical_data_feed_runtime_root=(
+            Path(raw["historical_data_feed_runtime_root"])
+            if raw.get("historical_data_feed_runtime_root")
+            else None
+        ),
+        historical_full_ladder_data_root=(
+            Path(raw["historical_full_ladder_data_root"])
+            if raw.get("historical_full_ladder_data_root")
+            else None
+        ),
+        historical_targeted_data_root=(
+            Path(raw["historical_targeted_data_root"])
+            if raw.get("historical_targeted_data_root")
+            else None
+        ),
         historical_paper_snapshot_root=(
             Path(raw["historical_paper_snapshot_root"])
             if raw.get("historical_paper_snapshot_root")
@@ -289,6 +336,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     if spec.production_storage_root == spec.archive_storage_root:
         raise ValueError("production and archive storage roots must differ")
     historical_snapshot_root = spec.resolved_historical_paper_snapshot_root()
+    historical_data_feed_root = spec.resolved_historical_data_feed_runtime_root()
     resolved_archive_root = spec.archive_storage_root.resolve(strict=False)
     resolved_historical_snapshot_root = historical_snapshot_root.resolve(strict=False)
     if (
@@ -298,6 +346,23 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError(
             "historical_paper_snapshot_root must live under archive_storage_root"
         )
+    if (
+        not historical_data_feed_root.is_absolute()
+        or not historical_data_feed_root.resolve(strict=False).is_relative_to(
+            resolved_archive_root
+        )
+    ):
+        raise ValueError(
+            "historical_data_feed_runtime_root must live under archive_storage_root"
+        )
+    for name, path in {
+        "historical_full_ladder_data_root": spec.historical_full_ladder_root(),
+        "historical_targeted_data_root": spec.historical_targeted_root(),
+    }.items():
+        if not path.is_absolute() or not path.resolve(strict=False).is_relative_to(
+            historical_data_feed_root.resolve(strict=False)
+        ):
+            raise ValueError(f"{name} must live under historical_data_feed_runtime_root")
     if not spec.canonical_db_path.is_relative_to(spec.production_storage_root):
         raise ValueError("canonical_db_path must live under production_storage_root")
     if not spec.data_feed_runtime_root.is_relative_to(spec.production_storage_root):

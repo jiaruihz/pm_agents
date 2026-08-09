@@ -10,6 +10,11 @@ production_storage_root: /Volumes/jrs
 production_storage_volume_uuid: 93F5EA71-2AAB-4A45-9A21-18220BBE4614
 archive_storage_root: /Volumes/jrs-archive
 archive_storage_volume_uuid: 748B704B-E074-40C1-A5F0-AC9205B52E9F
+# Immutable retired collector products. Consumers resolve semantic products
+# through the shared loader; they never embed targeted/full-ladder paths.
+historical_data_feed_runtime_root: /Volumes/jrs-archive/weather_data_feed_service_runtime
+historical_full_ladder_data_root: /Volumes/jrs-archive/weather_data_feed_service_runtime/full_ladder_output
+historical_targeted_data_root: /Volumes/jrs-archive/weather_data_feed_service_runtime/targeted_output
 # Immutable pre-current-production strategy snapshots.  This is a historical
 # PIT input, not a fallback current producer and not a second mutable owner.
 historical_paper_snapshot_root: /Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots

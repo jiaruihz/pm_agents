@@ -22,6 +22,7 @@ def paths() -> dict[str, str]:
         "pm_runtime_root": str(spec.pm_runtime_root),
         "feature_store_root": str(spec.pm_runtime_root / "weather_feature_store"),
         "archive_storage_root": str(spec.archive_storage_root),
+        "historical_data_feed_runtime_root": str(spec.resolved_historical_data_feed_runtime_root()),
         "historical_paper_snapshot_root": str(spec.resolved_historical_paper_snapshot_root()),
         "research_artifact_root": str(spec.research_artifact_root),
         "market_books_root": str(spec.resolved_market_books_root()),
@@ -32,6 +33,12 @@ def paths() -> dict[str, str]:
         "forecast_output_root": str(spec.resolved_forecast_output_root()),
         "forecast_hourly_curve_dir": str(spec.forecast_hourly_curve_dir()),
         "observation_cache_path": str(spec.observation_cache_path()),
+        "source_events_root": str(spec.source_events_root()),
+        "forecast_enrichment_root": str(spec.forecast_enrichment_root()),
+        "high_frequency_observations_root": str(spec.high_frequency_observations_root()),
+        "live_cross_observations_root": str(spec.live_cross_observations_root()),
+        "historical_full_ladder_root": str(spec.historical_full_ladder_root()),
+        "historical_targeted_root": str(spec.historical_targeted_root()),
         "market_proxy_state_path": str(spec.market_proxy_state_path),
     }
 
