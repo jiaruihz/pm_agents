@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from weather_data_feed_service.market_books_ws import (
+    DEFAULT_CITIES,
     HourlyWriter,
     SourceEventCursor,
     scheduled_report_windows,
@@ -10,6 +11,10 @@ from weather_data_feed_service.market_books_ws import (
 
 
 NOW = datetime(2026, 8, 9, 3, 0, tzinfo=timezone.utc)
+
+
+def test_default_microstructure_rollout_excludes_seoul() -> None:
+    assert DEFAULT_CITIES == ("Amsterdam", "Tokyo", "Helsinki", "Busan")
 
 
 def _market_payload(city: str = "Busan") -> dict:

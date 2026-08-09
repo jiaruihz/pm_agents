@@ -29,13 +29,13 @@ from weather_data_feed.source_lineage import producer_build_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "five_city_tiered_hot_strip_v3"
+SELECTOR_VERSION = "tiered_hot_strip_v4"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
 )
 CLOB_WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-DEFAULT_CITIES = ("Amsterdam", "Tokyo", "Helsinki", "Busan", "Seoul")
+DEFAULT_CITIES = ("Amsterdam", "Tokyo", "Helsinki", "Busan")
 
 
 def _utc_now() -> datetime:
