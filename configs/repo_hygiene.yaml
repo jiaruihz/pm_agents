@@ -11,17 +11,23 @@ max_entrypoints_outside_production_closure: 64
 
 # Research scripts are immutable evidence only when they represent a distinct
 # experiment. New city/date runs must use an existing runner + run manifest.
-# These ceilings are lowered as historical copies are consolidated.
-max_research_experiment_entrypoints: 422
-max_repeated_research_function_bodies: 169
+# The 2026-08-09 cleanup moved 17 already-referenced scripts out of untracked
+# limbo and into git, so the tracked-only counters rose by exactly that debt
+# transfer. The combined tracked+untracked ceiling is the invariant that must
+# only move downward; registering an existing dependency cannot masquerade as
+# creating a new experiment.
+max_research_experiment_entrypoints: 439
+max_repeated_research_function_bodies: 173
+max_total_research_experiment_entrypoints: 441
 
 # Local worktree debt is part of the audit: otherwise an agent can create a
 # hundred untracked one-off runners while the tracked-only check stays green.
-# These migration ceilings only move downward as families are consolidated.
-max_untracked_research_experiment_entrypoints: 111
-max_research_version_families: 16
-max_research_version_family_copies: 37
-max_worktree_repeated_function_extra_copies: 506
+# This cleanup lowered the live worktree budgets to the measured post-cleanup
+# state; future changes may only keep or reduce them.
+max_untracked_research_experiment_entrypoints: 2
+max_research_version_families: 9
+max_research_version_family_copies: 18
+max_worktree_repeated_function_extra_copies: 414
 
 # These are still consumed by active ops/source code.  They remain explicit
 # exceptions until their consumers use the JRS research artifact resolver.

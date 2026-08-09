@@ -247,6 +247,7 @@ def test_research_debt_checker_includes_untracked_worktree_scripts(
             "max_research_experiment_entrypoints": 0,
             "max_repeated_research_function_bodies": 0,
             "max_untracked_research_experiment_entrypoints": 1,
+            "max_total_research_experiment_entrypoints": 1,
             "max_research_version_families": 0,
             "max_research_version_family_copies": 0,
             "max_worktree_repeated_function_extra_copies": 0,
@@ -257,6 +258,7 @@ def test_research_debt_checker_includes_untracked_worktree_scripts(
     check_weather_docs.check_research_script_debt(errors, set(), paths)
 
     assert any("untracked research experiment entrypoints grew" in error for error in errors)
+    assert any("total tracked+untracked research experiment entrypoints grew" in error for error in errors)
     assert any("versioned research script families grew" in error for error in errors)
     assert any("versioned research script copies grew" in error for error in errors)
     assert any("worktree repeated research function copies grew" in error for error in errors)

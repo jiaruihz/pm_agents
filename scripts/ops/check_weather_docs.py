@@ -580,6 +580,19 @@ def check_research_script_debt(
         )
 
     all_entrypoints = sorted(set(entrypoints) | set(untracked_entrypoints))
+    total_entrypoint_ceiling = int(
+        config.get(
+            "max_total_research_experiment_entrypoints",
+            len(all_entrypoints),
+        )
+    )
+    if len(all_entrypoints) > total_entrypoint_ceiling:
+        fail(
+            errors,
+            "total tracked+untracked research experiment entrypoints grew from "
+            f"ceiling {total_entrypoint_ceiling} to {len(all_entrypoints)}; "
+            "moving a script across git ownership does not create debt budget",
+        )
     version_families: dict[str, list[str]] = {}
     for relative in all_entrypoints:
         family = re.sub(r"_v\d+(?=\.py$)", "_vN", relative)
