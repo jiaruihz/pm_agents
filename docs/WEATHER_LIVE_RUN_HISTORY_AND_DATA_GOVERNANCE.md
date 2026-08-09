@@ -1265,7 +1265,44 @@ data-feed commits `a7760dfb`/`6316ca6f` then published
 134/134 targeted books, complete forecast lineage, 0 new Core Carry orders and
 no consumer-side market request.
 
-## 18. Immediate Follow-Up Work
+## 18. 2026-08-07..09 Observation Append-Only History Gap
+
+The canonical observation producer continued to refresh
+`output/observations/latest.json`, but stopped appending the global
+`observations.jsonl` and its UTC daily shard after
+`2026-08-07T16:45:45Z`. The first repaired batch landed at
+`2026-08-09T13:54:17Z`, so the affected history window is 45.14 hours. The
+data-feed log records 503 successful cache publications inside that window
+before recovery; those captures are absent from raw observation history and
+must be labelled `observation_append_history_gap`, not no-observation or
+strategy-filtered no-signal.
+
+This was a branch-regression failure. The append writer had been added by
+`142f890a`, but the registered production checkout descended from a line that
+did not contain that commit and again called the latest-only writer. Commit
+`b35bf4c2` restores one producer-owned write of latest plus global/daily JSONL
+and adds batch identity, stable observation-history identity, event/available/
+ingested clocks and producer build identity. A regression test now exercises
+the three outputs together.
+
+The missing raw rows cannot be truthfully reconstructed from derived strategy
+snapshots, so no synthetic backfill was written. Online decision inputs were
+not stale because strategies consumed the continuously refreshed
+`latest.json` (or their independent source-event lane), not
+`observations.jsonl`. During the gap the two registered live journals recorded
+12 distinct Core Carry venue order ids and 13 fast-source venue order ids;
+none read the missing history file, so evidenced counterfactual order changes
+from this writer defect are zero. The gap still blocks exact raw-observation
+PIT replay for those 503 captures and must remain excluded or explicitly
+coverage-labelled in research.
+
+Production validation wrote 41 city rows with 41 unique history ids to both
+the global file and `2026-08-09/observations.jsonl`; every row carries build
+`b35bf4c2`. Controller health retained all persistent sessions. The only
+pre/post missing session was the expected completion of bounded one-shot
+`weather_canonical_refresh`, explicitly allowed in the comparison.
+
+## 19. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
