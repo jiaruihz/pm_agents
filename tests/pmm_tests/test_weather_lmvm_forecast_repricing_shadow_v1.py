@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from argparse import Namespace
+import gzip
 import json
 from pathlib import Path
+import pytest
 
 from scripts.ops import weather_lmvm_forecast_repricing_shadow_v1 as shadow
 
@@ -159,3 +161,115 @@ def test_maker_quote_records_visible_queue_without_claiming_fill() -> None:
     assert quote["maker_limit_price"] == 0.20
     assert quote["visible_queue_ahead_shares"] == 14.0
     assert quote["maker_fill_status"] == "not_observable_without_order_or_trade_prints"
+
+
+def test_current_snapshot_adapter_joins_canonical_full_ladder(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runtime = tmp_path / "runtime"
+    day = "2026-08-10"
+    books_dir = runtime / "market_books" / "batches" / day
+    ladder_dir = runtime / "market_ladder_snapshots" / day
+    snapshots = runtime / "strategy_snapshots" / "paper_snapshots"
+    books_dir.mkdir(parents=True)
+    ladder_dir.mkdir(parents=True)
+    snapshots.mkdir(parents=True)
+    monkeypatch.setattr(shadow, "DEFAULT_RUNTIME", runtime)
+    stamp = "20260810_020000"
+    book_path = books_dir / f"market_books_{stamp}.jsonl.gz"
+    clock = {
+        "status": "ok",
+        "event_time_pit_scorable": True,
+        "request_started_at_utc": "2026-08-09T18:00:00Z",
+        "response_received_at_utc": "2026-08-09T18:00:01Z",
+        "parsed_at_utc": "2026-08-09T18:00:02Z",
+    }
+    books = []
+    for index in range(2):
+        books.extend(
+            [
+                {
+                    **clock,
+                    "book_capture_id": f"yes-{index}",
+                    "summary": {
+                        "best_bid": 0.2 + index * 0.4,
+                        "best_ask": 0.22 + index * 0.4,
+                        "bid_size": 10.0,
+                        "ask_size": 11.0,
+                    },
+                },
+                {
+                    **clock,
+                    "book_capture_id": f"no-{index}",
+                    "summary": {
+                        "best_bid": 0.77 - index * 0.4,
+                        "best_ask": 0.79 - index * 0.4,
+                        "bid_size": 12.0,
+                        "ask_size": 13.0,
+                    },
+                },
+            ]
+        )
+    with gzip.open(book_path, "wt", encoding="utf-8") as handle:
+        for row in books:
+            handle.write(json.dumps(row) + "\n")
+    ladder = {
+        "available_at_utc": "2026-08-09T18:00:03Z",
+        "batch_capture_id": "market-batch",
+        "records": [
+            {
+                "city": "London",
+                "target_date": "2026-08-10",
+                "event_slug": "london-aug-10",
+                "rung_count": 2,
+                "rungs": [
+                    {
+                        "condition_id": f"condition-{index}",
+                        "bracket": str(20 + index),
+                        "market_id": f"market-{index}",
+                        "yes_token_id": f"token-{index}",
+                        "yes_book_capture_id": f"yes-{index}",
+                        "no_book_capture_id": f"no-{index}",
+                    }
+                    for index in range(2)
+                ],
+            }
+        ],
+    }
+    (ladder_dir / f"market_ladder_snapshot_{stamp}.json").write_text(
+        json.dumps(ladder), encoding="utf-8"
+    )
+    strategy = {
+        "ts_utc": "2026-08-09T18:00:00Z",
+        "available_at_utc": "2026-08-09T18:00:04Z",
+        "snapshot_capture_id": "strategy-capture",
+        "producer_build_id": "build-1",
+        "canonical_orderbook_source": {"archive_path": str(book_path)},
+        "records": [
+            {
+                "condition_id": f"condition-{index}",
+                "city": "London",
+                "target_date": "2026-08-10",
+                "city_local_date_at_snapshot": "2026-08-09",
+                "event_slug": "london-aug-10",
+                "bracket": str(20 + index),
+                "question": f"London {20 + index}",
+                "model_prob": (0.35, 0.65)[index],
+                "forecast_values_hash": "forecast-a",
+                "forecast_source": "open_meteo_live_ecmwf",
+                "forecast_model": "ecmwf",
+                "forecast_max_f": 69.0,
+                "timezone_name": "Europe/London",
+            }
+            for index in range(2)
+        ],
+    }
+    snapshot_path = snapshots / "snapshot_20260810_0200.json"
+    snapshot_path.write_text(json.dumps(strategy), encoding="utf-8")
+    rows, coverage = shadow.parse_clock_exact_snapshot_file(snapshot_path)
+    assert coverage["current_joined_ladders"] == 1
+    assert coverage["current_joined_rungs"] == 2
+    assert rows[0]["clock_lineage_status"] == "collector_exact_joined_full_ladder_v1"
+    assert rows[0]["lead_days"] == 1
+    assert rows[0]["rungs"][0]["yes_bid"] == pytest.approx(0.21)
+    assert rows[0]["rungs"][0]["yes_ask"] == pytest.approx(0.22)

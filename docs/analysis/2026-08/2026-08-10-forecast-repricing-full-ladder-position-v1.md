@@ -118,6 +118,26 @@ Runner 输出：`decision_bundles.jsonl`、`trade_intents.jsonl`、`position_dec
 `quote_markouts.jsonl`。`TradeIntent` 始终为 zero notional；POST_MAKER 后的 HOLD/EXIT 是
 conditional position telemetry，直到真实 order/fill journal 证明成交。
 
+### 当前 raw 接入实测
+
+当前 `strategy_snapshots` 只携带 hot/partial books，不能直接当完整 ladder。Runner 现在按快照中的
+`canonical_orderbook_source.archive_path`，只读联接同一批次的 `market_books` 与
+`market_ladder_snapshots`，并逐腿验证 request/response/parse/available 时钟；不重新请求盘口，也不把缺档事件送入模型。
+
+2026-08-10 one-shot current-raw smoke：
+
+| item | count |
+|---|---:|
+| collector-exact joined full ladders | 231 |
+| joined rungs | 2,541 |
+| initialized forecast streams | 23 |
+| incomplete ladder events blocked | 1,229 |
+| plan / order / exchange calls | 0 / 0 / 0 |
+
+这证明完整策略入口可以消费当前 raw 并建立持续状态；`1,229` 是证据覆盖缺口，不是策略 selector 筛除。
+首次启动只有 baseline，不会把左截断前不存在的 forecast revision 伪造成交易信号。历史 fixture 另外验证了
+`POST_MAKER -> conditional HOLD/EXIT` 的全链路。
+
 Artifact：
 
 - `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_position_20260810`

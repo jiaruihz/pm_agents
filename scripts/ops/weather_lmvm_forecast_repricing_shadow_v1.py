@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
+import gzip
 import hashlib
 import json
 import math
@@ -50,6 +51,10 @@ from weather_model_evaluation.forecast_repricing_position import (  # noqa: E402
     load_position_policy,
     score_runtime_entry,
     score_runtime_position,
+)
+from weather_model_evaluation.first_seen_event_ladder_panel import (  # noqa: E402
+    _book_clock_exact,
+    _effective_yes_quote,
 )
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
@@ -82,13 +87,14 @@ def parse_clock_exact_snapshot_file(
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Keep only v3 ladders with a true downstream-available clock."""
 
-    rows, parsed = parse_snapshot_file(str(path))
-    counters: Counter[str] = Counter(parsed)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        counters["clock_payload_invalid"] += 1
-        return [], dict(counters)
+        return [], {"clock_payload_invalid": 1}
+    if isinstance(payload.get("canonical_orderbook_source"), dict):
+        return parse_current_joined_snapshot_file(path, payload)
+    rows, parsed = parse_snapshot_file(str(path))
+    counters: Counter[str] = Counter(parsed)
     records = [row for row in payload.get("records") or [] if isinstance(row, dict)]
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for record in records:
@@ -132,6 +138,153 @@ def parse_clock_exact_snapshot_file(
         exact.append(row)
     counters["collector_exact_clock_ladders"] += len(exact)
     return exact, dict(counters)
+
+
+def _read_book_batch(path: Path) -> dict[str, dict[str, Any]]:
+    opener = gzip.open if path.suffix == ".gz" else open
+    rows: dict[str, dict[str, Any]] = {}
+    with opener(path, "rt", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            capture_id = str(row.get("book_capture_id") or "")
+            if capture_id:
+                rows[capture_id] = row
+    return rows
+
+
+def _matching_ladder_path(book_path: Path) -> Path:
+    name = book_path.name.replace("market_books_", "market_ladder_snapshot_", 1)
+    if name.endswith(".jsonl.gz"):
+        name = name[: -len(".jsonl.gz")] + ".json"
+    elif name.endswith(".jsonl"):
+        name = name[: -len(".jsonl")] + ".json"
+    return DEFAULT_RUNTIME / "market_ladder_snapshots" / book_path.parent.name / name
+
+
+def parse_current_joined_snapshot_file(
+    path: Path,
+    payload: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Join the current strategy forecast view to its canonical full ladder.
+
+    ``strategy_snapshots`` intentionally keeps only hot strategy books.  The
+    complete book truth lives in the batch named by
+    ``canonical_orderbook_source.archive_path`` and its matching
+    ``market_ladder_snapshot``.  Joining by condition id restores the current
+    full-ladder decision state without making another network request.
+    """
+
+    counters: Counter[str] = Counter(files_read=1)
+    source = dict(payload.get("canonical_orderbook_source") or {})
+    book_path = Path(str(source.get("archive_path") or ""))
+    if not book_path.exists():
+        counters["current_book_batch_missing"] += 1
+        return [], dict(counters)
+    ladder_path = _matching_ladder_path(book_path)
+    if not ladder_path.exists():
+        counters["current_ladder_snapshot_missing"] += 1
+        return [], dict(counters)
+    try:
+        books = _read_book_batch(book_path)
+        ladder_payload = json.loads(ladder_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        counters["current_join_payload_invalid"] += 1
+        return [], dict(counters)
+    decision_dt = parse_utc(payload.get("available_at_utc"))
+    ladder_available = parse_utc(ladder_payload.get("available_at_utc"))
+    if decision_dt is None or ladder_available is None or ladder_available > decision_dt:
+        counters["current_join_clock_invalid"] += 1
+        return [], dict(counters)
+    strategy_rows = {
+        str(row.get("condition_id")): row
+        for row in payload.get("records") or []
+        if isinstance(row, dict) and row.get("condition_id")
+    }
+    outputs = []
+    for event in ladder_payload.get("records") or []:
+        if not isinstance(event, dict):
+            continue
+        counters["current_ladder_events"] += 1
+        joined = []
+        blocked = False
+        for manifest in event.get("rungs") or []:
+            condition_id = str(manifest.get("condition_id") or "")
+            forecast = strategy_rows.get(condition_id)
+            yes = books.get(str(manifest.get("yes_book_capture_id") or ""))
+            no = books.get(str(manifest.get("no_book_capture_id") or ""))
+            if forecast is None or not _book_clock_exact(yes, decision_dt) or not _book_clock_exact(no, decision_dt):
+                blocked = True
+                break
+            quote = _effective_yes_quote(yes, no)
+            model_prob = finite(forecast.get("model_prob"))
+            if model_prob is None or any(quote[key] is None for key in ("yes_bid", "yes_ask", "yes_mid")):
+                blocked = True
+                break
+            joined.append(
+                {
+                    "condition_id": condition_id,
+                    "bracket": str(manifest.get("bracket") or forecast.get("bracket") or ""),
+                    "question": forecast.get("question"),
+                    "market_id": manifest.get("market_id"),
+                    "yes_token_id": manifest.get("yes_token_id"),
+                    "model_prob": model_prob,
+                    "market_prob": float(quote["yes_mid"]),
+                    "yes_bid": float(quote["yes_bid"]),
+                    "yes_ask": float(quote["yes_ask"]),
+                    "yes_bid_size": quote.get("yes_bid_size"),
+                    "yes_ask_size": quote.get("yes_ask_size"),
+                    "tick_size": 0.001,
+                }
+            )
+        if blocked or not joined or len(joined) != int(event.get("rung_count") or 0):
+            counters["current_incomplete_ladders_blocked"] += 1
+            continue
+        first = strategy_rows[str((event.get("rungs") or [])[0].get("condition_id") or "")]
+        target_date = str(event.get("target_date") or first.get("target_date") or "")
+        city_date = str(first.get("city_local_date_at_snapshot") or "")
+        try:
+            lead_days = (datetime.fromisoformat(target_date).date() - datetime.fromisoformat(city_date).date()).days
+        except ValueError:
+            counters["current_target_date_invalid"] += 1
+            continue
+        outputs.append(
+            {
+                "snapshot_id": canonical_json_hash(
+                    {
+                        "strategy_snapshot_capture_id": payload.get("snapshot_capture_id"),
+                        "market_ladder_batch_capture_id": ladder_payload.get("batch_capture_id"),
+                        "city": event.get("city"),
+                        "target_date": target_date,
+                    }
+                ),
+                "snapshot_ts_utc": str(payload.get("ts_utc") or payload.get("snapshot_ts_utc")),
+                "decision_ts_utc": decision_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "decision_epoch": decision_dt.timestamp(),
+                "clock_lineage_status": "collector_exact_joined_full_ladder_v1",
+                "event_time_pit_scorable": True,
+                "source_path": str(path),
+                "city": str(event.get("city") or first.get("city") or ""),
+                "target_date": target_date,
+                "event_slug": str(event.get("event_slug") or first.get("event_slug") or ""),
+                "market_timezone": first.get("timezone_name"),
+                "forecast_source": first.get("forecast_source"),
+                "forecast_model": first.get("forecast_model") or first.get("model"),
+                "model_version": payload.get("producer_build_id"),
+                "forecast_state_key": str(first.get("forecast_values_hash") or ""),
+                "forecast_state_basis": "forecast_values_hash",
+                "model_init_utc_estimated": first.get("model_init_utc_estimated"),
+                "forecast_max_f": first.get("forecast_max_f"),
+                "lead_days": lead_days,
+                "rung_count": len(joined),
+                "rungs": joined,
+            }
+        )
+    counters["collector_exact_clock_ladders"] += len(outputs)
+    counters["current_joined_ladders"] += len(outputs)
+    counters["current_joined_rungs"] += sum(len(row["rungs"]) for row in outputs)
+    return outputs, dict(counters)
 
 
 def utc_now() -> str:
