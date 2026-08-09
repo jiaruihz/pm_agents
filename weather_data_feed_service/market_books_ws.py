@@ -29,7 +29,7 @@ from weather_data_feed.source_lineage import producer_build_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "five_city_windowed_hot_strip_v2"
+SELECTOR_VERSION = "five_city_tiered_hot_strip_v3"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -206,10 +206,11 @@ def scheduled_report_windows(
     after_sec: float,
     extended_before_sec: float,
     research_sample_modulus: int,
-) -> tuple[set[tuple[str, str]], dict[str, str]]:
+) -> tuple[set[tuple[str, str]], set[tuple[str, str]], dict[str, str]]:
     """Return active report windows and the next expected report per city."""
 
     active: set[tuple[str, str]] = set()
+    research: set[tuple[str, str]] = set()
     next_reports: dict[str, str] = {}
     for key, row in observations.items():
         city, _ = key
@@ -245,8 +246,10 @@ def scheduled_report_windows(
             <= report_at + timedelta(seconds=after_sec)
         ):
             active.add(key)
+            if extended:
+                research.add(key)
         next_reports[city] = _utc_text(report_at)
-    return active, next_reports
+    return active, research, next_reports
 
 
 @dataclass
@@ -257,6 +260,7 @@ class Selection:
     active_brackets: dict[str, list[str]]
     grace_brackets: dict[str, list[str]]
     scheduled_cities: list[str]
+    research_cities: list[str]
     burst_cities: list[str]
     missing_observation_cities: list[str]
     invalidation_state: dict[str, float]
@@ -269,8 +273,11 @@ def select_tokens(
     cities: Iterable[str],
     now_utc: datetime,
     active_bracket_count: int,
+    research_bracket_count: int,
+    event_bracket_count: int,
     post_invalidation_sec: float,
     scheduled_keys: set[tuple[str, str]],
+    research_keys: set[tuple[str, str]],
     burst_keys: set[tuple[str, str]],
     invalidation_state: dict[str, float],
 ) -> Selection:
@@ -339,7 +346,12 @@ def select_tokens(
                 or float(parsed_by_label[label].high) >= running_max
             ]
             if window_active:
-                selected_labels.update(possible[:active_bracket_count])
+                bracket_count = active_bracket_count
+                if (city, target_date) in research_keys:
+                    bracket_count = max(bracket_count, research_bracket_count)
+                if (city, target_date) in burst_keys:
+                    bracket_count = max(bracket_count, event_bracket_count)
+                selected_labels.update(possible[:bracket_count])
             if (city, target_date) in burst_keys:
                 burst_cities.append(city)
             for label in ordered:
@@ -390,6 +402,9 @@ def select_tokens(
         grace_brackets=grace_brackets,
         scheduled_cities=sorted(
             city for city, target_date in grouped if (city, target_date) in scheduled_keys
+        ),
+        research_cities=sorted(
+            city for city, target_date in grouped if (city, target_date) in research_keys
         ),
         burst_cities=sorted(set(burst_cities)),
         missing_observation_cities=sorted(set(missing_observation_cities)),
@@ -493,7 +508,16 @@ class Collector:
         self.source_event_cursor = SourceEventCursor(self.source_events)
         self.next_report_at_utc: dict[str, str] = {}
         self.selection = Selection(
-            set(), {}, {}, {}, {}, [], [], [], self.invalidation_state
+            tokens=set(),
+            token_rows={},
+            city_token_counts={},
+            active_brackets={},
+            grace_brackets={},
+            scheduled_cities=[],
+            research_cities=[],
+            burst_cities=[],
+            missing_observation_cities=[],
+            invalidation_state=self.invalidation_state,
         )
         self.connected = False
         self.connection_error: str | None = None
@@ -507,7 +531,7 @@ class Collector:
     def refresh_selection(self, now_utc: datetime) -> Selection:
         observations = _observation_index(self.observation_cache)
         configured_cities = set(self.args.cities)
-        scheduled, self.next_report_at_utc = scheduled_report_windows(
+        scheduled, research, self.next_report_at_utc = scheduled_report_windows(
             {
                 key: row
                 for key, row in observations.items()
@@ -530,8 +554,11 @@ class Collector:
             cities=self.args.cities,
             now_utc=now_utc,
             active_bracket_count=self.args.active_bracket_count,
+            research_bracket_count=self.args.research_bracket_count,
+            event_bracket_count=self.args.event_bracket_count,
             post_invalidation_sec=self.args.post_invalidation_sec,
             scheduled_keys=scheduled,
+            research_keys=research,
             burst_keys=bursts,
             invalidation_state=self.invalidation_state,
         )
@@ -580,6 +607,7 @@ class Collector:
                 "active_brackets": self.selection.active_brackets,
                 "grace_brackets": self.selection.grace_brackets,
                 "scheduled_cities": self.selection.scheduled_cities,
+                "research_cities": self.selection.research_cities,
                 "burst_cities": self.selection.burst_cities,
                 "missing_observation_cities": self.selection.missing_observation_cities,
                 "post_invalidation_sec": self.args.post_invalidation_sec,
@@ -590,6 +618,8 @@ class Collector:
                 "research_sample_modulus": self.args.research_sample_modulus,
                 "next_report_at_utc": self.next_report_at_utc,
                 "active_bracket_count": self.args.active_bracket_count,
+                "research_bracket_count": self.args.research_bracket_count,
+                "event_bracket_count": self.args.event_bracket_count,
                 "counter_date_utc": self.day,
                 "day_payload_bytes": self.day_payload_bytes,
                 "daily_payload_budget_bytes": self.args.daily_payload_budget_bytes,
@@ -745,7 +775,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--health-path", required=True)
     parser.add_argument("--market-proxy", default=os.environ.get("WEATHER_DATA_FEED_MARKET_PROXY", ""))
     parser.add_argument("--cities", nargs="+", default=list(DEFAULT_CITIES))
-    parser.add_argument("--active-bracket-count", type=int, default=5)
+    parser.add_argument("--active-bracket-count", type=int, default=2)
+    parser.add_argument("--research-bracket-count", type=int, default=3)
+    parser.add_argument("--event-bracket-count", type=int, default=3)
     parser.add_argument("--post-invalidation-sec", type=float, default=0.0)
     parser.add_argument("--event-burst-sec", type=float, default=120.0)
     parser.add_argument("--report-window-before-sec", type=float, default=45.0)
@@ -775,6 +807,7 @@ def main(argv: list[str] | None = None) -> int:
                     "active_brackets": selection.active_brackets,
                     "grace_brackets": selection.grace_brackets,
                     "scheduled_cities": selection.scheduled_cities,
+                    "research_cities": selection.research_cities,
                     "burst_cities": selection.burst_cities,
                     "missing_observation_cities": selection.missing_observation_cities,
                 },

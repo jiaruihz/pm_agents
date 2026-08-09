@@ -34,6 +34,7 @@ def _select(
     now=NOW,
     observations=None,
     scheduled=frozenset({("Busan", "2026-08-09")}),
+    research=frozenset(),
     bursts=frozenset(),
     state=None,
     post_invalidation_sec=300,
@@ -43,9 +44,12 @@ def _select(
         observations=observations or {},
         cities=["Busan"],
         now_utc=now,
-        active_bracket_count=3,
+        active_bracket_count=2,
+        research_bracket_count=3,
+        event_bracket_count=3,
         post_invalidation_sec=post_invalidation_sec,
         scheduled_keys=set(scheduled),
+        research_keys=set(research),
         burst_keys=set(bursts),
         invalidation_state=state or {},
     )
@@ -70,7 +74,7 @@ def test_physically_invalid_lower_brackets_expire_after_markout_grace() -> None:
         observations=observations,
         state=baseline.invalidation_state,
     )
-    assert len(first.tokens) == 10
+    assert len(first.tokens) == 8
     assert first.grace_brackets["Busan"] == ["30", "31"]
 
     after_grace = _select(
@@ -78,8 +82,8 @@ def test_physically_invalid_lower_brackets_expire_after_markout_grace() -> None:
         observations=observations,
         state=first.invalidation_state,
     )
-    assert len(after_grace.tokens) == 6
-    assert after_grace.active_brackets["Busan"] == ["32", "33", "34"]
+    assert len(after_grace.tokens) == 4
+    assert after_grace.active_brackets["Busan"] == ["32", "33"]
     assert after_grace.grace_brackets["Busan"] == []
 
 
@@ -92,8 +96,8 @@ def test_already_invalid_on_start_is_not_subscribed() -> None:
     }
     selected = _select(observations=observations)
 
-    assert len(selected.tokens) == 6
-    assert selected.active_brackets["Busan"] == ["32", "33", "34"]
+    assert len(selected.tokens) == 4
+    assert selected.active_brackets["Busan"] == ["32", "33"]
     assert selected.grace_brackets["Busan"] == []
 
 
@@ -120,6 +124,20 @@ def test_recent_source_event_opens_only_the_hot_strip() -> None:
     assert selected.grace_brackets["Busan"] == []
 
 
+def test_sampled_research_window_adds_only_the_third_bracket() -> None:
+    observations = {
+        ("Busan", "2026-08-09"): {"status": "ok", "running_max_c": 32.0}
+    }
+    selected = _select(
+        observations=observations,
+        research={("Busan", "2026-08-09")},
+    )
+
+    assert len(selected.tokens) == 6
+    assert selected.research_cities == ["Busan"]
+    assert selected.active_brackets["Busan"] == ["32", "33", "34"]
+
+
 def test_missing_settlement_facing_observation_fails_closed() -> None:
     selected = _select()
     assert len(selected.tokens) == 0
@@ -144,7 +162,7 @@ def test_scheduled_report_window_uses_observation_cadence() -> None:
             "estimated_cadence_min": 30,
         }
     }
-    active, next_reports = scheduled_report_windows(
+    active, research, next_reports = scheduled_report_windows(
         observations,
         now_utc=NOW - timedelta(seconds=30),
         before_sec=45,
@@ -154,7 +172,29 @@ def test_scheduled_report_window_uses_observation_cadence() -> None:
     )
 
     assert active == {("Busan", "2026-08-09")}
+    assert research == set()
     assert next_reports == {"Busan": "2026-08-09T03:00:00.000Z"}
+
+
+def test_sampled_report_window_is_marked_for_three_brackets() -> None:
+    observations = {
+        ("Busan", "2026-08-09"): {
+            "status": "ok",
+            "last_obs_utc": "2026-08-09T02:30:00Z",
+            "estimated_cadence_min": 30,
+        }
+    }
+    active, research, _ = scheduled_report_windows(
+        observations,
+        now_utc=NOW - timedelta(seconds=100),
+        before_sec=45,
+        after_sec=120,
+        extended_before_sec=125,
+        research_sample_modulus=1,
+    )
+
+    assert active == {("Busan", "2026-08-09")}
+    assert research == {("Busan", "2026-08-09")}
 
 
 def test_source_event_cursor_ignores_revisions(tmp_path) -> None:
