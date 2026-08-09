@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect D-2/D-1 forecast-update single-YES repricing lineage, zero notional.
+"""Run D-2/D-1 forecast-update full-ladder repricing shadow, zero notional.
 
 The runner consumes immutable full-ladder paper snapshots.  It treats the first
 observed state of every city/target/model stream as a left-censored baseline and
@@ -7,9 +7,15 @@ only emits a decision when ``forecast_values_hash`` changes afterwards.  Every
 rung remains in the candidate denominator; one YES rung is selected by
 ``delta(model probability) - delta(market probability)``.
 
-It records ModelOutput -> SignalCandidate -> zero-notional TradeIntent plus
-subsequent quote markouts.  It never creates a plan, order, or exchange call.
-Quote crossing is explicitly telemetry, not an inferred maker fill.
+With ``--position-policy-model`` it scores every rung with the frozen
+full-ladder entry model, emits a maker-fill-gated zero-notional intent, and
+records conditional HOLD/EXIT decisions from later complete ladders.  The
+conditional path exercises the position state machine but never claims a
+maker fill.  Without that argument the retained legacy innovation selector is
+used for backward-compatible telemetry.
+
+It never creates a plan, order, or exchange call.  Quote crossing is explicitly
+telemetry, not an inferred maker fill.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -39,6 +46,11 @@ from weather_data_feed.information_events import (  # noqa: E402
     build_information_event,
     canonical_json_hash,
 )
+from weather_model_evaluation.forecast_repricing_position import (  # noqa: E402
+    load_position_policy,
+    score_runtime_entry,
+    score_runtime_position,
+)
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
@@ -46,6 +58,7 @@ SCHEMA_VERSION = "weather_lmvm_forecast_repricing_shadow_v1"
 CLOCK_CONTRACT_VERSION = "weather_orderbook_capture_v3_available_clock"
 STRATEGY_KEY = "lmvm_forecast_innovation_single_yes_v1"
 POLICY_ID = "delta_model_minus_delta_market_argmax_v1"
+POSITION_POLICY_ID = "full_ladder_maker_fill_gated_position_v1"
 FEATURE_SET_ID = canonical_json_hash(
     [
         "model_probability_before_after",
@@ -145,6 +158,21 @@ def finite(value: Any) -> float | None:
     return result if math.isfinite(result) else None
 
 
+def json_clean(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): json_clean(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_clean(item) for item in value]
+    if hasattr(value, "item") and not isinstance(value, (str, bytes)):
+        try:
+            return json_clean(value.item())
+        except (TypeError, ValueError):
+            pass
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
 def load_state(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {
@@ -183,7 +211,7 @@ def write_json_atomic(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
-        json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n",
+        json.dumps(json_clean(value), ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n",
         encoding="utf-8",
     )
     temporary.replace(path)
@@ -197,7 +225,7 @@ def append_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> int:
     with path.open("a", encoding="utf-8") as handle:
         for row in materialized:
             handle.write(
-                json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                json.dumps(json_clean(row), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
                 + "\n"
             )
     return len(materialized)
@@ -283,19 +311,51 @@ def model_identity(row: dict[str, Any]) -> tuple[str, str]:
 def build_update(
     previous: dict[str, Any],
     current: dict[str, Any],
-) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any], dict[str, Any]] | None:
+    position_policy: dict[str, Any] | None = None,
+) -> tuple[
+    dict[str, Any],
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+    dict[str, Any] | None,
+] | None:
     paired = paired_rungs(previous, current)
     if len(paired) != len(current.get("rungs") or []):
         return None
-    selected = max(
-        paired,
-        key=lambda rung: (
-            float(rung["forecast_innovation_score"]),
-            float(rung["model_probability_delta"]),
-            float(rung["model_probability_after"]),
-            -float(rung["yes_ask"]),
-        ),
-    )
+    policy_id = POSITION_POLICY_ID if position_policy is not None else POLICY_ID
+    policy_rows: dict[str, dict[str, Any]] = {}
+    if position_policy is not None:
+        scored_rows, selected = score_runtime_entry(
+            paired,
+            position_policy,
+            event_identity={
+                "forecast_event_id": canonical_json_hash(
+                    {
+                        "stream": stream_key(current),
+                        "forecast_state_before": previous["forecast_state_key"],
+                        "forecast_state_after": current["forecast_state_key"],
+                    }
+                ),
+                "city": current["city"],
+                "target_date": current["target_date"],
+                "lead_days": current["lead_days"],
+                "snapshot_epoch": current["decision_epoch"],
+            },
+        )
+        policy_rows = {str(row["condition_id"]): row for row in scored_rows}
+        paired = [
+            {**rung, **policy_rows.get(str(rung["condition_id"]), {})}
+            for rung in paired
+        ]
+    else:
+        selected = max(
+            paired,
+            key=lambda rung: (
+                float(rung["forecast_innovation_score"]),
+                float(rung["model_probability_delta"]),
+                float(rung["model_probability_after"]),
+                -float(rung["yes_ask"]),
+            ),
+        )
     generated = utc_now()
     normalized_payload = {
         "forecast_state_before": previous["forecast_state_key"],
@@ -341,7 +401,7 @@ def build_update(
             "feature_row_id": stream_key(current),
             "feature_schema_version": "lmvm_forecast_update_features_v1",
             "feature_version_manifest": {
-                "selector": POLICY_ID,
+                "selector": policy_id,
                 "snapshot_parser": "lmvm_single_yes_repricing_v1",
             },
             "source_profile_id": str(current.get("forecast_source") or "forecast"),
@@ -351,10 +411,20 @@ def build_update(
         created_at_utc=generated,
     )
     model_id, artifact_id = model_identity(current)
+    feature_set_id = FEATURE_SET_ID
+    if position_policy is not None:
+        model_id = str(position_policy["model_id"])
+        artifact_id = str(position_policy.get("_artifact_sha256") or model_id)
+        feature_set_id = canonical_json_hash(
+            {
+                "entry": position_policy["entry_features"],
+                "continuation": position_policy["continuation_features"],
+            }
+        )
     bundles = []
     selected_candidate: SignalCandidate | None = None
     for rung in paired:
-        is_selected = str(rung["condition_id"]) == str(selected["condition_id"])
+        is_selected = selected is not None and str(rung["condition_id"]) == str(selected["condition_id"])
         target_id = f"{rung['condition_id']}:YES"
         output = ModelOutput.create(
             checkpoint_id=checkpoint["state_checkpoint_id"],
@@ -367,7 +437,7 @@ def build_update(
             p_model=rung["model_probability_after"],
             model_id=model_id,
             model_artifact_id=artifact_id,
-            feature_set_id=FEATURE_SET_ID,
+            feature_set_id=feature_set_id,
             input_refs=(
                 {"role": "forecast_and_feature_book", "physical_path": current["source_path"], "snapshot_id": current["snapshot_id"]},
             ),
@@ -405,11 +475,11 @@ def build_update(
             executable_cost=ask,
             model_id=model_id,
             model_artifact_id=artifact_id,
-            feature_set_id=FEATURE_SET_ID,
+            feature_set_id=feature_set_id,
             feature_book_snapshot_id=current["snapshot_id"],
             execution_book_snapshot_id=current["snapshot_id"],
             strategy_key=STRATEGY_KEY,
-            policy_id=POLICY_ID,
+            policy_id=policy_id,
             candidate_status="scored",
             blocker_reason=None,
             selected=is_selected,
@@ -427,6 +497,14 @@ def build_update(
                 "market_probability_after": rung["market_probability_after"],
                 "market_probability_delta": rung["market_probability_delta"],
                 "forecast_innovation_score": rung["forecast_innovation_score"],
+                "predicted_relative_markout": finite(rung.get("predicted_relative_markout")),
+                "predicted_entry_net_value": finite(rung.get("predicted_entry_net_value")),
+                "signed_mode_distance": finite(rung.get("signed_mode_distance")),
+                "neighbor_propagation": finite(rung.get("neighbor_propagation")),
+                "neighbor_lead_lag": finite(rung.get("neighbor_lead_lag")),
+                "shock_x_mode_x_neighbor_propagation": finite(
+                    rung.get("shock_x_mode_x_neighbor_propagation")
+                ),
                 "entry_bid": rung["yes_bid"],
                 "entry_ask": ask,
                 "entry_bid_size": rung.get("yes_bid_size"),
@@ -449,8 +527,29 @@ def build_update(
         )
         if is_selected:
             selected_candidate = candidate
-    if selected_candidate is None or not selected_candidate.token_id:
-        return None
+    update = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "lmvm_forecast_update",
+        "generated_at_utc": generated,
+        "stream_key": stream_key(current),
+        "lead_days": current["lead_days"],
+        "forecast_state_before": previous["forecast_state_key"],
+        "forecast_state_after": current["forecast_state_key"],
+        "snapshot_id": current["snapshot_id"],
+        "snapshot_ts_utc": current["snapshot_ts_utc"],
+        "decision_ts_utc": current["decision_ts_utc"],
+        "clock_lineage_status": current["clock_lineage_status"],
+        "source_path": current["source_path"],
+        "city": current["city"],
+        "target_date": current["target_date"],
+        "rung_count": len(paired),
+        "policy_id": policy_id,
+        "decision": "POST_MAKER" if selected_candidate is not None else "NO_TRADE",
+        "zero_notional": True,
+        "no_order_placed": True,
+    }
+    if selected_candidate is None or not selected_candidate.token_id or selected is None:
+        return update, bundles, None, None
     selected_quote = maker_quote(selected)
     intent = TradeIntent.create(
         candidate_id=selected_candidate.candidate_id,
@@ -470,31 +569,17 @@ def build_update(
             "no_plan": True,
             "no_order": True,
             "maker_fill_requires_trade_or_order_evidence": True,
+            "position_opens_only_after_actual_fill": True,
+            "conditional_position_telemetry": position_policy is not None,
         },
     )
-    update = {
-        "schema_version": SCHEMA_VERSION,
-        "record_type": "lmvm_forecast_update",
-        "generated_at_utc": generated,
-        "stream_key": stream_key(current),
-        "lead_days": current["lead_days"],
-        "forecast_state_before": previous["forecast_state_key"],
-        "forecast_state_after": current["forecast_state_key"],
-        "snapshot_id": current["snapshot_id"],
-        "snapshot_ts_utc": current["snapshot_ts_utc"],
-        "decision_ts_utc": current["decision_ts_utc"],
-        "clock_lineage_status": current["clock_lineage_status"],
-        "source_path": current["source_path"],
-        "city": current["city"],
-        "target_date": current["target_date"],
-        "rung_count": len(paired),
+    update.update({
         "selected_candidate_id": selected_candidate.candidate_id,
         "selected_condition_id": selected_candidate.condition_id,
         "selected_bracket": selected_candidate.bracket,
         "selected_innovation_score": selected["forecast_innovation_score"],
-        "zero_notional": True,
-        "no_order_placed": True,
-    }
+        "predicted_entry_net_value": selected.get("predicted_entry_net_value"),
+    })
     open_candidate = {
         "candidate_id": selected_candidate.candidate_id,
         "stream_key": stream_key(current),
@@ -506,6 +591,10 @@ def build_update(
         "entry_ask": selected["yes_ask"],
         "entry_ask_size": selected.get("yes_ask_size"),
         "entry_fee_per_share": weather_fee_per_share(float(selected["yes_ask"])),
+        "token_id": selected_candidate.token_id,
+        "position_policy_enabled": position_policy is not None,
+        "conditional_fill_assumption": position_policy is not None,
+        "entry_ladder": json_clean(paired) if position_policy is not None else [],
         **selected_quote,
     }
     return update, bundles, intent.to_dict(), open_candidate
@@ -516,6 +605,7 @@ def markouts_for_state(
     open_candidates: dict[str, dict[str, Any]],
     markout_keys: set[str],
     follow_minutes: float,
+    position_policy: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     output = []
     expired = []
@@ -540,6 +630,25 @@ def markouts_for_state(
         exit_fee = weather_fee_per_share(bid)
         taker_net = bid - exit_fee - float(candidate["entry_ask"]) - float(candidate["entry_fee_per_share"])
         maker_price = float(candidate["maker_limit_price"])
+        position_action = "MARKOUT_ONLY"
+        position_reason = "legacy_quote_telemetry"
+        continuation_value = None
+        observed_relative = None
+        neighbor_propagation = None
+        if position_policy is not None and candidate.get("position_policy_enabled"):
+            decision = score_runtime_position(
+                candidate,
+                list(rungs.values()),
+                position_policy,
+                elapsed_minutes=elapsed,
+            )
+            position_action = decision.action
+            position_reason = decision.reason
+            continuation_value = decision.predicted_incremental_exit_value
+            observed_relative = decision.observed_relative_markout
+            neighbor_propagation = decision.neighbor_propagation
+            if decision.action == "EXIT":
+                expired.append(candidate_id)
         output.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -549,6 +658,7 @@ def markouts_for_state(
                 "city": row["city"],
                 "target_date": row["target_date"],
                 "condition_id": candidate["condition_id"],
+                "token_id": candidate.get("token_id"),
                 "bracket": candidate["bracket"],
                 "elapsed_minutes": elapsed,
                 "snapshot_id": row["snapshot_id"],
@@ -559,6 +669,14 @@ def markouts_for_state(
                 "yes_ask_size": rung.get("yes_ask_size"),
                 "taker_entry_to_taker_exit_net_per_share": taker_net,
                 "maker_entry_to_taker_exit_net_per_share_before_maker_fee": bid - exit_fee - maker_price,
+                "position_action": position_action,
+                "position_reason": position_reason,
+                "predicted_incremental_exit_value": continuation_value,
+                "observed_rung_relative_markout": observed_relative,
+                "neighbor_propagation": neighbor_propagation,
+                "conditional_maker_fill_position": bool(
+                    candidate.get("conditional_fill_assumption")
+                ),
                 "maker_quote_crossed": ask <= maker_price,
                 "maker_fill_status": "not_inferred_from_quote_cross",
                 "trade_print_coverage": "absent",
@@ -619,22 +737,69 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
         parsed_states.extend(rows)
         seen.add(str(path))
     for row in sorted(parsed_states, key=lambda item: (item["decision_epoch"], item["snapshot_id"])):
-        observed, expired = markouts_for_state(row, open_candidates, markout_keys, args.follow_minutes)
+        observed, expired = markouts_for_state(
+            row,
+            open_candidates,
+            markout_keys,
+            args.follow_minutes,
+            getattr(args, "position_policy", None),
+        )
         markouts.extend(observed)
+        for decision_row in observed:
+            if decision_row.get("position_action") != "EXIT":
+                continue
+            candidate = open_candidates.get(str(decision_row["candidate_id"]))
+            if not candidate or not candidate.get("token_id"):
+                continue
+            intents.append(
+                TradeIntent.create(
+                    candidate_id=str(decision_row["candidate_id"]),
+                    condition_id=str(decision_row["condition_id"]),
+                    token_id=str(candidate["token_id"]),
+                    side="SELL",
+                    requested_size=0.0,
+                    sizing_profile="zero_notional_v1",
+                    execution_profile="full_ladder_dynamic_exit_v1",
+                    max_cost=float(decision_row["yes_bid"]),
+                    ttl_seconds=300,
+                    dedupe_key=(
+                        f"{STRATEGY_KEY}|EXIT|{decision_row['candidate_id']}|"
+                        f"{decision_row['snapshot_id']}"
+                    ),
+                    exposure_bucket=f"{decision_row['city']}|{decision_row['target_date']}",
+                    mode="zero_notional",
+                    metadata={
+                        "record_only": True,
+                        "no_plan": True,
+                        "no_order": True,
+                        "conditional_maker_fill_position": True,
+                        "position_reason": decision_row["position_reason"],
+                    },
+                ).to_dict()
+            )
         for candidate_id in expired:
             open_candidates.pop(candidate_id, None)
         key = stream_key(row)
         previous = state["streams"].get(key)
         if previous is not None and previous.get("forecast_state_key") != row.get("forecast_state_key"):
-            built = build_update(previous, row)
+            built = build_update(
+                previous,
+                row,
+                getattr(args, "position_policy", None),
+            )
             if built is None:
                 counts["blocked_unpaired_ladder"] += 1
             else:
                 update, new_bundles, intent, open_candidate = built
                 updates.append(update)
                 bundles.extend(new_bundles)
-                intents.append(intent)
-                open_candidates[open_candidate["candidate_id"]] = open_candidate
+                if intent is not None:
+                    intents.append(intent)
+                if open_candidate is not None:
+                    open_candidates[open_candidate["candidate_id"]] = open_candidate
+                    counts["conditional_positions_opened"] += 1
+                else:
+                    counts["no_trade_forecast_updates"] += 1
                 counts["forecast_updates"] += 1
                 counts["candidate_rows"] += len(new_bundles)
         state["streams"][key] = row
@@ -644,6 +809,39 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
     counts["bundles_written"] = append_jsonl(out / "decision_bundles.jsonl", bundles)
     counts["intents_written"] = append_jsonl(out / "trade_intents.jsonl", intents)
     counts["markouts_written"] = append_jsonl(out / "quote_markouts.jsonl", markouts)
+    position_decisions = [
+        {
+            **row,
+            "record_type": "lmvm_position_decision",
+        }
+        for row in markouts
+        if row.get("position_action") in {"HOLD", "EXIT"}
+    ]
+    position_decisions.extend(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "record_type": "lmvm_position_decision",
+            "observed_at_utc": row["decision_ts_utc"],
+            "candidate_id": row.get("selected_candidate_id"),
+            "city": row["city"],
+            "target_date": row["target_date"],
+            "condition_id": row.get("selected_condition_id"),
+            "bracket": row.get("selected_bracket"),
+            "snapshot_id": row["snapshot_id"],
+            "position_action": row["decision"],
+            "position_reason": (
+                "maker_fill_gated_entry_score" if row["decision"] == "POST_MAKER"
+                else "no_positive_maker_conditional_value"
+            ),
+            "conditional_maker_fill_position": row["decision"] == "POST_MAKER",
+            "zero_notional": True,
+            "no_order_placed": True,
+        }
+        for row in updates
+    )
+    counts["position_decisions_written"] = append_jsonl(
+        out / "position_decisions.jsonl", position_decisions
+    )
     state["seen_files"] = sorted(seen)
     state["open_candidates"] = open_candidates
     state["markout_keys"] = sorted(markout_keys)
@@ -669,6 +867,12 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
         "no_plan_created": True,
         "no_order_placed": True,
         "maker_fill_evidence": "quote_cross_only_not_fill",
+        "position_policy": (
+            None
+            if getattr(args, "position_policy", None) is None
+            else getattr(args, "position_policy")["model_id"]
+        ),
+        "position_semantics": "conditional_until_actual_maker_fill",
         "signal_funnel_unit": "forecast_update_city_target_model_stream",
         "evidence_funnel_unit": "candidate_snapshot_markout",
     }
@@ -684,6 +888,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-snapshot-age-seconds", type=float, default=5400.0)
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-seconds", type=float, default=60.0)
+    parser.add_argument(
+        "--position-policy-model",
+        type=Path,
+        help="load a frozen full-ladder maker-fill-gated position policy",
+    )
+    parser.add_argument(
+        "--position-policy-sha256",
+        help="optional exact SHA-256 assertion for --position-policy-model",
+    )
     return parser
 
 
@@ -694,6 +907,18 @@ def main(argv: list[str] | None = None) -> int:
     args.output_dir = args.output_dir.resolve()
     args.state = (args.state or (args.output_dir / "state.json")).resolve()
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    args.position_policy = None
+    if args.position_policy_model is not None:
+        model_path = args.position_policy_model.resolve()
+        args.position_policy = load_position_policy(
+            model_path,
+            expected_sha256=args.position_policy_sha256,
+        )
+        digest = hashlib.sha256()
+        with model_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        args.position_policy["_artifact_sha256"] = digest.hexdigest()
     state = load_state(args.state)
     while True:
         result = run_cycle(args, state)

@@ -21,6 +21,10 @@ from .first_seen_event_ladder_panel import (
     load_source_events,
     materialize_panel,
 )
+from .forecast_repricing_position import (
+    train_position_policy,
+    write_position_policy_outputs,
+)
 from .market_prior_posterior import (
     replay_fmi_entry_metar_correction,
     run_market_prior_posterior_research,
@@ -129,12 +133,51 @@ def _add_market_prior_parser(subparsers: Any) -> None:
     parser.set_defaults(handler=run_market_prior)
 
 
+def _add_forecast_repricing_position_parser(subparsers: Any) -> None:
+    parser = subparsers.add_parser(
+        "forecast-repricing-position",
+        help=(
+            "Train and replay the D-1 full-ladder entry/hold/exit position policy "
+            "on an existing forecast-event rung panel."
+        ),
+    )
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--min-train-dates", type=int, default=15)
+    parser.add_argument("--holdout-fraction", type=float, default=0.20)
+    parser.add_argument("--bootstrap-draws", type=int, default=2000)
+    parser.set_defaults(handler=run_forecast_repricing_position)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="workflow", required=True)
     _add_first_seen_panel_parser(subparsers)
     _add_market_prior_parser(subparsers)
+    _add_forecast_repricing_position_parser(subparsers)
     return parser
+
+
+def run_forecast_repricing_position(args: argparse.Namespace) -> int:
+    frame = pd.read_csv(args.input, low_memory=False)
+    result = train_position_policy(
+        frame,
+        min_train_dates=args.min_train_dates,
+        holdout_fraction=args.holdout_fraction,
+        draws=args.bootstrap_draws,
+    )
+    summary = write_position_policy_outputs(result, args.input, args.output_dir)
+    print(
+        json.dumps(
+            {
+                "status": summary["status"],
+                "output_dir": str(args.output_dir),
+                "production": summary["production"],
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
 
 
 def run_first_seen_panel(args: argparse.Namespace) -> int:

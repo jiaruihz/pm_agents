@@ -1,10 +1,20 @@
 # Forecast Repricing
 
+## Full-ladder position handoff（2026-08-10）
+
+本 family 已有可加载的 `forecast_repricing_full_ladder_position_v1`：D-1 revision 后按
+`weather shock × signed mode distance × neighbor propagation` 给所有 rungs 评分，maker-fill-gated entry，
+30m 用完整 ladder continuation head 做 HOLD/EXIT，60m hard exit；不使用 max/min selector。Secondary reconstructed
+holdout 的 conditional dynamic ROI 为 `+13.13%` CI `[+1.50%,+18.89%]`（39 positions/6 dates），但
+entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、actual fills=0、formal forward=NA，因此状态是
+`runnable zero-notional / inconclusive`，不是 live alpha。Taker `-44.08%` 已关闭。实现、命令和证据见
+[full-ladder position v1](2026-08/2026-08-10-forecast-repricing-full-ladder-position-v1.md)。
+
 `Forecast Repricing` 是独立于 Core Carry 的短周期 market-response family。它预测 D-2/D-1 forecast revision 被本系统 first-seen 后，完整 temperature ladder 在未来 5/15/30/60 分钟的可执行价格变化；它不预测最终 Tmax winner，也不继承 Core Carry 的持仓、阈值或 live 授权。
 
 ## 当前判定
 
-状态：`inconclusive / no tradable edge / zero-notional forward not deployed`。
+状态：`inconclusive / no tradable edge / collector-exact event denominator accumulating / event-book forward not deployed`。
 
 - 固定 `city × target_date × forecast-event` 分母的历史重建覆盖 2,767 个 events、28,038 个 ladder rungs，其中 selected 2,767、未 selected 25,271；D-1 为 2,666 events/40 dates，D-2 只有 101 events/11 dates。
 - 5m 无覆盖；15m 只有 4 dates；只有 30m/60m 达到历史建模下限。development expanding OOF 选中 60m `weather + market level` Ridge，threshold 固定为 predicted taker net markout > 0。
