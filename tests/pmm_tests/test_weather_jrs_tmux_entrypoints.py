@@ -287,6 +287,12 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "127.0.0.1:7890" not in refresh
     assert "127.0.0.1:7897" not in refresh
 
+    proxy_helper = (OPS / "weather_market_proxy_env.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "weather_resolve_market_proxy()" in proxy_helper
+    assert "from scripts.ops.weather_market_proxy_ctl import read_state" in proxy_helper
+
 
 def test_shared_helper_owns_jrs_oneshot_lifecycle():
     helper = (OPS / "weather_jrs_tmux_env.sh").read_text(encoding="utf-8")
