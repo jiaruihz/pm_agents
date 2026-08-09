@@ -241,15 +241,23 @@ def one_hour_observation_changes(records: list[ObservationRecord]) -> dict[str, 
         "cloud_cover_change_1h_code": None,
         "ceiling_change_1h_ft": None,
         "wind_speed_change_1h_kt": None,
+        "wind_dir_1h_prior_deg": None,
+        "wind_dir_change_1h_deg": None,
+        "dewpoint_change_1h_f": None,
+        "relative_humidity_change_1h_pct": None,
     }
-    if len(records) < 2:
+    ordered_records = sorted(
+        (record for record in records if parse_dt(record.obs_ts_utc) is not None),
+        key=lambda record: parse_dt(record.obs_ts_utc) or datetime.min.replace(tzinfo=timezone.utc),
+    )
+    if len(ordered_records) < 2:
         return empty
-    latest = records[-1]
+    latest = ordered_records[-1]
     latest_dt = parse_dt(latest.obs_ts_utc)
     if latest_dt is None:
         return empty
     candidates: list[tuple[float, ObservationRecord]] = []
-    for record in records[:-1]:
+    for record in ordered_records[:-1]:
         dt = parse_dt(record.obs_ts_utc)
         if dt is None:
             continue
@@ -264,10 +272,178 @@ def one_hour_observation_changes(records: list[ObservationRecord]) -> dict[str, 
     sky_prior = severity.get(str(prior.sky_code or "").upper())
     ceiling_now = _float_or_none(latest.metadata.get("ceiling_ft_agl"))
     ceiling_prior = _float_or_none(prior.metadata.get("ceiling_ft_agl"))
+    wind_dir_now = _float_or_none(latest.metadata.get("wind_dir_deg"))
+    wind_dir_prior = _float_or_none(prior.metadata.get("wind_dir_deg"))
+    wind_dir_change = None
+    if wind_dir_now is not None and wind_dir_prior is not None:
+        wind_dir_change = (wind_dir_now - wind_dir_prior + 180.0) % 360.0 - 180.0
+    dewpoint_change = None
+    if latest.dewpoint_c is not None and prior.dewpoint_c is not None:
+        dewpoint_change = (float(latest.dewpoint_c) - float(prior.dewpoint_c)) * 9.0 / 5.0
+    humidity_change = None
+    if latest.relh is not None and prior.relh is not None:
+        humidity_change = float(latest.relh) - float(prior.relh)
     return {
         "cloud_cover_change_1h_code": sky_now - sky_prior if sky_now is not None and sky_prior is not None else None,
         "ceiling_change_1h_ft": ceiling_now - ceiling_prior if ceiling_now is not None and ceiling_prior is not None else None,
         "wind_speed_change_1h_kt": latest.wind_kt - prior.wind_kt if latest.wind_kt is not None and prior.wind_kt is not None else None,
+        "wind_dir_1h_prior_deg": wind_dir_prior,
+        "wind_dir_change_1h_deg": wind_dir_change,
+        "dewpoint_change_1h_f": dewpoint_change,
+        "relative_humidity_change_1h_pct": humidity_change,
+    }
+
+
+def observation_path_features(
+    records: list[ObservationRecord],
+    *,
+    as_of_utc: datetime | str | None = None,
+) -> dict[str, Any]:
+    """Return continuous PIT path clocks from one station's visible history.
+
+    Equal observations at the running maximum deliberately do not reset the
+    strict-high clock.  This separates a mature equal-high plateau from a new
+    high without changing the legacy last-equal-high fields.
+    """
+
+    as_of = parse_dt(as_of_utc) if isinstance(as_of_utc, str) else as_of_utc
+    if as_of is not None:
+        as_of = as_of.replace(tzinfo=timezone.utc) if as_of.tzinfo is None else as_of.astimezone(timezone.utc)
+
+    ordered: list[tuple[datetime, ObservationRecord]] = []
+    for record in records:
+        dt = parse_dt(record.obs_ts_utc)
+        ingest_dt = parse_dt(record.ingest_ts_utc)
+        if dt is None:
+            continue
+        if as_of is not None and (dt > as_of or (ingest_dt is not None and ingest_dt > as_of)):
+            continue
+        ordered.append((dt, record))
+    ordered.sort(key=lambda item: item[0])
+    if not ordered:
+        return {
+            "observation_history_span_minutes": None,
+            "first_running_max_obs_utc": "",
+            "last_running_max_obs_utc": "",
+            "minutes_since_first_running_max": None,
+            "minutes_since_last_running_max": None,
+            "minutes_since_last_strict_new_high": None,
+            "same_running_max_obs_count": 0,
+            "running_max_clock_left_censored": None,
+            "clear_sky_regime_minutes": None,
+            "clear_sky_regime_temp_change_f": None,
+            "clear_sky_regime_left_censored": None,
+            "precip_free_regime_minutes": None,
+            "precip_free_regime_temp_change_f": None,
+            "precip_free_regime_left_censored": None,
+            "first_precip_obs_utc": "",
+            "last_precip_obs_utc": "",
+            "precip_obs_count": 0,
+            "first_thunderstorm_obs_utc": "",
+            "last_thunderstorm_obs_utc": "",
+            "thunderstorm_obs_count": 0,
+            "minutes_since_last_precip_obs": None,
+        }
+
+    if as_of is None:
+        as_of = ordered[-1][0]
+
+    temperature_rows = [
+        (dt, record, _float_or_none(record.temp_c))
+        for dt, record in ordered
+        if _float_or_none(record.temp_c) is not None
+    ]
+    running_max = max((temp for _dt, _record, temp in temperature_rows), default=None)
+    running_hits = [
+        (dt, record)
+        for dt, record, temp in temperature_rows
+        if running_max is not None and temp is not None and abs(temp - running_max) < 1e-9
+    ]
+
+    strict_high_dt = None
+    high_so_far = -math.inf
+    for dt, _record, temp in temperature_rows:
+        if temp is not None and temp > high_so_far + 1e-9:
+            high_so_far = temp
+            strict_high_dt = dt
+
+    def minutes_since(dt: datetime | None) -> float | None:
+        return None if dt is None else round((as_of - dt).total_seconds() / 60.0, 3)
+
+    clear_codes = {"CLR", "SKC", "NSC", "CAVOK", "FEW"}
+
+    def clear_sky(record: ObservationRecord) -> bool:
+        return str(record.sky_code or "").upper().strip() in clear_codes
+
+    def observed_weather(record: ObservationRecord) -> dict[str, Any]:
+        return metar_physical_features(
+            record.raw_text,
+            record.metadata.get("present_weather")
+            or record.metadata.get("present_weather_codes")
+            or record.metadata.get("wx_string"),
+        )
+
+    def precip_free(record: ObservationRecord) -> bool:
+        physical = observed_weather(record)
+        return not bool(physical["precip_observed"])
+
+    def suffix_regime(predicate: Any) -> tuple[float | None, float | None, bool | None]:
+        if not predicate(ordered[-1][1]):
+            return None, None, False
+        start_index = len(ordered) - 1
+        while start_index > 0 and predicate(ordered[start_index - 1][1]):
+            start_index -= 1
+        start_dt, start_record = ordered[start_index]
+        latest_record = ordered[-1][1]
+        start_temp = _float_or_none(start_record.temp_c)
+        latest_temp = _float_or_none(latest_record.temp_c)
+        temp_change_f = (
+            None
+            if start_temp is None or latest_temp is None
+            else round((latest_temp - start_temp) * 9.0 / 5.0, 3)
+        )
+        return minutes_since(start_dt), temp_change_f, start_index == 0
+
+    clear_minutes, clear_temp_change, clear_censored = suffix_regime(clear_sky)
+    dry_minutes, dry_temp_change, dry_censored = suffix_regime(precip_free)
+    precip_rows = [(dt, record) for dt, record in ordered if not precip_free(record)]
+    thunderstorm_rows = [
+        (dt, record)
+        for dt, record in ordered
+        if bool(observed_weather(record)["thunderstorm_observed"])
+    ]
+    first_precip_dt = precip_rows[0][0] if precip_rows else None
+    last_precip_dt = precip_rows[-1][0] if precip_rows else None
+    first_thunderstorm_dt = thunderstorm_rows[0][0] if thunderstorm_rows else None
+    last_thunderstorm_dt = thunderstorm_rows[-1][0] if thunderstorm_rows else None
+    first_hit_dt = running_hits[0][0] if running_hits else None
+    last_hit_dt = running_hits[-1][0] if running_hits else None
+    first_hit_index = next(
+        (index for index, (dt, _record) in enumerate(ordered) if first_hit_dt is not None and dt == first_hit_dt),
+        None,
+    )
+    return {
+        "observation_history_span_minutes": round((ordered[-1][0] - ordered[0][0]).total_seconds() / 60.0, 3),
+        "first_running_max_obs_utc": first_hit_dt.isoformat() if first_hit_dt else "",
+        "last_running_max_obs_utc": last_hit_dt.isoformat() if last_hit_dt else "",
+        "minutes_since_first_running_max": minutes_since(first_hit_dt),
+        "minutes_since_last_running_max": minutes_since(last_hit_dt),
+        "minutes_since_last_strict_new_high": minutes_since(strict_high_dt),
+        "same_running_max_obs_count": len(running_hits),
+        "running_max_clock_left_censored": first_hit_index == 0 if first_hit_index is not None else None,
+        "clear_sky_regime_minutes": clear_minutes,
+        "clear_sky_regime_temp_change_f": clear_temp_change,
+        "clear_sky_regime_left_censored": clear_censored,
+        "precip_free_regime_minutes": dry_minutes,
+        "precip_free_regime_temp_change_f": dry_temp_change,
+        "precip_free_regime_left_censored": dry_censored,
+        "first_precip_obs_utc": first_precip_dt.isoformat() if first_precip_dt else "",
+        "last_precip_obs_utc": last_precip_dt.isoformat() if last_precip_dt else "",
+        "precip_obs_count": len(precip_rows),
+        "first_thunderstorm_obs_utc": first_thunderstorm_dt.isoformat() if first_thunderstorm_dt else "",
+        "last_thunderstorm_obs_utc": last_thunderstorm_dt.isoformat() if last_thunderstorm_dt else "",
+        "thunderstorm_obs_count": len(thunderstorm_rows),
+        "minutes_since_last_precip_obs": minutes_since(last_precip_dt),
     }
 
 

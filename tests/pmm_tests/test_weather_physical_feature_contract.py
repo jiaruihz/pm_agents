@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from weather_data_feed.forecast_hourly_curves import build_hourly_curve
 from weather_data_feed.models import ObservationRecord
-from weather_data_feed.observation_sources.fetchers import one_hour_observation_changes
+from weather_data_feed.observation_sources.fetchers import observation_path_features, one_hour_observation_changes
 from weather_data_feed.physical_features import (
     forecast_window_features,
     metar_physical_features,
     observation_clock_features,
+    physical_context_features,
     solar_geometry_features,
 )
 from weather_feature_layer.builders import build_weather_state_frame
@@ -85,7 +88,34 @@ def test_forecast_remaining_three_hours_survives_after_peak() -> None:
     assert features["forecast_remaining_3h_status"] == "ok"
     assert features["forecast_remaining_3h_hour_count"] == 4
     assert features["forecast_precip_probability_remaining_3h_max_pct"] == 91
-    assert features["forecast_cloud_cover_remaining_3h_mean_pct"] == 80.75
+    assert features["forecast_cloud_cover_remaining_3h_mean_pct"] == pytest.approx((72 + 78 + 84 + 89) / 4)
+    assert features["forecast_future_3h_hour_count"] == 3
+    assert features["forecast_precip_probability_future_3h_max_pct"] == 91
+    assert features["forecast_cloud_cover_future_3h_mean_pct"] == pytest.approx((78 + 84 + 89) / 3)
+    assert features["forecast_temperature_at_decision_f"] == pytest.approx(86.8)
+    assert features["forecast_remaining_max_f"] == pytest.approx(86.8)
+    assert features["forecast_reheat_after_now_f"] == 0
+    assert features["forecast_remaining_peak_hour_local"] == 13.2
+
+
+def test_forecast_temperature_innovation_uses_interpolated_decision_minute() -> None:
+    features = physical_context_features(
+        {
+            "unit": "C",
+            "current_temp_native": 30.0,
+            "decision_hour_local": 13.5,
+            "forecast_peak_hour_local": 15,
+            "hourly_curve": build_hourly_curve(
+                ["2026-07-14T13:00", "2026-07-14T14:00", "2026-07-14T15:00"],
+                [84.2, 86.0, 87.8],
+            ),
+        }
+    )
+
+    assert features["forecast_temperature_at_decision_f"] == pytest.approx(85.1)
+    assert features["forecast_temperature_innovation_status"] == "ok"
+    assert features["forecast_temperature_innovation_f"] == pytest.approx(0.9)
+    assert features["forecast_temperature_innovation_native"] == pytest.approx(0.5)
 
 
 def test_observation_change_features_share_the_same_record_history() -> None:
@@ -110,10 +140,84 @@ def test_observation_change_features_share_the_same_record_history() -> None:
         "cloud_cover_change_1h_code": 2,
         "ceiling_change_1h_ft": -3200,
         "wind_speed_change_1h_kt": 6,
+        "wind_dir_1h_prior_deg": None,
+        "wind_dir_change_1h_deg": None,
+        "dewpoint_change_1h_f": None,
+        "relative_humidity_change_1h_pct": None,
     }
 
 
-def test_shared_weather_state_v2_joins_pit_curve_and_physical_features() -> None:
+def test_equal_high_plateau_keeps_first_and_strict_high_clocks() -> None:
+    common = {
+        "source_key": "aviationweather_metar",
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "station_or_feed": "EHAM",
+        "ingest_ts_utc": "2026-07-16T16:26:00Z",
+    }
+    records = [
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T10:55:00Z", temp_c=23, dewpoint_c=15, wind_kt=6, sky_code="CAVOK", raw_text="EHAM 161055Z 07006KT CAVOK 23/15"),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T11:25:00Z", temp_c=24, dewpoint_c=15, wind_kt=6, sky_code="CAVOK", raw_text="EHAM 161125Z 04006KT CAVOK 24/15"),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T12:55:00Z", temp_c=23, dewpoint_c=16, wind_kt=10, sky_code="FEW", raw_text="EHAM 161255Z 02010KT -RA FEW030 23/16"),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T13:25:00Z", temp_c=24, dewpoint_c=16, wind_kt=8, sky_code="FEW", raw_text="EHAM 161325Z 02008KT FEW030 24/16"),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T15:55:00Z", temp_c=24, dewpoint_c=13, wind_kt=12, sky_code="CAVOK", raw_text="EHAM 161555Z 04012KT CAVOK 24/13"),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T16:25:00Z", temp_c=24, dewpoint_c=12, wind_kt=12, sky_code="CAVOK", raw_text="EHAM 161625Z 05012KT CAVOK 24/12"),
+    ]
+
+    features = observation_path_features(records, as_of_utc="2026-07-16T16:26:00Z")
+
+    assert features["first_running_max_obs_utc"] == "2026-07-16T11:25:00+00:00"
+    assert features["last_running_max_obs_utc"] == "2026-07-16T16:25:00+00:00"
+    assert features["minutes_since_first_running_max"] == 301
+    assert features["minutes_since_last_running_max"] == 1
+    assert features["minutes_since_last_strict_new_high"] == 301
+    assert features["same_running_max_obs_count"] == 4
+    assert features["clear_sky_regime_minutes"] == 331
+    assert features["precip_free_regime_minutes"] == 181
+    assert features["first_precip_obs_utc"] == "2026-07-16T12:55:00+00:00"
+    assert features["last_precip_obs_utc"] == "2026-07-16T12:55:00+00:00"
+    assert features["precip_obs_count"] == 1
+    assert features["minutes_since_last_precip_obs"] == 211
+
+
+def test_observation_path_excludes_reports_not_visible_as_of() -> None:
+    common = {
+        "source_key": "aviationweather_metar",
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "station_or_feed": "EHAM",
+    }
+    records = [
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T10:00:00Z", ingest_ts_utc="2026-07-16T10:01:00Z", temp_c=23),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T11:00:00Z", ingest_ts_utc="2026-07-16T11:01:00Z", temp_c=24),
+        ObservationRecord(**common, obs_ts_utc="2026-07-16T12:00:00Z", ingest_ts_utc="2026-07-16T12:01:00Z", temp_c=25),
+    ]
+
+    features = observation_path_features(records, as_of_utc="2026-07-16T11:30:00Z")
+
+    assert features["first_running_max_obs_utc"] == "2026-07-16T11:00:00+00:00"
+    assert features["minutes_since_last_strict_new_high"] == 30
+    assert features["same_running_max_obs_count"] == 1
+
+
+def test_forecast_remaining_path_excludes_next_local_date() -> None:
+    features = forecast_window_features(
+        {
+            "target_date": "2026-07-16",
+            "decision_hour_local": 22.5,
+            "forecast_peak_hour_local": 23,
+            "hourly_curve": build_hourly_curve(
+                ["2026-07-16T22:00", "2026-07-16T23:00", "2026-07-17T00:00"],
+                [70, 69, 90],
+            ),
+        }
+    )
+
+    assert features["forecast_remaining_max_f"] == pytest.approx(69.5)
+    assert features["forecast_remaining_peak_hour_local"] == 22.5
+
+
+def test_shared_weather_state_v4_joins_pit_curve_and_physical_features() -> None:
     hourly_curve = build_hourly_curve(
         ["2026-07-06T12:00", "2026-07-06T13:00", "2026-07-06T14:00"],
         [70, 72, 73],
@@ -176,7 +280,7 @@ def test_shared_weather_state_v2_joins_pit_curve_and_physical_features() -> None
     row = frame.iloc[0]
 
     assert frame.attrs["feature_metadata"]["feature_version_manifest"]["weather_state"] == WEATHER_STATE_VERSION
-    assert WEATHER_STATE_VERSION == "weather_state_v2"
+    assert WEATHER_STATE_VERSION == "weather_state_v4"
     assert all(field in frame.columns for field in WEATHER_PHYSICAL_FEATURE_FIELDS)
     assert row["precip_state"] == "rain_or_drizzle"
     assert row["ceiling_ft_agl"] == 1800

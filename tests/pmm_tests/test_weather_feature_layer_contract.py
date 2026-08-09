@@ -87,6 +87,66 @@ def test_heating_done_feature_is_price_free_and_directional() -> None:
     assert "yes_best_ask" not in done
 
 
+def test_heating_done_v2_recognizes_equal_high_plateau_without_threshold_funnel() -> None:
+    amsterdam = state.temperature_context_features(
+        {
+            "city": "Amsterdam",
+            "unit": "C",
+            "forecast_peak_delta_hours_local": 3.6,
+            "forecast_gap_to_running_native": 1.8,
+            "forecast_remaining_gap_to_running_native": 0.82,
+            "decline_native": 0.0,
+            "minutes_since_running_max": 1.0,
+            "minutes_since_first_running_max": 301.0,
+            "minutes_since_last_strict_new_high": 301.0,
+            "same_running_max_obs_count": 4,
+            "temp_trend_1h_f": 0.0,
+            "temp_trend_3h_f": 0.0,
+            "clear_sky_regime_minutes": 331.0,
+            "solar_heating_potential": 0.463,
+            "solar_elevation_delta_2h_deg": -17.9,
+            "sky_cover_code": 0,
+            "wind_speed_kt": 12,
+            "wind_dir_deg": 50,
+            "wind_dir_1h_prior_deg": 40,
+        }
+    )
+
+    assert amsterdam["heating_done_bucket_v1"] in {"runway_still_open", "heating_done_uncertain"}
+    assert amsterdam["heating_exhaustion_index_v2"] >= 0.60
+    assert amsterdam["heating_done_bucket_v2"] == "heating_done_probable"
+    assert amsterdam["heating_exhaustion_component_count_v2"] == 6
+    assert amsterdam["heating_exhaustion_forecast_status_v2"] == "remaining_curve_available"
+    assert amsterdam["heating_exhaustion_strict_high_status_v2"] == "strict_high_clock_available"
+    assert amsterdam["coastal_flow_state"] == "offshore_or_parallel_flow"
+    assert amsterdam["coastal_flow_change_1h"] == "flow_persistent"
+
+
+def test_report_anchored_trend_is_additive_and_does_not_change_v1() -> None:
+    base = {
+        "unit": "C",
+        "forecast_peak_delta_hours_local": 1.5,
+        "forecast_gap_to_running_native": 0.5,
+        "forecast_remaining_gap_to_running_native": 0.5,
+        "decline_native": 0.0,
+        "minutes_since_running_max": 20,
+        "minutes_since_last_strict_new_high": 120,
+        "temp_trend_1h_f": 1.2,
+        "temp_trend_3h_f": 2.4,
+    }
+    enriched = {
+        **base,
+        "temp_trend_report_anchored_1h_f": -0.8,
+        "temp_trend_report_anchored_3h_f": -1.8,
+    }
+
+    assert state.heating_done_features(enriched) == state.heating_done_features(base)
+    assert (
+        state.heating_done_features_v2(enriched)["heat_exhaustion_observed_path_v2"]
+        > state.heating_done_features_v2(base)["heat_exhaustion_observed_path_v2"]
+    )
+
+
 def test_feature_frame_metadata_contract_includes_pit_provenance() -> None:
     assert "pit_provenance" in FEATURE_FRAME_REQUIRED_METADATA
     assert PIT_PROVENANCE_LIVE_CAPTURE == "live_capture"
@@ -135,6 +195,41 @@ def test_regime_labels_cover_f_and_c_city_without_unit_drift() -> None:
     assert shared.loc[0, "moisture_cloud_regime"] == "humid_overcast_suppression"
     assert shared.loc[1, "day_regime"] == "day_open_runway"
     assert shared.loc[1, "running_max_state"] == "near_high_plateau"
+
+
+def test_v2_regime_uses_strict_high_clock_and_physical_solar_phase() -> None:
+    row = pd.DataFrame(
+        [
+            {
+                "city": "Amsterdam",
+                "unit": "C",
+                "decision_hour_local": 18.5,
+                "forecast_gap_to_running_native": 1.0,
+                "relative_humidity_pct": 76,
+                "sky_cover_code": 0,
+                "dewpoint_depression_f": 10,
+                "wind_speed_kt": 12,
+                "minutes_since_running_max": 5,
+                "minutes_since_last_strict_new_high": 305,
+                "obs_age_minutes": 5,
+                "decline_native": 0.0,
+                "temp_trend_1h_f": 1.0,
+                "temp_trend_3h_f": 1.0,
+                "temp_trend_report_anchored_1h_f": 0.0,
+                "temp_trend_report_anchored_3h_f": 0.0,
+                "solar_elevation_deg": 25,
+                "solar_elevation_delta_2h_deg": -18,
+            }
+        ]
+    )
+
+    labelled = regimes.add_regime_labels(row).iloc[0]
+
+    assert labelled["running_max_state"] == "fresh_running_high"
+    assert labelled["running_max_state_v2"] == "equal_high_plateau"
+    assert labelled["intraday_state_v2"] == "equal_high_plateau"
+    assert labelled["solar_phase_v2"] == "solar_declining"
+    assert labelled["moisture_cloud_regime_v2"] == "humid_clear_or_mixed"
 
 
 def test_market_geometry_preserves_stable_and_tail_bracket_semantics() -> None:
@@ -407,6 +502,85 @@ def test_bias_asof_features_match_tail_telemetry_contract() -> None:
     assert shared["bias_n_asof"] == 3
     assert math.isclose(shared["bias_mean_asof"], 0.666667)
     assert math.isclose(shared["hot_tail_pct_asof"], 2 / 3, abs_tol=1e-6)
+
+
+def test_low_price_yes_forecast_source_calibration_asof_blocks_only_explicit_d_bucket() -> None:
+    resources = tail_telemetry.TailTelemetryResources(
+        model={},
+        bias_index={},
+        forecast_calibration_index={
+            "Austin": [
+                {"target_date": f"2026-05-{day:02d}", "model_key": "gfs_global", "model_label": "GFS", "error_f": 3.0}
+                for day in range(1, 8)
+            ]
+            + [
+                {
+                    "target_date": "2026-05-09",
+                    "model_key": "gfs_global",
+                    "model_label": "GFS",
+                    "error_f": 0.0,
+                }
+            ],
+        },
+        model_path="fixture_model",
+        bias_path="fixture_bias",
+        forecast_calibration_path="fixture_forecast_calibration",
+    )
+
+    features = tail_telemetry.forecast_source_calibration_features(
+        resources,
+        city="Austin",
+        forecast_model="gfs",
+        target_date="2026-05-08",
+    )
+    assert features["forecast_source_calibration_status"] == "ok"
+    assert features["forecast_source_best_reliability_bucket_asof"] == "D_>2.5F"
+    assert features["forecast_source_best_D_excluded_v1"] is True
+
+    # The 2026-05-09 improvement is intentionally ignored by the 2026-05-08
+    # decision label, preserving the no-future-data contract.
+    assert math.isclose(features["forecast_source_best_mae_f_asof"], 3.0)
+
+
+def test_low_price_yes_forecast_source_calibration_core_ab_gap_tag() -> None:
+    resources = tail_telemetry.TailTelemetryResources(
+        model={},
+        bias_index={},
+        forecast_calibration_index={
+            "Madrid": [
+                {
+                    "target_date": f"2026-05-{day:02d}",
+                    "model_key": "gfs_global",
+                    "model_label": "GFS",
+                    "error_f": 1.2,
+                }
+                for day in range(1, 8)
+            ]
+            + [
+                {
+                    "target_date": f"2026-05-{day:02d}",
+                    "model_key": "icon_seamless",
+                    "model_label": "ICON",
+                    "error_f": 0.8,
+                }
+                for day in range(1, 8)
+            ],
+        },
+        model_path="fixture_model",
+        bias_path="fixture_bias",
+        forecast_calibration_path="fixture_forecast_calibration",
+    )
+
+    features = tail_telemetry.forecast_source_calibration_features(
+        resources,
+        city="Madrid",
+        forecast_model="gfs",
+        target_date="2026-05-08",
+    )
+    assert features["forecast_source_best_reliability_bucket_asof"] == "A_<=1.25F"
+    assert math.isclose(features["forecast_source_model_gap_to_best_f_asof"], 0.4)
+    assert features["forecast_source_best_D_excluded_v1"] is False
+    assert features["forecast_source_calibration_core_AB_gap_le_1F_v1"] is True
 
 
 def test_bias_reference_metadata_and_lookup_contract(tmp_path: Path) -> None:
@@ -775,6 +949,71 @@ def test_weather_state_frame_builder_does_not_use_utc_hour_as_local_fallback() -
     row = frame.iloc[0]
     assert pd.isna(row["decision_hour_local"])
     assert row["solar_window"] == "hour_missing"
+
+
+def test_weather_state_frame_builder_preserves_offset_local_wall_hour() -> None:
+    frame = build_weather_state_frame(
+        [{"city": "Amsterdam", "target_date": "2026-07-16", "ts_local": "2026-07-16T18:30:00+02:00", "unit": "C"}],
+        {"records": [{"city": "Amsterdam", "target_date": "2026-07-16", "status": "ok", "source": "aviationweather_metar", "station": "EHAM", "current_temp_c": 24, "running_max_c": 24}]},
+        as_of_ts_utc="2026-07-16T16:30:00Z",
+    )
+
+    assert frame.iloc[0]["decision_hour_local"] == 18.5
+
+
+def test_weather_state_frame_builder_excludes_future_observation_capture() -> None:
+    frame, audits = build_weather_state_frame_with_audits(
+        [{"city": "Amsterdam", "target_date": "2026-07-16", "snapshot_ts_utc": "2026-07-16T16:30:00Z", "unit": "C"}],
+        {"records": [{"city": "Amsterdam", "target_date": "2026-07-16", "status": "ok", "source": "aviationweather_metar", "station": "EHAM", "fetched_at_utc": "2026-07-16T16:31:00Z", "current_temp_c": 25, "running_max_c": 25}]},
+        as_of_ts_utc="2026-07-16T16:30:00Z",
+    )
+
+    assert frame.empty
+    assert audits[0].reason == "missing_observation"
+
+
+def test_weather_state_frame_builder_uses_forecast_available_clock_not_first_seen() -> None:
+    snapshot = [
+        {
+            "city": "Warsaw",
+            "target_date": "2026-07-18",
+            "snapshot_ts_utc": "2026-07-18T11:10:00Z",
+            "unit": "C",
+        }
+    ]
+    observations = {
+        "records": [
+            {
+                "city": "Warsaw",
+                "target_date": "2026-07-18",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "EPWA",
+                "fetched_at_utc": "2026-07-18T11:09:00Z",
+                "source_report_ts_utc": "2026-07-18T11:00:00Z",
+                "current_temp_c": 25,
+                "running_max_c": 26,
+            }
+        ]
+    }
+    curves = [
+        {
+            "city": "Warsaw",
+            "target_date": "2026-07-18",
+            "forecast_first_seen_utc": "2026-07-18T10:41:00Z",
+            "available_at_utc": "2026-07-18T11:16:00Z",
+            "hourly_curve": [{"hour_local": 12, "temperature_native": 30}],
+        }
+    ]
+
+    frame = build_weather_state_frame(
+        snapshot,
+        observations,
+        forecast_curve_rows=curves,
+        as_of_ts_utc="2026-07-18T11:10:00Z",
+    )
+
+    assert frame.iloc[0]["hourly_curve"] == []
 
 
 def test_weather_state_frame_explicit_asof_overrides_collection_start() -> None:

@@ -18,7 +18,6 @@ from weather_data_feed import (
     load_city_configs,
     load_observation_cache,
     parse_now_utc,
-    write_observation_cache,
 )
 from weather_data_feed.models import CityConfig, ObservationRecord
 from weather_data_feed.observation_sources import (
@@ -27,16 +26,23 @@ from weather_data_feed.observation_sources import (
     fetch_observation_source,
     infer_cadence_min,
     normalize_source_name,
+    observation_path_features,
 )
 from weather_data_feed.observation_sources.fetchers import parse_dt
 from weather_data_feed.observation_sources.fetchers import one_hour_observation_changes
+from weather_data_feed.information_events import canonical_json_hash
 from weather_data_feed.physical_features import metar_physical_features
-
+from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
+from weather_data_feed_service.io_utils import write_latest_and_daily_jsonl
 
 
 DEFAULT_OUTPUT_PATH = DEFAULT_RUNTIME_ROOT / "output" / "observations" / "latest.json"
 FIRST_OBSERVATION_GRACE_MIN = 90
+PRODUCER = "weather_data_feed_service.observations"
+PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
+    Path(__file__).resolve().parents[1]
+)
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -132,7 +138,14 @@ def observation_cache_row(
     try:
         source, result = _fetch_result(cfg, target_date, settings, sources)
         fetched_at = parse_dt(result.fetched_at_utc) or datetime.now(timezone.utc)
-        records = list(result.records)
+        records = []
+        for record in result.records:
+            obs_dt = parse_dt(record.obs_ts_utc)
+            ingest_dt = parse_dt(record.ingest_ts_utc)
+            if obs_dt is None or obs_dt > fetched_at or (ingest_dt is not None and ingest_dt > fetched_at):
+                continue
+            records.append(record)
+        records.sort(key=lambda record: parse_dt(record.obs_ts_utc) or datetime.min.replace(tzinfo=timezone.utc))
     except Exception as exc:  # noqa: BLE001
         local_day_elapsed_min = _local_day_elapsed_min(cfg, now_utc)
         awaiting_first_observation = (
@@ -185,12 +198,21 @@ def observation_cache_row(
     age_min = None if latest_dt is None else round((fetched_at - latest_dt).total_seconds() / 60.0, 3)
     cadence_min = infer_cadence_min(records)
     tmpf_now = _temp_f(current_temp_c)
-    tmpc_1h = _asof(records, fetched_at, 60.0, "temp_c")
-    tmpc_3h = _asof(records, fetched_at, 180.0, "temp_c")
+    # Keep the legacy fetch-anchored fields stable for existing consumers.
+    legacy_tmpc_1h = _asof(records, fetched_at, 60.0, "temp_c")
+    legacy_tmpc_3h = _asof(records, fetched_at, 180.0, "temp_c")
+    legacy_dwpc_3h = _asof(records, fetched_at, 180.0, "dewpoint_c")
+    legacy_relh_3h = _asof(records, fetched_at, 180.0, "relh")
+    # New report-anchored fields express the meteorological path independently
+    # from observation age.  New state features consume these explicit names.
+    trend_anchor = latest_dt or fetched_at
+    tmpc_1h = _asof(records, trend_anchor, 60.0, "temp_c")
+    tmpc_3h = _asof(records, trend_anchor, 180.0, "temp_c")
     dwpc_now = _float_or_none(latest.dewpoint_c)
-    dwpc_3h = _asof(records, fetched_at, 180.0, "dewpoint_c")
+    dwpc_1h = _asof(records, trend_anchor, 60.0, "dewpoint_c")
+    dwpc_3h = _asof(records, trend_anchor, 180.0, "dewpoint_c")
     relh_now = _float_or_none(latest.relh)
-    relh_3h = _asof(records, fetched_at, 180.0, "relh")
+    relh_3h = _asof(records, trend_anchor, 180.0, "relh")
     wind_kt = _float_or_none(latest.wind_kt)
     physical = metar_physical_features(
         latest.raw_text,
@@ -203,6 +225,7 @@ def observation_cache_row(
         wind_dir_raw = latest.metadata.get("metar_wind_dir_deg")
     wind_dir_deg = _float_or_none(wind_dir_raw)
     changes = one_hour_observation_changes(records)
+    path = observation_path_features(records, as_of_utc=fetched_at)
     return {
         "city": cfg.city,
         "target_date": target_date,
@@ -214,6 +237,10 @@ def observation_cache_row(
         "error": result.error,
         "fetched_at_utc": fetched_at.isoformat(),
         "last_obs_utc": latest.obs_ts_utc,
+        **path,
+        # Compatibility: this legacy clock is the last observation equal to
+        # the running maximum.  Consumers that need plateau maturity must use
+        # minutes_since_last_strict_new_high / minutes_since_first_running_max.
         "running_max_obs_utc": running_max_obs_utc.isoformat() if running_max_obs_utc else "",
         "minutes_since_running_max": None if running_max_obs_utc is None else round((fetched_at - running_max_obs_utc).total_seconds() / 60.0, 3),
         "n_obs": len(records),
@@ -246,10 +273,16 @@ def observation_cache_row(
         "lowest_cloud_base_ft_agl": physical["lowest_cloud_base_ft_agl"],
         "ceiling_ft_agl": physical["ceiling_ft_agl"],
         **changes,
-        "d_tmpf_1h": None if current_temp_c is None or tmpc_1h is None else (current_temp_c - tmpc_1h) * 9.0 / 5.0,
-        "d_tmpf_3h": None if current_temp_c is None or tmpc_3h is None else (current_temp_c - tmpc_3h) * 9.0 / 5.0,
-        "d_dwpf_3h": None if dwpc_now is None or dwpc_3h is None else (dwpc_now - dwpc_3h) * 9.0 / 5.0,
-        "d_relh_3h": None if relh_now is None or relh_3h is None else relh_now - relh_3h,
+        "d_tmpf_1h": None if current_temp_c is None or legacy_tmpc_1h is None else (current_temp_c - legacy_tmpc_1h) * 9.0 / 5.0,
+        "d_tmpf_3h": None if current_temp_c is None or legacy_tmpc_3h is None else (current_temp_c - legacy_tmpc_3h) * 9.0 / 5.0,
+        "temp_trend_report_anchored_1h_f": None if current_temp_c is None or tmpc_1h is None else (current_temp_c - tmpc_1h) * 9.0 / 5.0,
+        "temp_trend_report_anchored_3h_f": None if current_temp_c is None or tmpc_3h is None else (current_temp_c - tmpc_3h) * 9.0 / 5.0,
+        "d_dwpf_1h": None if dwpc_now is None or dwpc_1h is None else (dwpc_now - dwpc_1h) * 9.0 / 5.0,
+        "d_dwpf_3h": None if dwpc_now is None or legacy_dwpc_3h is None else (dwpc_now - legacy_dwpc_3h) * 9.0 / 5.0,
+        "dewpoint_trend_report_anchored_1h_f": None if dwpc_now is None or dwpc_1h is None else (dwpc_now - dwpc_1h) * 9.0 / 5.0,
+        "dewpoint_trend_report_anchored_3h_f": None if dwpc_now is None or dwpc_3h is None else (dwpc_now - dwpc_3h) * 9.0 / 5.0,
+        "d_relh_3h": None if relh_now is None or legacy_relh_3h is None else relh_now - legacy_relh_3h,
+        "relative_humidity_trend_report_anchored_3h_pct": None if relh_now is None or relh_3h is None else relh_now - relh_3h,
         "record_count": len(records),
         "estimated_cadence_min": cadence_min,
         "fetch_latency_ms": result.latency_ms,
@@ -269,7 +302,7 @@ def merge_previous_running_max(
     and local date.
     """
 
-    if not previous or row.get("status") != "ok" or previous.get("status") != "ok":
+    if not previous or row.get("status") != "ok" or not _has_trusted_observation(previous):
         return row
     if str(row.get("target_date") or "") != str(previous.get("target_date") or ""):
         return row
@@ -298,6 +331,16 @@ def merge_previous_running_max(
     out["history_continuity_previous_running_max_c"] = previous_max
     out["history_continuity_raw_running_max_c"] = current_max
     return out
+
+
+def _has_trusted_observation(row: dict[str, Any]) -> bool:
+    """Return whether a cache row still carries a successful observation."""
+
+    status = str(row.get("status") or "")
+    last_success_status = str(row.get("last_success_status") or "")
+    return status == "ok" or (
+        status == "reused_after_fetch_error" and last_success_status == "ok"
+    )
 
 
 def build_cache(args: argparse.Namespace) -> dict[str, Any]:
@@ -332,11 +375,26 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
         for future in as_completed(futures):
             row = future.result()
             previous = previous_records.get((str(row.get("city") or ""), str(row.get("target_date") or "")))
-            if row.get("status") != "ok" and previous and previous.get("status") == "ok":
+            if row.get("status") != "ok" and previous and _has_trusted_observation(previous):
                 reused = dict(previous)
+                reused_at = now_utc
+                reused["status"] = "reused_after_fetch_error"
+                reused["last_success_status"] = str(previous.get("last_success_status") or previous.get("status") or "")
                 reused["cache_reused_after_fetch_status"] = row.get("status")
                 reused["cache_reused_after_fetch_error"] = row.get("error")
-                reused["cache_reused_at_utc"] = datetime.now(timezone.utc).isoformat()
+                reused["cache_reused_at_utc"] = reused_at.isoformat()
+                last_obs = parse_dt(str(previous.get("last_obs_utc") or ""))
+                if last_obs is not None:
+                    reused["age_min"] = round((reused_at - last_obs).total_seconds() / 60.0, 3)
+                for field, timestamp_field in (
+                    ("minutes_since_running_max", "running_max_obs_utc"),
+                    ("minutes_since_first_running_max", "first_running_max_obs_utc"),
+                    ("minutes_since_last_running_max", "last_running_max_obs_utc"),
+                    ("minutes_since_last_strict_new_high", "first_running_max_obs_utc"),
+                ):
+                    timestamp = parse_dt(str(previous.get(timestamp_field) or ""))
+                    if timestamp is not None:
+                        reused[field] = round((reused_at - timestamp).total_seconds() / 60.0, 3)
                 rows.append(reused)
             else:
                 rows.append(merge_previous_running_max(row, previous))
@@ -379,11 +437,54 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def observation_history_rows(cache: dict[str, Any]) -> list[dict[str, Any]]:
+    """Add durable capture identity and clocks to observation-cache history."""
+
+    generated_at_utc = str(cache.get("generated_at_utc") or "")
+    rows = [dict(row) for row in cache.get("records") or [] if isinstance(row, dict)]
+    batch_capture_id = canonical_json_hash(
+        {
+            "producer": PRODUCER,
+            "generated_at_utc": generated_at_utc,
+            "record_count": len(rows),
+            "cities": sorted(str(row.get("city") or "") for row in rows),
+        }
+    )
+    history_rows: list[dict[str, Any]] = []
+    for row in rows:
+        row["record_type"] = "weather_observation_cache_record"
+        row["producer"] = PRODUCER
+        row["producer_build_id"] = PRODUCER_BUILD_ID
+        row["producer_build_id_basis"] = PRODUCER_BUILD_ID_BASIS
+        row["batch_capture_id"] = batch_capture_id
+        row["observation_cache_generated_at_utc"] = generated_at_utc
+        row.setdefault("available_at_utc", generated_at_utc)
+        row.setdefault("ingested_at_utc", generated_at_utc)
+        row["observation_history_id"] = canonical_json_hash(
+            {
+                "batch_capture_id": batch_capture_id,
+                "city": row.get("city"),
+                "target_date": row.get("target_date"),
+                "station": row.get("station"),
+                "last_obs_utc": row.get("last_obs_utc"),
+            }
+        )
+        history_rows.append(row)
+    return history_rows
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cache = build_cache(args)
     output = Path(args.output)
-    write_observation_cache(cache, output)
+    generated_at_utc = str(cache.get("generated_at_utc") or "")
+    write_latest_and_daily_jsonl(
+        output_dir=output.parent,
+        latest_payload=cache,
+        rows=observation_history_rows(cache),
+        jsonl_name="observations.jsonl",
+        day=generated_at_utc[:10] or None,
+    )
     print(json.dumps({"status": "ok", "output": str(output), **cache.get("summary", {})}, sort_keys=True))
     return 0
 

@@ -698,7 +698,12 @@ def fetch_aviationweather_taf(
     params = {"ids": station.upper(), "format": "json", "hours": str(hours)}
     data = _http_get(AVIATIONWEATHER_TAF_API, params=params, settings=settings).json()
     fetch_end = datetime.now(timezone.utc)
-    latest = data[0] if isinstance(data, list) and data else {}
+    rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+    latest = max(
+        rows,
+        key=lambda row: parse_dt(str(row.get("issueTime") or "")) or datetime.min.replace(tzinfo=timezone.utc),
+        default={},
+    )
     payload = {
         "source": "aviationweather_taf",
         "station": station.upper(),
@@ -770,11 +775,15 @@ def build_taf_signal(
         return {"available": False, "status": "invalid_valid_period", "raw_taf": raw_taf}
 
     tokens = raw_taf.split()
-    segment_starts = [
-        idx
-        for idx, token in enumerate(tokens)
-        if re.match(r"^FM\d{6}$", token) or token in {"TEMPO", "BECMG", "PROB30", "PROB40"}
-    ]
+    # ``PROB30 TEMPO`` / ``PROB40 TEMPO`` is one change group.  Treating the
+    # TEMPO token as a second segment loses the forecast probability and was a
+    # material semantic bug for transition-timing research.
+    segment_starts = []
+    for idx, token in enumerate(tokens):
+        if re.match(r"^FM\d{6}$", token) or token in {"BECMG", "PROB30", "PROB40"}:
+            segment_starts.append(idx)
+        elif token == "TEMPO" and not (idx > 0 and tokens[idx - 1] in {"PROB30", "PROB40"}):
+            segment_starts.append(idx)
     base_start = 0
     for idx, token in enumerate(tokens):
         if token == valid_match.group(0):
@@ -826,6 +835,7 @@ def build_taf_signal(
     ceiling_cover = ""
     wind_regimes: list[str] = []
     active_segments: list[dict[str, Any]] = []
+    transition_windows: list[dict[str, Any]] = []
 
     def precip_level(items: list[str]) -> str:
         joined = " ".join(items)
@@ -834,6 +844,62 @@ def build_taf_signal(
         if re.search(r"\b(?:-|\+)?(?:RA|DZ|SN)\b", joined):
             return "medium"
         return "low"
+
+    def transition_probability(segment_type: str) -> float:
+        if segment_type.startswith("PROB30"):
+            return 0.30
+        if segment_type.startswith("PROB40"):
+            return 0.40
+        if segment_type == "TEMPO":
+            # TAF TEMPO means temporary fluctuations for less than half of the
+            # stated period.  This is a timing-exposure prior, not a calibrated
+            # rain probability.
+            return 0.50
+        return 1.0
+
+    def event_types(items: list[str]) -> list[str]:
+        joined = " ".join(items)
+        events: list[str] = []
+        if re.search(r"\b[-+]?(?:RA|DZ|SN|SHRA|SHSN|TSRA|FZRA|FZDZ)\b", joined):
+            events.append("precipitation")
+        if re.search(r"\b(?:TSRA|TS|VCTS)\b", joined) or "CB" in joined:
+            events.append("convection")
+        low_cloud = any(
+            cover in {"BKN", "OVC"} and int(base) * 100 <= 4000
+            for cover, base in re.findall(r"\b(FEW|SCT|BKN|OVC)(\d{3})\b", joined)
+        )
+        if low_cloud:
+            events.append("low_cloud")
+        if re.search(r"\b(?:CAVOK|NSC|SKC|CLR)\b", joined):
+            events.append("clearing")
+        if re.search(r"\b(?:\d{3}|VRB)\d{2,3}(?:G\d{2,3})?KT\b", joined):
+            events.append("wind_regime")
+        return events
+
+    for segment in segments:
+        events = event_types(segment["tokens"])
+        if not events or segment["type"] == "BASE":
+            continue
+        start_utc = segment["start_utc"]
+        end_utc = segment["end_utc"]
+        # FM carries a precise change clock; its prevailing conditions remain
+        # valid afterward, but that validity span is not timing uncertainty.
+        # Use a short observation-sized realization window for the transition
+        # event while retaining the full segment above for weather-state use.
+        transition_end_utc = min(end_utc, start_utc + timedelta(minutes=30)) if segment["type"] == "FM" else end_utc
+        transition_windows.append(
+            {
+                "change_type": segment["type"],
+                "event_types": events,
+                "probability": transition_probability(segment["type"]),
+                "start_utc": start_utc.isoformat(),
+                "end_utc": transition_end_utc.isoformat(),
+                "start_local": start_utc.astimezone(local_tz).isoformat(),
+                "end_local": transition_end_utc.astimezone(local_tz).isoformat(),
+                "window_minutes": round((transition_end_utc - start_utc).total_seconds() / 60.0, 3),
+                "tokens": segment["tokens"],
+            }
+        )
 
     for segment in segments:
         start_local = segment["start_utc"].astimezone(local_tz)
@@ -879,8 +945,8 @@ def build_taf_signal(
         "source": "aviationweather_taf",
         "raw_taf": raw_taf,
         "issue_time": taf_payload.get("issue_time"),
-        "valid_time_from": taf_payload.get("valid_time_from"),
-        "valid_time_to": taf_payload.get("valid_time_to"),
+        "valid_time_from": taf_payload.get("valid_time_from") or valid_start.isoformat(),
+        "valid_time_to": taf_payload.get("valid_time_to") or valid_end.isoformat(),
         "peak_window": f"{peak_start.strftime('%H:%M')}-{peak_end.strftime('%H:%M')}",
         "active_segment_count": len(active_segments),
         "segments": [
@@ -892,6 +958,10 @@ def build_taf_signal(
             }
             for segment in active_segments
         ],
+        # Full TAF change windows are preserved independently of whether they
+        # overlap the model peak.  The feature layer applies an as-of clock and
+        # compares them with observed transition times.
+        "transition_windows": transition_windows,
         "low_ceiling_ft": low_ceiling_ft,
         "ceiling_cover": ceiling_cover,
         "wind_regimes": wind_regimes,

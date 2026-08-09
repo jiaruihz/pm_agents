@@ -405,6 +405,53 @@ def test_taf_signal_extracts_peak_window_cloud_rain_and_wind_shift():
     assert signal["wind_shift"] is True
 
 
+def test_taf_prob_tempo_remains_one_probability_bearing_transition_window():
+    signal = build_taf_signal(
+        {
+            "issue_time": "2026-07-21T05:00:00Z",
+            "raw_taf": "TAF WMKK 210500Z 2106/2212 VRB03KT 9999 FEW018 PROB30 TEMPO 2108/2111 5000 TSRA FEW017CB",
+        },
+        target_date="2026-07-21",
+        utc_offset_seconds=28800,
+        first_peak_hour=13,
+        last_peak_hour=14,
+    )
+
+    windows = signal["transition_windows"]
+    assert len(windows) == 1
+    assert windows[0]["change_type"] == "PROB30 TEMPO"
+    assert windows[0]["probability"] == 0.30
+    assert windows[0]["event_types"] == ["precipitation", "convection"]
+    assert windows[0]["start_utc"] == "2026-07-21T08:00:00+00:00"
+    assert windows[0]["end_utc"] == "2026-07-21T11:00:00+00:00"
+
+
+def test_taf_fetch_selects_latest_issue_instead_of_assuming_api_order(monkeypatch):
+    class Response:
+        def json(self):
+            return [
+                {
+                    "issueTime": "2026-07-21T05:00:00Z",
+                    "validTimeFrom": 1784610000,
+                    "validTimeTo": 1784696400,
+                    "rawTAF": "TAF TEST 210500Z 2106/2206 00000KT CAVOK",
+                },
+                {
+                    "issueTime": "2026-07-21T11:00:00Z",
+                    "validTimeFrom": 1784631600,
+                    "validTimeTo": 1784718000,
+                    "rawTAF": "TAF TEST 211100Z 2112/2212 00000KT CAVOK",
+                },
+            ]
+
+    monkeypatch.setattr(forecast_sources, "_http_get", lambda *_args, **_kwargs: Response())
+
+    result = forecast_sources.fetch_aviationweather_taf("TEST")
+
+    assert result.payload["issue_time"] == "2026-07-21T11:00:00Z"
+    assert "211100Z" in result.payload["raw_taf"]
+
+
 def test_forecast_enrichment_cache_indexes_latest_city_date_record():
     payload = {
         "records": [

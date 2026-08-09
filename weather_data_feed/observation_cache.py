@@ -75,14 +75,40 @@ def load_observation_cache(path: Path) -> dict[str, Any]:
 
 def index_observation_cache(cache: Mapping[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
     records = cache.get("records")
-    out: dict[tuple[str, str], dict[str, Any]] = {}
+    as_of = parse_utc(cache.get("decision_as_of_utc") or cache.get("as_of_ts_utc"))
+    out: dict[tuple[str, str], tuple[datetime, datetime, dict[str, Any]]] = {}
     if not isinstance(records, list):
-        return out
+        return {}
     for row in records:
         if not isinstance(row, Mapping):
             continue
         city = str(row.get("city") or "")
         target_date = str(row.get("target_date") or "")
-        if city and target_date:
-            out[(city, target_date)] = dict(row)
-    return out
+        if not city or not target_date:
+            continue
+        available = parse_utc(
+            row.get("available_at_utc")
+            or row.get("first_seen_at_utc")
+            or row.get("detect_ts_utc")
+            or row.get("fetched_at_utc")
+            or row.get("ingest_ts_utc")
+        )
+        report = parse_utc(row.get("source_report_ts_utc") or row.get("last_obs_utc"))
+        if as_of is not None and (
+            (available is not None and available > as_of)
+            or (report is not None and report > as_of)
+        ):
+            continue
+        available_rank = available or report or datetime.min.replace(tzinfo=timezone.utc)
+        report_rank = report or datetime.min.replace(tzinfo=timezone.utc)
+        key = (city, target_date)
+        if key not in out or (available_rank, report_rank) > (out[key][0], out[key][1]):
+            selected = dict(row)
+            if as_of is not None and report is not None:
+                decision_age_min = (as_of - report).total_seconds() / 60.0
+                selected["obs_age_minutes"] = decision_age_min
+                selected["obs_age_min"] = decision_age_min
+                selected["age_min"] = decision_age_min
+                selected["obs_age_clock_source"] = "decision_asof_minus_source_report"
+            out[key] = (available_rank, report_rank, selected)
+    return {key: selected for key, (_available, _report, selected) in out.items()}

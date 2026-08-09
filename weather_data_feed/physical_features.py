@@ -134,7 +134,6 @@ def metar_physical_features(raw_metar: Any, present_weather: Any = None) -> dict
 
 
 def observation_clock_features(record: Mapping[str, Any]) -> dict[str, Any]:
-    age = _first_float(record, "obs_age_minutes", "obs_age_min", "age_min")
     cadence = _first_float(
         record,
         "expected_report_cadence",
@@ -145,8 +144,9 @@ def observation_clock_features(record: Mapping[str, Any]) -> dict[str, Any]:
     report = _parse_utc(record.get("source_report_ts_utc") or record.get("last_obs_utc"))
     decision = _parse_utc(record.get("decision_snapshot_ts_utc") or record.get("as_of_ts_utc"))
     detect = _parse_utc(record.get("detect_ts_utc") or record.get("fetched_at_utc"))
-    if age is None and report and decision:
-        age = (decision - report).total_seconds() / 60.0
+    age = (decision - report).total_seconds() / 60.0 if report and decision else None
+    if age is None:
+        age = _first_float(record, "obs_age_minutes", "obs_age_min", "age_min")
     latency = (detect - report).total_seconds() / 60.0 if detect and report else None
     return {
         "obs_age_minutes": age,
@@ -229,6 +229,9 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
     peak_hour = _first_float(record, "forecast_peak_hour_local")
     selected: list[Mapping[str, Any]] = []
     remaining_3h: list[Mapping[str, Any]] = []
+    future_3h: list[Mapping[str, Any]] = []
+    parsed_curve: list[tuple[float, Mapping[str, Any]]] = []
+    target_date = str(record.get("target_date") or "").strip()
     peak_passed = decision_hour is not None and peak_hour is not None and peak_hour < decision_hour
     if isinstance(curve, Sequence) and not isinstance(curve, (str, bytes)) and decision_hour is not None:
         remaining_lo = math.floor(decision_hour)
@@ -237,14 +240,23 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(item, Mapping):
                 continue
             time_local = str(item.get("time_local") or "")
+            if target_date and len(time_local) >= 10 and time_local[:10] != target_date:
+                continue
             try:
                 hour = float(time_local[11:13]) + float(time_local[14:16]) / 60.0
             except (ValueError, IndexError):
                 continue
+            parsed_curve.append((hour, item))
             if peak_hour is not None and not peak_passed and decision_hour <= hour <= peak_hour:
                 selected.append(item)
+            # Compatibility: preserve the legacy "remaining_3h" fields,
+            # which include the current floor hour.  Strictly future weather
+            # uses the explicit future_3h names below.
             if remaining_lo <= hour <= remaining_hi:
                 remaining_3h.append(item)
+            if decision_hour <= hour <= remaining_hi:
+                future_3h.append(item)
+    parsed_curve.sort(key=lambda item: item[0])
 
     def values(rows: Sequence[Mapping[str, Any]], *keys: str) -> list[float]:
         out: list[float] = []
@@ -262,6 +274,41 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
     remaining_cloud = values(remaining_3h, "cloud_cover_pct", "cloud_cover")
     remaining_wind = values(remaining_3h, "wind_speed_10m_kt", "wind_speed_10m")
     remaining_direction = values(remaining_3h, "wind_direction_10m_deg", "wind_direction_10m")
+    future_precip = values(future_3h, "precipitation_probability_pct", "precipitation_probability")
+    future_cloud = values(future_3h, "cloud_cover_pct", "cloud_cover")
+    future_wind = values(future_3h, "wind_speed_10m_kt", "wind_speed_10m")
+    future_direction = values(future_3h, "wind_direction_10m_deg", "wind_direction_10m")
+    temperature_points = [
+        (hour, value)
+        for hour, item in parsed_curve
+        if (value := _first_float(item, "temperature_f")) is not None
+    ]
+    temperature_at_decision = _linear_value_at(temperature_points, decision_hour)
+    future_temperatures = [
+        (hour, value)
+        for hour, value in temperature_points
+        if decision_hour is not None and hour >= decision_hour
+    ]
+    remaining_temperature_points = list(future_temperatures)
+    if decision_hour is not None and temperature_at_decision is not None:
+        remaining_temperature_points.append((decision_hour, temperature_at_decision))
+    remaining_max = (
+        max(value for _hour, value in remaining_temperature_points)
+        if remaining_temperature_points
+        else None
+    )
+    remaining_peak_hour = None
+    if remaining_max is not None:
+        remaining_peak_hour = min(
+            hour
+            for hour, value in remaining_temperature_points
+            if abs(value - remaining_max) < 1e-9
+        )
+    remaining_delta = (
+        None
+        if remaining_max is None or temperature_at_decision is None
+        else remaining_max - temperature_at_decision
+    )
     status = (
         "forecast_peak_passed"
         if peak_passed
@@ -284,7 +331,32 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "forecast_wind_speed_remaining_3h_max_kt": max(remaining_wind) if remaining_wind else None,
         "forecast_wind_direction_remaining_3h_mean_deg": _circular_mean(remaining_direction),
+        "forecast_future_3h_status": "ok" if future_3h else "missing_weather_hourly_curve",
+        "forecast_future_3h_hour_count": len(future_3h),
+        "forecast_precip_probability_future_3h_max_pct": max(future_precip) if future_precip else None,
+        "forecast_cloud_cover_future_3h_mean_pct": sum(future_cloud) / len(future_cloud) if future_cloud else None,
+        "forecast_wind_speed_future_3h_max_kt": max(future_wind) if future_wind else None,
+        "forecast_wind_direction_future_3h_mean_deg": _circular_mean(future_direction),
+        "forecast_temperature_at_decision_f": temperature_at_decision,
+        "forecast_remaining_max_f": remaining_max,
+        "forecast_remaining_temp_delta_f": remaining_delta,
+        "forecast_reheat_after_now_f": None if remaining_delta is None else max(0.0, remaining_delta),
+        "forecast_remaining_peak_hour_local": remaining_peak_hour,
     }
+
+
+def _linear_value_at(points: Sequence[tuple[float, float]], target: float | None) -> float | None:
+    if target is None or not points:
+        return None
+    ordered = sorted(points)
+    for hour, value in ordered:
+        if abs(hour - target) < 1e-9:
+            return value
+    for (left_hour, left_value), (right_hour, right_value) in zip(ordered, ordered[1:]):
+        if left_hour < target < right_hour:
+            weight = (target - left_hour) / (right_hour - left_hour)
+            return left_value + weight * (right_value - left_value)
+    return None
 
 
 def _circular_mean(values: Sequence[float]) -> float | None:
@@ -307,6 +379,50 @@ def physical_context_features(record: Mapping[str, Any]) -> dict[str, Any]:
     if wind_speed is None:
         wind_speed = metar["metar_wind_speed_kt"]
     wind_rad = math.radians(wind_dir) if wind_dir is not None else None
+    forecast = forecast_window_features(record)
+    remaining_max_f = _finite(forecast.get("forecast_remaining_max_f"))
+    forecast_temperature_at_decision_f = _finite(
+        forecast.get("forecast_temperature_at_decision_f")
+    )
+    unit = str(record.get("unit") or "F").upper()
+    remaining_max_native = (
+        None
+        if remaining_max_f is None
+        else remaining_max_f
+        if unit == "F"
+        else (remaining_max_f - 32.0) * 5.0 / 9.0
+    )
+    running_native = _first_float(record, "running_max_native", "running_native")
+    current_native = _first_float(record, "current_temp_native", "current_native")
+    current_f = _first_float(
+        record,
+        "current_temp_f",
+        "current_f",
+        "tmpf_now",
+        "temperature_f",
+    )
+    if current_f is None and current_native is not None:
+        current_f = current_native if unit == "F" else current_native * 9.0 / 5.0 + 32.0
+    forecast_temperature_innovation_f = (
+        None
+        if current_f is None or forecast_temperature_at_decision_f is None
+        else current_f - forecast_temperature_at_decision_f
+    )
+    forecast_temperature_innovation_native = (
+        None
+        if forecast_temperature_innovation_f is None
+        else forecast_temperature_innovation_f
+        if unit == "F"
+        else forecast_temperature_innovation_f * 5.0 / 9.0
+    )
+    if current_f is None:
+        forecast_temperature_innovation_status = "missing_current_temperature"
+    elif forecast_temperature_at_decision_f is None:
+        forecast_temperature_innovation_status = (
+            "missing_forecast_temperature_at_decision"
+        )
+    else:
+        forecast_temperature_innovation_status = "ok"
     return {
         **{key: value for key, value in metar.items() if not key.startswith("metar_")},
         "wind_dir_deg": wind_dir,
@@ -316,7 +432,22 @@ def physical_context_features(record: Mapping[str, Any]) -> dict[str, Any]:
         "cloud_cover_change_1h_code": _first_float(record, "cloud_cover_change_1h_code", "d_sky_1h"),
         "ceiling_change_1h_ft": _first_float(record, "ceiling_change_1h_ft"),
         "wind_speed_change_1h_kt": _first_float(record, "wind_speed_change_1h_kt", "d_wind_speed_1h_kt"),
+        "wind_dir_1h_prior_deg": _first_float(record, "wind_dir_1h_prior_deg"),
+        "wind_dir_change_1h_deg": _first_float(record, "wind_dir_change_1h_deg"),
+        "dewpoint_change_1h_f": _first_float(record, "dewpoint_change_1h_f", "d_dwpf_1h"),
+        "dewpoint_trend_1h_f": _first_float(record, "dewpoint_trend_1h_f", "dewpoint_change_1h_f", "d_dwpf_1h"),
+        "dewpoint_trend_3h_f": _first_float(record, "dewpoint_trend_3h_f", "d_dwpf_3h"),
+        "relative_humidity_change_1h_pct": _first_float(record, "relative_humidity_change_1h_pct"),
         **observation_clock_features(record),
         **solar_geometry_features(record),
-        **forecast_window_features(record),
+        **forecast,
+        "forecast_temperature_innovation_status": forecast_temperature_innovation_status,
+        "forecast_temperature_innovation_f": forecast_temperature_innovation_f,
+        "forecast_temperature_innovation_native": forecast_temperature_innovation_native,
+        "forecast_remaining_gap_to_running_native": (
+            None if remaining_max_native is None or running_native is None else remaining_max_native - running_native
+        ),
+        "forecast_remaining_gap_to_current_native": (
+            None if remaining_max_native is None or current_native is None else remaining_max_native - current_native
+        ),
     }

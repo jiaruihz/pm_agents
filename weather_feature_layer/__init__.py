@@ -25,6 +25,7 @@ from weather_feature_layer.execution import (
     summarize_city_execution_profile,
 )
 from weather_feature_layer.store import (
+    EVENT_CHECKPOINT_KEY_COLUMNS,
     feature_frame_ref_for_row,
     load_feature_row_by_ref,
     write_feature_frame_store,
@@ -34,6 +35,7 @@ from weather_feature_layer.state import (
     cloud_warming_interaction,
     forecast_peak_clock_state,
     heating_done_features,
+    heating_done_features_v2,
     moisture_cloud_interaction,
     moisture_state,
     physical_context_features,
@@ -43,6 +45,7 @@ from weather_feature_layer.state import (
     warming_state,
     wind_thermal_interaction,
 )
+from weather_feature_layer.transitions import forecast_transition_timing_features
 
 __all__ = [
     "FEATURE_FRAME_SCHEMA_VERSION",
@@ -60,8 +63,11 @@ __all__ = [
     "classify_book_state",
     "cloud_warming_interaction",
     "feature_frame_ref_for_row",
+    "EVENT_CHECKPOINT_KEY_COLUMNS",
     "forecast_peak_clock_state",
+    "forecast_transition_timing_features",
     "heating_done_features",
+    "heating_done_features_v2",
     "load_feature_row_by_ref",
     "moisture_cloud_interaction",
     "moisture_state",

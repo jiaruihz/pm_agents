@@ -346,6 +346,118 @@ def heating_done_features(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _clip01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _age_saturation(minutes: float, scale_minutes: float = 90.0) -> float:
+    return 1.0 - math.exp(-max(0.0, minutes) / scale_minutes)
+
+
+def heating_done_features_v2(record: dict[str, Any]) -> dict[str, Any]:
+    """Continuous heating-exhaustion state; diagnostic, not probability.
+
+    Each component is normalized to 0..1 on a physical scale and the index is
+    the unweighted mean of available components.  This keeps the mechanism
+    inspectable and avoids turning a stack of categorical conditions into an
+    eligibility funnel.
+    """
+
+    unit = str(record.get("unit") or "").upper()
+    native_step = 1.0 if unit == "F" else 0.5
+    components: dict[str, float] = {}
+
+    peak_delta = safe_float(record.get("forecast_peak_delta_hours_local"))
+    if math.isfinite(peak_delta):
+        components["peak_clock"] = _clip01((peak_delta + 1.0) / 4.0)
+
+    remaining_gap = safe_float(record.get("forecast_remaining_gap_to_running_native"))
+    if math.isfinite(remaining_gap):
+        components["forecast_runway"] = _clip01(1.0 - max(0.0, remaining_gap) / (2.0 * native_step))
+
+    trend1 = safe_float(record.get("temp_trend_report_anchored_1h_f"))
+    if not math.isfinite(trend1):
+        trend1 = safe_float(record.get("temp_trend_1h_f"))
+    trend3 = safe_float(record.get("temp_trend_report_anchored_3h_f"))
+    if not math.isfinite(trend3):
+        trend3 = safe_float(record.get("temp_trend_3h_f"))
+    trend_rates = []
+    if math.isfinite(trend1):
+        trend_rates.append(trend1)
+    if math.isfinite(trend3):
+        trend_rates.append(trend3 / 3.0)
+    if trend_rates:
+        # Conservative path evidence: any still-positive horizon keeps runway
+        # open.  Flat is the midpoint; >=1F/h is open, <=-1F/h is exhausted.
+        components["observed_path"] = _clip01((1.0 - max(trend_rates)) / 2.0)
+
+    strict_high_age = safe_float(record.get("minutes_since_last_strict_new_high"))
+    if not math.isfinite(strict_high_age):
+        strict_high_age = safe_float(record.get("minutes_since_first_running_max"))
+    obs_age = safe_float(record.get("obs_age_minutes", record.get("obs_age_min")))
+    strict_high_observed_span = strict_high_age
+    if math.isfinite(strict_high_observed_span) and math.isfinite(obs_age):
+        strict_high_observed_span = max(0.0, strict_high_observed_span - max(0.0, obs_age))
+    if math.isfinite(strict_high_age):
+        components["strict_high_age"] = _age_saturation(strict_high_observed_span)
+
+    solar_potential = safe_float(record.get("solar_heating_potential"))
+    solar_delta = safe_float(record.get("solar_elevation_delta_2h_deg"))
+    if math.isfinite(solar_potential) and math.isfinite(solar_delta):
+        components["solar"] = 0.0 if solar_delta >= 0 else _clip01(1.0 - solar_potential)
+
+    clear_minutes = safe_float(record.get("clear_sky_regime_minutes"))
+    if math.isfinite(clear_minutes) and math.isfinite(strict_high_age):
+        # Time during which clear/few sky and no strict new high coexist.  A
+        # long clear period before the high and time after the latest observed
+        # report do not receive extra credit.
+        clear_observed = clear_minutes
+        if math.isfinite(obs_age):
+            clear_observed = max(0.0, clear_observed - max(0.0, obs_age))
+        components["clear_no_new_high"] = _age_saturation(
+            min(clear_observed, strict_high_observed_span)
+        )
+
+    score = sum(components.values()) / len(components) if components else math.nan
+    if not math.isfinite(score):
+        bucket = "heating_exhaustion_unknown"
+    elif score >= 0.75:
+        bucket = "heating_done_confirmed"
+    elif score >= 0.60:
+        bucket = "heating_done_probable"
+    elif score >= 0.45:
+        bucket = "near_peak_capping"
+    elif score >= 0.30:
+        bucket = "heating_done_uncertain"
+    else:
+        bucket = "runway_still_open"
+    return {
+        "heat_exhaustion_peak_clock_v2": components.get("peak_clock"),
+        "heat_exhaustion_forecast_runway_v2": components.get("forecast_runway"),
+        "heat_exhaustion_observed_path_v2": components.get("observed_path"),
+        "heat_exhaustion_strict_high_age_v2": components.get("strict_high_age"),
+        "heat_exhaustion_solar_v2": components.get("solar"),
+        "heat_exhaustion_clear_no_new_high_v2": components.get("clear_no_new_high"),
+        "heating_exhaustion_index_v2": None if not math.isfinite(score) else round(score, 4),
+        "heating_exhaustion_component_count_v2": len(components),
+        "strict_high_observed_span_minutes_v2": (
+            strict_high_observed_span if math.isfinite(strict_high_observed_span) else None
+        ),
+        "heating_exhaustion_forecast_status_v2": (
+            "remaining_curve_available" if math.isfinite(remaining_gap) else "missing_remaining_curve"
+        ),
+        "heating_exhaustion_strict_high_status_v2": (
+            "lower_bound_left_censored"
+            if bool(record.get("running_max_clock_left_censored")) and math.isfinite(strict_high_age)
+            else "strict_high_clock_available"
+            if math.isfinite(strict_high_age)
+            else "missing_strict_high_clock"
+        ),
+        "heating_done_bucket_v2": bucket,
+        "heating_done_components_v2": ";".join(components),
+    }
+
+
 def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
     city = str(record.get("city") or "")
     wind = wind_thermal_interaction(city, record.get("wind_speed_kt"), record.get("wind_dir_deg", math.nan))
@@ -362,6 +474,17 @@ def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
     warming = warming_state(record.get("temp_trend_1h_f"), record.get("temp_trend_3h_f"))
     peak_clock = forecast_peak_clock_state(record.get("forecast_peak_delta_hours_local"))
     heating_done = heating_done_features(record)
+    heating_done_v2 = heating_done_features_v2(record)
+    prior_wind = city_wind_context(city, record.get("wind_dir_1h_prior_deg"))
+    current_flow = str(wind["coastal_flow_state"])
+    prior_flow = str(prior_wind["coastal_flow_state"])
+    flow_change = (
+        "flow_history_unknown"
+        if prior_flow == "flow_unknown"
+        else "flow_persistent"
+        if prior_flow == current_flow
+        else f"{prior_flow}_to_{current_flow}"
+    )
     return {
         **wind,
         "sky_state": sky_state(record.get("sky_cover_code")),
@@ -370,7 +493,10 @@ def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
         "cloud_warming_interaction": cloud_warming,
         "moisture_cloud_interaction": moisture_cloud,
         "forecast_peak_clock_state": peak_clock,
+        "coastal_flow_state_1h_prior": prior_flow,
+        "coastal_flow_change_1h": flow_change,
         **heating_done,
+        **heating_done_v2,
         "temperature_context_regime": " | ".join(
             [
                 peak_clock,

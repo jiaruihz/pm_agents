@@ -16,7 +16,7 @@ from typing import Any
 
 import pandas as pd
 
-from weather_data_feed.observation_cache import index_observation_cache, parse_utc
+from weather_data_feed.observation_cache import parse_utc
 from weather_data_feed.sky_cover import SKY_COVER_CODE
 from weather_feature_layer.contracts import (
     DEFAULT_FEATURE_VERSION_MANIFEST,
@@ -26,9 +26,10 @@ from weather_feature_layer.contracts import (
 from weather_feature_layer.frame import validate_feature_metadata
 from weather_feature_layer.regimes import add_regime_labels
 from weather_feature_layer.state import city_wind_context, physical_context_features, temperature_context_features
+from weather_feature_layer.transitions import forecast_transition_timing_features
 
 
-WEATHER_STATE_FRAME_BUILDER_VERSION = "weather_state_frame_builder_v2"
+WEATHER_STATE_FRAME_BUILDER_VERSION = "weather_state_frame_builder_v4"
 WEATHER_STATE_FRAME_GRAIN = "city_date_snapshot"
 
 
@@ -45,6 +46,7 @@ def build_weather_state_frame(
     observation_cache: Mapping[str, Any] | None,
     *,
     forecast_curve_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None = None,
+    forecast_enrichment_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None = None,
     as_of_ts_utc: str | None = None,
     source_profile_id: str | None = None,
     input_snapshot_id: str | None = None,
@@ -62,6 +64,7 @@ def build_weather_state_frame(
         snapshot_rows,
         observation_cache,
         forecast_curve_rows=forecast_curve_rows,
+        forecast_enrichment_rows=forecast_enrichment_rows,
         as_of_ts_utc=as_of_ts_utc,
         source_profile_id=source_profile_id,
         input_snapshot_id=input_snapshot_id,
@@ -76,6 +79,7 @@ def build_weather_state_frame_with_audits(
     observation_cache: Mapping[str, Any] | None,
     *,
     forecast_curve_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None = None,
+    forecast_enrichment_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None = None,
     as_of_ts_utc: str | None = None,
     source_profile_id: str | None = None,
     input_snapshot_id: str | None = None,
@@ -83,9 +87,9 @@ def build_weather_state_frame_with_audits(
     builder_version: str = WEATHER_STATE_FRAME_BUILDER_VERSION,
 ) -> tuple[pd.DataFrame, list[WeatherStateBuildAudit]]:
     records = _snapshot_records(snapshot_rows)
-    observations = _index_observations(observation_cache)
     first_ts = _first_non_empty(records, "snapshot_ts_utc", "ts_utc")
     resolved_as_of = _iso_utc(as_of_ts_utc) or _iso_utc(first_ts) or _now_iso_utc()
+    observations = _index_observations(observation_cache, resolved_as_of)
     resolved_source_profile = str(source_profile_id or _first_non_empty(records, "source_profile_id") or "unspecified")
     resolved_snapshot_id = str(
         input_snapshot_id
@@ -101,6 +105,7 @@ def build_weather_state_frame_with_audits(
     )
     validate_feature_metadata(metadata)
     forecast_curves = _index_forecast_curves(forecast_curve_rows, resolved_as_of)
+    forecast_enrichment = _index_forecast_enrichment(forecast_enrichment_rows, resolved_as_of)
 
     rows: list[dict[str, Any]] = []
     audits: list[WeatherStateBuildAudit] = []
@@ -115,10 +120,12 @@ def build_weather_state_frame_with_audits(
             audits.append(WeatherStateBuildAudit(city, target_date, "skipped", "missing_observation"))
             continue
         curve = forecast_curves.get((city, target_date))
+        enrichment = forecast_enrichment.get((city, target_date))
         row = _build_state_row(
             snapshot,
             obs,
             forecast_curve=curve,
+            forecast_enrichment=enrichment,
             as_of_ts_utc=resolved_as_of,
             source_profile_id=resolved_source_profile,
         )
@@ -132,11 +139,12 @@ def build_weather_state_frame_with_audits(
             physical = physical_context_features(row)
             context_rows.append({**physical, **temperature_context_features({**row, **physical})})
         context_frame = pd.DataFrame(context_rows, index=frame.index)
-        for column in context_frame.columns:
-            if column in frame.columns:
-                frame[column] = context_frame[column].where(context_frame[column].notna(), frame[column])
-            else:
-                frame[column] = context_frame[column]
+        overlapping = context_frame.columns.intersection(frame.columns)
+        for column in overlapping:
+            frame[column] = context_frame[column].where(context_frame[column].notna(), frame[column])
+        additions = context_frame.drop(columns=overlapping)
+        if not additions.empty:
+            frame = pd.concat([frame, additions], axis=1)
         frame = add_regime_labels(frame)
     frame = _attach_feature_metadata(frame, metadata)
     frame.attrs["feature_metadata"] = metadata
@@ -148,6 +156,7 @@ def _build_state_row(
     snapshot: Mapping[str, Any],
     obs: Mapping[str, Any],
     forecast_curve: Mapping[str, Any] | None,
+    forecast_enrichment: Mapping[str, Any] | None,
     *,
     as_of_ts_utc: str,
     source_profile_id: str,
@@ -158,9 +167,14 @@ def _build_state_row(
     decision_snapshot_ts = _iso_utc(as_of_ts_utc or snapshot.get("snapshot_ts_utc"))
     last_obs_iso = _iso_utc(_first_value(obs, "source_report_ts_utc", "last_obs_utc", "report_time_utc", "obs_time_utc"))
     running_obs_iso = _iso_utc(_first_value(obs, "running_max_obs_utc", "running_max_time_utc"))
-    age_minutes = _first_float(obs, "obs_age_minutes", "obs_age_min", "age_min")
+    first_running_obs_iso = _iso_utc(_first_value(obs, "first_running_max_obs_utc"))
+    last_running_obs_iso = _iso_utc(_first_value(obs, "last_running_max_obs_utc", "running_max_obs_utc"))
+    # Observation age is a decision-clock feature.  Cached ``age_min`` values
+    # describe the collector's fetch instant and become stale when an immutable
+    # capture is replayed at a later snapshot.
+    age_minutes = _age_minutes(last_obs_iso, decision_snapshot_ts)
     if age_minutes is None:
-        age_minutes = _age_minutes(last_obs_iso, decision_snapshot_ts)
+        age_minutes = _first_float(obs, "obs_age_minutes", "obs_age_min", "age_min")
     cadence_min = _first_float(obs, "expected_report_cadence", "observation_cadence_min", "cadence_min", "estimated_cadence_min")
 
     current_temp_c = _first_float(obs, "current_temp_c", "temp_c_now", "temp_c")
@@ -228,13 +242,54 @@ def _build_state_row(
         "sky_cover_code": _sky_cover_code(_first_value(obs, "sky_cover_code", "sky_code_now", "sky_now", "sky", "sky_cover")),
         "temp_trend_1h_f": _first_float(obs, "temp_trend_1h_f", "d_tmpf_1h"),
         "temp_trend_3h_f": _first_float(obs, "temp_trend_3h_f", "d_tmpf_3h"),
+        "temp_trend_report_anchored_1h_f": _first_float(obs, "temp_trend_report_anchored_1h_f"),
+        "temp_trend_report_anchored_3h_f": _first_float(obs, "temp_trend_report_anchored_3h_f"),
+        "dewpoint_trend_1h_f": _first_float(obs, "dewpoint_trend_1h_f", "dewpoint_change_1h_f", "d_dwpf_1h"),
+        "dewpoint_trend_3h_f": _first_float(obs, "dewpoint_trend_3h_f", "d_dwpf_3h"),
+        "dewpoint_trend_report_anchored_1h_f": _first_float(obs, "dewpoint_trend_report_anchored_1h_f"),
+        "dewpoint_trend_report_anchored_3h_f": _first_float(obs, "dewpoint_trend_report_anchored_3h_f"),
+        "relative_humidity_trend_report_anchored_3h_pct": _first_float(obs, "relative_humidity_trend_report_anchored_3h_pct"),
         "minutes_since_running_max": _first_float(obs, "minutes_since_running_max"),
         "running_max_obs_utc": running_obs_iso,
+        "first_running_max_obs_utc": first_running_obs_iso,
+        "last_running_max_obs_utc": last_running_obs_iso,
+        "minutes_since_first_running_max": _first_float(obs, "minutes_since_first_running_max"),
+        "minutes_since_last_running_max": _first_float(obs, "minutes_since_last_running_max", "minutes_since_running_max"),
+        "minutes_since_last_strict_new_high": _first_float(obs, "minutes_since_last_strict_new_high"),
+        "same_running_max_obs_count": _first_float(obs, "same_running_max_obs_count"),
+        "running_max_clock_left_censored": _first_value(obs, "running_max_clock_left_censored"),
+        "observation_history_span_minutes": _first_float(obs, "observation_history_span_minutes"),
+        "clear_sky_regime_minutes": _first_float(obs, "clear_sky_regime_minutes"),
+        "clear_sky_regime_temp_change_f": _first_float(obs, "clear_sky_regime_temp_change_f"),
+        "clear_sky_regime_left_censored": _first_value(obs, "clear_sky_regime_left_censored"),
+        "precip_free_regime_minutes": _first_float(obs, "precip_free_regime_minutes"),
+        "precip_free_regime_temp_change_f": _first_float(obs, "precip_free_regime_temp_change_f"),
+        "precip_free_regime_left_censored": _first_value(obs, "precip_free_regime_left_censored"),
+        "first_precip_obs_utc": _iso_utc(_first_value(obs, "first_precip_obs_utc")),
+        "last_precip_obs_utc": _iso_utc(_first_value(obs, "last_precip_obs_utc")),
+        "precip_obs_count": _first_float(obs, "precip_obs_count"),
+        "first_thunderstorm_obs_utc": _iso_utc(_first_value(obs, "first_thunderstorm_obs_utc")),
+        "last_thunderstorm_obs_utc": _iso_utc(_first_value(obs, "last_thunderstorm_obs_utc")),
+        "thunderstorm_obs_count": _first_float(obs, "thunderstorm_obs_count"),
+        "precip_onset_clock_source": _clean_str(obs.get("precip_onset_clock_source")),
+        "thunderstorm_onset_clock_source": _clean_str(obs.get("thunderstorm_onset_clock_source")),
+        "minutes_since_last_precip_obs": _first_float(obs, "minutes_since_last_precip_obs"),
         "cloud_cover_change_1h_code": _first_float(obs, "cloud_cover_change_1h_code", "d_sky_1h"),
         "ceiling_change_1h_ft": _first_float(obs, "ceiling_change_1h_ft"),
         "wind_speed_change_1h_kt": _first_float(obs, "wind_speed_change_1h_kt", "d_wind_speed_1h_kt"),
+        "wind_dir_1h_prior_deg": _first_float(obs, "wind_dir_1h_prior_deg"),
+        "wind_dir_change_1h_deg": _first_float(obs, "wind_dir_change_1h_deg"),
+        "dewpoint_change_1h_f": _first_float(obs, "dewpoint_change_1h_f", "d_dwpf_1h"),
+        "relative_humidity_change_1h_pct": _first_float(obs, "relative_humidity_change_1h_pct"),
     }
     row.update(city_wind_context(row["city"], row["wind_dir_deg"]))
+    row.update(
+        forecast_transition_timing_features(
+            forecast_enrichment,
+            obs,
+            as_of_ts_utc=decision_snapshot_ts,
+        )
+    )
     return row
 
 
@@ -263,12 +318,66 @@ def _representative_sort_key(row: Mapping[str, Any]) -> tuple[int, datetime]:
     return has_forecast, snapshot_dt
 
 
-def _index_observations(observation_cache: Mapping[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
+def _index_observations(
+    observation_cache: Mapping[str, Any] | None,
+    as_of_ts_utc: str,
+) -> dict[tuple[str, str], dict[str, Any]]:
     if not observation_cache:
         return {}
+    as_of = parse_utc(as_of_ts_utc)
     if all(isinstance(key, tuple) and len(key) == 2 for key in observation_cache):
-        return {key: dict(value) for key, value in observation_cache.items() if isinstance(value, Mapping)}
-    return index_observation_cache(observation_cache)
+        raw_rows = []
+        for key, value in observation_cache.items():
+            if not isinstance(value, Mapping):
+                continue
+            row = dict(value)
+            row.setdefault("city", str(key[0]))
+            row.setdefault("target_date", str(key[1]))
+            raw_rows.append(row)
+    else:
+        records = observation_cache.get("records")
+        raw_rows = [dict(value) for value in records if isinstance(value, Mapping)] if isinstance(records, list) else []
+    out: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+    first_precip_by_key: dict[tuple[str, str], datetime] = {}
+    first_thunder_by_key: dict[tuple[str, str], datetime] = {}
+    for row in raw_rows:
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if not all(key):
+            continue
+        available = parse_utc(
+            row.get("available_at_utc")
+            or row.get("first_seen_at_utc")
+            or row.get("detect_ts_utc")
+            or row.get("fetched_at_utc")
+            or row.get("ingest_ts_utc")
+        )
+        if available is not None and as_of is not None and available > as_of:
+            continue
+        report_time = parse_utc(row.get("source_report_ts_utc") or row.get("last_obs_utc"))
+        if report_time is not None and as_of is not None and report_time > as_of:
+            continue
+        if report_time is not None and (as_of is None or report_time <= as_of):
+            if bool(row.get("precip_observed")):
+                previous = first_precip_by_key.get(key)
+                if previous is None or report_time < previous:
+                    first_precip_by_key[key] = report_time
+            if bool(row.get("thunderstorm_observed")):
+                previous = first_thunder_by_key.get(key)
+                if previous is None or report_time < previous:
+                    first_thunder_by_key[key] = report_time
+        sort_time = available or parse_utc(row.get("source_report_ts_utc") or row.get("last_obs_utc"))
+        sort_time = sort_time or datetime.min.replace(tzinfo=timezone.utc)
+        if key not in out or sort_time > out[key][0]:
+            out[key] = (sort_time, row)
+    indexed = {key: value[1] for key, value in out.items()}
+    for key, row in indexed.items():
+        if not str(row.get("first_precip_obs_utc") or "") and key in first_precip_by_key:
+            row["first_precip_obs_utc"] = first_precip_by_key[key].isoformat()
+            row["precip_onset_clock_source"] = "immutable_cache_capture_reconstruction"
+        if not str(row.get("first_thunderstorm_obs_utc") or "") and key in first_thunder_by_key:
+            row["first_thunderstorm_obs_utc"] = first_thunder_by_key[key].isoformat()
+            row["thunderstorm_onset_clock_source"] = "immutable_cache_capture_reconstruction"
+    return indexed
 
 
 def _index_forecast_curves(
@@ -288,8 +397,8 @@ def _index_forecast_curves(
             continue
         row = dict(item)
         available = parse_utc(
-            row.get("forecast_first_seen_utc")
-            or row.get("available_at_utc")
+            row.get("available_at_utc")
+            or row.get("forecast_first_seen_utc")
             or row.get("forecast_detected_at_utc")
             or row.get("snapshot_ts_utc")
         )
@@ -300,6 +409,35 @@ def _index_forecast_curves(
             continue
         if key not in out or available > out[key][0]:
             out[key] = (available, row)
+    return {key: value[1] for key, value in out.items()}
+
+
+def _index_forecast_enrichment(
+    rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None,
+    as_of_ts_utc: str,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """Select the latest enrichment capture provably visible at ``as_of``."""
+
+    if rows is None:
+        return {}
+    if isinstance(rows, Mapping):
+        raw_rows = rows.get("records") or rows.get("rows") or [rows]
+    else:
+        raw_rows = rows
+    as_of = parse_utc(as_of_ts_utc)
+    out: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+    for item in raw_rows:
+        if not isinstance(item, Mapping):
+            continue
+        row = dict(item)
+        captured = parse_utc(row.get("available_at_utc") or row.get("snapshot_ts_utc"))
+        if captured is None or (as_of is not None and captured > as_of):
+            continue
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if not all(key):
+            continue
+        if key not in out or captured > out[key][0]:
+            out[key] = (captured, row)
     return {key: value[1] for key, value in out.items()}
 
 
@@ -417,9 +555,14 @@ def _decision_hour(snapshot: Mapping[str, Any]) -> float | None:
     delta = _first_float(snapshot, "forecast_peak_delta_hours_local", "peak_delta_hours_local")
     if peak is not None and delta is not None:
         return peak + delta
-    local_ts = parse_utc(snapshot.get("city_local_ts") or snapshot.get("snapshot_local_ts") or snapshot.get("ts_local"))
-    if local_ts is not None:
-        return local_ts.hour + local_ts.minute / 60.0
+    local_value = snapshot.get("city_local_ts") or snapshot.get("snapshot_local_ts") or snapshot.get("ts_local")
+    if local_value:
+        try:
+            local_ts = datetime.fromisoformat(str(local_value).replace("Z", "+00:00"))
+        except ValueError:
+            local_ts = None
+        if local_ts is not None:
+            return local_ts.hour + local_ts.minute / 60.0 + local_ts.second / 3600.0
     return None
 
 

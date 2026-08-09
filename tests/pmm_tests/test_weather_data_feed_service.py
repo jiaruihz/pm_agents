@@ -7,6 +7,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from weather_data_feed.models import ObservationRecord
 from weather_data_feed.observation_sources import ObservationSourceResult
 
@@ -480,6 +482,52 @@ def test_source_events_recovers_missing_awc_report_as_late_backfill(tmp_path) ->
     assert rows[0]["recovered_from_multi_record_payload"] is True
 
 
+def test_source_event_information_headers_preserve_first_seen_and_late_boundary() -> None:
+    from weather_data_feed_service.source_events import annotate_information_events
+
+    state = {}
+    base = {
+        "status": "ok",
+        "source": "aviationweather_metar",
+        "city": "Atlanta",
+        "target_date": "2026-07-28",
+        "station": "KATL",
+        "source_report_ts_utc": "2026-07-28T12:00:00Z",
+        "local_detect_ts_utc": "2026-07-28T12:00:03Z",
+        "temp_c": 25.0,
+        "raw_metar": "METAR KATL 281200Z 00000KT 25/20",
+        "payload_hash": "source-a",
+    }
+    first = annotate_information_events(
+        [base], state, raw_source_path="sources.jsonl", available_at_utc="2026-07-28T12:00:04Z"
+    )[0]
+    replay = annotate_information_events(
+        [{**base, "local_detect_ts_utc": "2026-07-28T12:02:03Z"}],
+        state,
+        raw_source_path="sources.jsonl",
+        available_at_utc="2026-07-28T12:02:04Z",
+    )[0]
+    revision = annotate_information_events(
+        [{**base, "temp_c": 26.0, "raw_metar": "METAR KATL 281200Z 00000KT 26/20 COR", "payload_hash": "source-b"}],
+        state,
+        raw_source_path="sources.jsonl",
+        available_at_utc="2026-07-28T12:03:04Z",
+    )[0]
+    late = annotate_information_events(
+        [{**base, "first_seen_type": "late_backfill", "original_first_seen_unknown": True}],
+        state,
+        raw_source_path="sources.jsonl",
+        available_at_utc="2026-07-28T16:00:04Z",
+    )[0]
+
+    assert replay["information_event_id"] == first["information_event_id"]
+    assert replay["first_seen_at_utc"] == first["first_seen_at_utc"]
+    assert revision["event_role"] == "revision"
+    assert revision["revision_of_event_id"] == first["information_event_id"]
+    assert late["pit_lineage_class"] == "late_backfill_first_seen_unknown"
+    assert late["first_seen_at_utc"] is None
+
+
 def test_source_events_expands_fallbacks_only_for_research_profiles() -> None:
     from weather_data_feed.source_policy import load_city_configs
     from weather_data_feed_service import source_events
@@ -772,8 +820,9 @@ def test_observations_cache_row_uses_data_feed_fetcher(monkeypatch) -> None:
                     target_date="2026-06-17",
                     station_or_feed="ZSPD",
                     obs_ts_utc="2026-06-17T09:30:00+00:00",
-                    ingest_ts_utc="2026-06-17T09:31:00+00:00",
-                    temp_c=25.0,
+                        ingest_ts_utc="2026-06-17T09:31:00+00:00",
+                        temp_c=25.0,
+                        dewpoint_c=23.0,
                 ),
                 ObservationRecord(
                     source_key="aviationweather_metar",
@@ -817,6 +866,13 @@ def test_observations_cache_row_uses_data_feed_fetcher(monkeypatch) -> None:
     assert row["running_max_c"] == 27.0
     assert row["last_obs_utc"] == "2026-06-17T10:30:00+00:00"
     assert row["cadence_min"] == 30.0
+    assert row["first_running_max_obs_utc"] == "2026-06-17T10:00:00+00:00"
+    assert row["last_running_max_obs_utc"] == "2026-06-17T10:00:00+00:00"
+    assert row["minutes_since_first_running_max"] == 31.0
+    assert row["minutes_since_last_strict_new_high"] == 31.0
+    assert row["same_running_max_obs_count"] == 1
+    assert row["dewpoint_change_1h_f"] == pytest.approx(-1.8)
+    assert row["d_dwpf_1h"] == pytest.approx(-1.8)
 
 
 def test_observations_source_chain_uses_awc_cache_before_iem() -> None:
@@ -936,7 +992,9 @@ def test_observations_cache_reuses_previous_ok_row_on_fetch_failure(monkeypatch,
     cache = observations.build_cache(args)
     row = cache["records"][0]
 
-    assert row["status"] == "ok"
+    assert row["status"] == "reused_after_fetch_error"
+    assert row["last_success_status"] == "ok"
+    assert row["age_min"] == 10.0
     assert row["cache_reused_after_fetch_status"] == "fetch_failed"
     assert row["cache_reused_after_fetch_error"] == "HTTP 429"
 
@@ -972,6 +1030,64 @@ def test_observations_additional_city_adds_coverage_without_live_eligibility(
     assert captured["research_cities"] == {"Seoul"}
     assert captured["only_cities"] is None
     assert cache["summary"]["additional_cities"] == ["Seoul"]
+
+
+def test_observations_main_writes_global_and_daily_append_only_history(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import json
+    from weather_data_feed_service import observations
+
+    generated_at_utc = "2026-08-09T13:30:00+00:00"
+    cache = {
+        "schema_version": "weather_data_feed_observation_cache_v1",
+        "generated_at_utc": generated_at_utc,
+        "records": [
+            {
+                "schema_version": "weather_data_feed_observation_cache_v1",
+                "city": "Helsinki",
+                "target_date": "2026-08-09",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "EFHK",
+                "last_obs_utc": "2026-08-09T13:20:00+00:00",
+                "running_max_c": 23.0,
+                "current_temp_c": 22.0,
+            }
+        ],
+        "summary": {"cities": 1, "ok": 1, "non_ok": 0},
+    }
+    monkeypatch.setattr(observations, "build_cache", lambda _args: cache)
+    monkeypatch.setattr(observations, "PRODUCER_BUILD_ID", "test-sha")
+    monkeypatch.setattr(observations, "PRODUCER_BUILD_ID_BASIS", "test")
+    output = tmp_path / "observations" / "latest.json"
+
+    assert observations.main(["--output", str(output)]) == 0
+
+    latest = json.loads(output.read_text(encoding="utf-8"))
+    global_rows = [
+        json.loads(line)
+        for line in (output.parent / "observations.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    daily_rows = [
+        json.loads(line)
+        for line in (output.parent / "2026-08-09" / "observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert latest == cache
+    assert global_rows == daily_rows
+    assert len(global_rows) == 1
+    row = global_rows[0]
+    assert row["observation_cache_generated_at_utc"] == generated_at_utc
+    assert row["producer"] == "weather_data_feed_service.observations"
+    assert row["producer_build_id"] == "test-sha"
+    assert row["batch_capture_id"]
+    assert row["observation_history_id"]
+    assert row["available_at_utc"] == generated_at_utc
+    assert row["ingested_at_utc"] == generated_at_utc
 
 
 def test_observations_cache_keeps_running_max_monotone_across_truncated_fallback(monkeypatch, tmp_path) -> None:
@@ -1032,6 +1148,59 @@ def test_observations_cache_keeps_running_max_monotone_across_truncated_fallback
     assert row["history_continuity_status"] == "merged_previous_running_max"
     assert row["history_continuity_raw_running_max_c"] == 32.0
     assert cache["summary"]["running_max_continuity_merges"] == 1
+
+
+def test_observations_cache_keeps_running_max_after_error_reuse_then_fallback(monkeypatch, tmp_path) -> None:
+    import argparse
+    from weather_data_feed import build_observation_cache, write_observation_cache
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Wuhan"})[0]
+    output = tmp_path / "latest.json"
+    previous = {
+        "city": "Wuhan",
+        "target_date": "2026-07-19",
+        "status": "reused_after_fetch_error",
+        "last_success_status": "ok",
+        "source": "aviationweather_metar",
+        "station": "ZHHH",
+        "running_max_c": 33.0,
+        "running_max_obs_utc": "2026-07-19T09:00:00+00:00",
+    }
+    write_observation_cache(build_observation_cache([previous]), output)
+
+    monkeypatch.setattr(observations, "load_city_configs", lambda **_kwargs: [cfg])
+    monkeypatch.setattr(
+        observations,
+        "observation_cache_row",
+        lambda *_args, **_kwargs: {
+            "city": "Wuhan",
+            "target_date": "2026-07-19",
+            "status": "ok",
+            "source": "aviationweather_cache_csv",
+            "station": "ZHHH",
+            "fetched_at_utc": "2026-07-19T10:17:30+00:00",
+            "current_temp_c": 32.0,
+            "running_max_c": 32.0,
+            "running_max_obs_utc": "2026-07-19T10:00:00+00:00",
+            "n_obs": 1,
+        },
+    )
+    args = argparse.Namespace(
+        output=str(output),
+        now_utc="2026-07-19T10:17:30+00:00",
+        include_station_diff=False,
+        cities=["Wuhan"],
+        timeout_sec=3.0,
+        max_workers=1,
+        include_fallback_sources=True,
+    )
+
+    row = observations.build_cache(args)["records"][0]
+
+    assert row["running_max_c"] == 33.0
+    assert row["history_continuity_status"] == "merged_previous_running_max"
 
 
 def test_daily_parity_check_flags_missing_new_tree(tmp_path) -> None:
