@@ -1339,7 +1339,33 @@ manifest was healthy with no findings or lost persistent sessions. Data-feed
 health is `warn` only for missing same-day state in four non-trading cities;
 all registered runtimes and the JRS context are healthy.
 
-## 20. Immediate Follow-Up Work
+## 20. 2026-08-07..Ongoing WCIR Helsinki Forecast-Path Drift
+
+The registered WCIR production checkout continued to read Helsinki forecast
+curves from the retired `targeted_output/forecast_hourly_curves` directory after
+the canonical producer moved them to `forecast/forecast_hourly_curves`. The
+runner process and controller session stayed alive, but Helsinki stopped
+producing decision bundles after `2026-08-07T16:52:02.241468Z` and emitted
+`RuntimeError: no PIT forecast` on every subsequent cycle.
+
+As of `2026-08-09T18:14:57.997298Z`, the append-only runtime error journal
+contains 1,054 affected cycles across target dates `2026-08-07` and
+`2026-08-09`; the affected window remains open until the production checkout is
+updated and the controller-managed runtime is restarted. The last pre-gap
+Helsinki bundle is one of 777 historical Helsinki bundles in the journal.
+Research must label this interval `wcir_helsinki_forecast_path_gap`; it is not a
+strategy rejection or evidence that no Helsinki opportunities existed.
+
+Commit `c17eaa67` updates both WCIR configs to the canonical path. A read-only
+production-checkout smoke using the canonical input and a temporary output
+directory changed the same run from `errors=1, evaluated=0` to
+`errors=0, evaluated=2`. This isolates the path drift as the forecast failure's
+root cause. WCIR is `zero_notional_shadow`; both the affected production summary
+and the repair smoke report `orders_submitted=0`, so evidenced order, fill,
+notional and PnL impact is zero. This record must be updated with the recovery
+timestamp and first restored durable bundle after deployment.
+
+## 21. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
