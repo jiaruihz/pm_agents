@@ -1365,7 +1365,34 @@ and the repair smoke report `orders_submitted=0`, so evidenced order, fill,
 notional and PnL impact is zero. This record must be updated with the recovery
 timestamp and first restored durable bundle after deployment.
 
-## 21. Immediate Follow-Up Work
+## 21. 2026-07-28..Ongoing Retired Fast-Observation Consumer Gap
+
+The `weather_live_cross_observations` controller instance became the sole
+current high-frequency observation owner, but the broad stale-book collector,
+the Tmax first-lock shadow and data-feed health still referenced the retired
+`output/high_frequency_observations` tree. That tree stopped updating at
+`2026-07-28T00:18:07.402121Z`. The broad collector continued overwriting a
+fresh `status=ok` summary even though `source_cities`, `source_city_dates` and
+`new_events` were all empty. Its last durable quote was
+`2026-07-28T00:18:06.329036Z`; its last event was created at
+`2026-07-27T23:11:43.653834Z`.
+
+Commit `f34ec41c` routes current consumers and health exclusively through
+`live_cross_observations`, adds the source owner as an explicit controller
+dependency, and removes the dormant second producer from the data-feed loop.
+Setting the retired producer flag now fails closed instead of creating another
+mutable owner. A read-only parser smoke against the current canonical latest
+file returned five current city-target rows (Ankara, Atlanta, Helsinki,
+Istanbul and Miami), while the deployed stale-book process still returned zero
+until its checkout is updated and controller-managed session restarted.
+
+The broad collector and Tmax instance are shadow/telemetry-only, so evidenced
+order, fill, notional and PnL impact is zero. The affected interval is a source
+event/quote coverage gap, not evidence that no qualifying events existed. The
+record must be closed with the first restored durable event/quote timestamps
+after deployment.
+
+## 22. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
