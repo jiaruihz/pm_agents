@@ -73,7 +73,7 @@ managed_runtimes:
     tmux_session: weather_forecast_curve_collector_v1
     role: source_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
     start_script: scripts/ops/start_weather_forecast_curve_collector_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_curve_collector/latest.json
     health_format: json
