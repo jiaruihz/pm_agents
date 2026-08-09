@@ -190,6 +190,24 @@ production. N100 had an ext4 emergency read-only / IO error incident on
 | `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | weather-data-feed-source-events.timer | append-only | source-event history with report_ts, detect_ts, payload hashes, raw METAR |
 | `weather_data_feed_service_runtime/output/observations/latest.json` | weather-data-feed-observations.timer | ~5 min | shared fast observation cache for strategy feature/state inputs |
 
+### 2.2.1 Current append-only storage classes
+
+The mutable NVMe layer distinguishes data evidence from disposable process logs:
+
+| Family | Class | Current layout | Required lifecycle |
+|---|---|---|---|
+| `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions plus a byte-for-byte aggregate compatibility journal | keep daily partitions; migrate production readers to the partition reader, then remove the duplicate aggregate |
+| `output/high_frequency_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw historical observation evidence | 21 daily partitions plus an exact duplicate stopped aggregate | keep partitions; remove the aggregate after remaining compatibility consumers migrate |
+| `output/forecast_enrichment/{YYYY-MM-DD}/forecast_enrichment.jsonl` | reproducible feature evidence | 32 daily partitions plus an exact duplicate stopped aggregate | retain dated evidence needed by frozen research; remove the aggregate after consumers use partitions |
+| `output/fast_source_prev_no_trial/opportunities.jsonl` | signal/evidence journal | active monolith; current writer records transitions and five-minute heartbeats | cut over in a live maintenance window to daily partitions; hot current day, archive closed days, never treat heartbeat rows as separate opportunities |
+| `weather_edge_v1/*/state_decisions.jsonl` | strategy decision evidence | per-instance append-only monolith | preserve lineage, partition by decision date, and expose one shared partition reader before moving closed days |
+| `*.log` | disposable runtime diagnostics | plain stdout/stderr summaries | controller-managed cap: 64 MiB trigger, retain roughly the last 8 MiB; logs are not raw or canonical evidence |
+
+The aggregate/shard equality audit on 2026-08-09 found exact SHA-256 concatenation parity for the stopped
+`forecast_enrichment.jsonl` (869,591,376 bytes) and `high_frequency_observations.jsonl`
+(646,315,053 bytes). They remain temporarily only because old consumers still name the aggregate path; their
+duplication must not be described as additional history.
+
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See
 [§7 N100 automation gap](#7-n100-automation-gap).
