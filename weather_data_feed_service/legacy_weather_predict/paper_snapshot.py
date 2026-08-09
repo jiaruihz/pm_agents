@@ -133,6 +133,29 @@ MIN_SNAPSHOT_CITY_DATE_PAIRS = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHO
 BASE_SHARES = 10
 _FORECAST_CURVE_CACHE: dict[tuple[str, str, str], dict] | None = None
 _FORECAST_LIVE_DISABLED_REASON: str | None = None
+_FORECAST_LIVE_FAILURES: dict[tuple[str, str, str], dict] = {}
+
+
+def _forecast_live_failure_key(city, target_date, model):
+    return str(city), str(target_date), str(model).lower()
+
+
+def _record_forecast_live_failure(
+    city,
+    target_date,
+    model,
+    *,
+    reason,
+    status_code=None,
+    error=None,
+    attempted=True,
+):
+    _FORECAST_LIVE_FAILURES[_forecast_live_failure_key(city, target_date, model)] = {
+        "reason": str(reason),
+        "status_code": status_code,
+        "error": str(error or "")[:500] or None,
+        "attempted": bool(attempted),
+    }
 
 
 def snapshot_publish_quality(records):
@@ -1098,6 +1121,8 @@ def _fetch_live_forecast(client, model, city, cfg, target_date):
 def _refresh_live_forecast(client, model, city, cfg, target_date):
     """Refresh one forecast curve for the dedicated forecast collector."""
     global _FORECAST_LIVE_DISABLED_REASON
+    failure_key = _forecast_live_failure_key(city, target_date, model)
+    _FORECAST_LIVE_FAILURES.pop(failure_key, None)
     cached = _cached_live_forecast(city, target_date, model)
     cached_age = cached.get("cache_age_sec") if isinstance(cached, dict) else None
     if (
@@ -1119,7 +1144,7 @@ def _refresh_live_forecast(client, model, city, cfg, target_date):
     }
     if _FORECAST_LIVE_DISABLED_REASON is None:
         try:
-            status_code, payload, _error = curl_json_get(
+            status_code, payload, error = curl_json_get(
                 url,
                 params=params,
                 proxy=FORECAST_PROXY,
@@ -1130,8 +1155,38 @@ def _refresh_live_forecast(client, model, city, cfg, target_date):
                 return _forecast_details_from_open_meteo(payload, source_model=model)
             if status_code == 429:
                 _FORECAST_LIVE_DISABLED_REASON = "open_meteo_http_429"
-        except Exception:
-            pass
+                reason = "open_meteo_http_429"
+            elif status_code == 200:
+                reason = "open_meteo_empty_payload"
+            elif status_code:
+                reason = f"open_meteo_http_{status_code}"
+            else:
+                reason = "open_meteo_transport_error"
+            _record_forecast_live_failure(
+                city,
+                target_date,
+                model,
+                reason=reason,
+                status_code=status_code,
+                error=error,
+            )
+        except Exception as exc:
+            _record_forecast_live_failure(
+                city,
+                target_date,
+                model,
+                reason="open_meteo_request_exception",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+    else:
+        _record_forecast_live_failure(
+            city,
+            target_date,
+            model,
+            reason="open_meteo_request_suppressed",
+            error=f"provider disabled after {_FORECAST_LIVE_DISABLED_REASON}",
+            attempted=False,
+        )
     return cached or _cached_live_forecast(city, target_date, model)
 
 

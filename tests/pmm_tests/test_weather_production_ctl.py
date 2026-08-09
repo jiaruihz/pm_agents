@@ -121,11 +121,9 @@ def test_every_business_runtime_has_controller_start_contract():
     assert run_capture.recovery_policy == "safe"
 
 
-def test_migrated_historical_runtimes_remain_non_live():
+def test_current_migrated_runtimes_remain_non_live_and_dormant_d1_is_not_desired():
     spec = load_production_spec()
     migrated_ids = {
-        "d1_multisource_consensus_shadow_v1",
-        "europe_d1_distance2_dual_no_shadow_v1",
         "low_price_yes_integrated_tail_shadow_v2",
         "low_price_yes_lottery_shadow_v1",
         "metar_reversal_false_fade_reheat_shadow_v1",
@@ -143,8 +141,13 @@ def test_migrated_historical_runtimes_remain_non_live():
     migrated = [
         item for item in spec.managed_runtimes if item.instance_id in migrated_ids
     ]
+    actual_ids = {item.instance_id for item in spec.managed_runtimes}
 
-    assert len(migrated) == 15
+    assert {
+        "d1_multisource_consensus_shadow_v1",
+        "europe_d1_distance2_dual_no_shadow_v1",
+    }.isdisjoint(actual_ids)
+    assert len(migrated) == len(migrated_ids)
     assert all(item.expected_live is False for item in migrated)
     assert all(item.recovery_policy == "safe" for item in migrated)
 

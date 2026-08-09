@@ -167,32 +167,14 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: guarded_live
 
+  # Historical D1 multisource/distance-2 shadows are dormant research evidence,
+  # not current production desired state. Their code and dated artifacts remain
+  # available for replay, but the controller must not recreate or health-gate them.
+
   # Zero-notional/research services still use their original implementation,
   # but their exact production entrypoint and health identity are controlled
   # here.  ``safe`` means a missing session may be recreated; it does not
   # authorize a live mode or any order placement.
-  - instance_id: d1_multisource_consensus_shadow_v1
-    tmux_session: d1_multisource_consensus_shadow_v1
-    role: shadow
-    execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
-    start_script: scripts/ops/start_d1_multisource_consensus_shadow_v1.sh
-    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/d1_multisource_consensus_shadow_v1/runner.log
-    health_format: mtime
-    max_health_age_sec: 180
-    dependencies: [weather_data_feed_jrs]
-    recovery_policy: safe
-  - instance_id: europe_d1_distance2_dual_no_shadow_v1
-    tmux_session: europe_d1_distance2_dual_no_shadow_v1
-    role: shadow
-    execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
-    start_script: scripts/ops/start_europe_d1_distance2_dual_no_shadow_v1.sh
-    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_dual_no_shadow_v1/runner.log
-    health_format: mtime
-    max_health_age_sec: 180
-    dependencies: [weather_data_feed_jrs]
-    recovery_policy: safe
   - instance_id: low_price_yes_integrated_tail_shadow_v2
     uses_market_proxy: true
     tmux_session: low_price_yes_integrated_tail_shadow_v2

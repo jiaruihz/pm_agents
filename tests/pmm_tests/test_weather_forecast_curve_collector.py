@@ -18,6 +18,8 @@ def test_market_loop_has_no_forecast_network_producer() -> None:
     assert "FORECAST_ENRICHMENT" not in market_entry
     assert "forecast-enrichment" in forecast_entry
     assert "weather_data_feed_service.forecast_curve_collector" in forecast_entry
+    assert "--market-snapshot-dir" not in forecast_entry
+    assert "--include-research-cities" not in forecast_entry
 
 
 def test_dedicated_collector_publishes_operational_curve(monkeypatch, tmp_path) -> None:
@@ -73,3 +75,26 @@ def test_dedicated_collector_reports_missing_cache_or_source(monkeypatch, tmp_pa
     assert result["status"] == "degraded"
     assert result["available_city_targets"] == 0
     assert result["failed_count"] == 1
+
+
+def test_dedicated_collector_reports_real_provider_failure(monkeypatch, tmp_path) -> None:
+    now = datetime(2026, 8, 7, 10, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(collector.snapshot, "CITIES", {"TestCity": {"lat": 1.0, "lon": 2.0}})
+    monkeypatch.setattr(collector.snapshot, "CITY_MODEL", {"TestCity": "gfs"})
+    monkeypatch.setattr(collector, "_selected_models", lambda: {"TestCity": "gfs"})
+    monkeypatch.setattr(collector.snapshot, "city_scan_dates", lambda *_args: ["2026-08-07"])
+    monkeypatch.setattr(collector.snapshot, "local_settle_utc", lambda *_args: now + timedelta(hours=10))
+    monkeypatch.setattr(collector.snapshot, "_cached_live_forecast", lambda *_args: None)
+    monkeypatch.setattr(
+        collector.snapshot,
+        "curl_json_get",
+        lambda *_args, **_kwargs: (503, None, "curl_status=503 upstream unavailable"),
+    )
+
+    result = collector.collect(output_root=tmp_path, now_utc=now)
+
+    assert result["refresh_status"] == "provider_request_failed"
+    assert result["request_attempt_count"] == 1
+    assert result["request_failure_counts"] == {"open_meteo_http_503": 1}
+    assert result["failed_examples"][0]["reason"] == "open_meteo_http_503"
+    assert "upstream unavailable" in result["request_failure_examples"][0]["error"]
