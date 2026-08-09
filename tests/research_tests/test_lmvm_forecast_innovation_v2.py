@@ -19,14 +19,27 @@ def rung(bracket: str, model: float, market: float) -> dict:
 
 def state(epoch: float, key: str, rungs: list[dict]) -> dict:
     return {
+        "source_path": f"snapshot-{epoch}.json",
+        "snapshot_ts_utc": f"2026-08-0{int(epoch)}T00:00:00Z",
         "snapshot_epoch": epoch,
         "snapshot_id": str(epoch),
+        "decision_local": f"2026-08-0{int(epoch)}T08:00:00+08:00",
+        "decision_hour_local": 8.0,
+        "lead_days": 1,
         "forecast_state_key": key,
+        "forecast_state_basis": "forecast_values_hash",
         "city": "Shanghai",
         "target_date": "2026-08-06",
         "event_slug": "event",
+        "market_timezone": "Asia/Shanghai",
         "forecast_source": "source",
         "forecast_model": "model",
+        "model_version": "model-v1",
+        "model_init_utc_estimated": "2026-08-01T00:00:00Z",
+        "forecast_max_f": 90.0,
+        "rung_count": len(rungs),
+        "model_probability_sum_raw": 1.0,
+        "market_mid_sum_raw": 1.0,
         "rungs": rungs,
     }
 
@@ -56,3 +69,18 @@ def test_update_pair_uses_immediately_previous_snapshot_market() -> None:
     paired = module.paired_rungs(*pairs[0])
     bracket_30 = next(row for row in paired if row["bracket"] == "30")
     assert round(bracket_30["market_probability_delta"], 6) == 0.05
+
+
+def test_full_ladder_panel_keeps_selected_and_unselected_rows_and_clock_gaps() -> None:
+    previous = state(1, "old", [rung("30", 0.4, 0.4), rung("31", 0.3, 0.3), rung("32", 0.3, 0.3)])
+    current = state(2, "new", [rung("30", 0.5, 0.48), rung("31", 0.3, 0.31), rung("32", 0.2, 0.21)])
+
+    panel = module.build_full_ladder_panel([(previous, current)])
+
+    assert len(panel) == 3
+    assert panel["forecast_event_id"].nunique() == 1
+    assert panel["selected_by_innovation"].sum() == 1
+    assert panel.loc[panel["selected_by_innovation"], "bracket"].item() == "30"
+    assert panel["provider_first_seen_at_utc"].isna().all()
+    assert set(panel["provider_first_seen_status"]) == {"unavailable_in_reconstructed_archive"}
+    assert set(panel["collector_first_seen_status"]) == {"legacy_earliest_observed_not_collector_exact"}

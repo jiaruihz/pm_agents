@@ -16,6 +16,7 @@ baseline unless the probability source is replaced explicitly.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -153,6 +154,96 @@ def build_innovation_candidates(
                 "policy_eligible": True,
             }
         )
+    return pd.DataFrame(rows)
+
+
+def build_full_ladder_panel(
+    pairs: list[tuple[dict[str, Any], dict[str, Any]]]
+) -> pd.DataFrame:
+    """Materialize every selected and unselected rung at each forecast event.
+
+    The event denominator is fixed before any execution policy is applied.  Old
+    paper snapshots do not expose an upstream provider-availability clock, so
+    that clock remains explicitly missing rather than being aliased to the
+    collector's earliest observed snapshot.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for previous, current in pairs:
+        paired = paired_rungs(previous, current)
+        selected = max(
+            paired,
+            key=lambda row: (
+                float(row["forecast_innovation_score"]),
+                float(row["model_probability_delta"]),
+                float(row["model_probability_after"]),
+                -float(row["yes_ask"]),
+            ),
+        )
+        event_id = hashlib.sha256(
+            (
+                f"{current['snapshot_id']}|{previous['forecast_state_key']}|"
+                f"{current['forecast_state_key']}"
+            ).encode("utf-8")
+        ).hexdigest()
+        market_rank = {
+            str(row["condition_id"]): rank
+            for rank, row in enumerate(
+                sorted(paired, key=lambda item: float(item["market_probability_after"]), reverse=True),
+                start=1,
+            )
+        }
+        model_rank = {
+            str(row["condition_id"]): rank
+            for rank, row in enumerate(
+                sorted(paired, key=lambda item: float(item["model_probability_after"]), reverse=True),
+                start=1,
+            )
+        }
+        for rung in paired:
+            ask = float(rung["yes_ask"])
+            entry_fee = base.weather_fee_per_share(ask)
+            condition_id = str(rung["condition_id"])
+            rows.append(
+                {
+                    **_candidate_base(current),
+                    "forecast_event_id": event_id,
+                    "forecast_state_before": previous["forecast_state_key"],
+                    "condition_id": condition_id,
+                    "bracket": rung["bracket"],
+                    "question": rung["question"],
+                    "selected_by_innovation": condition_id == str(selected["condition_id"]),
+                    "model_prob": rung["model_probability_after"],
+                    "market_prob": rung["market_probability_after"],
+                    "model_probability_before": rung["model_probability_before"],
+                    "model_probability_after": rung["model_probability_after"],
+                    "market_probability_before": rung["market_probability_before"],
+                    "market_probability_after": rung["market_probability_after"],
+                    "model_probability_delta": rung["model_probability_delta"],
+                    "market_probability_delta": rung["market_probability_delta"],
+                    "forecast_innovation_score": rung["forecast_innovation_score"],
+                    "market_probability_rank": market_rank[condition_id],
+                    "model_probability_rank": model_rank[condition_id],
+                    "entry_bid": rung["yes_bid"],
+                    "entry_ask": ask,
+                    "entry_bid_size": rung["yes_bid_size"],
+                    "entry_ask_size": rung["yes_ask_size"],
+                    "entry_spread": ask - float(rung["yes_bid"]),
+                    "entry_fee_per_share": entry_fee,
+                    "model_edge_after_entry_fee": float(rung["model_probability_after"])
+                    - ask
+                    - entry_fee,
+                    "forecast_issue_time_utc": current.get("model_init_utc_estimated"),
+                    "provider_first_seen_at_utc": None,
+                    "provider_first_seen_status": "unavailable_in_reconstructed_archive",
+                    "collector_first_seen_at_utc": current["snapshot_ts_utc"],
+                    "collector_first_seen_status": "legacy_earliest_observed_not_collector_exact",
+                    "book_snapshot_time_utc": current["snapshot_ts_utc"],
+                    "execution_time_utc": current["snapshot_ts_utc"],
+                    "execution_time_status": "same_snapshot_replay_assumption",
+                    "candidate_selected": condition_id == str(selected["condition_id"]),
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -450,8 +541,11 @@ def main() -> int:
     static_candidates, probability_rows = base.build_candidates(annotated)
     pairs, update_counts = forecast_update_pairs(states)
     innovation = build_innovation_candidates(pairs)
+    full_ladder = build_full_ladder_panel(pairs)
     candidates = pd.concat([static_candidates, innovation], ignore_index=True, sort=False)
-    candidates = base.attach_markouts(candidates, base.quote_history(states))
+    quote_history = base.quote_history(states)
+    candidates = base.attach_markouts(candidates, quote_history)
+    full_ladder = base.attach_markouts(full_ladder, quote_history)
     candidates, cutoff = assign_period(candidates)
     probabilities = base.score_probabilities(probability_rows, base.load_winners(args.db))
     summary = markout_summary(candidates, args.draws)
@@ -460,6 +554,7 @@ def main() -> int:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     candidates.to_csv(args.output_dir / "candidate_markouts.csv", index=False)
+    full_ladder.to_csv(args.output_dir / "forecast_event_rungs.csv", index=False)
     probabilities.to_csv(args.output_dir / "probability_rows.csv", index=False)
     summary.to_csv(args.output_dir / "markout_summary.csv", index=False)
     paired.to_csv(args.output_dir / "paired_policy_deltas.csv", index=False)
@@ -471,6 +566,9 @@ def main() -> int:
         "snapshot_files": len(files),
         "parse_counts": dict(parse_counts),
         "update_counts": dict(update_counts),
+        "full_ladder_event_rows": len(full_ladder),
+        "full_ladder_events": int(full_ladder["forecast_event_id"].nunique()) if not full_ladder.empty else 0,
+        "full_ladder_selected_rows": int(full_ladder["selected_by_innovation"].sum()) if not full_ladder.empty else 0,
         "chronological_cutoff": cutoff,
         "probability": base.probability_summary(probabilities),
         "markout_summary": summary.to_dict("records"),
