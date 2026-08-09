@@ -27,6 +27,8 @@ def production_spec(
         pm_runtime_root=tmp_path,
         canonical_tmux_socket="weather-data-feed-jrs",
         canonical_tmux_binary=tmp_path / "tmux",
+        market_proxy_state_path=tmp_path / "market_proxy.json",
+        market_proxy_default_url="http://127.0.0.1:7897",
         managed_runtimes=runtimes,
     )
 
@@ -95,6 +97,15 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_current_yes_heat_death_shadow_v1"].max_health_age_sec == 2400
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_market_books_prod"
+    )
+    assert by_id["weather_helsinki_pre_cross_active_ladder_shadow"].checkout_root == Path(
+        "/Users/deepsleep/projects/pm_agents_market_books_prod"
+    )
+    assert by_id[
+        "weather_helsinki_pre_cross_active_ladder_shadow"
+    ].resolved_start_script() == Path(
+        "/Users/deepsleep/projects/pm_agents_market_books_prod/scripts/ops/"
+        "start_weather_helsinki_pre_cross_active_ladder_shadow.sh"
     )
 
 

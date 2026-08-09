@@ -257,7 +257,7 @@ managed_runtimes:
     tmux_session: weather_helsinki_pre_cross_active_ladder_shadow
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
     start_script: scripts/ops/start_weather_helsinki_pre_cross_active_ladder_shadow.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/latest.json
     max_health_age_sec: 180
