@@ -1616,6 +1616,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="write reporting-only tables from an already frozen validation run",
     )
+    source.add_argument(
+        "--mass-transport-forward-parent",
+        type=Path,
+        help="score 2026-07-29..08-08 from an existing frozen mass-transport artifact",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--min-train-dates", type=int, default=15)
     parser.add_argument("--holdout-fraction", type=float, default=0.20)
@@ -1651,6 +1656,19 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.mass_transport_forward_parent is not None:
+        if args.score_model_dir is not None:
+            raise ValueError("--score-model-dir is not supported with --mass-transport-forward-parent")
+        from weather_model_evaluation.ladder_mass_transport import run_recent_forward
+
+        result=run_recent_forward(
+            args.mass_transport_identity_db,
+            args.mass_transport_forward_parent,
+            args.output_dir,
+            draws=args.draws,
+        )
+        print(json.dumps({"status":result["status"],"output_dir":str(args.output_dir)},ensure_ascii=False))
+        return 0
     if args.mass_transport_postprocess_dir is not None:
         from weather_model_evaluation.ladder_mass_transport import (
             finalize_saved_validation,

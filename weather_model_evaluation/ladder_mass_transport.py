@@ -44,6 +44,7 @@ RUN_ID = "ladder_mass_transport_time_aligned_20260809"
 TRAIN_START, TRAIN_END = "2026-05-19", "2026-07-10"
 DEV_START, DEV_END = "2026-07-11", "2026-07-21"
 VALIDATION_START, VALIDATION_END = "2026-07-22", "2026-07-28"
+RECENT_FORWARD_START, RECENT_FORWARD_END = "2026-07-29", "2026-08-08"
 FORWARD_START, FORWARD_END = "2026-08-11", "2026-08-17"
 HORIZONS = (30, 60)
 PRIMARY_HORIZON = 60
@@ -535,6 +536,45 @@ def build_panel(
     return fixed.reset_index(drop=True),coverage
 
 
+def build_recent_forward_panel(db:Path)->tuple[pd.DataFrame,dict[str,Any]]:
+    """Materialize the post-validation, pre-untouched fixed denominator.
+
+    This window is never used for feature, alpha, or selector selection.  It is
+    scored only after the 2026-07-22..28 historical validation artifacts have
+    been frozen.
+    """
+    conn=_connect(db)
+    try:
+        snapshots=_read_sampled_snapshots(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
+        snapshots["snapshot_ts"]=pd.to_datetime(snapshots["source_snapshot_ts_utc"],utc=True)
+        forecasts=_read_forecasts(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
+        observations=_read_observations(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
+        snapshots=_asof_weather(snapshots,forecasts,observations)
+        snapshots["snapshot_source"]="tmax_v2_canonical"
+        rungs=_read_rungs(conn,snapshots["ladder_snapshot_id"].tolist())
+        settlements=_read_settlements(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
+    finally:
+        conn.close()
+    fixed=_fixed_from_source(snapshots,rungs,settlements).reset_index(drop=True)
+    coverage={
+        "window":[RECENT_FORWARD_START,RECENT_FORWARD_END],
+        "raw_snapshots":int(snapshots.ladder_snapshot_id.nunique()),
+        "raw_rungs":int(len(rungs)),
+        "raw_dates":sorted(snapshots.target_date.dropna().astype(str).unique()),
+        "raw_cities":int(snapshots.city.nunique()),
+        "fixed_rows":int(len(fixed)),
+        "fixed_snapshots":int(fixed.ladder_snapshot_id.nunique()),
+        "fixed_dates":sorted(fixed.target_date.dropna().astype(str).unique()),
+        "fixed_cities":int(fixed.city.nunique()),
+        "missing_forecast_rows":int(fixed.forecast_peak_f.isna().sum()),
+        "missing_observation_rows":int(fixed.observed_max_f.isna().sum()),
+        "missing_settlement_rows":int(fixed.win.isna().sum()),
+        "settled_dates":sorted(fixed.loc[fixed.win.notna(),"target_date"].unique()),
+        "denominator_scope":"canonical tmax_v2 ladder snapshots/rung quotes; 30-minute sampled direct YES rows with a PIT 60m future snapshot",
+    }
+    return fixed,coverage
+
+
 def _weights(rows: pd.DataFrame) -> np.ndarray:
     counts=rows.groupby("target_date")["target_date"].transform("size").astype(float)
     return (1/counts).to_numpy()
@@ -615,6 +655,63 @@ def frozen_validation(rows:pd.DataFrame,choice:FrozenChoice,draws:int,seed:int)-
     metrics=metric_table(scored,draws,seed)
     deltas=delta_table(scored,choice.block,draws,seed+1000)
     return scored,metrics,deltas,models
+
+
+def score_frozen_window(
+    rows:pd.DataFrame,
+    choice:FrozenChoice,
+    start_date:str,
+    end_date:str,
+    fixed_alphas:dict[str,float],
+    *,
+    candidate_primary_model:Pipeline|None=None,
+)->tuple[pd.DataFrame,dict[str,Pipeline]]:
+    """Score a later window without reopening any model-selection decision."""
+    train_pool=rows[rows.target_date.between(TRAIN_START,DEV_END)].copy()
+    test_pool=rows[rows.target_date.between(start_date,end_date)].copy()
+    if test_pool.empty:
+        raise ValueError(f"frozen score window has no rows: {start_date}..{end_date}")
+    missing_blocks=sorted(set(FEATURE_BLOCKS)-set(fixed_alphas))
+    if missing_blocks:
+        raise ValueError(f"frozen alpha map missing blocks: {missing_blocks}")
+    outputs=[]
+    models={}
+    for block in FEATURE_BLOCKS:
+        alpha=float(fixed_alphas[block])
+        for horizon in HORIZONS:
+            label=f"h{horizon}_relative_markout"
+            train=train_pool[train_pool[label].notna()]
+            test=test_pool[test_pool[label].notna()].copy()
+            if block==choice.block and horizon==PRIMARY_HORIZON and candidate_primary_model is not None:
+                model=candidate_primary_model
+                columns=list(FEATURE_BLOCKS[block])+list(CATEGORICAL)
+                pred=model.predict(test[columns])
+            else:
+                model,pred=_fit_predict(train,test,block,alpha,label)
+            models[f"{block}:markout:{horizon}"]=model
+            part=test.copy()
+            part["block"]=block
+            part["alpha"]=alpha
+            part["horizon"]=horizon
+            part["markout_prediction"]=pred
+            direction=f"h{horizon}_direction"
+            dmodel,dpred=_fit_predict(train,test,block,alpha,direction,True)
+            part["direction_probability"]=dpred
+            models[f"{block}:direction:{horizon}"]=dmodel
+            settled_train=train[train.win.notna()]
+            settled_test=test[test.win.notna()].copy()
+            if settled_test.empty:
+                part["settlement_probability"]=np.nan
+            else:
+                smodel,spred=_fit_predict(settled_train,settled_test,block,alpha,"win",True)
+                settled_test["settlement_probability"]=_normalized_settlement_probability(settled_test,spred)
+                models[f"{block}:settlement"]=smodel
+                part=part.merge(
+                    settled_test[["ladder_snapshot_id","condition_id","settlement_probability"]],
+                    on=["ladder_snapshot_id","condition_id"],how="left",
+                )
+            outputs.append(part)
+    return pd.concat(outputs,ignore_index=True),models
 
 
 def select_development_alpha(rows:pd.DataFrame,block:str)->float:
@@ -749,6 +846,7 @@ def _candidate_expressions(scored:pd.DataFrame,candidate:str)->tuple[pd.DataFram
         target=group.loc[group.markout_prediction.idxmax()]
         hedge=group.loc[group.markout_prediction.idxmin()]
         edge=float(target.markout_prediction-hedge.markout_prediction)
+        label=f"h{PRIMARY_HORIZON}_relative_markout"
         records.append({
             "ladder_snapshot_id":snapshot_id,"city":target.city,
             "target_date":target.target_date,"event_identity":target.event_identity,
@@ -757,6 +855,7 @@ def _candidate_expressions(scored:pd.DataFrame,candidate:str)->tuple[pd.DataFram
             "target_condition_id":target.condition_id,"hedge_condition_id":hedge.condition_id,
             "target_bracket":target.bracket,"hedge_bracket":hedge.bracket,
             "predicted_pair_markout":edge,
+            "actual_pair_relative_markout":float(target[label]-hedge[label]),
             "target_yes_bid":target.yes_bid,"target_yes_ask":target.yes_ask,
             "target_yes_bid_size":target.yes_bid_size,"target_yes_ask_size":target.yes_ask_size,
             "hedge_no_bid":hedge.no_bid,"hedge_no_ask":hedge.no_ask,
@@ -802,6 +901,89 @@ def _candidate_expressions(scored:pd.DataFrame,candidate:str)->tuple[pd.DataFram
     executable=executable[executable[size_columns].ge(1.0).all(axis=1)].copy()
     funnel["one_share_depth_all_legs"]=len(executable)
     return executable.reset_index(drop=True),funnel
+
+
+def selector_direction_diagnostics(scored:pd.DataFrame,candidate:str)->dict[str,Any]:
+    """Separate rank signal, crossing cost, fees, and a sign-flip control."""
+    candidate_rows=scored[
+        (scored.block==candidate)&(scored.horizon==PRIMARY_HORIZON)
+    ].copy()
+    label=f"h{PRIMARY_HORIZON}_relative_markout"
+    direction=f"h{PRIMARY_HORIZON}_direction"
+    prediction=candidate_rows.markout_prediction.to_numpy(float)
+    actual=candidate_rows[label].to_numpy(float)
+    daily_candidate=(candidate_rows.assign(
+        loss=(candidate_rows.markout_prediction-candidate_rows[label])**2,
+        reverse_loss=(-candidate_rows.markout_prediction-candidate_rows[label])**2,
+        zero_loss=candidate_rows[label]**2,
+    ).groupby("target_date")[["loss","reverse_loss","zero_loss"]].mean())
+
+    def expression(sign:float)->dict[str,Any]:
+        frame=scored.copy()
+        mask=(frame.block==candidate)&(frame.horizon==PRIMARY_HORIZON)
+        frame.loc[mask,"markout_prediction"]*=sign
+        rows,funnel=_candidate_expressions(frame,candidate)
+        if rows.empty:
+            return {"funnel":funnel,"rows":0}
+        entry=rows.target_yes_ask+rows.hedge_no_ask
+        exit_=rows.future_target_yes_bid+rows.future_hedge_no_bid
+        entry_fee=_fee_per_share(rows.target_yes_ask)+_fee_per_share(rows.hedge_no_ask)
+        exit_fee=_fee_per_share(rows.future_target_yes_bid)+_fee_per_share(rows.future_hedge_no_bid)
+        rows=rows.assign(
+            gross_ask_to_bid=exit_-entry,
+            fees=entry_fee+exit_fee,
+            net_taker=exit_-entry-entry_fee-exit_fee,
+        )
+        daily=rows.groupby("target_date",as_index=False).agg(
+            rows=("ladder_snapshot_id","size"),
+            pure_relative=("actual_pair_relative_markout","sum"),
+            gross_ask_to_bid=("gross_ask_to_bid","sum"),
+            fees=("fees","sum"),
+            net_taker=("net_taker","sum"),
+        )
+        def total_ci(column:str)->dict[str,float]:
+            values=daily[column].to_numpy(float)
+            if len(values)<3:
+                return {"point":float(values.sum()),"ci_low":math.nan,"ci_high":math.nan}
+            rng=np.random.default_rng(20260809+(0 if sign>0 else 1))
+            samples=values[rng.integers(0,len(values),size=(3000,len(values)))].sum(axis=1)
+            low,high=np.quantile(samples,[.025,.975])
+            return {"point":float(values.sum()),"ci_low":float(low),"ci_high":float(high)}
+        return {
+            "funnel":funnel,
+            "rows":int(len(rows)),
+            "dates":int(rows.target_date.nunique()),
+            "pure_relative_sum":float(rows.actual_pair_relative_markout.sum()),
+            "pure_relative_mean":float(rows.actual_pair_relative_markout.mean()),
+            "pure_relative_positive_dates":int((daily.pure_relative>0).sum()),
+            "gross_ask_to_bid_pnl":float(rows.gross_ask_to_bid.sum()),
+            "spread_crossing_cost":float((rows.actual_pair_relative_markout-rows.gross_ask_to_bid).sum()),
+            "fees":float(rows.fees.sum()),
+            "net_taker_pnl":float(rows.net_taker.sum()),
+            "target_date_bootstrap":{
+                column:total_ci(column)
+                for column in ("pure_relative","gross_ask_to_bid","net_taker")
+            },
+            "daily":daily.to_dict("records"),
+        }
+
+    corr=float(np.corrcoef(prediction,actual)[0,1]) if len(prediction)>1 else math.nan
+    return {
+        "row_level":{
+            "rows":int(len(candidate_rows)),
+            "dates":int(candidate_rows.target_date.nunique()),
+            "actual_positive_rate":float(candidate_rows[direction].mean()),
+            "regression_sign_accuracy":float(np.mean((prediction>=0)==(actual>=0))),
+            "direction_probability_accuracy":float(np.mean((candidate_rows.direction_probability>=.5)==candidate_rows[direction].astype(bool))),
+            "always_nonpositive_accuracy":float(np.mean(candidate_rows[direction].eq(0))),
+            "prediction_actual_correlation":corr,
+            "candidate_date_equal_mse":float(daily_candidate.loss.mean()),
+            "reverse_date_equal_mse":float(daily_candidate.reverse_loss.mean()),
+            "zero_date_equal_mse":float(daily_candidate.zero_loss.mean()),
+        },
+        "frozen_selector":expression(1.0),
+        "sign_flipped_selector_control":expression(-1.0),
+    }
 
 
 def evaluate_execution(
@@ -1091,6 +1273,147 @@ def postprocess_artifact(output_dir:Path,draws:int=3000,seed:int=20260809,db:Pat
     summary["code_hashes"]={"mass_transport_module":_artifact_sha256(Path(__file__)),"unified_runner":_artifact_sha256(Path(__file__).with_name("lmvm_repricing_challenger.py"))}
     (output_dir/"summary.json").write_text(json.dumps(summary,indent=2,ensure_ascii=False,default=str)+"\n")
     freeze_path=output_dir/"model_freeze.json"; freeze=json.loads(freeze_path.read_text()); freeze["canonical_identity"]=summary.get("canonical_identity"); freeze["artifact_hashes"]=summary["artifact_hashes"]; freeze["code_hashes"]=summary["code_hashes"]; freeze["true_untouched_forward"]=summary["true_untouched_forward"]; freeze_path.write_text(json.dumps(freeze,indent=2,ensure_ascii=False,default=str)+"\n")
+    return summary
+
+
+def run_recent_forward(
+    db:Path,
+    parent_artifact_dir:Path,
+    output_dir:Path,
+    *,
+    draws:int=3000,
+    seed:int=20260809,
+)->dict[str,Any]:
+    """Score 2026-07-29..08-08 once with the already-frozen v1 choices."""
+    output_dir.mkdir(parents=True,exist_ok=True)
+    parent_freeze=json.loads((parent_artifact_dir/"model_freeze.json").read_text())
+    parent_summary=json.loads((parent_artifact_dir/"summary.json").read_text())
+    choice=FrozenChoice(
+        str(parent_freeze["choice"]["block"]),
+        float(parent_freeze["choice"]["alpha"]),
+        int(parent_freeze["choice"]["horizon"]),
+    )
+    tournament=pd.read_csv(parent_artifact_dir/"development_tournament.csv")
+    fixed_alphas={
+        str(block):float(group.sort_values("mse").iloc[0].alpha)
+        for block,group in tournament.groupby("block")
+    }
+    if fixed_alphas.get(choice.block)!=choice.alpha:
+        raise ValueError("parent candidate alpha disagrees with frozen development tournament")
+    candidate_model_path=parent_artifact_dir/"candidate_markout_model.joblib"
+    expected_model_hash=str(parent_freeze.get("model_sha256") or "")
+    actual_model_hash=_artifact_sha256(candidate_model_path)
+    if expected_model_hash and expected_model_hash!=actual_model_hash:
+        raise ValueError("parent frozen candidate model hash mismatch")
+
+    parent_panel=pd.read_csv(parent_artifact_dir/"fixed_panel.csv.gz",low_memory=False)
+    recent,coverage=build_recent_forward_panel(db)
+    recent.to_csv(output_dir/"fixed_recent_forward_panel.csv.gz",index=False,compression="gzip")
+    combined=pd.concat([parent_panel,recent],ignore_index=True,sort=False)
+    scored,_=score_frozen_window(
+        combined,choice,RECENT_FORWARD_START,RECENT_FORWARD_END,fixed_alphas,
+        candidate_primary_model=joblib.load(candidate_model_path),
+    )
+    scored.to_csv(output_dir/"recent_forward_scores.csv.gz",index=False,compression="gzip")
+    metrics=metric_table(scored,draws,seed)
+    deltas=delta_table(scored,choice.block,draws,seed+1000)
+    metrics.to_csv(output_dir/"recent_forward_metrics.csv",index=False)
+    deltas.to_csv(output_dir/"recent_forward_deltas.csv",index=False)
+    city,regime=city_and_regime_tables(
+        scored,choice.block,parent_panel[parent_panel.target_date.between(DEV_START,DEV_END)]
+    )
+    city.to_csv(output_dir/"recent_forward_by_city.csv",index=False)
+    regime.to_csv(output_dir/"recent_forward_by_liquidity_regime.csv",index=False)
+    loco=leave_one_city_out(scored,choice.block)
+    loco.to_csv(output_dir/"recent_forward_leave_one_city_out.csv",index=False)
+
+    label=f"h{PRIMARY_HORIZON}_relative_markout"
+    direction=f"h{PRIMARY_HORIZON}_direction"
+    work=scored[(scored.block==choice.block)&(scored.horizon==PRIMARY_HORIZON)].copy()
+    base=scored[(scored.block=="M0_market_level")&(scored.horizon==PRIMARY_HORIZON)][
+        ["ladder_snapshot_id","condition_id","markout_prediction","direction_probability"]
+    ].rename(columns={"markout_prediction":"m0_prediction","direction_probability":"m0_direction_probability"})
+    work=work.merge(base,on=["ladder_snapshot_id","condition_id"],validate="one_to_one")
+    work["candidate_markout_loss"]=(work.markout_prediction-work[label])**2
+    work["m0_markout_loss"]=(work.m0_prediction-work[label])**2
+    work["markout_mse_delta"]=work.candidate_markout_loss-work.m0_markout_loss
+    work["candidate_direction_brier"]=(work.direction_probability-work[direction])**2
+    work["m0_direction_brier"]=(work.m0_direction_probability-work[direction])**2
+    daily=work.groupby("target_date",as_index=False).agg(
+        rows=("condition_id","size"),snapshots=("ladder_snapshot_id","nunique"),cities=("city","nunique"),
+        candidate_markout_mse=("candidate_markout_loss","mean"),m0_markout_mse=("m0_markout_loss","mean"),
+        markout_mse_delta=("markout_mse_delta","mean"),candidate_direction_brier=("candidate_direction_brier","mean"),
+        m0_direction_brier=("m0_direction_brier","mean"),
+    )
+    daily.to_csv(output_dir/"recent_forward_by_target_date.csv",index=False)
+    work.groupby(["target_date","city"],as_index=False).agg(
+        rows=("condition_id","size"),snapshots=("ladder_snapshot_id","nunique"),
+        candidate_markout_mse=("candidate_markout_loss","mean"),m0_markout_mse=("m0_markout_loss","mean"),
+        markout_mse_delta=("markout_mse_delta","mean"),
+    ).to_csv(output_dir/"recent_forward_by_city_date.csv",index=False)
+
+    selector_diagnostics=selector_direction_diagnostics(scored,choice.block)
+    (output_dir/"selector_direction_diagnostics.json").write_text(
+        json.dumps(selector_diagnostics,indent=2,ensure_ascii=False,default=str)+"\n"
+    )
+    execution=evaluate_execution(scored,choice.block,output_dir,draws,seed+5000)
+    primary=deltas[deltas.horizon.eq(PRIMARY_HORIZON)]
+    markout_pass=bool(len(primary)==3 and primary.markout_mse_delta_ci_high.lt(0).all())
+    direction_pass=bool(
+        len(primary)==3
+        and primary.direction_brier_delta.le(0).all()
+        and primary.direction_logloss_delta.le(0).all()
+    )
+    probability_pass=markout_pass and direction_pass
+    status=(execution["status"] if probability_pass else "BRANCH_EXHAUSTED")
+    resolved=db.resolve(strict=True)
+    stat=resolved.stat()
+    summary={
+        "schema_version":"ladder_mass_transport_recent_forward_v1",
+        "generated_at_utc":datetime.now(UTC).isoformat(),
+        "status":status,
+        "window":[RECENT_FORWARD_START,RECENT_FORWARD_END],
+        "used_for_selection":False,
+        "choice":parent_freeze["choice"],
+        "fixed_alphas":fixed_alphas,
+        "probability_gate":{"passed":probability_pass,"markout_pass":markout_pass,"direction_pass":direction_pass},
+        "coverage":coverage,
+        "metrics":metrics.to_dict("records"),
+        "deltas":deltas.to_dict("records"),
+        "selector_direction_diagnostics":selector_diagnostics,
+        "execution":execution,
+        "leave_one_city_out":{
+            "cities":int(len(loco)),
+            "cities_candidate_better":int(loco.mse_delta.lt(0).sum()),
+            "all_omissions_candidate_better":bool(loco.mse_delta.lt(0).all()),
+        },
+        "parent_artifact":{
+            "path":str(parent_artifact_dir),
+            "run_id":parent_freeze.get("run_id"),
+            "status":parent_summary.get("status"),
+            "model_sha256":actual_model_hash,
+            "fixed_panel_sha256":_artifact_sha256(parent_artifact_dir/"fixed_panel.csv.gz"),
+        },
+        "canonical_identity":{
+            "db_argument":str(db),"db_realpath":str(resolved),"device":stat.st_dev,"inode":stat.st_ino,
+            "size_bytes":stat.st_size,"mtime_utc":datetime.fromtimestamp(stat.st_mtime,UTC).isoformat(),
+        },
+        "true_untouched_forward":{"window":[FORWARD_START,FORWARD_END],"status":"not_started","used_for_selection":False},
+        "production":{"shadow_started":False,"notional_usd":0.0,"orders":0,"fills":0},
+    }
+    summary["artifact_hashes"]={
+        name:_artifact_sha256(output_dir/name)
+        for name in (
+            "fixed_recent_forward_panel.csv.gz","recent_forward_scores.csv.gz",
+            "recent_forward_metrics.csv","recent_forward_deltas.csv",
+            "selector_direction_diagnostics.json","execution_expressions.csv.gz",
+        ) if (output_dir/name).exists()
+    }
+    summary["code_hashes"]={
+        "mass_transport_module":_artifact_sha256(Path(__file__)),
+        "unified_runner":_artifact_sha256(Path(__file__).with_name("lmvm_repricing_challenger.py")),
+    }
+    (output_dir/"summary.json").write_text(json.dumps(summary,indent=2,ensure_ascii=False,default=str)+"\n")
     return summary
 
 

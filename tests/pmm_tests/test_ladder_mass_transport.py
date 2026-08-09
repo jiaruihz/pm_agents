@@ -19,6 +19,9 @@ def test_feature_blocks_are_nested_and_static_kink_is_control_only() -> None:
     assert "kink_score" not in subject.M3
     assert set(subject.STATIC_KINK) == set(subject.M0) | {"kink_score"}
     assert "snapshot_source" in subject.CATEGORICAL
+    assert (subject.RECENT_FORWARD_START, subject.RECENT_FORWARD_END) == (
+        "2026-07-29", "2026-08-08"
+    )
 
 
 def test_relative_target_removes_common_ladder_move() -> None:
@@ -38,6 +41,72 @@ def test_date_ci_resamples_target_dates() -> None:
     point, low, high = subject._date_ci(rows, "delta", 500, 7)
     assert point == -2.0
     assert high < 0
+
+
+def test_candidate_expression_preserves_pure_relative_markout() -> None:
+    common = {
+        "block": "M2_ladder_transition",
+        "horizon": 60,
+        "ladder_snapshot_id": "snapshot-1",
+        "city": "Amsterdam",
+        "target_date": "2026-07-29",
+        "event_identity": "event-1",
+        "snapshot_ts": "2026-07-29T00:00:00Z",
+        "feature_book_snapshot_id": "snapshot-1",
+        "future_evaluation_snapshot_id": "snapshot-2",
+        "yes_bid_size": 10.0,
+        "yes_ask_size": 10.0,
+        "no_bid_size": 10.0,
+        "no_ask_size": 10.0,
+        "h60_yes_bid_size": 10.0,
+        "h60_yes_ask_size": 10.0,
+        "h60_no_bid_size": 10.0,
+        "h60_no_ask_size": 10.0,
+        "win": 0.0,
+    }
+    rows = pd.DataFrame(
+        [
+            {
+                **common,
+                "condition_id": "high",
+                "bracket": "20",
+                "markout_prediction": 0.02,
+                "h60_relative_markout": 0.015,
+                "yes_bid": 0.20,
+                "yes_ask": 0.21,
+                "no_bid": 0.78,
+                "no_ask": 0.79,
+                "h60_yes_bid": 0.22,
+                "h60_yes_ask": 0.23,
+                "h60_no_bid": 0.76,
+                "h60_no_ask": 0.77,
+            },
+            {
+                **common,
+                "condition_id": "low",
+                "bracket": "19",
+                "markout_prediction": -0.01,
+                "h60_relative_markout": -0.005,
+                "yes_bid": 0.30,
+                "yes_ask": 0.31,
+                "no_bid": 0.68,
+                "no_ask": 0.69,
+                "h60_yes_bid": 0.29,
+                "h60_yes_ask": 0.30,
+                "h60_no_bid": 0.69,
+                "h60_no_ask": 0.70,
+            },
+        ]
+    )
+
+    expressions, funnel = subject._candidate_expressions(
+        rows, "M2_ladder_transition"
+    )
+
+    assert funnel["one_share_depth_all_legs"] == 1
+    assert expressions.iloc[0]["target_condition_id"] == "high"
+    assert expressions.iloc[0]["hedge_condition_id"] == "low"
+    assert np.isclose(expressions.iloc[0]["actual_pair_relative_markout"], 0.02)
 
 
 def test_history_adapter_preserves_pit_snapshot_and_direct_ladder(tmp_path) -> None:
