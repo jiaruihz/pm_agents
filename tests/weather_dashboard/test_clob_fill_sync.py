@@ -1,4 +1,5 @@
 import sqlite3
+from types import SimpleNamespace
 
 import weather_dashboard.ingest.clob_fill_sync as clob_fill_sync
 from weather_dashboard.ingest.clob_fill_sync import (
@@ -19,6 +20,51 @@ from weather_dashboard.ingest.clob_fill_sync import (
     _submitted_order_price_cap,
     sync_clob_fills,
 )
+
+
+def test_v2_clob_http_client_uses_explicit_proxy_and_resilient_timeout(monkeypatch):
+    calls = []
+
+    class PreviousClient:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    previous = PreviousClient()
+    helpers = SimpleNamespace(_http_client=previous)
+
+    def fake_client(**kwargs):
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setenv("WEATHER_DATA_FEED_MARKET_PROXY", "http://127.0.0.1:7897")
+    monkeypatch.setenv("WEATHER_CLOB_HTTP_TIMEOUT_SEC", "17")
+    monkeypatch.setattr(clob_fill_sync.httpx, "Client", fake_client)
+
+    result = clob_fill_sync._configure_v2_clob_http_client(helpers)
+
+    assert result == {"proxy_configured": True, "timeout_sec": 17.0}
+    assert calls == [
+        {
+            "http2": True,
+            "proxy": "http://127.0.0.1:7897",
+            "timeout": 17.0,
+            "trust_env": False,
+        }
+    ]
+    assert previous.closed is True
+
+
+def test_v2_clob_http_client_rejects_nonpositive_timeout(monkeypatch):
+    monkeypatch.setenv("WEATHER_CLOB_HTTP_TIMEOUT_SEC", "0")
+
+    try:
+        clob_fill_sync._configure_v2_clob_http_client(SimpleNamespace())
+    except ValueError as exc:
+        assert "must be positive" in str(exc)
+    else:
+        raise AssertionError("nonpositive timeout must fail explicitly")
 
 
 def test_insert_fill_dedupes_same_physical_fill_with_different_id(monkeypatch):

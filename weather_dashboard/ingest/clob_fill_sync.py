@@ -62,6 +62,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
+import httpx
 import requests
 
 from weather_dashboard.ingest.clob_fill_cache import (
@@ -96,6 +97,7 @@ EXTERNAL_FETCH_ERRORS: list[str] = []
 CLOB_HOST_DEFAULT = "https://clob.polymarket.com"
 DATA_API_HOST = "https://data-api.polymarket.com"
 REQUEST_TIMEOUT = 10  # seconds
+CLOB_CLIENT_TIMEOUT_DEFAULT = 15.0
 PAGE_SIZE = 500
 WEATHER_TAKER_FEE_RATE = Decimal("0.05")
 FEE_QUANTUM = Decimal("0.00001")
@@ -754,6 +756,44 @@ def _extract_immediate_place_fill(row: sqlite3.Row | dict[str, Any]) -> dict[str
 # Authenticated CLOB client
 # ---------------------------------------------------------------------------
 
+def _configure_v2_clob_http_client(clob_http_helpers: Any) -> dict[str, Any]:
+    """Bind py_clob_client_v2 to the production proxy with a resilient timeout.
+
+    py_clob_client_v2 owns a module-global httpx client created with a five
+    second default timeout.  The local proxy can be healthy while an upstream
+    TLS handshake takes slightly longer than that, which previously made the
+    bounded canonical refresh fail all three attempts.  Replace the singleton
+    before any authenticated request and use the explicit production proxy
+    environment populated by the canonical launcher.
+    """
+    proxy = (
+        os.getenv("WEATHER_DATA_FEED_MARKET_PROXY", "").strip()
+        or os.getenv("HTTPS_PROXY", "").strip()
+        or os.getenv("HTTP_PROXY", "").strip()
+        or os.getenv("ALL_PROXY", "").strip()
+    )
+    raw_timeout = os.getenv("WEATHER_CLOB_HTTP_TIMEOUT_SEC", "").strip()
+    timeout = float(raw_timeout) if raw_timeout else CLOB_CLIENT_TIMEOUT_DEFAULT
+    if timeout <= 0:
+        raise ValueError("WEATHER_CLOB_HTTP_TIMEOUT_SEC must be positive")
+
+    previous = getattr(clob_http_helpers, "_http_client", None)
+    clob_http_helpers._http_client = httpx.Client(  # noqa: SLF001
+        http2=True,
+        proxy=proxy or None,
+        timeout=timeout,
+        trust_env=not bool(proxy),
+    )
+    if previous is not None and previous is not clob_http_helpers._http_client:
+        close = getattr(previous, "close", None)
+        if callable(close):
+            close()
+    return {
+        "proxy_configured": bool(proxy),
+        "timeout_sec": timeout,
+    }
+
+
 def _build_clob_client() -> Any | None:
     """
     Build a py_clob_client_v2 ClobClient using env-var credentials.
@@ -763,14 +803,22 @@ def _build_clob_client() -> Any | None:
         from py_clob_client_v2.client import ClobClient
         from py_clob_client_v2.clob_types import ApiCreds
         from py_clob_client_v2.constants import POLYGON
+        import py_clob_client_v2.http_helpers.helpers as clob_http_helpers
+
+        clob_v2 = True
     except ImportError:
         try:
             from py_clob_client.client import ClobClient  # type: ignore[assignment]
             from py_clob_client.clob_types import ApiCreds  # type: ignore[assignment]
             from py_clob_client.constants import POLYGON  # type: ignore[assignment]
+
+            clob_v2 = False
         except ImportError:
             log.warning("Neither py_clob_client_v2 nor py_clob_client installed.")
             return None
+
+    if clob_v2:
+        _configure_v2_clob_http_client(clob_http_helpers)
 
     host = (
         os.getenv("CLOB_BASE_URL", "").strip()
@@ -820,16 +868,16 @@ def _build_clob_client() -> Any | None:
     )
     if creds is None:
         try:
-            client.set_api_creds(client.derive_api_key())
+            derived = (
+                client.derive_api_key()
+                if clob_v2
+                else client.create_or_derive_api_creds()
+            )
+            client.set_api_creds(derived)
         except Exception as exc:
-            log.warning("derive_api_key failed: %s -- trying create_or_derive_api_creds", exc)
-            try:
-                client.set_api_creds(client.create_or_derive_api_creds())
-            except Exception as exc2:
-                log.warning(
-                    "create_or_derive_api_creds failed: %s -- no auth available", exc2
-                )
-                return None
+            method = "derive_api_key" if clob_v2 else "create_or_derive_api_creds"
+            log.warning("%s failed: %s -- no auth available", method, exc)
+            return None
     return client
 
 

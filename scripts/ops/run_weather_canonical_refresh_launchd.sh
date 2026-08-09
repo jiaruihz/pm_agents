@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 RUNTIME_DIR="$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh"
 LOCK_DIR="$RUNTIME_DIR/refresh.lock"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 
 mkdir -p "$RUNTIME_DIR"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -22,9 +23,11 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
   source "$PROJECT_DIR/.env"
   set +a
 fi
-MARKET_PROXY="${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7897}"
-export HTTP_PROXY="$MARKET_PROXY" HTTPS_PROXY="$MARKET_PROXY" ALL_PROXY="$MARKET_PROXY"
-export http_proxy="$MARKET_PROXY" https_proxy="$MARKET_PROXY" all_proxy="$MARKET_PROXY"
+# Resolve the same mutable control-plane state as every market consumer.  A
+# proxy switch must also move fill reconciliation; keeping a local default here
+# would create a second route that the controller cannot change or audit.
+MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
+weather_export_market_proxy_env "$MARKET_PROXY"
 
 # Keep this post-trade path deliberately small: production-declared live
 # instances only, then order -> fill -> fact -> gate.  Registration is the

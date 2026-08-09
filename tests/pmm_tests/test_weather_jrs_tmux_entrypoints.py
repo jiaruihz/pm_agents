@@ -278,6 +278,15 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert 'LAUNCHD_LOG_DIR="$HOME/Library/Logs/' in installer
     assert "RUNTIME_DIR=" not in installer
 
+    refresh = (OPS / "run_weather_canonical_refresh_launchd.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "weather_market_proxy_env.sh" in refresh
+    assert 'MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"' in refresh
+    assert 'weather_export_market_proxy_env "$MARKET_PROXY"' in refresh
+    assert "127.0.0.1:7890" not in refresh
+    assert "127.0.0.1:7897" not in refresh
+
 
 def test_shared_helper_owns_jrs_oneshot_lifecycle():
     helper = (OPS / "weather_jrs_tmux_env.sh").read_text(encoding="utf-8")
