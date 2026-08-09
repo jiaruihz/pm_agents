@@ -160,7 +160,7 @@ def fetch_direct(start_date: str, end_date: str, workers: int, timeout: float) -
 def load_iem(runtime: Path, profiles_path: Path, start_date: str, end_date: str) -> list[dict[str, Any]]:
     profiles = eligibility.load_profiles(profiles_path)
     rows = eligibility.load_fast_observations(
-        runtime / "output/high_frequency_observations/high_frequency_observations.jsonl",
+        runtime / "output/high_frequency_observations",
         profiles,
         30.0,
     )

@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
+
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
@@ -65,6 +67,14 @@ def canonical_city(value: Any) -> str:
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
     if not path.exists():
+        return
+    if path.is_dir():
+        for shard in dated_jsonl_paths(
+            path,
+            filename="high_frequency_observations.jsonl",
+            allow_missing=True,
+        ):
+            yield from iter_jsonl(shard)
         return
     snapshot_size = path.stat().st_size
     with path.open("rb") as handle:
@@ -784,7 +794,7 @@ def main() -> int:
     profiles = load_profiles(Path(args.profiles))
     awc, synoptic = load_reference_events(runtime / "output/source_events/sources.jsonl", profiles)
     fast = load_fast_observations(
-        runtime / "output/high_frequency_observations/high_frequency_observations.jsonl",
+        runtime / "output/high_frequency_observations",
         profiles,
         args.max_fast_age_min,
     )

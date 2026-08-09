@@ -192,7 +192,7 @@ def main() -> int:
     profiles = eligibility.load_profiles(Path(args.profiles))
     awc, _synoptic = eligibility.load_reference_events(runtime / "output/source_events/sources.jsonl", profiles)
     fast = eligibility.load_fast_observations(
-        runtime / "output/high_frequency_observations/high_frequency_observations.jsonl",
+        runtime / "output/high_frequency_observations",
         profiles,
         args.max_fast_age_min,
     )

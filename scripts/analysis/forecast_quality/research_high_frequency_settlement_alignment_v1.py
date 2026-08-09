@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
+
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_RUNTIME_ROOTS = [
@@ -59,6 +61,16 @@ def default_runtime_root() -> Path:
 def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
+    if path.is_dir():
+        return [
+            row
+            for shard in dated_jsonl_paths(
+                path,
+                filename="high_frequency_observations.jsonl",
+                allow_missing=True,
+            )
+            for row in read_json_or_jsonl(shard)
+        ]
     if path.suffix == ".json":
         payload = json.loads(path.read_text(encoding="utf-8"))
         records = payload.get("records") if isinstance(payload, dict) else payload
@@ -274,7 +286,10 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     runtime_root = default_runtime_root()
-    parser.add_argument("--high-frequency-path", default=str(runtime_root / "output/high_frequency_observations/high_frequency_observations.jsonl"))
+    parser.add_argument(
+        "--high-frequency-path",
+        default=str(runtime_root / "output/high_frequency_observations"),
+    )
     parser.add_argument("--source-events-path", default=str(runtime_root / "output/source_events/sources.jsonl"))
     parser.add_argument("--db-path", default=str(ROOT / "runtime/weather.db"))
     parser.add_argument("--out-dir", default=str(ROOT / "docs/analysis/2026-07/generated/high_frequency_settlement_alignment_v1"))
