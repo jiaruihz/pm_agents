@@ -432,6 +432,44 @@ parser.add_argument("--output-dir", type=Path, default=ROOT / "docs/analysis/202
     }
 
 
+def test_dependency_scan_resolves_path_lists_and_glob_patterns(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    source = repo / "scripts/analysis/family/research_example.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        '''from pathlib import Path
+ROOT = Path(__file__).resolve().parents[3]
+FEATURE_ROWS = [
+    ROOT / "docs/analysis/2026-06/generated/atlas/feature_factory_a/reheat_feature_rows.csv",
+    ROOT / "docs/analysis/2026-06/generated/atlas/feature_factory_b/reheat_feature_rows.csv",
+]
+SHARD_GLOB = str(ROOT / "docs/analysis/2026-06/generated/atlas/feature_factory_*/reheat_feature_rows.csv")
+OUT_JSON = ROOT / "docs/analysis/2026-06/generated/atlas/result.json"
+for path in FEATURE_ROWS:
+    path.read_text()
+rows = list(ROOT.glob(SHARD_GLOB))
+''',
+        encoding="utf-8",
+    )
+    rows = {
+        "docs/analysis/2026-06/generated/atlas/feature_factory_a/reheat_feature_rows.csv": {},
+        "docs/analysis/2026-06/generated/atlas/feature_factory_b/reheat_feature_rows.csv": {},
+        "docs/analysis/2026-06/generated/atlas/feature_factory_c/reheat_feature_rows.csv": {},
+        "docs/analysis/2026-06/generated/atlas/result.json": {},
+    }
+    monkeypatch.setattr(artifact_ctl, "ROOT", repo)
+
+    result = artifact_ctl.discover_archived_dependencies([source], rows)
+
+    assert result == {
+        "scripts/analysis/family/research_example.py": [
+            "docs/analysis/2026-06/generated/atlas/feature_factory_a/reheat_feature_rows.csv",
+            "docs/analysis/2026-06/generated/atlas/feature_factory_b/reheat_feature_rows.csv",
+            "docs/analysis/2026-06/generated/atlas/feature_factory_c/reheat_feature_rows.csv",
+        ]
+    }
+
+
 def test_restore_dependencies_uses_minimal_script_plan(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

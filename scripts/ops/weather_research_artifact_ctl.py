@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import fnmatch
+import glob
 import gzip
 import hashlib
 import json
@@ -401,19 +403,36 @@ def prune_reproduced(
     return payload
 
 
-def _static_path(node: ast.AST, environment: dict[str, str]) -> str | None:
+def _static_paths(
+    node: ast.AST,
+    environment: dict[str, tuple[str, ...]],
+) -> tuple[str, ...]:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
+        return (node.value,)
     if isinstance(node, ast.Name):
-        return environment.get(node.id)
+        return environment.get(node.id, ())
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return tuple(
+            dict.fromkeys(
+                value
+                for element in node.elts
+                for value in _static_paths(element, environment)
+            )
+        )
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        left = _static_path(node.left, environment)
-        right = _static_path(node.right, environment)
-        if left and right:
-            if "docs/" in right:
-                return right
-            return f"{left.rstrip('/')}/{right.lstrip('/')}"
-        return left or right
+        left_values = _static_paths(node.left, environment)
+        right_values = _static_paths(node.right, environment)
+        if left_values and right_values:
+            return tuple(
+                dict.fromkeys(
+                    right
+                    if "docs/" in right
+                    else f"{left.rstrip('/')}/{right.lstrip('/')}"
+                    for left in left_values
+                    for right in right_values
+                )
+            )
+        return left_values or right_values
     if isinstance(node, ast.Call) and node.args:
         name = ""
         if isinstance(node.func, ast.Name):
@@ -421,12 +440,17 @@ def _static_path(node: ast.AST, environment: dict[str, str]) -> str | None:
         elif isinstance(node.func, ast.Attribute):
             name = node.func.attr
         if name in {"Path", "str", "resolve"}:
-            return _static_path(node.args[0], environment)
-    return None
+            return _static_paths(node.args[0], environment)
+    return ()
 
 
-def _python_path_environment(tree: ast.AST) -> dict[str, str]:
-    environment: dict[str, str] = {}
+def _static_path(node: ast.AST, environment: dict[str, tuple[str, ...]]) -> str | None:
+    values = _static_paths(node, environment)
+    return values[0] if len(values) == 1 else None
+
+
+def _python_path_environment(tree: ast.AST) -> dict[str, tuple[str, ...]]:
+    environment: dict[str, tuple[str, ...]] = {}
     assignments = [
         node
         for node in ast.walk(tree)
@@ -435,13 +459,13 @@ def _python_path_environment(tree: ast.AST) -> dict[str, str]:
     for _ in range(4):
         changed = False
         for node in assignments:
-            value = _static_path(node.value, environment)
-            if not value:
+            values = _static_paths(node.value, environment)
+            if not values:
                 continue
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             for target in targets:
-                if isinstance(target, ast.Name) and environment.get(target.id) != value:
-                    environment[target.id] = value
+                if isinstance(target, ast.Name) and environment.get(target.id) != values:
+                    environment[target.id] = values
                     changed = True
         if not changed:
             break
@@ -467,6 +491,11 @@ def discover_archived_dependencies(
             if "docs/analysis/" not in value or "/generated/" not in value:
                 return
             relative = value[value.index("docs/analysis/") :]
+            if glob.has_magic(relative):
+                required.update(
+                    path for path in archived_paths if fnmatch.fnmatchcase(path, relative)
+                )
+                return
             if relative in archive_rows:
                 required.add(relative)
             prefix = relative.rstrip("/") + "/"
@@ -475,10 +504,14 @@ def discover_archived_dependencies(
         # argparse defaults are read indirectly through ``args.<name>`` and do
         # not appear at the eventual pandas/open call.  Treat static non-output
         # constants as dependencies as well.
-        for name, value in environment.items():
-            if any(marker in name.upper() for marker in ("OUTPUT", "OUT_DIR", "DESTINATION")):
+        for name, values in environment.items():
+            upper_name = name.upper()
+            if upper_name.startswith("OUT_") or any(
+                marker in upper_name for marker in ("OUTPUT", "DESTINATION")
+            ):
                 continue
-            add_archived_path(value)
+            for value in values:
+                add_archived_path(value)
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -505,14 +538,12 @@ def discover_archived_dependencies(
                     for keyword in node.keywords:
                         if keyword.arg != "default":
                             continue
-                        value = _static_path(keyword.value, environment)
-                        if value:
+                        for value in _static_paths(keyword.value, environment):
                             add_archived_path(value)
             if not function.startswith(READ_CALL_PREFIXES):
                 continue
             for candidate in candidates:
-                value = _static_path(candidate, environment)
-                if value:
+                for value in _static_paths(candidate, environment):
                     add_archived_path(value)
         if required:
             dependencies[str(source.relative_to(ROOT))] = sorted(required)
