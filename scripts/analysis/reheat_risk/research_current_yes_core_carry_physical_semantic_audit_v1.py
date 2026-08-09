@@ -39,6 +39,8 @@ from scripts.analysis.reheat_risk import (  # noqa: E402
 )
 from weather_data_feed.city_calendar import CITY_TIMEZONE  # noqa: E402
 from weather_data_feed.sky_cover import SKY_COVER_CODE  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 RESEARCH_ID = "current_yes_core_carry_physical_semantic_audit_v1"
@@ -60,15 +62,10 @@ CORE_ARTIFACT = (
     / "src/strategies/weather_edge_v1/config/"
     "current_yes_core_carry_model_v2.json"
 )
-OBS_HISTORY = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/output/observations/observations.jsonl"
-)
-FORECAST_LATEST = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json"
-)
-SNAPSHOT_DIR = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
-)
+PRODUCTION_SPEC = load_production_spec()
+OBS_HISTORY = PRODUCTION_SPEC.data_feed_output_root() / "observations/observations.jsonl"
+FORECAST_LATEST = PRODUCTION_SPEC.forecast_enrichment_root() / "latest.json"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 WELLINGTON_DECISION_SNAPSHOT = (
     SNAPSHOT_DIR / "snapshot_20260729_1756.json"
 )

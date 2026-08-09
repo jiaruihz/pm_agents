@@ -44,6 +44,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/tmax_single_snapshot_lineage_replay_v2"
@@ -53,12 +54,7 @@ DB_PATH = ROOT / "runtime/weather.db"
 OLD_FULL_POLICY = ROOT / "docs/analysis/2026-07/generated/tmax_lineage_repair_replay_v1/policy_replay_rows.csv"
 OLD_COHERENT_POLICY = ROOT / "docs/analysis/2026-07/generated/tmax_coherent_expression_calibrator_v1/policy_rows.csv"
 
-# Later roots take precedence when the same captured timestamp exists.
-SNAPSHOT_ROOTS = [
-    ROOT / "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots",
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
-    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
-]
+SNAPSHOT_ROOTS = [historical_strategy_snapshots()]
 
 FORWARD_START = "2026-06-21"
 FEE_RATE = 0.05
