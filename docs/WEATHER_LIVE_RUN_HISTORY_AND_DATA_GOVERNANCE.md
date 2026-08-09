@@ -1302,7 +1302,44 @@ the global file and `2026-08-09/observations.jsonl`; every row carries build
 pre/post missing session was the expected completion of bounded one-shot
 `weather_canonical_refresh`, explicitly allowed in the comparison.
 
-## 19. Immediate Follow-Up Work
+## 19. 2026-08-09 Health Identity, Proxy Consumer And Loaded-SHA Convergence
+
+Production health had two blind/misclassified states. First, a fresh
+`observations/latest.json` could hide a stopped append-only history writer.
+Health now requires the latest global history batch to be fresh, carry the
+producer/build/clock/stable-id contract, match the cache identity set, and
+match the UTC daily shard. The first production check after deployment passed
+all three surfaces with 41 rows, 41 unique history ids and zero parse errors.
+
+Second, two Seoul `fast_source_prev_no_trial_v1` fills at 06:19 and 06:20 UTC
+shared the same city/date/token/policy but had different `event_key`,
+`execution_key` and exchange order id. They consumed 5 shares each against a
+10-share market cap with zero cap violation. The old coarse health key treated
+the second row as a duplicate and made the whole feed health critical. Health
+now deduplicates current risk by stable execution identity while retaining the
+conservative legacy key when an old row has no identity. This incident changed
+zero orders, fills, notional or PnL; it was one false alert over two legitimate
+fills.
+
+The Helsinki pre-cross zero-notional shadow was the only running proxy consumer
+still bound to `127.0.0.1:7890`. Its desired checkout is now the canonical
+market-books production checkout and its controller restart resolved the shared
+proxy state to `127.0.0.1:7897`. The proxy probe returned HTTP 200 and the
+running-consumer mismatch count fell from one to zero. This runner cannot place
+orders, so order/fill/notional impact is zero.
+
+Core Carry was healthy but reported loaded SHA `9bab95e4` while its clean
+registered checkout was at `0983b0d7`. The intervening changes were forecast
+owner/configuration changes, not Core Carry signal or execution changes. Before
+the guarded-live restart, the authenticated CLOB query returned zero open
+orders. Controller restart preserved the 10 taker / 5 maker shares, 15-second
+maker refresh, 10 city-days and $100 daily cap and loaded `0983b0d7`; the
+post-restart authenticated query also returned zero open orders. The final
+manifest was healthy with no findings or lost persistent sessions. Data-feed
+health is `warn` only for missing same-day state in four non-trading cities;
+all registered runtimes and the JRS context are healthy.
+
+## 20. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
