@@ -941,6 +941,39 @@ def test_observations_cache_reuses_previous_ok_row_on_fetch_failure(monkeypatch,
     assert row["cache_reused_after_fetch_error"] == "HTTP 429"
 
 
+def test_observations_additional_city_adds_coverage_without_live_eligibility(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import argparse
+    from weather_data_feed_service import observations
+
+    captured: dict = {}
+
+    def fake_configs(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(observations, "load_city_configs", fake_configs)
+    args = argparse.Namespace(
+        output=str(tmp_path / "latest.json"),
+        now_utc="2026-08-09T03:30:00+00:00",
+        include_station_diff=True,
+        cities=None,
+        additional_cities=["Seoul"],
+        timeout_sec=3.0,
+        max_workers=1,
+        include_fallback_sources=True,
+    )
+
+    cache = observations.build_cache(args)
+
+    assert captured["include_research_cities"] is True
+    assert captured["research_cities"] == {"Seoul"}
+    assert captured["only_cities"] is None
+    assert cache["summary"]["additional_cities"] == ["Seoul"]
+
+
 def test_observations_cache_keeps_running_max_monotone_across_truncated_fallback(monkeypatch, tmp_path) -> None:
     import argparse
     from weather_data_feed import build_observation_cache, write_observation_cache

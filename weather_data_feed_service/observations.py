@@ -309,9 +309,12 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
             previous_records = index_observation_cache(load_observation_cache(output))
         except Exception:
             previous_records = {}
+    additional_cities = set(getattr(args, "additional_cities", None) or [])
     configs = load_city_configs(
         include_station_diff=args.include_station_diff,
         only_cities=set(args.cities or []) or None,
+        include_research_cities=bool(additional_cities),
+        research_cities=additional_cities or None,
     )
     settings = FetchSettings(timeout_sec=args.timeout_sec, proxy_candidates=(None,))
     rows: list[dict[str, Any]] = []
@@ -347,6 +350,7 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
         "ok": ok,
         "non_ok": len(rows) - ok,
         "include_fallback_sources": bool(args.include_fallback_sources),
+        "additional_cities": sorted(additional_cities),
         "running_max_continuity_merges": sum(
             1 for row in rows if row.get("history_continuity_status") == "merged_previous_running_max"
         ),
@@ -359,6 +363,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT_PATH))
     parser.add_argument("--now-utc", default=None)
     parser.add_argument("--cities", nargs="*", default=None)
+    parser.add_argument(
+        "--additional-cities",
+        nargs="*",
+        default=None,
+        help=(
+            "Add source-resolved observation coverage without changing strategy "
+            "live eligibility"
+        ),
+    )
     parser.add_argument("--include-station-diff", action="store_true")
     parser.add_argument("--include-fallback-sources", action="store_true")
     parser.add_argument("--timeout-sec", type=float, default=3.0)
