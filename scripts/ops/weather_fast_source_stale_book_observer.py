@@ -33,6 +33,7 @@ from weather_data_feed.fast_event_source_policy import (  # noqa: E402
     market_value_from_temp_c,
 )
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict  # noqa: E402
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths, iter_jsonl_lines  # noqa: E402
 from weather_data_feed.source_policy import city_slug  # noqa: E402
 from weather_data_feed.source_event_incremental_state import (  # noqa: E402
     METAR_LIKE_SOURCES,
@@ -44,7 +45,7 @@ from src.strategies.runtime.production import load_production_spec  # noqa: E402
 PRODUCTION = load_production_spec()
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", str(PRODUCTION.data_feed_runtime_root)))
 HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
-HIGH_FREQUENCY_JSONL = RUNTIME_ROOT / "output/high_frequency_observations/high_frequency_observations.jsonl"
+HIGH_FREQUENCY_JSONL = RUNTIME_ROOT / "output/high_frequency_observations"
 SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
 PAPER_SNAPSHOT_DIR = Path(
     os.environ.get("WEATHER_STRATEGY_PAPER_SNAPSHOT_DIR", str(PRODUCTION.strategy_paper_snapshot_dir()))
@@ -611,10 +612,19 @@ def source_running_max_by_city(
     extreme_kind: str = "max",
 ) -> dict[tuple[str, str], dict[str, Any]]:
     out: dict[tuple[str, str], dict[str, Any]] = {}
-    if not path.exists():
-        return out
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
+    target_dates = {
+        target_date_for_city(city, now_utc, explicit_target_date)
+        for city in (allowed_cities or {profile.city for profile in profiles.values()})
+    }
+    paths = dated_jsonl_paths(
+        path,
+        filename="high_frequency_observations.jsonl",
+        dates=target_dates,
+        neighbor_days=1,
+        allow_missing=True,
+    )
+    if paths:
+        for line in iter_jsonl_lines(paths):
             if not line.strip():
                 continue
             row = json.loads(line)

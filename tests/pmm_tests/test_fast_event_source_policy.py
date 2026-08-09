@@ -15,6 +15,7 @@ from scripts.ops.weather_fast_source_stale_book_observer import (
     relative_market_token,
     source_market_episode_key,
     source_latest_by_city,
+    source_running_max_by_city,
     target_date_for_city,
     temperature_event_slug,
 )
@@ -199,6 +200,35 @@ def test_source_latest_prefers_configured_runway_for_same_observation_minute(tmp
     selected = rows[("Seoul", "2026-07-14")]
     assert selected["runway"] == "15R/33L"
     assert selected["temp_c"] == 29.2
+
+
+def test_source_running_extreme_reads_dated_shards_not_root_aggregate(tmp_path):
+    profiles = load_fast_event_source_profiles()
+    root = tmp_path / "high_frequency_observations"
+    shard = root / "2026-07-14" / "high_frequency_observations.jsonl"
+    shard.parent.mkdir(parents=True)
+    base = {
+        "city": "Tokyo",
+        "target_date": "2026-07-14",
+        "source": "jma_amedas",
+        "observation_time_utc": "2026-07-14T04:00:00Z",
+        "local_detect_ts_utc": "2026-07-14T04:01:00Z",
+    }
+    shard.write_text(json.dumps({**base, "temp_c": 30.5}) + "\n", encoding="utf-8")
+    (root / "high_frequency_observations.jsonl").write_text(
+        json.dumps({**base, "temp_c": 99.0}) + "\n", encoding="utf-8"
+    )
+
+    rows = source_running_max_by_city(
+        root,
+        "2026-07-14",
+        {"jma_amedas"},
+        {"Tokyo"},
+        profiles,
+        datetime(2026, 7, 14, 5, 0, tzinfo=timezone.utc),
+    )
+
+    assert rows[("Tokyo", "2026-07-14")]["temp_c"] == 30.5
 
 
 def test_market_index_does_not_collide_across_target_dates(tmp_path):

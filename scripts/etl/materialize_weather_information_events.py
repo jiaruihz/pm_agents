@@ -25,6 +25,7 @@ from weather_data_feed.information_events import (
     canonical_json_hash,
     normalized_observation_payload,
 )
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
 
 
 def _utc_now() -> str:
@@ -40,34 +41,6 @@ def _files(paths: Iterable[Path], *, allow_missing: bool) -> Iterator[Path]:
             files = sorted(path.rglob("*.jsonl"))
             if not files and not allow_missing:
                 raise FileNotFoundError(f"no JSONL files under required path: {path}")
-            yield from files
-            continue
-        if not allow_missing:
-            raise FileNotFoundError(f"required raw path does not exist: {path}")
-
-
-def _partitioned_files(
-    paths: Iterable[Path],
-    *,
-    filename: str,
-    allow_missing: bool,
-) -> Iterator[Path]:
-    """Resolve a partition family without double-reading its legacy aggregate.
-
-    An explicit file keeps the historical CLI contract.  A directory selects
-    only ``YYYY-MM-DD/<filename>`` shards; root-level compatibility aggregates
-    and sibling datasets (for example ``forecast_versions.jsonl``) are ignored.
-    """
-    for path in paths:
-        if path.is_file():
-            yield path
-            continue
-        if path.is_dir():
-            files = sorted(path.glob(f"????-??-??/{filename}"))
-            if not files and not allow_missing:
-                raise FileNotFoundError(
-                    f"no dated {filename} partitions under required path: {path}"
-                )
             yield from files
             continue
         if not allow_missing:
@@ -497,19 +470,27 @@ def main(argv: list[str] | None = None) -> int:
             (Path(value) for value in args.source_events),
             allow_missing=bool(args.allow_missing),
         ),
-        *_partitioned_files(
-            (Path(value) for value in args.high_frequency_observations),
-            filename="high_frequency_observations.jsonl",
-            allow_missing=bool(args.allow_missing),
+        *(
+            file
+            for value in args.high_frequency_observations
+            for file in dated_jsonl_paths(
+                Path(value),
+                filename="high_frequency_observations.jsonl",
+                allow_missing=bool(args.allow_missing),
+            )
         ),
         *_files(
             (Path(value) for value in args.forecast_curves),
             allow_missing=bool(args.allow_missing),
         ),
-        *_partitioned_files(
-            (Path(value) for value in args.forecast_enrichment),
-            filename="forecast_enrichment.jsonl",
-            allow_missing=bool(args.allow_missing),
+        *(
+            file
+            for value in args.forecast_enrichment
+            for file in dated_jsonl_paths(
+                Path(value),
+                filename="forecast_enrichment.jsonl",
+                allow_missing=bool(args.allow_missing),
+            )
         ),
     ]
     conn = sqlite3.connect(args.db)

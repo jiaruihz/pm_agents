@@ -5,6 +5,7 @@ import sqlite3
 
 from scripts.etl import materialize_weather_information_events as materialize
 from weather_data_feed.information_events import build_information_event
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
 
 
 def test_partitioned_files_ignore_root_aggregate_and_sibling_datasets(tmp_path):
@@ -17,8 +18,8 @@ def test_partitioned_files_ignore_root_aggregate_and_sibling_datasets(tmp_path):
     (dated / "forecast_versions.jsonl").write_text("sibling dataset\n", encoding="utf-8")
 
     assert list(
-        materialize._partitioned_files(
-            [root], filename="forecast_enrichment.jsonl", allow_missing=False
+        dated_jsonl_paths(
+            root, filename="forecast_enrichment.jsonl", allow_missing=False
         )
     ) == [shard]
 
@@ -28,8 +29,8 @@ def test_partitioned_files_preserve_explicit_file_compatibility(tmp_path):
     aggregate.write_text("{}\n", encoding="utf-8")
 
     assert list(
-        materialize._partitioned_files(
-            [aggregate],
+        dated_jsonl_paths(
+            aggregate,
             filename="high_frequency_observations.jsonl",
             allow_missing=False,
         )
