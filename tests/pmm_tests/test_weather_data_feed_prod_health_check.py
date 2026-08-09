@@ -18,6 +18,42 @@ from scripts.ops.weather_data_feed_prod_health_check import (
 from weather_data_feed.forecast_hourly_curves import build_curve_row, write_forecast_hourly_curve_capture
 
 
+def _history_rows(cache: dict, batch_id: str) -> list[dict]:
+    generated = cache["generated_at_utc"]
+    return [
+        {
+            **row,
+            "record_type": "weather_observation_cache_record",
+            "producer": "weather_data_feed_service.observations",
+            "producer_build_id": "test-build",
+            "batch_capture_id": batch_id,
+            "observation_history_id": f"{batch_id}:{index}",
+            "available_at_utc": generated,
+            "ingested_at_utc": generated,
+            "observation_cache_generated_at_utc": generated,
+        }
+        for index, row in enumerate(cache["records"])
+    ]
+
+
+def _write_observation_history(
+    history,
+    cache: dict,
+    *,
+    prefix_rows: list[dict] | None = None,
+) -> None:
+    latest_rows = _history_rows(cache, "latest-batch")
+    all_rows = [*(prefix_rows or []), *latest_rows]
+    history.write_text(
+        "".join(json.dumps(item) + "\n" for item in all_rows), encoding="utf-8"
+    )
+    day_path = history.parent / cache["generated_at_utc"][:10] / history.name
+    day_path.parent.mkdir(parents=True)
+    day_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in latest_rows), encoding="utf-8"
+    )
+
+
 def test_prod_health_check_flags_snapshot_duplicates_and_staleness(tmp_path):
     snapshot = tmp_path / "snapshot_20260619_1200.json"
     row = {
@@ -127,15 +163,17 @@ def test_prod_health_check_fails_recent_running_max_regression(tmp_path):
         "running_max_c": 31.0,
         "age_min": 5.0,
     }
-    cache.write_text(
-        json.dumps({"generated_at_utc": "2026-07-19T10:19:00Z", "records": [row]}),
-        encoding="utf-8",
+    cache_payload = {"generated_at_utc": "2026-07-19T10:19:00Z", "records": [row]}
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    earlier_cache = {
+        "generated_at_utc": "2026-07-19T10:10:00Z",
+        "records": [{**row, "running_max_c": 32.0}],
+    }
+    _write_observation_history(
+        history,
+        cache_payload,
+        prefix_rows=_history_rows(earlier_cache, "earlier-batch"),
     )
-    history_rows = [
-        {**row, "running_max_c": 32.0, "observation_cache_generated_at_utc": "2026-07-19T10:10:00Z"},
-        {**row, "observation_cache_generated_at_utc": "2026-07-19T10:19:00Z"},
-    ]
-    history.write_text("".join(json.dumps(item) + "\n" for item in history_rows), encoding="utf-8")
 
     report = check_observation_cache(
         cache,
@@ -153,9 +191,7 @@ def test_prod_health_check_fails_recent_running_max_regression(tmp_path):
 def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
     cache = tmp_path / "latest.json"
     history = tmp_path / "observations.jsonl"
-    cache.write_text(
-        json.dumps(
-            {
+    cache_payload = {
                 "generated_at_utc": "2026-07-19T10:19:00Z",
                 "records": [
                     {
@@ -169,9 +205,8 @@ def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
                     }
                 ],
             }
-        ),
-        encoding="utf-8",
-    )
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    _write_observation_history(history, cache_payload)
 
     report = check_observation_cache(
         cache,
@@ -188,9 +223,7 @@ def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
 def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
     cache = tmp_path / "latest.json"
     history = tmp_path / "observations.jsonl"
-    cache.write_text(
-        json.dumps(
-            {
+    cache_payload = {
                 "generated_at_utc": "2026-08-07T17:12:00Z",
                 "records": [
                     {
@@ -204,9 +237,8 @@ def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
                     }
                 ],
             }
-        ),
-        encoding="utf-8",
-    )
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    _write_observation_history(history, cache_payload)
 
     report = check_observation_cache(
         cache,
@@ -226,9 +258,7 @@ def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
 def test_prod_health_check_warns_during_expected_first_observation_gap(tmp_path):
     cache = tmp_path / "latest.json"
     history = tmp_path / "observations.jsonl"
-    cache.write_text(
-        json.dumps(
-            {
+    cache_payload = {
                 "generated_at_utc": "2026-07-29T05:17:00Z",
                 "records": [
                     {
@@ -241,9 +271,8 @@ def test_prod_health_check_warns_during_expected_first_observation_gap(tmp_path)
                     }
                 ],
             }
-        ),
-        encoding="utf-8",
-    )
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    _write_observation_history(history, cache_payload)
 
     report = check_observation_cache(
         cache,
@@ -256,6 +285,84 @@ def test_prod_health_check_warns_during_expected_first_observation_gap(tmp_path)
     assert report["status"] == "warn"
     assert report["invalid_record_count"] == 0
     assert report["awaiting_first_observation_cities"] == ["Chicago"]
+
+
+def test_prod_health_check_fails_when_fresh_cache_has_no_append_only_history(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache.write_text(
+        json.dumps(
+            {
+                "generated_at_utc": "2026-08-09T14:19:00Z",
+                "records": [
+                    {
+                        "city": "Seoul",
+                        "target_date": "2026-08-09",
+                        "station": "RKSI",
+                        "status": "ok",
+                        "current_temp_c": 31.0,
+                        "running_max_c": 33.0,
+                        "last_obs_utc": "2026-08-09T14:00:00Z",
+                        "age_min": 19.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=datetime(2026, 8, 9, 14, 20, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_history_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "fail"
+    assert report["history_exists"] is False
+    assert report["latest_history_batch_matches_cache"] is False
+
+
+def test_prod_health_check_fails_history_contract_or_daily_parity_drift(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache_payload = {
+        "generated_at_utc": "2026-08-09T14:19:00Z",
+        "records": [
+            {
+                "city": "Seoul",
+                "target_date": "2026-08-09",
+                "station": "RKSI",
+                "status": "ok",
+                "current_temp_c": 31.0,
+                "running_max_c": 33.0,
+                "last_obs_utc": "2026-08-09T14:00:00Z",
+                "age_min": 19.0,
+            }
+        ],
+    }
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    _write_observation_history(history, cache_payload)
+    history_rows = [json.loads(line) for line in history.read_text().splitlines()]
+    history_rows[0].pop("producer_build_id")
+    history.write_text(json.dumps(history_rows[0]) + "\n", encoding="utf-8")
+    daily = history.parent / "2026-08-09" / history.name
+    daily.write_text("", encoding="utf-8")
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=datetime(2026, 8, 9, 14, 20, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_history_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "fail"
+    assert report["history_missing_required_fields"] == {"producer_build_id": 1}
+    assert report["daily_history_parity"] is False
 
 
 def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
@@ -847,6 +954,50 @@ def test_live_order_check_allows_authorized_taker_maker_split(tmp_path):
     )
 
     assert report["effective_current_or_future_rows"] == 2
+    assert report["duplicate_current_execution_identity_count"] == 0
+    assert report["duplicate_current_strategy_city_token_count"] == 0
+
+
+def test_live_order_check_allows_distinct_source_events_to_share_market_cap(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    base = {
+        "strategy_instance": "fast_source_prev_no_trial_v1",
+        "city": "Seoul",
+        "target_date": "2026-08-09",
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "execution_policy": "fast_source_visible_depth_hot_retry_v1",
+        "child_order_role": "taker",
+        "status": "cross_candidate",
+        "actual_fill_shares": 5.0,
+        "max_shares_per_market": 10.0,
+        "exchange_order_status": "matched",
+    }
+    first = {
+        **base,
+        "event_key": "Seoul|2026-08-09|06:19",
+        "execution_key": "Seoul|2026-08-09|06:19|taker|0",
+        "order_id": "order-1",
+    }
+    second = {
+        **base,
+        "event_key": "Seoul|2026-08-09|06:20",
+        "execution_key": "Seoul|2026-08-09|06:20|taker|0",
+        "order_id": "order-2",
+    }
+    path.write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 9, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 2
     assert report["duplicate_current_strategy_city_token_count"] == 0
 
 
@@ -881,5 +1032,6 @@ def test_live_order_check_flags_current_duplicate_and_yes_no_conflict(tmp_path):
         now_utc=datetime(2026, 7, 7, tzinfo=timezone.utc),
     )
 
+    assert report["duplicate_current_execution_identity_count"] == 1
     assert report["duplicate_current_strategy_city_token_count"] == 1
     assert report["current_yes_no_conflict_count"] == 1

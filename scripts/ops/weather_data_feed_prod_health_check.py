@@ -239,6 +239,61 @@ def duplicate_examples(rows: list[dict[str, Any]], fields: tuple[str, ...], limi
     return sum(counter[key] - 1 for key in duplicate_keys), examples
 
 
+def duplicate_current_execution_examples(
+    rows: list[dict[str, Any]], limit: int = 10
+) -> tuple[int, list[dict[str, Any]]]:
+    """Find repeated execution attempts without rejecting legitimate split fills.
+
+    A strategy may intentionally consume one market cap across multiple source
+    events.  Those rows share city/token/policy but have distinct execution
+    identities.  Older rows without an execution identity keep the conservative
+    coarse-key behavior.
+    """
+
+    fields = (
+        "strategy_instance",
+        "city",
+        "target_date",
+        "token_id",
+        "signal_side",
+        "order_side",
+        "execution_policy",
+        "child_order_role",
+    )
+    keyed: list[tuple[tuple[str, ...], dict[str, Any], str, str]] = []
+    for row in rows:
+        identity_field = ""
+        identity = ""
+        for candidate in ("execution_key", "live_order_key", "event_key"):
+            value = str(row.get(candidate) or "").strip()
+            if value:
+                identity_field = candidate
+                identity = value
+                break
+        keyed.append((row_key(row, fields) + (identity_field, identity), row, identity_field, identity))
+
+    counter = Counter(key for key, _, _, _ in keyed)
+    duplicate_keys = {key for key, count in counter.items() if count > 1 and any(key)}
+    examples: list[dict[str, Any]] = []
+    for key, row, identity_field, identity in keyed:
+        if key not in duplicate_keys:
+            continue
+        examples.append(
+            {
+                "key": {
+                    **dict(zip(fields, key[: len(fields)])),
+                    "execution_identity_field": identity_field or "legacy_coarse_key",
+                    "execution_identity": identity,
+                },
+                "line_no": row.get("_line_no"),
+                "order_id": row.get("_effective_order_id"),
+            }
+        )
+        if len(examples) >= limit:
+            break
+    return sum(counter[key] - 1 for key in duplicate_keys), examples
+
+
 def check_snapshot_duplicates(snapshot_path: Path, *, now_utc: datetime, max_age_min: float) -> dict[str, Any]:
     payload = load_snapshot(snapshot_path)
     rows = [row for row in payload.get("records", []) if isinstance(row, dict)]
@@ -507,6 +562,7 @@ def check_observation_cache(
     history_path: Path,
     now_utc: datetime,
     max_cache_age_min: float,
+    max_history_age_min: float | None = None,
     max_observation_age_min: float,
     required_cities: set[str] | None = None,
     history_window_min: float = 30.0,
@@ -579,10 +635,102 @@ def check_observation_cache(
         if valid_awaiting_first:
             awaiting_first_rows.append(city)
 
+    history_age_limit = max_cache_age_min if max_history_age_min is None else max_history_age_min
+    history_exists = history_path.is_file()
+    history_error = ""
+    try:
+        history_rows = read_jsonl_tail(history_path, history_tail_rows)
+    except OSError as exc:
+        history_rows = []
+        history_error = f"{type(exc).__name__}: {exc}"
+    history_parse_errors = [row for row in history_rows if row.get("_parse_error")]
+    valid_history_rows = [row for row in history_rows if not row.get("_parse_error")]
+    latest_history_row = valid_history_rows[-1] if valid_history_rows else {}
+    latest_batch_id = str(latest_history_row.get("batch_capture_id") or "")
+    latest_batch_rows = [
+        row for row in valid_history_rows
+        if latest_batch_id and str(row.get("batch_capture_id") or "") == latest_batch_id
+    ]
+    latest_batch_generated_raw = str(
+        latest_history_row.get("observation_cache_generated_at_utc")
+        or latest_history_row.get("ingested_at_utc")
+        or ""
+    )
+    latest_batch_generated = parse_utc(latest_batch_generated_raw)
+    history_age_min = (
+        round((now_utc - latest_batch_generated).total_seconds() / 60.0, 3)
+        if latest_batch_generated else None
+    )
+    history_required_fields = (
+        "record_type",
+        "producer",
+        "producer_build_id",
+        "batch_capture_id",
+        "observation_history_id",
+        "available_at_utc",
+        "ingested_at_utc",
+        "observation_cache_generated_at_utc",
+    )
+    history_missing_fields = Counter(
+        field
+        for row in latest_batch_rows
+        for field in history_required_fields
+        if not str(row.get(field) or "").strip()
+    )
+    latest_history_ids = [str(row.get("observation_history_id") or "") for row in latest_batch_rows]
+    duplicate_history_ids = sorted(
+        identity for identity, count in Counter(latest_history_ids).items()
+        if identity and count > 1
+    )
+    cache_identities = {
+        (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("station") or ""),
+            str(row.get("last_obs_utc") or ""),
+        )
+        for row in rows
+    }
+    history_identities = {
+        (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("station") or ""),
+            str(row.get("last_obs_utc") or ""),
+        )
+        for row in latest_batch_rows
+    }
+    latest_batch_matches_cache = bool(latest_batch_rows) and (
+        latest_batch_generated == generated
+        and len(latest_batch_rows) == len(rows)
+        and history_identities == cache_identities
+    )
+    daily_history_path = (
+        history_path.parent / latest_batch_generated.date().isoformat() / history_path.name
+        if latest_batch_generated else None
+    )
+    daily_error = ""
+    try:
+        daily_rows = (
+            read_jsonl_tail(daily_history_path, history_tail_rows)
+            if daily_history_path is not None else []
+        )
+    except OSError as exc:
+        daily_rows = []
+        daily_error = f"{type(exc).__name__}: {exc}"
+    daily_batch_rows = [
+        row for row in daily_rows
+        if not row.get("_parse_error")
+        and latest_batch_id
+        and str(row.get("batch_capture_id") or "") == latest_batch_id
+    ]
+    daily_ids = {str(row.get("observation_history_id") or "") for row in daily_batch_rows}
+    daily_parity = bool(latest_batch_rows) and daily_ids == set(latest_history_ids)
+
     recent_cutoff = now_utc.timestamp() - history_window_min * 60.0
     previous_by_station_day: dict[tuple[str, str, str], tuple[float, str]] = {}
     regressions: list[dict[str, Any]] = []
-    for row in read_jsonl_tail(history_path, history_tail_rows):
+    for row in history_rows:
         if row.get("_parse_error"):
             continue
         key = (
@@ -625,6 +773,19 @@ def check_observation_cache(
         or cache_age_min > max_cache_age_min
         or bool(blocking_invalid_rows)
         or bool(regressions)
+        or not history_exists
+        or bool(history_error)
+        or not valid_history_rows
+        or bool(history_parse_errors)
+        or not latest_batch_id
+        or history_age_min is None
+        or history_age_min < 0
+        or history_age_min > history_age_limit
+        or bool(history_missing_fields)
+        or bool(duplicate_history_ids)
+        or not latest_batch_matches_cache
+        or not daily_parity
+        or bool(daily_error)
     )
     status = (
         "fail"
@@ -639,6 +800,24 @@ def check_observation_cache(
         "path": str(path),
         "history_path": str(history_path),
         "history_tail_rows": history_tail_rows,
+        "history_exists": history_exists,
+        "history_error": history_error,
+        "history_parse_error_count": len(history_parse_errors),
+        "history_age_limit_min": history_age_limit,
+        "history_age_min": history_age_min,
+        "latest_history_batch_id": latest_batch_id,
+        "latest_history_batch_generated_at_utc": (
+            latest_batch_generated.isoformat() if latest_batch_generated else ""
+        ),
+        "latest_history_batch_row_count": len(latest_batch_rows),
+        "latest_history_batch_matches_cache": latest_batch_matches_cache,
+        "history_missing_required_fields": dict(sorted(history_missing_fields.items())),
+        "duplicate_observation_history_id_count": len(duplicate_history_ids),
+        "duplicate_observation_history_ids": duplicate_history_ids[:10],
+        "daily_history_path": str(daily_history_path) if daily_history_path else "",
+        "daily_history_error": daily_error,
+        "daily_history_batch_row_count": len(daily_batch_rows),
+        "daily_history_parity": daily_parity,
         "status": status,
         "generated_at_utc": generated.isoformat() if generated else "",
         "cache_age_min": cache_age_min,
@@ -949,18 +1128,8 @@ def check_live_orders(
         if is_effective_live_order(row, today_utc=today_utc)
         and (not row.get("_effective_order_id") or row.get("_effective_order_id") not in replaced_ids)
     ]
-    duplicate_current_intents, current_intent_examples = duplicate_examples(
-        effective_rows,
-        (
-            "strategy_instance",
-            "city",
-            "target_date",
-            "token_id",
-            "signal_side",
-            "order_side",
-            "execution_policy",
-            "child_order_role",
-        ),
+    duplicate_current_intents, current_intent_examples = duplicate_current_execution_examples(
+        effective_rows
     )
     market_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
     for row in effective_rows:
@@ -1009,6 +1178,7 @@ def check_live_orders(
         "parse_error_count": parse_errors,
         "duplicate_order_id_count": duplicate_orders,
         "duplicate_strategy_city_token_count": duplicate_intents,
+        "duplicate_current_execution_identity_count": duplicate_current_intents,
         "duplicate_current_strategy_city_token_count": duplicate_current_intents,
         "current_yes_no_conflict_count": len(conflict_examples),
         "duplicate_examples": (order_examples + intent_examples)[:10],
@@ -1071,7 +1241,10 @@ def overall_status(sections: dict[str, Any]) -> str:
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
         or live_orders.get("duplicate_order_id_count", 0) > 0
-        or live_orders.get("duplicate_current_strategy_city_token_count", 0) > 0
+        or live_orders.get(
+            "duplicate_current_execution_identity_count",
+            live_orders.get("duplicate_current_strategy_city_token_count", 0),
+        ) > 0
         or live_orders.get("current_yes_no_conflict_count", 0) > 0
     )
     if hard_fail:
@@ -1110,6 +1283,7 @@ def main() -> int:
     parser.add_argument("--max-forecast-curve-age-min", type=float, default=390.0)
     parser.add_argument("--max-fast-observation-age-min", type=float, default=3.0)
     parser.add_argument("--max-observation-cache-age-min", type=float, default=10.0)
+    parser.add_argument("--max-observation-history-age-min", type=float, default=10.0)
     parser.add_argument("--max-observation-age-min", type=float, default=120.0)
     parser.add_argument("--tail-telemetry-rows", type=int, default=5000)
     parser.add_argument("--tail-live-order-rows", type=int, default=2000)
@@ -1166,6 +1340,7 @@ def main() -> int:
             history_path=Path(args.observation_history),
             now_utc=now_utc,
             max_cache_age_min=args.max_observation_cache_age_min,
+            max_history_age_min=args.max_observation_history_age_min,
             max_observation_age_min=args.max_observation_age_min,
             required_cities=required_observation_cities,
             history_tail_rows=args.tail_observation_history_rows,
