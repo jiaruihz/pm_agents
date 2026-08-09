@@ -841,7 +841,7 @@ def evaluate_execution(
     tt=rows.taker_entry_taker_exit
     for name in ("maker_entry_taker_exit","taker_entry_maker_exit","maker_entry_maker_exit"):
         gain=rows[name]-tt
-        required=np.where(gain>0,np.clip(-tt/gain,0,1),np.nan)
+        required=np.where(gain>0,np.maximum(-tt/gain,0),np.nan)
         rows[f"{name}_break_even_fill_rate"]=required
     rows["maker_exit_unfilled_taker_unwind_pnl"]=rows.taker_entry_taker_exit
     maker_entry_cost=rows.target_yes_bid+rows.hedge_no_bid
@@ -892,10 +892,18 @@ def evaluate_execution(
         "largest_abs_city_share":float(city.taker_entry_taker_exit_pnl.abs().max()/city.taker_entry_taker_exit_pnl.abs().sum()),
     }
     status="SHADOW_READY" if tt_metric["ci_low"]>0 else "REJECTED_FOR_EXPRESSION"
+    tt_shortfall=max(0.0,-float(rows.taker_entry_taker_exit.sum()))
+    mean_pair_improvement=tt_shortfall/len(rows)
     return {
         "status":status,"funnel":funnel,"shares_per_leg":1,
         "selector":"positive predicted max-minus-min M2 rung-relative markout; first non-overlapping cross per city-date-event",
         "hold_minutes":PRIMARY_HORIZON,"metrics":metrics,"break_even_fill_rates":fill_rates,
+        "break_even_price_improvement":{
+            "joint_pair_per_expression":mean_pair_improvement,
+            "per_entry_leg_if_entry_only":mean_pair_improvement/2,
+            "per_exit_leg_if_exit_only":mean_pair_improvement/2,
+            "per_leg_if_four_leg_joint":mean_pair_improvement/4,
+        },
         "adverse_selection":adverse,"generic_ladder_maker":{"style":"conditional maker entry+taker exit","pnl_usd":generic_pnl,"fill_status":"unknown"},
         "maker_exit_fallback":{"taker_unwind_pnl_usd":float(rows.maker_exit_unfilled_taker_unwind_pnl.sum()),
                                "hold_to_settlement_pnl_usd":float(rows.maker_exit_unfilled_hold_settlement_pnl.sum())},
