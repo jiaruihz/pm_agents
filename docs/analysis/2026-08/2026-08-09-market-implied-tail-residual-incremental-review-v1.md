@@ -23,8 +23,12 @@ avg ask 4.48c，Weather taker fee 后 ROI -34.03%，target-date bootstrap CI [-4
 - shadow raw: `2026-08-07T17:43:27Z..2026-08-09T06:03:19Z`，19,470 rows / 4 target dates / 47 城；
   12,996 direct two-sided、8,019 full-ladder>=80%、11,416 有 prior-checkpoint price path。
 - shadow 的 8/08 以后尚无完整 settled forward date，因此本轮没有 untouched forward 成绩。
-- 全局 controller health 当时为 `CRITICAL`，来自 forecast collector stale 和其他 shadow 缺失/陈旧；
-  本 head 与其直接上游 `weather_market_books` 均 fresh。该告警不污染纯盘口 replay，但表示生产全链不能称为完全健康。
+- 全局 controller health 为 `CRITICAL`。06:44 UTC 的 `market_books` 批次曾 degraded（1,738 tokens 中
+  仅 238 books 成功）；06:51 下一批恢复 `status=ok`、418/418 books 成功，但只发现 19 events，另有
+  81 个 `event_unavailable` discovery failures。因此当前 fresh telemetry 仍须按 quote/event coverage 分层，
+  不能把 heartbeat 正常等同于完整 ladder universe。
+- canonical refresh 的 LaunchAgent 最后一次退出为 1：CLOB order-status 请求超时，三次 authenticated fill sync
+  未完整成功。DB route 与本轮已固定历史 build 健康，这不改变 7/11..7/28 replay 数字，但生产全链不能称为正常。
 
 ## 固定分母
 
