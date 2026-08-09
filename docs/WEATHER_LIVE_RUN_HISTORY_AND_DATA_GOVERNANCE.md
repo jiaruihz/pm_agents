@@ -1227,7 +1227,45 @@ to fail-closed loading of the canonical observation cache; production commit
 strategy books complete, zero missing trading-city weather states, fresh
 observations/books and Core Carry consumption at `2026-08-08T19:29:49Z`.
 
-## 17. Immediate Follow-Up Work
+## 17. 2026-08-07..09 Forecast Owner Interface Drift And Canonical-Ladder Bypass
+
+The forecast owner deployed at `2026-08-07T16:53:40Z` passed two arguments
+that its enrichment CLI did not implement (`--market-snapshot-dir` and
+`--include-research-cities`). Enrichment therefore failed deterministically for
+150 consecutive cycles through `2026-08-09T06:49:34Z`. At the same time the
+curve collector swallowed every non-429 HTTP/transport failure as generic
+`forecast_unavailable`, so cached coverage decayed to zero without preserving
+the provider cause. Label this interval `forecast_owner_interface_and_observability_gap`;
+do not treat it as strategy-filtered no-signal or evidence that every failure
+was a provider quota response.
+
+The last complete strategy snapshot before the downstream outage was
+`snapshot_20260809_1155.json` (`2026-08-09T03:56:22Z`). Seventeen partial
+snapshots followed. Core Carry placed 0 orders during this gap. The independent
+fast-source path placed two Seoul fills totaling `$8.20`; those orders did not
+consume forecast curves and are not attributed to this incident.
+
+Commits `14fc8848` and `21352807` restore the CLI contract and publish exact
+request failure reason/status/error plus attempted-request counts. Production
+forecast checkout commits `3185285e`/`0983b0d7` captured 100/100 city-targets
+and enrichment captured 40/40 cities without a 429. This proves the provider
+path was healthy at recovery time, not that an external quota can never recur.
+The same desired-state change removes the dormant July D1 multisource and
+distance-2 zero-notional runners from current controller ownership while
+retaining their code and dated evidence for replay.
+
+Recovery validation exposed a separate consumer bypass: `strategy-snapshot`
+loaded canonical books but still rediscovered every event through Gamma. With
+the direct Gamma path unavailable it spent 227 seconds and emitted a zero-row
+partial snapshot even though `market_books/latest.json` contained 2,068 books
+for 94 events. Commits `5009ad95` and `d9c517bc` materialize event ladders and
+the live target scope directly from canonical book identity. Production
+data-feed commits `a7760dfb`/`6316ca6f` then published
+`snapshot_20260809_1513.json`: 1,034 records, 47 cities, 94 city-targets,
+134/134 targeted books, complete forecast lineage, 0 new Core Carry orders and
+no consumer-side market request.
+
+## 18. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
