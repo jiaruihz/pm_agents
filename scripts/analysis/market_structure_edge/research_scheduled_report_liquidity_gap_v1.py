@@ -24,17 +24,24 @@ import json
 import math
 import random
 import statistics
+import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from weather_data_feed.production_paths import historical_orderbook_roots  # noqa: E402
+
+
 DEFAULT_DENSE_SOURCES = ROOT / "runtime/weather_edge_v1/remote_pm_agent/source_orderbook_timing/sources.jsonl"
 DEFAULT_DENSE_BOOKS = ROOT / "runtime/weather_edge_v1/remote_pm_agent/source_orderbook_timing/books.jsonl"
-DEFAULT_CURRENT_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
-DEFAULT_CURRENT_SOURCES = DEFAULT_CURRENT_ROOT / "output/source_events/sources.jsonl"
+DEFAULT_CURRENT_ROOT = load_production_spec().data_feed_runtime_root
+DEFAULT_CURRENT_SOURCES = load_production_spec().source_events_root() / "sources.jsonl"
 DEFAULT_OUTPUT_DIR = ROOT / "docs/analysis/2026-07/generated/scheduled_report_liquidity_gap_v1"
 
 UTC = dt.timezone.utc
@@ -517,11 +524,16 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def current_book_paths(root: Path) -> list[Path]:
     paths: list[Path] = []
-    for relative in (
-        "targeted_output/orderbook_snapshots/*/*.jsonl.gz",
-        "full_ladder_output/orderbook_snapshots/*/*.jsonl.gz",
-    ):
-        paths.extend(root.glob(relative))
+    orderbook_roots = (
+        historical_orderbook_roots()
+        if root == DEFAULT_CURRENT_ROOT
+        else (
+            root / "targeted_output" / "orderbook_snapshots",
+            root / "full_ladder_output" / "orderbook_snapshots",
+        )
+    )
+    for orderbook_root in orderbook_roots:
+        paths.extend(orderbook_root.glob("*/*.jsonl.gz"))
     return sorted(set(paths))
 
 

@@ -13,16 +13,22 @@ import csv
 import json
 import math
 import statistics
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
-
-
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_SOURCE_EVENTS = Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/source_events/sources.jsonl")
-DEFAULT_SNAPSHOT_DIR = Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+
+DEFAULT_SOURCE_EVENTS = load_production_spec().source_events_root() / "sources.jsonl"
+DEFAULT_SNAPSHOT_DIR = historical_strategy_snapshots()
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/forecast_station_error_distribution_v1"
 REPORT_PATH = ROOT / "docs/analysis/2026-06/2026-06-30-forecast-station-error-distribution-v1.md"
 SOURCE_PROFILES = ROOT / "weather_data_feed/source_profiles.json"

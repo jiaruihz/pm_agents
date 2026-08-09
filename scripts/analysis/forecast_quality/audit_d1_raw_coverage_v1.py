@@ -19,9 +19,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.market_brackets import parse_market_bracket
+from weather_data_feed.production_paths import (  # noqa: E402
+    historical_full_ladder_root,
+    historical_targeted_root,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
-RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+RUNTIME = load_production_spec().data_feed_runtime_root
 START = date(2026, 5, 5)
 END = date(2026, 8, 6)
 SNAPSHOT_RE = re.compile(r"snapshot_(\d{8})_")
@@ -391,8 +396,10 @@ def main() -> int:
     parser.add_argument("--db", type=Path, default=Path("/Volumes/jrs/pm_agents/runtime/weather.db"))
     args = parser.parse_args()
 
-    targeted = snapshot_census(RUNTIME / "targeted_output/paper_snapshots")
-    full = snapshot_census(RUNTIME / "full_ladder_output/paper_snapshots")
+    targeted_root = historical_targeted_root()
+    full_root = historical_full_ladder_root()
+    targeted = snapshot_census(targeted_root / "paper_snapshots")
+    full = snapshot_census(full_root / "paper_snapshots")
     run = run_capture_census(RUNTIME / "output/forecast_run_capture")
     target_dates = sorted(set(run["target_dates"]))
     settled = settlement_keys(args.db, target_dates)
@@ -413,14 +420,14 @@ def main() -> int:
             RUNTIME / "output/forecast_enrichment/forecast_versions.jsonl"
         ),
         "forecast_hourly_curves": curves_census(
-            RUNTIME / "targeted_output/forecast_hourly_curves"
+            targeted_root / "forecast_hourly_curves"
         ),
         "exact_run_capture": run,
         "targeted_paper_snapshots": targeted,
         "full_ladder_paper_snapshots": full,
         "orderbook_trees": {
-            "targeted": dated_tree_census(RUNTIME / "targeted_output/orderbook_snapshots"),
-            "full_ladder": dated_tree_census(RUNTIME / "full_ladder_output/orderbook_snapshots"),
+            "targeted": dated_tree_census(targeted_root / "orderbook_snapshots"),
+            "full_ladder": dated_tree_census(full_root / "orderbook_snapshots"),
         },
         "intersection": {
             "exact_run_complete_event_keys": len(run_complete),

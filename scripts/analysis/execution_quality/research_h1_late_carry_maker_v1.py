@@ -16,19 +16,22 @@ import json
 import math
 import random
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from weather_execution_module_compare import build_report
-
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_execution_module_compare import build_report  # noqa: E402
+from weather_data_feed.production_paths import historical_full_ladder_root  # noqa: E402
+
+
 DEFAULT_INSTANCE = "current_yes_heat_death_tiny_live_h1_late_carry_v1"
-DEFAULT_FULL_LADDER_DIR = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/orderbook_snapshots"
-)
+DEFAULT_FULL_LADDER_DIR = historical_full_ladder_root() / "orderbook_snapshots"
 
 
 def finite(value: Any) -> float | None:

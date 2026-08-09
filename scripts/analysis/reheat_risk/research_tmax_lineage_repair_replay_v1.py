@@ -35,6 +35,8 @@ import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: 
 from scripts.ops import tmax_distribution_edge_live_candidate_v1 as live  # noqa: E402
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
 from weather_data_feed.observation_sources.fetchers import relative_humidity_pct  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/tmax_lineage_repair_replay_v1"
@@ -42,13 +44,11 @@ REPORT_PATH = ROOT / "docs/analysis/2026-07/2026-07-10-tmax-lineage-repair-repla
 JSON_PATH = ROOT / "docs/analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.json"
 LIVE_ORDERS = ROOT / "runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1/live_orders.jsonl"
 DB_PATH = ROOT / "runtime/weather.db"
-RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
-SOURCE_EVENTS_ROOT = RUNTIME_ROOT / "output/source_events"
-FORECAST_ENRICHMENT_ROOT = RUNTIME_ROOT / "output/forecast_enrichment"
-SNAPSHOT_ROOTS = [
-    ROOT / "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots",
-    RUNTIME_ROOT / "targeted_output/paper_snapshots",
-]
+PRODUCTION_SPEC = load_production_spec()
+RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
+SOURCE_EVENTS_ROOT = PRODUCTION_SPEC.source_events_root()
+FORECAST_ENRICHMENT_ROOT = PRODUCTION_SPEC.forecast_enrichment_root()
+SNAPSHOT_ROOTS = [historical_strategy_snapshots()]
 
 MODEL_SPEC = live.MODEL_SPEC
 MODEL_METHOD = live.MODEL_METHOD

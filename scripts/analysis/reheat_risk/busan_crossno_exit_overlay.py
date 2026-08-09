@@ -11,25 +11,28 @@ import json
 import math
 from pathlib import Path
 import re
+import sys
 from typing import Any
 
 import numpy as np
 import pandas as pd
-
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_targeted_root  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+
 DEFAULT_TRADES = ROOT / (
     "docs/analysis/2026-08/generated/busan_cross_event_remaining_heat_v7/"
     "busan_expression_trades.csv"
 )
 DEFAULT_GLOB = (
-    "/Volumes/jrs/weather_data_feed_service_runtime/output/"
-    "korea_first_seen_state_v1/checkpoints/*.jsonl"
+    str(load_production_spec().data_feed_output_root())
+    + "/korea_first_seen_state_v1/checkpoints/*.jsonl"
 )
-DEFAULT_SNAPSHOT_ROOT = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/"
-    "orderbook_snapshots"
-)
+DEFAULT_SNAPSHOT_ROOT = historical_targeted_root() / "orderbook_snapshots"
 DEFAULT_OUT = ROOT / (
     "docs/analysis/2026-08/generated/busan_crossno_exit_overlay_v10"
 )

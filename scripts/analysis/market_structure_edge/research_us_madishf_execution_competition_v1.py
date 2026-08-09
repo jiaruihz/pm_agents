@@ -15,14 +15,21 @@ import json
 import math
 import sqlite3
 import statistics
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-
 ROOT = Path(__file__).resolve().parents[3]
-RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_targeted_root  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+
+RUNTIME = load_production_spec().data_feed_runtime_root
 RUNNER = RUNTIME / "output/fast_source_prev_no_trial"
 LADDER = RUNTIME / "output/source_event_ladder_repricing_shadow"
 ALIGNMENT = ROOT / "docs/analysis/2026-07/generated/us_madishf_metar_wu_alignment_v1/daily_alignment.csv"
@@ -270,7 +277,7 @@ def load_archive_snapshots(token_ids: set[str], dates: set[str]) -> dict[str, li
     for value in dates:
         day = datetime.fromisoformat(value)
         for offset in (0, 1):
-            scan_dirs.add(RUNTIME / "targeted_output/orderbook_snapshots" / (day + timedelta(days=offset)).date().isoformat())
+            scan_dirs.add(historical_targeted_root() / "orderbook_snapshots" / (day + timedelta(days=offset)).date().isoformat())
     for directory in sorted(scan_dirs):
         if not directory.exists():
             continue

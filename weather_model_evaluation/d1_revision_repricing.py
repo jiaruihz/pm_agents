@@ -37,12 +37,9 @@ from weather_data_feed.market_book_contract import classify_orderbook_clock  # n
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
-DEFAULT_CAPTURE_DIR = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture"
-)
-DEFAULT_SNAPSHOT_DIR = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/paper_snapshots"
-)
+PRODUCTION_SPEC = load_production_spec()
+DEFAULT_CAPTURE_DIR = PRODUCTION_SPEC.data_feed_output_root() / "forecast_run_capture"
+DEFAULT_SNAPSHOT_DIR = PRODUCTION_SPEC.historical_full_ladder_root() / "paper_snapshots"
 DEFAULT_OUT = (
     ROOT
     / "docs/analysis/2026-08/generated/d1_forecast_revision_market_repricing"
@@ -56,12 +53,7 @@ MARKOUT_MINUTES = (5, 10, 30, 60, 90)
 
 
 def default_snapshot_dirs() -> list[Path]:
-    spec = load_production_spec()
-    relative = spec.data_feed_runtime_root.relative_to(spec.production_storage_root)
-    roots = [
-        spec.data_feed_runtime_root / "full_ladder_output" / "paper_snapshots",
-        spec.archive_storage_root / relative / "full_ladder_output" / "paper_snapshots",
-    ]
+    roots = [load_production_spec().historical_full_ladder_root() / "paper_snapshots"]
     return list(dict.fromkeys(path for path in roots if path.exists()))
 
 

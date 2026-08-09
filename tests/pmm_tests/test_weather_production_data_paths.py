@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from src.strategies.runtime.production import load_production_spec
+from scripts.analysis.market_structure_edge.research_scheduled_report_liquidity_gap_v1 import (
+    current_book_paths,
+)
 from weather_data_feed.production_paths import (
     current_forecast_curves,
     current_strategy_snapshots,
@@ -53,6 +56,17 @@ def test_semantic_data_path_helpers_cover_current_and_history() -> None:
         spec.historical_full_ladder_root() / "orderbook_snapshots",
         spec.historical_targeted_root() / "orderbook_snapshots",
     )
+
+
+def test_historical_book_cli_override_keeps_explicit_runtime_root(tmp_path) -> None:
+    targeted = tmp_path / "targeted_output/orderbook_snapshots/2026-08-01/a.jsonl.gz"
+    full = tmp_path / "full_ladder_output/orderbook_snapshots/2026-08-01/b.jsonl.gz"
+    targeted.parent.mkdir(parents=True)
+    full.parent.mkdir(parents=True)
+    targeted.write_bytes(b"")
+    full.write_bytes(b"")
+
+    assert current_book_paths(tmp_path) == [full, targeted]
 
 
 def test_production_path_cli_uses_the_shared_loader() -> None:

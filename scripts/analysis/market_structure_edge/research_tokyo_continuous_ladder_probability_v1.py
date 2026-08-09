@@ -51,6 +51,8 @@ from scripts.analysis.market_structure_edge.research_tokyo_jma_multivariate_mark
     exact_first_seen,
     parse_ts,
 )
+from weather_data_feed.production_paths import historical_full_ladder_root  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 UTC = timezone.utc
@@ -67,16 +69,12 @@ EXACT_FIRST_SEEN = (
     / "tokyo_jma_feature_timestamp_audit_v1"
     / "tokyo_jma_exact_enriched.csv"
 )
-MARKET_STATES = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/research/"
-    "five_city_weather_microstructure/v1/"
+MARKET_STATES = load_production_spec().resolved_historical_data_feed_runtime_root() / (
+    "research/five_city_weather_microstructure/v1/"
     "snapshot=20260730T120000Z/state_rows.csv.gz"
 )
 PM_HISTORY = ROOT / "runtime/weather_edge_v1/market_data/cache/pm_history"
-RAW_BOOKS = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/"
-    "orderbook_snapshots"
-)
+RAW_BOOKS = historical_full_ladder_root() / "orderbook_snapshots"
 DEFAULT_OUT = (
     ROOT
     / "docs/analysis/2026-07/generated"

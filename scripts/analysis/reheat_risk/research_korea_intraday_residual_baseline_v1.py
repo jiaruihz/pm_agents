@@ -20,6 +20,7 @@ import math
 from pathlib import Path
 import re
 import sqlite3
+import sys
 from typing import Any, Iterable
 
 import numpy as np
@@ -29,14 +30,23 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-
-
 ROOT = Path(__file__).resolve().parents[3]
-RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from weather_data_feed.production_paths import (  # noqa: E402
+    historical_full_ladder_root,
+    historical_strategy_snapshots,
+    historical_targeted_root,
+)
+
+
+RUNTIME = load_production_spec().data_feed_runtime_root
 DEFAULT_STATE = RUNTIME / "research/korea_first_seen_state_v1_backfill/checkpoints"
-DEFAULT_BOOK = RUNTIME / "full_ladder_output/orderbook_snapshots"
-DEFAULT_TARGETED_BOOK = RUNTIME / "targeted_output/orderbook_snapshots"
-DEFAULT_PAPER_SNAPSHOTS = RUNTIME / "targeted_output/paper_snapshots"
+DEFAULT_BOOK = historical_full_ladder_root() / "orderbook_snapshots"
+DEFAULT_TARGETED_BOOK = historical_targeted_root() / "orderbook_snapshots"
+DEFAULT_PAPER_SNAPSHOTS = historical_strategy_snapshots()
 DEFAULT_ATLAS = Path(
     "/Volumes/jrs/pm_agents/research/weather_book_microstructure_atlas/v1/"
     "snapshot=20260729T161422Z/state_rows.csv.gz"

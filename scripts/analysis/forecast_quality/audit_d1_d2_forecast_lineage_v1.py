@@ -18,12 +18,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.market_brackets import parse_market_bracket
+from weather_data_feed.production_paths import (  # noqa: E402
+    historical_full_ladder_root,
+    historical_targeted_root,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
-RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+RUNTIME = load_production_spec().data_feed_runtime_root
 DEFAULT_VERSIONS = RUNTIME / "output/forecast_enrichment/forecast_versions.jsonl"
-DEFAULT_CURVES = RUNTIME / "targeted_output/forecast_hourly_curves"
-DEFAULT_LADDERS = RUNTIME / "full_ladder_output/paper_snapshots"
+DEFAULT_CURVES = historical_targeted_root() / "forecast_hourly_curves"
+DEFAULT_LADDERS = historical_full_ladder_root() / "paper_snapshots"
 DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_d2_forecast_lineage_audit_v1"
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-05-d1-d2-forecast-lineage-audit-v1.md"
 

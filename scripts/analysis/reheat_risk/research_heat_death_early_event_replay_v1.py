@@ -45,13 +45,18 @@ from weather_data_feed.weather_context import (  # noqa: E402
     warming_state,
     wind_thermal_interaction,
 )
+from weather_data_feed.production_paths import (  # noqa: E402
+    historical_strategy_snapshots,
+    historical_targeted_root,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 from weather_feature_layer.market import parse_bracket, settlement_interval  # noqa: E402
 
 
-RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
-SOURCE_EVENTS_DIR = RUNTIME_ROOT / "output" / "source_events"
-SNAPSHOT_DIR = RUNTIME_ROOT / "targeted_output" / "paper_snapshots"
-ORDERBOOK_DIR = RUNTIME_ROOT / "targeted_output" / "orderbook_snapshots"
+RUNTIME_ROOT = load_production_spec().data_feed_runtime_root
+SOURCE_EVENTS_DIR = load_production_spec().source_events_root()
+SNAPSHOT_DIR = historical_strategy_snapshots()
+ORDERBOOK_DIR = historical_targeted_root() / "orderbook_snapshots"
 DB_PATH = ROOT / "runtime" / "weather.db"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/heat_death_early_event_replay_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-v1.json"
