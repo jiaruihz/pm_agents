@@ -40,7 +40,7 @@
       "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
       "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
       "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books",
-      "forecast_curve_dir": "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves",
+      "forecast_curve_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves",
       "expression_models": ["incumbent", "challenger"],
       "artifacts": {
         "weather": {
