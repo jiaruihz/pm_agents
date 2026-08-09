@@ -141,6 +141,9 @@ def test_strategy_view_builds_market_ladder_from_canonical_book_identity(tmp_pat
     assert ladder["bracket_list"] == [("31", 0.45)]
     assert ladder["market_entries"][0]["yes_token_id"] == "yes-1"
     assert ladder["market_entries"][0]["no_token_id"] == "no-1"
+    assert paper_snapshot._extract_bracket_label(
+        ladder["market_entries"][0]["question"]
+    ) == "31"
 
 
 def test_strategy_view_rejects_stale_canonical_batch(tmp_path):

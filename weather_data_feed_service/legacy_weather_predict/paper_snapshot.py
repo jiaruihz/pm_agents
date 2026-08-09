@@ -713,12 +713,18 @@ def canonical_market_ladders_from_books(books):
             yes_price = market.get("yes_price")
             if yes_price is None or not 0.0 <= float(yes_price) <= 1.0:
                 continue
+            if bracket.endswith("+"):
+                question = f"Will the highest temperature be {bracket[:-1]}°F or higher?"
+            elif "-" in bracket:
+                question = f"Will the highest temperature be between {bracket}°F?"
+            else:
+                question = f"Will the highest temperature be {bracket}°F?"
             entries.append(
                 {
                     **market,
                     "yes_price": float(yes_price),
                     "last_trade": 0.0,
-                    "question": f"Highest temperature in {key[0]} on {key[1]}: {bracket}",
+                    "question": question,
                 }
             )
         entries.sort(
@@ -2064,10 +2070,15 @@ def main():
                     city,
                     now_utc,
                 )
+            target_markets = (
+                (canonical_ladder or {}).get("market_entries", [])
+                if external_orderbook_only
+                else markets
+            )
             if args.orderbook_scope == "strategy_live":
-                orderbook_targets = orderbook_targets_for_strategy_live(markets, unit, metar_state)
+                orderbook_targets = orderbook_targets_for_strategy_live(target_markets, unit, metar_state)
             elif args.orderbook_scope == "current_d1":
-                orderbook_targets = orderbook_targets_for_current_yes(markets, unit, metar_state)
+                orderbook_targets = orderbook_targets_for_current_yes(target_markets, unit, metar_state)
             else:
                 orderbook_targets = None
 
