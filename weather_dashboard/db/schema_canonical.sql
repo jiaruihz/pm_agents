@@ -110,7 +110,12 @@ CREATE TABLE IF NOT EXISTS plans (
     desired_shares REAL,
     sizing_mode TEXT,
     entry_price_window TEXT,
+    execution_profile TEXT,
     execution_policy TEXT NOT NULL,
+    order_lifecycle_policy TEXT,
+    child_order_role TEXT,
+    comparison_group_id TEXT,
+    maker_only INTEGER,
     limit_price REAL,
     skip_reason TEXT,
     status TEXT,
@@ -174,8 +179,81 @@ CREATE TABLE IF NOT EXISTS fills (
     filled_shares REAL NOT NULL,
     filled_price REAL NOT NULL,
     fees_usd REAL NOT NULL DEFAULT 0,
+    fee_source TEXT NOT NULL DEFAULT 'legacy_unknown',
+    fee_rate REAL,
+    fee_metadata_json TEXT,
+    transaction_hash TEXT,
     status TEXT NOT NULL CHECK (status IN ('filled','partial','cancelled','expired','simulated')),
     filled_at_utc TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- A physical CLOB order id is globally unique, while legacy migrations could
+-- derive a new execution_id when plan/config enrichment changed. Preserve the
+-- raw duplicate rows and mark the later execution as an append-only alias.
+CREATE TABLE IF NOT EXISTS order_execution_aliases (
+    alias_execution_id TEXT PRIMARY KEY REFERENCES orders(execution_id),
+    canonical_execution_id TEXT NOT NULL REFERENCES orders(execution_id),
+    physical_order_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    source_path TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    CHECK (alias_execution_id <> canonical_execution_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_execution_aliases_physical
+    ON order_execution_aliases(physical_order_id);
+
+CREATE TABLE IF NOT EXISTS fill_validity_adjustments (
+    adjustment_id TEXT PRIMARY KEY,
+    fill_id TEXT NOT NULL UNIQUE REFERENCES fills(fill_id),
+    effective_status TEXT NOT NULL CHECK (effective_status IN ('valid','excluded')),
+    reason TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    source_path TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Existing fills are immutable. Fee corrections are append-only evidence rows
+-- whose signed deltas are folded into fact_trades at build time.
+CREATE TABLE IF NOT EXISTS fill_fee_adjustments (
+    adjustment_id TEXT PRIMARY KEY,
+    fill_id TEXT NOT NULL REFERENCES fills(fill_id),
+    fee_delta_usd REAL NOT NULL,
+    fee_source TEXT NOT NULL,
+    fee_evidence_class TEXT NOT NULL CHECK (fee_evidence_class IN ('exact','estimate')),
+    transaction_hash TEXT,
+    fee_rate REAL,
+    market_fee_metadata_json TEXT,
+    evidence_json TEXT NOT NULL,
+    source_path TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Existing fills are immutable. Exact price corrections preserve the raw row
+-- and replace its price only in canonical derived facts.
+CREATE TABLE IF NOT EXISTS fill_price_adjustments (
+    adjustment_id TEXT PRIMARY KEY,
+    fill_id TEXT NOT NULL UNIQUE REFERENCES fills(fill_id),
+    corrected_filled_price REAL NOT NULL CHECK (corrected_filled_price > 0 AND corrected_filled_price <= 1),
+    price_source TEXT NOT NULL,
+    price_evidence_class TEXT NOT NULL CHECK (price_evidence_class IN ('exact','estimate')),
+    evidence_json TEXT NOT NULL,
+    source_path TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Existing fills are immutable. Timestamp corrections preserve the raw ingest
+-- timestamp and replace it only in canonical derived facts.
+CREATE TABLE IF NOT EXISTS fill_timestamp_adjustments (
+    adjustment_id TEXT PRIMARY KEY,
+    fill_id TEXT NOT NULL UNIQUE REFERENCES fills(fill_id),
+    corrected_filled_at_utc TEXT NOT NULL,
+    timestamp_source TEXT NOT NULL,
+    timestamp_evidence_class TEXT NOT NULL CHECK (timestamp_evidence_class IN ('exact','estimate')),
+    evidence_json TEXT NOT NULL,
+    source_path TEXT,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
@@ -238,6 +316,429 @@ CREATE TABLE IF NOT EXISTS weather_observation_events (
     raw_payload TEXT,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     UNIQUE(source_system, source_row_hash)
+);
+
+-- Tmax V2 keeps its point-in-time inputs separate from the legacy feature
+-- tables.  A V2 state may reference one (and only one) captured ladder; it
+-- must never be reconstructed by joining rungs from different captures.
+CREATE TABLE IF NOT EXISTS tmax_v2_ladder_snapshots (
+    ladder_snapshot_id TEXT PRIMARY KEY,
+    source_system TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_snapshot_ts_utc TEXT NOT NULL,
+    available_at_utc TEXT NOT NULL,
+    source_payload_hash TEXT NOT NULL,
+    city TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    event_slug TEXT,
+    event_identity TEXT NOT NULL,
+    market_unit TEXT,
+    settlement_source_class TEXT,
+    market_timezone TEXT,
+    market_utc_offset_seconds INTEGER,
+    market_metadata_source_json TEXT,
+    market_metadata_missing_reason TEXT,
+    absolute_ladder_signature TEXT NOT NULL,
+    rung_count INTEGER NOT NULL,
+    complete_rung_count INTEGER NOT NULL,
+    completeness_status TEXT NOT NULL CHECK (
+        completeness_status IN ('complete','incomplete','invalid')
+    ),
+    lineage_status TEXT NOT NULL CHECK (
+        lineage_status IN ('pit_verified_capture','research_only_unknown_available_at')
+    ),
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(source_payload_hash, city, target_date, event_identity)
+);
+
+CREATE TABLE IF NOT EXISTS tmax_v2_ladder_rung_quotes (
+    rung_quote_id TEXT PRIMARY KEY,
+    ladder_snapshot_id TEXT NOT NULL REFERENCES tmax_v2_ladder_snapshots(ladder_snapshot_id),
+    absolute_bracket_identity TEXT NOT NULL,
+    condition_id TEXT,
+    market_id TEXT,
+    question TEXT,
+    yes_token_id TEXT,
+    no_token_id TEXT,
+    yes_direct_bid REAL,
+    yes_direct_ask REAL,
+    yes_direct_bid_size REAL,
+    yes_direct_ask_size REAL,
+    yes_direct_depth_bid_5c REAL,
+    yes_direct_depth_ask_5c REAL,
+    yes_direct_depth_bid_10c REAL,
+    yes_direct_depth_ask_10c REAL,
+    yes_book_status TEXT,
+    yes_book_fetched_at_utc TEXT,
+    no_direct_bid REAL,
+    no_direct_ask REAL,
+    no_direct_bid_size REAL,
+    no_direct_ask_size REAL,
+    no_direct_depth_bid_5c REAL,
+    no_direct_depth_ask_5c REAL,
+    no_direct_depth_bid_10c REAL,
+    no_direct_depth_ask_10c REAL,
+    no_book_status TEXT,
+    no_book_fetched_at_utc TEXT,
+    source_record_hash TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(ladder_snapshot_id, absolute_bracket_identity)
+);
+
+CREATE TABLE IF NOT EXISTS tmax_v2_forecast_captures (
+    forecast_capture_id TEXT PRIMARY KEY,
+    source_system TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_row_hash TEXT NOT NULL,
+    snapshot_ts_utc TEXT,
+    available_at_utc TEXT,
+    city TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    forecast_source TEXT,
+    forecast_model TEXT,
+    forecast_values_hash TEXT,
+    hourly_curve_json TEXT NOT NULL,
+    normalized_hourly_curve_json TEXT,
+    forecast_run_at_utc TEXT,
+    forecast_timezone TEXT,
+    forecast_utc_offset_seconds INTEGER,
+    available_at_basis TEXT,
+    forecast_first_seen_at_utc TEXT,
+    forecast_first_seen_basis TEXT,
+    forecast_first_seen_source TEXT,
+    curve_time_lineage_status TEXT,
+    curve_time_missing_reason TEXT,
+    lineage_status TEXT NOT NULL CHECK (
+        lineage_status IN ('pit_verified_capture','research_only_unknown_available_at')
+    ),
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(source_path, source_row_hash)
+);
+
+-- This is a compatibility lineage layer over weather_observation_events.  It
+-- makes the absence of first-seen data explicit instead of treating a later
+-- archive import time as evidence that an observation was usable then.
+CREATE TABLE IF NOT EXISTS tmax_v2_observation_event_lineage (
+    tmax_v2_observation_id TEXT PRIMARY KEY,
+    source_observation_id TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    source_path TEXT,
+    city TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    obs_ts_utc TEXT NOT NULL,
+    temp_f REAL,
+    first_seen_at_utc TEXT,
+    available_at_utc TEXT,
+    source_kind TEXT NOT NULL,
+    station_id TEXT,
+    icao TEXT,
+    feed_identity TEXT,
+    identity_missing_reason TEXT,
+    lineage_status TEXT NOT NULL CHECK (
+        lineage_status IN ('pit_verified_first_seen','research_only_unknown_first_seen')
+    ),
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    -- A later native first-seen record is new evidence, not an in-place
+    -- upgrade of an archive-only record.
+    UNIQUE(source_observation_id, lineage_status, first_seen_at_utc)
+);
+
+-- Immutable upstream information-event headers. This is intentionally
+-- independent from weather_observation_events: a source-specific delivery
+-- identity can be shared by several typed payload representations, and late
+-- recovery must remain auditable without rewriting its historical clock.
+CREATE TABLE IF NOT EXISTS weather_information_events (
+    information_event_id TEXT PRIMARY KEY,
+    event_kind TEXT NOT NULL CHECK (event_kind IN ('observation', 'taf', 'forecast_curve')),
+    event_role TEXT NOT NULL CHECK (event_role IN ('new_content', 'revision')),
+    source TEXT NOT NULL,
+    city TEXT NOT NULL,
+    station_id TEXT,
+    provider_item_id TEXT,
+    content_key TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    revision_of_event_id TEXT REFERENCES weather_information_events(information_event_id),
+    source_event_ts_utc TEXT,
+    issued_at_utc TEXT,
+    valid_from_utc TEXT,
+    valid_to_utc TEXT,
+    detected_at_utc TEXT,
+    first_seen_at_utc TEXT,
+    available_at_utc TEXT,
+    ingested_at_utc TEXT NOT NULL,
+    pit_lineage_class TEXT NOT NULL CHECK (
+        pit_lineage_class IN (
+            'collector_exact',
+            'archive_known_available',
+            'late_backfill_first_seen_unknown'
+        )
+    ),
+    original_first_seen_unknown INTEGER NOT NULL CHECK (original_first_seen_unknown IN (0, 1)),
+    raw_source_path TEXT,
+    raw_row_hash TEXT,
+    CHECK (
+        (pit_lineage_class <> 'late_backfill_first_seen_unknown')
+        OR (first_seen_at_utc IS NULL AND original_first_seen_unknown = 1)
+    ),
+    UNIQUE(source, station_id, provider_item_id, content_key, payload_hash)
+);
+
+-- A checkpoint is only an index to a file-backed feature frame. The full
+-- payload stays in weather_feature_layer; trigger_event_id prevents two
+-- same-second source updates from collapsing into one city/date/time row.
+CREATE TABLE IF NOT EXISTS weather_state_checkpoints (
+    state_checkpoint_id TEXT PRIMARY KEY,
+    city TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    trigger_event_id TEXT NOT NULL REFERENCES weather_information_events(information_event_id),
+    as_of_ts_utc TEXT NOT NULL,
+    input_event_set_hash TEXT NOT NULL,
+    feature_store_frame_id TEXT,
+    feature_row_id TEXT,
+    feature_schema_version TEXT NOT NULL,
+    feature_version_manifest TEXT NOT NULL,
+    source_profile_id TEXT,
+    pit_provenance TEXT NOT NULL,
+    checkpoint_status TEXT NOT NULL CHECK (
+        checkpoint_status IN (
+            'built',
+            'blocked_missing_required_identity',
+            'blocked_no_target_date_scope',
+            'build_error'
+        )
+    ),
+    checkpoint_blocker TEXT,
+    created_at_utc TEXT NOT NULL,
+    UNIQUE(
+        city, target_date, trigger_event_id, as_of_ts_utc,
+        feature_schema_version, feature_version_manifest, input_event_set_hash
+    )
+);
+
+-- Existing v15 facts are immutable. These additive metadata rows backfill
+-- their newly introduced lineage columns without updating the original row.
+CREATE TABLE IF NOT EXISTS tmax_v2_ladder_snapshot_metadata (
+    metadata_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    ladder_metadata_id TEXT NOT NULL UNIQUE,
+    ladder_snapshot_id TEXT NOT NULL REFERENCES tmax_v2_ladder_snapshots(ladder_snapshot_id),
+    metadata_fingerprint TEXT NOT NULL,
+    market_unit TEXT,
+    settlement_source_class TEXT,
+    market_timezone TEXT,
+    market_utc_offset_seconds INTEGER,
+    market_metadata_source_json TEXT,
+    market_metadata_missing_reason TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(ladder_snapshot_id, metadata_fingerprint)
+);
+
+CREATE TABLE IF NOT EXISTS tmax_v2_ladder_rung_metadata (
+    metadata_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    rung_metadata_id TEXT NOT NULL UNIQUE,
+    rung_quote_id TEXT NOT NULL REFERENCES tmax_v2_ladder_rung_quotes(rung_quote_id),
+    metadata_fingerprint TEXT NOT NULL,
+    question TEXT,
+    question_source TEXT,
+    question_missing_reason TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(rung_quote_id, metadata_fingerprint)
+);
+
+CREATE TABLE IF NOT EXISTS tmax_v2_forecast_capture_metadata (
+    metadata_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    forecast_metadata_id TEXT NOT NULL UNIQUE,
+    forecast_capture_id TEXT NOT NULL REFERENCES tmax_v2_forecast_captures(forecast_capture_id),
+    metadata_fingerprint TEXT NOT NULL,
+    normalized_hourly_curve_json TEXT,
+    forecast_timezone TEXT,
+    forecast_utc_offset_seconds INTEGER,
+    available_at_basis TEXT,
+    forecast_first_seen_at_utc TEXT,
+    forecast_first_seen_basis TEXT,
+    forecast_first_seen_source TEXT,
+    curve_time_lineage_status TEXT,
+    curve_time_missing_reason TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(forecast_capture_id, metadata_fingerprint)
+);
+
+CREATE TABLE IF NOT EXISTS tmax_v2_observation_identity_metadata (
+    metadata_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    observation_metadata_id TEXT NOT NULL UNIQUE,
+    tmax_v2_observation_id TEXT NOT NULL REFERENCES tmax_v2_observation_event_lineage(tmax_v2_observation_id),
+    metadata_fingerprint TEXT NOT NULL,
+    station_id TEXT,
+    icao TEXT,
+    feed_identity TEXT,
+    identity_missing_reason TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(tmax_v2_observation_id, metadata_fingerprint)
+);
+
+CREATE VIEW IF NOT EXISTS tmax_v2_ladder_snapshots_enriched AS
+WITH latest AS (
+    SELECT ladder_snapshot_id, MAX(metadata_seq) AS metadata_seq
+    FROM tmax_v2_ladder_snapshot_metadata
+    GROUP BY ladder_snapshot_id
+)
+SELECT
+    base.*,
+    COALESCE(metadata.market_unit, base.market_unit) AS effective_market_unit,
+    COALESCE(metadata.settlement_source_class, base.settlement_source_class) AS effective_settlement_source_class,
+    COALESCE(metadata.market_timezone, base.market_timezone) AS effective_market_timezone,
+    COALESCE(metadata.market_utc_offset_seconds, base.market_utc_offset_seconds) AS effective_market_utc_offset_seconds,
+    COALESCE(metadata.market_metadata_source_json, base.market_metadata_source_json) AS effective_market_metadata_source_json,
+    COALESCE(metadata.market_metadata_missing_reason, base.market_metadata_missing_reason) AS effective_market_metadata_missing_reason
+FROM tmax_v2_ladder_snapshots AS base
+LEFT JOIN latest ON latest.ladder_snapshot_id = base.ladder_snapshot_id
+LEFT JOIN tmax_v2_ladder_snapshot_metadata AS metadata ON metadata.metadata_seq = latest.metadata_seq;
+
+CREATE VIEW IF NOT EXISTS tmax_v2_ladder_rung_quotes_enriched AS
+WITH latest AS (
+    SELECT rung_quote_id, MAX(metadata_seq) AS metadata_seq
+    FROM tmax_v2_ladder_rung_metadata
+    GROUP BY rung_quote_id
+)
+SELECT
+    base.*,
+    COALESCE(metadata.question, base.question) AS effective_question,
+    metadata.question_source AS effective_question_source,
+    metadata.question_missing_reason AS effective_question_missing_reason
+FROM tmax_v2_ladder_rung_quotes AS base
+LEFT JOIN latest ON latest.rung_quote_id = base.rung_quote_id
+LEFT JOIN tmax_v2_ladder_rung_metadata AS metadata ON metadata.metadata_seq = latest.metadata_seq;
+
+CREATE VIEW IF NOT EXISTS tmax_v2_forecast_captures_enriched AS
+WITH latest AS (
+    SELECT forecast_capture_id, MAX(metadata_seq) AS metadata_seq
+    FROM tmax_v2_forecast_capture_metadata
+    GROUP BY forecast_capture_id
+)
+SELECT
+    base.*,
+    COALESCE(metadata.normalized_hourly_curve_json, base.normalized_hourly_curve_json) AS effective_normalized_hourly_curve_json,
+    COALESCE(metadata.forecast_timezone, base.forecast_timezone) AS effective_forecast_timezone,
+    COALESCE(metadata.forecast_utc_offset_seconds, base.forecast_utc_offset_seconds) AS effective_forecast_utc_offset_seconds,
+    COALESCE(metadata.available_at_basis, base.available_at_basis) AS effective_available_at_basis,
+    COALESCE(metadata.forecast_first_seen_at_utc, base.forecast_first_seen_at_utc) AS effective_forecast_first_seen_at_utc,
+    COALESCE(metadata.forecast_first_seen_basis, base.forecast_first_seen_basis) AS effective_forecast_first_seen_basis,
+    COALESCE(metadata.forecast_first_seen_source, base.forecast_first_seen_source) AS effective_forecast_first_seen_source,
+    COALESCE(metadata.curve_time_lineage_status, base.curve_time_lineage_status) AS effective_curve_time_lineage_status,
+    COALESCE(metadata.curve_time_missing_reason, base.curve_time_missing_reason) AS effective_curve_time_missing_reason
+FROM tmax_v2_forecast_captures AS base
+LEFT JOIN latest ON latest.forecast_capture_id = base.forecast_capture_id
+LEFT JOIN tmax_v2_forecast_capture_metadata AS metadata ON metadata.metadata_seq = latest.metadata_seq;
+
+CREATE VIEW IF NOT EXISTS tmax_v2_observation_event_lineage_enriched AS
+WITH latest AS (
+    SELECT tmax_v2_observation_id, MAX(metadata_seq) AS metadata_seq
+    FROM tmax_v2_observation_identity_metadata
+    GROUP BY tmax_v2_observation_id
+)
+SELECT
+    base.*,
+    COALESCE(metadata.station_id, base.station_id) AS effective_station_id,
+    COALESCE(metadata.icao, base.icao) AS effective_icao,
+    COALESCE(metadata.feed_identity, base.feed_identity) AS effective_feed_identity,
+    COALESCE(metadata.identity_missing_reason, base.identity_missing_reason) AS effective_identity_missing_reason
+FROM tmax_v2_observation_event_lineage AS base
+LEFT JOIN latest ON latest.tmax_v2_observation_id = base.tmax_v2_observation_id
+LEFT JOIN tmax_v2_observation_identity_metadata AS metadata ON metadata.metadata_seq = latest.metadata_seq;
+
+CREATE TABLE IF NOT EXISTS tmax_v2_canonical_states (
+    tmax_state_id TEXT PRIMARY KEY,
+    city TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    decision_ts_utc TEXT NOT NULL,
+    ladder_snapshot_id TEXT NOT NULL REFERENCES tmax_v2_ladder_snapshots(ladder_snapshot_id),
+    observation_event_id TEXT REFERENCES tmax_v2_observation_event_lineage(tmax_v2_observation_id),
+    forecast_capture_id TEXT REFERENCES tmax_v2_forecast_captures(forecast_capture_id),
+    observation_available_at_utc TEXT,
+    forecast_available_at_utc TEXT,
+    observation_lineage_status TEXT NOT NULL,
+    forecast_lineage_status TEXT NOT NULL,
+    pit_status TEXT NOT NULL CHECK (
+        pit_status IN ('pit_verified','research_only_unknown_observation_first_seen',
+                       'research_only_unknown_forecast_available_at','research_only_missing_inputs')
+    ),
+    lineage_summary_json TEXT NOT NULL DEFAULT '{}',
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(city, target_date, decision_ts_utc, ladder_snapshot_id)
+);
+
+-- v14 states remain immutable historical materializations.  A late-arriving
+-- source can still be PIT-valid for an old decision, so V2 publishes later
+-- input lineages as a new revision instead of mutating or replacing the base.
+CREATE TABLE IF NOT EXISTS tmax_v2_canonical_state_revisions (
+    state_revision_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    tmax_state_revision_id TEXT NOT NULL UNIQUE,
+    tmax_state_id TEXT NOT NULL REFERENCES tmax_v2_canonical_states(tmax_state_id),
+    lineage_fingerprint TEXT NOT NULL,
+    observation_event_id TEXT REFERENCES tmax_v2_observation_event_lineage(tmax_v2_observation_id),
+    forecast_capture_id TEXT REFERENCES tmax_v2_forecast_captures(forecast_capture_id),
+    observation_available_at_utc TEXT,
+    forecast_available_at_utc TEXT,
+    observation_lineage_status TEXT NOT NULL,
+    forecast_lineage_status TEXT NOT NULL,
+    pit_status TEXT NOT NULL CHECK (
+        pit_status IN ('pit_verified','research_only_unknown_observation_first_seen',
+                       'research_only_unknown_forecast_available_at','research_only_missing_inputs')
+    ),
+    lineage_summary_json TEXT NOT NULL DEFAULT '{}',
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(tmax_state_id, lineage_fingerprint)
+);
+
+CREATE VIEW IF NOT EXISTS tmax_v2_canonical_state_effective AS
+WITH latest_revision AS (
+    SELECT tmax_state_id, MAX(state_revision_seq) AS state_revision_seq
+    FROM tmax_v2_canonical_state_revisions
+    GROUP BY tmax_state_id
+)
+SELECT
+    base.tmax_state_id,
+    revision.tmax_state_revision_id,
+    revision.state_revision_seq,
+    base.city,
+    base.target_date,
+    base.decision_ts_utc,
+    base.ladder_snapshot_id,
+    revision.observation_event_id,
+    revision.forecast_capture_id,
+    revision.observation_available_at_utc,
+    revision.forecast_available_at_utc,
+    revision.observation_lineage_status,
+    revision.forecast_lineage_status,
+    revision.pit_status,
+    revision.lineage_summary_json,
+    revision.created_at_utc
+FROM tmax_v2_canonical_states AS base
+JOIN latest_revision ON latest_revision.tmax_state_id = base.tmax_state_id
+JOIN tmax_v2_canonical_state_revisions AS revision
+  ON revision.state_revision_seq = latest_revision.state_revision_seq
+UNION ALL
+SELECT
+    base.tmax_state_id,
+    NULL AS tmax_state_revision_id,
+    0 AS state_revision_seq,
+    base.city,
+    base.target_date,
+    base.decision_ts_utc,
+    base.ladder_snapshot_id,
+    base.observation_event_id,
+    base.forecast_capture_id,
+    base.observation_available_at_utc,
+    base.forecast_available_at_utc,
+    base.observation_lineage_status,
+    base.forecast_lineage_status,
+    base.pit_status,
+    base.lineage_summary_json,
+    base.created_at_utc
+FROM tmax_v2_canonical_states AS base
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM tmax_v2_canonical_state_revisions AS revision
+    WHERE revision.tmax_state_id = base.tmax_state_id
 );
 
 CREATE TABLE IF NOT EXISTS weather_intraday_state_rows (
@@ -313,16 +814,16 @@ CREATE TABLE IF NOT EXISTS weather_strategy_runtime_registry (
     display_name TEXT NOT NULL,
     family TEXT NOT NULL,
     lifecycle_status TEXT NOT NULL CHECK (
-        lifecycle_status IN ('live','shadow','telemetry','paper','research','stale','shelved','blocked','monitor')
+        lifecycle_status IN ('live','shadow','telemetry','paper','research','stale','shelved','blocked','monitor','pre_live','superseded-for-now','tiny_live_probe','deprecated')
     ),
     execution_mode TEXT NOT NULL CHECK (
-        execution_mode IN ('live','zero_notional_shadow','telemetry','paper','research','monitor','historical')
+        execution_mode IN ('live','zero_notional_shadow','telemetry','paper','research','monitor','historical','zero_notional_pre_live','tiny_live_split_taker_maker_probe','tiny_live','tiny_live_taker_probe')
     ),
     health_status TEXT NOT NULL CHECK (
         health_status IN ('healthy','idle','stale','blocked','shelved','unknown')
     ),
     source_layer TEXT NOT NULL CHECK (
-        source_layer IN ('runtime_local','runtime_remote_mirror','fact_trades','docs','manual')
+        source_layer IN ('runtime_local','runtime_remote_mirror','fact_trades','docs','manual','legacy_read_only')
     ),
     runtime_dir TEXT,
     summary_path TEXT,
@@ -423,6 +924,40 @@ CREATE INDEX IF NOT EXISTS idx_weather_observation_events_city_date
     ON weather_observation_events(city, target_date, obs_ts_utc);
 CREATE INDEX IF NOT EXISTS idx_weather_observation_events_icao_date
     ON weather_observation_events(icao, target_date, obs_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_fill_fee_adjustments_fill_id
+    ON fill_fee_adjustments(fill_id);
+CREATE INDEX IF NOT EXISTS idx_fill_price_adjustments_fill_id
+    ON fill_price_adjustments(fill_id);
+CREATE INDEX IF NOT EXISTS idx_fill_timestamp_adjustments_fill_id
+    ON fill_timestamp_adjustments(fill_id);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_ladder_snapshot_city_date_decision
+    ON tmax_v2_ladder_snapshots(city, target_date, source_snapshot_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_ladder_rung_snapshot
+    ON tmax_v2_ladder_rung_quotes(ladder_snapshot_id, absolute_bracket_identity);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_forecast_capture_asof
+    ON tmax_v2_forecast_captures(city, target_date, available_at_utc);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_observation_lineage_asof
+    ON tmax_v2_observation_event_lineage(city, target_date, available_at_utc, obs_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_weather_information_events_city_available
+    ON weather_information_events(city, available_at_utc, event_kind);
+CREATE INDEX IF NOT EXISTS idx_weather_information_events_content_key
+    ON weather_information_events(content_key, source, first_seen_at_utc);
+CREATE INDEX IF NOT EXISTS idx_weather_state_checkpoints_city_date_asof
+    ON weather_state_checkpoints(city, target_date, as_of_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_weather_state_checkpoints_trigger
+    ON weather_state_checkpoints(trigger_event_id);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_state_city_date_decision
+    ON tmax_v2_canonical_states(city, target_date, decision_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_state_revision_identity
+    ON tmax_v2_canonical_state_revisions(tmax_state_id, state_revision_seq DESC);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_ladder_metadata_identity
+    ON tmax_v2_ladder_snapshot_metadata(ladder_snapshot_id, metadata_seq DESC);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_rung_metadata_identity
+    ON tmax_v2_ladder_rung_metadata(rung_quote_id, metadata_seq DESC);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_forecast_metadata_identity
+    ON tmax_v2_forecast_capture_metadata(forecast_capture_id, metadata_seq DESC);
+CREATE INDEX IF NOT EXISTS idx_tmax_v2_observation_metadata_identity
+    ON tmax_v2_observation_identity_metadata(tmax_v2_observation_id, metadata_seq DESC);
 CREATE INDEX IF NOT EXISTS idx_weather_intraday_state_rows_city_date
     ON weather_intraday_state_rows(city, target_date, decision_hour_local);
 CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
@@ -652,6 +1187,42 @@ BEGIN
     SELECT RAISE(ABORT, 'fills is append-only');
 END;
 
+CREATE TRIGGER IF NOT EXISTS fill_fee_adjustments_canonical_before_update
+BEFORE UPDATE ON fill_fee_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'fill_fee_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS fill_fee_adjustments_canonical_before_delete
+BEFORE DELETE ON fill_fee_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'fill_fee_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS fill_price_adjustments_canonical_before_update
+BEFORE UPDATE ON fill_price_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'fill_price_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS fill_price_adjustments_canonical_before_delete
+BEFORE DELETE ON fill_price_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'fill_price_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS fill_timestamp_adjustments_canonical_before_update
+BEFORE UPDATE ON fill_timestamp_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'fill_timestamp_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS fill_timestamp_adjustments_canonical_before_delete
+BEFORE DELETE ON fill_timestamp_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'fill_timestamp_adjustments is append-only');
+END;
+
 CREATE TRIGGER IF NOT EXISTS settlements_canonical_before_update
 BEFORE UPDATE ON settlements
 BEGIN
@@ -686,4 +1257,107 @@ CREATE TRIGGER IF NOT EXISTS ingestion_log_canonical_before_delete
 BEFORE DELETE ON ingestion_log
 BEGIN
     SELECT RAISE(ABORT, 'ingestion_log is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_snapshots_before_update
+BEFORE UPDATE ON tmax_v2_ladder_snapshots
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_snapshots is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_snapshots_before_delete
+BEFORE DELETE ON tmax_v2_ladder_snapshots
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_snapshots is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_rung_quotes_before_update
+BEFORE UPDATE ON tmax_v2_ladder_rung_quotes
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_rung_quotes is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_rung_quotes_before_delete
+BEFORE DELETE ON tmax_v2_ladder_rung_quotes
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_rung_quotes is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_forecast_captures_before_update
+BEFORE UPDATE ON tmax_v2_forecast_captures
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_forecast_captures is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_forecast_captures_before_delete
+BEFORE DELETE ON tmax_v2_forecast_captures
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_forecast_captures is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_observation_event_lineage_before_update
+BEFORE UPDATE ON tmax_v2_observation_event_lineage
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_observation_event_lineage is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_observation_event_lineage_before_delete
+BEFORE DELETE ON tmax_v2_observation_event_lineage
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_observation_event_lineage is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_canonical_states_before_update
+BEFORE UPDATE ON tmax_v2_canonical_states
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_canonical_states is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_canonical_states_before_delete
+BEFORE DELETE ON tmax_v2_canonical_states
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_canonical_states is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tmax_v2_canonical_state_revisions_before_update
+BEFORE UPDATE ON tmax_v2_canonical_state_revisions
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_canonical_state_revisions is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_canonical_state_revisions_before_delete
+BEFORE DELETE ON tmax_v2_canonical_state_revisions
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_canonical_state_revisions is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_snapshot_metadata_before_update
+BEFORE UPDATE ON tmax_v2_ladder_snapshot_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_snapshot_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_snapshot_metadata_before_delete
+BEFORE DELETE ON tmax_v2_ladder_snapshot_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_snapshot_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_rung_metadata_before_update
+BEFORE UPDATE ON tmax_v2_ladder_rung_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_rung_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_ladder_rung_metadata_before_delete
+BEFORE DELETE ON tmax_v2_ladder_rung_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_ladder_rung_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_forecast_capture_metadata_before_update
+BEFORE UPDATE ON tmax_v2_forecast_capture_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_forecast_capture_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_forecast_capture_metadata_before_delete
+BEFORE DELETE ON tmax_v2_forecast_capture_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_forecast_capture_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_observation_identity_metadata_before_update
+BEFORE UPDATE ON tmax_v2_observation_identity_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_observation_identity_metadata is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS tmax_v2_observation_identity_metadata_before_delete
+BEFORE DELETE ON tmax_v2_observation_identity_metadata
+BEGIN
+    SELECT RAISE(ABORT, 'tmax_v2_observation_identity_metadata is append-only');
 END;

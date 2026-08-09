@@ -3,12 +3,82 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 
 from weather_dashboard.db.connection import get_conn
 from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 19
+
+
+def _create_table_sql(schema_text: str, table: str) -> str:
+    match = re.search(
+        rf"CREATE TABLE IF NOT EXISTS {re.escape(table)}\s*\(.*?\n\);",
+        schema_text,
+        flags=re.DOTALL,
+    )
+    if match is None:
+        raise RuntimeError(f"canonical schema missing CREATE TABLE for {table}")
+    return match.group(0)
+
+
+def _ensure_runtime_registry_enum_contract(
+    conn: sqlite3.Connection, schema_text: str
+) -> None:
+    """Migrate the derived runtime registry when manifest enums expand."""
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' "
+        "AND name='weather_strategy_runtime_registry'"
+    ).fetchone()
+    if row is None or all(
+        marker in str(row[0])
+        for marker in ("tiny_live_probe", "zero_notional_pre_live", "legacy_read_only")
+    ):
+        return
+
+    conn.row_factory = sqlite3.Row
+    registry_rows = [dict(item) for item in conn.execute(
+        "SELECT * FROM weather_strategy_runtime_registry"
+    )]
+    artifact_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' "
+        "AND name='weather_strategy_runtime_artifacts'"
+    ).fetchone()
+    artifact_rows = (
+        [dict(item) for item in conn.execute("SELECT * FROM weather_strategy_runtime_artifacts")]
+        if artifact_exists
+        else []
+    )
+
+    if artifact_exists:
+        conn.execute("DROP TABLE weather_strategy_runtime_artifacts")
+    conn.execute("DROP TABLE weather_strategy_runtime_registry")
+    conn.execute(_create_table_sql(schema_text, "weather_strategy_runtime_registry"))
+    if registry_rows:
+        columns = list(registry_rows[0])
+        conn.executemany(
+            f"INSERT INTO weather_strategy_runtime_registry ({','.join(columns)}) "
+            f"VALUES ({','.join(['?'] * len(columns))})",
+            [[item[column] for column in columns] for item in registry_rows],
+        )
+    conn.execute(_create_table_sql(schema_text, "weather_strategy_runtime_artifacts"))
+    if artifact_rows:
+        columns = list(artifact_rows[0])
+        conn.executemany(
+            f"INSERT INTO weather_strategy_runtime_artifacts ({','.join(columns)}) "
+            f"VALUES ({','.join(['?'] * len(columns))})",
+            [[item[column] for column in columns] for item in artifact_rows],
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_weather_runtime_status "
+        "ON weather_strategy_runtime_registry(lifecycle_status, health_status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_weather_runtime_family "
+        "ON weather_strategy_runtime_registry(family)"
+    )
 
 
 def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -104,15 +174,103 @@ def _ensure_strategy_instance_runtime_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE strategy_instance_runtime ADD COLUMN {column} {decl}")
 
 
+def _ensure_fill_fee_lineage_columns(conn: sqlite3.Connection) -> None:
+    """Add fee lineage columns without changing the shared schema-v15 boundary."""
+    if "fills" not in {
+        str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }:
+        return
+    existing = _column_names(conn, "fills")
+    additions = {
+        "fee_source": "TEXT NOT NULL DEFAULT 'legacy_unknown'",
+        "fee_rate": "REAL",
+        "fee_metadata_json": "TEXT",
+        "transaction_hash": "TEXT",
+    }
+    for column, decl in additions.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE fills ADD COLUMN {column} {decl}")
+
+
+def _ensure_execution_profile_columns(conn: sqlite3.Connection) -> None:
+    """Add normalized execution-module identity to canonical plans."""
+
+    if "plans" not in {
+        str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }:
+        return
+    existing = _column_names(conn, "plans")
+    additions = {
+        "execution_profile": "TEXT",
+        "order_lifecycle_policy": "TEXT",
+        "child_order_role": "TEXT",
+        "comparison_group_id": "TEXT",
+        "maker_only": "INTEGER",
+    }
+    for column, declaration in additions.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE plans ADD COLUMN {column} {declaration}")
+
+
+def _ensure_tmax_v2_lineage_columns(conn: sqlite3.Connection) -> None:
+    """Add V2 metadata columns while immutable v15 rows remain untouched."""
+
+    additions_by_table = {
+        "tmax_v2_ladder_snapshots": {
+            "market_unit": "TEXT",
+            "settlement_source_class": "TEXT",
+            "market_timezone": "TEXT",
+            "market_utc_offset_seconds": "INTEGER",
+            "market_metadata_source_json": "TEXT",
+            "market_metadata_missing_reason": "TEXT",
+        },
+        "tmax_v2_ladder_rung_quotes": {
+            "question": "TEXT",
+        },
+        "tmax_v2_forecast_captures": {
+            "normalized_hourly_curve_json": "TEXT",
+            "forecast_timezone": "TEXT",
+            "forecast_utc_offset_seconds": "INTEGER",
+            "available_at_basis": "TEXT",
+            "forecast_first_seen_at_utc": "TEXT",
+            "forecast_first_seen_basis": "TEXT",
+            "forecast_first_seen_source": "TEXT",
+            "curve_time_lineage_status": "TEXT",
+            "curve_time_missing_reason": "TEXT",
+        },
+        "tmax_v2_observation_event_lineage": {
+            "station_id": "TEXT",
+            "icao": "TEXT",
+            "feed_identity": "TEXT",
+            "identity_missing_reason": "TEXT",
+        },
+    }
+    existing_tables = {
+        str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    for table, additions in additions_by_table.items():
+        if table not in existing_tables:
+            continue
+        existing_columns = _column_names(conn, table)
+        for column, declaration in additions.items():
+            if column not in existing_columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+
+
 def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     """Apply the canonical weather dashboard schema."""
     schema_path = Path(__file__).parent / "schema_canonical.sql"
-    conn.executescript(schema_path.read_text(encoding="utf-8"))
+    schema_text = schema_path.read_text(encoding="utf-8")
+    conn.executescript(schema_text)
+    _ensure_runtime_registry_enum_contract(conn, schema_text)
     _ensure_order_payload_column(conn)
     _ensure_strategy_config_columns(conn)
     _ensure_strategy_def_columns(conn)
     _ensure_strategy_instance_columns(conn)
     _ensure_strategy_instance_runtime_columns(conn)
+    _ensure_fill_fee_lineage_columns(conn)
+    _ensure_execution_profile_columns(conn)
+    _ensure_tmax_v2_lineage_columns(conn)
     apply_first_seen_schema(conn)
 
     row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
@@ -122,7 +280,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "strategy catalog portfolio status and ownership lineage",
+                "canonical lineage, fee, execution, and runtime registry contracts",
             ),
         )
     conn.commit()

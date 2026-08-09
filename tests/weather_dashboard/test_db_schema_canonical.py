@@ -14,6 +14,8 @@ from weather_dashboard.db.apply_schema_canonical import (
     init_db_canonical,
 )
 from weather_dashboard.db.connection import apply_pragmas, get_conn
+from weather_dashboard.ingest.information_events import ingest_information_events
+from weather_data_feed.information_events import build_information_event
 
 
 @pytest.fixture
@@ -37,9 +39,14 @@ def test_canonical_tables_exist(tmp_db_canonical):
         "plans",
         "orders",
         "fills",
+        "fill_fee_adjustments",
+        "fill_price_adjustments",
+        "fill_timestamp_adjustments",
         "settlements",
         "settlement_outcomes",
         "weather_observation_events",
+        "weather_information_events",
+        "weather_state_checkpoints",
         "weather_intraday_state_rows",
         "run_artifacts",
         "run_alerts",
@@ -56,6 +63,99 @@ def test_canonical_tables_exist(tmp_db_canonical):
 def test_canonical_schema_version_written(tmp_db_canonical):
     row = tmp_db_canonical.execute("SELECT version, description FROM schema_version").fetchone()
     assert row["version"] == SCHEMA_VERSION
+
+
+def test_first_seen_event_and_checkpoint_schema_preserve_late_backfill_boundary(tmp_db_canonical):
+    event_id = "e" * 64
+    tmp_db_canonical.execute(
+        """
+        INSERT INTO weather_information_events (
+            information_event_id, event_kind, event_role, source, city,
+            content_key, payload_hash, ingested_at_utc, pit_lineage_class,
+            original_first_seen_unknown
+        ) VALUES (?, 'observation', 'new_content', 'aviationweather_metar', 'Atlanta',
+                  'KATL|2026-07-28T12:00:00Z', 'payload', '2026-07-28T16:00:00Z',
+                  'late_backfill_first_seen_unknown', 1)
+        """,
+        (event_id,),
+    )
+    tmp_db_canonical.execute(
+        """
+        INSERT INTO weather_state_checkpoints (
+            state_checkpoint_id, city, target_date, trigger_event_id, as_of_ts_utc,
+            input_event_set_hash, feature_schema_version, feature_version_manifest,
+            pit_provenance, checkpoint_status, created_at_utc
+        ) VALUES (?, 'Atlanta', '2026-07-28', ?, '2026-07-28T16:00:00Z',
+                  'inputs', 'feature_frame_v1', '{}', 'late_backfill_first_seen_unknown',
+                  'blocked_missing_required_identity', '2026-07-28T16:00:00Z')
+        """,
+        ("c" * 64, event_id),
+    )
+
+    assert tmp_db_canonical.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 1
+    with pytest.raises(sqlite3.IntegrityError):
+        tmp_db_canonical.execute(
+            """
+            INSERT INTO weather_information_events (
+                information_event_id, event_kind, event_role, source, city,
+                content_key, payload_hash, first_seen_at_utc, ingested_at_utc,
+                pit_lineage_class, original_first_seen_unknown
+            ) VALUES ('bad-late', 'observation', 'new_content', 'aviationweather_metar', 'Atlanta',
+                      'bad', 'payload-bad', '2026-07-28T12:00:00Z', '2026-07-28T16:00:00Z',
+                      'late_backfill_first_seen_unknown', 1)
+            """
+        )
+
+
+def test_information_event_ingest_is_append_only_for_duplicate_delivery(tmp_db_canonical):
+    first = build_information_event(
+        event_kind="observation",
+        event_role="new_content",
+        source="aviationweather",
+        city="Atlanta",
+        station_id="KATL",
+        provider_item_id="KATL-20260728-1200",
+        content_key="KATL|2026-07-28T12:00:00Z",
+        normalized_payload={"raw_metar": "METAR KATL 281200Z 00000KT 25/20"},
+        detected_at_utc="2026-07-28T12:00:03Z",
+        first_seen_at_utc="2026-07-28T12:00:03Z",
+        available_at_utc="2026-07-28T12:00:04Z",
+        pit_lineage_class="collector_exact",
+    )
+    duplicate = {**first, "detected_at_utc": "2026-07-28T12:02:03Z", "available_at_utc": "2026-07-28T12:02:04Z"}
+
+    assert ingest_information_events(tmp_db_canonical, [first]) == {"inserted": 1, "duplicates": 0}
+    assert ingest_information_events(tmp_db_canonical, [duplicate]) == {"inserted": 0, "duplicates": 1}
+    stored = tmp_db_canonical.execute("SELECT * FROM weather_information_events").fetchone()
+    assert stored["first_seen_at_utc"] == "2026-07-28T12:00:03Z"
+    assert stored["available_at_utc"] == "2026-07-28T12:00:04Z"
+
+
+def test_fill_fee_lineage_is_v15_compatible(tmp_db_canonical):
+    columns = {
+        row["name"] for row in tmp_db_canonical.execute("PRAGMA table_info(fills)")
+    }
+    assert {"fee_source", "fee_rate", "fee_metadata_json", "transaction_hash"} <= columns
+    assert max(
+        row["version"] for row in tmp_db_canonical.execute("SELECT version FROM schema_version")
+    ) >= 15
+
+
+def test_execution_profile_plan_lineage_is_v16(tmp_db_canonical):
+    columns = {
+        row["name"] for row in tmp_db_canonical.execute("PRAGMA table_info(plans)")
+    }
+    assert {
+        "execution_profile",
+        "execution_policy",
+        "order_lifecycle_policy",
+        "child_order_role",
+        "comparison_group_id",
+        "maker_only",
+    } <= columns
+    assert max(
+        row["version"] for row in tmp_db_canonical.execute("SELECT version FROM schema_version")
+    ) >= 16
 
 
 def test_canonical_schema_has_no_legacy_field_names(tmp_db_canonical):
