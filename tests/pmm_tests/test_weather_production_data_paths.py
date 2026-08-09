@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from src.strategies.runtime.production import load_production_spec
 from weather_data_feed_service import cli
 
@@ -17,6 +19,9 @@ def test_production_data_roots_are_distinct_and_canonical() -> None:
     assert spec.resolved_strategy_snapshot_root() == spec.data_feed_runtime_root / "strategy_snapshots"
     assert spec.resolved_market_ladder_snapshot_root() == spec.data_feed_runtime_root / "market_ladder_snapshots"
     assert spec.resolved_forecast_output_root() == spec.data_feed_runtime_root / "forecast"
+    assert spec.resolved_historical_paper_snapshot_root() == Path(
+        "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots"
+    )
 
 
 def test_production_path_cli_uses_the_shared_loader() -> None:
@@ -45,6 +50,7 @@ def test_archive_paths_cli_uses_the_shared_loader() -> None:
     expected = {
         "feature_store_root": "/Volumes/jrs/pm_agents/runtime/weather_feature_store",
         "archive_storage_root": "/Volumes/jrs-archive",
+        "historical_paper_snapshot_root": "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots",
         "research_artifact_root": "/Volumes/jrs-archive/pm_agents/research/artifact_store",
     }
     for name, path in expected.items():
@@ -56,6 +62,33 @@ def test_archive_paths_cli_uses_the_shared_loader() -> None:
             text=True,
         )
         assert result.stdout.strip() == path
+
+
+@pytest.mark.parametrize(
+    "outside_root",
+    [
+        "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots",
+        "/Volumes/jrs-archive/../jrs/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots",
+    ],
+)
+def test_historical_snapshot_root_cannot_escape_archive_storage(
+    tmp_path, outside_root
+) -> None:
+    source = ROOT / "src/strategies/runtime/production.yaml"
+    invalid = tmp_path / "production.yaml"
+    invalid.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots",
+            outside_root,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="historical_paper_snapshot_root must live under archive_storage_root",
+    ):
+        load_production_spec(invalid)
 
 
 def test_managed_runtime_artifacts_stay_on_contract_storage() -> None:

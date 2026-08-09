@@ -73,6 +73,7 @@ class WeatherProductionSpec:
     production_storage_volume_uuid: str | None = None
     archive_storage_root: Path = Path("/Volumes/jrs-archive")
     archive_storage_volume_uuid: str | None = None
+    historical_paper_snapshot_root: Path | None = None
     canonical_refresh_checkout_root: Path | None = None
     research_artifact_root: Path = Path(
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"
@@ -97,6 +98,12 @@ class WeatherProductionSpec:
 
     def forecast_hourly_curve_dir(self) -> Path:
         return self.resolved_forecast_output_root() / "forecast_hourly_curves"
+
+    def resolved_historical_paper_snapshot_root(self) -> Path:
+        return self.historical_paper_snapshot_root or (
+            self.archive_storage_root
+            / "pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots"
+        )
 
     def observation_cache_path(self) -> Path:
         return self.data_feed_runtime_root / "output/observations/latest.json"
@@ -257,6 +264,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             if raw.get("archive_storage_volume_uuid")
             else None
         ),
+        historical_paper_snapshot_root=(
+            Path(raw["historical_paper_snapshot_root"])
+            if raw.get("historical_paper_snapshot_root")
+            else None
+        ),
         canonical_refresh_checkout_root=(
             Path(raw["canonical_refresh_checkout_root"])
             if raw.get("canonical_refresh_checkout_root")
@@ -276,6 +288,16 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("archive_storage_root must be absolute")
     if spec.production_storage_root == spec.archive_storage_root:
         raise ValueError("production and archive storage roots must differ")
+    historical_snapshot_root = spec.resolved_historical_paper_snapshot_root()
+    resolved_archive_root = spec.archive_storage_root.resolve(strict=False)
+    resolved_historical_snapshot_root = historical_snapshot_root.resolve(strict=False)
+    if (
+        not historical_snapshot_root.is_absolute()
+        or not resolved_historical_snapshot_root.is_relative_to(resolved_archive_root)
+    ):
+        raise ValueError(
+            "historical_paper_snapshot_root must live under archive_storage_root"
+        )
     if not spec.canonical_db_path.is_relative_to(spec.production_storage_root):
         raise ValueError("canonical_db_path must live under production_storage_root")
     if not spec.data_feed_runtime_root.is_relative_to(spec.production_storage_root):
