@@ -170,7 +170,8 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
         "coverage_ratio": round(coverage_ratio, 6),
         "failed_count": len(failed),
         "failed_examples": failed[:20],
-        "request_attempt_count": sum(1 for item in request_failures if item.get("attempted")),
+        "request_attempt_count": len(rows)
+        + sum(1 for item in request_failures if item.get("attempted")),
         "request_failure_count": len(request_failures),
         "request_failure_counts": dict(sorted(request_failure_counts.items())),
         "request_failure_examples": request_failures[:20],
