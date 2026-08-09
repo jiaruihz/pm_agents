@@ -72,3 +72,16 @@ def bracket_contains(parsed: dict[str, Any] | MarketBracket, value: float) -> bo
     if parsed.get("top"):
         return low is not None and value >= float(low)
     return low is not None and high is not None and float(low) <= value <= float(high)
+
+
+def bracket_center(value: Any) -> float:
+    """Return the numeric center used to order exact/range/open-tail rungs."""
+
+    parsed = parse_market_bracket(str(value))
+    if parsed is None:
+        return float("nan")
+    if parsed.low is None:
+        return float(parsed.high) if parsed.high is not None else float("nan")
+    if parsed.high is None:
+        return float(parsed.low)
+    return (float(parsed.low) + float(parsed.high)) / 2.0

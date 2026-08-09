@@ -13,6 +13,7 @@ import math
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import gc
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -31,10 +32,16 @@ from scripts.analysis.market_structure_edge.market_ladder_kink_v1 import (
     bracket_center,
     lifecycle_label,
 )
+from weather_data_feed.ladder_snapshot_history import (
+    history_cache_dates,
+    load_history_cache_date,
+    materialize_history_cache,
+)
 
 
 SCHEMA_VERSION = "ladder_mass_transport_v1"
-RUN_ID = "ladder_mass_transport_20260809"
+RUN_ID = "ladder_mass_transport_time_aligned_20260809"
+TRAIN_START, TRAIN_END = "2026-05-19", "2026-07-10"
 DEV_START, DEV_END = "2026-07-11", "2026-07-21"
 VALIDATION_START, VALIDATION_END = "2026-07-22", "2026-07-28"
 FORWARD_START, FORWARD_END = "2026-08-11", "2026-08-17"
@@ -80,7 +87,37 @@ FEATURE_BLOCKS = {
     "M3_weather_response_lag": M3,
     "static_kink_control": STATIC_KINK,
 }
-CATEGORICAL = ("city", "lifecycle")
+CATEGORICAL = ("city", "lifecycle", "snapshot_source")
+
+
+def _compact_panel_columns() -> list[str]:
+    columns = [
+        "ladder_snapshot_id", "feature_book_snapshot_id",
+        "future_evaluation_snapshot_id", "city", "target_date",
+        "event_identity", "snapshot_ts", "snapshot_source", "source_path",
+        "market_unit", "bracket", "condition_id", "bracket_center",
+        "yes_direct", "no_direct", "yes_bid", "yes_ask", "yes_mid",
+        "yes_bid_size", "yes_ask_size", "yes_depth_bid_5c",
+        "yes_depth_ask_5c", "no_bid", "no_ask", "no_bid_size",
+        "no_ask_size", "forecast_capture_id", "forecast_values_hash",
+        "forecast_event_ts", "observation_event_ts", "win",
+    ]
+    columns.extend(CATEGORICAL)
+    for block in FEATURE_BLOCKS.values():
+        columns.extend(block)
+    for horizon in HORIZONS:
+        columns.extend(
+            [
+                f"h{horizon}_snapshot_id", f"h{horizon}_mid_move",
+                f"h{horizon}_common_move", f"h{horizon}_relative_markout",
+                f"h{horizon}_direction", f"h{horizon}_yes_bid",
+                f"h{horizon}_yes_ask", f"h{horizon}_yes_bid_size",
+                f"h{horizon}_yes_ask_size", f"h{horizon}_no_bid",
+                f"h{horizon}_no_ask", f"h{horizon}_no_bid_size",
+                f"h{horizon}_no_ask_size",
+            ]
+        )
+    return list(dict.fromkeys(columns))
 
 
 @dataclass(frozen=True)
@@ -107,7 +144,9 @@ def _chunks(values: list[str], size: int = 800) -> Iterable[list[str]]:
         yield values[index:index + size]
 
 
-def _read_sampled_snapshots(conn: sqlite3.Connection) -> pd.DataFrame:
+def _read_sampled_snapshots(
+    conn: sqlite3.Connection, start: str, end: str
+) -> pd.DataFrame:
     return pd.read_sql_query(
         """
         WITH base AS (
@@ -123,14 +162,14 @@ def _read_sampled_snapshots(conn: sqlite3.Connection) -> pd.DataFrame:
             AND s.completeness_status='complete'
             AND s.lineage_status='pit_verified_capture'
         )
-        SELECT ladder_snapshot_id,city,target_date,event_slug,event_identity,
+        SELECT ladder_snapshot_id,source_path,city,target_date,event_slug,event_identity,
                source_snapshot_ts_utc,available_at_utc,market_unit,market_timezone,
                market_utc_offset_seconds,rung_count,absolute_ladder_signature
         FROM base WHERE sample_rank=1
         ORDER BY city,target_date,event_identity,source_snapshot_ts_utc
         """,
         conn,
-        params={"sample_seconds": SAMPLE_SECONDS, "start": DEV_START, "end": VALIDATION_END},
+        params={"sample_seconds": SAMPLE_SECONDS, "start": start, "end": end},
     )
 
 
@@ -157,7 +196,7 @@ def _read_rungs(conn: sqlite3.Connection, snapshot_ids: list[str]) -> pd.DataFra
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def _read_forecasts(conn: sqlite3.Connection) -> pd.DataFrame:
+def _read_forecasts(conn: sqlite3.Connection, start: str, end: str) -> pd.DataFrame:
     return pd.read_sql_query(
         """
         SELECT forecast_capture_id,city,target_date,forecast_model,forecast_values_hash,
@@ -168,10 +207,10 @@ def _read_forecasts(conn: sqlite3.Connection) -> pd.DataFrame:
           AND lineage_status='pit_verified_capture'
           AND effective_normalized_hourly_curve_json IS NOT NULL
         ORDER BY city,target_date,available_at_utc
-        """, conn, params=(DEV_START, VALIDATION_END))
+        """, conn, params=(start, end))
 
 
-def _read_observations(conn: sqlite3.Connection) -> pd.DataFrame:
+def _read_observations(conn: sqlite3.Connection, start: str, end: str) -> pd.DataFrame:
     return pd.read_sql_query(
         """
         SELECT tmax_v2_observation_id,city,target_date,temp_f,obs_ts_utc,
@@ -180,10 +219,10 @@ def _read_observations(conn: sqlite3.Connection) -> pd.DataFrame:
         WHERE target_date BETWEEN ? AND ?
           AND lineage_status='pit_verified_first_seen'
         ORDER BY city,target_date,available_at_utc
-        """, conn, params=(DEV_START, VALIDATION_END))
+        """, conn, params=(start, end))
 
 
-def _read_settlements(conn: sqlite3.Connection) -> pd.DataFrame:
+def _read_settlements(conn: sqlite3.Connection, start: str, end: str) -> pd.DataFrame:
     return pd.read_sql_query(
         """
         SELECT city,target_date,bracket,
@@ -192,7 +231,7 @@ def _read_settlements(conn: sqlite3.Connection) -> pd.DataFrame:
         FROM settlement_outcomes
         WHERE target_date BETWEEN ? AND ? AND settlement_status='settled'
         GROUP BY city,target_date,bracket
-        """, conn, params=(DEV_START, VALIDATION_END))
+        """, conn, params=(start, end))
 
 
 def _curve_peak(value: Any) -> float:
@@ -381,31 +420,115 @@ def _add_targets(frame: pd.DataFrame, snapshots: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def build_panel(db: Path) -> tuple[pd.DataFrame, dict[str,Any]]:
+def _fixed_from_source(
+    snapshots: pd.DataFrame,
+    rungs: pd.DataFrame,
+    settlements: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build the model panel one target date at a time to cap memory use."""
+    if snapshots.empty or rungs.empty:
+        return pd.DataFrame(columns=_compact_panel_columns())
+    snapshot_dates = snapshots.set_index("ladder_snapshot_id")["target_date"]
+    rungs = rungs.copy()
+    rungs["_target_date"] = rungs["ladder_snapshot_id"].map(snapshot_dates)
+    outputs: list[pd.DataFrame] = []
+    columns = _compact_panel_columns()
+    for target_date in sorted(snapshots["target_date"].unique()):
+        day_snapshots = snapshots[snapshots["target_date"].eq(target_date)].copy()
+        day_rungs = rungs[rungs["_target_date"].eq(target_date)].drop(columns="_target_date").copy()
+        frame = _prepare_ladder(day_snapshots, day_rungs)
+        frame = _add_weather_features(frame)
+        frame = _add_targets(frame, day_snapshots)
+        frame = frame.merge(
+            settlements[settlements["target_date"].eq(target_date)],
+            on=["city", "target_date", "bracket"],
+            how="left",
+        )
+        fixed = frame[
+            frame["yes_direct"]
+            & frame[f"h{PRIMARY_HORIZON}_relative_markout"].notna()
+        ].copy()
+        fixed["feature_book_snapshot_id"] = fixed["ladder_snapshot_id"]
+        fixed["future_evaluation_snapshot_id"] = fixed[f"h{PRIMARY_HORIZON}_snapshot_id"]
+        outputs.append(fixed.reindex(columns=columns))
+        del day_snapshots, day_rungs, frame, fixed
+        gc.collect()
+    return pd.concat(outputs, ignore_index=True) if outputs else pd.DataFrame(columns=columns)
+
+
+def build_panel(
+    db: Path,
+    history_snapshot_dir: Path,
+    history_cache_path: Path,
+    *,
+    history_workers: int = 8,
+) -> tuple[pd.DataFrame, dict[str,Any]]:
     conn=_connect(db)
     try:
-        snapshots=_read_sampled_snapshots(conn)
-        snapshots["snapshot_ts"]=pd.to_datetime(snapshots["source_snapshot_ts_utc"],utc=True)
-        forecasts=_read_forecasts(conn); observations=_read_observations(conn)
-        snapshots=_asof_weather(snapshots,forecasts,observations)
-        rungs=_read_rungs(conn,snapshots["ladder_snapshot_id"].tolist())
-        settlements=_read_settlements(conn)
+        canonical_snapshots=_read_sampled_snapshots(conn,DEV_START,VALIDATION_END)
+        canonical_snapshots["snapshot_ts"]=pd.to_datetime(canonical_snapshots["source_snapshot_ts_utc"],utc=True)
+        forecasts=_read_forecasts(conn,DEV_START,VALIDATION_END)
+        observations=_read_observations(conn,DEV_START,VALIDATION_END)
+        canonical_snapshots=_asof_weather(canonical_snapshots,forecasts,observations)
+        canonical_snapshots["snapshot_source"]="tmax_v2_canonical"
+        canonical_rungs=_read_rungs(conn,canonical_snapshots["ladder_snapshot_id"].tolist())
+        settlements=_read_settlements(conn,TRAIN_START,VALIDATION_END)
     finally: conn.close()
-    frame=_prepare_ladder(snapshots,rungs)
-    frame=_add_weather_features(frame)
-    frame=_add_targets(frame,snapshots)
-    frame=frame.merge(settlements,on=["city","target_date","bracket"],how="left")
-    fixed=frame[frame["yes_direct"] & frame[f"h{PRIMARY_HORIZON}_relative_markout"].notna()].copy()
-    fixed["feature_book_snapshot_id"]=fixed["ladder_snapshot_id"]
-    fixed["future_evaluation_snapshot_id"]=fixed[f"h{PRIMARY_HORIZON}_snapshot_id"]
+
+    history_coverage=materialize_history_cache(
+        history_snapshot_dir, TRAIN_START, TRAIN_END, history_cache_path,
+        sample_seconds=SAMPLE_SECONDS,
+        workers=history_workers,
+    )
+    history_dates=history_cache_dates(history_cache_path)
+    if not history_dates:
+        raise ValueError("historical immutable paper snapshot adapter produced no ladders")
+    historical_outputs=[]
+    historical_sampled_snapshots=0
+    historical_sampled_rungs=0
+    historical_cities:set[str]=set()
+    for target_date in history_dates:
+        day_snapshots,day_rungs=load_history_cache_date(
+            history_cache_path,target_date,sample_seconds=SAMPLE_SECONDS
+        )
+        historical_sampled_snapshots+=day_snapshots.ladder_snapshot_id.nunique()
+        historical_sampled_rungs+=len(day_rungs)
+        historical_cities.update(day_snapshots.city.dropna().astype(str))
+        historical_outputs.append(_fixed_from_source(day_snapshots,day_rungs,settlements))
+        del day_snapshots,day_rungs
+        gc.collect()
+    historical_fixed=pd.concat(historical_outputs,ignore_index=True)
+    canonical_fixed = _fixed_from_source(
+        canonical_snapshots, canonical_rungs, settlements
+    )
+    fixed = pd.concat([historical_fixed, canonical_fixed], ignore_index=True)
     coverage={
-        "raw_sampled_snapshots":int(snapshots.ladder_snapshot_id.nunique()),
-        "raw_dates":int(snapshots.target_date.nunique()),"raw_cities":int(snapshots.city.nunique()),
-        "raw_rungs":int(len(frame)),"fixed_rows":int(len(fixed)),
+        "raw_sampled_snapshots":int(historical_sampled_snapshots+canonical_snapshots.ladder_snapshot_id.nunique()),
+        "raw_dates":len(set(history_dates)|set(canonical_snapshots.target_date.dropna().astype(str))),
+        "raw_cities":len(historical_cities|set(canonical_snapshots.city.dropna().astype(str))),
+        "raw_rungs":int(historical_sampled_rungs+len(canonical_rungs)),"fixed_rows":int(len(fixed)),
         "fixed_snapshots":int(fixed.ladder_snapshot_id.nunique()),"fixed_dates":int(fixed.target_date.nunique()),
         "fixed_cities":int(fixed.city.nunique()),"missing_forecast_rows":int(fixed.forecast_peak_f.isna().sum()),
         "missing_observation_rows":int(fixed.observed_max_f.isna().sum()),
         "missing_settlement_rows":int(fixed.win.isna().sum()),
+        "denominator_scope":{
+            "historical_training":[TRAIN_START,TRAIN_END],
+            "development_model_selection":[DEV_START,DEV_END],
+            "frozen_historical_validation":[VALIDATION_START,VALIDATION_END],
+            "historical_source":"immutable archived paper snapshots",
+            "development_validation_source":"canonical tmax_v2 ladder snapshots/rung quotes",
+        },
+        "historical_snapshot_census":history_coverage,
+        "fixed_rows_by_source":{
+            str(key):int(value)
+            for key,value in fixed.groupby("snapshot_source").size().items()
+        },
+        "fixed_snapshots_by_source":{
+            str(key):int(value)
+            for key,value in fixed.groupby("snapshot_source")["ladder_snapshot_id"].nunique().items()
+        },
+        "legacy_forecast_clock":"snapshot-first-seen interval-censored; pre-hash snapshots use forecast max/model-init/source proxy",
+        "legacy_observation_clock":"first snapshot carrying a new METAR observation timestamp; no later observation backfill",
         "m4_status":"blocked_no_historical_ws_materializer_rest_parity_or_trade_prints",
         "m4_raw_policy_window":"2026-08-08 onward; outside development/validation",
     }
@@ -438,12 +561,18 @@ def development_oof(rows:pd.DataFrame)->pd.DataFrame:
     dev=rows[rows.target_date.between(DEV_START,DEV_END)].copy(); dates=sorted(dev.target_date.unique()); outputs=[]
     for block in FEATURE_BLOCKS:
         for alpha in RIDGE_ALPHAS:
-            for horizon in HORIZONS:
+            # Model/block selection is registered on the primary 60m head.
+            # The 30m secondary head is fit only after the choice is frozen.
+            for horizon in (PRIMARY_HORIZON,):
                 label=f"h{horizon}_relative_markout"
-                for index,date in enumerate(dates):
-                    train_dates=dates[:index]
-                    if len(train_dates)<MIN_OOF_TRAIN_DATES: continue
-                    train=dev[dev.target_date.isin(train_dates)&dev[label].notna()]; test=dev[(dev.target_date==date)&dev[label].notna()]
+                for date in dates:
+                    train=rows[
+                        rows.target_date.between(TRAIN_START,DEV_END)
+                        & rows.target_date.lt(date)
+                        & rows[label].notna()
+                    ]
+                    if train.target_date.nunique()<MIN_OOF_TRAIN_DATES: continue
+                    test=dev[(dev.target_date==date)&dev[label].notna()]
                     if test.empty: continue
                     _,pred=_fit_predict(train,test,block,alpha,label)
                     part=test[["target_date","city","ladder_snapshot_id","condition_id",label]].copy(); part["prediction"]=pred; part["block"]=block; part["alpha"]=alpha; part["horizon"]=horizon; outputs.append(part)
@@ -472,11 +601,11 @@ def _normalized_settlement_probability(rows:pd.DataFrame,raw:np.ndarray)->np.nda
 
 
 def frozen_validation(rows:pd.DataFrame,choice:FrozenChoice,draws:int,seed:int)->tuple[pd.DataFrame,pd.DataFrame,pd.DataFrame,dict[str,Pipeline]]:
-    dev=rows[rows.target_date.between(DEV_START,DEV_END)].copy(); val=rows[rows.target_date.between(VALIDATION_START,VALIDATION_END)].copy(); outputs=[]; models={}
-    chosen_alpha={block:(choice.alpha if block==choice.block else float(select_development_alpha(dev,block))) for block in FEATURE_BLOCKS}
+    train_pool=rows[rows.target_date.between(TRAIN_START,DEV_END)].copy(); dev=rows[rows.target_date.between(DEV_START,DEV_END)].copy(); val=rows[rows.target_date.between(VALIDATION_START,VALIDATION_END)].copy(); outputs=[]; models={}
+    chosen_alpha={block:(choice.alpha if block==choice.block else float(select_development_alpha(rows,block))) for block in FEATURE_BLOCKS}
     for block,alpha in chosen_alpha.items():
         for horizon in HORIZONS:
-            label=f"h{horizon}_relative_markout"; train=dev[dev[label].notna()]; test=val[val[label].notna()].copy(); model,pred=_fit_predict(train,test,block,alpha,label); models[f"{block}:markout:{horizon}"]=model
+            label=f"h{horizon}_relative_markout"; train=train_pool[train_pool[label].notna()]; test=val[val[label].notna()].copy(); model,pred=_fit_predict(train,test,block,alpha,label); models[f"{block}:markout:{horizon}"]=model
             part=test.copy(); part["block"]=block; part["alpha"]=alpha; part["horizon"]=horizon; part["markout_prediction"]=pred
             direction=f"h{horizon}_direction"; dmodel,dpred=_fit_predict(train,test,block,alpha,direction,True); part["direction_probability"]=dpred; models[f"{block}:direction:{horizon}"]=dmodel
             settled_train=train[train.win.notna()]; settled_test=test[test.win.notna()].copy(); smodel,spred=_fit_predict(settled_train,settled_test,block,alpha,"win",True); settled_test["settlement_probability"]=_normalized_settlement_probability(settled_test,spred); models[f"{block}:settlement"]=smodel
@@ -488,14 +617,20 @@ def frozen_validation(rows:pd.DataFrame,choice:FrozenChoice,draws:int,seed:int)-
     return scored,metrics,deltas,models
 
 
-def select_development_alpha(dev:pd.DataFrame,block:str)->float:
+def select_development_alpha(rows:pd.DataFrame,block:str)->float:
     # Non-candidate controls use the same fixed alpha grid but are selected on development only.
+    dev=rows[rows.target_date.between(DEV_START,DEV_END)].copy()
     dates=sorted(dev.target_date.unique()); scores=[]; label=f"h{PRIMARY_HORIZON}_relative_markout"
     for alpha in RIDGE_ALPHAS:
         losses=[]
-        for i,date in enumerate(dates):
-            if i<MIN_OOF_TRAIN_DATES:continue
-            train=dev[dev.target_date.isin(dates[:i])&dev[label].notna()]; test=dev[(dev.target_date==date)&dev[label].notna()]
+        for date in dates:
+            train=rows[
+                rows.target_date.between(TRAIN_START,DEV_END)
+                & rows.target_date.lt(date)
+                & rows[label].notna()
+            ]
+            if train.target_date.nunique()<MIN_OOF_TRAIN_DATES:continue
+            test=dev[(dev.target_date==date)&dev[label].notna()]
             _,pred=_fit_predict(train,test,block,alpha,label); losses.extend((pred-test[label].to_numpy())**2)
         scores.append((float(np.mean(losses)),alpha))
     return min(scores)[1]
@@ -557,14 +692,343 @@ def city_and_regime_tables(scored:pd.DataFrame,candidate:str,development_rows:pd
     return city,regime
 
 
-def leave_one_city_out(rows:pd.DataFrame,choice:FrozenChoice)->pd.DataFrame:
-    dev=rows[rows.target_date.between(DEV_START,DEV_END)]; val=rows[rows.target_date.between(VALIDATION_START,VALIDATION_END)]; label=f"h{PRIMARY_HORIZON}_relative_markout"; records=[]
-    for city in sorted(val.city.unique()):
-        train=dev[(dev.city!=city)&dev[label].notna()]; test=val[(val.city==city)&val[label].notna()]
-        if test.empty:continue
-        _,cand=_fit_predict(train,test,choice.block,choice.alpha,label); _,base=_fit_predict(train,test,"M0_market_level",select_development_alpha(dev,"M0_market_level"),label)
-        records.append({"city":city,"rows":len(test),"dates":test.target_date.nunique(),"candidate_mse":float(np.mean((cand-test[label])**2)),"m0_mse":float(np.mean((base-test[label])**2)),"mse_delta":float(np.mean((cand-test[label])**2-(base-test[label])**2))})
+def leave_one_city_out(scored:pd.DataFrame,candidate:str)->pd.DataFrame:
+    """Report pooled validation sensitivity after omitting each city.
+
+    This is deliberately reporting-only: it neither reopens model selection nor
+    uses a validation city to create an allowlist.
+    """
+    label=f"h{PRIMARY_HORIZON}_relative_markout"
+    cand=scored[(scored.block==candidate)&(scored.horizon==PRIMARY_HORIZON)].copy()
+    base=scored[(scored.block=="M0_market_level")&(scored.horizon==PRIMARY_HORIZON)][
+        ["ladder_snapshot_id","condition_id","markout_prediction"]
+    ].rename(columns={"markout_prediction":"m0_prediction"})
+    paired=cand.merge(base,on=["ladder_snapshot_id","condition_id"],validate="one_to_one")
+    paired["candidate_loss"]=(paired.markout_prediction-paired[label])**2
+    paired["m0_loss"]=(paired.m0_prediction-paired[label])**2
+    records=[]
+    for city in sorted(paired.city.dropna().unique()):
+        kept=paired[paired.city!=city]
+        records.append({
+            "omitted_city":city,"rows":len(kept),"dates":kept.target_date.nunique(),
+            "candidate_mse":float(kept.groupby("target_date").candidate_loss.mean().mean()),
+            "m0_mse":float(kept.groupby("target_date").m0_loss.mean().mean()),
+            "mse_delta":float(kept.groupby("target_date").apply(
+                lambda x:(x.candidate_loss-x.m0_loss).mean(),include_groups=False
+            ).mean()),
+        })
     return pd.DataFrame(records)
+
+
+def _fee_per_share(price:pd.Series|float)->pd.Series|float:
+    return FEE_RATE*price*(1-price)
+
+
+def _execution_ci(rows:pd.DataFrame,column:str,draws:int,seed:int)->dict[str,float]:
+    daily=rows.groupby("target_date",as_index=False).agg(
+        pnl=(column,"sum"),cost=(f"{column}_cost","sum")
+    )
+    point=float(daily.pnl.sum())
+    roi=float(point/daily.cost.sum()) if daily.cost.sum()>0 else math.nan
+    if len(daily)<3:
+        return {"pnl_usd":point,"roi":roi,"ci_low":math.nan,"ci_high":math.nan}
+    rng=np.random.default_rng(seed)
+    indices=rng.integers(0,len(daily),size=(draws,len(daily)))
+    samples=daily.pnl.to_numpy()[indices].sum(axis=1)
+    low,high=np.quantile(samples,[.025,.975])
+    return {"pnl_usd":point,"roi":roi,"ci_low":float(low),"ci_high":float(high)}
+
+
+def _candidate_expressions(scored:pd.DataFrame,candidate:str)->tuple[pd.DataFrame,dict[str,int]]:
+    rows=scored[(scored.block==candidate)&(scored.horizon==PRIMARY_HORIZON)].copy()
+    records=[]
+    for snapshot_id,group in rows.groupby("ladder_snapshot_id",sort=False):
+        group=group.dropna(subset=["markout_prediction"])
+        if len(group)<2:
+            continue
+        target=group.loc[group.markout_prediction.idxmax()]
+        hedge=group.loc[group.markout_prediction.idxmin()]
+        edge=float(target.markout_prediction-hedge.markout_prediction)
+        records.append({
+            "ladder_snapshot_id":snapshot_id,"city":target.city,
+            "target_date":target.target_date,"event_identity":target.event_identity,
+            "snapshot_ts":target.snapshot_ts,"feature_book_snapshot_id":target.feature_book_snapshot_id,
+            "future_evaluation_snapshot_id":target.future_evaluation_snapshot_id,
+            "target_condition_id":target.condition_id,"hedge_condition_id":hedge.condition_id,
+            "target_bracket":target.bracket,"hedge_bracket":hedge.bracket,
+            "predicted_pair_markout":edge,
+            "target_yes_bid":target.yes_bid,"target_yes_ask":target.yes_ask,
+            "target_yes_bid_size":target.yes_bid_size,"target_yes_ask_size":target.yes_ask_size,
+            "hedge_no_bid":hedge.no_bid,"hedge_no_ask":hedge.no_ask,
+            "hedge_no_bid_size":hedge.no_bid_size,"hedge_no_ask_size":hedge.no_ask_size,
+            "future_target_yes_bid":target[f"h{PRIMARY_HORIZON}_yes_bid"],
+            "future_target_yes_ask":target[f"h{PRIMARY_HORIZON}_yes_ask"],
+            "future_target_yes_bid_size":target[f"h{PRIMARY_HORIZON}_yes_bid_size"],
+            "future_target_yes_ask_size":target[f"h{PRIMARY_HORIZON}_yes_ask_size"],
+            "future_hedge_no_bid":hedge[f"h{PRIMARY_HORIZON}_no_bid"],
+            "future_hedge_no_ask":hedge[f"h{PRIMARY_HORIZON}_no_ask"],
+            "future_hedge_no_bid_size":hedge[f"h{PRIMARY_HORIZON}_no_bid_size"],
+            "future_hedge_no_ask_size":hedge[f"h{PRIMARY_HORIZON}_no_ask_size"],
+            "target_win":target.win,"hedge_win":hedge.win,
+        })
+    expressions=pd.DataFrame(records)
+    funnel={"validation_snapshots":int(rows.ladder_snapshot_id.nunique()),"pair_constructed":len(expressions)}
+    expressions=expressions[expressions.predicted_pair_markout>0].copy()
+    funnel["positive_continuous_signal"]=len(expressions)
+    expressions["snapshot_ts"]=pd.to_datetime(expressions.snapshot_ts,utc=True)
+    selected=[]
+    for _,group in expressions.sort_values("snapshot_ts").groupby(
+        ["city","target_date","event_identity"],sort=False
+    ):
+        next_entry=pd.Timestamp.min.tz_localize("UTC")
+        for index,row in group.iterrows():
+            if row.snapshot_ts>=next_entry:
+                selected.append(index)
+                next_entry=row.snapshot_ts+pd.Timedelta(minutes=PRIMARY_HORIZON)
+    expressions=expressions.loc[selected].copy()
+    funnel["non_overlapping_first_cross"]=len(expressions)
+    quote_columns=[
+        "target_yes_bid","target_yes_ask","hedge_no_bid","hedge_no_ask",
+        "future_target_yes_bid","future_target_yes_ask",
+        "future_hedge_no_bid","future_hedge_no_ask",
+    ]
+    size_columns=[
+        "target_yes_bid_size","target_yes_ask_size","hedge_no_bid_size","hedge_no_ask_size",
+        "future_target_yes_bid_size","future_target_yes_ask_size",
+        "future_hedge_no_bid_size","future_hedge_no_ask_size",
+    ]
+    executable=expressions[expressions[quote_columns].notna().all(axis=1)].copy()
+    funnel["all_four_style_quotes"]=len(executable)
+    executable=executable[executable[size_columns].ge(1.0).all(axis=1)].copy()
+    funnel["one_share_depth_all_legs"]=len(executable)
+    return executable.reset_index(drop=True),funnel
+
+
+def evaluate_execution(
+    scored:pd.DataFrame,candidate:str,output_dir:Path,draws:int,seed:int
+)->dict[str,Any]:
+    rows,funnel=_candidate_expressions(scored,candidate)
+    if rows.empty:
+        return {"status":"REJECTED_FOR_EXPRESSION","funnel":funnel,"reason":"no_one_share_four_style_quote_rows"}
+    styles={
+        "taker_entry_taker_exit":(
+            rows.target_yes_ask,rows.hedge_no_ask,
+            rows.future_target_yes_bid,rows.future_hedge_no_bid,True,True
+        ),
+        "maker_entry_taker_exit":(
+            rows.target_yes_bid,rows.hedge_no_bid,
+            rows.future_target_yes_bid,rows.future_hedge_no_bid,False,True
+        ),
+        "taker_entry_maker_exit":(
+            rows.target_yes_ask,rows.hedge_no_ask,
+            rows.future_target_yes_ask,rows.future_hedge_no_ask,True,False
+        ),
+        "maker_entry_maker_exit":(
+            rows.target_yes_bid,rows.hedge_no_bid,
+            rows.future_target_yes_ask,rows.future_hedge_no_ask,False,False
+        ),
+    }
+    metrics=[]
+    for index,(name,(entry_a,entry_b,exit_a,exit_b,entry_taker,exit_taker)) in enumerate(styles.items()):
+        entry_fee=(_fee_per_share(entry_a)+_fee_per_share(entry_b)) if entry_taker else 0.0
+        exit_fee=(_fee_per_share(exit_a)+_fee_per_share(exit_b)) if exit_taker else 0.0
+        rows[f"{name}_cost"]=entry_a+entry_b+entry_fee
+        rows[name]=exit_a+exit_b-exit_fee-rows[f"{name}_cost"]
+        ci=_execution_ci(rows,name,draws,seed+index)
+        ci.update({"style":name,"rows":len(rows),"dates":rows.target_date.nunique(),
+                   "maker_fill_status":"not_inferred_future_touch_is_not_fill" if "maker" in name else "not_applicable"})
+        metrics.append(ci)
+    tt=rows.taker_entry_taker_exit
+    for name in ("maker_entry_taker_exit","taker_entry_maker_exit","maker_entry_maker_exit"):
+        gain=rows[name]-tt
+        required=np.where(gain>0,np.clip(-tt/gain,0,1),np.nan)
+        rows[f"{name}_break_even_fill_rate"]=required
+    rows["maker_exit_unfilled_taker_unwind_pnl"]=rows.taker_entry_taker_exit
+    maker_entry_cost=rows.target_yes_bid+rows.hedge_no_bid
+    maker_hold_payout=rows.target_win+(1-rows.hedge_win)
+    rows["maker_exit_unfilled_hold_settlement_pnl"]=maker_hold_payout-maker_entry_cost
+    rows.to_csv(output_dir/"execution_expressions.csv.gz",index=False,compression="gzip")
+    daily=rows.groupby("target_date",as_index=False).agg(
+        rows=("ladder_snapshot_id","size"),cities=("city","nunique"),
+        taker_entry_taker_exit_pnl=("taker_entry_taker_exit","sum"),
+        maker_entry_taker_exit_pnl=("maker_entry_taker_exit","sum"),
+        taker_entry_maker_exit_pnl=("taker_entry_maker_exit","sum"),
+        maker_entry_maker_exit_pnl=("maker_entry_maker_exit","sum"),
+    )
+    daily.to_csv(output_dir/"execution_by_target_date.csv",index=False)
+    city=rows.groupby("city",as_index=False).agg(
+        rows=("ladder_snapshot_id","size"),dates=("target_date","nunique"),
+        taker_entry_taker_exit_pnl=("taker_entry_taker_exit","sum"),
+        maker_entry_taker_exit_pnl=("maker_entry_taker_exit","sum"),
+    )
+    city.to_csv(output_dir/"execution_by_city.csv",index=False)
+    tt_metric=next(item for item in metrics if item["style"]=="taker_entry_taker_exit")
+    fill_rates={name:{
+        "median":float(rows[f"{name}_break_even_fill_rate"].median()),
+        "p90":float(rows[f"{name}_break_even_fill_rate"].quantile(.9)),
+        "finite_rows":int(rows[f"{name}_break_even_fill_rate"].notna().sum()),
+    } for name in ("maker_entry_taker_exit","taker_entry_maker_exit","maker_entry_maker_exit")}
+    adverse=[]
+    maker_legs={"maker_entry_taker_exit":2,"taker_entry_maker_exit":2,"maker_entry_maker_exit":4}
+    for name,legs in maker_legs.items():
+        for penalty in (0.0,.005,.01,.02):
+            adverse.append({"style":name,"maker_adverse_selection_per_leg":penalty,
+                            "pnl_usd":float((rows[name]-legs*penalty).sum())})
+    # Same snapshots, generic market-making control: quote both outcomes on the
+    # widest complementary rung and unwind both as taker after 60m.
+    generic=[]
+    source=scored[(scored.block==candidate)&(scored.horizon==PRIMARY_HORIZON)]
+    for snapshot_id in rows.ladder_snapshot_id:
+        group=source[source.ladder_snapshot_id==snapshot_id].copy()
+        group["maker_discount"]=1-group.yes_bid-group.no_bid
+        rung=group.loc[group.maker_discount.idxmax()]
+        cost=rung.yes_bid+rung.no_bid
+        proceeds=rung[f"h{PRIMARY_HORIZON}_yes_bid"]+rung[f"h{PRIMARY_HORIZON}_no_bid"]
+        proceeds-=_fee_per_share(rung[f"h{PRIMARY_HORIZON}_yes_bid"])+_fee_per_share(rung[f"h{PRIMARY_HORIZON}_no_bid"])
+        generic.append(float(proceeds-cost))
+    generic_pnl=float(np.nansum(generic))
+    concentration={
+        "largest_abs_date_share":float(daily.taker_entry_taker_exit_pnl.abs().max()/daily.taker_entry_taker_exit_pnl.abs().sum()),
+        "largest_abs_city_share":float(city.taker_entry_taker_exit_pnl.abs().max()/city.taker_entry_taker_exit_pnl.abs().sum()),
+    }
+    status="SHADOW_READY" if tt_metric["ci_low"]>0 else "REJECTED_FOR_EXPRESSION"
+    return {
+        "status":status,"funnel":funnel,"shares_per_leg":1,
+        "selector":"positive predicted max-minus-min M2 rung-relative markout; first non-overlapping cross per city-date-event",
+        "hold_minutes":PRIMARY_HORIZON,"metrics":metrics,"break_even_fill_rates":fill_rates,
+        "adverse_selection":adverse,"generic_ladder_maker":{"style":"conditional maker entry+taker exit","pnl_usd":generic_pnl,"fill_status":"unknown"},
+        "maker_exit_fallback":{"taker_unwind_pnl_usd":float(rows.maker_exit_unfilled_taker_unwind_pnl.sum()),
+                               "hold_to_settlement_pnl_usd":float(rows.maker_exit_unfilled_hold_settlement_pnl.sum())},
+        "concentration":concentration,
+        "reason":None if status=="SHADOW_READY" else "only conditional maker prices can improve economics; historical fill readiness is unavailable",
+    }
+
+
+def finalize_saved_validation(
+    output_dir:Path,db:Path,history_cache_path:Path|None=None,
+    *,draws:int=3000,seed:int=20260809,
+)->dict[str,Any]:
+    """Finish a run from immutable panel/OOF/frozen-validation artifacts."""
+    panel=pd.read_csv(output_dir/"fixed_panel.csv.gz",low_memory=False)
+    oof=pd.read_csv(output_dir/"development_oof.csv.gz",low_memory=False)
+    tournament=pd.read_csv(output_dir/"development_tournament.csv")
+    scored=pd.read_csv(output_dir/"frozen_validation_scores.csv.gz",low_memory=False)
+    metrics=pd.read_csv(output_dir/"frozen_validation_metrics.csv")
+    deltas=pd.read_csv(output_dir/"frozen_validation_deltas.csv")
+    selected=tournament[tournament.block.isin(["M2_ladder_transition","M3_weather_response_lag"])].sort_values("mse").iloc[0]
+    choice=FrozenChoice(str(selected.block),float(selected.alpha))
+    dev_panel=panel[panel.target_date.between(DEV_START,DEV_END)]
+    city,regime=city_and_regime_tables(scored,choice.block,dev_panel)
+    city.to_csv(output_dir/"validation_by_city.csv",index=False)
+    regime.to_csv(output_dir/"validation_by_liquidity_regime.csv",index=False)
+    loco=leave_one_city_out(scored,choice.block)
+    loco.to_csv(output_dir/"leave_one_city_out.csv",index=False)
+    label=f"h{PRIMARY_HORIZON}_relative_markout"
+    train=panel[panel.target_date.between(TRAIN_START,DEV_END)&panel[label].notna()]
+    validation=panel[panel.target_date.between(VALIDATION_START,VALIDATION_END)&panel[label].notna()]
+    model,_=_fit_predict(train,validation,choice.block,choice.alpha,label)
+    joblib.dump(model,output_dir/"candidate_markout_model.joblib")
+    primary=deltas[deltas.horizon.eq(PRIMARY_HORIZON)]
+    markout_pass=bool(len(primary)==3 and primary.markout_mse_delta_ci_high.lt(0).all())
+    direction_pass=bool(primary.direction_brier_delta.le(0).all() and primary.direction_logloss_delta.le(0).all())
+    probability_pass=markout_pass and direction_pass
+    execution=(evaluate_execution(scored,choice.block,output_dir,draws,seed+5000)
+               if probability_pass else {"status":"NOT_RUN_PROBABILITY_GATE_FAILED"})
+    status=execution["status"] if probability_pass else "BRANCH_EXHAUSTED"
+
+    work=scored[(scored.block==choice.block)&(scored.horizon==PRIMARY_HORIZON)].copy()
+    base=scored[(scored.block=="M0_market_level")&(scored.horizon==PRIMARY_HORIZON)][
+        ["ladder_snapshot_id","condition_id","markout_prediction","direction_probability"]
+    ].rename(columns={"markout_prediction":"m0_prediction","direction_probability":"m0_direction_probability"})
+    work=work.merge(base,on=["ladder_snapshot_id","condition_id"],validate="one_to_one")
+    work["candidate_markout_loss"]=(work.markout_prediction-work[label])**2
+    work["m0_markout_loss"]=(work.m0_prediction-work[label])**2
+    work["markout_loss_delta"]=work.candidate_markout_loss-work.m0_markout_loss
+    daily=work.groupby("target_date",as_index=False).agg(
+        rows=("condition_id","size"),snapshots=("ladder_snapshot_id","nunique"),cities=("city","nunique"),
+        candidate_markout_mse=("candidate_markout_loss","mean"),m0_markout_mse=("m0_markout_loss","mean"),
+        markout_mse_delta=("markout_loss_delta","mean")
+    )
+    daily.to_csv(output_dir/"validation_by_target_date.csv",index=False)
+    work.groupby(["target_date","city"],as_index=False).agg(
+        rows=("condition_id","size"),snapshots=("ladder_snapshot_id","nunique"),
+        candidate_markout_mse=("candidate_markout_loss","mean"),m0_markout_mse=("m0_markout_loss","mean"),
+        markout_mse_delta=("markout_loss_delta","mean")
+    ).to_csv(output_dir/"validation_by_city_date.csv",index=False)
+    calibration=[]
+    bins=np.linspace(0,1,11)
+    for (block,horizon),group in scored.groupby(["block","horizon"]):
+        dcol=f"h{horizon}_direction"; group=group.copy()
+        group["bin"]=pd.cut(group.direction_probability,bins,include_lowest=True)
+        for bucket,g in group.groupby("bin",observed=True):
+            calibration.append({"head":"direction","block":block,"horizon":horizon,"bin":str(bucket),"rows":len(g),"mean_prediction":g.direction_probability.mean(),"observed_rate":g[dcol].mean()})
+        group["settlement_bin"]=pd.cut(group.settlement_probability,bins,include_lowest=True)
+        for bucket,g in group.dropna(subset=["settlement_probability","win"]).groupby("settlement_bin",observed=True):
+            calibration.append({"head":"settlement","block":block,"horizon":horizon,"bin":str(bucket),"rows":len(g),"mean_prediction":g.settlement_probability.mean(),"observed_rate":g.win.mean()})
+    pd.DataFrame(calibration).to_csv(output_dir/"validation_calibration_bins.csv",index=False)
+
+    history_coverage={}
+    if history_cache_path is not None and history_cache_path.exists():
+        conn=sqlite3.connect(f"file:{history_cache_path}?mode=ro",uri=True)
+        try:
+            row=conn.execute("SELECT value FROM metadata WHERE key='coverage'").fetchone()
+            history_coverage=json.loads(row[0]) if row else {}
+        finally: conn.close()
+    coverage={
+        "fixed_rows":len(panel),"fixed_snapshots":panel.ladder_snapshot_id.nunique(),
+        "fixed_dates":panel.target_date.nunique(),"fixed_cities":panel.city.nunique(),
+        "dates_by_phase":{
+            "historical_training":sorted(panel[panel.target_date.between(TRAIN_START,TRAIN_END)].target_date.unique()),
+            "development":sorted(dev_panel.target_date.unique()),
+            "frozen_validation":sorted(panel[panel.target_date.between(VALIDATION_START,VALIDATION_END)].target_date.unique()),
+        },
+        "rows_by_phase":{
+            "historical_training":int(panel.target_date.between(TRAIN_START,TRAIN_END).sum()),
+            "development":int(panel.target_date.between(DEV_START,DEV_END).sum()),
+            "frozen_validation":int(panel.target_date.between(VALIDATION_START,VALIDATION_END).sum()),
+        },
+        "fixed_rows_by_source":{str(k):int(v) for k,v in panel.groupby("snapshot_source").size().items()},
+        "historical_snapshot_census":history_coverage,
+        "missing_forecast_rows":int(panel.forecast_peak_f.isna().sum()),
+        "missing_observation_rows":int(panel.observed_max_f.isna().sum()),
+        "missing_settlement_rows":int(panel.win.isna().sum()),
+        "m4_status":"blocked_no_historical_ws_materializer_rest_parity_or_trade_prints",
+        "denominator_scope":{
+            "historical_training":[TRAIN_START,TRAIN_END],"development_model_selection":[DEV_START,DEV_END],
+            "frozen_historical_validation":[VALIDATION_START,VALIDATION_END],"true_untouched_forward":[FORWARD_START,FORWARD_END],
+        },
+    }
+    resolved=db.resolve(strict=True); stat=resolved.stat()
+    freeze={
+        "schema_version":SCHEMA_VERSION,"run_id":RUN_ID,"status":status,
+        "choice":{"block":choice.block,"alpha":choice.alpha,"horizon":choice.horizon},
+        "selector":execution.get("selector"),"shares_per_leg":execution.get("shares_per_leg"),
+        "hold_minutes":execution.get("hold_minutes"),"entry_exit_styles":"four fixed styles in execution_expressions.csv.gz",
+        "historical_training":[TRAIN_START,TRAIN_END],"development_model_selection":[DEV_START,DEV_END],
+        "frozen_historical_validation":[VALIDATION_START,VALIDATION_END],"true_untouched_forward":[FORWARD_START,FORWARD_END],
+        "validation_access":{"already_seen_in_superseded_narrow_run":True,"corrected_time_aligned_replay_count":1,"fully_untouched":False},
+        "feature_blocks":{key:list(value) for key,value in FEATURE_BLOCKS.items()},
+        "m4_status":coverage["m4_status"],"model_sha256":_artifact_sha256(output_dir/"candidate_markout_model.joblib"),
+        "notional_usd":0.0,"orders_enabled":False,"live_enabled":False,
+    }
+    (output_dir/"model_freeze.json").write_text(json.dumps(freeze,indent=2,ensure_ascii=False,default=str)+"\n")
+    summary={
+        "schema_version":SCHEMA_VERSION,"generated_at_utc":datetime.now(UTC).isoformat(),"status":status,
+        "probability_gate":{"passed":probability_pass,"markout_pass":markout_pass,"direction_pass":direction_pass},
+        "coverage":coverage,"choice":freeze["choice"],"development_tournament":tournament.to_dict("records"),
+        "validation_metrics":metrics.to_dict("records"),"validation_deltas":deltas.to_dict("records"),
+        "leave_one_city_out":{"cities":len(loco),"all_omissions_candidate_better":bool(loco.mse_delta.lt(0).all()),"worst_delta":float(loco.mse_delta.max())},
+        "execution":execution,"true_untouched_forward":{"window":[FORWARD_START,FORWARD_END],"status":"NA_not_started_as_of_2026-08-09","used_for_selection":False},
+        "canonical_identity":{"db_argument":str(db),"db_realpath":str(resolved),"device":stat.st_dev,"inode":stat.st_ino,"size_bytes":stat.st_size,"mtime_utc":datetime.fromtimestamp(stat.st_mtime,UTC).isoformat()},
+        "production":{"shadow_started":False,"notional_usd":0.0,"orders":0,"fills":0},
+    }
+    summary["artifact_hashes"]={name:_artifact_sha256(output_dir/name) for name in (
+        "fixed_panel.csv.gz","development_oof.csv.gz","frozen_validation_scores.csv.gz",
+        "candidate_markout_model.joblib","execution_expressions.csv.gz",
+    ) if (output_dir/name).exists()}
+    summary["code_hashes"]={"mass_transport_module":_artifact_sha256(Path(__file__)),"unified_runner":_artifact_sha256(Path(__file__).with_name("lmvm_repricing_challenger.py"))}
+    (output_dir/"summary.json").write_text(json.dumps(summary,indent=2,ensure_ascii=False,default=str)+"\n")
+    return summary
 
 
 def postprocess_artifact(output_dir:Path,draws:int=3000,seed:int=20260809,db:Path|None=None)->dict[str,Any]:
@@ -622,18 +1086,38 @@ def postprocess_artifact(output_dir:Path,draws:int=3000,seed:int=20260809,db:Pat
     return summary
 
 
-def run(db:Path,output_dir:Path,draws:int=3000,seed:int=20260809)->dict[str,Any]:
+def run(
+    db:Path,
+    history_snapshot_dir:Path,
+    output_dir:Path,
+    draws:int=3000,
+    seed:int=20260809,
+    history_workers:int=8,
+    history_cache_path:Path|None=None,
+    resume_fixed_panel:bool=False,
+)->dict[str,Any]:
     output_dir.mkdir(parents=True,exist_ok=True)
-    panel,coverage=build_panel(db); panel.to_csv(output_dir/"fixed_panel.csv.gz",index=False,compression="gzip")
+    if history_cache_path is None:
+        history_cache_path=output_dir/"historical_snapshot_adapter.sqlite"
+    if resume_fixed_panel and (output_dir/"fixed_panel.csv.gz").exists():
+        panel=pd.read_csv(output_dir/"fixed_panel.csv.gz",low_memory=False)
+        coverage={"m4_status":"blocked_no_historical_ws_materializer_rest_parity_or_trade_prints"}
+    else:
+        panel,coverage=build_panel(
+            db,history_snapshot_dir,history_cache_path,
+            history_workers=history_workers,
+        ); panel.to_csv(output_dir/"fixed_panel.csv.gz",index=False,compression="gzip")
     oof=development_oof(panel); oof.to_csv(output_dir/"development_oof.csv.gz",index=False,compression="gzip")
     choice,tournament=select_development(oof,draws,seed); tournament.to_csv(output_dir/"development_tournament.csv",index=False)
     scored,metrics,deltas,models=frozen_validation(panel,choice,draws,seed); scored.to_csv(output_dir/"frozen_validation_scores.csv.gz",index=False,compression="gzip"); metrics.to_csv(output_dir/"frozen_validation_metrics.csv",index=False); deltas.to_csv(output_dir/"frozen_validation_deltas.csv",index=False)
     city,regime=city_and_regime_tables(scored,choice.block,panel[panel.target_date.between(DEV_START,DEV_END)]); city.to_csv(output_dir/"validation_by_city.csv",index=False); regime.to_csv(output_dir/"validation_by_liquidity_regime.csv",index=False)
-    loco=leave_one_city_out(panel,choice); loco.to_csv(output_dir/"leave_one_city_out.csv",index=False)
+    loco=leave_one_city_out(scored,choice.block); loco.to_csv(output_dir/"leave_one_city_out.csv",index=False)
     primary=deltas[deltas.horizon.eq(PRIMARY_HORIZON)]; markout_pass=bool(len(primary)==3 and primary.markout_mse_delta_ci_high.lt(0).all()); direction_pass=bool(primary.direction_brier_delta.le(0).all() and primary.direction_logloss_delta.le(0).all()); status="probability_pass" if markout_pass and direction_pass else "BRANCH_EXHAUSTED"
-    freeze={"schema_version":SCHEMA_VERSION,"run_id":RUN_ID,"status":status,"choice":{"block":choice.block,"alpha":choice.alpha,"horizon":choice.horizon},"development":[DEV_START,DEV_END],"frozen_historical_validation":[VALIDATION_START,VALIDATION_END],"true_untouched_forward":[FORWARD_START,FORWARD_END],"validation_open_count":1,"feature_blocks":{key:list(value) for key,value in FEATURE_BLOCKS.items()},"categorical_city_effect":"L2-shrunk one-hot nuisance effect; no city selector","m4_status":coverage["m4_status"],"execution_evaluation":"required_only_if_probability_pass","notional_usd":0.0,"orders_enabled":False,"live_enabled":False}
+    freeze={"schema_version":SCHEMA_VERSION,"run_id":RUN_ID,"status":status,"choice":{"block":choice.block,"alpha":choice.alpha,"horizon":choice.horizon},"historical_training":[TRAIN_START,TRAIN_END],"development_model_selection":[DEV_START,DEV_END],"frozen_historical_validation":[VALIDATION_START,VALIDATION_END],"true_untouched_forward":[FORWARD_START,FORWARD_END],"validation_access":{"already_seen_in_superseded_narrow_run":True,"corrected_time_aligned_replay_count":1,"fully_untouched":False},"feature_blocks":{key:list(value) for key,value in FEATURE_BLOCKS.items()},"categorical_nuisance_effects":["city","lifecycle","snapshot_source"],"city_selector":False,"m4_status":coverage["m4_status"],"execution_evaluation":"required_only_if_probability_pass","notional_usd":0.0,"orders_enabled":False,"live_enabled":False}
     joblib.dump(models[f"{choice.block}:markout:{PRIMARY_HORIZON}"],output_dir/"candidate_markout_model.joblib"); freeze["model_sha256"]=_artifact_sha256(output_dir/"candidate_markout_model.joblib")
     (output_dir/"model_freeze.json").write_text(json.dumps(freeze,indent=2,ensure_ascii=False)+"\n")
     summary={"schema_version":SCHEMA_VERSION,"generated_at_utc":datetime.now(UTC).isoformat(),"status":status,"coverage":coverage,"choice":freeze["choice"],"development_tournament":tournament.to_dict("records"),"validation_metrics":metrics.to_dict("records"),"validation_deltas":deltas.to_dict("records"),"leave_one_city_out":{"cities":len(loco),"cities_candidate_better":int(loco.mse_delta.lt(0).sum()),"median_delta":float(loco.mse_delta.median())},"m4":{"status":coverage["m4_status"],"trade_print_intensity":None,"cancel_replenishment":None,"queue_turnover":None,"participant_concentration":None},"execution":{"status":"NOT_RUN_PROBABILITY_GATE_FAILED" if status=="BRANCH_EXHAUSTED" else "PENDING"},"production":{"shadow_started":False,"notional_usd":0.0,"orders":0,"fills":0}}
     (output_dir/"summary.json").write_text(json.dumps(summary,indent=2,ensure_ascii=False,default=str)+"\n")
-    return summary
+    return finalize_saved_validation(
+        output_dir,db,history_cache_path,draws=draws,seed=seed
+    )

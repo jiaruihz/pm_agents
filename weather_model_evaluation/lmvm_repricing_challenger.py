@@ -38,6 +38,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.strategies.runtime.production import load_production_spec
+
 
 SEED = 20260809
 HORIZONS = (15, 30, 60, 120)
@@ -1620,6 +1622,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--draws", type=int, default=2_000)
     parser.add_argument("--mass-transport-identity-db", type=Path, default=Path("runtime/weather.db"))
     parser.add_argument(
+        "--mass-transport-history-snapshot-dir",
+        type=Path,
+        default=load_production_spec().resolved_historical_paper_snapshot_root(),
+        help=(
+            "override the production-contract historical PIT snapshot root; "
+            "normally omit this option"
+        ),
+    )
+    parser.add_argument("--mass-transport-history-workers", type=int, default=8)
+    parser.add_argument(
+        "--mass-transport-history-cache",
+        type=Path,
+        help="optional run-scoped local cache for streaming archived snapshots",
+    )
+    parser.add_argument(
+        "--mass-transport-resume-fixed-panel",
+        action="store_true",
+        help="reuse the immutable fixed_panel artifact and rerun OOF/validation",
+    )
+    parser.add_argument(
         "--score-model-dir",
         type=Path,
         help="score candidate rows with an existing frozen/probe artifact instead of training",
@@ -1630,9 +1652,20 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     if args.mass_transport_postprocess_dir is not None:
-        from weather_model_evaluation.ladder_mass_transport import postprocess_artifact
+        from weather_model_evaluation.ladder_mass_transport import (
+            finalize_saved_validation,
+            postprocess_artifact,
+        )
 
-        result = postprocess_artifact(args.mass_transport_postprocess_dir, draws=args.draws, db=args.mass_transport_identity_db)
+        if (args.mass_transport_postprocess_dir / "summary.json").exists():
+            result = postprocess_artifact(args.mass_transport_postprocess_dir, draws=args.draws, db=args.mass_transport_identity_db)
+        else:
+            result = finalize_saved_validation(
+                args.mass_transport_postprocess_dir,
+                args.mass_transport_identity_db,
+                args.mass_transport_history_cache,
+                draws=args.draws,
+            )
         print(json.dumps({"status": result["status"], "output_dir": str(args.mass_transport_postprocess_dir)}, ensure_ascii=False))
         return 0
     if args.mass_transport_db is not None:
@@ -1640,7 +1673,15 @@ def main() -> int:
             raise ValueError("--score-model-dir is not supported with --mass-transport-db")
         from weather_model_evaluation.ladder_mass_transport import run
 
-        result = run(args.mass_transport_db, args.output_dir, draws=args.draws)
+        result = run(
+            args.mass_transport_db,
+            args.mass_transport_history_snapshot_dir,
+            args.output_dir,
+            draws=args.draws,
+            history_workers=args.mass_transport_history_workers,
+            history_cache_path=args.mass_transport_history_cache,
+            resume_fixed_panel=args.mass_transport_resume_fixed_panel,
+        )
         print(json.dumps({"status": result["status"], "output_dir": str(args.output_dir)}, ensure_ascii=False))
         return 0
     input_path = args.full_ladder_event_csv or args.candidate_csv
