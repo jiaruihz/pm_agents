@@ -58,7 +58,7 @@ managed_runtimes:
     start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
     max_health_age_sec: 1800
-    dependencies: [weather_forecast_curve_collector_v1, weather_market_books]
+    dependencies: [weather_market_books]
     recovery_policy: safe
 
   - instance_id: weather_forecast_curve_collector_v1
