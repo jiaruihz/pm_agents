@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 
 from scripts.analysis.market_structure_edge import (
-    research_helsinki_fmi_metar_ws_linkage_v1 as linkage,
+    research_full_ladder_first_seen_residual_v1 as residual_runner,
 )
+from weather_model_evaluation import source_event_ws_linkage as linkage
 
 
 def _ts(value: str) -> float:
@@ -76,3 +78,33 @@ def test_invalid_or_naive_timestamp_is_not_treated_as_utc() -> None:
     assert linkage._timestamp("2026-08-01T10:00:00Z") == datetime(
         2026, 8, 1, 10, tzinfo=timezone.utc
     ).timestamp()
+
+
+def test_existing_first_seen_runner_dispatches_ws_linkage_mode(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    captured = {}
+    monkeypatch.setattr(
+        residual_runner.source_event_ws_linkage,
+        "run",
+        lambda args: captured.update(vars(args)) or {"status": "ok"},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "research_full_ladder_first_seen_residual_v1.py",
+            "--mode",
+            "helsinki-ws-linkage",
+            "--ws-target-date",
+            "2026-08-01",
+            "--ws-output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert residual_runner.main() == 0
+    assert captured["target_date"] == "2026-08-01"
+    assert captured["output_dir"] == tmp_path
+    assert captured["entrypoint_path"] == Path(residual_runner.__file__)
+    assert '"status": "ok"' in capsys.readouterr().out

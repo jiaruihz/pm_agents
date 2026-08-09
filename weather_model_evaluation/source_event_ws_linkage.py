@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Link Helsinki FMI/METAR first-seen events to reconstructed WS books."""
+"""Link source first-seen events to reconstructed WS books."""
 
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ import statistics
 import sys
 from typing import Any, Iterable
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -29,6 +28,18 @@ from src.strategies.runtime.production import load_production_spec  # noqa: E402
 SCHEMA_VERSION = "helsinki_fmi_metar_ws_linkage_v1"
 MARKOUT_HORIZONS_SEC = (10, 30, 60)
 TRANSPORT_PROOF_GRACE_SEC = 30
+
+
+def default_input_paths() -> dict[str, Path]:
+    production = load_production_spec()
+    return {
+        "ws_root": production.data_feed_runtime_root
+        / "market_books"
+        / "ws_incremental",
+        "source_event_path": production.source_events_root() / "sources.jsonl",
+        "fmi_path": production.live_cross_observations_root()
+        / "high_frequency_observations.jsonl",
+    }
 
 
 def _timestamp(value: str | None) -> float | None:
@@ -350,6 +361,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "reaction": window,
         }
+    entrypoint = Path(getattr(args, "entrypoint_path", __file__)).resolve()
     summary = {
         "schema_version": SCHEMA_VERSION,
         "target_date": args.target_date,
@@ -407,8 +419,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "fmi_path": str(args.fmi_path),
         },
         "producer": {
-            "entrypoint": str(Path(__file__).resolve()),
-            "entrypoint_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "entrypoint": str(entrypoint),
+            "entrypoint_sha256": hashlib.sha256(entrypoint.read_bytes()).hexdigest(),
+            "linkage_module": str(Path(__file__).resolve()),
+            "linkage_module_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "reconstructor": str(
                 (ROOT / "weather_data_feed" / "ws_incremental_book.py").resolve()
             ),
@@ -424,22 +438,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    production = load_production_spec()
-    runtime = production.data_feed_runtime_root
+    defaults = default_input_paths()
     parser.add_argument("--target-date", required=True)
     parser.add_argument(
-        "--ws-root", type=Path, default=runtime / "market_books" / "ws_incremental"
+        "--ws-root", type=Path, default=defaults["ws_root"]
     )
     parser.add_argument(
         "--source-event-path",
         type=Path,
-        default=production.source_events_root() / "sources.jsonl",
+        default=defaults["source_event_path"],
     )
     parser.add_argument(
         "--fmi-path",
         type=Path,
-        default=production.live_cross_observations_root()
-        / "high_frequency_observations.jsonl",
+        default=defaults["fmi_path"],
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()

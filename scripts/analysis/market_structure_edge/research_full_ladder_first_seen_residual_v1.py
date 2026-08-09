@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 import re
 import sqlite3
+import sys
 from typing import Any
 
 import numpy as np
@@ -22,6 +23,12 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_model_evaluation import source_event_ws_linkage  # noqa: E402
+
+
 DEFAULT_CANDIDATES = Path(
     "/Volumes/jrs/weather_data_feed_service_runtime/output/"
     "first_seen_zero_notional/candidates.jsonl"
@@ -524,11 +531,44 @@ zero-notional collector，不改变任何 live runner。
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--mode",
+        choices=("first-seen-residual", "helsinki-ws-linkage"),
+        default="first-seen-residual",
+    )
     parser.add_argument("--candidates", type=Path, default=DEFAULT_CANDIDATES)
     parser.add_argument("--settlement-db", type=Path, default=DEFAULT_SETTLEMENT_DB)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    ws_defaults = source_event_ws_linkage.default_input_paths()
+    parser.add_argument("--ws-target-date")
+    parser.add_argument("--ws-root", type=Path, default=ws_defaults["ws_root"])
+    parser.add_argument(
+        "--ws-source-event-path",
+        type=Path,
+        default=ws_defaults["source_event_path"],
+    )
+    parser.add_argument("--ws-fmi-path", type=Path, default=ws_defaults["fmi_path"])
+    parser.add_argument("--ws-output-dir", type=Path)
     args = parser.parse_args()
+
+    if args.mode == "helsinki-ws-linkage":
+        if not args.ws_target_date or args.ws_output_dir is None:
+            parser.error(
+                "helsinki-ws-linkage requires --ws-target-date and --ws-output-dir"
+            )
+        result = source_event_ws_linkage.run(
+            argparse.Namespace(
+                target_date=args.ws_target_date,
+                ws_root=args.ws_root,
+                source_event_path=args.ws_source_event_path,
+                fmi_path=args.ws_fmi_path,
+                output_dir=args.ws_output_dir,
+                entrypoint_path=Path(__file__),
+            )
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
 
     frame = attach_settlements(load_candidates(args.candidates), load_settlements(args.settlement_db))
     checkpoints = checkpoint_audit(frame)
