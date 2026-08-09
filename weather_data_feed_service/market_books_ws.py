@@ -2,21 +2,22 @@
 
 The canonical five-minute REST ladder remains the complete denominator.  This
 collector adds event-time microstructure for a bounded set of current-day
-weather markets: a physically plausible strip is subscribed continuously,
-newly invalidated lower brackets are retained for a short markout window, and
-the full ladder is temporarily subscribed after a first-seen source event.
+weather markets.  The socket is idle outside scheduled report windows and
+genuine first-seen source events; active windows subscribe only the physically
+plausible hot strip.  Complete ladder context remains owned by the REST layer.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import signal
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -28,7 +29,7 @@ from weather_data_feed.source_lineage import producer_build_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "five_city_physical_strip_v1"
+SELECTOR_VERSION = "five_city_windowed_hot_strip_v2"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -173,7 +174,11 @@ class SourceEventCursor:
             target_date = str(row.get("target_date") or "")
             if city not in cities or not target_date:
                 continue
-            if not bool(row.get("material_state_change") or row.get("changed_since_last")):
+            if row.get("event_role") != "new_content":
+                continue
+            if row.get("information_event_status") != "material":
+                continue
+            if not bool(row.get("material_state_change")):
                 continue
             first_seen = _parse_utc(row.get("first_seen_at_utc"))
             if first_seen is None:
@@ -193,6 +198,57 @@ class SourceEventCursor:
         return {(city, target_date) for city, target_date, _ in self.recent}
 
 
+def scheduled_report_windows(
+    observations: dict[tuple[str, str], dict[str, Any]],
+    *,
+    now_utc: datetime,
+    before_sec: float,
+    after_sec: float,
+    extended_before_sec: float,
+    research_sample_modulus: int,
+) -> tuple[set[tuple[str, str]], dict[str, str]]:
+    """Return active report windows and the next expected report per city."""
+
+    active: set[tuple[str, str]] = set()
+    next_reports: dict[str, str] = {}
+    for key, row in observations.items():
+        city, _ = key
+        last_report = _parse_utc(row.get("last_obs_utc"))
+        try:
+            cadence_min = float(
+                row.get("estimated_cadence_min") or row.get("cadence_min") or 0
+            )
+        except (TypeError, ValueError):
+            cadence_min = 0.0
+        if last_report is None or not 0 < cadence_min <= 180:
+            continue
+        cadence_sec = cadence_min * 60.0
+        report_at = last_report
+        if now_utc > report_at:
+            elapsed_sec = (now_utc - report_at).total_seconds()
+            report_at += timedelta(
+                seconds=int(elapsed_sec // cadence_sec) * cadence_sec
+            )
+            if now_utc > report_at + timedelta(seconds=after_sec):
+                report_at += timedelta(seconds=cadence_sec)
+        sample_key = f"{city}|{_utc_text(report_at)}"
+        extended = (
+            research_sample_modulus > 0
+            and int.from_bytes(hashlib.sha256(sample_key.encode()).digest()[:8], "big")
+            % research_sample_modulus
+            == 0
+        )
+        window_before = extended_before_sec if extended else before_sec
+        if (
+            report_at - timedelta(seconds=window_before)
+            <= now_utc
+            <= report_at + timedelta(seconds=after_sec)
+        ):
+            active.add(key)
+        next_reports[city] = _utc_text(report_at)
+    return active, next_reports
+
+
 @dataclass
 class Selection:
     tokens: set[str]
@@ -200,6 +256,7 @@ class Selection:
     city_token_counts: dict[str, int]
     active_brackets: dict[str, list[str]]
     grace_brackets: dict[str, list[str]]
+    scheduled_cities: list[str]
     burst_cities: list[str]
     missing_observation_cities: list[str]
     invalidation_state: dict[str, float]
@@ -213,6 +270,7 @@ def select_tokens(
     now_utc: datetime,
     active_bracket_count: int,
     post_invalidation_sec: float,
+    scheduled_keys: set[tuple[str, str]],
     burst_keys: set[tuple[str, str]],
     invalidation_state: dict[str, float],
 ) -> Selection:
@@ -251,17 +309,22 @@ def select_tokens(
                 continue
             by_label.setdefault(label, []).append(row)
             parsed_by_label[label] = parsed
-        ordered = sorted(parsed_by_label, key=lambda label: _bracket_sort_key(parsed_by_label[label]))
+        ordered = sorted(
+            parsed_by_label,
+            key=lambda label: _bracket_sort_key(parsed_by_label[label]),
+        )
         selected_labels: set[str] = set()
         grace_labels: set[str] = set()
 
         unit = _unit_for_records(rows)
         running_max = _running_max_native(observations.get((city, target_date)), unit)
+        window_active = (city, target_date) in scheduled_keys or (
+            city,
+            target_date,
+        ) in burst_keys
         if running_max is None:
-            # Missing settlement-facing state must not silently prune a real
-            # expression.  The bounded five-city universe makes this fail-open
-            # affordable while the complete REST ladder remains authoritative.
-            selected_labels.update(ordered)
+            # The complete REST ladder remains available.  Missing physical
+            # state must not turn a selective WebSocket into an unbounded feed.
             missing_observation_cities.append(city)
             for label in ordered:
                 state_key = f"{city}|{target_date}|{label}"
@@ -275,13 +338,10 @@ def select_tokens(
                 or parsed_by_label[label].high is None
                 or float(parsed_by_label[label].high) >= running_max
             ]
-            if (city, target_date) in burst_keys:
-                # A source event promotes the full still-possible distribution,
-                # never brackets that the running maximum has already invalidated.
-                selected_labels.update(possible)
-                burst_cities.append(city)
-            else:
+            if window_active:
                 selected_labels.update(possible[:active_bracket_count])
+            if (city, target_date) in burst_keys:
+                burst_cities.append(city)
             for label in ordered:
                 parsed = parsed_by_label[label]
                 state_key = f"{city}|{target_date}|{label}"
@@ -300,7 +360,8 @@ def select_tokens(
                     invalidated_at = previous_state
                 next_invalidation_state[state_key] = invalidated_at
                 if (
-                    invalidated_at > 0
+                    window_active
+                    and invalidated_at > 0
                     and now_epoch - invalidated_at <= post_invalidation_sec
                 ):
                     selected_labels.add(label)
@@ -327,6 +388,9 @@ def select_tokens(
         city_token_counts=city_token_counts,
         active_brackets=active_brackets,
         grace_brackets=grace_brackets,
+        scheduled_cities=sorted(
+            city for city, target_date in grouped if (city, target_date) in scheduled_keys
+        ),
         burst_cities=sorted(set(burst_cities)),
         missing_observation_cities=sorted(set(missing_observation_cities)),
         invalidation_state=invalidation_state,
@@ -427,7 +491,10 @@ class Collector:
         self.archive_path: str | None = None
         self.writer = HourlyWriter(self.output_root)
         self.source_event_cursor = SourceEventCursor(self.source_events)
-        self.selection = Selection(set(), {}, {}, {}, {}, [], [], self.invalidation_state)
+        self.next_report_at_utc: dict[str, str] = {}
+        self.selection = Selection(
+            set(), {}, {}, {}, {}, [], [], [], self.invalidation_state
+        )
         self.connected = False
         self.connection_error: str | None = None
 
@@ -438,18 +505,33 @@ class Collector:
             self.day_payload_bytes = 0
 
     def refresh_selection(self, now_utc: datetime) -> Selection:
+        observations = _observation_index(self.observation_cache)
+        configured_cities = set(self.args.cities)
+        scheduled, self.next_report_at_utc = scheduled_report_windows(
+            {
+                key: row
+                for key, row in observations.items()
+                if key[0] in configured_cities
+            },
+            now_utc=now_utc,
+            before_sec=self.args.report_window_before_sec,
+            after_sec=self.args.report_window_after_sec,
+            extended_before_sec=self.args.research_window_before_sec,
+            research_sample_modulus=self.args.research_sample_modulus,
+        )
         bursts = self.source_event_cursor.read(
-            cities=set(self.args.cities),
+            cities=configured_cities,
             now_utc=now_utc,
             burst_sec=self.args.event_burst_sec,
         )
         self.selection = select_tokens(
             market_payload=_load_json(self.market_latest),
-            observations=_observation_index(self.observation_cache),
+            observations=observations,
             cities=self.args.cities,
             now_utc=now_utc,
             active_bracket_count=self.args.active_bracket_count,
             post_invalidation_sec=self.args.post_invalidation_sec,
+            scheduled_keys=scheduled,
             burst_keys=bursts,
             invalidation_state=self.invalidation_state,
         )
@@ -497,10 +579,16 @@ class Collector:
                 "city_token_counts": self.selection.city_token_counts,
                 "active_brackets": self.selection.active_brackets,
                 "grace_brackets": self.selection.grace_brackets,
+                "scheduled_cities": self.selection.scheduled_cities,
                 "burst_cities": self.selection.burst_cities,
                 "missing_observation_cities": self.selection.missing_observation_cities,
                 "post_invalidation_sec": self.args.post_invalidation_sec,
                 "event_burst_sec": self.args.event_burst_sec,
+                "report_window_before_sec": self.args.report_window_before_sec,
+                "report_window_after_sec": self.args.report_window_after_sec,
+                "research_window_before_sec": self.args.research_window_before_sec,
+                "research_sample_modulus": self.args.research_sample_modulus,
+                "next_report_at_utc": self.next_report_at_utc,
                 "active_bracket_count": self.args.active_bracket_count,
                 "counter_date_utc": self.day,
                 "day_payload_bytes": self.day_payload_bytes,
@@ -658,8 +746,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--market-proxy", default=os.environ.get("WEATHER_DATA_FEED_MARKET_PROXY", ""))
     parser.add_argument("--cities", nargs="+", default=list(DEFAULT_CITIES))
     parser.add_argument("--active-bracket-count", type=int, default=5)
-    parser.add_argument("--post-invalidation-sec", type=float, default=300.0)
+    parser.add_argument("--post-invalidation-sec", type=float, default=0.0)
     parser.add_argument("--event-burst-sec", type=float, default=120.0)
+    parser.add_argument("--report-window-before-sec", type=float, default=45.0)
+    parser.add_argument("--report-window-after-sec", type=float, default=120.0)
+    parser.add_argument("--research-window-before-sec", type=float, default=125.0)
+    parser.add_argument("--research-sample-modulus", type=int, default=6)
     parser.add_argument("--reconcile-sec", type=float, default=5.0)
     parser.add_argument("--health-interval-sec", type=float, default=10.0)
     parser.add_argument("--rest-max-age-sec", type=float, default=420.0)
@@ -682,6 +774,7 @@ def main(argv: list[str] | None = None) -> int:
                     "city_token_counts": selection.city_token_counts,
                     "active_brackets": selection.active_brackets,
                     "grace_brackets": selection.grace_brackets,
+                    "scheduled_cities": selection.scheduled_cities,
                     "burst_cities": selection.burst_cities,
                     "missing_observation_cities": selection.missing_observation_cities,
                 },
