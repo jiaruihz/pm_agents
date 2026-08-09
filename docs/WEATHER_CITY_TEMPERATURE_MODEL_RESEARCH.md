@@ -1,23 +1,24 @@
 # 跨城市细粒度温度模型：统一研究与评测约定
 
-Status: current-source  
-Updated: 2026-07-30  
-Scope: 城市级日内温度概率模型的方法、评测和知识沉淀；不规定统一算法或统一特征
+Status: current-source
+Updated: 2026-08-09 selective CLOB WebSocket microstructure evaluation contract
+Scope: 城市级日内温度概率模型的方法、评测和知识沉淀；运行边界服从 `WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md`，不规定统一算法或统一特征
 
 ## 1. 核心决定
 
 本研究体系统一运行在 **Weather City Intraday Runtime（WCIR）**，框架标识
 `weather_city_intraday_runtime_v1`，策略族 `weather.city_intraday_probability`。
 Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通过 WCIR profile/adapter 接入。
-模型尚未冻结时先接 `coverage-only` adapter 留完整分母与 blocker；这代表链路接入，不代表已有概率或 alpha。
+如果模型尚未冻结，先接 `coverage-only` adapter 留完整分母和 blocker；这代表链路接入，不代表已有概率或 alpha。
 
 不同城市的数据源、观测频率、可用特征、结算单位和盘口结构不同，**不强制共用同一个模型或训练模块**。
 
-统一的只有三件事：
+统一的只有四件事：
 
 1. 研究问题必须写清目标、decision time、label 和 PIT 边界。
-2. 模型最终导出同一种 prediction table。
-3. 使用同一套概率指标；有 PIT 盘口时，再使用同一套 market baseline 和交易指标。
+2. 实时采集 profile、事件时钟、PIT checkpoint 和 replay 服从同一 runtime contract。
+3. 模型最终导出同一种 prediction table / `SignalCandidate`，需要执行时只输出标准 `TradeIntent`。
+4. 使用同一套概率指标；有 PIT 盘口时，再使用同一套 market baseline 和交易指标。
 
 城市代码能自然复用就复用；不能复用时可以独立实现，只要最终导出统一结果。不要为了接口整齐扭曲城市自己的数据和物理机制。
 目标模块边界、接口、迁移顺序和新城市接入工作单见
@@ -33,7 +34,7 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 | Amsterdam | WCIR Amsterdam adapter；weather head 保留，交易头改为 market-prior + KNMI innovation | standalone weather probability 不能直接当 fair price；captured-book D1 上 market-prior 仅点估改善，CI 跨零且交易未胜纯 market direction | zero-notional；补真实 first-seen lineage 与 frozen forward · [paradigm](analysis/2026-08/2026-08-04-amsterdam-market-prior-event-innovation-paradigm-v1.md) · [executable null](analysis/2026-08/2026-08-04-amsterdam-executable-market-null-v2.md) |
 | Busan | `busan_intraday_exact_no`；固定为 confirmation head + conditional reheat head | AMOS cross persistence 不能替代 source→routine/WU basis；v9/v10/v11 只是同一模型的历史 experiment。非线性 tournament 和连续 residual 都受独立日期、market-aligned rows 与 conditional-reheat 样本限制 | coverage-only；不继续造版本号，按固定 ontology append 新日期 · [stable architecture](analysis/2026-08/2026-08-04-busan-stable-model-architecture-v1.md) · [family benchmark](analysis/2026-08/2026-08-04-busan-model-family-benchmark.md) |
 | Helsinki | frozen remaining-heat/weather artifact + market-expression research head | weather head 有历史 OOF 增量，但当前 expression reliability 未通过；少量正 ROI 不能覆盖 market baseline、active grain 和独立日期不足 | 保持 zero-notional，不改 artifact；补 PIT book/forward · [v7 lineage](analysis/2026-07/2026-07-31-helsinki-v7-forecast-lineage-missing-expert.md) · [reliability](analysis/2026-07/2026-07-31-helsinki-model-reliability-audit-v1.md) |
-| Tokyo | frozen weather path head；market-offset 仍是 development challenger | 历史 collector-exact 覆盖不足以重训后恢复旧 holdout；state-entry 仍未稳定胜 market | zero-notional collector，达到预注册 exact train/holdout 日期后再评审 · [coverage](analysis/2026-07/2026-07-31-tokyo-market-anchor-training-coverage-v7.md) |
+| Tokyo | frozen weather path head；final-settlement market-offset 以 calibrated market 为 baseline；next-routine-METAR confirmation 只作连续 challenger feature | 三路同raw path回放：`.5`为20笔15胜、ROI+0.68%；`.7`为10笔8胜、ROI+3.61%；weather-only final-settlement positive-EV为10笔7胜、ROI+4.94%，三者date CI均跨0。10个`.5/.7`双执行配对中9个同观测直接跨双阈值，只有1个早10分钟且ask贵8c，故`.5`主要扩大低质信号池而非稳定抢早。模型仍放行7/26 terminal false，且当前journal无多数双边mid，不能评calibrated-market residual | `.7`保持规则基线；`.5`不live，模型三路zero-notional；补每个`.5+` event双边mid/ask/full depth/prediction后做clean forward · [three-way replay](analysis/2026-08/2026-08-06-tokyo-cross-0p5-0p7-model-three-way-replay-v1.md) · [stacked training](analysis/2026-08/2026-08-06-tokyo-final-settlement-stack-training-v1.md) |
 | Seoul | Korea source-event adapter，尚无独立 frozen probability artifact | 与 Busan 共用的 CrossNO/dual-head 不能绕过城市 source→settlement basis；外部负面对照使当前表达不能晋级 | coverage-only；先建 Seoul 自己的 PIT probability/basis，再谈 expression · [Korea dual head](analysis/2026-08/2026-08-03-korea-cross-event-dual-head-v5.md) |
 
 跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
@@ -44,22 +45,31 @@ proper score、market baseline、frozen forward 和 executable expression 四层
 
 以下内容允许每个城市独立：
 
-- 历史与实时数据 adapter；
+- 历史训练数据 adapter，以及满足共享 event contract 的城市 source adapter；
 - 特征集合和缺失值处理；
 - logistic、HGB、survival、hazard 或其他算法；
 - 1h、2h、EOD、remaining-heat、exact-bracket 等模型 head；
 - source-to-settlement basis 和 native-unit lattice；
 - Polymarket condition / bracket 映射。
 
-天气模型与市场表达应分层：
+盘口与模型不要求物理分层；统一边界放在城市插件外：
 
 ```text
-city weather/source state
-  -> city-specific probability model
-  -> standardized prediction rows
-  -> city-specific market mapping
-  -> executable residual / signal / PnL evaluation
+shared PIT DecisionContext
+  -> city-specific feature/model/policy
+       (weather-only | market-offset | joint weather+market)
+  -> standardized prediction / SignalCandidate
+  -> TradeIntent
+  -> shared plan / order / fill / settlement
 ```
+
+城市插件可以把 PIT 盘口作为 prior、offset、联合特征或 microstructure 特征，也可以完全不用盘口；但必须声明
+`market_feature_role` 和 `market_feature_clock`，分别记录模型输入的 `feature_book_snapshot_id` 与执行报价的
+`execution_book_snapshot_id`。城市代码不得自建 collector、回放时钟、order client、fill/PnL 或 settlement 链。
+
+接入前必须用实际 deployed sample 声明 source payload 是 point observation、measurement interval 还是 revision；
+`target_date` 不能用于猜物理 shard。source、official/settlement 和 market expression 的 lattice anchor 分开记录，
+`relative_offset` 必须声明 anchor。repo tests 与 running producer/consumer 的 code/config/schema fingerprint 都要通过 parity。
 
 ## 3. 最薄的统一接口：prediction table
 
@@ -71,18 +81,25 @@ city weather/source state
 | `target_date` | 结算城市本地日期 |
 | `decision_ts_utc` | 概率真正可计算的时点 |
 | `target_id` | 明确的预测目标，如 `eod_cross_d1` |
+| `target_kind` | `physical_path` / `settlement_outcome` / `market_expression` |
 | `p_model` | 对该目标的预测概率 |
 | `label` | 最终 0/1 标签；未结算时为空 |
 | `split` | `train` / `validation` / `oof` / `frozen_forward` |
 | `model_id` | 城市内可复现的模型版本 |
 | `feature_set_id` | 特征版本或稳定 hash |
 | `pit_provenance` | `live_capture` / `archive_reconstruction` / `historical_non_pit` |
+| `checkpoint_id` | 共享 runtime 生成的 PIT checkpoint identity；历史离线研究可为空但须说明 |
+| `scorable_status` | `scorable` 或结构化不可评分原因；不能静默丢行 |
 
 有盘口时可附：
 
 | 字段 | 含义 |
 |---|---|
 | `market_p` | 同一 row、同一时点、同一 outcome 的市场概率 |
+| `market_feature_role` | `none` / `prior_offset` / `joint_feature` / `microstructure_feature` |
+| `market_feature_clock` | `pre_event` / `first_post_event` / `decision_current` / `none` |
+| `feature_book_snapshot_id` | 模型实际读取的盘口证据 |
+| `execution_book_snapshot_id` | expression/成本判断实际使用的盘口证据 |
 | `expression_side` | 实际映射的 YES/NO |
 | `executable_cost` | 真实 side ask/VWAP 加官方 fee 后成本 |
 | `market_snapshot_ts_utc` | 行情证据时间 |
@@ -95,7 +112,12 @@ city weather/source state
 - 参数和特征选择只能发生在 train/validation 或 expanding OOF 内。
 - frozen holdout/forward 只复核，不继续调参。
 - 每个特征必须在 `decision_ts_utc` 已真实可得。
+- 历史 state 必须由 event store 按 `available_at_utc <= decision_ts_utc` fold；不能只按 observation time 截断 raw journal。
+- revision/late-backfill 保留原 first-seen 和父事件；measurement interval 不得冒充 point observation。
 - forecast 必须保存 issue/run/first-seen；不能用后发 run 回填。
+- forecast/feature artifact 发生刷新时，所有下游 OOF 必须核对同一个
+  semantic content hash，并按依赖顺序重放；压缩文件应 hash 解压内容，不能让
+  gzip header timestamp 冒充数据版本变化。
 - METAR/WU/settlement 后到值只能作 label，不能作事前特征。
 - 历史 EDR、archive reconstruction 等非 PIT 数据必须显式标记，不能冒充实时领先性证据。
 
@@ -131,6 +153,27 @@ Accuracy 不能代替概率指标。阈值必须在验证集冻结，不能在 h
 
 至少保留一个简单 baseline，例如 train base rate、clock climatology 或城市当前最简单模型。比较算法或特征时固定 rows、label 和 split。
 
+日内高频概率模型还必须把“评测 grain”与“原始更新频率”分开。默认同时报告：
+
+- checkpoint：每个合法 PIT 更新；
+- transition：物理/持仓状态发生变化的首行；
+- state entry：每日首次进入每个 confirmed state（例如 current X）。
+
+每个 grain 先在 `target_date` 内平均，再跨日期平均；模型比较用 paired
+target-date block bootstrap。若训练目标同时覆盖多个 grain，权重必须预先固定，
+各 grain 先按日期等权，不能按事后错误、价格或 edge 重加权。
+
+有序结果（例如 `Δmax={0,1,2,3+}`）除 binary Brier/logloss 外，同时报告
+multiclass logloss、RPS 和 exact/within-one accuracy。多 horizon 事件应优先使用
+coherent survival/hazard 或其他保证概率单调的联合分布；独立 horizon heads
+必须检查并报告 coherence。校准默认使用固定 bin、target-date-equal 权重。
+
+forecast 缺失不是 eligibility filter。若全局模型在缺失行结构性退化，可在固定
+全分母上预注册 `available -> full model / missing -> physical+official expert`
+路由；missing expert 只能使用 decision-time 可得特征，且必须与不路由版本做
+同 rows、同 grain bootstrap。前季 OOF 的事后 calibration 不保证跨季稳定，
+不能因为 ECE 变差就默认追加一个校准器。
+
 ### 5.3 有 PIT 盘口时
 
 在 prediction rows 与盘口完全对齐后，增加：
@@ -140,6 +183,71 @@ Accuracy 不能代替概率指标。阈值必须在验证集冻结，不能在 h
 - market coverage gap，不能把缺盘口当成策略过滤。
 
 天气模型能预测天气，不自动等于打败市场。
+
+若盘口进入模型，仍须在固定 rows、label 和 split 上至少比较纯天气、纯 market 与 market-aware 模型；
+pre-event、first-post-event 和 decision-current 不得混成同一个 `model_id`。依赖 midpoint 的模型遇到
+one-sided book 时返回 `not_scorable_missing_midpoint`，但 checkpoint 仍留在 coverage 分母；明确支持纯天气或
+ask-only 的模型可以继续计算。
+
+#### 5.3.1 选择性 CLOB WebSocket microstructure
+
+使用 WebSocket 微观特征时，先按 runtime contract 将 baseline `book/snapshot` + `price_change` delta
+重建成 token-level PIT book state。模型表保存重建 state ID、selector/capture-policy version、subscription set、
+producer build 和 gap/reconnect status。无消息、未订阅、窗外或 paused city 均不能解释成盘口没变。
+
+微观增量的固定同分母 A/B 至少包含：
+
+1. `weather-only`；
+2. `market level-only`（同时点 price/spread/depth）；
+3. `weather + level`；
+4. `weather + level + WS dynamics`。
+
+四组固定 rows、labels、clocks、quotes 与 split；否则不能把 level 信息的改善归因给 WS dynamics。
+raw frame/message 不是样本，必须映射到预注册 checkpoint/time-bin/first-event/state-transition，
+并先按 `target_date` 等权。quote add/cancel/replace 只是报价活动；无 trade print/order lifecycle 时，
+不得声称 executed volume、queue/fill 或 maker alpha。
+
+#### 5.3.2 交易模型默认使用 market prior + source innovation
+
+城市 weather-only probability 是物理预测基线，不默认等同于可交易 fair price。只要同 checkpoint 市场已经存在，
+交易层的默认问题应改为“新 source event 给市场已知状态增加了多少信息”，而不是直接计算
+`p_weather - ask`：
+
+```text
+pre-event full ladder -> market prior
+new source first-seen + path/forecast innovation -> likelihood/log-odds correction
+market prior + correction -> post-event posterior
+posterior vs fresh executable quote -> candidate / skip
+```
+
+最薄的 binary 形式为：
+
+```text
+logit(p_post) = logit(p_market_pre_event) + g(source_innovation, weather_state,
+                                               source_basis, cadence, path_state)
+```
+
+其中 `g` 必须用 expanding/OOF 或 train-only fold 拟合并强正则；market offset 固定在模型中，避免 weather model
+在稀疏尾部无约束覆盖市场。若只能使用同时点 sampled market reference，可先研究 regularized stacking，但必须标成
+`historical_price_reference_non_executable`，不能冒充 pre-event innovation 或订单簿回放。
+
+短期 repricing 与最终 settlement 分成两个 head：
+
+- markout head：预测 `t0 -> +30/+120/+300s/next official` 的价格变化，交易目标是 source event 后市场是否尚未完成重定价；
+- settlement head：预测最终 exact-bracket outcome，market 为 prior，weather/source 只输出 posterior correction。
+
+极端分歧（例如 market 接近 0/1、weather 仍给中等概率）首先是可靠性与 domain-shift 诊断，不自动视作最大 edge，
+也不靠事后价格带 hard gate 处理。候选必须同时保存 pre-event、feature 和 execution 三个 book clock，并以
+posterior uncertainty 下界扣除 ask/VWAP、官方 fee、spread/退出摩擦和 adverse-selection 后再评价。
+
+默认 A/B 固定相同 rows/labels/quotes，至少比较 `market`、`weather-only`、`market-prior posterior`；先要求 posterior
+在 frozen forward proper score 上打败 market，再发布 fee-adjusted expression 结果。source checkpoint 的静态重复行
+不能重复计作独立交易，主交易 grain 是 first-seen event / state transition / first position entry。
+
+每个城市在研究 market-aware model 前还应固定一个 market zero-EV null：直接用 settlement label 检验 market calibration，
+并报告无额外信息的 favorite/randomized-side policy 在理论 market price、官方 fee 和可执行 ask 三层的 ROI。若 market
+概率正确，理论 gross EV 应为 0；spread/fee 后应为负。candidate 的 paired proper-score delta 必须以 settlement 为标准，
+不是以“更接近 market”为标准；完全复制 market 的 candidate delta=0，不能通过 baseline gate。
 
 ### 5.4 策略执行映射
 
@@ -174,8 +282,9 @@ Accuracy 不能代替概率指标。阈值必须在验证集冻结，不能在 h
 可以直接说：
 
 > 这项城市温度模型研究请遵循
-> `docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md`：模型、特征和数据 adapter 可以按城市独立，
-> 不强行复用；但必须导出统一 prediction table，按 target_date 做 PIT/OOF/frozen-forward 切分，
-> 统一报告 logloss、Brier、calibration 和 baseline。有同一时点盘口时，再报告同分母 market
-> baseline、信号数、胜率、官方 fee 后 PnL/ROI；没有盘口就明确标 not_available。
-
+> `docs/WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md` 和
+> `docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md`：模型、特征、盘口是否进入模型和 source adapter
+> 可以按城市独立；但采集 profile、事件时钟、PIT checkpoint/replay、prediction/SignalCandidate、
+> TradeIntent 与执行链必须复用公共框架。按 target_date 做 PIT/OOF/frozen-forward 切分，统一报告
+> logloss、Brier、calibration 和同分母 market baseline；有盘口再报告信号、胜率和官方 fee 后 PnL/ROI，
+> 没有盘口标 not_available。不要为城市另建 collector、回放时钟或 order/fill/PnL 链。

@@ -20,6 +20,7 @@ description: 审计一个 Polymarket 账户的历史交易、持仓、已平仓�
   - `https://polymarket.com/profile/%40username`
   - `0x...` wallet
 - `fetch_all`（可选）
+  - 在公开端点和当前代码上限内尽量分页；不是无条件完整账户历史
 - `focus`（可选）
   - `accuracy | pnl | drawdown | suspiciousness | all`
 - `report_style`（可选）
@@ -33,14 +34,14 @@ description: 审计一个 Polymarket 账户的历史交易、持仓、已平仓�
 ## Run
 
 ```bash
-python3 skills/polymarket-profile-audit/scripts/run_profile_audit.py \
+.venv/bin/python skills/polymarket-profile-audit/scripts/run_profile_audit.py \
   --target "@cqk"
 ```
 
 全量模式示例：
 
 ```bash
-python3 skills/polymarket-profile-audit/scripts/run_profile_audit.py \
+.venv/bin/python skills/polymarket-profile-audit/scripts/run_profile_audit.py \
   --target "https://polymarket.com/@cqk" \
   --fetch-all \
   --report-style analyst
@@ -57,6 +58,7 @@ python3 skills/polymarket-profile-audit/scripts/run_profile_audit.py \
 ## Rules
 
 - 先交代样本量，再下结论。
+- `fetch_all` 必须同时报告返回数量、最早/最晚时间、端点/分页上限和已知缺口，不得简称“全部历史”。
 - 已平仓结果和未平仓浮盈亏必须分开写。
 - 回撤不是可选项，必须写。
 - 不能基于公开数据直接指控内幕交易。

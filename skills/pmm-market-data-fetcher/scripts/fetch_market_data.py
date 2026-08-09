@@ -15,15 +15,18 @@ GAMMA_BASE = "https://gamma-api.polymarket.com"
 CLOB_BASE = "https://clob.polymarket.com"
 
 
-def _parse_slug(market_url: str) -> str:
+def _parse_event_slug(market_url: str) -> str:
     parsed = urlparse(market_url.strip())
     path = parsed.path.strip("/")
     if not path:
         raise ValueError(f"invalid market_url: {market_url}")
     parts = path.split("/")
-    if len(parts) >= 2 and parts[0] in {"event", "market"}:
+    if len(parts) >= 2 and parts[0] == "event":
         return parts[1]
-    return parts[-1]
+    raise ValueError(
+        "this legacy snapshot tool accepts event URLs only; use "
+        "polymarket-market-rule-audit for a market slug or condition id"
+    )
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -57,20 +60,37 @@ def _to_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _translate_to_zh(text: str) -> str:
+def _translation_settings() -> dict[str, str] | None:
+    alipay_key = os.getenv("ALIPAY_API_KEY")
+    if alipay_key:
+        return {
+            "provider": "alipay_openai_compatible",
+            "api_key": alipay_key,
+            "base_url": os.getenv("ALIPAY_HOST_URL", "https://antchat.alipay.com").rstrip("/"),
+            "model": os.getenv("ALIPAY_MODEL", "Qwen3-VL-235B-A22B-Thinking"),
+        }
+
+    openai_key = os.getenv("OPENAI_API_KEY")
+    openai_model = os.getenv("OPENAI_MODEL")
+    if openai_key and openai_model:
+        return {
+            "provider": "openai_compatible",
+            "api_key": openai_key,
+            "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com").rstrip("/"),
+            "model": openai_model,
+        }
+    return None
+
+
+def _translate_to_zh(text: str, settings: dict[str, str] | None) -> str:
     content = (text or "").strip()
-    if not content:
-        return ""
-    api_key = os.getenv("ALIPAY_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if not content or settings is None:
         return ""
 
-    base_url = os.getenv("ALIPAY_HOST_URL", "https://antchat.alipay.com").rstrip("/")
-    model = os.getenv("ALIPAY_MODEL", "Qwen3-VL-235B-A22B-Thinking")
-    endpoint = f"{base_url}/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    endpoint = f"{settings['base_url']}/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {settings['api_key']}", "Content-Type": "application/json"}
     payload = {
-        "model": model,
+        "model": settings["model"],
         "temperature": 0.0,
         "messages": [
             {
@@ -206,16 +226,13 @@ def run(
     orderbook_limit: int,
     translate_zh: bool,
 ) -> None:
-    slug = _parse_slug(market_url)
+    slug = _parse_event_slug(market_url)
     timeout = httpx.Timeout(connect=8.0, read=25.0, write=20.0, pool=20.0)
 
+    translation_settings = _translation_settings() if translate_zh else None
     translation_mode = "disabled"
     if translate_zh:
-        translation_mode = (
-            "enabled"
-            if (os.getenv("ALIPAY_API_KEY") or os.getenv("OPENAI_API_KEY"))
-            else "skipped_missing_api_key"
-        )
+        translation_mode = "enabled" if translation_settings else "skipped_missing_provider_config"
 
     with httpx.Client(timeout=timeout, follow_redirects=True) as client:
         event = _fetch_event_by_slug(client, slug)
@@ -238,7 +255,7 @@ def run(
                 "market_id": market_id,
                 "question": market.get("question"),
                 "description": market_desc,
-                "description_zh": _translate_to_zh(market_desc) if translate_zh else "",
+                "description_zh": _translate_to_zh(market_desc, translation_settings),
                 "active": bool(market.get("active")),
                 "closed": bool(market.get("closed")),
                 "end_date": market.get("endDate"),
@@ -269,9 +286,9 @@ def run(
             "translation": {
                 "enabled": bool(translate_zh),
                 "mode": translation_mode,
-                "provider": "openai_compatible",
-                "host": os.getenv("ALIPAY_HOST_URL", "https://antchat.alipay.com"),
-                "model": os.getenv("ALIPAY_MODEL", "Qwen3-VL-235B-A22B-Thinking"),
+                "provider": (translation_settings or {}).get("provider", ""),
+                "host": (translation_settings or {}).get("base_url", ""),
+                "model": (translation_settings or {}).get("model", ""),
             },
         },
         "event": {
@@ -281,7 +298,7 @@ def run(
             "title": event.get("title"),
             "description": event.get("description"),
             "description_zh": (
-                _translate_to_zh(str(event.get("description") or "")) if translate_zh else ""
+                _translate_to_zh(str(event.get("description") or ""), translation_settings)
             ),
             "resolution_source": event.get("resolutionSource"),
             "rules": event.get("rules"),
@@ -310,8 +327,8 @@ def _parse_bool(value: str) -> bool:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch Polymarket market snapshot by URL")
-    parser.add_argument("--market-url", required=True, help="Polymarket event/market URL")
+    parser = argparse.ArgumentParser(description="Fetch a legacy PMM event snapshot by URL")
+    parser.add_argument("--market-url", required=True, help="Polymarket event URL")
     parser.add_argument("--out", default="", help="Output JSON path")
     parser.add_argument(
         "--include-orderbook",
@@ -326,7 +343,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--translate-zh",
-        default="true",
+        default="false",
         help="Whether to add Chinese translation fields (true/false)",
     )
     args = parser.parse_args()

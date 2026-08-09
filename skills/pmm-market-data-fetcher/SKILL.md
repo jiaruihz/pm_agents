@@ -1,30 +1,36 @@
 ---
 name: pmm-market-data-fetcher
-description: Fetch Polymarket market snapshots from a market/event URL, including event title, rules-related fields, token ids, and optional live orderbooks for each token.
+description: Fetch a one-shot Polymarket event snapshot for the dormant PMM framework, including event metadata, token ids, and optional orderbooks. Use for legacy PMM setup or manual snapshots; do not use as weather canonical market data, continuous capture, or market-rule research.
 ---
 
 # PMM Market Data Fetcher
 
-Use this skill when the user wants to fetch Polymarket market metadata from a URL and save a local snapshot for strategy analysis, backtesting setup, or manual review.
+Use this skill only for a legacy PMM event snapshot. Use `polymarket-market-rule-audit`
+or `polymarket-research-orchestrator` for market/condition research, and the registered
+weather collector for weather production data.
 
 ## Inputs
 
-- `market_url` (required): Polymarket event/market URL, e.g. `https://polymarket.com/event/natural-disaster-in-2026`
+- `market_url` (required): Polymarket event URL, e.g. `https://polymarket.com/event/natural-disaster-in-2026`
 - `out` (optional): output JSON path
 - `include_orderbook` (optional): fetch orderbook for each token id (default `true`)
 - `orderbook_limit` (optional): number of levels to keep per side (default `20`)
-- `translate_zh` (optional): add `description_zh` via OpenAI-compatible translation (default `true`)
+- `translate_zh` (optional): add `description_zh` via an explicitly configured provider (default `false`)
 
 ## Script
 
 Run:
 
 ```bash
-python skills/pmm-market-data-fetcher/scripts/fetch_market_data.py \
+.venv/bin/python skills/pmm-market-data-fetcher/scripts/fetch_market_data.py \
   --market-url "https://polymarket.com/event/natural-disaster-in-2026" \
   --include-orderbook true \
   --translate-zh true
 ```
+
+Translation uses `ALIPAY_API_KEY` with the Alipay host/model variables, or
+`OPENAI_API_KEY` only when `OPENAI_MODEL` is also set; an OpenAI key must never be
+sent to the Alipay default host.
 
 ## Output
 

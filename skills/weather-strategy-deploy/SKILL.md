@@ -1,6 +1,6 @@
 ---
 name: weather-strategy-deploy
-description: 部署、启停或变更 Mac mini 上的 weather 当前生产行为，包括 runner、data-feed、city/source policy、strategy instance、entry/sizing/execution policy 与 live/shadow switch。必须以 Mac production controller、manifest 和 production.yaml 为当前真相，git-first，保留资金安全和显式确认，并验证代码、进程、raw runtime、exchange、API/页面。本 skill 不部署 N100；不得读取或执行历史 N100/mid_price 运维链路，显式 N100 灾备请求需要独立恢复合同。
+description: 部署、启停或变更 Mac mini 上的 weather 当前生产行为，包括 runner、data-feed、market proxy、选择性 CLOB WebSocket capture、city/source policy、strategy instance、entry/sizing/execution policy 与 live/shadow switch。必须以 Mac production controller、manifest 和 production.yaml 为当前真相，git-first，保留资金安全和显式确认，并验证代码、进程、raw runtime、exchange、API/页面。本 skill 不部署 N100；不得读取或执行历史 N100/mid_price 运维链路，显式 N100 灾备请求需要独立恢复合同。
 ---
 
 # Weather strategy deploy
@@ -15,9 +15,9 @@ description: 部署、启停或变更 Mac mini 上的 weather 当前生产行为
 - N100 不属于当前生产拓扑。除非用户明确提出“N100 灾备恢复/迁回”，否则不得 SSH N100、读取其旧 live 配置、运行其 timer/service、把其 raw 当当前真相，或将任何代码部署到 N100。
 - 策略状态以进程 + raw runtime + authenticated exchange evidence 为准；registry 是路由，不是 present-state proof。
 
-默认只读：`AGENTS.md`、`src/strategies/runtime/production.yaml`、`WEATHER_REPO_BOUNDARY.md` 的当前 Mac 边界、目标策略 living doc，以及与本次参数直接相关的配置/测试。
+默认只读：`AGENTS.md`、`src/strategies/runtime/production.yaml`、`docs/WEATHER_REPO_BOUNDARY.md` 的当前 Mac 边界、目标策略 living doc，以及与本次参数直接相关的配置/测试。
 
-需要生产接手背景时，只读 `WEATHER_STRATEGY_ENTRYPOINT.md` 的“当前接手口径”且在 `Historical Production Posture` 前停止。需要控制器/JRS 细节时，只读 `OPS_RUNBOOK.md` 的“Mac JRS 常驻进程”当前章节。普通 Mac 部署不得继续读取两个文档中的 N100 历史章节，也不得从旧命令复制部署步骤。策略研究状态仅在本次变更涉及 eligibility/live 授权判断时读取 `WEATHER_STRATEGY_REGISTRY.md`。
+需要生产接手背景时，只读 `docs/WEATHER_STRATEGY_ENTRYPOINT.md` 的“当前接手口径”且在 `Historical Production Posture` 前停止。需要控制器/JRS 细节时，只读 `docs/OPS_RUNBOOK.md` 的“Mac JRS 常驻进程”当前章节。普通 Mac 部署不得继续读取两个文档中的 N100 历史章节，也不得从旧命令复制部署步骤。策略研究状态仅在本次变更涉及 eligibility/live 授权判断时读取 `docs/WEATHER_STRATEGY_REGISTRY.md`。
 
 ## 先定义部署对象
 
@@ -30,6 +30,22 @@ expected raw output / stop-pause mechanism / rollback
 ```
 
 不能只写 `execution_policy`。同名 policy 的不同 instance、source、band、size 是不同生产对象。
+
+### Market proxy 与选择性 CLOB WS
+
+- market proxy 切换只使用 `docs/OPS_RUNBOOK.md` 当前章节登记的
+  `scripts/ops/weather_market_proxy_ctl.py`；不得逐脚本修改 `.env`、`HTTP_PROXY` 或
+  `--market-proxy`。成功标准包括 Gamma probe、新 market-books batch、全部 consumer
+  proxy binding、依赖 freshness 和失败回滚，不是端口可连接。
+- 变更 WS collector 时，把 REST canonical book 与 `ws_incremental` 视为两个输出合同；不得让
+  WS selective coverage 取代完整 ladder 或让消费视图重新请求盘口。
+- 部署对象必须额外冻结 selector/capture-policy version、城市、hot bracket/window、subscription
+  set、代理流量预算/日、落盘预算/日、保留期和 stop condition。
+- 后验分别验证 REST raw freshness、WS baseline/delta reconstruction、gap/reconnect、当前订阅集合、
+  collector bytes/messages 与预算；无消息只可按 policy-valid window 判定，不能直接当作健康或无变化。
+- 当前 WS collector 是 capture-only：只落 raw frame 与 combined health。若本次没有同时交付并验证
+  deterministic reconstructed-book materializer、append-only subscription/capture manifest 和 parity test，
+  部署结论只能写“capture healthy”，不得写“feature/model-ready”；baseline/delta reconstruction 项明确记为未完成。
 
 ## 变更前动态盘点
 

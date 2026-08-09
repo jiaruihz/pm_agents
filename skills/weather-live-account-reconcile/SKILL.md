@@ -20,7 +20,7 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
 | unrealized valuation | mid/bid/last_fill 估值 | `fact_trades.val_*`，附估值时间 |
 | reserved | 仍开放订单占用 | authenticated open orders；不得从 submitted notional 猜 |
 
-当前 raw 从 `production.yaml`、manifest、进程参数里的 active `health_path/live_order_path/output root` 解析；不得默认等于控制仓库 `runtime/weather_edge_v1/`。N100 镜像只用于历史窗口。
+当前 live order journals 从 `production.yaml` 的 expected-live `live_order_path` 解析；不得默认等于控制仓库某个旧 runtime 目录。`runtime/weather.db` 是 physical canonical DB 的兼容链接，`runtime/weather_edge_v1/clob_fills.jsonl` 是当前 canonical fill cache，这两者保留既有合同。N100 镜像只用于历史窗口。
 
 ## 流程
 
@@ -31,6 +31,9 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
 3. 比较 raw 最新 order/fill 与 DB `fact_built_at_utc` / `fill_ts_utc`。
 4. DB 缺最新 fill 时先走 `weather-fact-rebuild` 的最小刷新路径。
 5. 运行固定对账脚本。
+
+脚本默认读取 `fact_trades.instance_id` / `orders.instance_id` 并从 production desired state
+发现所有 active live journals；`--raw-live-dir` 只用于显式历史兼容，不得作为当前生产默认。
 
 使用 canonical 数字时保存 DB realpath/device/inode、build time/`build_id` 和
 `observed_at_utc`；对账运行中 refresh 改变 build 时重启查询，不混用两个分母。

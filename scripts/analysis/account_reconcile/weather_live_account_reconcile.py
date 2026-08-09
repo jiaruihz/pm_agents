@@ -27,29 +27,40 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DB = ROOT / "runtime" / "weather.db"
 DEFAULT_CLOB_FILLS = ROOT / "runtime" / "weather_edge_v1" / "clob_fills.jsonl"
-DEFAULT_RAW_LIVE_DIR = ROOT / "runtime" / "weather_edge_v1" / "remote_pm_agent" / "live"
 DEFAULT_COVERAGE_GATE = ROOT / "scripts" / "analysis" / "execution_quality" / "weather_clob_fill_coverage_gate.py"
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec
 
 
 INSTANCE_CASE = """
-CASE
-  WHEN run_id LIKE '%_mid_price_core_v1_25_75' THEN 'mid_price_core_v1_25_75'
-  WHEN run_id LIKE '%_mid_price_core_v2_25_75' THEN 'mid_price_core_v2_25_75'
-  WHEN run_id LIKE '%_mid_price_core_v1_side_band' THEN 'mid_price_core_v1_side_band'
-  WHEN execution_policy='mid_price_core_v2' AND entry_price_window='0.25-0.75' THEN 'mid_price_core_v2_25_75'
-  WHEN execution_policy='mid_price_core_v1' AND entry_price_window='0.25-0.75' THEN 'mid_price_core_v1_25_75'
-  WHEN execution_policy='mid_price_core_v1' AND entry_price_window IN ('0.20-0.45','0.35-0.65') THEN 'mid_price_core_v1_side_band'
-  ELSE COALESCE(strategy_id, 'unknown')
-END
+COALESCE(
+  NULLIF(instance_id, ''),
+  CASE
+    WHEN run_id LIKE '%_mid_price_core_v1_25_75' THEN 'mid_price_core_v1_25_75'
+    WHEN run_id LIKE '%_mid_price_core_v2_25_75' THEN 'mid_price_core_v2_25_75'
+    WHEN run_id LIKE '%_mid_price_core_v1_side_band' THEN 'mid_price_core_v1_side_band'
+    WHEN execution_policy='mid_price_core_v2' AND entry_price_window='0.25-0.75' THEN 'mid_price_core_v2_25_75'
+    WHEN execution_policy='mid_price_core_v1' AND entry_price_window='0.25-0.75' THEN 'mid_price_core_v1_25_75'
+    WHEN execution_policy='mid_price_core_v1' AND entry_price_window IN ('0.20-0.45','0.35-0.65') THEN 'mid_price_core_v1_side_band'
+  END,
+  NULLIF(strategy_id, ''),
+  'unknown'
+)
 """
 
 ORDER_INSTANCE_CASE = """
-CASE
-  WHEN run_id LIKE '%_mid_price_core_v1_25_75' THEN 'mid_price_core_v1_25_75'
-  WHEN run_id LIKE '%_mid_price_core_v2_25_75' THEN 'mid_price_core_v2_25_75'
-  WHEN run_id LIKE '%_mid_price_core_v1_side_band' THEN 'mid_price_core_v1_side_band'
-  ELSE 'unknown'
-END
+COALESCE(
+  NULLIF(instance_id, ''),
+  CASE
+    WHEN run_id LIKE '%_mid_price_core_v1_25_75' THEN 'mid_price_core_v1_25_75'
+    WHEN run_id LIKE '%_mid_price_core_v2_25_75' THEN 'mid_price_core_v2_25_75'
+    WHEN run_id LIKE '%_mid_price_core_v1_side_band' THEN 'mid_price_core_v1_side_band'
+  END,
+  'unknown'
+)
 """
 
 
@@ -76,10 +87,16 @@ GROUP_EXPR = {
 
 
 @dataclass(frozen=True)
+class RawOrderSource:
+    instance_id: str
+    path: Path
+
+
+@dataclass(frozen=True)
 class Args:
     db: Path
     clob_fills: Path
-    raw_live_dir: Path
+    raw_order_sources: tuple[RawOrderSource, ...]
     start: str
     end: str
     date_field: str
@@ -89,9 +106,39 @@ class Args:
 
 
 def connect(path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(
+        f"file:{path.resolve()}?mode=ro",
+        uri=True,
+        timeout=1.0,
+    )
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=1000")
     return conn
+
+
+def resolve_raw_order_sources(override: Path | None = None) -> tuple[RawOrderSource, ...]:
+    """Resolve live journals from production desired state unless explicitly overridden."""
+
+    if override is not None:
+        paths = sorted(override.glob("*orders.jsonl")) if override.is_dir() else [override]
+        return tuple(RawOrderSource(instance_id="override", path=path) for path in paths)
+
+    spec = load_production_spec()
+    sources: list[RawOrderSource] = []
+    seen: set[str] = set()
+    for runtime in spec.managed_runtimes:
+        if not runtime.expected_live or runtime.live_order_path is None:
+            continue
+        path = runtime.live_order_path
+        if not path.is_absolute():
+            path = (runtime.checkout_root or spec.operational_repo_root) / path
+        key = str(path)
+        if key in seen:
+            continue
+        sources.append(RawOrderSource(instance_id=runtime.instance_id, path=path))
+        seen.add(key)
+    return tuple(sources)
 
 
 def fetch_all(conn: sqlite3.Connection, sql: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
@@ -214,7 +261,7 @@ def aggregate_live(conn: sqlite3.Connection, args: Args) -> list[dict[str, Any]]
 
 
 def aggregate_orders(conn: sqlite3.Connection, args: Args) -> list[dict[str, Any]]:
-    # Orders do not carry strategy metadata directly beyond run_id. Use the same run_id suffix mapping.
+    # Current orders carry instance_id. Keep run_id suffixes only for historical rows.
     date_col = "substr(placed_at_utc, 1, 10)"
     filter_sql = ""
     params: list[Any] = [args.start, args.end]
@@ -235,13 +282,20 @@ def aggregate_orders(conn: sqlite3.Connection, args: Args) -> list[dict[str, Any
         WITH o AS (
           SELECT
             orders.*,
-            fills.filled_at_utc,
-            fills.filled_price,
-            fills.filled_shares,
+            fill_summary.filled_at_utc,
+            fill_summary.actual_fill_cost_usd,
             {ORDER_INSTANCE_CASE} AS strategy_instance,
             {date_col} AS selected_date
           FROM orders
-          LEFT JOIN fills USING(execution_id)
+          LEFT JOIN (
+            SELECT
+              execution_id,
+              MAX(filled_at_utc) AS filled_at_utc,
+              SUM(filled_price * filled_shares) AS actual_fill_cost_usd
+            FROM fills
+            WHERE status='filled'
+            GROUP BY execution_id
+          ) fill_summary USING(execution_id)
           WHERE venue='polymarket_clob'
         )
         SELECT
@@ -251,7 +305,7 @@ def aggregate_orders(conn: sqlite3.Connection, args: Args) -> list[dict[str, Any
           COUNT(*) AS orders,
           ROUND(SUM(cost_usd), 4) AS submitted_or_error_cost_usd,
           SUM(CASE WHEN filled_at_utc IS NOT NULL THEN 1 ELSE 0 END) AS filled_orders,
-          ROUND(SUM(CASE WHEN filled_at_utc IS NOT NULL THEN filled_price*filled_shares ELSE 0 END), 4) AS actual_fill_cost_usd
+          ROUND(SUM(COALESCE(actual_fill_cost_usd, 0)), 4) AS actual_fill_cost_usd
         FROM o
         WHERE selected_date BETWEEN ? AND ?
           {filter_sql}
@@ -272,10 +326,58 @@ def bj_date(iso_ts: str) -> str:
     return dt.astimezone(datetime.timezone(datetime.timedelta(hours=8))).date().isoformat()
 
 
-def raw_order_summary(path: Path, start: str, end: str) -> dict[str, Any]:
+def _is_raw_order_attempt(row: dict[str, Any]) -> bool:
+    role = str(row.get("child_order_role") or "").lower()
+    if role.endswith("_terminal"):
+        return False
+    if row.get("live_attempted") is True or row.get("live_submit_status"):
+        return True
+    return str(row.get("status") or "").lower() in {
+        "submitted",
+        "submit_failed",
+        "failed",
+        "rejected",
+    }
+
+
+def _raw_order_timestamp(row: dict[str, Any]) -> str:
+    return str(
+        row.get("created_at_utc")
+        or row.get("live_attempt_ts_utc")
+        or row.get("placed_at_utc")
+        or row.get("ts_utc")
+        or ""
+    )
+
+
+def _raw_submitted_notional(row: dict[str, Any]) -> float:
+    return float(
+        row.get("notional")
+        or row.get("submitted_notional_usd")
+        or row.get("planned_notional_usd")
+        or 0.0
+    )
+
+
+def _raw_posted_notional(row: dict[str, Any], submitted: float) -> float:
+    explicit = row.get("posted_notional")
+    if explicit is not None:
+        return float(explicit or 0.0)
+    accepted = (
+        row.get("live_order_posted") is True
+        or str(row.get("live_submit_status") or "") in {"submitted", "posted"}
+    )
+    return submitted if accepted else 0.0
+
+
+def raw_order_summary(
+    sources: tuple[RawOrderSource, ...], start: str, end: str
+) -> dict[str, Any]:
     out: dict[str, Any] = {
-        "path": str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path),
-        "exists": path.exists(),
+        "paths": [str(source.path) for source in sources],
+        "configured_files": len(sources),
+        "existing_files": 0,
+        "missing_files": [],
         "files": 0,
         "rows": 0,
         "range_rows": 0,
@@ -283,17 +385,21 @@ def raw_order_summary(path: Path, start: str, end: str) -> dict[str, Any]:
         "range_posted_notional_usd": 0.0,
         "by_created_date_bj": [],
     }
-    if not path.exists():
-        return out
-    by_date: dict[str, dict[str, Any]] = defaultdict(
+    by_date: dict[tuple[str, str], dict[str, Any]] = defaultdict(
         lambda: {
             "created_date_bj": "",
+            "strategy_instance": "",
             "orders": 0,
             "submitted_notional_usd": 0.0,
             "posted_notional_usd": 0.0,
         }
     )
-    for file_path in sorted(path.glob("*orders.jsonl")):
+    for source in sources:
+        file_path = source.path
+        if not file_path.is_file():
+            out["missing_files"].append(str(file_path))
+            continue
+        out["existing_files"] += 1
         out["files"] += 1
         with file_path.open("r", encoding="utf-8") as fh:
             for line in fh:
@@ -301,15 +407,23 @@ def raw_order_summary(path: Path, start: str, end: str) -> dict[str, Any]:
                     continue
                 row = json.loads(line)
                 out["rows"] += 1
-                created_date = bj_date(str(row.get("created_at_utc") or ""))
+                if not _is_raw_order_attempt(row):
+                    continue
+                created_date = bj_date(_raw_order_timestamp(row))
                 if start <= created_date <= end:
-                    submitted = float(row.get("notional") or 0.0)
-                    posted = float(row.get("posted_notional") or submitted)
+                    submitted = _raw_submitted_notional(row)
+                    posted = _raw_posted_notional(row, submitted)
+                    strategy_instance = str(
+                        row.get("strategy_instance")
+                        or row.get("instance_id")
+                        or source.instance_id
+                    )
                     out["range_rows"] += 1
                     out["range_submitted_notional_usd"] += submitted
                     out["range_posted_notional_usd"] += posted
-                    item = by_date[created_date]
+                    item = by_date[(created_date, strategy_instance)]
                     item["created_date_bj"] = created_date
+                    item["strategy_instance"] = strategy_instance
                     item["orders"] += 1
                     item["submitted_notional_usd"] += submitted
                     item["posted_notional_usd"] += posted
@@ -317,12 +431,13 @@ def raw_order_summary(path: Path, start: str, end: str) -> dict[str, Any]:
     out["range_posted_notional_usd"] = round(float(out["range_posted_notional_usd"]), 4)
     out["by_created_date_bj"] = [
         {
-            "created_date_bj": k,
+            "created_date_bj": v["created_date_bj"],
+            "strategy_instance": v["strategy_instance"],
             "orders": v["orders"],
             "submitted_notional_usd": round(v["submitted_notional_usd"], 4),
             "posted_notional_usd": round(v["posted_notional_usd"], 4),
         }
-        for k, v in sorted(by_date.items())
+        for _, v in sorted(by_date.items())
     ]
     return out
 
@@ -403,7 +518,7 @@ def clob_coverage_gate(db: Path, cache: Path) -> dict[str, Any]:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    conn = sqlite3.connect(str(db))
+    conn = connect(db)
     try:
         order_caps = module.load_order_caps(conn)
         # Keep the account report on the same effective-price basis as the
@@ -550,44 +665,53 @@ def render_markdown(result: dict[str, Any]) -> str:
 
 def run(args: Args) -> dict[str, Any]:
     conn = connect(args.db)
-    coverage = clob_coverage_gate(args.db, args.clob_fills)
-    db_vs_cache = coverage.get("db_vs_primary_cache") or {}
-    fill_id_reconciliation = {
-        "db_live_real_distinct_fills": coverage.get("db_fills", {}).get(
-            "distinct_fill_ids", 0
-        ),
-        "raw_clob_distinct_fills": coverage.get("cache_fills", {}).get(
-            "distinct_fill_ids", 0
-        ),
-        "db_not_in_raw": db_vs_cache.get("db_not_in_cache", 0),
-        "raw_not_in_db": db_vs_cache.get("cache_not_in_db", 0),
-        "sample_db_not_in_raw": db_vs_cache.get("sample_db_not_in_cache", []),
-        "sample_raw_not_in_db": db_vs_cache.get("sample_cache_not_in_db", []),
-    }
-    return {
-        "scope": {
-            "db": str(args.db.relative_to(ROOT) if args.db.is_relative_to(ROOT) else args.db),
-            "date_field": args.date_field,
-            "start": args.start,
-            "end": args.end,
-            "instances": ",".join(args.instances),
-            "group_by": ",".join(args.group_by),
-        },
-        "db_snapshot": db_snapshot(conn),
-        "live_reconcile": aggregate_live(conn, args),
-        "order_reconcile": aggregate_orders(conn, args),
-        "raw_clob_summary": raw_clob_summary(args.clob_fills, args.start, args.end),
-        "raw_order_summary": raw_order_summary(args.raw_live_dir, args.start, args.end),
-        "fill_id_reconciliation": fill_id_reconciliation,
-        "clob_fill_coverage_gate": coverage,
-    }
+    try:
+        coverage = clob_coverage_gate(args.db, args.clob_fills)
+        db_vs_cache = coverage.get("db_vs_primary_cache") or {}
+        fill_id_reconciliation = {
+            "db_live_real_distinct_fills": coverage.get("db_fills", {}).get(
+                "distinct_fill_ids", 0
+            ),
+            "raw_clob_distinct_fills": coverage.get("cache_fills", {}).get(
+                "distinct_fill_ids", 0
+            ),
+            "db_not_in_raw": db_vs_cache.get("db_not_in_cache", 0),
+            "raw_not_in_db": db_vs_cache.get("cache_not_in_db", 0),
+            "sample_db_not_in_raw": db_vs_cache.get("sample_db_not_in_cache", []),
+            "sample_raw_not_in_db": db_vs_cache.get("sample_cache_not_in_db", []),
+        }
+        return {
+            "scope": {
+                "db": str(args.db.relative_to(ROOT) if args.db.is_relative_to(ROOT) else args.db),
+                "date_field": args.date_field,
+                "start": args.start,
+                "end": args.end,
+                "instances": ",".join(args.instances),
+                "group_by": ",".join(args.group_by),
+                "raw_order_files": len(args.raw_order_sources),
+            },
+            "db_snapshot": db_snapshot(conn),
+            "live_reconcile": aggregate_live(conn, args),
+            "order_reconcile": aggregate_orders(conn, args),
+            "raw_clob_summary": raw_clob_summary(args.clob_fills, args.start, args.end),
+            "raw_order_summary": raw_order_summary(args.raw_order_sources, args.start, args.end),
+            "fill_id_reconciliation": fill_id_reconciliation,
+            "clob_fill_coverage_gate": coverage,
+        }
+    finally:
+        conn.close()
 
 
 def parse_args() -> Args:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--clob-fills", type=Path, default=DEFAULT_CLOB_FILLS)
-    parser.add_argument("--raw-live-dir", type=Path, default=DEFAULT_RAW_LIVE_DIR)
+    parser.add_argument(
+        "--raw-live-dir",
+        type=Path,
+        default=None,
+        help="Explicit legacy override; default resolves expected-live journals from production.yaml.",
+    )
     parser.add_argument("--start", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument("--end", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument(
@@ -611,7 +735,7 @@ def parse_args() -> Args:
     return Args(
         db=ns.db,
         clob_fills=ns.clob_fills,
-        raw_live_dir=ns.raw_live_dir,
+        raw_order_sources=resolve_raw_order_sources(ns.raw_live_dir),
         start=ns.start,
         end=ns.end,
         date_field=ns.date_field,

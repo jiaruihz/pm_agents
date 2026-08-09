@@ -1,4 +1,4 @@
-interface_version: 1
-display_name: PMM Scenario Generator
-short_description: Generate PMM mock scenarios from catalog or user intent profile.
-default_prompt: Generate PMM backtest mock scenarios for a given strategy intent.
+interface:
+  display_name: "PMM Scenario Generator"
+  short_description: "Generate dormant PMM mock scenarios for backtests"
+  default_prompt: "Use $pmm-scenario-generator to generate legacy PMM mock scenarios for a specified backtest profile."

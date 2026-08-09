@@ -23,7 +23,7 @@ description: 审计一个 Polymarket 市场的基础信息、规则、结算条�
 ## Run
 
 ```bash
-python3 skills/polymarket-market-rule-audit/scripts/run_market_rule_audit.py \
+.venv/bin/python skills/polymarket-market-rule-audit/scripts/run_market_rule_audit.py \
   --target-market "https://polymarket.com/event/..."
 ```
 

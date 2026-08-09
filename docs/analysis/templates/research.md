@@ -9,6 +9,8 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 
 - hypothesis（可证伪，一句话）：
 - data scope（city/source/target-date，含或不含已查看样本）：
+- market capture scope/policy（使用选择性 WS 时；否则 N/A）：
+- collector budget（扩采时填 traffic/day、storage/day、retention、stop condition；否则 N/A）：
 - acceptance gates（probability / market baseline / forward / execution）：
 - 唯一动作（coverage audit / fixed A-B / frozen-forward collector / zero-notional shadow）：
 - 不在范围内（尤其是 live、其他城市、额外变体）：
@@ -23,6 +25,9 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 | settlement / label coverage | | |
 | independent target dates | | |
 | clean frozen-forward status | | |
+| selective capture policy/version + subscription coverage（若使用 WS） | | |
+| incremental-book reconstruction parity（若使用 WS） | | |
+| sampling grain / message weighting（若使用 WS） | | |
 
 ## 结论与动作
 
@@ -50,6 +55,9 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 | source first-seen/cadence | |
 | source-to-settlement basis | |
 | book freshness / archive bias | |
+| capture policy / rollout-valid window / subscription set | |
+| WS baseline snapshot + delta reconstruction / gap status | |
+| eligible checkpoints vs observed frames/messages | |
 | label availability | |
 
 ## Signal funnel
@@ -79,6 +87,15 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 
 | candidate | rows | logloss | Brier | calibration | delta vs market | date-block CI |
 |---|---:|---:|---:|---:|---:|---|
+
+### Microstructure ablation（使用 WS 时必填）
+
+| arm | fixed rows/dates | feature clock | primary score | delta vs level-only | date-block CI |
+|---|---:|---|---:|---:|---|
+| weather-only | | | | | |
+| market level-only | | | | | |
+| weather + level | | | | | |
+| weather + level + WS dynamics | | | | | |
 
 ## Expression / execution
 

@@ -27,7 +27,7 @@ description: 诊断并恢复 weather 生产的 JRS 外置卷/TCC/canonical tmux 
 
 ## 历史复发与完成口径
 
-开始修复前搜索 `WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`、相关 incident、git log
+开始修复前搜索 `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`、相关 incident、git log
 和 runtime logs，列出同症状历史的时间窗、当时修复层级和复发原因。不要根据最近一次恢复报告或
 当前提示词推断历史已闭环。
 
@@ -105,7 +105,7 @@ weather_jrs_tmux_write_probe weather-data-feed-jrs "$JRS_RUNTIME_ROOT"
 ```
 
 - probe 成功：不迁移；修正 runner 的 process context。
-- helper 报 tmux path/hash 漂移：不迁移；先按 `OPS_RUNBOOK.md` 给新 binary
+- helper 报 tmux path/hash 漂移：不迁移；先按 `docs/OPS_RUNBOOK.md` 给新 binary
   授权 Full Disk Access、更新 pin 并重建 canonical host。
 - probe 失败：记录原始错误并判断是 volume、现有 parent 还是 prospective host 故障；不要直接把
   一次失败等同于数据盘故障或立即迁移。

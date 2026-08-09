@@ -14,7 +14,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from pmm.backtest.scenario_generator import generate_all_from_catalog
+from src.strategies.pmm.backtest.scenario_generator import generate_all_from_catalog
 
 
 def _clip(v: float, lo: float, hi: float) -> float:
@@ -151,8 +151,10 @@ def _print_initial(files: list[str]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate PMM mock scenarios")
     parser.add_argument("--mode", default="catalog", choices=["catalog", "intent"])
-    parser.add_argument("--catalog", default="pmm/backtest/case_catalog.json")
-    parser.add_argument("--out-dir", default="pmm/backtest/scenarios")
+    parser.add_argument(
+        "--catalog", default="src/strategies/pmm/backtest/case_catalog.json"
+    )
+    parser.add_argument("--out-dir", default="runtime/pmm/backtest/scenarios")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--show-initial", action="store_true")
     parser.add_argument("--show-sample", default="")

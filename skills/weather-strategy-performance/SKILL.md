@@ -154,8 +154,8 @@ executable_cost = side ask + taker fee + declared friction
 
 使用 `docs/analysis/templates/performance.md` 或 `performance-compare.md`。必须包含数据快照、目标 metric/grain、双漏斗、probability 与 trade 两层、fee/执行口径、paired baseline、CI/forward、三门、动作。
 
-报告是 snapshot，不自动成为新的当前入口。交付前把结论回写 `WEATHER_DOCS_INDEX.md` 路由的 family living doc
-与 `WEATHER_STRATEGY_REGISTRY.md`：保留最新可用判断、明确 superseded-for-decision-use 的旧数字，并链接本次证据。
+报告是 snapshot，不自动成为新的当前入口。交付前把结论回写 `docs/WEATHER_DOCS_INDEX.md` 路由的 family living doc
+与 `docs/WEATHER_STRATEGY_REGISTRY.md`：保留最新可用判断、明确 superseded-for-decision-use 的旧数字，并链接本次证据。
 大型明细、模型和图片进入 `production.yaml.research_artifact_root`；仓库只保留结论、紧凑 metadata 与权威 case evidence。
 
 默认先报 fee-adjusted PnL，并拆 YES/NO；不要让一侧掩盖另一侧亏损。最终一句：

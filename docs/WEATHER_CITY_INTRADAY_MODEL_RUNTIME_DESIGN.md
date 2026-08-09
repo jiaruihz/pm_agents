@@ -1,7 +1,7 @@
 # Weather City Intraday Runtime（WCIR）：总体设计与迁移方案
 
-Status: WCIR runtime implemented; latest canonical refresh blocked by JRS permission context; model-performance baseline remains rolling
-Updated: 2026-08-03 Phase 7 five-city runtime audit + canonical permission fail-closed
+Status: WCIR runtime/authority migration implemented; model-performance baseline remains rolling; current process/JRS health is intentionally dynamic
+Updated: 2026-08-09 selective CLOB WebSocket reconstruction contract
 Scope: 城市级分钟/小时间隔观测模型从采集、PIT checkpoint、replay 到统一候选与下单执行的目标架构
 Source of truth: 目标模块边界与接口是；当前生产进程、实例和迁移状态不是
 Used by: `AGENTS.md`、`CLAUDE.md`、`weather-strategy-research`、各城市模型研究与接入任务
@@ -236,6 +236,23 @@ mode = research | shadow | zero_notional | live
 7. `relative_offset` 必须声明相对 source、official 或 expression 哪个 anchor；capture 取所需 anchor expressions 的 union，anchor 差距超出窗口时显式记 coverage gap，不能报成 bracket mismatch。
 8. `first_post_event` 必须由 checkpoint builder 选择“首个满足预注册 quote contract 的 book”，不能由 scorer 第一次成功运行的偶然时点决定。
 
+### 5.1 选择性 CLOB WebSocket 增量状态
+
+WebSocket raw journal 是 transport evidence，不是 prediction table 或完整 ladder 正本。公共 runtime 负责：
+
+- 将 `book` / `snapshot` 作为 token-level baseline，将 `price_change` 按 event/receive clock 作为 delta，
+  对 reconnect 初始快照、duplicate、out-of-order 与 sequence gap 做确定性处理；
+- 为重建 book state 生成 stable ID，包含 baseline ref、delta range/hash、token map、producer build、
+  selector/capture-policy version、subscription set 和 coverage/gap status；
+- 把重建状态作为 `feature_book_snapshot_ref`；不用当前 REST `latest` 回填历史 delta，
+  `execution_book_snapshot_ref` 仍按决策时的 fresh executable quote 独立选择；
+- 将 unsubscribed/window-inactive/paused-city/reconnect-gap 分别记为结构化 coverage status。
+  无消息不能 fold 成“盘口未变”；完整 ladder 分母继续由 PIT REST capture 所有。
+
+frame 可批量包含多个 token/event，活跃行情会内生更高消息率。runtime 只在预注册
+checkpoint/time-bin/first-event/state-transition 上产生 feature frame，不为每条 raw message 生成独立 candidate。
+quote delta 不得标记为 trade print、executed volume、queue position 或 fill。
+
 这允许东京的 market-offset、赫尔辛基的 residual 研究和阿姆斯特丹的 source-cross/quote policy 共用 runtime，同时保留各自机制。
 
 ## 6. Live 与 replay 必须同构
@@ -253,6 +270,8 @@ replay 不复制策略逻辑，只替换两个依赖：
 - forecast 晚到、重复 payload、进程重启后的去重；
 - KNMI 同一 measurement interval 的 initial/update/revision 与 late backfill；
 - one-sided book、stale book、无 midpoint；
+- WebSocket baseline + delta 重建、批量多 token frame、duplicate/out-of-order、reconnect 初始快照与 sequence gap；
+- capture-policy 切换、未订阅 bracket、窗外静默与 paused-city coverage；
 - hot/cold cadence 切换和 after-event burst；
 - 本地日期先于 UTC shard 切换、等待首报和新日文件尚未产生；
 - source lattice 领先 official 一档/两档，以及 multi-anchor expression union；
@@ -386,7 +405,7 @@ Phase 5 的逐实例显式授权约束，不能由本决策自动切换。
 
 #### Phase 3A：Helsinki
 
-Status: **2026-08-03 runtime v3 已作为 production authoritative 单写运行；本地、全历史迁移与实际 running raw 验收通过。**
+Status: **2026-08-03 runtime v3 已作为 production authoritative 单写运行；当时盘点的 legacy runtime inventory 迁移与实际 running raw 验收通过。**
 Helsinki 与 Tokyo 共用的 runtime v3 只写统一 contract journals，旧 v2 evaluation/intent/checkpoint/error
 journals 已在 config 与实例 registry 标为 `deprecated_read_only`。全量 388 evaluation、10 历史 paper intent、2 blocker
 转换为 386 unique candidates、6 可证明 zero-notional intents 和4条历史 Tokyo token-identity blocker；212 个缺失 outcome
@@ -396,14 +415,16 @@ checkpoint probability 已改读 v3 decision bundles，不再回读 legacy evalu
 
 2026-08-03 Phase 7 审计时的 production 进程为 clean detached checkout `e3bd0aa2`，配置仍是
 `zero_notional_shadow`，没有 live 参数；当前是否仍在运行必须重新以 manifest/health 为准。
-旧 v2 journal 在 v3 active journal 建立后没有新增写入。当前新的 JRS 权限异常影响 canonical 补数，不影响已经完成的
-runtime authority cutover；它不能被解释成允许绕过 manifest 或另写 repo-local DB。
+旧 v2 journal 在 v3 active journal 建立后没有新增写入。2026-08-03 记录的 JRS permission blocker 后续已通过
+controller 恢复；2026-08-07 strict manifest 再次确认 canonical DB route healthy、JRS context healthy。该事实只关闭
+旧 blocker，不把本设计文档变成运行状态页；当前是否健康仍必须重新运行 manifest/health，且不得绕过 manifest 或另写
+repo-local DB。
 
 - 作为 point-observation、纯天气/market-offset 双表达参考实现。
 - 对齐 forecast、official、FMI、book、one-sided、等待首报与状态变化去重。
 - 覆盖全部 deployed raw、一次 UTC/业务日期边界，以及 point/one-sided/stale/token identity fixtures。
 
-完成标准：全历史迁移 conversion error=0、temp canonical delta=0；runtime v3 首轮与重启 dedupe 不写 legacy 文件；无 exception storm、无订单或 notional。
+完成标准：manifest 声明的 legacy runtime inventory 迁移 conversion error=0、temp canonical delta=0；runtime v3 首轮与重启 dedupe 不写 legacy 文件；无 exception storm、无订单或 notional。
 
 #### Phase 3B：Tokyo
 
@@ -523,7 +544,7 @@ read probe 并正确降为 `critical/canonical_db_inaccessible`，不再把 meta
 
 ### Phase 7：关闭 active 旁路并保留 legacy 资产
 
-Status: **2026-08-03 WCIR 五城 runtime/代码旁路收口已通过；最新 canonical 补数因 JRS 权限 fail-closed，整体文档状态暂不升级为 fully implemented。**
+Status: **implemented。2026-08-03 WCIR 五城 runtime/代码旁路收口已通过；当时的 JRS permission blocker 已于后续 controller 恢复，并在 2026-08-07 由 strict manifest/health 复核。**
 
 固定审计入口为 `scripts/ops/audit_weather_city_runtime_phase7.py`。实际 production raw 报告 hash
 `a3199ab975521f8f400267d7301d74c927d494c7f76255998b10dd0b1e903168`，覆盖 Amsterdam、Busan、Helsinki、
@@ -545,7 +566,7 @@ Seoul、Tokyo：356 journal rows / 352 unique candidates、1,270 checkpoint bloc
 - 所有城市输出标准 candidate/intent；replay/shadow/paper/live 共用 model/plugin/policy contract。
 - 旧 runtime、raw、fixture 和兼容 reader 标为 `legacy_adapter` / `dormant` / read-only rollback，保留不删；不再是 active authority。
 
-完成标准：仓库和 production manifest 的 active-path 扫描均无未登记旁路；五城 migration report、schema、contract tests、rolling-baseline impact report 同步完成，之后才把本文件状态升级为 `implemented`。
+完成证据：仓库和 production manifest 的 active-path 扫描均无未登记旁路；五城 migration report、schema、contract tests、rolling-baseline impact report 已同步完成。这里的 `implemented` 只表示 runtime/authority 迁移完成，不表示模型 alpha 已确认，也不替代当前 controller health。
 
 ## 9. 全框架验收标准
 

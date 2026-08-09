@@ -1,4 +1,4 @@
-interface_version: 1
-display_name: Polymarket Market Rule Audit
-short_description: 审计 Polymarket 市场规则、结算条件和歧义风险。
-default_prompt: 审计这个 Polymarket 市场的基础信息、规则、结算条件和歧义风险，并输出结构化结论。
+interface:
+  display_name: "Polymarket Market Rule Audit"
+  short_description: "审计 Polymarket 市场规则、结算来源和歧义风险"
+  default_prompt: "Use $polymarket-market-rule-audit 审计这个 Polymarket 市场的规则、结算条件和歧义风险。"

@@ -29,7 +29,7 @@ description: 分析一个 Polymarket 市场的评论区、top holders、smart wa
 ## Run
 
 ```bash
-python3 skills/polymarket-market-intel/scripts/run_market_intel.py \
+.venv/bin/python skills/polymarket-market-intel/scripts/run_market_intel.py \
   --target-market "https://polymarket.com/event/..."
 ```
 
@@ -48,3 +48,4 @@ python3 skills/polymarket-market-intel/scripts/run_market_intel.py \
 - 评论抓取失败时自动降级到 holder/wallet 视角。
 - 评论情绪不能代替规则分析。
 - 关键钱包历史质量要和当前市场偏向分开描述。
+- `profile_audit_mode=full` 只表示在公开端点和当前代码上限内尽量分页，不保证账户全历史；报告返回数量、覆盖窗口和已知缺口。

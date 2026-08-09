@@ -1,7 +1,7 @@
 # Weather Analysis Contract
 
 Status: current-source
-Updated: 2026-08-03 WCIR decision identity, canonical build pin, bounded refresh routing
+Updated: 2026-08-09 selective CLOB WebSocket reconstruction and coverage contract
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -126,7 +126,7 @@ sqlite3 -batch -cmd ".timeout 5000" runtime/weather.db \
 ### 禁止清单
 
 - 不准在 `/tmp` 或未 git 的目录写一次性 pandas 脚本，不存档不记录
-- 不准自己定义新指标或新切片维度（必须用 §2/§5 里的定义）
+- canonical 绩效不得临时改指标定义；研究确需新增指标/切片时，必须先定义 grain、公式、PIT 可得性和复用归属，并在报告/contract 中登记
 - 不准把 strategy_id 之外的字段当作策略唯一标识
 - 不准只输出数字结论而不写 Markdown 报告
 - 不准跳过报告的"数据完整性自检"段
@@ -140,7 +140,7 @@ sqlite3 -batch -cmd ".timeout 5000" runtime/weather.db \
 | 门 | 通过条件 | 不通过时 |
 |---|---|---|
 | 显著性门 | ROI、超额 ROI、PnL delta 或 A/B delta 的 bootstrap 95% CI 不跨 0；若是相对基准，则 CI 不跨基准 | `inconclusive`，不得给 live 动作 |
-| 基准门 | 相对零模型的超额显著大于 0；默认零模型是同价位无脑买 NO，可补市场隐含价 EV=0 和随机选边 sanity check | 只是 base-rate，不算 alpha |
+| 基准门 | 概率/模型以同 rows 的 market probability 为主基准；交易表达以同一时点 executable market cost 为主基准。同价位无脑买 NO/YES 与随机选边只作 side/base-rate sanity check | 只是 base-rate 或天气预测能力，不算 market residual alpha |
 | 前瞻门 | train 窗选出的规则、城市、side 或参数，在 holdout 或后续日期仍同号且仍有超额 | 只能 `shadow_candidate`，不得改 live |
 
 结论只能使用以下等级：
@@ -176,6 +176,17 @@ conclusion=confirmed/shadow_candidate/inconclusive
 - 同一 `target_date` 多城市、多 bracket 或多 fill 存在相关性时，优先按 `target_date` 做 block/cluster bootstrap。
 - 可报告相关性折减后的 `n_eff = n / (1 + (n - 1) * rho_bar)`；若 `n_eff` 远低于 naive n，结论必须降级或标高风险。
 - 若本轮试了多个城市/切片/版本，报告候选数量 K，并说明是否做了 Bonferroni、FDR、Deflated Sharpe 或其他多重检验处理。
+
+日内概率模型的统一补充口径：
+
+- checkpoint、state-transition、state-entry 分别计分，不能用大量容易的重复
+  checkpoint 淹没关键状态切换；
+- 每个 grain 内先按 `target_date` 等权；多 grain objective 的权重必须在训练前固定；
+- ordered outcome 增加 RPS；多 horizon event 增加 integrated horizon
+  Brier/logloss，并验证概率单调/coherent；
+- calibration、AUC、accuracy 都只能作 proper loss 的补充，不能替代同 rows
+  Brier/logloss 与 market baseline；
+- 共享实现位于 `weather_model_evaluation`，城市 adapter/特征/模型仍可独立。
 
 ### 8 环覆盖自检（报告必须声明）
 
@@ -242,6 +253,14 @@ python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py \
 2. authenticated CLOB order / trade 数据。
 3. public activity / trades API 只作 fallback，并且必须按 partial fill 粒度聚合、受 order cap 约束。
 
+fill 数量来源与 fee 来源必须分别取最强证据；即时 `matched` 回报不能提前结束 fee 证据链。fee 权威顺序是：
+
+1. authenticated order/trade 的非零 `takerFee`；
+2. `place.transactionsHashes` 精确命中的 public activity BUY 现金差：`max(0, usdcSize - size * price)`；
+3. public fallback partial BUY 每一段各自使用同一现金差；
+4. 明确 maker fill 记 `maker_zero`；
+5. 以上都不可得时才按 Weather 官方曲线估算，并标 `weather_fee_curve_estimate`，不得静默写 0。
+
 **禁止**把 Polymarket public activity 当成逐 order 的权威 fill 来源。public activity 是账户级成交活动，不保证携带本地 CLOB `order_id` 粒度；同 market split child orders 或同 token 多笔订单时，旧 fallback 会把账户级成交错误分配给某个 child order，造成：
 
 - `order_id` mismatch；
@@ -256,6 +275,13 @@ python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
 `gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。必须先修复 `clob_fills.jsonl` / CLOB fill sync，再重建 `runtime/weather.db`。
+
+`fills` 是 append-only。历史错误 fee 不得 `UPDATE/DELETE fills`，必须写入
+`runtime/weather_edge_v1/clob_fill_fee_adjustments.jsonl`，重建时导入
+`fill_fee_adjustments`；`fact_trades.fees_usd = fills.fees_usd + SUM(fee_delta_usd)`。
+调整必须带 `fee_source`、`fee_evidence_class`、tx/evidence 与 market fee metadata；
+`public_activity_tx_exact`、`maker_zero`（exact/order semantics）与 `weather_fee_curve_estimate` 必须分层报告。
+coverage gate 必须令已知 immediate matched taker 的“effective fee=0 且无 adjustment evidence”失败。
 
 ### Polymarket 交易费口径（2026-07-03 勘误）
 
@@ -421,6 +447,15 @@ rows = conn.execute("""
 - 重建：`run_stack.sh` 在 fact_trades **之后**调用 `scripts/etl/build_weather_signal_candidates.py`
 - 设计文档：[WEATHER_SIGNAL_CANDIDATES_DESIGN.md](WEATHER_SIGNAL_CANDIDATES_DESIGN.md)
 
+当前物化表仍是 `v1_legacy_daily` 语义：每
+`(condition_id, side, event_date)` 一行。first-seen/event-driven 研究的目标
+grain 是同表 additive `v2_event_checkpoint`，按 trigger event/checkpoint
+保留一天内多次真正的新信息决策；在 schema/rebuild 落地前不得把 raw
+`source_events` 临时 join 的结果声称为 canonical
+`fact_signal_candidates`。落地后所有查询必须显式声明
+`candidate_grain_version`，禁止混合 v1/v2 分母。完整契约见
+[WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
+
 **口径硬规定：**
 - **反事实主口径 = `counterfactual_pnl`**，用**决策窗 `decision_entry_price`**（T-22~24h 真能看到的价）算，
   公式沿用 §2.1 已验证的 BUY_YES/BUY_NO（含 2026-05-29 BUY_NO 勘误）。
@@ -482,6 +517,19 @@ rows = conn.execute("""
 - raw orderbook join 必须按 token map 对齐 `(condition_id, bracket, outcome)`，并且只取 `snapshot_ts <= decision_ts` 的最近盘口；禁止用 latest snapshot 回填历史决策。
 - `counterfactual_pnl_best` 只能作为全天最优诊断上限，不得当作主绩效或 live 决策依据。
 - 成交样本和未成交机会必须并排报告，避免把 fill selection bias 当 alpha。
+
+#### 选择性 WebSocket 增量盘口（硬规定）
+
+- raw `book` / `snapshot` 是完整状态基准，`price_change` 是 delta。必须按 token 与 event/receive clock
+  从最近有效基准确定性重建；单条 frame/JSONL 不是 orderbook snapshot。
+- 重建状态的 identity 必须可回溯 baseline raw ref、delta 区间/hash、token map、producer build、
+  selector/capture-policy version、subscription set 与 gap/reconnect 状态。不得用当前 `latest` REST 快照回填历史 delta。
+- hot strip、时间窗、event burst、暂停城市与未订阅 bracket 造成选择性 missingness。无 WS 消息不等于盘口
+  无变化；报告必须按 rollout/capture manifest 的 policy-valid 窗口分层，完整 ladder 分母仍由 PIT REST ladder 提供。
+- frame/message 是 transport grain，不是独立训练样本或交易机会。必须映射到预注册 checkpoint/time-bin/
+  first-event/state-transition grain，并先在 `target_date` 内等权；不得按消息活跃度无意重加权。
+- quote add/cancel/replace 不是 trade print、成交量或 queue position。无真实 print/order lifecycle 时，只能评价
+  quote-state/markout，不得声称 order-flow、fill 或 maker execution alpha。
 
 ### weather.db（原始规范化表，仅 fact_trades / fact_signal_candidates builder 使用）
 
@@ -760,6 +808,7 @@ Shanghai, Shenzhen, Singapore, Taipei, TelAviv, Tokyo, Warsaw, Wellington, Wuhan
 | M3 A/B 对比 | `docs/analysis/templates/performance-compare.md` | weather-strategy-performance |
 | M2 单日血缘 | `docs/analysis/templates/lineage.md` | weather-strategy-lineage |
 | M4 持仓敞口 | `docs/analysis/templates/exposure.md` | weather-strategy-exposure |
+| M5 新机制 / 概率 / 快源 / PIT 研究 | `docs/analysis/templates/research.md` | weather-strategy-research |
 
 **输出路径规约**：`docs/analysis/YYYY-MM/YYYY-MM-DD-<mode>-<topic>.md`  
 每份报告产出后必须 git commit。

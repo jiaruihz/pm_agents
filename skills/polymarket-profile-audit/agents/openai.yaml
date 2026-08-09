@@ -1,4 +1,4 @@
-interface_version: 1
-display_name: Polymarket Profile Audit
-short_description: Audit a Polymarket user from username, profile URL, or wallet and summarize the result.
-default_prompt: Audit this Polymarket account, pull its history, and tell me whether the sample supports exceptional accuracy or abnormal behavior.
+interface:
+  display_name: "Polymarket Profile Audit"
+  short_description: "Audit a Polymarket account and its history"
+  default_prompt: "Use $polymarket-profile-audit to audit this Polymarket account and summarize its historical performance."

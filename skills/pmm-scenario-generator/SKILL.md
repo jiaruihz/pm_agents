@@ -1,11 +1,12 @@
 ---
 name: pmm-scenario-generator
-description: Generate synthetic PMM mock/backtest scenarios in batch from either a fixed catalog or an intent-driven profile (base zone, regime, liquidity, fill style, shock type).
+description: Generate synthetic scenarios for the dormant legacy PMM backtest framework from a fixed catalog or intent profile. Use only for PMM orderbook simulation; do not use it for the active weather/WCIR strategy, canonical facts, or production CLOB capture.
 ---
 
 # PMM Scenario Generator
 
-Use this skill when the user wants to generate mock market data (orderbook ticks) for PMM strategy testing.
+Use this skill when the user explicitly wants legacy PMM mock orderbook ticks. The PMM
+framework is retained for possible reuse but is not the active weather strategy chain.
 
 ## Inputs
 
@@ -17,7 +18,7 @@ Use this skill when the user wants to generate mock market data (orderbook ticks
 
 ### `catalog` mode params
 
-- `catalog`: path to catalog json, default `pmm/backtest/case_catalog.json`
+- `catalog`: path to catalog json, default `src/strategies/pmm/backtest/case_catalog.json`
 - `show_initial`: print initial state summary
 - `show_sample`: print first tick for one scenario id
 
@@ -37,16 +38,16 @@ Use this skill when the user wants to generate mock market data (orderbook ticks
 Catalog mode:
 
 ```bash
-python skills/pmm-scenario-generator/scripts/generate_scenarios.py \
+.venv/bin/python skills/pmm-scenario-generator/scripts/generate_scenarios.py \
   --mode catalog \
-  --catalog pmm/backtest/case_catalog.json \
-  --out-dir pmm/backtest/scenarios
+  --catalog src/strategies/pmm/backtest/case_catalog.json \
+  --out-dir runtime/pmm/backtest/scenarios
 ```
 
 Intent mode:
 
 ```bash
-python skills/pmm-scenario-generator/scripts/generate_scenarios.py \
+.venv/bin/python skills/pmm-scenario-generator/scripts/generate_scenarios.py \
   --mode intent \
   --base-zone around_30 \
   --market-regime oscillating \
@@ -55,7 +56,7 @@ python skills/pmm-scenario-generator/scripts/generate_scenarios.py \
   --shock-event spike_then_revert \
   --horizon-ticks 600 \
   --count 10 \
-  --out-dir pmm/backtest/scenarios_intent
+  --out-dir runtime/pmm/backtest/scenarios_intent
 ```
 
 ## Output
