@@ -44,6 +44,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--draws", type=int, default=3000)
+    parser.add_argument("--target-start", default="")
+    parser.add_argument("--target-end", default="")
+    parser.add_argument("--recent-start", default=RECENT_START)
     return parser.parse_args()
 
 
@@ -126,7 +129,7 @@ def summarize(rows: pd.DataFrame, label: str, draws: int, seed: int) -> dict[str
     }
 
 
-def load_rows(db: Path) -> pd.DataFrame:
+def load_rows(db: Path, *, target_start: str = "", target_end: str = "") -> pd.DataFrame:
     query = """
     WITH outcomes AS (
         SELECT
@@ -142,6 +145,8 @@ def load_rows(db: Path) -> pd.DataFrame:
             ) AS win
         FROM settlement_outcomes
         WHERE settlement_status = 'settled'
+          AND (:target_start = '' OR target_date >= :target_start)
+          AND (:target_end = '' OR target_date <= :target_end)
         GROUP BY city, target_date, bracket
     ),
     snapshot_quality AS (
@@ -165,6 +170,8 @@ def load_rows(db: Path) -> pd.DataFrame:
             ) AS quoted_mid_mass
         FROM tmax_v2_ladder_snapshots s
         JOIN tmax_v2_ladder_rung_quotes r USING (ladder_snapshot_id)
+        WHERE (:target_start = '' OR s.target_date >= :target_start)
+          AND (:target_end = '' OR s.target_date <= :target_end)
         GROUP BY s.ladder_snapshot_id
     )
     SELECT
@@ -199,6 +206,8 @@ def load_rows(db: Path) -> pd.DataFrame:
      AND o.bracket = r.absolute_bracket_identity
     WHERE s.completeness_status = 'complete'
       AND s.lineage_status = 'pit_verified_capture'
+      AND (:target_start = '' OR s.target_date >= :target_start)
+      AND (:target_end = '' OR s.target_date <= :target_end)
       AND r.yes_direct_bid BETWEEN 0.001 AND 0.999
       AND r.yes_direct_ask BETWEEN 0.001 AND 0.999
       AND r.yes_direct_ask >= r.yes_direct_bid
@@ -207,7 +216,8 @@ def load_rows(db: Path) -> pd.DataFrame:
     try:
         conn.execute("PRAGMA query_only=ON")
         conn.execute("PRAGMA busy_timeout=5000")
-        frame = pd.read_sql_query(query, conn)
+        params = {"target_start": target_start, "target_end": target_end}
+        frame = pd.read_sql_query(query, conn, params=params)
         identities = pd.read_sql_query(
             """
             SELECT DISTINCT
@@ -218,8 +228,11 @@ def load_rows(db: Path) -> pd.DataFrame:
             JOIN tmax_v2_ladder_rung_quotes r USING (ladder_snapshot_id)
             WHERE s.completeness_status = 'complete'
               AND s.lineage_status = 'pit_verified_capture'
+              AND (:target_start = '' OR s.target_date >= :target_start)
+              AND (:target_end = '' OR s.target_date <= :target_end)
             """,
             conn,
+            params=params,
         )
     finally:
         conn.close()
@@ -446,7 +459,15 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.report.parent.mkdir(parents=True, exist_ok=True)
 
-    raw = load_rows(args.db)
+    raw = load_rows(
+        args.db,
+        target_start=args.target_start,
+        target_end=args.target_end,
+    )
+    if raw.empty:
+        raise RuntimeError(
+            f"no settled PIT rows for target range {args.target_start or '*'}..{args.target_end or '*'}"
+        )
     expanded, fixed = prepare_rows(raw)
     coverage = coverage_table(expanded, fixed)
 
@@ -506,12 +527,12 @@ def main() -> None:
     windows = []
     for label, group in (
         ("all", fixed),
-        ("early_2026-07-11_to_18", fixed[fixed["target_date"] < RECENT_START]),
-        ("recent_2026-07-19_to_23", fixed[fixed["target_date"] >= RECENT_START]),
+        (f"before_{args.recent_start}", fixed[fixed["target_date"] < args.recent_start]),
+        (f"since_{args.recent_start}", fixed[fixed["target_date"] >= args.recent_start]),
         ("lottery_ask_le_20c", fixed[fixed["yes_ask"] <= 0.20]),
         (
-            "recent_lottery_ask_le_20c",
-            fixed[(fixed["target_date"] >= RECENT_START) & (fixed["yes_ask"] <= 0.20)],
+            f"since_{args.recent_start}_lottery_ask_le_20c",
+            fixed[(fixed["target_date"] >= args.recent_start) & (fixed["yes_ask"] <= 0.20)],
         ),
     ):
         windows.append(summarize(group, label, args.draws, 2026072450 + len(windows) * 2))
@@ -543,7 +564,9 @@ def main() -> None:
             "fee": "shares * 0.05 * price * (1-price)",
             "exit": "hold to settlement",
             "full_ladder_geometry_min_quote_fraction": 0.80,
-            "recent_start": RECENT_START,
+            "recent_start": args.recent_start,
+            "target_start": args.target_start or None,
+            "target_end": args.target_end or None,
             "no_live_change": True,
         },
         "inventory": {
@@ -572,7 +595,7 @@ def main() -> None:
     all_row = window_frame[window_frame["slice"].eq("all")].iloc[0]
     lottery_row = window_frame[window_frame["slice"].eq("lottery_ask_le_20c")].iloc[0]
     recent_lottery = window_frame[
-        window_frame["slice"].eq("recent_lottery_ask_le_20c")
+        window_frame["slice"].eq(f"since_{args.recent_start}_lottery_ask_le_20c")
     ].iloc[0]
     lines = [
         "# Market-Implied Tail Residual P0/P1 v1",
@@ -590,7 +613,7 @@ def main() -> None:
         (
             f"在该分母上，所有 exact-bracket YES 的 fee-adjusted taker ROI 为 "
             f"{fmt_pct(all_row['fee_adjusted_roi'])}；ask<=20c 彩票为 "
-            f"{fmt_pct(lottery_row['fee_adjusted_roi'])}，recent 7/19..7/23 为 "
+            f"{fmt_pct(lottery_row['fee_adjusted_roi'])}，自 {args.recent_start} 起为 "
             f"{fmt_pct(recent_lottery['fee_adjusted_roi'])}。"
         ),
         "",
@@ -650,7 +673,7 @@ def main() -> None:
         "## 研究裁决",
         "",
         "- broad cheap YES 不是 alpha；是否存在 residual 必须由下一阶段 market-only model 在 OOF 概率质量上证明。",
-        "- 当前只有 12 个 settled target dates，且 full-ladder 高质量覆盖主要在 7/15 后；不能据单格点估创建 hard gate。",
+        f"- 当前评估 slice 只有 {summary['inventory']['dates']} 个 settled target dates；不能据单格点估创建 hard gate。",
         "- P2 应在同一固定分母比较 raw market mid 与 full-ladder market-only model；先不加入 forecast/weather。",
         "- P2 通过后再做 P3 weather uplift，才能区分 market/base-rate 与 forecast/source alpha。",
         "- verdict=`inconclusive`; 保持 zero-notional research，不改 HeadA shadow/live。",

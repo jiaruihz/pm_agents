@@ -171,6 +171,14 @@ Runtime:
 - health: `/Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/latest_summary.json`
 - append-only checkpoints: `/Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/checkpoints.jsonl`
 
+## 2026-08-09 Incremental Review
+
+固定分母扩展到 7/28 后，7/24..28 的 broad exact YES ROI -11.36%，ask<=20c 为 -34.03%
+且 CI 全负；hotter-tail 仍没有稳定可加 selector。唯一前后同号的诊断是 `cold_1 + local ladder discount`，
+但它是 post-hoc market-structure 候选而非 hotter-tail。下一步只评估连续 local-kink residual 的
+expanding-date OOF proper-score uplift；8/08+ shadow 尚无完整 settled forward date，verdict 仍为 `inconclusive`。
+完整证据见 [incremental review v1](../2026-08/2026-08-09-market-implied-tail-residual-incremental-review-v1.md)。
+
 Artifacts:
 
 - `docs/analysis/2026-07/generated/market_implied_tail_residual_v1/summary.json`
