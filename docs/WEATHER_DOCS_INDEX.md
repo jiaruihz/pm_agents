@@ -38,7 +38,7 @@ Status 口径：
 | Tmax distribution / full ladder / target book | [WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md](WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md) | P0–P6、lineage repair、v3 报告用于复核演进；当前结论是概率/会计框架保留、alpha 未 confirmed |
 | Amsterdam / Busan / Helsinki / Seoul / Tokyo 城市模型 | [WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md](WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md) + [WCIR runtime design](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md) | 先读“五城知识账”；数字版本是 experiment/run，不自动成为新模型身份或新 collector |
 | 外部钱包 | [WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md](WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md) | 先读全钱包结论矩阵；逐钱包报告只支持机制与历史 selected-fill 证据，不支持地址跟单或 live eligibility |
-| market structure / Range RV / underround / microstructure | [market_structure_edge.md](analysis/market_structure_edge.md) | 历史 scanner 版本是 search history；当前只保留已吸收的结构结论和仍需 forward 的执行问题 |
+| market structure / Range RV / underround / microstructure | [market_structure_edge.md](analysis/market_structure_edge.md) | 历史 scanner 版本是 search history；当前包含 exact-kink 与 canonical ladder-mass-transport 的 branch-exhausted 结论，以及仍需 forward 的其他执行问题 |
 | forecast source / city-model calibration | [WEATHER_FORECAST_SOURCE_CALIBRATION.md](WEATHER_FORECAST_SOURCE_CALIBRATION.md) | 单日/单模型 scorecard 只作 snapshot；当前每城模型与 lineage 以 living calibration doc 为准 |
 | 生产、JRS、DB、采集事故 | [WEATHER_JRS_RUNTIME_INCIDENTS.md](WEATHER_JRS_RUNTIME_INCIDENTS.md) + [DATA_PIPELINE](WEATHER_DATA_PIPELINE.md) + [ENTRYPOINT](WEATHER_STRATEGY_ENTRYPOINT.md) | 事故报告用于时间窗和根因证据，不替代 controller/manifest 的当前状态 |
 
