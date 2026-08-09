@@ -642,6 +642,8 @@ def load_canonical_orderbook_latest(path, *, now_utc, max_age_sec):
         }
     books = {}
     book_keys = (
+        "city", "event_date", "event_id", "event_slug", "market_id",
+        "condition_id", "bracket", "outcome",
         "status", "token_id", "request_started_at_utc", "response_received_at_utc",
         "parsed_at_utc", "fetched_at_utc", "request_batch_capture_id",
         "clock_lineage_status", "event_time_pit_scorable", "exchange_book_timestamp",
@@ -663,6 +665,72 @@ def load_canonical_orderbook_latest(path, *, now_utc, max_age_sec):
         "available_at_utc": available_raw,
         "book_count": len(books),
     }
+
+
+def canonical_market_ladders_from_books(books):
+    """Build event ladders from canonical book identity without Gamma I/O."""
+    grouped = {}
+    for book in books.values():
+        city = str(book.get("city") or "")
+        event_date = str(book.get("event_date") or "")
+        bracket = str(book.get("bracket") or "")
+        outcome = str(book.get("outcome") or "").lower()
+        if not city or not event_date or not bracket or outcome not in {"yes", "no"}:
+            continue
+        event = grouped.setdefault(
+            (city, event_date),
+            {
+                "event_id": str(book.get("event_id") or ""),
+                "event_slug": str(book.get("event_slug") or ""),
+                "markets": {},
+            },
+        )
+        market = event["markets"].setdefault(
+            bracket,
+            {
+                "label": bracket,
+                "market_id": str(book.get("market_id") or ""),
+                "condition_id": str(book.get("condition_id") or ""),
+                "yes_token_id": "",
+                "no_token_id": "",
+                "yes_price": None,
+            },
+        )
+        market[f"{outcome}_token_id"] = str(book.get("token_id") or "")
+        if outcome == "yes":
+            summary = book.get("summary") if isinstance(book.get("summary"), dict) else {}
+            bid = _to_float(summary.get("best_bid"), None)
+            ask = _to_float(summary.get("best_ask"), None)
+            if bid is not None and ask is not None:
+                market["yes_price"] = (bid + ask) / 2.0
+            else:
+                market["yes_price"] = ask if ask is not None else bid
+
+    ladders = {}
+    for key, event in grouped.items():
+        entries = []
+        for bracket, market in event["markets"].items():
+            yes_price = market.get("yes_price")
+            if yes_price is None or not 0.0 <= float(yes_price) <= 1.0:
+                continue
+            entries.append(
+                {
+                    **market,
+                    "yes_price": float(yes_price),
+                    "last_trade": 0.0,
+                    "question": f"Highest temperature in {key[0]} on {key[1]}: {bracket}",
+                }
+            )
+        entries.sort(
+            key=lambda item: float((re.search(r"-?\d+(?:\.\d+)?", item["label"]) or [float("inf")])[0])
+        )
+        ladders[key] = {
+            "event_id": event["event_id"],
+            "event_slug": event["event_slug"],
+            "bracket_list": [(item["label"], item["yes_price"]) for item in entries],
+            "market_entries": entries,
+        }
+    return ladders
 
 
 def publish_legacy_orderbook_alias(source_archive, destination):
@@ -1734,6 +1802,7 @@ def main():
     )
     orderbook_cache = {}
     canonical_orderbook_source = None
+    canonical_market_ladders = {}
     external_orderbook_only = bool(args.orderbook_source_latest)
     if external_orderbook_only:
         orderbook_cache, canonical_orderbook_source = load_canonical_orderbook_latest(
@@ -1741,6 +1810,7 @@ def main():
             now_utc=now_utc,
             max_age_sec=args.orderbook_source_max_age_sec,
         )
+        canonical_market_ladders = canonical_market_ladders_from_books(orderbook_cache)
         publish_legacy_orderbook_alias(
             canonical_orderbook_source.get("archive_path"),
             orderbook_archive,
@@ -1891,28 +1961,36 @@ def main():
                 if forecast_info.get("cache_fallback")
                 else ("ok" if errors is not None else "missing_error_distribution")
             )
-            # Fetch PM event
+            # Resolve market identity. A strategy view fed by canonical
+            # market-books must never rediscover the same event over Gamma.
             city_slug = cfg.get("slug", city.lower())
             dt = datetime.strptime(target_date, "%Y-%m-%d")
             date_slug = dt.strftime("%B-%-d-%Y").lower()
             slug = f"highest-temperature-in-{city_slug}-on-{date_slug}"
-
-            try:
-                status_code, ev_raw, _error = curl_json_get(
-                    f"{PM_GAMMA_URL}/events",
-                    params={"slug": slug},
-                    proxy=PROXY,
-                    timeout_sec=PM_CURL_TIMEOUT_SEC,
-                    connect_timeout_sec=PM_CURL_CONNECT_TIMEOUT_SEC,
-                )
-                if status_code != 200 or ev_raw is None:
-                    ev_raw = {}
-                if isinstance(ev_raw, list) and len(ev_raw) > 0:
-                    ev_raw = ev_raw[0]
-                markets = ev_raw.get("markets", []) if isinstance(ev_raw, dict) else []
-            except Exception:
-                ev_raw = {}
+            canonical_ladder = canonical_market_ladders.get((city, target_date))
+            if external_orderbook_only:
+                ev_raw = {
+                    "id": (canonical_ladder or {}).get("event_id", ""),
+                    "slug": (canonical_ladder or {}).get("event_slug", slug),
+                }
                 markets = []
+            else:
+                try:
+                    status_code, ev_raw, _error = curl_json_get(
+                        f"{PM_GAMMA_URL}/events",
+                        params={"slug": slug},
+                        proxy=PROXY,
+                        timeout_sec=PM_CURL_TIMEOUT_SEC,
+                        connect_timeout_sec=PM_CURL_CONNECT_TIMEOUT_SEC,
+                    )
+                    if status_code != 200 or ev_raw is None:
+                        ev_raw = {}
+                    if isinstance(ev_raw, list) and len(ev_raw) > 0:
+                        ev_raw = ev_raw[0]
+                    markets = ev_raw.get("markets", []) if isinstance(ev_raw, dict) else []
+                except Exception:
+                    ev_raw = {}
+                    markets = []
 
             settle_utc, market_end_source = resolve_market_end_utc(
                 ev_raw if isinstance(ev_raw, dict) else None,
@@ -1957,7 +2035,12 @@ def main():
                     )
                 )
 
-            if hours_to_settle < 0 or hours_to_settle > 50 or not markets:
+            if (
+                hours_to_settle < 0
+                or hours_to_settle > 50
+                or (external_orderbook_only and not canonical_ladder)
+                or (not external_orderbook_only and not markets)
+            ):
                 continue
 
             now_local = city_local_datetime(city, now_utc)
@@ -1994,7 +2077,11 @@ def main():
 
             # Build bracket list for compute_bracket_probs
             market_map = {}
-            bracket_list, market_entries = gamma_market_ladder(markets)
+            if external_orderbook_only:
+                bracket_list = canonical_ladder["bracket_list"]
+                market_entries = canonical_ladder["market_entries"]
+            else:
+                bracket_list, market_entries = gamma_market_ladder(markets)
 
             if not args.no_orderbook:
                 if (

@@ -102,6 +102,47 @@ def test_strategy_view_reads_canonical_books_but_keeps_target_scope(tmp_path):
     assert skipped["status"] == "orderbook_scope_skipped"
 
 
+def test_strategy_view_builds_market_ladder_from_canonical_book_identity(tmp_path):
+    latest = tmp_path / "latest.json"
+    records = []
+    for outcome, token_id, best_bid, best_ask in (
+        ("yes", "yes-1", 0.4, 0.5),
+        ("no", "no-1", 0.5, 0.6),
+    ):
+        records.append(
+            {
+                "city": "Tokyo",
+                "event_date": "2026-08-07",
+                "event_id": "event-1",
+                "event_slug": "tokyo-event",
+                "market_id": "market-1",
+                "condition_id": "condition-1",
+                "bracket": "31",
+                "outcome": outcome,
+                "token_id": token_id,
+                "status": "ok",
+                "summary": {"best_bid": best_bid, "best_ask": best_ask},
+            }
+        )
+    latest.write_text(
+        json.dumps({"available_at_utc": "2026-08-07T12:00:00Z", "records": records})
+    )
+
+    books, source = paper_snapshot.load_canonical_orderbook_latest(
+        latest,
+        now_utc=datetime(2026, 8, 7, 12, 1, tzinfo=timezone.utc),
+        max_age_sec=420,
+    )
+    ladders = paper_snapshot.canonical_market_ladders_from_books(books)
+
+    assert source["status"] == "ok"
+    ladder = ladders[("Tokyo", "2026-08-07")]
+    assert ladder["event_id"] == "event-1"
+    assert ladder["bracket_list"] == [("31", 0.45)]
+    assert ladder["market_entries"][0]["yes_token_id"] == "yes-1"
+    assert ladder["market_entries"][0]["no_token_id"] == "no-1"
+
+
 def test_strategy_view_rejects_stale_canonical_batch(tmp_path):
     latest = tmp_path / "latest.json"
     latest.write_text(json.dumps({"available_at_utc": "2026-08-07T12:00:00Z", "records": []}))
