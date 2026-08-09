@@ -79,7 +79,7 @@ managed_runtimes:
     tmux_session: weather_market_books
     role: market_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
     start_script: scripts/ops/start_weather_market_books.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
     health_format: json

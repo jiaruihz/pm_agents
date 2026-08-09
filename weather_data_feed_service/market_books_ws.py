@@ -663,7 +663,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reconcile-sec", type=float, default=5.0)
     parser.add_argument("--health-interval-sec", type=float, default=10.0)
     parser.add_argument("--rest-max-age-sec", type=float, default=420.0)
-    parser.add_argument("--daily-payload-budget-bytes", type=int, default=1_000_000_000)
+    parser.add_argument("--daily-payload-budget-bytes", type=int, default=3_000_000_000)
     parser.add_argument("--select-once", action="store_true")
     return parser
 
