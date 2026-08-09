@@ -17,7 +17,7 @@ Superseded by / Used by: 取代 `docs/archive/UNIFIED_STRATEGY_PLATFORM_REFACTOR
 
 | 维度 | 现状 | 痛点 |
 |---|---|---|
-| 策略头启动 | 每个 head 一个 `scripts/ops/start_*.sh`，携带 ~40 个 env-var 旋钮（见 `start_weather_theta_current_yes_tiny_live.sh`） | 加一条策略 = 复制一个大 shell + 一个大 runner；改一个参数 = 改 shell 环境变量，无审计、无类型校验 |
+| 策略头启动 | 历史上每个 head 各有一个 `scripts/ops/start_*.sh`，携带约 40 个 env-var 旋钮；这些 per-head wrapper 已删除 | 加一条策略 = 复制一个大 shell + 一个大 runner；改一个参数 = 改 shell 环境变量，无审计、无类型校验 |
 | 运行时管理 | pidfile + `tmux -L weather-jrs` + nohup，散落在 `runtime/weather_edge_v1/<instance>/loop.pid` | 无统一 start/stop/restart；崩溃无自动重启记录；跨实例的全局 notional 上限没有任何一个进程看得见 |
 | 策略代码 | 每个 runner（`low_price_yes_lottery_tiny_live.py` 等）各自重写：arg 解析、循环、pidfile、snapshot/book 拉取、shadow telemetry 落盘、plan/order emit、heartbeat JSON | 横切逻辑重复 N 份，改一处要改 N 处；行为不一致（有的写 shadow，有的不写） |
 | 状态/元数据 | `weather_strategy_runtime_registry` 是**扫描反射**表：`refresh_weather_strategy_runtime_registry.py` 读本地 artifact 反推状态 | 状态是**被推断**出来的，不是**被设置**的；无法通过接口改状态；`lifecycle_status` 里混进了 `stale` 这种健康信号，三套 enum（lifecycle/execution/health）语义重叠 |
