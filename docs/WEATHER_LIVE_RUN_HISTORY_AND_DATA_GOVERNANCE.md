@@ -1365,6 +1365,11 @@ and the repair smoke report `orders_submitted=0`, so evidenced order, fill,
 notional and PnL impact is zero. This record must be updated with the recovery
 timestamp and first restored durable bundle after deployment.
 
+Commit `f2110dd3` also makes the WCIR summary expose `status=error` whenever an
+adapter cycle records an exception, and the production contract now accepts
+only `status=ok`. The still-running old build is therefore reported critical
+instead of being treated as healthy merely because its summary timestamp moves.
+
 ## 21. 2026-07-28..Ongoing Retired Fast-Observation Consumer Gap
 
 The `weather_live_cross_observations` controller instance became the sole
@@ -1391,6 +1396,12 @@ order, fill, notional and PnL impact is zero. The affected interval is a source
 event/quote coverage gap, not evidence that no qualifying events existed. The
 record must be closed with the first restored durable event/quote timestamps
 after deployment.
+
+Commit `f2110dd3` replaces freshness-only checks with producer-owned semantic
+health: the broad collector must prove its canonical input identity and input
+freshness, while the Tmax summary must report healthy source-context inputs.
+Until the new builds are deployed, controller health intentionally reports
+both old runtimes critical rather than preserving their former false-OK state.
 
 ## 22. Immediate Follow-Up Work
 
