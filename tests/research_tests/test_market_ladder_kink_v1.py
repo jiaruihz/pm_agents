@@ -14,9 +14,9 @@ SCRIPT = (
     / "scripts"
     / "analysis"
     / "market_structure_edge"
-    / "research_market_ladder_kink_v1.py"
+    / "market_ladder_kink_v1.py"
 )
-SPEC = importlib.util.spec_from_file_location("research_market_ladder_kink_v1", SCRIPT)
+SPEC = importlib.util.spec_from_file_location("market_ladder_kink_v1", SCRIPT)
 assert SPEC and SPEC.loader
 subject = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = subject

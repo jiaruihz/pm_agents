@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.analysis.market_structure_edge import research_market_ladder_kink_v1 as v1
+from scripts.analysis.market_structure_edge import market_ladder_kink_v1 as v1
 from src.strategies.runtime.production import load_production_spec
 
 

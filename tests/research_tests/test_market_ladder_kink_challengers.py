@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from scripts.analysis.market_structure_edge import (
-    research_market_ladder_kink_challengers as subject,
+    market_ladder_kink_challengers as subject,
 )
 
 
@@ -194,4 +194,3 @@ def test_verdict_localizes_execution_failure_and_exhausts_branch() -> None:
         "60": "probability_and_baseline",
     }
     assert result["final"] == "BRANCH_EXHAUSTED"
-
