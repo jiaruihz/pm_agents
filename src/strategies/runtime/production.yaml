@@ -315,6 +315,17 @@ managed_runtimes:
     accepted_health_statuses: [healthy, warning]
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+  - instance_id: weather_runtime_log_maintainer
+    tmux_session: weather_runtime_log_maintainer
+    role: monitor
+    execution_mode: infrastructure
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    start_script: scripts/ops/start_weather_runtime_log_maintainer.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/runtime_log_maintainer/latest_summary.json
+    max_health_age_sec: 900
+    accepted_health_statuses: [ok, warning]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
   - instance_id: weather_source_event_ladder_repricing_shadow
     uses_market_proxy: true
     tmux_session: weather_source_event_ladder_repricing_shadow
