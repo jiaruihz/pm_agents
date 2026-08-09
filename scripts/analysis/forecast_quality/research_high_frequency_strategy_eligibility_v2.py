@@ -10,6 +10,7 @@ import json
 import math
 import sqlite3
 import statistics
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,10 +18,12 @@ from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
-from weather_data_feed.jsonl_partitions import dated_jsonl_paths
-
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths  # noqa: E402
+
 DEFAULT_RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
 FAST_SOURCES = {"noaa_madis_hfmetar", "fmi", "ims_lod", "mgm"}
 FAST_CITIES = {
@@ -65,35 +68,40 @@ def canonical_city(value: Any) -> str:
     return ALIASES.get(city, city)
 
 
-def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
+def iter_jsonl(
+    path: Path,
+    *,
+    partition_filename: str | None = None,
+) -> Iterable[dict[str, Any]]:
     if path.is_dir():
-        for shard in dated_jsonl_paths(
+        paths = dated_jsonl_paths(
             path,
-            filename="high_frequency_observations.jsonl",
+            filename=partition_filename or "high_frequency_observations.jsonl",
             allow_missing=True,
-        ):
-            yield from iter_jsonl(shard)
+        )
+    elif path.is_file():
+        paths = (path,)
+    else:
         return
-    snapshot_size = path.stat().st_size
-    with path.open("rb") as handle:
-        while handle.tell() < snapshot_size:
-            raw_line = handle.readline()
-            if not raw_line:
-                break
-            try:
-                line = raw_line.decode("utf-8")
-            except UnicodeDecodeError:
-                continue
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                yield row
+    for source_path in paths:
+        snapshot_size = source_path.stat().st_size
+        with source_path.open("rb") as handle:
+            while handle.tell() < snapshot_size:
+                raw_line = handle.readline()
+                if not raw_line:
+                    break
+                try:
+                    line = raw_line.decode("utf-8")
+                except UnicodeDecodeError:
+                    continue
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict):
+                    yield row
 
 
 def load_profiles(path: Path) -> dict[str, dict[str, Any]]:
@@ -121,7 +129,10 @@ def load_reference_events(
     path: Path, profiles: dict[str, dict[str, Any]]
 ) -> tuple[dict[str, list[ReferenceEvent]], dict[str, list[ReferenceEvent]]]:
     earliest: dict[tuple[str, str, str], ReferenceEvent] = {}
-    for row in iter_jsonl(path):
+    for row in iter_jsonl(
+        path,
+        partition_filename="high_frequency_observations.jsonl",
+    ):
         source = str(row.get("source") or "")
         if source not in {"aviationweather_metar", "synopticdata_timeseries"}:
             continue

@@ -52,10 +52,12 @@ def test_taf_changed_payload_with_same_validity_is_linked_revision(tmp_path) -> 
     first = _annotate_taf_information_events(
         [row("TAF KATL 281200Z 2812/2912 CAVOK", "2026-07-28T04:00:03Z")],
         tmp_path,
+        raw_source_path=tmp_path / "2026-07-28" / "forecast_enrichment.jsonl",
     )[0]["taf"]["information_event"]
     revision = _annotate_taf_information_events(
         [row("TAF AMD KATL 281200Z 2812/2912 TSRA", "2026-07-28T04:05:03Z")],
         tmp_path,
+        raw_source_path=tmp_path / "2026-07-28" / "forecast_enrichment.jsonl",
     )[0]["taf"]["information_event"]
 
     assert revision["event_role"] == "revision"

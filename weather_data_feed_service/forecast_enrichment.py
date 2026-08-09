@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from weather_data_feed import city_local_date, load_city_configs, parse_now_utc
 from weather_data_feed.assigned_forecast_models import assigned_model_family
 from weather_data_feed.information_events import build_information_event
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths, recent_jsonl_lines
 from weather_data_feed.historical_forecast_runs import (
     DEFAULT_GLOBAL_SINGLE_RUN_MODELS,
     conservative_available_run,
@@ -84,7 +85,12 @@ def _taf_valid_time(value: Any) -> str | None:
         return str(value)
 
 
-def _annotate_taf_information_events(rows: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
+def _annotate_taf_information_events(
+    rows: list[dict[str, Any]],
+    output_dir: Path,
+    *,
+    raw_source_path: Path,
+) -> list[dict[str, Any]]:
     state_path = output_dir / "taf_information_event_state.json"
     state = read_json(state_path, {})
     first_seen = dict(state.get("first_seen_by_id") or {})
@@ -122,7 +128,7 @@ def _annotate_taf_information_events(rows: list[dict[str, Any]], output_dir: Pat
                 detected_at_utc=detected,
                 available_at_utc=available,
                 pit_lineage_class="collector_exact",
-                raw_source_path=str(output_dir / "forecast_enrichment.jsonl"),
+                raw_source_path=str(raw_source_path),
             )
             provisional = build_information_event(
                 **common,
@@ -236,12 +242,16 @@ def load_reusable_open_meteo_rows(
     candidates.extend(
         row for row in latest.get("records", []) if isinstance(row, dict)
     )
-    journal = output_dir / "forecast_enrichment.jsonl"
-    if journal.exists():
+    journals = dated_jsonl_paths(
+        output_dir,
+        filename="forecast_enrichment.jsonl",
+        allow_missing=True,
+    )
+    if journals:
         try:
-            lines = journal.read_text(encoding="utf-8").splitlines()[-max(1, tail_rows) :]
+            lines = recent_jsonl_lines(journals, max_lines=max(1, tail_rows))
         except OSError:
-            lines = []
+            lines = ()
         for line in reversed(lines):
             try:
                 row = json.loads(line)
@@ -1118,12 +1128,23 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
-    rows = _annotate_taf_information_events(list(payload.get("records") or []), output_dir)
+    generated_at = _parse_cache_utc(payload.get("generated_at_utc")) or datetime.now(
+        timezone.utc
+    )
+    record_day = generated_at.date().isoformat()
+    record_journal = output_dir / record_day / "forecast_enrichment.jsonl"
+    rows = _annotate_taf_information_events(
+        list(payload.get("records") or []),
+        output_dir,
+        raw_source_path=record_journal,
+    )
     write_latest_and_daily_jsonl(
         output_dir=output_dir,
         latest_payload=payload,
         rows=rows,
         jsonl_name="forecast_enrichment.jsonl",
+        day=record_day,
+        write_aggregate=False,
     )
     endpoint_versions = [
         version

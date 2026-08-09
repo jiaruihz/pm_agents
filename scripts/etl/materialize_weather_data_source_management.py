@@ -25,6 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.connection import get_conn
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
 
 DEFAULT_DB = str(PROJECT_ROOT / "runtime" / "weather.db")
 DEFAULT_RUNTIME_ROOT = os.environ.get(
@@ -285,6 +286,14 @@ def build_monitor_instances(runtime_root: str) -> list[dict]:
             jp = subdir / j
             if jp.is_file():
                 journal_paths.append(str(jp))
+                continue
+            shards = dated_jsonl_paths(
+                subdir,
+                filename=j,
+                allow_missing=True,
+            )
+            if shards:
+                journal_paths.append(str(shards[-1]))
 
         cities: list[str] = []
         summary: dict = {}

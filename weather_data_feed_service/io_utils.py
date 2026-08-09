@@ -38,9 +38,11 @@ def write_latest_and_daily_jsonl(
     rows: list[dict[str, Any]],
     jsonl_name: str,
     day: str | None = None,
+    write_aggregate: bool = True,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     day_key = day or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    append_jsonl(output_dir / jsonl_name, rows)
+    if write_aggregate:
+        append_jsonl(output_dir / jsonl_name, rows)
     append_jsonl(output_dir / day_key / jsonl_name, rows)
     write_json(output_dir / "latest.json", latest_payload)

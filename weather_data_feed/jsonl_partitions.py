@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from collections import deque
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -55,3 +56,26 @@ def iter_jsonl_lines(paths: Iterable[Path]) -> Iterator[str]:
     for path in paths:
         with path.open(encoding="utf-8") as handle:
             yield from handle
+
+
+def recent_jsonl_lines(paths: Iterable[Path], *, max_lines: int) -> tuple[str, ...]:
+    """Return the newest complete lines without reading older partitions.
+
+    Files must be ordered oldest to newest.  Only as many newest shards as
+    needed to satisfy ``max_lines`` are scanned.
+    """
+
+    limit = max(0, int(max_lines))
+    if limit == 0:
+        return ()
+    remaining = limit
+    chunks: list[tuple[str, ...]] = []
+    for path in reversed(tuple(paths)):
+        with path.open(encoding="utf-8") as handle:
+            lines = tuple(deque(handle, maxlen=remaining))
+        if lines:
+            chunks.append(lines)
+            remaining -= len(lines)
+        if remaining <= 0:
+            break
+    return tuple(line for chunk in reversed(chunks) for line in chunk)

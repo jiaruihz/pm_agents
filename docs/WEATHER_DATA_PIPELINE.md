@@ -1,11 +1,17 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-08-04 controller/storage identity and single refresh entrypoint
+Updated: 2026-08-10 shard-only enrichment journals
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-08-04
+Last updated: 2026-08-10
+
+> **2026-08-10 journal storage override**：`output/forecast_enrichment` 与历史
+> `output/high_frequency_observations` 的 durable history 只写、只读
+> `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写。`latest.json`
+> 仍是当前 cache。`output/live_cross_observations/high_frequency_observations.jsonl`
+> 是低延迟消费者正在 tail 的另一条 active stream，不属于这次 aggregate 清理，继续由其单一 producer 维护。
 
 > **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
 > `src/strategies/runtime/production.yaml` 解析；物理 canonical 是
@@ -128,6 +134,8 @@ unless matched by a real row in `fills`.
 | `production.yaml.historical_paper_snapshot_root` | immutable archive | historical replay only | pre-current-producer PIT strategy snapshots; consumers resolve this path through the shared production loader, never by embedding `/Volumes/...` literals |
 | `production.yaml.historical_{full_ladder,targeted}_data_root` | immutable archive | historical replay only | retired collector products; physical legacy names exist only in the production contract, while executable consumers use semantic helpers from `weather_data_feed.production_paths` |
 | `/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_forecast_curve_collector_v1` | forecast cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
+| `/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json` + `YYYY-MM-DD/forecast_enrichment.jsonl` | Mac tmux `weather_forecast_curve_collector_v1` | forecast cadence | current enrichment cache plus shard-only append history; no root aggregate |
+| `/Volumes/jrs/weather_data_feed_service_runtime/output/high_frequency_observations/latest.json` + `YYYY-MM-DD/high_frequency_observations.jsonl` | legacy/reference HFO collector when enabled | source cadence | reference enrichment cache plus shard-only append history; no root aggregate |
 | `production.yaml.managed_runtimes[*].live_order_path` | corresponding controller-managed live runtime | live strategy cadence | complete current live order-journal set; no second hard-coded list |
 | `production.yaml.managed_runtimes[*].health_path` | corresponding controller-managed runtime | role cadence | current raw pulse/summary; the control repo is not assumed to be its storage root |
 

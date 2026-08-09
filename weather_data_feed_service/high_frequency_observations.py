@@ -558,12 +558,18 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         ),
     )
     generated_at = published_at_utc
+    partition_only = bool(getattr(args, "partition_only", False))
+    raw_journal = Path(args.output_dir) / "high_frequency_observations.jsonl"
+    if partition_only:
+        raw_journal = (
+            Path(args.output_dir)
+            / generated_at[:10]
+            / "high_frequency_observations.jsonl"
+        )
     rows = annotate_information_events(
         rows,
         state,
-        raw_source_path=str(
-            Path(args.output_dir) / "high_frequency_observations.jsonl"
-        ),
+        raw_source_path=str(raw_journal),
         available_at_utc=generated_at,
     )
     source_statuses = {f"{result.source_key}:{result.city}": result.status for result in results}
@@ -640,7 +646,12 @@ def update_state(payload: dict[str, Any], state_path: Path) -> None:
     )
 
 
-def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
+def write_outputs(
+    payload: dict[str, Any],
+    output_dir: Path,
+    *,
+    write_aggregate: bool = True,
+) -> None:
     append_rows = append_history_rows(list(payload.get("new_observation_records") or []))
     latest_payload = {
         key: value
@@ -653,6 +664,8 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         latest_payload=latest_payload,
         rows=append_rows,
         jsonl_name="high_frequency_observations.jsonl",
+        day=str(payload.get("generated_at_utc") or "")[:10] or None,
+        write_aggregate=write_aggregate,
     )
 
 
@@ -671,13 +684,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-minute-window-min-interval-sec", action="append", default=[])
     parser.add_argument("--state-path", default="")
     parser.add_argument("--notify-path", default="")
+    parser.add_argument(
+        "--partition-only",
+        action="store_true",
+        help="Write the dated shard and latest.json without a root aggregate journal.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     payload = build_payload(args)
-    write_outputs(payload, Path(args.output_dir))
+    write_outputs(
+        payload,
+        Path(args.output_dir),
+        write_aggregate=not bool(args.partition_only),
+    )
     if args.notify_path:
         write_new_observation_notification(Path(args.notify_path), payload)
     update_state(payload, Path(args.state_path) if args.state_path else Path(args.output_dir) / "state.json")

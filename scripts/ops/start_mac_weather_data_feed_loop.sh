@@ -165,6 +165,7 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
           --sources "${RUNWAY_OBSERVATIONS_SOURCE_ARGS[@]}" \
           --active-local-start-hour "$FAST_OBS_ACTIVE_LOCAL_START_HOUR" \
           --active-local-end-hour "$FAST_OBS_ACTIVE_LOCAL_END_HOUR" \
+          --partition-only \
           --max-workers 4
       else
         "$PY" -u -m weather_data_feed_service \
@@ -172,6 +173,7 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
           --output-dir "$RUNWAY_OBSERVATIONS_OUTPUT" \
           --active-local-start-hour "$FAST_OBS_ACTIVE_LOCAL_START_HOUR" \
           --active-local-end-hour "$FAST_OBS_ACTIVE_LOCAL_END_HOUR" \
+          --partition-only \
           --max-workers 4
       fi
       rc=$?

@@ -8,6 +8,7 @@ import csv
 import json
 import sqlite3
 import statistics
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,11 @@ from weather_data_feed.jsonl_partitions import dated_jsonl_paths
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths  # noqa: E402
+
 DEFAULT_RUNTIME_ROOTS = [
     Path("/Volumes/jrs/weather_data_feed_service_runtime"),
     Path("~/projects/weather_data_feed_service_runtime").expanduser(),
@@ -75,14 +81,24 @@ def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         records = payload.get("records") if isinstance(payload, dict) else payload
         return [row for row in records or [] if isinstance(row, dict)]
+    paths = (
+        dated_jsonl_paths(
+            path,
+            filename="high_frequency_observations.jsonl",
+            allow_missing=True,
+        )
+        if path.is_dir()
+        else (path,)
+    )
     rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            if isinstance(row, dict):
-                rows.append(row)
+    for source_path in paths:
+        with source_path.open(encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if isinstance(row, dict):
+                    rows.append(row)
     return rows
 
 

@@ -652,8 +652,19 @@ def test_forecast_enrichment_builds_shadow_rows(monkeypatch, tmp_path) -> None:
     assert row["open_meteo_weather_context"]["target_day_hourly"]["forecast_max"] == 95.0
     assert row["vertical_profile_signal"]["available"] is True
     assert row["taf"]["signal"]["source"] == "aviationweather_taf"
-    assert (tmp_path / "forecast_enrichment" / "forecast_enrichment.jsonl").exists()
+    assert not (tmp_path / "forecast_enrichment" / "forecast_enrichment.jsonl").exists()
+    dated_journals = tuple(
+        (tmp_path / "forecast_enrichment").glob(
+            "????-??-??/forecast_enrichment.jsonl"
+        )
+    )
+    assert len(dated_journals) == 1
+    dated_journal = dated_journals[0]
     assert (tmp_path / "forecast_enrichment" / "latest.json").exists()
+    persisted_row = json.loads(dated_journal.read_text(encoding="utf-8").splitlines()[0])
+    assert persisted_row["taf"]["information_event"]["raw_source_path"] == str(
+        dated_journal
+    )
 
     def unexpected_open_meteo(*_args, **_kwargs):
         raise AssertionError("fresh Open-Meteo evidence should be reused")
@@ -696,6 +707,53 @@ def test_forecast_enrichment_builds_shadow_rows(monkeypatch, tmp_path) -> None:
         max_age_sec=21600,
     )
     assert recovered["Shanghai"]["open_meteo_multi_model"]["result"]["status"] == "ok"
+
+
+def test_high_frequency_partition_only_preserves_live_cross_default(tmp_path) -> None:
+    from weather_data_feed_service import high_frequency_observations
+
+    payload = {
+        "generated_at_utc": "2026-07-07T02:00:00+00:00",
+        "new_observation_records": [
+            {
+                "city": "Shanghai",
+                "source": "aviationweather_metar",
+                "station": "ZSPD",
+                "observation_time_utc": "2026-07-07T01:55:00+00:00",
+                "value_f": 90.0,
+            }
+        ],
+    }
+
+    partition_root = tmp_path / "high_frequency_observations"
+    high_frequency_observations.write_outputs(
+        payload,
+        partition_root,
+        write_aggregate=False,
+    )
+    assert not (partition_root / "high_frequency_observations.jsonl").exists()
+    assert (
+        partition_root
+        / "2026-07-07"
+        / "high_frequency_observations.jsonl"
+    ).exists()
+    assert (partition_root / "latest.json").exists()
+
+    live_cross_root = tmp_path / "live_cross_observations"
+    high_frequency_observations.write_outputs(payload, live_cross_root)
+    assert (live_cross_root / "high_frequency_observations.jsonl").exists()
+    assert (
+        live_cross_root
+        / "2026-07-07"
+        / "high_frequency_observations.jsonl"
+    ).exists()
+
+
+def test_high_frequency_cli_partition_only_flag() -> None:
+    from weather_data_feed_service import high_frequency_observations
+
+    args = high_frequency_observations.build_parser().parse_args(["--partition-only"])
+    assert args.partition_only is True
 
 
 def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:
