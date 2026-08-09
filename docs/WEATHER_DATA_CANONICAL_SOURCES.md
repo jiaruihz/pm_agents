@@ -1,7 +1,7 @@
 # Weather Data Canonical Sources
 
 Status: current-source
-Updated: 2026-08-08 Mac raw, canonical DB and archive identity boundary
+Updated: 2026-08-09 Mac raw, canonical DB and archive identity boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -76,10 +76,37 @@ manifest、对应 Mac raw journal 和 exchange response；问历史机会、绩�
 | `market_books/latest.json` + `batches/` | `weather_market_books` 唯一 raw Gamma/CLOB book 正本 |
 | `strategy_snapshots/` | data-feed join 后的策略消费视图 |
 | `market_ladder_snapshots/` | 完整 event/rung/two-sided distribution 与 batch completeness |
+| `production.yaml.historical_paper_snapshot_root` | 旧 collector 时期不可重采的 immutable PIT strategy snapshots；只作历史训练/回放输入，不是 current fallback |
 | production manifest 登记的 live order paths | 当前 strategy order/execution journals |
 | canonical fill cache + authenticated CLOB | order-level fills；public activity 只能作受约束的辅助证据 |
 
 所有 path 都通过 production loader 解析；表中的语义名不是让业务代码复制 physical path。
+retired collector 的 physical mapping 只允许登记在 `production.yaml`；可执行 Python/shell/service/config 由回归测试扫描，
+禁止再出现对应 path literal。旧名字留在 archive 的物理布局与历史文档中不等于它仍是 current data contract。
+
+历史与当前不应物理混放：当前 mutable raw 由 `market_books`/`market_ladder_snapshots` 单 owner 持续写入，
+历史 `paper_snapshots` 保留原始 schema 和 source path。研究代码通过 production loader 取得这两层，再投影到同一
+snapshot/rung contract；development、validation、forward 只是模型 split，不能再作为 raw source 的读取边界。
+
+### Historical ladder coverage boundary (2026-08-09 census)
+
+- archive raw：6,569 个 `snapshot_*.json`，capture 2026-05-05..2026-08-05，约 18.5 GB；其中
+  target_date 2026-05-19..2026-07-10 在 30 分钟采样后为 178,810 ladders / 1,586,613 rungs / 53 dates / 48 cities。
+- current `strategy_snapshots`：3,149 个 timestamped JSON，capture 2026-07-02..2026-08-09；其中 2,798 个文件名与
+  archive 重叠且 size 相同，不能把两个目录直接 concat 成训练集。
+- repo compatibility `market_data/paper_snapshots` 不是另一份 raw owner。2026-08-09 对它与 current
+  `strategy_snapshots` 做全文件 SHA-256 核验后，将 2,886 个完全相同文件原子改为同盘 hard link，保持旧 path/内容不变并
+  释放 10,964,734,619 bytes 重复物理块；2 个同名但 size 不同与 10 个 compatibility-only 文件保留，禁止按文件名覆盖。
+- retired hot collector roots 在清理前逐文件与 archive 比对：先补迁 345 个 archive 缺失文件，并把差异运行日志另名完整保留；
+  复核 4,100 个文件 / 1,689,779,927 bytes 全部逐字节一致且无进程引用后，已从 NVMe 删除两棵热盘副本。历史物理布局只由
+  `production.yaml.historical_*` 登记，不再允许 executable consumer 写死旧目录。
+- 当前 `tmax_v2_ladder_snapshots` 覆盖 target_date 2026-07-04..2026-08-08：398,600 physical rows / 36 dates / 47 cities；按
+  `(city,target_date,event_identity,source_snapshot_ts_utc)` 归并为326,370 logical captures，72,230 rows仍是多个历史路径重复物化。
+  其中7/29..8/8从raw `market_books/batches`按同batch末次response/fetch保守时钟补入47,806 full-ladder rows；模型读取必须
+  先按capture clock去重并优先full-ladder raw lineage，且不得把`tmax_v2`称作项目full history（5月训练仍来自immutable archive adapter）。
+- 旧 archive 不是与 7 月后同质量的 weather state：上述 historical-training slice 有 163,773 / 178,810 ladders
+  缺 intraday observation，107,861 / 178,810 只能使用 legacy forecast hash proxy。报告必须单列这些 coverage gap，
+  不能让 imputation 把两代 schema 的差异伪装成 alpha。
 
 ## 3. Canonical tables
 
