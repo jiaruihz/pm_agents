@@ -270,3 +270,21 @@ def test_history_adapter_streaming_cache_round_trip(tmp_path) -> None:
     assert history_cache_dates(cache_path) == ["2026-05-19"]
     assert len(snapshots) == 1
     assert len(rungs) == 3
+
+
+def test_candidate_expressions_handles_no_cross_rung_snapshot() -> None:
+    rows = pd.DataFrame(
+        {
+            "block": ["M2_ladder_transition"],
+            "horizon": [60],
+            "ladder_snapshot_id": ["snapshot-1"],
+            "condition_id": ["condition-1"],
+            "markout_prediction": [0.01],
+        }
+    )
+    expressions, funnel = subject._candidate_expressions(
+        rows, "M2_ladder_transition"
+    )
+    assert expressions.empty
+    assert funnel["pair_constructed"] == 0
+    assert funnel["one_share_depth_all_legs"] == 0

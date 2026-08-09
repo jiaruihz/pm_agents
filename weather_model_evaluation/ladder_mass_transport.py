@@ -156,7 +156,8 @@ def _read_sampled_snapshots(
                  ROW_NUMBER() OVER (
                    PARTITION BY s.city,s.target_date,s.event_identity,
                                 CAST(unixepoch(s.source_snapshot_ts_utc)/:sample_seconds AS INTEGER)
-                   ORDER BY s.source_snapshot_ts_utc,s.ladder_snapshot_id
+                   ORDER BY CASE WHEN s.source_system='weather_market_books_full_ladder' THEN 0 ELSE 1 END,
+                            s.source_snapshot_ts_utc,s.ladder_snapshot_id
                  ) AS sample_rank
           FROM tmax_v2_ladder_snapshots s
           WHERE s.target_date BETWEEN :start AND :end
@@ -254,7 +255,7 @@ def _asof_weather(snapshots: pd.DataFrame, forecasts: pd.DataFrame, observations
         f = forecast_groups.get(key)
         if f is not None and not f.empty:
             f = f.copy()
-            f["available_ts"] = pd.to_datetime(f["available_at_utc"], utc=True)
+            f["available_ts"] = pd.to_datetime(f["available_at_utc"], utc=True, format="mixed")
             f["forecast_peak_f"] = f["curve_json"].map(_curve_peak)
             f = f.sort_values("available_ts").drop_duplicates("forecast_values_hash", keep="first")
             f["forecast_peak_shock_f"] = f["forecast_peak_f"].diff()
@@ -275,7 +276,7 @@ def _asof_weather(snapshots: pd.DataFrame, forecasts: pd.DataFrame, observations
         o = observation_groups.get(key)
         if o is not None and not o.empty:
             o = o.copy()
-            o["available_ts"] = pd.to_datetime(o["available_at_utc"], utc=True)
+            o["available_ts"] = pd.to_datetime(o["available_at_utc"], utc=True, format="mixed")
             o = o.sort_values("available_ts")
             o["observed_max_f"] = pd.to_numeric(o["temp_f"], errors="coerce").cummax()
             o["observed_max_shock_f"] = o["observed_max_f"].diff().clip(lower=0)
@@ -467,7 +468,9 @@ def build_panel(
     conn=_connect(db)
     try:
         canonical_snapshots=_read_sampled_snapshots(conn,DEV_START,VALIDATION_END)
-        canonical_snapshots["snapshot_ts"]=pd.to_datetime(canonical_snapshots["source_snapshot_ts_utc"],utc=True)
+        canonical_snapshots["snapshot_ts"]=pd.to_datetime(
+            canonical_snapshots["source_snapshot_ts_utc"],utc=True,format="mixed"
+        )
         forecasts=_read_forecasts(conn,DEV_START,VALIDATION_END)
         observations=_read_observations(conn,DEV_START,VALIDATION_END)
         canonical_snapshots=_asof_weather(canonical_snapshots,forecasts,observations)
@@ -546,7 +549,9 @@ def build_recent_forward_panel(db:Path)->tuple[pd.DataFrame,dict[str,Any]]:
     conn=_connect(db)
     try:
         snapshots=_read_sampled_snapshots(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
-        snapshots["snapshot_ts"]=pd.to_datetime(snapshots["source_snapshot_ts_utc"],utc=True)
+        snapshots["snapshot_ts"]=pd.to_datetime(
+            snapshots["source_snapshot_ts_utc"],utc=True,format="mixed"
+        )
         forecasts=_read_forecasts(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
         observations=_read_observations(conn,RECENT_FORWARD_START,RECENT_FORWARD_END)
         snapshots=_asof_weather(snapshots,forecasts,observations)
@@ -872,9 +877,17 @@ def _candidate_expressions(scored:pd.DataFrame,candidate:str)->tuple[pd.DataFram
         })
     expressions=pd.DataFrame(records)
     funnel={"validation_snapshots":int(rows.ladder_snapshot_id.nunique()),"pair_constructed":len(expressions)}
+    if expressions.empty:
+        funnel.update({
+            "positive_continuous_signal":0,
+            "non_overlapping_first_cross":0,
+            "all_four_style_quotes":0,
+            "one_share_depth_all_legs":0,
+        })
+        return expressions,funnel
     expressions=expressions[expressions.predicted_pair_markout>0].copy()
     funnel["positive_continuous_signal"]=len(expressions)
-    expressions["snapshot_ts"]=pd.to_datetime(expressions.snapshot_ts,utc=True)
+    expressions["snapshot_ts"]=pd.to_datetime(expressions.snapshot_ts,utc=True,format="mixed")
     selected=[]
     for _,group in expressions.sort_values("snapshot_ts").groupby(
         ["city","target_date","event_identity"],sort=False
