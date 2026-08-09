@@ -272,7 +272,7 @@ if [[ $REBUILD -eq 1 ]]; then
   FIRST_SEEN_RAW_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
   FIRST_SEEN_SOURCE_EVENTS="${WEATHER_FIRST_SEEN_SOURCE_EVENTS_PATH:-$FIRST_SEEN_RAW_ROOT/output/source_events/sources.jsonl}"
   FIRST_SEEN_FORECAST_CURVES="${WEATHER_FIRST_SEEN_FORECAST_CURVES_PATH:-$FIRST_SEEN_RAW_ROOT/targeted_output/forecast_hourly_curves}"
-  FIRST_SEEN_FORECAST_ENRICHMENT="${WEATHER_FIRST_SEEN_FORECAST_ENRICHMENT_PATH:-$FIRST_SEEN_RAW_ROOT/output/forecast_enrichment/forecast_enrichment.jsonl}"
+  FIRST_SEEN_FORECAST_ENRICHMENT="${WEATHER_FIRST_SEEN_FORECAST_ENRICHMENT_PATH:-$FIRST_SEEN_RAW_ROOT/output/forecast_enrichment}"
   FIRST_SEEN_PAPER_SNAPSHOTS="${WEATHER_FIRST_SEEN_PAPER_SNAPSHOTS_PATH:-$FIRST_SEEN_RAW_ROOT/targeted_output/paper_snapshots}"
   FIRST_SEEN_FEATURE_STORE="${WEATHER_FIRST_SEEN_FEATURE_STORE_PATH:-$REPO_ROOT/runtime/weather_edge_v1/feature_store}"
   log "  Materializing first-seen information events (data/signal lineage only)..."

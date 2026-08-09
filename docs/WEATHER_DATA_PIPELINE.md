@@ -205,8 +205,10 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 
 The aggregate/shard equality audit on 2026-08-09 found exact SHA-256 concatenation parity for the stopped
 `forecast_enrichment.jsonl` (869,591,376 bytes) and `high_frequency_observations.jsonl`
-(646,315,053 bytes). They remain temporarily only because old consumers still name the aggregate path; their
-duplication must not be described as additional history.
+(646,315,053 bytes). The canonical rebuild now reads only dated `forecast_enrichment` partitions when given
+the family directory, explicitly excluding both the root compatibility aggregate and sibling
+`forecast_versions.jsonl` files. The two aggregates remain temporarily only for unmigrated research/runtime
+compatibility consumers; their duplication must not be described as additional history.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See

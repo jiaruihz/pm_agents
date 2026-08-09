@@ -46,6 +46,34 @@ def _files(paths: Iterable[Path], *, allow_missing: bool) -> Iterator[Path]:
             raise FileNotFoundError(f"required raw path does not exist: {path}")
 
 
+def _partitioned_files(
+    paths: Iterable[Path],
+    *,
+    filename: str,
+    allow_missing: bool,
+) -> Iterator[Path]:
+    """Resolve a partition family without double-reading its legacy aggregate.
+
+    An explicit file keeps the historical CLI contract.  A directory selects
+    only ``YYYY-MM-DD/<filename>`` shards; root-level compatibility aggregates
+    and sibling datasets (for example ``forecast_versions.jsonl``) are ignored.
+    """
+    for path in paths:
+        if path.is_file():
+            yield path
+            continue
+        if path.is_dir():
+            files = sorted(path.glob(f"????-??-??/{filename}"))
+            if not files and not allow_missing:
+                raise FileNotFoundError(
+                    f"no dated {filename} partitions under required path: {path}"
+                )
+            yield from files
+            continue
+        if not allow_missing:
+            raise FileNotFoundError(f"required raw path does not exist: {path}")
+
+
 def iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
     with path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -453,17 +481,37 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    paths = [
+    requested_paths = [
         Path(value)
-        for value in [
+        for value in (
             *args.source_events,
             *args.high_frequency_observations,
             *args.forecast_curves,
             *args.forecast_enrichment,
-        ]
+        )
     ]
-    if not paths:
+    if not requested_paths:
         raise ValueError("at least one raw input path is required")
+    paths = [
+        *_files(
+            (Path(value) for value in args.source_events),
+            allow_missing=bool(args.allow_missing),
+        ),
+        *_partitioned_files(
+            (Path(value) for value in args.high_frequency_observations),
+            filename="high_frequency_observations.jsonl",
+            allow_missing=bool(args.allow_missing),
+        ),
+        *_files(
+            (Path(value) for value in args.forecast_curves),
+            allow_missing=bool(args.allow_missing),
+        ),
+        *_partitioned_files(
+            (Path(value) for value in args.forecast_enrichment),
+            filename="forecast_enrichment.jsonl",
+            allow_missing=bool(args.allow_missing),
+        ),
+    ]
     conn = sqlite3.connect(args.db)
     try:
         apply_schema_canonical(conn)
@@ -477,7 +525,17 @@ def main(argv: list[str] | None = None) -> int:
         )
     finally:
         conn.close()
-    print(json.dumps({"paths": [str(path) for path in paths], **result}, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "paths": [str(path) for path in requested_paths],
+                "requested_paths": [str(path) for path in requested_paths],
+                "resolved_files": len(paths),
+                **result,
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 

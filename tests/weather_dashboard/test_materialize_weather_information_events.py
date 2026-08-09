@@ -7,6 +7,35 @@ from scripts.etl import materialize_weather_information_events as materialize
 from weather_data_feed.information_events import build_information_event
 
 
+def test_partitioned_files_ignore_root_aggregate_and_sibling_datasets(tmp_path):
+    root = tmp_path / "forecast_enrichment"
+    dated = root / "2026-08-09"
+    dated.mkdir(parents=True)
+    shard = dated / "forecast_enrichment.jsonl"
+    shard.write_text("{}\n", encoding="utf-8")
+    (root / "forecast_enrichment.jsonl").write_text("legacy aggregate\n", encoding="utf-8")
+    (dated / "forecast_versions.jsonl").write_text("sibling dataset\n", encoding="utf-8")
+
+    assert list(
+        materialize._partitioned_files(
+            [root], filename="forecast_enrichment.jsonl", allow_missing=False
+        )
+    ) == [shard]
+
+
+def test_partitioned_files_preserve_explicit_file_compatibility(tmp_path):
+    aggregate = tmp_path / "high_frequency_observations.jsonl"
+    aggregate.write_text("{}\n", encoding="utf-8")
+
+    assert list(
+        materialize._partitioned_files(
+            [aggregate],
+            filename="high_frequency_observations.jsonl",
+            allow_missing=False,
+        )
+    ) == [aggregate]
+
+
 def test_raw_material_event_extracts_flat_and_nested_taf_and_is_rebuild_idempotent(tmp_path):
     observation = build_information_event(
         event_kind="observation", event_role="new_content", source="aviationweather", city="Atlanta",
