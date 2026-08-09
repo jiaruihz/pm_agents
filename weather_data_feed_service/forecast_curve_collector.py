@@ -7,6 +7,7 @@ one-shot producer is scheduled independently by the production controller.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import os
 from datetime import datetime, timezone
@@ -57,10 +58,12 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
     # Each one-shot must discover captures written by previous runs.
     snapshot._FORECAST_CURVE_CACHE = None
     snapshot._FORECAST_LIVE_DISABLED_REASON = None
+    snapshot._FORECAST_LIVE_FAILURES = {}
     models = _selected_models()
     rows: list[dict[str, Any]] = []
     reused = 0
     failed: list[dict[str, str]] = []
+    request_failures: list[dict[str, Any]] = []
     expected = 0
 
     for city, cfg in snapshot.CITIES.items():
@@ -82,8 +85,27 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
                 )
                 continue
             info = snapshot._refresh_live_forecast(None, model, city, cfg, date_text)
+            diagnostic = snapshot._FORECAST_LIVE_FAILURES.get(
+                snapshot._forecast_live_failure_key(city, date_text, model)
+            )
+            if diagnostic:
+                request_failures.append(
+                    {
+                        "city": city,
+                        "target_date": date_text,
+                        "model": model,
+                        **diagnostic,
+                        "cache_fallback_available": info is not None,
+                    }
+                )
             if info is None:
-                failed.append({"city": city, "target_date": date_text, "reason": "forecast_unavailable"})
+                failed.append(
+                    {
+                        "city": city,
+                        "target_date": date_text,
+                        "reason": str((diagnostic or {}).get("reason") or "forecast_unavailable"),
+                    }
+                )
                 continue
             if info.get("cache_fallback"):
                 reused += 1
@@ -123,6 +145,19 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
     # without usable model/error pairing. Keep the exact misses visible while
     # avoiding a global dependency cascade when at least 95% remains usable.
     status = "ok" if expected > 0 and coverage_ratio >= 0.95 else "degraded"
+    request_failure_counts = Counter(str(item["reason"]) for item in request_failures)
+    if snapshot._FORECAST_LIVE_DISABLED_REASON == "open_meteo_http_429":
+        refresh_status = "provider_rate_limited"
+    elif request_failures and rows:
+        refresh_status = "partial_provider_failure"
+    elif request_failures:
+        refresh_status = "provider_request_failed"
+    elif rows:
+        refresh_status = "fresh_capture"
+    elif reused:
+        refresh_status = "cache_reused"
+    else:
+        refresh_status = "no_usable_forecast"
     return {
         "schema_version": "weather_forecast_curve_collector_status_v1",
         "status": status,
@@ -135,12 +170,12 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
         "coverage_ratio": round(coverage_ratio, 6),
         "failed_count": len(failed),
         "failed_examples": failed[:20],
+        "request_attempt_count": sum(1 for item in request_failures if item.get("attempted")),
+        "request_failure_count": len(request_failures),
+        "request_failure_counts": dict(sorted(request_failure_counts.items())),
+        "request_failure_examples": request_failures[:20],
         "open_meteo_disabled_reason": snapshot._FORECAST_LIVE_DISABLED_REASON,
-        "refresh_status": (
-            "provider_rate_limited"
-            if snapshot._FORECAST_LIVE_DISABLED_REASON == "open_meteo_http_429"
-            else ("fresh_capture" if rows else "cache_reused")
-        ),
+        "refresh_status": refresh_status,
         "capture_path": str(archive) if archive else None,
     }
 
