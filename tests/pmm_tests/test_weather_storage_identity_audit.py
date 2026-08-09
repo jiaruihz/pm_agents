@@ -29,6 +29,8 @@ def _spec(tmp_path: Path, canonical: Path, compatibility: Path) -> WeatherProduc
         pm_runtime_root=canonical.parent,
         canonical_tmux_socket="test",
         canonical_tmux_binary=Path("/usr/bin/tmux"),
+        market_proxy_state_path=tmp_path / "feed/output/market_proxy/state.json",
+        market_proxy_default_url="http://127.0.0.1:7891",
         managed_runtimes=(
             WeatherManagedRuntimeSpec(
                 instance_id="live",
