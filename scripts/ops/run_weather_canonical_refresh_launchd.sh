@@ -26,7 +26,11 @@ fi
 # Resolve the same mutable control-plane state as every market consumer.  A
 # proxy switch must also move fill reconciliation; keeping a local default here
 # would create a second route that the controller cannot change or audit.
-MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
+PROXY_CONTROL_ROOT="$(
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().operational_repo_root)'
+)"
+MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"
 weather_export_market_proxy_env "$MARKET_PROXY"
 
 # Keep this post-trade path deliberately small: production-declared live

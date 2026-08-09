@@ -282,7 +282,8 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
         encoding="utf-8"
     )
     assert "weather_market_proxy_env.sh" in refresh
-    assert 'MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"' in refresh
+    assert "load_production_spec().operational_repo_root" in refresh
+    assert 'MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"' in refresh
     assert 'weather_export_market_proxy_env "$MARKET_PROXY"' in refresh
     assert "127.0.0.1:7890" not in refresh
     assert "127.0.0.1:7897" not in refresh
