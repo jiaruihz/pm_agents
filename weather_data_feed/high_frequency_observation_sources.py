@@ -49,6 +49,7 @@ IMS_API_BASE = "https://api.ims.gov.il/v1/envista"
 AEMET_API_BASE = "https://opendata.aemet.es/opendata/api"
 DWD_MUNICH_10M_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/air_temperature/now/10minutenwerte_TU_01262_now.zip"
 ECCC_SWOB_LATEST_BASE = "https://dd.weather.gc.ca/today/observations/swob-ml/latest"
+BOM_AWS_BASE = "https://reg.bom.gov.au/fwo"
 
 US_HFMETAR_CITIES: dict[str, dict[str, Any]] = {
     "New York": {"station": "KLGA", "label": "LaGuardia MADIS HFMETAR", "timezone_name": "America/New_York"},
@@ -62,6 +63,9 @@ US_HFMETAR_CITIES: dict[str, dict[str, Any]] = {
     "Miami": {"station": "KMIA", "label": "Miami Intl MADIS HFMETAR", "timezone_name": "America/New_York"},
     "Atlanta": {"station": "KATL", "label": "Atlanta Hartsfield MADIS HFMETAR", "timezone_name": "America/New_York"},
     "Seattle": {"station": "KSEA", "label": "SeaTac MADIS HFMETAR", "timezone_name": "America/Los_Angeles"},
+    "Boston": {"station": "KBOS", "label": "Boston Logan MADIS HFMETAR", "timezone_name": "America/New_York"},
+    "Minneapolis": {"station": "KMSP", "label": "Minneapolis-St Paul MADIS HFMETAR", "timezone_name": "America/Chicago"},
+    "Phoenix": {"station": "KPHX", "label": "Phoenix Sky Harbor MADIS HFMETAR", "timezone_name": "America/Phoenix"},
 }
 
 HIGH_FREQUENCY_CITY_SOURCES: dict[str, dict[str, dict[str, Any]]] = {
@@ -129,6 +133,18 @@ HIGH_FREQUENCY_CITY_SOURCES: dict[str, dict[str, dict[str, Any]]] = {
     "eccc_swob": {
         "Toronto": {"station": "CYYZ", "label": "Toronto Pearson ECCC SWOB", "timezone_name": "America/Toronto", "icao": "CYYZ", "report_type": "MAN"},
     },
+    "bom_aws": {
+        "Sydney": {"station": "94767", "label": "Sydney Airport BoM AWS", "timezone_name": "Australia/Sydney", "icao": "YSSY", "product_id": "IDN60901"},
+        "Melbourne": {"station": "94866", "label": "Melbourne Airport BoM AWS", "timezone_name": "Australia/Melbourne", "icao": "YMML", "product_id": "IDV60901"},
+        "Brisbane": {"station": "94578", "label": "Brisbane Airport BoM AWS", "timezone_name": "Australia/Brisbane", "icao": "YBBN", "product_id": "IDQ60901"},
+        "Perth": {"station": "94151", "label": "Perth Airport BoM AWS", "timezone_name": "Australia/Perth", "icao": "YPPH", "product_id": "IDW60901"},
+        "Adelaide": {"station": "94146", "label": "Adelaide Airport BoM AWS", "timezone_name": "Australia/Adelaide", "icao": "YPAD", "product_id": "IDS60901"},
+        "Canberra": {"station": "94926", "label": "Canberra Airport BoM AWS", "timezone_name": "Australia/Sydney", "icao": "YSCB", "product_id": "IDN60903"},
+        "Hobart": {"station": "94619", "label": "Hobart Airport BoM AWS", "timezone_name": "Australia/Hobart", "icao": "YMHB", "product_id": "IDT60901"},
+        "Darwin": {"station": "94120", "label": "Darwin Airport BoM AWS", "timezone_name": "Australia/Darwin", "icao": "YPDN", "product_id": "IDD60901"},
+        "Cairns": {"station": "94287", "label": "Cairns Airport BoM AWS", "timezone_name": "Australia/Brisbane", "icao": "YBCS", "product_id": "IDQ60801"},
+        "Gold Coast": {"station": "94592", "label": "Gold Coast Airport BoM AWS", "timezone_name": "Australia/Brisbane", "icao": "YBCG", "product_id": "IDQ60901"},
+    },
 }
 
 
@@ -169,6 +185,16 @@ def safe_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return out if math.isfinite(out) and -100.0 < out < 1000.0 else None
+
+
+def safe_pressure_hpa(value: Any) -> float | None:
+    if value in (None, "", "-", "--", "M", "///"):
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) and 800.0 < out < 1200.0 else None
 
 
 def parse_dt(value: Any) -> datetime | None:
@@ -987,6 +1013,70 @@ def fetch_dwd_10m(city: str, *, settings: HighFrequencyFetchSettings | None = No
     return _result("dwd_10m", city, "ok" if records else "empty", records[-24:], start, end, metadata={"raw_payload_hash": stable_hash(response.content.hex())})
 
 
+def parse_bom_aws_payload(payload: Any, *, city: str, target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["bom_aws"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    observations = payload.get("observations") if isinstance(payload, dict) else None
+    raw_rows = observations.get("data") if isinstance(observations, dict) else []
+    rows: list[dict[str, Any]] = []
+    for raw in raw_rows if isinstance(raw_rows, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        temp_c = safe_float(raw.get("air_temp"))
+        timestamp = str(raw.get("aifstime_utc") or "").strip()
+        try:
+            obs_dt = datetime.strptime(timestamp, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            obs_dt = None
+        if temp_c is None or obs_dt is None:
+            continue
+        rows.append(
+            _base_record(
+                source="bom_aws",
+                city=city,
+                meta=meta,
+                target_date=target_date,
+                obs_dt=obs_dt,
+                fetched_at=fetched,
+                temp_c=temp_c,
+                raw=raw,
+                source_kind="official_airport_station",
+                source_note="Australian Bureau of Meteorology airport AWS public observation; research enrichment, not settlement truth unless market rules name the same station",
+                extra={
+                    "wmo": str(raw.get("wmo") or meta["station"]),
+                    "local_observation_time": raw.get("local_date_time_full"),
+                    "humidity": safe_float(raw.get("rel_hum")),
+                    "dewpoint_c": safe_float(raw.get("dewpt")),
+                    "wind_speed_kmh": safe_float(raw.get("wind_spd_kmh")),
+                    "wind_gust_kmh": safe_float(raw.get("gust_kmh")),
+                    "pressure_hpa": safe_pressure_hpa(raw.get("press_msl")),
+                    "product_id": meta["product_id"],
+                },
+            )
+        )
+    return sorted(rows, key=lambda row: row["observation_time_utc"])
+
+
+def fetch_bom_aws(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["bom_aws"][city]
+    start = datetime.now(timezone.utc)
+    product_id = str(meta["product_id"])
+    station = str(meta["station"])
+    url = f"{BOM_AWS_BASE}/{product_id}/{product_id}.{station}.json"
+    payload = _http_get(url, headers={"Accept": "application/json"}, settings=settings).json()
+    end = datetime.now(timezone.utc)
+    records = parse_bom_aws_payload(payload, city=city, target_date=target_date, fetched_at=end)
+    return _result(
+        "bom_aws",
+        city,
+        "ok" if records else "empty",
+        records[-24:],
+        start,
+        end,
+        metadata={"url": url, "raw_payload_hash": stable_hash(payload)},
+    )
+
+
 def parse_aemet_payload(payload: Any, *, city: str = "Madrid", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
     meta = HIGH_FREQUENCY_CITY_SOURCES["aemet_10m"][city]
     fetched = fetched_at or datetime.now(timezone.utc)
@@ -1189,6 +1279,7 @@ FETCHERS = {
     "ims_1m": fetch_ims_1m,
     "metservice_1m": fetch_metservice_1m,
     "eccc_swob": fetch_eccc_swob,
+    "bom_aws": fetch_bom_aws,
 }
 
 

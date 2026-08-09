@@ -71,6 +71,8 @@ physical runtime root 当前为 `/Volumes/jrs/weather_data_feed_service_runtime`
   running max、bracket 选择和下单留在策略层。
 - consumer 遇到 stale/missing/wrong-date 必须显式失败；不得静默 live-fetch 或回退 N100/history cache。
 - raw unit/value 先保留，再映射到 settlement-source native lattice；高频参考源不自动成为 official/settlement truth。
+- `bom_aws` 当前提供 10 个澳大利亚机场的 capture adapter；Boston/Minneapolis/Phoenix 的 MADIS profile 也只开放
+  collector/calibration。两者都不代表生产已启用，更不授予 settlement 或 live eligibility。
 - forecast model fallback 必须显式告警，不能把缺失的 ECMWF cache 静默替换成 GFS。
 
 ## 文件协议

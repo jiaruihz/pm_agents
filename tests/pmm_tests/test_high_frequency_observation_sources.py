@@ -14,6 +14,7 @@ from weather_data_feed.high_frequency_observation_sources import (
     fetch_meteofrance_6m,
     fetch_metservice_1m,
     parse_aemet_payload,
+    parse_bom_aws_payload,
     parse_dwd_10m_zip,
     parse_eccc_swob_xml,
     parse_hko_csv,
@@ -154,6 +155,17 @@ def test_supported_high_frequency_sources_cover_requested_open_project_sources()
     assert sources["ims_1m"]["Tel Aviv"]["icao"] == "LLBG"
     assert sources["metservice_1m"]["Wellington"]["icao"] == "NZWN"
     assert sources["eccc_swob"]["Toronto"]["icao"] == "CYYZ"
+    assert sources["bom_aws"]["Sydney"]["station"] == "94767"
+    assert sources["bom_aws"]["Sydney"]["icao"] == "YSSY"
+    assert sources["bom_aws"]["Melbourne"]["icao"] == "YMML"
+    assert sources["bom_aws"]["Brisbane"]["icao"] == "YBBN"
+    assert sources["bom_aws"]["Perth"]["station"] == "94151"
+    assert sources["bom_aws"]["Adelaide"]["station"] == "94146"
+    assert sources["bom_aws"]["Canberra"]["icao"] == "YSCB"
+    assert sources["bom_aws"]["Hobart"]["station"] == "94619"
+    assert sources["bom_aws"]["Darwin"]["icao"] == "YPDN"
+    assert sources["bom_aws"]["Cairns"]["icao"] == "YBCS"
+    assert sources["bom_aws"]["Gold Coast"]["icao"] == "YBCG"
 
 
 def test_auth_required_sources_are_explicit_when_key_missing(monkeypatch) -> None:
@@ -297,6 +309,41 @@ def test_dwd_and_eccc_public_parsers_keep_source_publication_semantics() -> None
     assert dwd[0]["station"] == "01262"
     assert eccc[0]["temp_c"] == 22.3
     assert eccc[0]["max_temp_c_past_1h"] == 22.8
+
+
+def test_bom_aws_parser_normalizes_airport_observation() -> None:
+    rows = parse_bom_aws_payload(
+        {
+            "observations": {
+                "data": [
+                    {
+                        "name": "Sydney Airport",
+                        "wmo": 94767,
+                        "aifstime_utc": "20260721013000",
+                        "local_date_time_full": "20260721113000",
+                        "air_temp": 17.7,
+                        "dewpt": 12.2,
+                        "rel_hum": 70,
+                        "wind_spd_kmh": 13,
+                        "gust_kmh": 20,
+                        "press_msl": 1020.4,
+                    }
+                ]
+            }
+        },
+        city="Sydney",
+        target_date="2026-07-21",
+        fetched_at=datetime(2026, 7, 21, 1, 31, tzinfo=timezone.utc),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["source"] == "bom_aws"
+    assert rows[0]["station"] == "94767"
+    assert rows[0]["icao"] == "YSSY"
+    assert rows[0]["observation_time_utc"] == "2026-07-21T01:30:00+00:00"
+    assert rows[0]["temp_c"] == 17.7
+    assert rows[0]["pressure_hpa"] == 1020.4
+    assert rows[0]["product_id"] == "IDN60901"
 
 
 def test_high_frequency_observations_cli_dispatches_runner_args(monkeypatch) -> None:

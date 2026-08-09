@@ -1,6 +1,6 @@
 {
   "schema_version": "weather_fast_event_source_profiles_v1",
-  "generated_at_utc": "2026-07-14T01:36:09.090970+00:00",
+  "generated_at_utc": "2026-07-23T15:46:28.748074+00:00",
   "generated_from": [
     "weather_data_feed/high_frequency_observation_sources.py",
     "weather_data_feed/source_profiles.json"
@@ -55,6 +55,23 @@
       "live_eligible": false,
       "calibration_status": "same_station_forward_pending",
       "blocked_reason": "requires_forward_repricing_calibration",
+      "note": "zero-notional source-event calibration profile; never grants live eligibility"
+    },
+    {
+      "city": "Boston",
+      "source": "noaa_madis_hfmetar",
+      "source_station_or_feed": "KBOS",
+      "source_icao": "KBOS",
+      "timezone_name": "America/New_York",
+      "market_unit": "F",
+      "bracket_rounding": "arithmetic_round",
+      "settlement_source_class": "no_recent_market_or_unknown_rules",
+      "official_station_or_feed": "",
+      "source_basis_class": "unclassified",
+      "collector_enabled": true,
+      "live_eligible": false,
+      "calibration_status": "secondary_sensor_alignment_pending",
+      "blocked_reason": "non_settlement_sensor_alignment_required",
       "note": "zero-notional source-event calibration profile; never grants live eligibility"
     },
     {
@@ -245,6 +262,23 @@
       "note": "zero-notional source-event calibration profile; never grants live eligibility"
     },
     {
+      "city": "Minneapolis",
+      "source": "noaa_madis_hfmetar",
+      "source_station_or_feed": "KMSP",
+      "source_icao": "KMSP",
+      "timezone_name": "America/Chicago",
+      "market_unit": "F",
+      "bracket_rounding": "arithmetic_round",
+      "settlement_source_class": "no_recent_market_or_unknown_rules",
+      "official_station_or_feed": "",
+      "source_basis_class": "unclassified",
+      "collector_enabled": true,
+      "live_eligible": false,
+      "calibration_status": "secondary_sensor_alignment_pending",
+      "blocked_reason": "non_settlement_sensor_alignment_required",
+      "note": "zero-notional source-event calibration profile; never grants live eligibility"
+    },
+    {
       "city": "NYC",
       "source": "noaa_madis_hfmetar",
       "source_station_or_feed": "KLGA",
@@ -259,6 +293,23 @@
       "live_eligible": false,
       "calibration_status": "same_station_forward_pending",
       "blocked_reason": "requires_forward_repricing_calibration",
+      "note": "zero-notional source-event calibration profile; never grants live eligibility"
+    },
+    {
+      "city": "Phoenix",
+      "source": "noaa_madis_hfmetar",
+      "source_station_or_feed": "KPHX",
+      "source_icao": "KPHX",
+      "timezone_name": "America/Phoenix",
+      "market_unit": "F",
+      "bracket_rounding": "arithmetic_round",
+      "settlement_source_class": "no_recent_market_or_unknown_rules",
+      "official_station_or_feed": "",
+      "source_basis_class": "unclassified",
+      "collector_enabled": true,
+      "live_eligible": false,
+      "calibration_status": "secondary_sensor_alignment_pending",
+      "blocked_reason": "non_settlement_sensor_alignment_required",
       "note": "zero-notional source-event calibration profile; never grants live eligibility"
     },
     {
@@ -382,8 +433,8 @@
     }
   ],
   "summary": {
-    "profiles": 22,
-    "cities": 21,
+    "profiles": 25,
+    "cities": 24,
     "live_eligible": 0,
     "source_basis_counts": {
       "cross_station_proxy": 1,
@@ -392,7 +443,8 @@
       "same_airport_alternate_sensor": 3,
       "same_city_secondary_sensor": 1,
       "same_station_alternate_feed": 4,
-      "same_station_mirror": 11
+      "same_station_mirror": 11,
+      "unclassified": 3
     }
   }
 }

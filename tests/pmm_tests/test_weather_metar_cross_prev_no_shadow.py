@@ -44,14 +44,14 @@ def test_dead_bracket_guard_rejects_ambiguous_range_until_upper_is_crossed():
     assert not parsed_label_is_dead_for_running_value({"low": 35.0, "high": None, "bottom": False, "top": True}, 35, 36)
 
 
-def test_city_policy_allows_same_station_and_blocks_seoul():
+def test_city_policy_allows_same_station_and_keeps_seoul_on_watchlist():
     configs = load_city_configs(include_station_diff=False, only_cities={"Shanghai", "Tokyo", "Seoul"})
     assert [cfg.city for cfg in configs] == ["Shanghai", "Tokyo"]
 
     policy = build_city_policy(include_station_diff=False, only_cities={"Seoul"})
     assert policy["allowed"] == []
     assert policy["rejected"][0]["city"] == "Seoul"
-    assert "blocked_unresolved_settlement_basis" in policy["rejected"][0]["reason"]
+    assert "default_source_watchlist" in policy["rejected"][0]["reason"]
 
 
 def test_city_policy_keeps_station_diff_explicit():
