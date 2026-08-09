@@ -7,6 +7,13 @@ from pathlib import Path
 import pytest
 
 from src.strategies.runtime.production import load_production_spec
+from weather_data_feed.production_paths import (
+    current_forecast_curves,
+    current_strategy_snapshots,
+    historical_orderbook_roots,
+    historical_strategy_snapshots,
+    strategy_snapshot_roots,
+)
 from weather_data_feed_service import cli
 
 
@@ -21,6 +28,30 @@ def test_production_data_roots_are_distinct_and_canonical() -> None:
     assert spec.resolved_forecast_output_root() == spec.data_feed_runtime_root / "forecast"
     assert spec.resolved_historical_paper_snapshot_root() == Path(
         "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots"
+    )
+    assert spec.resolved_historical_data_feed_runtime_root() == Path(
+        "/Volumes/jrs-archive/weather_data_feed_service_runtime"
+    )
+    assert spec.historical_full_ladder_root() == Path(
+        "/Volumes/jrs-archive/weather_data_feed_service_runtime/full_ladder_output"
+    )
+    assert spec.historical_targeted_root() == Path(
+        "/Volumes/jrs-archive/weather_data_feed_service_runtime/targeted_output"
+    )
+
+
+def test_semantic_data_path_helpers_cover_current_and_history() -> None:
+    spec = load_production_spec()
+    assert current_strategy_snapshots() == spec.strategy_paper_snapshot_dir()
+    assert historical_strategy_snapshots() == spec.resolved_historical_paper_snapshot_root()
+    assert strategy_snapshot_roots() == (
+        current_strategy_snapshots(),
+        historical_strategy_snapshots(),
+    )
+    assert current_forecast_curves() == spec.forecast_hourly_curve_dir()
+    assert historical_orderbook_roots() == (
+        spec.historical_full_ladder_root() / "orderbook_snapshots",
+        spec.historical_targeted_root() / "orderbook_snapshots",
     )
 
 
@@ -50,6 +81,9 @@ def test_archive_paths_cli_uses_the_shared_loader() -> None:
     expected = {
         "feature_store_root": "/Volumes/jrs/pm_agents/runtime/weather_feature_store",
         "archive_storage_root": "/Volumes/jrs-archive",
+        "historical_data_feed_runtime_root": "/Volumes/jrs-archive/weather_data_feed_service_runtime",
+        "historical_full_ladder_root": "/Volumes/jrs-archive/weather_data_feed_service_runtime/full_ladder_output",
+        "historical_targeted_root": "/Volumes/jrs-archive/weather_data_feed_service_runtime/targeted_output",
         "historical_paper_snapshot_root": "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots",
         "research_artifact_root": "/Volumes/jrs-archive/pm_agents/research/artifact_store",
     }
@@ -146,6 +180,36 @@ def test_current_entrypoints_do_not_depend_on_retired_data_roots() -> None:
         assert "full_ladder_output" not in text, name
         assert "$PROJECT_DIR/runtime/weather_edge_v1" not in text, name
         assert "$ROOT/runtime/weather_edge_v1" not in text, name
+
+
+def test_executable_consumers_do_not_embed_retired_weather_data_paths() -> None:
+    forbidden = (
+        "targeted_output/",
+        "full_ladder_output/",
+        "runtime/weather_edge_v1/market_data/paper_snapshots",
+        "/home/jiarui/projects/weather-predict",
+        "/home/jiarui/projects/weather_data_feed_service_runtime",
+    )
+    roots = (
+        ROOT / "scripts",
+        ROOT / "src",
+        ROOT / "weather_dashboard",
+        ROOT / "weather_data_feed",
+        ROOT / "weather_data_feed_service",
+        ROOT / "weather_model_evaluation",
+        ROOT / "configs",
+    )
+    executable_suffixes = {".py", ".sh", ".service", ".json"}
+    violations: list[str] = []
+    for source_root in roots:
+        for path in source_root.rglob("*"):
+            if not path.is_file() or path.suffix not in executable_suffixes:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            matches = [fragment for fragment in forbidden if fragment in text]
+            if matches:
+                violations.append(f"{path.relative_to(ROOT)}: {matches}")
+    assert violations == []
 
 
 def test_metar_reversal_entrypoint_passes_controller_runtime_dir() -> None:
