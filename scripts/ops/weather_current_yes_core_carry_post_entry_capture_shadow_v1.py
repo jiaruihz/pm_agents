@@ -39,7 +39,7 @@ from scripts.analysis.reheat_risk.research_core_carry_post_entry_capture_v1 impo
     walk_sell_ladder,
 )
 from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as core_signal  # noqa: E402
-from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
+from scripts.ops.weather_market_proxy import market_httpx_client, market_proxy_url  # noqa: E402
 
 
 def utc_now() -> str:
@@ -270,7 +270,7 @@ def parser() -> argparse.ArgumentParser:
         p = sub.add_parser(command)
         p.add_argument("--core-runtime", default=str(CORE_RUNTIME))
         p.add_argument("--output-dir", default=str(OUTPUT_DIR))
-        p.add_argument("--book-proxy", default="http://127.0.0.1:7890")
+        p.add_argument("--book-proxy", default=market_proxy_url(None))
         p.add_argument("--book-timeout-sec", type=float, default=5.0)
         p.add_argument("--quantity", type=float, default=10.0)
         p.add_argument("--gain-floor", type=float, default=0.03)

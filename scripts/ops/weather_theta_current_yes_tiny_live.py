@@ -55,6 +55,7 @@ from src.strategies.weather_edge_v1.tools.current_yes_codex_prompts import (
 )
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
+from scripts.ops.weather_market_proxy import market_proxy_url
 from weather_data_feed import (
     ObservationClockConfig,
     bracket_contains,
@@ -280,7 +281,7 @@ def proxy_candidates() -> list[str | None]:
         for key in ("WEATHER_PREDICT_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"):
             if values.get(key):
                 candidates.append(values[key])
-    candidates.extend(["http://127.0.0.1:7890", "http://127.0.0.1:7897", None])
+    candidates.extend([market_proxy_url(None), None])
     out: list[str | None] = []
     for item in candidates:
         if item not in out:

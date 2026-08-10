@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from scripts.ops import weather_market_proxy_ctl as ctl
+from scripts.ops import weather_market_proxy as shared
 from src.strategies.runtime.production import load_production_spec
 
 
@@ -10,6 +11,39 @@ def test_proxy_url_validation():
     assert ctl.validate_proxy_url("http://127.0.0.1:7897") == "http://127.0.0.1:7897"
     with pytest.raises(ValueError):
         ctl.validate_proxy_url("http://127.0.0.1")
+
+
+def test_shared_proxy_resolves_controller_state_not_legacy_aliases(tmp_path, monkeypatch):
+    state = tmp_path / "market_proxy.json"
+    state.write_text('{"proxy_url":"http://127.0.0.1:17897"}\n', encoding="utf-8")
+    spec = __import__("dataclasses").replace(
+        load_production_spec(),
+        market_proxy_state_path=state,
+        market_proxy_default_url="http://127.0.0.1:27897",
+    )
+    monkeypatch.setattr(shared, "load_production_spec", lambda: spec)
+
+    assert shared.market_proxy_url(None, env={"WEATHER_PREDICT_MARKET_PROXY": "http://127.0.0.1:9999"}) == "http://127.0.0.1:17897"
+    assert shared.market_proxy_url(None, env={"WEATHER_DATA_FEED_MARKET_PROXY": "http://127.0.0.1:8888"}) == "http://127.0.0.1:8888"
+
+
+def test_proxy_probe_requires_gamma_and_clob(monkeypatch):
+    statuses = iter(("200", "503"))
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+        def __init__(self):
+            self.stdout = next(statuses)
+
+    monkeypatch.setattr(ctl.subprocess, "run", lambda *args, **kwargs: Result())
+
+    result = ctl.probe("http://127.0.0.1:17897")
+
+    assert result["ok"] is False
+    assert [row["name"] for row in result["checks"]] == ["gamma", "clob"]
+    assert result["checks"][1]["http_status"] == "503"
 
 
 def test_proxy_consumers_come_only_from_production_manifest():
@@ -38,6 +72,10 @@ def test_active_entrypoints_do_not_hardcode_old_proxy_port():
         text = (root / "scripts/ops" / name).read_text(encoding="utf-8")
         assert "127.0.0.1:7890" not in text, name
         assert "weather_resolve_market_proxy" in text, name
+
+    for path in (root / "scripts").glob("**/*"):
+        if path.is_file() and path.suffix in {".py", ".sh"}:
+            assert "127.0.0.1:7890" not in path.read_text(encoding="utf-8"), path
 
 
 def test_chain_health_uses_artifact_freshness_only_for_live_and_primary_books(monkeypatch):

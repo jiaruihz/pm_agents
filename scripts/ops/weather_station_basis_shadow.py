@@ -52,6 +52,7 @@ from weather_data_feed.observation_sources import (
     parse_aviationweather_records,
     parse_iem_asos_temperature_obs,
 )
+from scripts.ops.weather_market_proxy import market_proxy_url
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = Path(os.environ.get("STATION_BASIS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
@@ -123,7 +124,7 @@ def _weather_predict_proxy_candidates() -> list[str | None]:
             if values.get(key):
                 candidates.append(values[key])
 
-    candidates.extend(["http://127.0.0.1:7890", "http://127.0.0.1:7897", None])
+    candidates.extend([market_proxy_url(None), None])
     deduped: list[str | None] = []
     for value in candidates:
         if value not in deduped:

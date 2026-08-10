@@ -31,6 +31,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     build_low_price_yes_tail_telemetry,
     load_tail_telemetry_resources_soft,
 )
+from scripts.ops.weather_market_proxy import market_proxy_url
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc
 from weather_feature_layer.execution import classify_book_state
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
@@ -86,7 +87,7 @@ def parse_args() -> argparse.Namespace:
         "--book-proxy",
         default=os.environ.get(
             "LOW_PRICE_YES_INTEGRATED_TAIL_MARKET_PROXY",
-            "http://127.0.0.1:7890",
+            market_proxy_url(None),
         ),
     )
     parser.add_argument("--interval-seconds", type=float, default=300.0)

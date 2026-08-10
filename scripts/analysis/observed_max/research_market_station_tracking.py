@@ -38,7 +38,10 @@ import httpx
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
-PROXIES = [None, "http://127.0.0.1:7897", "http://127.0.0.1:7890"]
+sys.path.insert(0, str(REPO))
+from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
+
+PROXIES = [None, production_market_proxy_url()]
 
 # city -> tz
 CITY_TZ = {

@@ -38,6 +38,8 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "scripts/analysis/observed_max"))
+sys.path.insert(0, str(REPO))
+from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
 
 from research_official_station_alignment import (  # noqa: E402
     arith_round,
@@ -47,7 +49,7 @@ from research_official_station_alignment import (  # noqa: E402
     parse_bracket,
 )
 
-PROXIES = [None, "http://127.0.0.1:7897", "http://127.0.0.1:7890"]
+PROXIES = [None, production_market_proxy_url()]
 WU_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525"  # public key embedded in wunderground.com
 
 # city -> (icao, tz, wu_location_suffix)
