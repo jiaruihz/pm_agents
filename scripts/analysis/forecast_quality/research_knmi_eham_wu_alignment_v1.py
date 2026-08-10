@@ -116,11 +116,19 @@ def date_range(start_date: str, end_date: str) -> Iterable[date]:
         cursor += timedelta(days=1)
 
 
-def list_knmi_files(client: httpx.Client, token: str) -> list[dict[str, Any]]:
+def list_knmi_files(
+    client: httpx.Client,
+    token: str,
+    *,
+    begin: str = "",
+) -> list[dict[str, Any]]:
     url = f"{KNMI_API_BASE}/datasets/{KNMI_DATASET}/versions/{KNMI_VERSION}/files"
+    params: dict[str, Any] = {"maxKeys": 1000, "sorting": "asc"}
+    if begin:
+        params.update({"orderBy": "filename", "begin": begin})
     response = client.get(
         url,
-        params={"maxKeys": 1000, "sorting": "desc"},
+        params=params,
         headers={"Authorization": token},
     )
     response.raise_for_status()
@@ -135,7 +143,24 @@ def file_local_date(filename: str) -> str:
     return timestamp.astimezone(LOCAL_ZONE).date().isoformat()
 
 
-def backfill_knmi(start_date: str, end_date: str, timeout: float, workers: int) -> list[dict[str, Any]]:
+def file_local_hour(filename: str) -> int | None:
+    match = FILENAME_RE.search(filename)
+    if not match:
+        return None
+    timestamp = datetime.strptime(match.group(1), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(LOCAL_ZONE).hour
+
+
+def backfill_knmi(
+    start_date: str,
+    end_date: str,
+    timeout: float,
+    workers: int,
+    cache_dir: Path | None = None,
+    max_files: int | None = None,
+    local_hour_start: int | None = None,
+    local_hour_end: int | None = None,
+) -> list[dict[str, Any]]:
     token = os.environ.get("KNMI_OPEN_DATA_API_KEY", "").strip()
     if not token:
         raise RuntimeError("KNMI_OPEN_DATA_API_KEY is not configured")
@@ -143,24 +168,59 @@ def backfill_knmi(start_date: str, end_date: str, timeout: float, workers: int) 
     headers = {"Authorization": token}
     rows: list[dict[str, Any]] = []
     with httpx.Client(timeout=timeout, trust_env=False) as client:
+        begin_date = date.fromisoformat(start_date) - timedelta(days=1)
+        begin_filename = (
+            "KMDS__OPER_P___10M_OBS_L2_"
+            f"{begin_date.strftime('%Y%m%d')}2100.nc"
+        )
         selected = [
             item
-            for item in list_knmi_files(client, token)
+            for item in list_knmi_files(client, token, begin=begin_filename)
             if start_date <= file_local_date(str(item.get("filename") or "")) <= end_date
+            and (
+                local_hour_start is None
+                or (
+                    (hour := file_local_hour(str(item.get("filename") or ""))) is not None
+                    and local_hour_start <= hour < (local_hour_end or 24)
+                )
+            )
         ]
+        if max_files is not None:
+            selected = selected[: max(0, max_files)]
         if len(selected) > 850:
             raise RuntimeError(f"refusing {len(selected)} KNMI files; 850-file quota headroom limit")
         print(f"knmi_files={len(selected)} authenticated_request_budget={len(selected) + 1}", flush=True)
 
+    raw_cache = cache_dir
+    if raw_cache is not None:
+        raw_cache.mkdir(parents=True, exist_ok=True)
+
     def download(file_meta: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
-        with httpx.Client(timeout=timeout, trust_env=False) as client:
-            filename = str(file_meta["filename"])
-            url_response = client.get(f"{files_url}/{filename}/url", headers=headers)
-            url_response.raise_for_status()
-            download_url = str(url_response.json().get("temporaryDownloadUrl") or "")
-            content_response = client.get(download_url)
-            content_response.raise_for_status()
-            return file_meta, content_response.content
+        filename = str(file_meta["filename"])
+        cache_path = None if raw_cache is None else raw_cache / filename
+        if cache_path is not None and cache_path.exists() and cache_path.stat().st_size > 0:
+            return file_meta, cache_path.read_bytes()
+        last_error: Exception | None = None
+        for _attempt in range(3):
+            try:
+                with httpx.Client(timeout=timeout, trust_env=False) as client:
+                    url_response = client.get(
+                        f"{files_url}/{filename}/url",
+                        headers=headers,
+                    )
+                    url_response.raise_for_status()
+                    download_url = str(
+                        url_response.json().get("temporaryDownloadUrl") or ""
+                    )
+                    content_response = client.get(download_url)
+                    content_response.raise_for_status()
+                    content = content_response.content
+                    if cache_path is not None:
+                        cache_path.write_bytes(content)
+                    return file_meta, content
+            except (httpx.HTTPError, OSError) as exc:
+                last_error = exc
+        raise RuntimeError(f"failed to download {filename} after 3 attempts") from last_error
 
     downloaded: list[tuple[dict[str, Any], bytes]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
@@ -505,13 +565,39 @@ def main() -> int:
     parser.add_argument("--timeout-sec", type=float, default=30.0)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--reuse-knmi-csv", action="store_true")
+    parser.add_argument("--knmi-cache-dir", type=Path)
+    parser.add_argument("--knmi-max-files", type=int)
+    parser.add_argument("--knmi-local-hour-start", type=int)
+    parser.add_argument("--knmi-local-hour-end", type=int)
     args = parser.parse_args()
+
+    if (args.knmi_local_hour_start is None) != (
+        args.knmi_local_hour_end is None
+    ):
+        parser.error(
+            "--knmi-local-hour-start and --knmi-local-hour-end must be set together"
+        )
+    if args.knmi_local_hour_start is not None and not (
+        0 <= args.knmi_local_hour_start < args.knmi_local_hour_end <= 24
+    ):
+        parser.error("KNMI local-hour window must satisfy 0 <= start < end <= 24")
+    if args.knmi_max_files is not None and args.knmi_max_files < 0:
+        parser.error("--knmi-max-files must be non-negative")
 
     raw_path = OUT / "knmi_observations_backfill.csv"
     if args.reuse_knmi_csv:
         knmi = read_csv(raw_path)
     else:
-        knmi = backfill_knmi(args.start_date, args.end_date, args.timeout_sec, args.workers)
+        knmi = backfill_knmi(
+            args.start_date,
+            args.end_date,
+            args.timeout_sec,
+            args.workers,
+            cache_dir=args.knmi_cache_dir,
+            max_files=args.knmi_max_files,
+            local_hour_start=args.knmi_local_hour_start,
+            local_hour_end=args.knmi_local_hour_end,
+        )
         write_csv(raw_path, knmi)
     metar = load_metar(args.start_date, args.end_date)
     next_rows = align_next_metar(knmi, metar)
