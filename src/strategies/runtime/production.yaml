@@ -31,6 +31,9 @@ production_releases:
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
     expected_repo_sha: 1866ed88f75608854e023f27cd3b3f63b231b610
+  - release_id: core_carry_runtime
+    checkout_root: /Users/deepsleep/projects/pm_agents_core_carry_prod
+    expected_repo_sha: 70dfc002d2ed3570053590442672b9d343db1903
   - release_id: knmi
     checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
     expected_repo_sha: 2e8ba3be9aa6c2e3278fa78c7c1f8fe32753f976
@@ -184,7 +187,7 @@ managed_runtimes:
     tmux_session: weather_current_yes_core_carry_tiny_live_v2
     role: strategy
     execution_mode: live
-    release_id: strategy_runtime
+    release_id: core_carry_runtime
     start_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     restart_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json

@@ -37,11 +37,14 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert spec.research_artifact_root == Path(
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"
     )
-    assert len(spec.releases) == 11
+    assert len(spec.releases) == 12
     assert spec.release("control_plane").checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_prod"
     )
     assert len(spec.release("control_plane").expected_repo_sha) == 40
+    assert spec.release("core_carry_runtime").checkout_root == Path(
+        "/Users/deepsleep/projects/pm_agents_core_carry_prod"
+    )
 
 
 def test_db_route_detects_distinct_local_and_jrs_files(tmp_path):

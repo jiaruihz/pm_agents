@@ -66,8 +66,9 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].expected_live is True
     assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
+    assert by_id["current_yes_core_carry_tiny_live_v2"].release_id == "core_carry_runtime"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
-        "/Users/deepsleep/projects/pm_agents_market_books_prod/scripts/ops/"
+        "/Users/deepsleep/projects/pm_agents_core_carry_prod/scripts/ops/"
         "start_weather_current_yes_core_carry_tiny_live_v2.sh"
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
