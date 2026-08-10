@@ -8,12 +8,10 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 Last updated: 2026-08-10
 
 > **2026-08-10 journal storage override**：forecast enrichment、forecast version、
-> observations、AMOS fast lane 以及已停止的历史/probe journal 均已切为只写、只读
+> observations、AMOS fast lane、source events 以及已停止的历史/probe journal 均已切为只写、只读
 > `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写并在逐项校验后删除。
-> `latest.json` 仍是当前 cache。当前仅 `source_events/sources.jsonl` 保留 aggregate
-> compatibility journal；它仍被真实下单 runner 的持久化 byte cursor tail，不能在 live
-> 维护窗口完成无重放游标迁移前删除。KNMI 与 live-cross 已完成 rollover-aware reader
-> 切换，当前只保留各自的 `YYYY-MM-DD/<dataset>.jsonl` 历史。
+> `latest.json` 仍是当前 cache。source-events、KNMI 与 live-cross 的 reader 均已完成
+> rollover-aware 切换，当前只保留各自的 `YYYY-MM-DD/<dataset>.jsonl` 历史。
 
 > **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
 > `src/strategies/runtime/production.yaml` 解析；物理 canonical 是
@@ -199,7 +197,7 @@ production. N100 had an ext4 emergency read-only / IO error incident on
 | `pm_agent/runtime/weather_edge_v1/signals/live_*_signals.jsonl` | weather_snapshot_signal_builder | every 30 min | signals fed into the planner |
 | `pm_agent/runtime/weather_edge_v1/live_cycle/{cycle_id}.json` | weather_live_cycle | every 30 min | cycle summary (config, alerts, executor result) |
 | `weather_data_feed_service_runtime/output/source_events/latest.json` | weather-data-feed-source-events.timer | every completed run + 2 min | latest city/source observation events for latency and crossing signals |
-| `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | weather-data-feed-source-events.timer | append-only | source-event history with report_ts, detect_ts, payload hashes, raw METAR |
+| `weather_data_feed_service_runtime/output/source_events/YYYY-MM-DD/sources.jsonl` | weather-data-feed-source-events.timer | append-only daily shard | source-event history with report_ts, detect_ts, payload hashes, raw METAR; no root aggregate |
 | `weather_data_feed_service_runtime/output/observations/latest.json` | weather-data-feed-observations.timer | ~5 min | shared fast observation cache for strategy feature/state inputs |
 
 ### 2.2.1 Current append-only storage classes
@@ -208,7 +206,7 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 
 | Family | Class | Current layout | Required lifecycle |
 |---|---|---|---|
-| `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions plus an active aggregate compatibility journal | keep partitions; migrate persistent byte-offset readers in a live maintenance window, then remove the aggregate |
+| `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions only; `latest.json` is the current cache | persistent readers maintain rollover-aware per-shard cursors; producer no longer writes a root aggregate |
 | `output/live_cross_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw high-frequency evidence | daily partitions only; `latest.json` is the current cache and notify source | Korea/WCIR/stale-book/market-book readers follow shard rollover; producer no longer writes a root aggregate |
 | `output/knmi_open_data/{YYYY-MM-DD}/knmi_observations.jsonl` | raw KNMI first-seen evidence | daily partitions only; `latest.json` is the current cache and wake path | rollover-aware KNMI first-seen, market-book and WCIR readers consume the dated family |
 | `output/observations/{YYYY-MM-DD}/observations.jsonl` | official observation evidence | daily partitions only; `latest.json` is the current cache | readers resolve physical capture-day shards and never fall back to a deleted aggregate |
@@ -225,11 +223,13 @@ post-restart notification advanced the shard and downstream cursor while the agg
 after which the 23,147,593-byte root duplicate was removed. The live-cross cutover then moved market-books,
 Korea first-seen, three stale-book windows and WCIR to the dated family. After restart, the current shard grew
 from 6,376,875 to 6,384,072 bytes while the 123,715,543-byte aggregate stayed byte-for-byte unchanged; all
-consumer health remained current, and the exact duplicate was removed. This cleanup pass has removed
-1,575,692,388 bytes in total without removing unique history or changing canonical facts. The sole remaining
-compatibility journal is `source_events/sources.jsonl`: its shard bytes are exactly the same size, but a real
-live runner still owns a persistent aggregate byte cursor. The no-replay aggregate-to-shard cursor migration
-is implemented and tested, but production cutover and deletion require an explicitly confirmed live restart.
+consumer health remained current, and the exact duplicate was removed. The source-events live runner then
+cut over to 36 rollover-aware shard cursors with no replay; authenticated exchange evidence showed zero open
+orders and its post-restart order delta was zero. After the producer switched to shard-only, two completed
+source-event cycles grew the current shard while the 3,066,051,726-byte aggregate stayed unchanged. Its SHA-256
+matched the ordered shard prefix, no process or open handle referenced it, and it was removed. This cleanup pass
+has removed 4,641,744,114 bytes in total without removing unique history or changing canonical facts; the runtime
+tree no longer contains an aggregate/daily-shard duplicate candidate.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See
