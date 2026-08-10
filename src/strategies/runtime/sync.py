@@ -24,6 +24,26 @@ from src.strategies.runtime.definitions import load_strategy_definitions
 from src.strategies.runtime.ownership import backfill_order_instance_links, sync_config_ownership
 
 
+NON_OPERATIONAL_DESIRED_STATUS = {
+    "blocked": "blocked",
+    "deprecated": "shelved",
+    "shelved": "shelved",
+    "stale": "shelved",
+    "superseded-for-now": "shelved",
+}
+
+
+def default_desired_status(lifecycle_status: str) -> str:
+    """Return the safe initial control state for a catalog lifecycle.
+
+    ``instances.yaml`` is a historical catalog, not the production desired
+    topology.  Non-operational catalog rows must therefore never enter a new
+    DB as enabled merely because the SQL column has a legacy default.
+    """
+
+    return NON_OPERATIONAL_DESIRED_STATUS.get(lifecycle_status, "enabled")
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -144,9 +164,9 @@ def sync_instance_specs(
             """
             INSERT INTO strategy_instance
                 (instance_id, strategy_key, display_name, family, lifecycle_status,
-                 execution_mode, config_id, source_layer, runtime_dir, start_script, tmux_session,
+                 execution_mode, config_id, desired_status, source_layer, runtime_dir, start_script, tmux_session,
                  expected_live, spec_commit, params_hash, notes, updated_at_utc)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(instance_id) DO UPDATE SET
                 strategy_key=excluded.strategy_key,
                 display_name=excluded.display_name,
@@ -154,6 +174,12 @@ def sync_instance_specs(
                 lifecycle_status=excluded.lifecycle_status,
                 execution_mode=excluded.execution_mode,
                 config_id=excluded.config_id,
+                desired_status=CASE
+                    WHEN excluded.lifecycle_status IN ('blocked','deprecated','shelved','stale','superseded-for-now')
+                         AND strategy_instance.desired_status='enabled'
+                    THEN excluded.desired_status
+                    ELSE strategy_instance.desired_status
+                END,
                 source_layer=excluded.source_layer,
                 runtime_dir=excluded.runtime_dir,
                 start_script=excluded.start_script,
@@ -166,7 +192,8 @@ def sync_instance_specs(
             """,
             (
                 s.strategy_instance, strategy_key, s.display_name, s.family,
-                s.lifecycle_status, s.execution_mode, config_id, s.source_layer, s.runtime_dir,
+                s.lifecycle_status, s.execution_mode, config_id,
+                default_desired_status(s.lifecycle_status), s.source_layer, s.runtime_dir,
                 s.start_script, s.tmux_session,
                 int(s.expected_live) if s.expected_live is not None else None,
                 commit, params_hash(s), s.notes, now,

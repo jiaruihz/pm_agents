@@ -29,3 +29,22 @@ def test_refresh_populates_registry_rows(tmp_path):
     ).fetchone()[0]
     assert count == len(load_instance_specs())
     conn.close()
+
+
+def test_schema_accepts_manifest_runtime_taxonomy(tmp_path):
+    conn = sqlite3.connect(tmp_path / "weather.db")
+    apply_schema_canonical(conn)
+    sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE name='weather_strategy_runtime_registry'"
+    ).fetchone()[0]
+    for value in (
+        "pre_live",
+        "superseded-for-now",
+        "tiny_live_probe",
+        "deprecated",
+        "zero_notional_pre_live",
+        "tiny_live_taker_probe",
+        "legacy_read_only",
+    ):
+        assert value in sql
+    conn.close()

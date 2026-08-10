@@ -55,6 +55,7 @@ from src.strategies.weather_edge_v1.tools.current_yes_codex_prompts import (
 )
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
+from src.strategies.runtime.production import load_production_spec
 from weather_data_feed import (
     ObservationClockConfig,
     bracket_contains,
@@ -266,7 +267,8 @@ def proxy_candidates() -> list[str | None]:
         value = os.environ.get(key)
         if value:
             candidates.append(value)
-    env_path = Path(os.environ.get("WEATHER_PREDICT_DIR", "/home/jiarui/projects/weather-predict")) / ".env"
+    configured_root = os.environ.get("WEATHER_PREDICT_DIR")
+    env_path = Path(configured_root).expanduser() / ".env" if configured_root else ROOT / ".env"
     if env_path.exists():
         values: dict[str, str] = {}
         for raw_line in env_path.read_text(encoding="utf-8").splitlines():
@@ -651,12 +653,7 @@ def snapshot_dir_candidates() -> tuple[list[Path], bool]:
         if os.environ.get(key):
             candidates.append(Path(str(os.environ[key])).expanduser())
             explicit = True
-    if os.environ.get("WEATHER_PREDICT_DIR"):
-        candidates.append(Path(str(os.environ["WEATHER_PREDICT_DIR"])).expanduser() / "output/paper_snapshots")
-        explicit = True
-    candidates.append(Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"))
-    candidates.append(Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"))
-    candidates.append(ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots")
+    candidates.append(load_production_spec().strategy_paper_snapshot_dir())
     out: list[Path] = []
     for path in candidates:
         if path not in out:
@@ -703,9 +700,7 @@ def observation_cache_candidates() -> list[Path]:
     for key in ("THETA_CURRENT_YES_OBSERVATION_CACHE", "WEATHER_DATA_FEED_OBSERVATION_CACHE"):
         if os.environ.get(key):
             candidates.append(Path(str(os.environ[key])).expanduser())
-    candidates.append(Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json"))
-    candidates.append(ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json")
-    candidates.append(ROOT / "runtime/weather_edge_v1/observations/latest.json")
+    candidates.append(load_production_spec().observation_cache_path())
     out: list[Path] = []
     for path in candidates:
         if path not in out:

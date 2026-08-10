@@ -269,12 +269,11 @@ if [[ $REBUILD -eq 1 ]]; then
   }
 
   # ---- 1c. Build fact_signal_candidates (机会粒度，对齐 universe→paper→live) ----
-  FIRST_SEEN_RAW_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-  FIRST_SEEN_SOURCE_EVENTS="${WEATHER_FIRST_SEEN_SOURCE_EVENTS_PATH:-$FIRST_SEEN_RAW_ROOT/output/source_events/sources.jsonl}"
-  FIRST_SEEN_FORECAST_CURVES="${WEATHER_FIRST_SEEN_FORECAST_CURVES_PATH:-$FIRST_SEEN_RAW_ROOT/targeted_output/forecast_hourly_curves}"
-  FIRST_SEEN_FORECAST_ENRICHMENT="${WEATHER_FIRST_SEEN_FORECAST_ENRICHMENT_PATH:-$FIRST_SEEN_RAW_ROOT/output/forecast_enrichment}"
-  FIRST_SEEN_PAPER_SNAPSHOTS="${WEATHER_FIRST_SEEN_PAPER_SNAPSHOTS_PATH:-$FIRST_SEEN_RAW_ROOT/targeted_output/paper_snapshots}"
-  FIRST_SEEN_FEATURE_STORE="${WEATHER_FIRST_SEEN_FEATURE_STORE_PATH:-$REPO_ROOT/runtime/weather_edge_v1/feature_store}"
+  FIRST_SEEN_SOURCE_EVENTS="${WEATHER_FIRST_SEEN_SOURCE_EVENTS_PATH:-$($VENV/python scripts/ops/weather_production_path.py source_events_root)/sources.jsonl}"
+  FIRST_SEEN_FORECAST_CURVES="${WEATHER_FIRST_SEEN_FORECAST_CURVES_PATH:-$($VENV/python scripts/ops/weather_production_path.py forecast_hourly_curves)}"
+  FIRST_SEEN_FORECAST_ENRICHMENT="${WEATHER_FIRST_SEEN_FORECAST_ENRICHMENT_PATH:-$($VENV/python scripts/ops/weather_production_path.py forecast_enrichment_root)}"
+  FIRST_SEEN_PAPER_SNAPSHOTS="${WEATHER_FIRST_SEEN_PAPER_SNAPSHOTS_PATH:-$($VENV/python scripts/ops/weather_production_path.py strategy_paper_snapshots)}"
+  FIRST_SEEN_FEATURE_STORE="${WEATHER_FIRST_SEEN_FEATURE_STORE_PATH:-$($VENV/python scripts/ops/weather_production_path.py feature_store_root)}"
   log "  Materializing first-seen information events (data/signal lineage only)..."
   "$VENV/python" scripts/etl/materialize_weather_information_events.py \
     --db "$DB_PATH" \

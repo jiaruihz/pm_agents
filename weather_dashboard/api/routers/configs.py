@@ -84,7 +84,7 @@ def list_strategy_definitions(db: Db):
             COUNT(DISTINCT c.config_id) AS config_count,
             COUNT(DISTINCT si.instance_id) AS instance_count,
             COUNT(DISTINCT CASE WHEN rt.process_status='running' THEN si.instance_id END) AS running_instance_count,
-            COUNT(DISTINCT CASE WHEN si.lifecycle_status='live' THEN si.instance_id END) AS live_instance_count
+            COUNT(DISTINCT CASE WHEN si.expected_live=1 THEN si.instance_id END) AS live_instance_count
         FROM strategy_def d
         LEFT JOIN strategy_config c ON c.strategy_key=d.strategy_key
         LEFT JOIN strategy_instance si ON si.strategy_key=d.strategy_key
@@ -108,7 +108,7 @@ def get_strategy_definition(strategy_key: str, db: Db):
             COUNT(DISTINCT c.config_id) AS config_count,
             COUNT(DISTINCT si.instance_id) AS instance_count,
             COUNT(DISTINCT CASE WHEN rt.process_status='running' THEN si.instance_id END) AS running_instance_count,
-            COUNT(DISTINCT CASE WHEN si.lifecycle_status='live' THEN si.instance_id END) AS live_instance_count
+            COUNT(DISTINCT CASE WHEN si.expected_live=1 THEN si.instance_id END) AS live_instance_count
         FROM strategy_def d
         LEFT JOIN strategy_config c ON c.strategy_key=d.strategy_key
         LEFT JOIN strategy_instance si ON si.strategy_key=d.strategy_key

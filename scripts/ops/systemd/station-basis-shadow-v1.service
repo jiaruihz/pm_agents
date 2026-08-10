@@ -17,7 +17,6 @@ WorkingDirectory=/home/jiarui/projects/pm_agent_station_basis_v1
 Environment=PYTHON=/home/jiarui/projects/pm_agent/.venv/bin/python
 Environment=DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent
 Environment=STATION_BASIS_DATA_ROOT=/home/jiarui/projects/pm_agent
-Environment=WEATHER_PREDICT_DIR=/home/jiarui/projects/weather-predict
 ExecStart=/bin/bash /home/jiarui/projects/pm_agent_station_basis_v1/scripts/ops/weather_station_basis_shadow_v1_loop.sh
 Restart=always
 RestartSec=30

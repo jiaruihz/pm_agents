@@ -1,10 +1,12 @@
-"""Current probe health from the strategy-instance control plane.
+"""Observed probe health from current runtime-state evidence.
 
 The legacy ``weather_strategy_runtime_registry`` contains historical N100 mirrors
 and is intentionally not a dashboard truth source.  This endpoint reads the
-current ``strategy_instance`` desired state plus ``strategy_instance_runtime``
-actual state.  Freshness is calculated from timestamps at request time rather
-than trusting a stale ``snapshot_age_min`` value serialized in an old summary.
+``strategy_instance`` is a historical catalog, so lifecycle labels alone do
+not make an instance current.  This endpoint includes explicit expected-live
+rows and rows with observed running runtime state.  Desired production topology
+still comes only from production.yaml/controller.  Freshness is calculated
+from timestamps at request time rather than trusting a stale serialized age.
 """
 
 import json
@@ -67,10 +69,7 @@ def _instance_rows(db: Db) -> list[dict]:
         FROM strategy_instance si
         LEFT JOIN strategy_instance_runtime rt ON rt.instance_id=si.instance_id
         WHERE si.desired_status='enabled'
-          AND (
-              si.expected_live=1
-              OR si.lifecycle_status IN ('tiny_live_probe', 'shadow', 'monitor')
-          )
+          AND (si.expected_live=1 OR rt.process_status='running')
         ORDER BY
             CASE WHEN rt.process_status='running' THEN 0 ELSE 1 END,
             si.lifecycle_status,

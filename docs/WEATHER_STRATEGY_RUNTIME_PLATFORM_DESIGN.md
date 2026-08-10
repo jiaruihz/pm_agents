@@ -1,9 +1,14 @@
 # 天气策略运行时平台 · 产品化设计
 
-Status: design-draft
-Updated: 2026-07-09 首版蓝图（统一启动器 + 策略接口 + DB 控制面 + 数据源领域模型）；补 §12 看板升级计划 + §13 数据模型 ER 关联；复盘对齐既有量化血缘：strategy_def=StrategyManifest 头粒度继任者、metadata/config/instance 三者关系（§13.4）、instance 引用 config_id 而非内联 params（§4.2）；补 §6.5-6.8 数据源表粒度修订
+Status: historical-design / superseded-for-production-control
+Updated: 2026-08-07 controller-only boundary correction
 Source of truth: no（目标草案，未实现）；架构口径服从 WEATHER_ARCHITECTURE_SPINE / WEATHER_SYSTEM_CONTRACT
 Superseded by / Used by: 取代 `docs/archive/UNIFIED_STRATEGY_PLATFORM_REFACTOR_PLAN.md`（旧 PMM/ARB 版）的目标定位；落地后由 WEATHER_STRATEGY_ENTRYPOINT / WEATHER_STRATEGY_REGISTRY 引用
+
+> **当前边界：** 本文的 DB-first supervisor 与 launcher mutation 方案没有成为生产控制面。当前唯一 desired topology 是
+> `src/strategies/runtime/production.yaml`，唯一启停/恢复入口是 `weather_production_ctl.py`。`instances.yaml` 和
+> `strategy_instance` 只保留策略 catalog/血缘；`weather_strategy_launcher.py` 只读兼容，`start`、`stop`、
+> `reconcile --apply` 均 fail closed。下文 supervisor/pmctl 内容只作历史设计，不得据此操作生产。
 
 > 一句话：把现在"一个策略头 = 一个 600 行 runner + 一个 40 个环境变量的 `start_*.sh` + 一堆 pidfile/tmux"的作坊，
 > 收敛成"策略头只实现一个接口 → 单一 supervisor 从 DB 定义的 instance 统一拉起/管控 → 状态与参数统一通过控制面改，且全程可追溯"。
@@ -239,12 +244,11 @@ CREATE TABLE strategy_instance_runtime (
 );
 ```
 
-> **落地状态(2026-07-10):** 第一版已落地：`strategy_instance_runtime` 建表、additive schema migration、
+> **历史落地状态(2026-07-10):** `strategy_instance_runtime` 建表、additive schema migration、
 > `src.strategies.runtime.runtime_state.push_runtime_state()` 写入口、`weather_strategy_launcher.py reconcile`
 > 观察/对账入口已完成。`/api/strategy-runtime/overview` 和 detail 已改为读
 > `strategy_instance + strategy_instance_runtime`，不再以 `weather_strategy_runtime_registry` 作为主状态源。
-> 当前 `reconcile` 默认只观察并写实际态；只有显式 `--apply` 才启停 tmux，live 启停仍强制
-> `--confirm-live --reason`。
+> 当前 `reconcile` 只观察并写实际态；旧 `--apply` 启停能力已于 2026-08-07 移除，所有生产 mutation 走 controller。
 
 ### 4.4 `strategy_control_log`（append-only 审计，DB-first 的可追溯保证）
 
@@ -284,11 +288,10 @@ CREATE TABLE strategy_control_log (
 
 进程模型细节：supervisor + 每实例一子进程，Mac 上（短期生产）用普通 Python supervisor（asyncio / multiprocessing），一次性挂在 tmux/launchd 下常驻。`host` 字段留了多机位。迁移期：现有 `start_*.sh` 先改成 `pmctl start <instance>` 的薄壳，之后删除。
 
-> **落地状态(2026-07-10):** `weather_strategy_launcher.py reconcile` 是 supervisor 的第一版入口：
+> **历史落地状态(2026-07-10，现已被 controller 取代):** `weather_strategy_launcher.py reconcile` 曾是 supervisor 的第一版入口：
 > 它从 DB 读 `strategy_instance.desired_status`，观察 tmux 实际状态，写入
-> `strategy_instance_runtime.process_status`；`--apply` 模式可按期望态启停带 `start_script/tmux_session`
-> 的实例。该版本尚未实现常驻 loop/backoff/全局 notional cap，也未把所有 runner 改成
-> `BaseRunner` 子进程模型。
+> `strategy_instance_runtime.process_status`。其 `--apply` 直接启停能力已移除；当前 controller/manifest 架构不再沿
+> DB desired-status supervisor 路线继续实现。
 
 ---
 
@@ -815,7 +818,7 @@ CREATE TABLE weather_source_alignment_feature (
 | Phase | 内容 | 交付判据 |
 |---|---|---|
 | **0 · 接口与 harness（零行为变更）** | 从一个 head（建议 `low_price_yes_lottery`）抽出 `BaseRunner`，定义 `StrategyHead` protocol + `ParamsSchema`，把这一个 head 移植过去 | 新旧并行跑 shadow，emit/telemetry **逐笔 parity**（TDD parity test），证明无回归 |
-| **1 · 控制面 + 运行时表 + supervisor** | 已落 `strategy_def/instance/runtime/control_log`；`weather_strategy_launcher.py sync/reconcile` 能写 runtime 实际态；dashboard 已读新表 | 仍需常驻 supervisor loop/backoff、全局 notional cap、把 runner 迁入 BaseRunner |
+| **1 · 控制面 + 运行时表 + supervisor** | 历史上落过 catalog/runtime 表；生产控制已改由 `production.yaml + weather_production_ctl.py` 承担 | 本行旧 DB-supervisor 路线不再继续；catalog 只作血缘/展示 |
 | **2 · 数据源领域模型** | 先落 `weather_data_source_profile / weather_data_monitor_instance`，从 `source_profiles.json`、high-frequency/runway registries 和 runtime output 回填；health 先动态计算，必要时再物化；加集中陈旧/fallback 告警 | 静默 GFS fallback 类事故变成 source health 告警；fast-source monitor 实例、城市源覆盖、输出路径和延迟都能在 dashboard 看见 |
 | **3 · 全量移植 head** | 按 family 逐族移植；删各自 `start_*.sh` + 重复的 loop/pidfile/telemetry 代码；registry → 读模型 | `scripts/ops/start_*.sh` 与 bespoke runner 大幅减少；重复横切代码归零 |
 | **4 · 看板控制动作 + 数据源面板** | 看板接 `pmctl` 控制动作 + `weather_data_source_health` 面板；下线扫描式 `refresh_weather_strategy_runtime_registry.py` | 从看板可 pause/enable-live/set-cap；数据源健康可视 |

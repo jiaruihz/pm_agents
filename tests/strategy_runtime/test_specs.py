@@ -1,4 +1,5 @@
 from src.strategies.runtime.specs import load_instance_specs, params_hash
+from src.strategies.runtime.production import load_production_spec
 
 
 def test_load_returns_known_instances():
@@ -26,3 +27,30 @@ def test_params_hash_is_stable():
     specs = load_instance_specs()
     assert params_hash(specs[0]) == params_hash(specs[0])
     assert len(params_hash(specs[0])) == 12
+
+
+def test_catalog_expected_live_is_a_subset_of_production_authority():
+    """Historical catalog rows must never claim current live authority."""
+    catalog_live = {
+        spec.strategy_instance for spec in load_instance_specs() if spec.expected_live
+    }
+    production_live = {
+        runtime.instance_id
+        for runtime in load_production_spec().managed_runtimes
+        if runtime.expected_live
+    }
+    assert catalog_live == production_live
+
+
+def test_catalog_exposes_no_start_entrypoint_outside_production_authority():
+    production = {
+        runtime.instance_id: runtime
+        for runtime in load_production_spec().managed_runtimes
+    }
+    for spec in load_instance_specs():
+        if not spec.start_script:
+            continue
+        assert spec.strategy_instance in production
+        production_start = production[spec.strategy_instance].start_script
+        assert production_start is not None
+        assert str(production_start) == spec.start_script

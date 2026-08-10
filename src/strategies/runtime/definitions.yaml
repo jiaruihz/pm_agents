@@ -32,8 +32,8 @@
   family: reheat_risk.current_yes
   strategy_name: 当前档 YES 路径策略
   description: 判断当前最高温 exact bracket 是否能守住，并显式处理继续升温导致的 overshoot 风险。
-  portfolio_status: historical_live
-  portfolio_note: 有历史 tiny-live 记录，但本机观测已陈旧；不是当前 Mac 生产主线。
+  portfolio_status: forward_live
+  portfolio_note: H1 late-carry 与 H2 early-dislocation 在 Mac 做小仓前向取证；均未确认，不得据当前样本扩仓。
 - strategy_key: reheat_risk.higher_no_carry
   family: reheat_risk.higher_no_carry
   strategy_name: 高档 NO carry

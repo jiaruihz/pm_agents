@@ -27,7 +27,7 @@ def test_record_action_sets_desired_and_logs(tmp_path):
         (iid,),
     ).fetchone()
     assert log["action"] == "stop"
-    assert log["from_state"] == "enabled"
+    assert log["from_state"] == "shelved"
     assert log["to_state"] == "paused"
     assert log["reason"] == "ops test"
     assert log["actor"] == "tester"

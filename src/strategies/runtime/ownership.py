@@ -25,7 +25,7 @@ def strategy_key_for_params(params: dict[str, Any]) -> str | None:
         return "latency_arb.hko_official_tminus1_no"
     if policy.startswith("regime_routed_no"):
         return "reheat_risk.regime_routed_no"
-    if policy.startswith("theta_current_yes"):
+    if policy.startswith("theta_current_yes") or policy.startswith("current_yes_heat_death"):
         return "reheat_risk.current_yes"
     if policy.startswith("tmax_distribution_edge"):
         return "reheat_risk.tmax_distribution_edge"

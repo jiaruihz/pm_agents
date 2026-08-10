@@ -67,6 +67,20 @@ def test_probes_health_lists_current_instance_control_plane(client, api_db, tmp_
     assert row["candidate_rows"] == 2
 
 
+def test_probes_health_excludes_catalog_only_shadow_without_running_state(client, api_db):
+    api_db.execute(
+        """INSERT INTO strategy_instance (
+               instance_id, strategy_key, display_name, family, lifecycle_status,
+               execution_mode, desired_status, source_layer, expected_live, updated_at_utc
+           ) VALUES ('historical-shadow', 'family', 'Historical', 'family', 'shadow',
+               'zero_notional_shadow', 'enabled', 'runtime_local', 0,
+               '2026-07-26T00:00:00Z')"""
+    )
+    api_db.commit()
+    probes = client.get("/api/probes/health").json()["probes"]
+    assert "historical-shadow" not in {row["strategy_instance"] for row in probes}
+
+
 def test_probe_freshness_is_calculated_from_runtime_timestamp_not_summary_age(tmp_path):
     now = datetime(2026, 7, 26, 1, 0, tzinfo=timezone.utc)
     row = _probe_row({

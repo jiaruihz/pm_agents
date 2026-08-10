@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Unified local launcher for weather strategy runtime loops.
+"""Read-only compatibility CLI for the historical strategy-instance catalog.
 
-This is intentionally thin: strategy metadata lives in
-refresh_weather_strategy_runtime_registry.strategy_specs(), while individual
-strategies still own their runner implementation. The launcher gives us one
-operator entrypoint for list/status/start/stop and refreshes the dashboard
-registry after process changes.
+Production process mutation is owned exclusively by ``weather_production_ctl``
+and ``production.yaml``.  The legacy start/stop/reconcile-apply commands remain
+only to fail closed with a migration message; they never invoke a runner or
+touch tmux.
 """
 
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
-import os
 import sqlite3
 import subprocess
 import sys
@@ -29,9 +26,13 @@ if str(ROOT) not in sys.path:
 from scripts.ops import refresh_weather_strategy_runtime_registry as registry  # noqa: E402
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical  # noqa: E402
 from src.strategies.runtime.sync import sync_instance_specs  # noqa: E402
-from src.strategies.runtime import control  # noqa: E402
 from src.strategies.runtime import runtime_state  # noqa: E402
-from src.strategies.runtime.specs import params_hash, spec_commit  # noqa: E402
+
+
+CONTROLLER_ONLY_MESSAGE = (
+    "production mutation moved to scripts/ops/weather_production_ctl.py; "
+    "inspect health/plan first and use only a registered controller action"
+)
 
 
 def json_ready(value: Any) -> Any:
@@ -259,92 +260,18 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def require_live_confirmation(spec: registry.StrategySpec, args: argparse.Namespace, action: str) -> None:
-    if spec.lifecycle_status == "live" and not args.confirm_live:
-        raise SystemExit(f"refusing to {action} live strategy without --confirm-live: {spec.strategy_instance}")
-    if spec.lifecycle_status == "live" and not args.reason:
-        raise SystemExit(f"refusing to {action} live strategy without --reason: {spec.strategy_instance}")
-
-
-def _record_action(db_path: Path, spec: registry.StrategySpec, action: str,
-                   to_state: str, reason: str | None) -> str | None:
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA busy_timeout=5000")
-    try:
-        apply_schema_canonical(conn)
-        return control.record_control_action(
-            conn, instance_id=spec.strategy_instance, action=action,
-            to_state=to_state, reason=reason, actor=getpass.getuser(),
-            spec_commit=spec_commit(), params_hash=params_hash(spec),
-        )
-    finally:
-        conn.close()
-
-
 def cmd_start(args: argparse.Namespace) -> int:
-    spec = get_spec(args.strategy_instance)
-    require_live_confirmation(spec, args, "start")
-    if not spec.start_script:
-        raise SystemExit(f"strategy has no start_script in registry spec: {spec.strategy_instance}")
-    script = ROOT / spec.start_script
-    if not script.exists():
-        raise SystemExit(f"missing start_script: {script}")
-    env = os.environ.copy()
-    if spec.lifecycle_status == "live" and args.confirm_live:
-        env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
-    proc = subprocess.run(
-        [str(script)],
-        cwd=ROOT,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
-    log_id = _record_action(args.db_path, spec, "start", "enabled", args.reason)
-    refresh = None if args.no_refresh else refresh_db(args.db_path)
-    print_payload(
-        {
-            "action": "start",
-            "strategy_instance": spec.strategy_instance,
-            "returncode": proc.returncode,
-            "output": proc.stdout.strip(),
-            "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
-            "control_log_id": log_id,
-            "registry_refresh": refresh,
-        }
-    )
-    return proc.returncode
+    raise SystemExit(CONTROLLER_ONLY_MESSAGE)
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
-    spec = get_spec(args.strategy_instance)
-    require_live_confirmation(spec, args, "stop")
-    if not spec.tmux_session:
-        raise SystemExit(f"strategy has no tmux_session in registry spec: {spec.strategy_instance}")
-    proc = subprocess.run(["tmux", "kill-session", "-t", spec.tmux_session], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-    if proc.returncode != 0 and "can't find session" not in proc.stdout.lower():
-        rc = proc.returncode
-    else:
-        rc = 0
-    log_id = _record_action(args.db_path, spec, "stop", "paused", args.reason)
-    refresh = None if args.no_refresh else refresh_db(args.db_path)
-    print_payload(
-        {
-            "action": "stop",
-            "strategy_instance": spec.strategy_instance,
-            "returncode": rc,
-            "output": proc.stdout.strip(),
-            "process_status": "running" if tmux_running(spec.tmux_session) else "stopped",
-            "control_log_id": log_id,
-            "registry_refresh": refresh,
-        }
-    )
-    return rc
+    raise SystemExit(CONTROLLER_ONLY_MESSAGE)
 
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
-    """Write actual process state for every instance; optionally reconcile drift."""
+    """Observe catalog runtime state; production mutation is controller-only."""
+    if args.apply:
+        raise SystemExit(CONTROLLER_ONLY_MESSAGE)
     conn = sqlite3.connect(args.db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=5000")
@@ -370,69 +297,12 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         for row in rows:
             iid = str(row["instance_id"])
             desired = str(row["desired_status"])
-            lifecycle = str(row["lifecycle_status"])
             session = row.get("tmux_session")
             running = bool(session and session in tmux)
             observed_status = "running" if running else "stopped" if session else "unknown"
             action = "observe"
             rc = 0
             output = ""
-
-            if args.apply and desired == "enabled" and observed_status == "stopped":
-                spec = specs.get(iid)
-                if spec and spec.start_script:
-                    require_live_confirmation(spec, args, "start")
-                    proc = subprocess.run(
-                        [str(ROOT / spec.start_script)],
-                        cwd=ROOT,
-                        text=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        check=False,
-                    )
-                    rc = proc.returncode
-                    output = proc.stdout.strip()
-                    action = "start"
-                    observed_status = "running" if tmux_running(spec.tmux_session) else "stopped"
-                    control.write_control_log(
-                        conn,
-                        instance_id=iid,
-                        actor=getpass.getuser(),
-                        action="supervisor_start",
-                        from_state=desired,
-                        to_state=desired,
-                        reason=args.reason,
-                        spec_commit=row.get("spec_commit"),
-                        params_hash=None,
-                    )
-                else:
-                    action = "start_unavailable"
-            elif args.apply and desired in {"paused", "shelved", "blocked"} and observed_status == "running":
-                if lifecycle == "live" and not args.confirm_live:
-                    action = "stop_requires_confirm_live"
-                else:
-                    proc = subprocess.run(
-                        ["tmux", "kill-session", "-t", str(session)],
-                        text=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        check=False,
-                    )
-                    rc = 0 if proc.returncode == 0 or "can't find session" in proc.stdout.lower() else proc.returncode
-                    output = proc.stdout.strip()
-                    action = "stop"
-                    observed_status = "stopped" if rc == 0 else observed_status
-                    control.write_control_log(
-                        conn,
-                        instance_id=iid,
-                        actor=getpass.getuser(),
-                        action="supervisor_stop",
-                        from_state=desired,
-                        to_state=desired,
-                        reason=args.reason,
-                        spec_commit=row.get("spec_commit"),
-                        params_hash=None,
-                    )
 
             spec = specs.get(iid)
             if spec:

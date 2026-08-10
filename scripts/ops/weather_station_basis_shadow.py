@@ -108,7 +108,8 @@ def _weather_predict_proxy_candidates() -> list[str | None]:
         if value:
             candidates.append(value)
 
-    env_path = Path(os.environ.get("WEATHER_PREDICT_DIR", "/home/jiarui/projects/weather-predict")) / ".env"
+    configured_root = os.environ.get("WEATHER_PREDICT_DIR")
+    env_path = Path(configured_root).expanduser() / ".env" if configured_root else ROOT / ".env"
     if env_path.exists():
         values: dict[str, str] = {}
         for raw_line in env_path.read_text(encoding="utf-8").splitlines():
