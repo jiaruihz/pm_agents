@@ -126,6 +126,7 @@ unless matched by a real row in `fills`.
 | `/Volumes/jrs/weather_data_feed_service_runtime/market_ladder_snapshots/` | Mac tmux `weather_market_books` | market-books cadence | complete event/rung/two-sided book view and batch completeness |
 | `/Volumes/jrs/weather_data_feed_service_runtime/strategy_snapshots/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | strategy snapshot cadence | forecast/observation/model joined strategy view; reads canonical market books |
 | `production.yaml.historical_paper_snapshot_root` | immutable archive | historical replay only | pre-current-producer PIT strategy snapshots; consumers resolve this path through the shared production loader, never by embedding `/Volumes/...` literals |
+| `production.yaml.historical_{full_ladder,targeted}_data_root` | immutable archive | historical replay only | retired collector products; physical legacy names exist only in the production contract, while executable consumers use semantic helpers from `weather_data_feed.production_paths` |
 | `/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_forecast_curve_collector_v1` | forecast cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
 | `production.yaml.managed_runtimes[*].live_order_path` | corresponding controller-managed live runtime | live strategy cadence | complete current live order-journal set; no second hard-coded list |
 | `production.yaml.managed_runtimes[*].health_path` | corresponding controller-managed runtime | role cadence | current raw pulse/summary; the control repo is not assumed to be its storage root |
@@ -199,17 +200,18 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 |---|---|---|---|
 | `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions plus a byte-for-byte aggregate compatibility journal | keep daily partitions; migrate production readers to the partition reader, then remove the duplicate aggregate |
 | `output/high_frequency_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw historical observation evidence | 21 daily partitions plus an exact duplicate stopped aggregate | keep partitions; remove the aggregate after remaining compatibility consumers migrate |
-| `output/forecast_enrichment/{YYYY-MM-DD}/forecast_enrichment.jsonl` | reproducible feature evidence | 32 daily partitions plus an exact duplicate stopped aggregate | retain dated evidence needed by frozen research; remove the aggregate after consumers use partitions |
+| `output/forecast_enrichment/{YYYY-MM-DD}/forecast_enrichment.jsonl` | reproducible feature evidence | daily partitions plus an exact duplicate aggregate still written for compatibility | retain dated evidence needed by frozen research; first migrate the producer's tail reader and remaining consumers, then stop and remove the aggregate |
 | `output/fast_source_prev_no_trial/opportunities.jsonl` | signal/evidence journal | active monolith; current writer records transitions and five-minute heartbeats | cut over in a live maintenance window to daily partitions; hot current day, archive closed days, never treat heartbeat rows as separate opportunities |
 | `weather_edge_v1/*/state_decisions.jsonl` | strategy decision evidence | per-instance append-only monolith | preserve lineage, partition by decision date, and expose one shared partition reader before moving closed days |
 | `*.log` | disposable runtime diagnostics | plain stdout/stderr summaries | controller-managed cap: 64 MiB trigger, retain roughly the last 8 MiB; logs are not raw or canonical evidence |
 
-The aggregate/shard equality audit on 2026-08-09 found exact SHA-256 concatenation parity for the stopped
-`forecast_enrichment.jsonl` (869,591,376 bytes) and `high_frequency_observations.jsonl`
-(646,315,053 bytes). The canonical rebuild now reads only dated `forecast_enrichment` partitions when given
-the family directory, explicitly excluding both the root compatibility aggregate and sibling
-`forecast_versions.jsonl` files. The two aggregates remain temporarily only for unmigrated research/runtime
-compatibility consumers; their duplication must not be described as additional history.
+The aggregate/shard equality audit on 2026-08-09 found byte-for-byte concatenation parity for
+`forecast_enrichment.jsonl` (895,379,584 bytes at 23:48; still active) and the stopped
+`high_frequency_observations.jsonl` (646,315,053 bytes). The canonical rebuild now reads only dated
+`forecast_enrichment` partitions when given the family directory, explicitly excluding both the root
+compatibility aggregate and sibling `forecast_versions.jsonl` files. The two aggregates remain temporarily
+only for producer/unmigrated-consumer compatibility; their duplication must not be described as additional
+history.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See

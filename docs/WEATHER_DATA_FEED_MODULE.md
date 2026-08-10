@@ -32,6 +32,7 @@ fallback 或恢复入口。
 | `source_profiles.json` / `source_registry.py` | official source、station、settlement 与 live eligibility registry |
 | `source_policy.py` | 从 profile 解析城市/source policy |
 | `market_brackets.py` | exact bracket label、边界与 contains 语义 |
+| `ladder_snapshot_history.py` | immutable historical `paper_snapshots` 到统一 snapshot/rung research contract；路径由 production loader 提供 |
 | `observation_cache.py` | observation cache/latest 协议与 `(city,target_date)` 索引 |
 | `observation_clock.py` | observation cadence、age 与时钟字段 |
 | `observation_sources/` | source adapter、raw parser 与统一 `ObservationRecord` |

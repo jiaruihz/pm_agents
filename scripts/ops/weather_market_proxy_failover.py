@@ -17,8 +17,14 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SNAPSHOT_DIR = Path.home() / "projects/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
-DEFAULT_LOG = Path.home() / "projects/weather_data_feed_service_runtime/loop/market_proxy_failover.jsonl"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+PRODUCTION_SPEC = load_production_spec()
+DEFAULT_SNAPSHOT_DIR = PRODUCTION_SPEC.strategy_paper_snapshot_dir()
+DEFAULT_LOG = PRODUCTION_SPEC.data_feed_runtime_root / "loop/market_proxy_failover.jsonl"
 DEFAULT_GROUP = "🙂 TAGSS"
 DEFAULT_CANDIDATES = [
     "🇭🇰 香港 01丨1x HK",

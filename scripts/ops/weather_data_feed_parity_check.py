@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.snapshot_protocol import REQUIRED_SNAPSHOT_FIELDS, normalize_snapshot_record
+from src.strategies.runtime.production import load_production_spec
 
 
 def load_snapshot(path: Path) -> dict[str, Any]:
@@ -86,7 +87,7 @@ def main() -> int:
     parser.add_argument("--snapshot", default="")
     parser.add_argument(
         "--snapshot-dir",
-        default=str(ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"),
+        default=str(load_production_spec().strategy_paper_snapshot_dir()),
     )
     args = parser.parse_args()
 

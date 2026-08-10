@@ -1227,7 +1227,10 @@ def overall_status(sections: dict[str, Any]) -> str:
         or orderbook.get("missing")
         or (bool(orderbook_coverage) and orderbook_coverage.get("status") != "ok")
         or (bool(forecast_curves) and forecast_curves.get("status") != "ok")
-        or live_cross_observations.get("status") != "ok"
+        or (
+            bool(live_cross_observations)
+            and live_cross_observations.get("status") != "ok"
+        )
         or (bool(observation_cache) and observation_cache.get("status") == "fail")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
