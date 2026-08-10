@@ -796,8 +796,8 @@ def migrate_production_storage(
         current_day_command = (
             "for day in \"$(date +%Y-%m-%d)\" \"$(date -v-1d +%Y-%m-%d)\"; do "
             f"for src in {shlex.quote(str(source_output))}/*/\"$day\" "
-            f"{shlex.quote(str(spec.data_feed_runtime_root / 'full_ladder_output'))}/*/\"$day\" "
-            f"{shlex.quote(str(spec.data_feed_runtime_root / 'targeted_output'))}/*/\"$day\"; do "
+            f"{shlex.quote(str(spec.resolved_market_books_root() / 'batches'))}/\"$day\" "
+            f"{shlex.quote(str(spec.forecast_hourly_curve_dir()))}/\"$day\"; do "
             "test -d \"$src\" || continue; "
             f"rel=\"${{src#{str(spec.production_storage_root)}/}}\"; "
             f"dst={shlex.quote(str(staging_root))}/\"$rel\"; "
@@ -805,9 +805,13 @@ def migrate_production_storage(
             "/usr/bin/rsync -aE \"$src/\" \"$dst/\"; "
             "done; "
             "stamp=\"${day//-/}\"; "
-            f"for src in {shlex.quote(str(spec.data_feed_runtime_root / 'targeted_output/paper_snapshots'))}/snapshot_\"$stamp\"*; do "
+            f"for src in {shlex.quote(str(spec.strategy_paper_snapshot_dir()))}/snapshot_\"$stamp\"* "
+            f"{shlex.quote(str(spec.resolved_market_ladder_snapshot_root()))}/*\"$stamp\"*; do "
             "test -f \"$src\" || continue; "
-            f"/usr/bin/rsync -aE \"$src\" {shlex.quote(str(staging_root / (spec.data_feed_runtime_root / 'targeted_output/paper_snapshots').relative_to(spec.production_storage_root)) + '/')} ; "
+            f"rel=\"${{src#{str(spec.production_storage_root)}/}}\"; "
+            f"dst={shlex.quote(str(staging_root))}/\"$rel\"; "
+            "mkdir -p \"$(dirname \"$dst\")\"; "
+            "/usr/bin/rsync -aE \"$src\" \"$dst\"; "
             "done; done"
         )
         final_command = " && ".join(
@@ -1064,6 +1068,36 @@ def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> N
                 )
 
 
+def _checkout_start_preflight(
+    runtime: WeatherManagedRuntimeSpec,
+) -> dict[str, Any] | None:
+    """Validate a git production checkout before an existing session is stopped."""
+    checkout = runtime.checkout_root
+    script = runtime.resolved_start_script()
+    if checkout is None or not (checkout / ".git").exists():
+        return None
+    python = checkout / ".venv/bin/python"
+    if not python.exists():
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": f"checkout_bootstrap_missing_venv:{python}",
+        }
+    if script is not None and script.exists():
+        try:
+            script_text = script.read_text(encoding="utf-8")
+        except OSError:
+            script_text = ""
+        env_path = checkout / ".env"
+        if ".env" in script_text and not env_path.exists():
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": f"checkout_bootstrap_missing_env:{env_path}",
+            }
+    return None
+
+
 def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dict[str, Any]:
     script = runtime.resolved_start_script()
     if script is None:
@@ -1074,6 +1108,9 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
         return {"instance_id": runtime.instance_id, "status": "blocked", "reason": "confirm_live_required"}
     if not script.exists():
         return {"instance_id": runtime.instance_id, "status": "error", "reason": f"start_script_missing:{script}"}
+    preflight_error = _checkout_start_preflight(runtime)
+    if preflight_error is not None:
+        return preflight_error
     env = os.environ.copy()
     env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
     if confirm_live:
@@ -1102,6 +1139,9 @@ def _run_restart(
     *,
     confirm_live: bool,
 ) -> dict[str, Any]:
+    preflight_error = _checkout_start_preflight(runtime)
+    if preflight_error is not None:
+        return preflight_error
     script = runtime.resolved_restart_script()
     if script is None:
         if runtime.expected_live or runtime.recovery_policy != "safe":

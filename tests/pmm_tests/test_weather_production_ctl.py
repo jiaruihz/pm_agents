@@ -881,6 +881,36 @@ def test_controller_can_restart_safe_non_live_runtime_from_start_contract(
     assert marker.read_text(encoding="utf-8") == "started"
 
 
+def test_controller_restart_preflights_git_checkout_before_stop(monkeypatch, tmp_path):
+    (tmp_path / ".git").write_text("gitdir: elsewhere\n", encoding="utf-8")
+    script = tmp_path / "start.sh"
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    calls = []
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: calls.append(args)
+        or subprocess.CompletedProcess(args, 0, "", ""),
+    )
+
+    result = ctl._run_restart(spec, runtime, confirm_live=False)
+
+    assert calls == []
+    assert result["status"] == "error"
+    assert result["reason"].startswith("checkout_bootstrap_missing_venv:")
+
+
 def test_controller_restart_starts_missing_safe_runtime(monkeypatch, tmp_path):
     marker = tmp_path / "started.txt"
     script = tmp_path / "start.sh"
