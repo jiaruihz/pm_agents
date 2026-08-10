@@ -1,0 +1,2088 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>天气研究全景 · 2026-08-10</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Weather Research Map" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Weather Research Map&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+    [aria-pressed=&quot;true&quot;],
+    [aria-selected=&quot;true&quot;],
+    .is-selected
+  ) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;weather-research-map&quot;&gt;
+  &lt;style&gt;
+    #weather-research-map {
+      width: 100%;
+      color: var(--foreground);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    #weather-research-map * {
+      box-sizing: border-box;
+    }
+
+    #weather-research-map h1,
+    #weather-research-map h2,
+    #weather-research-map h3,
+    #weather-research-map p {
+      margin-top: 0;
+    }
+
+    #weather-research-map .map-header,
+    #weather-research-map .panel-stack,
+    #weather-research-map .section-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #weather-research-map .map-header p,
+    #weather-research-map .section-stack p {
+      margin-bottom: 0;
+    }
+
+    #weather-research-map .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    #weather-research-map .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    #weather-research-map .pipeline {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      align-items: start;
+    }
+
+    #weather-research-map .pipeline-step {
+      min-width: 0;
+      padding-top: 10px;
+      border-top: 3px solid var(--viz-series-1);
+    }
+
+    #weather-research-map .pipeline-step:nth-child(2),
+    #weather-research-map .pipeline-step:nth-child(5) {
+      border-top-color: var(--viz-series-2);
+    }
+
+    #weather-research-map .pipeline-step:nth-child(3),
+    #weather-research-map .pipeline-step:nth-child(6) {
+      border-top-color: var(--viz-series-3);
+    }
+
+    #weather-research-map .pipeline-step:nth-child(4) {
+      border-top-color: var(--viz-series-4);
+    }
+
+    #weather-research-map .pipeline-step strong,
+    #weather-research-map .maturity-line strong,
+    #weather-research-map .roadmap-step strong {
+      display: block;
+      font-weight: 500;
+    }
+
+    #weather-research-map .maturity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #weather-research-map .maturity-line {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.2fr);
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #weather-research-map .maturity-line:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    #weather-research-map .status-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    #weather-research-map .phase-controls {
+      align-items: stretch;
+    }
+
+    #weather-research-map .phase-controls .btn {
+      flex: 1 1 150px;
+    }
+
+    #weather-research-map .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px 18px;
+    }
+
+    #weather-research-map .detail-grid div,
+    #weather-research-map .detail-grid p {
+      min-width: 0;
+      margin: 0;
+    }
+
+    #weather-research-map .detail-grid dt {
+      color: var(--muted-foreground);
+      margin-bottom: 4px;
+    }
+
+    #weather-research-map .detail-grid dd {
+      margin: 0;
+    }
+
+    #weather-research-map .architecture-lane {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1.3fr) minmax(0, 1fr) 110px;
+      gap: 14px;
+      align-items: start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #weather-research-map .architecture-lane:last-child {
+      border-bottom: 0;
+    }
+
+    #weather-research-map .architecture-lane strong {
+      font-weight: 500;
+    }
+
+    #weather-research-map .roadmap {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    #weather-research-map .roadmap-step {
+      position: relative;
+      padding: 0 0 18px 30px;
+      border-left: 2px solid var(--border);
+    }
+
+    #weather-research-map .roadmap-step::before {
+      content: &quot;&quot;;
+      position: absolute;
+      left: -7px;
+      top: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--viz-series-1);
+    }
+
+    #weather-research-map .roadmap-step:last-child {
+      border-left-color: transparent;
+      padding-bottom: 0;
+    }
+
+    #weather-research-map .roadmap-step:nth-child(2)::before,
+    #weather-research-map .roadmap-step:nth-child(5)::before {
+      background: var(--viz-series-2);
+    }
+
+    #weather-research-map .roadmap-step:nth-child(3)::before {
+      background: var(--viz-series-3);
+    }
+
+    #weather-research-map .roadmap-step:nth-child(4)::before {
+      background: var(--viz-series-4);
+    }
+
+    #weather-research-map .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      background: var(--viz-series-1);
+    }
+
+    #weather-research-map .legend-dot.collecting {
+      background: var(--viz-series-2);
+    }
+
+    #weather-research-map .legend-dot.inconclusive {
+      background: var(--viz-series-3);
+    }
+
+    #weather-research-map .legend-dot.stopped {
+      background: var(--viz-series-4);
+    }
+
+    #weather-research-map .source-line {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    #weather-research-map [hidden] {
+      display: none !important;
+    }
+
+    #weather-research-map .nowrap {
+      white-space: nowrap;
+    }
+
+    @media (max-width: 820px) {
+      #weather-research-map .two-col,
+      #weather-research-map .three-col {
+        grid-template-columns: 1fr;
+      }
+
+      #weather-research-map .pipeline {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      #weather-research-map .detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      #weather-research-map .architecture-lane {
+        grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr);
+      }
+
+      #weather-research-map .architecture-lane .lane-status {
+        grid-column: 2 / -1;
+      }
+    }
+
+    @media (max-width: 520px) {
+      #weather-research-map .pipeline,
+      #weather-research-map .detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      #weather-research-map .maturity-line,
+      #weather-research-map .architecture-lane {
+        grid-template-columns: 1fr;
+      }
+
+      #weather-research-map .architecture-lane .lane-status {
+        grid-column: auto;
+      }
+    }
+  &lt;/style&gt;
+
+  &lt;header class=&quot;map-header&quot;&gt;
+    &lt;div class=&quot;viz-row&quot;&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;截至 2026-08-10 12:07 北京时间&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;Manifest 健康&lt;/span&gt;
+      &lt;span class=&quot;viz-badge&quot;&gt;Canonical fill gate 通过&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;h1&gt;天气研究全景：工程骨架已成，Alpha 仍待确认&lt;/h1&gt;
+    &lt;p class=&quot;text-muted&quot;&gt;研究状态与生产状态分开：当前有 tiny-live 证据探针，但没有任何策略达到 confirmed，也没有可扩大的 live alpha。&lt;/p&gt;
+  &lt;/header&gt;
+
+  &lt;section class=&quot;viz-grid&quot; aria-label=&quot;当前总览&quot;&gt;
+    &lt;div class=&quot;card viz-stat&quot;&gt;
+      &lt;div class=&quot;text-muted&quot;&gt;研究结论&lt;/div&gt;
+      &lt;div class=&quot;viz-stat-value&quot;&gt;0 条 confirmed&lt;/div&gt;
+      &lt;div&gt;主线收敛到 market-prior + weather/source innovation residual。&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;card viz-stat&quot;&gt;
+      &lt;div class=&quot;text-muted&quot;&gt;生产事实&lt;/div&gt;
+      &lt;div class=&quot;viz-stat-value&quot;&gt;26 个 runtime 健康&lt;/div&gt;
+      &lt;div&gt;2 tiny-live · 12 shadow · 12 infra/collector；1 个非关键 coverage warning。&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;card viz-stat&quot;&gt;
+      &lt;div class=&quot;text-muted&quot;&gt;Canonical 证据&lt;/div&gt;
+      &lt;div class=&quot;viz-stat-value&quot;&gt;179,101 个机会&lt;/div&gt;
+      &lt;div&gt;4,974 fill-grain trade facts · 1,429 live_real fill rows · $4,557.03 fill cost 已对齐。&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;nav class=&quot;viz-controls&quot; role=&quot;tablist&quot; aria-label=&quot;全景图视图&quot;&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; role=&quot;tab&quot; aria-selected=&quot;true&quot; data-tab=&quot;overview&quot;&gt;总览&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; role=&quot;tab&quot; aria-selected=&quot;false&quot; data-tab=&quot;timeline&quot;&gt;时间线&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; role=&quot;tab&quot; aria-selected=&quot;false&quot; data-tab=&quot;system&quot;&gt;系统与生产&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; role=&quot;tab&quot; aria-selected=&quot;false&quot; data-tab=&quot;research&quot;&gt;研究结论&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; role=&quot;tab&quot; aria-selected=&quot;false&quot; data-tab=&quot;next&quot;&gt;下一步&lt;/button&gt;
+  &lt;/nav&gt;
+
+  &lt;main&gt;
+    &lt;section class=&quot;panel-stack&quot; role=&quot;tabpanel&quot; data-panel=&quot;overview&quot;&gt;
+      &lt;div class=&quot;two-col&quot;&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h2&gt;现在真正的主轴&lt;/h2&gt;
+          &lt;div class=&quot;pipeline&quot; aria-label=&quot;从数据到验证的完整链路&quot;&gt;
+            &lt;div class=&quot;pipeline-step&quot;&gt;
+              &lt;strong&gt;1 · Raw 数据&lt;/strong&gt;
+              &lt;span class=&quot;text-small text-muted&quot;&gt;forecast / observation / market_books，单一 owner&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;pipeline-step&quot;&gt;
+              &lt;strong&gt;2 · PIT 状态&lt;/strong&gt;
+              &lt;span class=&quot;text-small text-muted&quot;&gt;四时钟、first-seen、不可变 snapshot identity&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;pipeline-step&quot;&gt;
+              &lt;strong&gt;3 · 概率残差&lt;/strong&gt;
+              &lt;span class=&quot;text-small text-muted&quot;&gt;logit(market) + source / weather innovation&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;pipeline-step&quot;&gt;
+              &lt;strong&gt;4 · 机会与决策&lt;/strong&gt;
+              &lt;span class=&quot;text-small text-muted&quot;&gt;SignalCandidate → TradeIntent，固定分母&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;pipeline-step&quot;&gt;
+              &lt;strong&gt;5 · 下单与成交&lt;/strong&gt;
+              &lt;span class=&quot;text-small text-muted&quot;&gt;plan → order → fill，真实 ask/bid/depth/fee&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;pipeline-step&quot;&gt;
+              &lt;strong&gt;6 · 结算与验证&lt;/strong&gt;
+              &lt;span class=&quot;text-small text-muted&quot;&gt;settlement → PnL → proper score → frozen forward&lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;table-responsive&quot;&gt;
+            &lt;table class=&quot;table table-sm&quot;&gt;
+              &lt;thead&gt;
+                &lt;tr&gt;&lt;th&gt;当前决策&lt;/th&gt;&lt;th&gt;保留&lt;/th&gt;&lt;th&gt;不再冒充结论&lt;/th&gt;&lt;/tr&gt;
+              &lt;/thead&gt;
+              &lt;tbody&gt;
+                &lt;tr&gt;&lt;td&gt;研究主线&lt;/td&gt;&lt;td&gt;连续 residual，同分母先打败 market&lt;/td&gt;&lt;td&gt;事后切片、价格规则、selected ROI&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;td&gt;模型形态&lt;/td&gt;&lt;td&gt;market prior + innovation；repricing 与 settlement 分头&lt;/td&gt;&lt;td&gt;weather-only 直接当 fair price&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;td&gt;执行证据&lt;/td&gt;&lt;td&gt;真实 taker 成本；真实 maker 生命周期&lt;/td&gt;&lt;td&gt;future touch 充当 maker fill&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;td&gt;生产姿态&lt;/td&gt;&lt;td&gt;维持 tiny-live / shadow 采证&lt;/td&gt;&lt;td&gt;在 confirmed 前扩城市、扩 size&lt;/td&gt;&lt;/tr&gt;
+              &lt;/tbody&gt;
+            &lt;/table&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h2&gt;成熟度判断&lt;/h2&gt;
+          &lt;div class=&quot;maturity-list&quot;&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;数据与血缘&lt;/strong&gt;&lt;span&gt;高：raw owner、PIT、canonical facts、fee/fill 对账已形成闭环。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;生产控制面&lt;/strong&gt;&lt;span&gt;高：Mac + JRS identity、manifest、controller、runtime health 已统一。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;模型 Alpha&lt;/strong&gt;&lt;span&gt;低：多数模型未显著打败同一 PIT 行上的 market baseline。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;执行 Alpha&lt;/strong&gt;&lt;span&gt;低至中：taker 成本证据完整；maker queue/fill/adverse-selection 仍缺真实样本。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;实盘证据&lt;/strong&gt;&lt;span&gt;中：两条 tiny-live 探针在跑，但窗口小、敏感、不能外推。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;验证治理&lt;/strong&gt;&lt;span&gt;中高：缺口会量化并重放；仍需连续、无污染的 frozen-forward 窗口。&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;three-col&quot;&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h3&gt;已经做成的底座&lt;/h3&gt;
+          &lt;p&gt;共享 weather data 模块、forecast 与 orderbook owner、WCIR 城市运行时、统一执行 handoff、canonical facts、dashboard、controller、manifest、JRS failover。&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h3&gt;已经排除的捷径&lt;/h3&gt;
+          &lt;p&gt;全局 weather-only fair price、宽泛价格方向、all-YES taker、D1 extreme-NO、ladder kink、纯 mass transport、future-touch maker 回测。&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h3&gt;仍值得下注的证据&lt;/h3&gt;
+          &lt;p&gt;first-seen source events、market-prior residual、三城 coherent full ladder、Helsinki WS deterministic replay、真实 maker lifecycle。&lt;/p&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;panel-stack&quot; role=&quot;tabpanel&quot; data-panel=&quot;timeline&quot; hidden&gt;
+      &lt;div class=&quot;section-stack&quot;&gt;
+        &lt;h2&gt;全过程时间线&lt;/h2&gt;
+        &lt;div class=&quot;viz-controls phase-controls&quot; aria-label=&quot;选择阶段&quot;&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; data-phase=&quot;p1&quot; aria-pressed=&quot;true&quot;&gt;5/10–5/17&lt;br&gt;起步与首轮 live&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p2&quot; aria-pressed=&quot;false&quot;&gt;5/18–6/7&lt;br&gt;Canonical 化&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p3&quot; aria-pressed=&quot;false&quot;&gt;6/8–6/30&lt;br&gt;系统研究展开&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p4&quot; aria-pressed=&quot;false&quot;&gt;7/1–7/13&lt;br&gt;Mac 接管与 probes&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p5&quot; aria-pressed=&quot;false&quot;&gt;7/14&lt;br&gt;Research reset&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p6&quot; aria-pressed=&quot;false&quot;&gt;7/15–7/31&lt;br&gt;First-seen 与 WCIR&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p7&quot; aria-pressed=&quot;false&quot;&gt;8/1–8/8&lt;br&gt;统一运行时与存储&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-phase=&quot;p8&quot; aria-pressed=&quot;false&quot;&gt;8/9–8/10&lt;br&gt;当前收敛&lt;/button&gt;
+        &lt;/div&gt;
+        &lt;article class=&quot;card&quot; id=&quot;phase-detail&quot; aria-live=&quot;polite&quot;&gt;
+          &lt;div class=&quot;viz-row&quot;&gt;
+            &lt;span class=&quot;viz-badge&quot; id=&quot;phase-period&quot;&gt;2026-05-10 → 2026-05-17&lt;/span&gt;
+            &lt;span class=&quot;viz-badge&quot; id=&quot;phase-status&quot;&gt;基础落地 · 执行风险暴露&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;h3 id=&quot;phase-title&quot;&gt;从策略工具到首轮真实下单&lt;/h3&gt;
+          &lt;dl class=&quot;detail-grid&quot;&gt;
+            &lt;div&gt;&lt;dt&gt;数据 / 架构&lt;/dt&gt;&lt;dd id=&quot;phase-data&quot;&gt;weather strategy tooling、signal planner、executor 开始成形。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;模型 / 信号&lt;/dt&gt;&lt;dd id=&quot;phase-model&quot;&gt;规则与价格带驱动，尚无统一 PIT 概率基准。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;回测 / 验证&lt;/dt&gt;&lt;dd id=&quot;phase-test&quot;&gt;分母、fee、settlement 尚未统一，研究与执行仍偏脚本化。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;下单模块&lt;/dt&gt;&lt;dd id=&quot;phase-order&quot;&gt;完成首个 CLOB workflow；立即暴露 duplicate、universe、sizing 问题。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;实盘证据&lt;/dt&gt;&lt;dd id=&quot;phase-live&quot;&gt;5/14：147 submitted / 239 rows、7 城、$914.40 planned；随后收紧。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;阶段产出&lt;/dt&gt;&lt;dd id=&quot;phase-outcome&quot;&gt;明确必须建设可追踪的 signal → plan → order → fill 主链。&lt;/dd&gt;&lt;/div&gt;
+          &lt;/dl&gt;
+        &lt;/article&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;section-stack&quot;&gt;
+        &lt;h2&gt;关键事故、口径修正与量化影响&lt;/h2&gt;
+        &lt;div class=&quot;table-responsive&quot;&gt;
+          &lt;table class=&quot;table table-sm&quot;&gt;
+            &lt;thead&gt;&lt;tr&gt;&lt;th&gt;窗口&lt;/th&gt;&lt;th&gt;问题&lt;/th&gt;&lt;th&gt;影响半径&lt;/th&gt;&lt;th&gt;结论 / 处置&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+            &lt;tbody&gt;
+              &lt;tr&gt;&lt;td&gt;5/14–5/16&lt;/td&gt;&lt;td&gt;duplicate / 错误城市 universe / 广泛下单&lt;/td&gt;&lt;td&gt;最高 $914.40 planned；5/15 涉及 21 城&lt;/td&gt;&lt;td&gt;推动 dedupe、city policy、统一 plan/order lineage&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;6/6&lt;/td&gt;&lt;td&gt;near-binary settlement 未归一&lt;/td&gt;&lt;td&gt;missing_bracket 725 → 0&lt;/td&gt;&lt;td&gt;早期 BUY_NO / 城市 / 模型数值全部作废；方向仅 unconfirmed&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;6/25–6/29&lt;/td&gt;&lt;td&gt;regime-routed NO live/backtest parity 与过拟合&lt;/td&gt;&lt;td&gt;forward 失败，重复风险被暴露&lt;/td&gt;&lt;td&gt;暂停 live；转向 frozen-forward 与共享 feature factory&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;7/2–7/5&lt;/td&gt;&lt;td&gt;ECMWF 城市静默 fallback GFS&lt;/td&gt;&lt;td&gt;16 个 live_real fills，6 城&lt;/td&gt;&lt;td&gt;保留真实订单；从 ECMWF 研究切片剔除；fallback 改为显式告警&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;7/14&lt;/td&gt;&lt;td&gt;fast-source share-cap / bracket 口径错误&lt;/td&gt;&lt;td&gt;计划 95 shares，实际 111.562142；12 单超额，共 16.562142 shares&lt;/td&gt;&lt;td&gt;修复 sizing/candidate 口径；lower-bound 问题 3 candidates、0 orders&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;7/16–7/18&lt;/td&gt;&lt;td&gt;JRS permission 与 tmux context 分裂&lt;/td&gt;&lt;td&gt;4 个反事实机会未尝试；0 个 confirmed missed fills；fast obs gap 8h12m&lt;/td&gt;&lt;td&gt;canonical JRS tmux、controller recovery、probe 统一&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;7/25–8/5&lt;/td&gt;&lt;td&gt;Core Carry 概率 canonical 派生污染&lt;/td&gt;&lt;td&gt;22 / 54 signals 的 model_p_yes=0&lt;/td&gt;&lt;td&gt;订单与 PnL 未受影响；修复 append-only 概率 lineage&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;7/29&lt;/td&gt;&lt;td&gt;fee lineage 修复&lt;/td&gt;&lt;td&gt;14 个 adjustment；settled PnL -$0.06266；unknown fee → 0&lt;/td&gt;&lt;td&gt;canonical fee-adjusted PnL 闭环&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;8/3–8/4&lt;/td&gt;&lt;td&gt;JRS permission + tmux run-shell crash&lt;/td&gt;&lt;td&gt;source gap 12h13m54s；snapshot gap 12h26m42s&lt;/td&gt;&lt;td&gt;0 条 evidenced wrong orders/fills；永久禁用 canonical tmux run-shell&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;8/3–8/5&lt;/td&gt;&lt;td&gt;maker share-unit 污染&lt;/td&gt;&lt;td&gt;缺 14.999985 shares / $14.349986 cost / 约 $0.65 settled PnL&lt;/td&gt;&lt;td&gt;append-only 修复并回放&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;8/6&lt;/td&gt;&lt;td&gt;NVMe cutover&lt;/td&gt;&lt;td&gt;25 sessions 保留；raw gap 13–16 分钟&lt;/td&gt;&lt;td&gt;0 条 wrong orders/fills；物理 canonical 迁至 JRS NVMe&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;8/7&lt;/td&gt;&lt;td&gt;Open-Meteo 请求放大&lt;/td&gt;&lt;td&gt;约 6,900 calls；984 rows / 374 个 429&lt;/td&gt;&lt;td&gt;Core live 不依赖 forecast，0 evidenced wrong orders；拆分唯一 forecast owner&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;8/7–8/10&lt;/td&gt;&lt;td&gt;forecast / observation interface drift&lt;/td&gt;&lt;td&gt;150 cycles failed；history gap 45.14h；Helsinki 1,054 cycles 零下单&lt;/td&gt;&lt;td&gt;在线决策无错误证据；owner、append-only history、Helsinki path 已恢复&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;8/7–8/9&lt;/td&gt;&lt;td&gt;target-day retention / proxy coupling&lt;/td&gt;&lt;td&gt;29 city-days omitted、73 Americas checkpoints missed；11 publications skipped&lt;/td&gt;&lt;td&gt;没有可证明的错单；canonical market_books 与消费视图解耦&lt;/td&gt;&lt;/tr&gt;
+            &lt;/tbody&gt;
+          &lt;/table&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;panel-stack&quot; role=&quot;tabpanel&quot; data-panel=&quot;system&quot; hidden&gt;
+      &lt;div class=&quot;section-stack&quot;&gt;
+        &lt;h2&gt;系统架构：上层策略可换，底层血缘不重做&lt;/h2&gt;
+        &lt;div aria-label=&quot;系统分层&quot;&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;0 · 数据层&lt;/strong&gt;&lt;span&gt;weather_data_feed contract；forecast curve、observations、market_books 各有唯一网络 owner&lt;/span&gt;&lt;span&gt;raw event / full ladder / append-only history / latest cache&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;健康&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;1 · PIT 事实层&lt;/strong&gt;&lt;span&gt;weather_information_event、weather_state_checkpoint、feature_frame_ref&lt;/span&gt;&lt;span&gt;event / observed / ingested / decision 四时钟；immutable snapshot id&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;已统一&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;2 · 模型与信号&lt;/strong&gt;&lt;span&gt;WCIR 城市 adapter；market-prior residual；SignalCandidate 机会粒度&lt;/span&gt;&lt;span&gt;连续概率、同分母 M0–M3、source basis&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;采证中&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;3 · 决策层&lt;/strong&gt;&lt;span&gt;TradeIntent、city/source policy、execution profile、risk/notional caps&lt;/span&gt;&lt;span&gt;eligibility 与 coverage 分开；策略 config/run manifest&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;共享&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;4 · 执行层&lt;/strong&gt;&lt;span&gt;shared handoff → plan → CLOB order → fill&lt;/span&gt;&lt;span&gt;taker/maker split、dedupe、share cap、raw exchange response&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;真实运行&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;5 · 结算层&lt;/strong&gt;&lt;span&gt;canonical fill / fee adjustments → fact_trades&lt;/span&gt;&lt;span&gt;settlement truth、pnl_usd_at_fill、open 与 realized 分离&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;Gate 通过&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;architecture-lane&quot;&gt;&lt;strong&gt;6 · 评估层&lt;/strong&gt;&lt;span&gt;fact_signal_candidates + fact_trades + dashboard / reports&lt;/span&gt;&lt;span&gt;proper score、market baseline、block bootstrap、frozen forward&lt;/span&gt;&lt;span class=&quot;lane-status&quot;&gt;&lt;span class=&quot;viz-badge&quot;&gt;标准化&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;two-col&quot;&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h2&gt;当前生产真相&lt;/h2&gt;
+          &lt;div class=&quot;table-responsive&quot;&gt;
+            &lt;table class=&quot;table table-sm&quot;&gt;
+              &lt;tbody&gt;
+                &lt;tr&gt;&lt;th&gt;当前主机&lt;/th&gt;&lt;td&gt;Mac mini；N100 仅历史 / 恢复边界&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;热层&lt;/th&gt;&lt;td&gt;/Volumes/jrs；canonical DB physical 与 repo compatibility path 为同 device/inode&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;控制面&lt;/th&gt;&lt;td&gt;production.yaml → strict manifest → controller → canonical JRS tmux&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;Live runtimes&lt;/th&gt;&lt;td&gt;Core Carry tiny-live v2；Fast Source Prev-NO trial v1&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;Shadow&lt;/th&gt;&lt;td&gt;12 个，包括 WCIR、low-price、regime、tmax、heat-death、Helsinki/Tokyo、ladder repricing&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;当前 warning&lt;/th&gt;&lt;td&gt;Miami / NYC same-day snapshot state coverage；非 critical&lt;/td&gt;&lt;/tr&gt;
+              &lt;/tbody&gt;
+            &lt;/table&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h2&gt;当前事实层&lt;/h2&gt;
+          &lt;div class=&quot;table-responsive&quot;&gt;
+            &lt;table class=&quot;table table-sm&quot;&gt;
+              &lt;tbody&gt;
+                &lt;tr&gt;&lt;th&gt;fact_signal_candidates&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;179,101 rows&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;机会日期&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;2026-05-05 → 2026-08-08&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;fact_trades&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;4,974 fill rows&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;成交日期&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;2026-05-06 → 2026-08-10&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;已结算 / 待结算&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;4,933 / 41&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;live_real&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;1,429 fill rows / 986 executions&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;Fill cost&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;$4,557.034121&lt;/td&gt;&lt;/tr&gt;
+                &lt;tr&gt;&lt;th&gt;Fill coverage gate&lt;/th&gt;&lt;td class=&quot;text-end&quot;&gt;pass · cost delta 0 · missing order 0&lt;/td&gt;&lt;/tr&gt;
+              &lt;/tbody&gt;
+            &lt;/table&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;section-stack&quot;&gt;
+        &lt;h2&gt;生产与研究必须分开解释&lt;/h2&gt;
+        &lt;div class=&quot;table-responsive&quot;&gt;
+          &lt;table class=&quot;table table-sm&quot;&gt;
+            &lt;thead&gt;&lt;tr&gt;&lt;th&gt;问题&lt;/th&gt;&lt;th&gt;以什么为真&lt;/th&gt;&lt;th&gt;不能用什么替代&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+            &lt;tbody&gt;
+              &lt;tr&gt;&lt;td&gt;现在是否真实下单？&lt;/td&gt;&lt;td&gt;manifest + process args + raw order + exchange response&lt;/td&gt;&lt;td&gt;registry 标签、旧文档&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;策略是否有 alpha？&lt;/td&gt;&lt;td&gt;同一 PIT rows 的 market baseline + significance + frozen forward + execution&lt;/td&gt;&lt;td&gt;tiny-live 正 ROI、历史 selected slice&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;成交与 PnL 是否可信？&lt;/td&gt;&lt;td&gt;canonical fill/fee lineage + settlement + coverage gate&lt;/td&gt;&lt;td&gt;order_date 现金流、open cost 当亏损&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;数据是否足够？&lt;/td&gt;&lt;td&gt;signal funnel 与 evidence funnel 分开&lt;/td&gt;&lt;td&gt;把 coverage gap 当策略过滤&lt;/td&gt;&lt;/tr&gt;
+            &lt;/tbody&gt;
+          &lt;/table&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;panel-stack&quot; role=&quot;tabpanel&quot; data-panel=&quot;research&quot; hidden&gt;
+      &lt;div class=&quot;section-stack&quot;&gt;
+        &lt;div class=&quot;viz-row&quot;&gt;
+          &lt;h2&gt;研究家族：什么还在推进，什么已经停止&lt;/h2&gt;
+          &lt;span class=&quot;status-key text-small text-muted&quot;&gt;&lt;span class=&quot;legend-dot&quot;&gt;&lt;/span&gt; active / probe &lt;span class=&quot;legend-dot collecting&quot;&gt;&lt;/span&gt; collecting &lt;span class=&quot;legend-dot inconclusive&quot;&gt;&lt;/span&gt; inconclusive &lt;span class=&quot;legend-dot stopped&quot;&gt;&lt;/span&gt; rejected / exhausted&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;viz-controls&quot;&gt;
+          &lt;label class=&quot;form-label&quot; for=&quot;research-filter&quot;&gt;筛选状态
+            &lt;select class=&quot;form-select&quot; id=&quot;research-filter&quot;&gt;
+              &lt;option value=&quot;all&quot;&gt;全部&lt;/option&gt;
+              &lt;option value=&quot;active&quot;&gt;Active / tiny-live&lt;/option&gt;
+              &lt;option value=&quot;collecting&quot;&gt;Forward collecting&lt;/option&gt;
+              &lt;option value=&quot;inconclusive&quot;&gt;Shadow / inconclusive&lt;/option&gt;
+              &lt;option value=&quot;stopped&quot;&gt;Rejected / exhausted&lt;/option&gt;
+            &lt;/select&gt;
+          &lt;/label&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;table-responsive&quot;&gt;
+          &lt;table class=&quot;table table-sm&quot;&gt;
+            &lt;thead&gt;&lt;tr&gt;&lt;th&gt;家族&lt;/th&gt;&lt;th&gt;阶段&lt;/th&gt;&lt;th&gt;关键证据&lt;/th&gt;&lt;th&gt;当前动作&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+            &lt;tbody id=&quot;research-body&quot;&gt;&lt;/tbody&gt;
+          &lt;/table&gt;
+        &lt;/div&gt;
+        &lt;article class=&quot;card&quot; id=&quot;research-detail&quot; aria-live=&quot;polite&quot;&gt;
+          &lt;div class=&quot;viz-row&quot;&gt;&lt;span class=&quot;viz-badge&quot; id=&quot;research-status&quot;&gt;tiny-live evidence probe&lt;/span&gt;&lt;span class=&quot;text-muted&quot; id=&quot;research-track&quot;&gt;Current YES / Core Carry&lt;/span&gt;&lt;/div&gt;
+          &lt;h3 id=&quot;research-name&quot;&gt;Current YES · Core Carry v2/v3&lt;/h3&gt;
+          &lt;p id=&quot;research-conclusion&quot;&gt;历史表现为正，但 proper-score 相对 market 的置信区间跨零；最近窗口对价格 floor 极敏感，因此仍未 confirmed。&lt;/p&gt;
+          &lt;dl class=&quot;detail-grid&quot;&gt;
+            &lt;div&gt;&lt;dt&gt;证据&lt;/dt&gt;&lt;dd id=&quot;research-evidence&quot;&gt;136 city-days / 30 dates / 29 cities，130-6，ROI +4.67%；8/03 cutoff forward 8/8，+$4.02254，但单次 loss 可让窗口转负。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;生产&lt;/dt&gt;&lt;dd id=&quot;research-production&quot;&gt;tiny-live 10 taker + 5 maker shares，日成本上限 $100；当前只是证据探针。&lt;/dd&gt;&lt;/div&gt;
+            &lt;div&gt;&lt;dt&gt;下一验收&lt;/dt&gt;&lt;dd id=&quot;research-next&quot;&gt;继续固定 hold；不加 +3c exit，不扩 size；等连续 forward 与同分母 market residual 证据。&lt;/dd&gt;&lt;/div&gt;
+          &lt;/dl&gt;
+        &lt;/article&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;panel-stack&quot; role=&quot;tabpanel&quot; data-panel=&quot;next&quot; hidden&gt;
+      &lt;div class=&quot;two-col&quot;&gt;
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h2&gt;推荐路线：只推进一条 primary lane&lt;/h2&gt;
+          &lt;ol class=&quot;roadmap&quot;&gt;
+            &lt;li class=&quot;roadmap-step&quot;&gt;&lt;strong&gt;0 · 守住当前事实层&lt;/strong&gt;&lt;span&gt;保持 manifest / DB identity / fill gate 健康；修复 Miami / NYC 语义 coverage warning，不改写历史 raw。&lt;/span&gt;&lt;/li&gt;
+            &lt;li class=&quot;roadmap-step&quot;&gt;&lt;strong&gt;1 · 完成连续 forward capture&lt;/strong&gt;&lt;span&gt;三城 source-event coherent full ladder + Helsinki deterministic WS + D1 forecast collector；每条事件都锁 first-seen 与 snapshot id。&lt;/span&gt;&lt;/li&gt;
+            &lt;li class=&quot;roadmap-step&quot;&gt;&lt;strong&gt;2 · 冻结一次 M0–M3 同分母比较&lt;/strong&gt;&lt;span&gt;M0 market level；M1 source/weather innovation；M2 ladder dynamics；M3 interaction。相同 rows、labels、clocks，至少 30 个新 settled target dates。&lt;/span&gt;&lt;/li&gt;
+            &lt;li class=&quot;roadmap-step&quot;&gt;&lt;strong&gt;3 · 先过概率门，再谈交易门&lt;/strong&gt;&lt;span&gt;Brier / log loss 相对 market 显著改善；随后才用真实 ask/bid/depth/fee 验证 fee-adjusted expression。&lt;/span&gt;&lt;/li&gt;
+            &lt;li class=&quot;roadmap-step&quot;&gt;&lt;strong&gt;4 · 补真实 maker lifecycle&lt;/strong&gt;&lt;span&gt;post、ack、queue、partial fill、expire/cancel、adverse selection；future touch 不再视为 fill。&lt;/span&gt;&lt;/li&gt;
+            &lt;li class=&quot;roadmap-step&quot;&gt;&lt;strong&gt;5 · 只有四门都过才申请扩大 live&lt;/strong&gt;&lt;span&gt;significance + same-denominator baseline + frozen forward + execution；否则维持 shadow/tiny-live 或停止该表达。&lt;/span&gt;&lt;/li&gt;
+          &lt;/ol&gt;
+        &lt;/div&gt;
+
+        &lt;div class=&quot;section-stack&quot;&gt;
+          &lt;h2&gt;为什么这是唯一合理的下一步&lt;/h2&gt;
+          &lt;div class=&quot;maturity-list&quot;&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;瓶颈不在系统&lt;/strong&gt;&lt;span&gt;数据 owner、运行时、canonical facts、下单/成交血缘已经足够支持严谨实验。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;瓶颈在证据&lt;/strong&gt;&lt;span&gt;现有正向结果多为样本小、选择性强或 proper score 未胜 market。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;不要再扩散&lt;/strong&gt;&lt;span&gt;新增阈值、城市脚本和事后切片只会稀释 forward 分母。&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;maturity-line&quot;&gt;&lt;strong&gt;最值钱的数据&lt;/strong&gt;&lt;span&gt;真实 first-seen source event × coherent ladder × settlement × queue/fill lifecycle。&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;section-stack&quot;&gt;
+        &lt;h2&gt;下一次决策门槛&lt;/h2&gt;
+        &lt;div class=&quot;table-responsive&quot;&gt;
+          &lt;table class=&quot;table table-sm&quot;&gt;
+            &lt;thead&gt;&lt;tr&gt;&lt;th&gt;Gate&lt;/th&gt;&lt;th&gt;Pass 条件&lt;/th&gt;&lt;th&gt;Fail 动作&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+            &lt;tbody&gt;
+              &lt;tr&gt;&lt;td&gt;数据&lt;/td&gt;&lt;td&gt;≥30 新 settled target dates；PIT、first-seen、snapshot id、source basis 完整&lt;/td&gt;&lt;td&gt;继续采集；不拟合、不解释 ROI&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;模型&lt;/td&gt;&lt;td&gt;同分母 Brier / log loss 显著胜 market baseline；按 target_date block bootstrap&lt;/td&gt;&lt;td&gt;停止该 residual head，不补 hard filters&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;表达&lt;/td&gt;&lt;td&gt;真实 fee / spread / depth 后 EV 与 forward ROI 仍为正&lt;/td&gt;&lt;td&gt;保留预测层，放弃交易表达&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;执行&lt;/td&gt;&lt;td&gt;taker 可成交或 maker 真实 fill/queue 证据；adverse selection 可控&lt;/td&gt;&lt;td&gt;只 shadow，不用 future touch 估 fill&lt;/td&gt;&lt;/tr&gt;
+              &lt;tr&gt;&lt;td&gt;Live&lt;/td&gt;&lt;td&gt;四门全过、风险上限明确、git-first deploy、process/raw/exchange 后验闭环&lt;/td&gt;&lt;td&gt;维持现有 tiny-live，不扩城市、不扩 size&lt;/td&gt;&lt;/tr&gt;
+            &lt;/tbody&gt;
+          &lt;/table&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+  &lt;/main&gt;
+
+  &lt;footer class=&quot;source-line text-small text-muted&quot;&gt;
+    证据口径：WEATHER_STRATEGY_REGISTRY、Quant/WCIR/Data Pipeline living docs、git 历史、2026-08-10 strict production manifest、canonical weather.db 与 CLOB fill coverage gate。Canonical build：2026-08-10 10:52 北京时间。
+  &lt;/footer&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&quot;weather-research-map&quot;);
+      if (!root) return;
+
+      const phaseData = {
+        p1: {
+          period: &quot;2026-05-10 → 2026-05-17&quot;,
+          status: &quot;基础落地 · 执行风险暴露&quot;,
+          title: &quot;从策略工具到首轮真实下单&quot;,
+          data: &quot;weather strategy tooling、signal planner、executor 开始成形。&quot;,
+          model: &quot;规则与价格带驱动，尚无统一 PIT 概率基准。&quot;,
+          test: &quot;分母、fee、settlement 尚未统一，研究与执行仍偏脚本化。&quot;,
+          order: &quot;完成首个 CLOB workflow；立即暴露 duplicate、universe、sizing 问题。&quot;,
+          live: &quot;5/14：147 submitted / 239 rows、7 城、$914.40 planned；随后收紧。&quot;,
+          outcome: &quot;明确必须建设可追踪的 signal → plan → order → fill 主链。&quot;
+        },
+        p2: {
+          period: &quot;2026-05-18 → 2026-06-07&quot;,
+          status: &quot;Canonical 化 · 口径第一次大修&quot;,
+          title: &quot;Dashboard、机会层与成交事实层成形&quot;,
+          data: &quot;dashboard lineage、fact_trades、fact_signal_candidates 与 legacy migration 建成。&quot;,
+          model: &quot;mid_price_core_v2、entry band、sizing 与显式 instance 被纳入可回放配置。&quot;,
+          test: &quot;6/6 near-binary 0.9995/0.0005 归一化，missing_bracket 725 → 0。&quot;,
+          order: &quot;fill recovery、订单回连、成交粒度 PnL 开始统一。&quot;,
+          live: &quot;早期 V2 停止、弱城市降级；不再信任 pre-fix 盈利模式数字。&quot;,
+          outcome: &quot;早期 BUY_NO / Warsaw / ECMWF / LA 数值作废；方向仅 unconfirmed，不是 disproven。&quot;
+        },
+        p3: {
+          period: &quot;2026-06-08 → 2026-06-30&quot;,
+          status: &quot;研究展开 · 发现 market baseline 才是门槛&quot;,
+          title: &quot;从规则策略扩展到模型、物理机制与执行研究&quot;,
+          data: &quot;forecast quality、station basis、METAR/source profile、regime atlas、shared data feed module 逐步形成。&quot;,
+          model: &quot;Range RV、all-YES、extreme-NO basket、reheat/remaining-heat、Current YES、regime-routed NO。&quot;,
+          test: &quot;引入 proper score、same-denominator baseline、walk-forward、block bootstrap、机会缺口审计。&quot;,
+          order: &quot;Current-YES tiny-live telemetry 与执行质量被纳入统一链路。&quot;,
+          live: &quot;6/25 regime-routed NO 暴露 live/backtest parity 和 duplicate 风险，随后 frozen-forward 失败。&quot;,
+          outcome: &quot;从追逐局部 ROI 转向：先证明天气概率在相同 PIT 行上打败 market。&quot;
+        },
+        p4: {
+          period: &quot;2026-07-01 → 2026-07-13&quot;,
+          status: &quot;生产迁移 · 快源与 full snapshot 扩张&quot;,
+          title: &quot;N100 事故后 Mac 接管，collector 与 live probes 快速扩展&quot;,
+          data: &quot;N100 ext4 read-only / IO 后退出当前 truth；Mac 接管 data feed 与 live loops，JRS external disk 上线。&quot;,
+          model: &quot;Tmax distribution、fast-source、HeadA/convective、forecast curve lineage 与 feature layer 并行推进。&quot;,
+          test: &quot;source→official→book first-seen 证据开始积累，但快源仅 4–5 个日期。&quot;,
+          order: &quot;low-price YES tiny-live、source probes、runtime registry/control plane 上线。&quot;,
+          live: &quot;7/2–5 ECMWF 城市静默 fallback GFS，影响 16 个 live_real fills；订单保留、研究剔除。&quot;,
+          outcome: &quot;生产迁移完成，但同时证明 collectors/probes 多不等于 alpha 成熟。&quot;
+        },
+        p5: {
+          period: &quot;2026-07-14&quot;,
+          status: &quot;Strategy Search Reset · 0 confirmed&quot;,
+          title: &quot;把所有策略重新放回统一证据门槛&quot;,
+          data: &quot;重新锁定 denominator、PIT clock、fee、settlement 与 market baseline。&quot;,
+          model: &quot;宽价格规则、天气独立 fair-price、少量快源事件都不再作为升 live 依据。&quot;,
+          test: &quot;all-YES：gross +3.16% → fee-adjusted -0.42%；peak-runway current-NO -68.6%。&quot;,
+          order: &quot;fast-source share-cap 审计：计划 95 shares，实际 111.562142，超额 16.562142。&quot;,
+          live: &quot;HeadA / low-price YES 随后降为 zero-notional shadow。&quot;,
+          outcome: &quot;主线正式收敛为 continuous P(outcome)-market residual；0 条 confirmed。&quot;
+        },
+        p6: {
+          period: &quot;2026-07-15 → 2026-07-31&quot;,
+          status: &quot;First-seen / Core Carry / 城市模型&quot;,
+          title: &quot;统一执行与 first-seen 数据体系开始承接城市模型&quot;,
+          data: &quot;JRS canonical context、first-seen pipeline、KNMI、physical canonical DB、fee/fill materialization 建成。&quot;,
+          model: &quot;Core Carry v2/v3、D1 challenger、Amsterdam/Tokyo/Helsinki 模型、microstructure atlas。&quot;,
+          test: &quot;Core Carry 历史 136 city-days / 30 dates，ROI +4.67%，但 proper-score 相对 market CI 跨零。&quot;,
+          order: &quot;shared order runtime、10 taker + 5 maker profile、dedupe/share-cap parity 收敛。&quot;,
+          live: &quot;Core Carry tiny-live 部署；fast-source 继续作为显式授权的证据探针。&quot;,
+          outcome: &quot;工程链路明显成熟；研究结论仍停在 inconclusive。&quot;
+        },
+        p7: {
+          period: &quot;2026-08-01 → 2026-08-08&quot;,
+          status: &quot;WCIR 与生产控制面统一&quot;,
+          title: &quot;跨城市 PIT runtime、controller、NVMe 与 market owner 收口&quot;,
+          data: &quot;WCIR 五城接入；forecast / market_books / strategy snapshot owner 分离；NVMe cutover。&quot;,
+          model: &quot;D1 weather-only v3、Busan/Helsinki/Tokyo forward、forecast repricing、market tail residual。&quot;,
+          test: &quot;Busan 4-day forward：model logloss 0.6955 vs market 0.3106；replay ROI -6.42%。&quot;,
+          order: &quot;shared execution handoff 与 live/shadow parity 强化；maker share unit 污染被量化修复。&quot;,
+          live: &quot;JRS/tmux crash、Open-Meteo amplification、retention/interface drift 均做影响半径审计；无 evidenced wrong orders。&quot;,
+          outcome: &quot;系统从脚本集合变为一条有 owner、identity、回放与 controller 的量化生产链。&quot;
+        },
+        p8: {
+          period: &quot;2026-08-09 → 2026-08-10&quot;,
+          status: &quot;当前收敛 · 连续 forward 采证&quot;,
+          title: &quot;选择性 WS、coherent full ladder 与 source-event transport 汇合&quot;,
+          data: &quot;PIT weather state v4、full-ladder event collector、deterministic reconstructed book、capture manifest。&quot;,
+          model: &quot;ladder kink 与纯 mass transport 已穷尽；pooled source-event M0–M3 尚无足够 joint train rows。&quot;,
+          test: &quot;三城 collector 已验证：Amsterdam / Helsinki / Tokyo 各 11 rungs，0/15/30/60 秒共 22/22 books。&quot;,
+          order: &quot;当前 collector 不产 signal/intent/order；maker 仍需真实 post/queue/fill 证据。&quot;,
+          live: &quot;Core Carry 与 fast-source 两条 tiny-live 继续采证；不扩大授权。&quot;,
+          outcome: &quot;下一步已很清楚：完成连续 forward，再做唯一一次 frozen same-denominator residual 比较。&quot;
+        }
+      };
+
+      const researchData = [
+        {
+          name: &quot;Current YES · Core Carry v2/v3&quot;,
+          status: &quot;tiny-live evidence probe&quot;,
+          group: &quot;active&quot;,
+          stage: &quot;Active · 未 confirmed&quot;,
+          track: &quot;Current YES / Core Carry&quot;,
+          short: &quot;136 city-days / 30 dates，130-6，ROI +4.67%；proper-score vs market CI 跨零&quot;,
+          action: &quot;固定 hold；不扩 size&quot;,
+          conclusion: &quot;历史表现为正，但 proper-score 相对 market 的置信区间跨零；最近窗口对价格 floor 极敏感，因此仍未 confirmed。&quot;,
+          evidence: &quot;136 city-days / 30 dates / 29 cities，130-6，ROI +4.67%；8/03 cutoff forward 8/8，+$4.02254，但单次 loss 可让窗口转负。&quot;,
+          production: &quot;tiny-live 10 taker + 5 maker shares，日成本上限 $100；当前只是证据探针。&quot;,
+          next: &quot;继续固定 hold；不加 +3c exit，不扩 size；等连续 forward 与同分母 market residual 证据。&quot;
+        },
+        {
+          name: &quot;Fast Source · Previous-NO&quot;,
+          status: &quot;live trial / basis unresolved&quot;,
+          group: &quot;active&quot;,
+          stage: &quot;Active probe · 未 confirmed&quot;,
+          track: &quot;Source event / fast observation&quot;,
+          short: &quot;历史与 probe 有正向迹象；terminal false cross 与 source→official basis 未解决&quot;,
+          action: &quot;维持小额 trial；补 basis&quot;,
+          conclusion: &quot;快源能够产生时效优势，但跨档不是 settlement truth；terminal false cross 与各城 source basis 决定能否转成真实 alpha。&quot;,
+          evidence: &quot;7/14 sizing 审计发现 16.562142 shares 超额并已修复；现有正向窗口仍小，不能从少量 probe 外推。&quot;,
+          production: &quot;Busan / Helsinki / Tokyo / Seoul 受限 live_trial；其他城市 shadow。&quot;,
+          next: &quot;继续 source→official/settlement→book first-seen 链；按 correct-vs-false executable/fill 固定分母评估。&quot;
+        },
+        {
+          name: &quot;WCIR 城市概率模型&quot;,
+          status: &quot;forward collecting&quot;,
+          group: &quot;collecting&quot;,
+          stage: &quot;Framework ready · 模型未确认&quot;,
+          track: &quot;Amsterdam / Busan / Helsinki / Seoul / Tokyo&quot;,
+          short: &quot;共享 PIT/runtime/execution 已完成；Helsinki/Tokyo frozen，其他 coverage-only&quot;,
+          action: &quot;采满 ≥30 settled dates&quot;,
+          conclusion: &quot;WCIR 的价值首先是统一城市 contract；当前没有任何城市模型获得扩大 live 的证据。&quot;,
+          evidence: &quot;Busan 4-day forward：model logloss 0.6955，market 0.3106；13 replay trades ROI -6.42%。Helsinki exact PIT 936 events / 8 dates。&quot;,
+          production: &quot;zero-notional / shadow；Amsterdam、Busan、Seoul coverage-only，Helsinki/Tokyo frozen adapters。&quot;,
+          next: &quot;保持 adapter 共用；采满至少 30 个新 settled target dates，再做 frozen A/B。&quot;
+        },
+        {
+          name: &quot;Pooled Source-Event Ladder Transport&quot;,
+          status: &quot;forward collecting&quot;,
+          group: &quot;collecting&quot;,
+          stage: &quot;Collector validated · 尚未拟合&quot;,
+          track: &quot;First-seen source event × coherent ladder&quot;,
+          short: &quot;三城 11 rungs；0/15/30/60 秒 22/22 books；无 joint train rows&quot;,
+          action: &quot;只采集，不下单&quot;,
+          conclusion: &quot;这是当前最有信息价值的建模数据，但今天仍没有足够历史 joint rows 可以训练或宣称 alpha。&quot;,
+          evidence: &quot;Amsterdam / Helsinki / Tokyo collector 已通过 end-to-end validation；每城 11 rungs，四个 horizon 的 22/22 books 完整。&quot;,
+          production: &quot;collector-only；不产 SignalCandidate、TradeIntent 或 order。&quot;,
+          next: &quot;冻结 M0 market、M1 innovation、M2 ladder dynamics、M3 interaction；积累连续 settled dates 后一次性评估。&quot;
+        },
+        {
+          name: &quot;D1 Weather-Only Challenger&quot;,
+          status: &quot;deploy-pending collector&quot;,
+          group: &quot;collecting&quot;,
+          stage: &quot;模型不胜 market&quot;,
+          track: &quot;D1 frozen candidate&quot;,
+          short: &quot;training slice 5,561 / 39 cities；holdout 1.8506，market 1.5497&quot;,
+          action: &quot;只部署 collector&quot;,
+          conclusion: &quot;weather-only 相比旧 weather baseline 有改善，但仍明显落后 market；不能给 ROI 或 live 结论。&quot;,
+          evidence: &quot;legacy artifact 42,705 rows / 52 cities；training slice 5,561 / 39 cities；secondary holdout 1.9763 → 1.8506，market 1.5497。&quot;,
+          production: &quot;v3 collector code-tested；W1 尚未 frozen。&quot;,
+          next: &quot;部署后累计 30 个 settled dates/horizon；用 market-prior residual 重新定位它的作用。&quot;
+        },
+        {
+          name: &quot;Forecast Repricing&quot;,
+          status: &quot;zero-notional / execution unknown&quot;,
+          group: &quot;inconclusive&quot;,
+          stage: &quot;Inconclusive&quot;,
+          track: &quot;Forecast event repricing&quot;,
+          short: &quot;2,767 events / 28,038 rungs；taker -44.08%；maker 条件样本正但 actual fills=0&quot;,
+          action: &quot;收集 post/queue/fill&quot;,
+          conclusion: &quot;方向性 repricing 可以观察，但 taker 表达失败；maker 正向结果没有真实 fill，不能当可执行收益。&quot;,
+          evidence: &quot;历史 taker ROI -44.08%；secondary maker conditional 39 positions / 6 dates ROI +13.13%，但 actual fills=0。&quot;,
+          production: &quot;full-ladder zero-notional position policy 可运行。&quot;,
+          next: &quot;采真实 maker ack、queue、partial fill、expire/cancel 与 adverse selection。&quot;
+        },
+        {
+          name: &quot;Range RV / Adjacent Range&quot;,
+          status: &quot;shadow / forward failed&quot;,
+          group: &quot;inconclusive&quot;,
+          stage: &quot;Inconclusive&quot;,
+          track: &quot;Range relative value&quot;,
+          short: &quot;部分统计 gate 通过，但 frozen forward 与 live 标准未过&quot;,
+          action: &quot;只保留 shadow&quot;,
+          conclusion: &quot;机制未被彻底证伪，但现有表达没有跨过 forward/live 门槛。&quot;,
+          evidence: &quot;早期切片有正向统计信号；扩大到固定分母后稳定性不足。&quot;,
+          production: &quot;shadow / dormant，基础设施保留。&quot;,
+          next: &quot;除非获得新的连续概率机制，不再通过阈值微调推进。&quot;
+        },
+        {
+          name: &quot;Low-Price YES / HeadA / Convective&quot;,
+          status: &quot;demoted to zero-notional&quot;,
+          group: &quot;inconclusive&quot;,
+          stage: &quot;Live expression failed&quot;,
+          track: &quot;Low-price YES&quot;,
+          short: &quot;67 live fills，ROI -3.564%；proper score 不胜 market&quot;,
+          action: &quot;维持 shadow，不恢复 live&quot;,
+          conclusion: &quot;低价并不是 alpha；convective/weather 模型没有在 proper score 或 executable expression 上建立优势。&quot;,
+          evidence: &quot;Strategy reset 时 actual live 67 fills，ROI -3.564%；模型与交易表达均未通过。&quot;,
+          production: &quot;自 7/15 起 zero-notional shadow。&quot;,
+          next: &quot;只保留底层数据/特征；不加价格带或 support-count hard gate。&quot;
+        },
+        {
+          name: &quot;Global Weather Probability / Reliability&quot;,
+          status: &quot;research-only&quot;,
+          group: &quot;inconclusive&quot;,
+          stage: &quot;No standalone alpha&quot;,
+          track: &quot;Global weather model&quot;,
+          short: &quot;全局 standalone probability 未胜 market；reliability 仅软信息层&quot;,
+          action: &quot;改作 residual feature&quot;,
+          conclusion: &quot;天气模型可提供 innovation 与可靠度，但不应再独立输出 fair price。&quot;,
+          evidence: &quot;多轮城市、模型、季节切片中，market proper score 仍是更强基准。&quot;,
+          production: &quot;不作为独立 live family。&quot;,
+          next: &quot;仅作为 market-prior residual 的条件特征，并保持固定分母。&quot;
+        },
+        {
+          name: &quot;All-YES Underround&quot;,
+          status: &quot;rejected expression&quot;,
+          group: &quot;stopped&quot;,
+          stage: &quot;Rejected&quot;,
+          track: &quot;Basket / underround&quot;,
+          short: &quot;gross +3.16% → fee-adjusted -0.42%&quot;,
+          action: &quot;停止 taker 表达&quot;,
+          conclusion: &quot;表面 underround 被 fee 吞没，不构成 taker alpha。&quot;,
+          evidence: &quot;同一篮子在 fee 修正前 +3.16%，修正后 -0.42%。&quot;,
+          production: &quot;不 live。&quot;,
+          next: &quot;无新的执行机制前不重启。&quot;
+        },
+        {
+          name: &quot;D1 Extreme-NO Basket&quot;,
+          status: &quot;rejected / research-only&quot;,
+          group: &quot;stopped&quot;,
+          stage: &quot;No excess return&quot;,
+          track: &quot;Extreme NO basket&quot;,
+          short: &quot;4,086 baskets / 56 dates；mechanical ROI 约 -0.3% 至 -0.4%&quot;,
+          action: &quot;停止交易化&quot;,
+          conclusion: &quot;机械篮子没有正收益；可靠城市的小幅正向切片置信区间跨零。&quot;,
+          evidence: &quot;4,086 baskets / 56 dates；forecast models 仍弱于 market。&quot;,
+          production: &quot;research-only。&quot;,
+          next: &quot;保留事实层，不再围绕城市切片调阈值。&quot;
+        },
+        {
+          name: &quot;Market Ladder Kink&quot;,
+          status: &quot;exhausted&quot;,
+          group: &quot;stopped&quot;,
+          stage: &quot;Branch exhausted&quot;,
+          track: &quot;Orderbook kink&quot;,
+          short: &quot;41,124 rungs / 4,135 snapshots / 9 dates；ask→future bid ROI -14.48% / -18.01%&quot;,
+          action: &quot;停止 shadow&quot;,
+          conclusion: &quot;盘口存在动态收敛，但相对 markout 无法覆盖 spread + fee。&quot;,
+          evidence: &quot;9/9 dates 亏损；probability delta 不胜 baseline，置信区间跨零。&quot;,
+          production: &quot;无 shadow。&quot;,
+          next: &quot;分支已穷尽。&quot;
+        },
+        {
+          name: &quot;Ladder Mass Transport&quot;,
+          status: &quot;exhausted&quot;,
+          group: &quot;stopped&quot;,
+          stage: &quot;Branch exhausted&quot;,
+          track: &quot;Relative ladder motion&quot;,
+          short: &quot;148,961 rungs / 19,375 snapshots / 11 dates；taker ROI -2.7087%&quot;,
+          action: &quot;停止纯 transport 表达&quot;,
+          conclusion: &quot;纯相对 transport 的 markout 偶有正向，但 spread + fee 后全面亏损。&quot;,
+          evidence: &quot;11/11 dates、47/47 cities 亏损；M2 不胜 baseline。&quot;,
+          production: &quot;不 shadow。&quot;,
+          next: &quot;只有真实 prints / queue / lifecycle 机制出现时才重开。&quot;
+        }
+      ];
+
+      const tabButtons = Array.from(root.querySelectorAll(&quot;[data-tab]&quot;));
+      const panels = Array.from(root.querySelectorAll(&quot;[data-panel]&quot;));
+
+      function selectTab(tabName) {
+        tabButtons.forEach((button) =&gt; {
+          const selected = button.dataset.tab === tabName;
+          button.classList.toggle(&quot;btn-primary&quot;, selected);
+          button.setAttribute(&quot;aria-selected&quot;, selected ? &quot;true&quot; : &quot;false&quot;);
+        });
+        panels.forEach((panel) =&gt; {
+          panel.hidden = panel.dataset.panel !== tabName;
+        });
+      }
+
+      tabButtons.forEach((button) =&gt; {
+        button.addEventListener(&quot;click&quot;, () =&gt; selectTab(button.dataset.tab));
+      });
+
+      const phaseFields = {
+        period: root.querySelector(&quot;#phase-period&quot;),
+        status: root.querySelector(&quot;#phase-status&quot;),
+        title: root.querySelector(&quot;#phase-title&quot;),
+        data: root.querySelector(&quot;#phase-data&quot;),
+        model: root.querySelector(&quot;#phase-model&quot;),
+        test: root.querySelector(&quot;#phase-test&quot;),
+        order: root.querySelector(&quot;#phase-order&quot;),
+        live: root.querySelector(&quot;#phase-live&quot;),
+        outcome: root.querySelector(&quot;#phase-outcome&quot;)
+      };
+
+      function selectPhase(phaseId) {
+        const item = phaseData[phaseId];
+        if (!item) return;
+        Object.keys(phaseFields).forEach((key) =&gt; {
+          phaseFields[key].textContent = item[key];
+        });
+        root.querySelectorAll(&quot;[data-phase]&quot;).forEach((button) =&gt; {
+          const selected = button.dataset.phase === phaseId;
+          button.classList.toggle(&quot;btn-primary&quot;, selected);
+          button.setAttribute(&quot;aria-pressed&quot;, selected ? &quot;true&quot; : &quot;false&quot;);
+        });
+      }
+
+      root.querySelectorAll(&quot;[data-phase]&quot;).forEach((button) =&gt; {
+        button.addEventListener(&quot;click&quot;, () =&gt; selectPhase(button.dataset.phase));
+      });
+
+      const researchBody = root.querySelector(&quot;#research-body&quot;);
+      const researchFilter = root.querySelector(&quot;#research-filter&quot;);
+      const researchFields = {
+        status: root.querySelector(&quot;#research-status&quot;),
+        track: root.querySelector(&quot;#research-track&quot;),
+        name: root.querySelector(&quot;#research-name&quot;),
+        conclusion: root.querySelector(&quot;#research-conclusion&quot;),
+        evidence: root.querySelector(&quot;#research-evidence&quot;),
+        production: root.querySelector(&quot;#research-production&quot;),
+        next: root.querySelector(&quot;#research-next&quot;)
+      };
+
+      function selectResearch(index) {
+        const item = researchData[index];
+        if (!item) return;
+        researchFields.status.textContent = item.status;
+        researchFields.track.textContent = item.track;
+        researchFields.name.textContent = item.name;
+        researchFields.conclusion.textContent = item.conclusion;
+        researchFields.evidence.textContent = item.evidence;
+        researchFields.production.textContent = item.production;
+        researchFields.next.textContent = item.next;
+      }
+
+      function renderResearch() {
+        const filter = researchFilter.value;
+        const rows = researchData
+          .map((item, index) =&gt; ({ item, index }))
+          .filter(({ item }) =&gt; filter === &quot;all&quot; || item.group === filter)
+          .map(({ item, index }) =&gt; `
+            &lt;tr&gt;
+              &lt;td&gt;&lt;button type=&quot;button&quot; class=&quot;btn btn-ghost&quot; data-research-index=&quot;${index}&quot;&gt;${item.name}&lt;/button&gt;&lt;/td&gt;
+              &lt;td&gt;&lt;span class=&quot;viz-badge&quot;&gt;${item.stage}&lt;/span&gt;&lt;/td&gt;
+              &lt;td&gt;${item.short}&lt;/td&gt;
+              &lt;td&gt;${item.action}&lt;/td&gt;
+            &lt;/tr&gt;`)
+          .join(&quot;&quot;);
+        researchBody.innerHTML = rows || &quot;&lt;tr&gt;&lt;td colspan=\&quot;4\&quot;&gt;没有匹配的研究家族。&lt;/td&gt;&lt;/tr&gt;&quot;;
+      }
+
+      researchBody.addEventListener(&quot;click&quot;, (event) =&gt; {
+        const button = event.target.closest(&quot;[data-research-index]&quot;);
+        if (!button) return;
+        selectResearch(Number(button.dataset.researchIndex));
+      });
+
+      researchFilter.addEventListener(&quot;change&quot;, renderResearch);
+      renderResearch();
+      selectResearch(0);
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handleLeave = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

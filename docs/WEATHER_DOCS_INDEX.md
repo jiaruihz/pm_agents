@@ -80,6 +80,7 @@ manifest/历史报告指针。需要重放历史研究时，用
 |---|---|---|
 | [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | Weather 生产接手第一入口：controller/manifest 当前事实、权威来源、git-first 变更、JRS 恢复与 N100 历史边界；不再内嵌旧启动命令和 allowlist |
 | [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) | `current-reference` | 我们一共研究过哪些策略：每条的灵感/盈利规则、当前状态(live/shadow/research/dormant)、是否可行、属于血缘哪一层 |
+| [weather-research-map-2026-08-10.html](analysis/2026-08/weather-research-map-2026-08-10.html) | `snapshot` | 截至 2026-08-10 的天气研究交互式全景：数据、模型、下单、架构、回测、实盘、验证、关键事故时间线与下一步研究门槛；生产和研究事实仍分别以 manifest 与 registry/living docs 为准 |
 | [2026-07-14-strategy-search-reset-v1.md](analysis/2026-07/2026-07-14-strategy-search-reset-v1.md) | `snapshot` | 当前研究总判断：没有 confirmed 可扩 live alpha；回到全量连续 residual，快源 collector-only，模型先在同分母 proper score 上胜 market |
 | [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) | `current-reference` | 一条策略跑完后怎么一步步复盘：preflight→成交质量→绩效→对账→关联参数→结论；每阶段的 canonical 源/gate/skill/living doc 与 live-vs-shadow 比法 |
 | [WEATHER_INTRADAY_DECISION_CASEBOOK.md](WEATHER_INTRADAY_DECISION_CASEBOOK.md) | `current-reference` | 临场天气判断的 living casebook：冻结用户↔Codex 交互、PIT state、订单/fill 与结论更新；首批 Busan/Lucknow/Ankara golden replay；2026-07-29 起维护 current-YES 语义 residual 统计 case library，保存同期市场赔率并区分 core 独错、共同尾部与市场更错 |
