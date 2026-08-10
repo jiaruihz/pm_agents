@@ -34,7 +34,7 @@ from weather_data_feed.high_frequency_observation_sources import (
 
 DEFAULT_RAW = Path(
     "/Volumes/jrs/weather_data_feed_service_runtime/output/"
-    "live_cross_observations/high_frequency_observations.jsonl"
+    "live_cross_observations"
 )
 DEFAULT_OUT = (
     ROOT
@@ -73,14 +73,18 @@ def timestamp_contract_violation(
 
 def iter_raw(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if row.get("city") == "Tokyo" and row.get("source") == "jma_amedas":
-                rows.append(row)
+    paths = [path] if path.is_file() else sorted(
+        path.glob("????-??-??/high_frequency_observations.jsonl")
+    )
+    for physical_path in paths:
+        with physical_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("city") == "Tokyo" and row.get("source") == "jma_amedas":
+                    rows.append(row)
     return rows
 
 

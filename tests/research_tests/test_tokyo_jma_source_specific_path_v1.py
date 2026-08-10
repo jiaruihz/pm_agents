@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import json
 from pathlib import Path
 
 
@@ -27,6 +28,19 @@ MODEL = load(
     "scripts/analysis/market_structure_edge/"
     "research_tokyo_jma_source_specific_path_v1.py",
 )
+
+
+def test_audit_iter_raw_reads_all_dated_live_cross_shards(tmp_path) -> None:
+    root = tmp_path / "live_cross_observations"
+    for day, city in (("2026-08-09", "Tokyo"), ("2026-08-10", "Tokyo"), ("2026-08-10", "Seoul")):
+        path = root / day / "high_frequency_observations.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"city": city, "source": "jma_amedas", "day": day}) + "\n")
+
+    rows = AUDIT.iter_raw(root)
+
+    assert [row["day"] for row in rows] == ["2026-08-09", "2026-08-10"]
 
 
 def test_timestamp_contract_rejects_future_information() -> None:

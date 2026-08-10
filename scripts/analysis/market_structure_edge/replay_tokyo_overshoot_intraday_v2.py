@@ -47,7 +47,7 @@ DEFAULT_BOOK = Path(
 )
 DEFAULT_JMA = Path(
     "/Volumes/jrs/weather_data_feed_service_runtime/output/"
-    "live_cross_observations/high_frequency_observations.jsonl"
+    "live_cross_observations"
 )
 DEFAULT_OFFICIAL = Path(
     "/Volumes/jrs/weather_data_feed_service_runtime/output/observations"
