@@ -66,9 +66,12 @@ def _iso(dt: datetime | None) -> str | None:
 
 def _journal_rows(path: Path | None, fallback: object) -> int:
     """Count small journals exactly without stalling the supervisor on history."""
-    if path is None or not path.exists():
+    if path is None:
         return 0
-    if path.stat().st_size > MAX_COUNTED_JOURNAL_BYTES:
+    paths = registry.jsonl_family_paths(path, allow_missing=True)
+    if not paths:
+        return 0
+    if sum(item.stat().st_size for item in paths) > MAX_COUNTED_JOURNAL_BYTES:
         return int(fallback or 0)
     return registry.count_lines(path) or 0
 
@@ -88,7 +91,10 @@ def _runtime_snapshot(
     telemetry_path = registry.path_for(spec, spec.telemetry_file)
     summary = registry.read_json(summary_path) if summary_path else {}
     paths = [path for path in (summary_path, primary_path, live_order_path, paper_order_path, telemetry_path) if path]
-    latest_mtime = max((registry.file_mtime(path) for path in paths if path.exists()), default=None)
+    latest_mtime = max(
+        (value for path in paths if (value := registry.file_mtime(path)) is not None),
+        default=None,
+    )
     summary_ts = registry.parse_dt(summary.get("generated_at_utc") or summary.get("refreshed_at_utc"))
     data_ts = registry.parse_dt(summary.get("snapshot_ts_utc"))
     if data_ts is None and primary_path:

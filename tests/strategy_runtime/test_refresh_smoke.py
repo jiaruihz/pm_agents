@@ -48,3 +48,22 @@ def test_schema_accepts_manifest_runtime_taxonomy(tmp_path):
     ):
         assert value in sql
     conn.close()
+
+
+def test_registry_journal_helpers_resolve_dated_partitions(tmp_path):
+    semantic_path = tmp_path / "opportunities.jsonl"
+    oldest = tmp_path / "2026-08-09" / "opportunities.jsonl"
+    newest = tmp_path / "2026-08-10" / "opportunities.jsonl"
+    oldest.parent.mkdir()
+    newest.parent.mkdir()
+    oldest.write_text('{"ts_utc":"2026-08-09T00:00:00Z"}\n', encoding="utf-8")
+    newest.write_text(
+        '{"ts_utc":"2026-08-10T00:00:00Z"}\n'
+        '{"ts_utc":"2026-08-10T00:05:00Z"}\n',
+        encoding="utf-8",
+    )
+
+    assert registry.count_lines(semantic_path) == 3
+    assert registry.latest_record_ts(semantic_path).isoformat() == "2026-08-10T00:05:00+00:00"
+    assert "2026-08-10T00:05:00Z" in registry.sample_last_json(semantic_path)
+    assert registry.file_mtime(semantic_path) is not None

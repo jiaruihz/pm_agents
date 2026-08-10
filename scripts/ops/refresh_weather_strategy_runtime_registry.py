@@ -31,6 +31,7 @@ if str(ROOT) not in sys.path:
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from src.strategies.runtime import runtime_state
 from src.strategies.runtime.sync import sync_instance_specs
+from weather_data_feed.jsonl_partitions import jsonl_family_paths
 
 
 def utc_now() -> datetime:
@@ -59,9 +60,10 @@ def parse_dt(value: Any) -> datetime | None:
 
 
 def file_mtime(path: Path) -> datetime | None:
-    if not path.exists():
+    paths = jsonl_family_paths(path, allow_missing=True)
+    if not paths:
         return None
-    return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+    return datetime.fromtimestamp(max(item.stat().st_mtime for item in paths), timezone.utc)
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -74,14 +76,22 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def count_lines(path: Path | None) -> int | None:
-    if path is None or not path.exists():
+    if path is None:
         return None
-    with path.open("rb") as handle:
-        return sum(1 for _ in handle)
+    paths = jsonl_family_paths(path, allow_missing=True)
+    if not paths:
+        return None
+    total = 0
+    for item in paths:
+        with item.open("rb") as handle:
+            total += sum(1 for _ in handle)
+    return total
 
 
 def latest_record_ts(path: Path) -> datetime | None:
-    if not path.exists() or path.stat().st_size == 0:
+    paths = jsonl_family_paths(path, allow_missing=True)
+    path = next((item for item in reversed(paths) if item.stat().st_size), None)
+    if path is None:
         return None
     try:
         with path.open("rb") as handle:
@@ -116,7 +126,9 @@ def latest_record_ts(path: Path) -> datetime | None:
 
 
 def sample_last_json(path: Path) -> str:
-    if not path.exists() or path.stat().st_size == 0:
+    paths = jsonl_family_paths(path, allow_missing=True)
+    path = next((item for item in reversed(paths) if item.stat().st_size), None)
+    if path is None:
         return "{}"
     try:
         with path.open("rb") as handle:
@@ -445,7 +457,7 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
         summary = read_json(summary_path) if summary_path else {}
 
         paths = [p for p in [summary_path, primary_journal_path, live_order_path, paper_order_path, telemetry_path] if p]
-        latest_mtime = max((file_mtime(p) for p in paths if p and p.exists()), default=None)
+        latest_mtime = max((value for p in paths if (value := file_mtime(p)) is not None), default=None)
         summary_ts = parse_dt(summary.get("generated_at_utc") or summary.get("refreshed_at_utc"))
         data_ts = parse_dt(summary.get("snapshot_ts_utc"))
         if data_ts is None and primary_journal_path:

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import scripts.ops.weather_fast_source_prev_no_trial as runner
 
@@ -9,6 +10,7 @@ from scripts.ops.weather_fast_source_prev_no_trial import (
     metar_report_clocks,
     next_metar_burst_cities,
     next_metar_window_status,
+    opportunity_journal_path,
     opportunity_journal_rows,
     resolve_share_cap_pause,
     source_temp_in_market_unit,
@@ -1178,6 +1180,13 @@ def test_opportunity_journal_only_writes_changes_or_heartbeat():
     assert len(first) == 1
     assert unchanged == []
     assert len(heartbeat) == 1
+
+
+def test_opportunity_journal_path_uses_utc_capture_day(tmp_path: Path):
+    row = {"ts_utc": "2026-08-10T23:59:59+00:00"}
+    assert opportunity_journal_path(tmp_path, row) == (
+        tmp_path / "2026-08-10" / "opportunities.jsonl"
+    )
 
 
 def test_next_metar_execution_window_is_pre_report_deadline():

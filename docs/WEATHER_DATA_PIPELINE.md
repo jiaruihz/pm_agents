@@ -215,6 +215,15 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 | `weather_edge_v1/*/state_decisions.jsonl` | strategy decision evidence | per-instance append-only monolith | preserve lineage, partition by decision date, and expose one shared partition reader before moving closed days |
 | `*.log` | disposable runtime diagnostics | plain stdout/stderr summaries | controller-managed cap: 64 MiB trigger, retain roughly the last 8 MiB; logs are not raw or canonical evidence |
 
+The 2026-08-10 `fast_source_prev_no_trial/opportunities.jsonl` census found 973,463
+parse-clean chronological rows across 33 UTC days and 2,706,569,383 bytes at the dry-run checkpoint.
+About 79.3% of rows were unchanged-state heartbeats, while 84.8% of bytes came from the older
+2026-07-09..21 high-frequency writing window; since 2026-07-22 the transition/heartbeat contract has
+held current growth to roughly 20–26 MiB/day. This is unique signal evidence, not an aggregate/shard
+duplicate. The shared semantic-path reader, dated writer and byte-preserving no-delete migration tool
+are locally validated; production remains on the monolith until an explicitly confirmed live maintenance
+cutover creates and verifies the daily shards.
+
 The 2026-08-09/10 cleanup verified aggregate bytes against the ordered shard bytes before each deletion,
 backfilled 1,360 missing `forecast_versions` rows into the correct capture-day shard, and removed the
 verified forecast, observation, AMOS fast-lane and stopped historical/probe aggregates. On 2026-08-10 the

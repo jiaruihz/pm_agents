@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from weather_data_feed.jsonl_partitions import recent_jsonl_lines
+from weather_data_feed.jsonl_partitions import jsonl_family_paths, recent_jsonl_lines
 
 
 def _write_lines(path: Path, values: list[str]) -> None:
@@ -24,3 +24,16 @@ def test_recent_jsonl_lines_spans_only_required_newest_shards(tmp_path) -> None:
         "new-2\n",
     )
     assert recent_jsonl_lines((oldest, middle, newest), max_lines=0) == ()
+
+
+def test_jsonl_family_prefers_aggregate_during_cutover_then_uses_shards(tmp_path) -> None:
+    aggregate = tmp_path / "opportunities.jsonl"
+    oldest = tmp_path / "2026-07-01" / "opportunities.jsonl"
+    newest = tmp_path / "2026-07-02" / "opportunities.jsonl"
+    _write_lines(oldest, ["old"])
+    _write_lines(newest, ["new"])
+    _write_lines(aggregate, ["old", "new"])
+
+    assert jsonl_family_paths(aggregate) == (aggregate,)
+    aggregate.unlink()
+    assert jsonl_family_paths(aggregate) == (oldest, newest)

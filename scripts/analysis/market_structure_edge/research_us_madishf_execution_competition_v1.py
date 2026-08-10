@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.production_paths import historical_targeted_root  # noqa: E402
+from weather_data_feed.jsonl_partitions import jsonl_family_paths  # noqa: E402
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
@@ -216,27 +217,27 @@ def load_orders() -> dict[str, dict[str, Any]]:
 def load_runner_requotes(event_keys: set[str]) -> dict[str, list[dict[str, Any]]]:
     """Stream the large per-cycle journal, decoding only US MADISHF rows."""
     out: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    path = RUNNER / "opportunities.jsonl"
-    size = path.stat().st_size
-    with path.open("rb") as handle:
-        while handle.tell() < size:
-            line = handle.readline()
-            if not line:
-                break
-            if b'"source": "noaa_madis_hfmetar"' not in line or b'"event_key"' not in line:
-                continue
-            try:
-                raw = json.loads(line.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                continue
-            key = str(raw.get("event_key") or "")
-            if key not in event_keys or raw.get("status") != "cross_candidate":
-                continue
-            out[key].append({
-                "ts": dt(raw.get("ts_utc")), "ts_utc": raw.get("ts_utc"),
-                "ask": num(raw.get("best_ask")), "ask_size": num(raw.get("ask_size")),
-                "bid": None, "bid_size": None, "max_no_ask": num(raw.get("max_no_ask")),
-            })
+    for path in jsonl_family_paths(RUNNER / "opportunities.jsonl"):
+        size = path.stat().st_size
+        with path.open("rb") as handle:
+            while handle.tell() < size:
+                line = handle.readline()
+                if not line:
+                    break
+                if b'"source": "noaa_madis_hfmetar"' not in line or b'"event_key"' not in line:
+                    continue
+                try:
+                    raw = json.loads(line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                key = str(raw.get("event_key") or "")
+                if key not in event_keys or raw.get("status") != "cross_candidate":
+                    continue
+                out[key].append({
+                    "ts": dt(raw.get("ts_utc")), "ts_utc": raw.get("ts_utc"),
+                    "ask": num(raw.get("best_ask")), "ask_size": num(raw.get("ask_size")),
+                    "bid": None, "bid_size": None, "max_no_ask": num(raw.get("max_no_ask")),
+                })
     for rows in out.values():
         rows.sort(key=lambda r: r["ts"] or datetime.min.replace(tzinfo=timezone.utc))
     return out

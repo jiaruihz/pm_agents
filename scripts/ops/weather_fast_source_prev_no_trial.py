@@ -143,6 +143,13 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
         fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def opportunity_journal_path(output_dir: Path, row: dict[str, Any]) -> Path:
+    ts = parse_dt(row.get("ts_utc"))
+    if ts is None:
+        raise ValueError("opportunity row requires a valid ts_utc for daily partitioning")
+    return output_dir / ts.date().isoformat() / "opportunities.jsonl"
+
+
 def read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
@@ -803,8 +810,11 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         now=now,
         heartbeat_sec=args.opportunity_heartbeat_sec,
     )
+    opportunity_journal_paths: set[str] = set()
     for row in journal_rows:
-        append_jsonl(out_dir / "opportunities.jsonl", row)
+        journal_path = opportunity_journal_path(out_dir, row)
+        append_jsonl(journal_path, row)
+        opportunity_journal_paths.add(str(journal_path))
     active_dates = set(target_dates.values())
     confirmation_state = {
         key: value
@@ -873,6 +883,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "events": len(event_rows),
         "opportunities": len(opportunity_rows),
         "opportunity_journal_rows": len(journal_rows),
+        "opportunity_journal_paths": sorted(opportunity_journal_paths),
         "source_event_incremental_refresh": source_event_refresh,
         "execution_eligible": len(order_rows),
         "live_orders_attempted": len(order_rows),

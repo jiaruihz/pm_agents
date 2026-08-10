@@ -135,6 +135,22 @@ class TestMaterializer:
             str(prev_no_dir / "orders.jsonl"),
         }
 
+    def test_monitor_instance_uses_latest_dated_prev_no_opportunity_shard(self, db, tmp_path):
+        from scripts.etl.materialize_weather_data_source_management import build_monitor_instances
+
+        runtime_root = tmp_path / "runtime"
+        prev_no_dir = runtime_root / "output" / "fast_source_prev_no_trial"
+        oldest = prev_no_dir / "2026-08-09" / "opportunities.jsonl"
+        newest = prev_no_dir / "2026-08-10" / "opportunities.jsonl"
+        oldest.parent.mkdir(parents=True)
+        newest.parent.mkdir(parents=True)
+        oldest.write_text("{}\n", encoding="utf-8")
+        newest.write_text("{}\n", encoding="utf-8")
+
+        rows = {row["monitor_instance_id"]: row for row in build_monitor_instances(str(runtime_root))}
+        journals = json.loads(rows["fast_source_prev_no_trial"]["journal_paths_json"])
+        assert journals == [str(newest)]
+
     def test_idempotent(self, db, tmp_path):
         from scripts.etl.materialize_weather_data_source_management import (
             build_official_observation_profiles,

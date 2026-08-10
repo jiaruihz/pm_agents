@@ -51,6 +51,35 @@ def dated_jsonl_paths(
     return files
 
 
+def jsonl_family_paths(
+    path: Path,
+    *,
+    allow_missing: bool = False,
+) -> tuple[Path, ...]:
+    """Resolve one semantic journal path to its file or dated shards.
+
+    Runtime contracts historically name journals as ``root/name.jsonl``.  A
+    partitioned journal keeps that semantic path while storing physical rows
+    at ``root/YYYY-MM-DD/name.jsonl``.  When both layouts exist during a
+    maintenance cutover, the explicit file wins so callers never double-read
+    the same prefix.
+    """
+
+    candidate = Path(path)
+    if candidate.is_file():
+        return (candidate,)
+    files = dated_jsonl_paths(
+        candidate.parent,
+        filename=candidate.name,
+        allow_missing=True,
+    )
+    if files:
+        return files
+    if allow_missing:
+        return ()
+    raise FileNotFoundError(f"required JSONL family does not exist: {candidate}")
+
+
 def iter_jsonl_lines(paths: Iterable[Path]) -> Iterator[str]:
     """Stream complete lines from an already-resolved ordered path set."""
     for path in paths:
