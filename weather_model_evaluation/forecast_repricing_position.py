@@ -503,6 +503,56 @@ def _position_stats(
     }
 
 
+def _paired_position_delta(
+    frame: pd.DataFrame,
+    candidate_pnl: str,
+    baseline_pnl: str,
+    *,
+    cost_column: str,
+    draws: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Compare exit policies on identical positions and target-date blocks."""
+
+    work = frame.dropna(subset=[candidate_pnl, baseline_pnl, cost_column]).copy()
+    if work.empty:
+        return {
+            "positions": 0,
+            "target_dates": 0,
+            "candidate_roi": math.nan,
+            "baseline_roi": math.nan,
+            "roi_delta": math.nan,
+            "ci_low": math.nan,
+            "ci_high": math.nan,
+        }
+    by_date = work.groupby("target_date").agg(
+        candidate_pnl=(candidate_pnl, "sum"),
+        baseline_pnl=(baseline_pnl, "sum"),
+        cost=(cost_column, "sum"),
+    )
+    values = by_date[["candidate_pnl", "baseline_pnl", "cost"]].to_numpy(float)
+
+    def delta(sample: np.ndarray) -> float:
+        cost = sample[:, 2].sum()
+        return float((sample[:, 0].sum() - sample[:, 1].sum()) / cost)
+
+    rng = np.random.default_rng(seed)
+    boot = [
+        delta(values[rng.integers(0, len(values), size=len(values))])
+        for _ in range(draws)
+    ]
+    cost = float(work[cost_column].sum())
+    return {
+        "positions": int(len(work)),
+        "target_dates": int(len(by_date)),
+        "candidate_roi": float(work[candidate_pnl].sum() / cost),
+        "baseline_roi": float(work[baseline_pnl].sum() / cost),
+        "roi_delta": float((work[candidate_pnl].sum() - work[baseline_pnl].sum()) / cost),
+        "ci_low": float(np.quantile(boot, 0.025)),
+        "ci_high": float(np.quantile(boot, 0.975)),
+    }
+
+
 def train_position_policy(
     rows: pd.DataFrame,
     *,
@@ -670,6 +720,14 @@ def train_position_policy(
             draws=draws,
             seed=20260814,
         ),
+        "dynamic_vs_fixed_60_same_rows": _paired_position_delta(
+            entries,
+            "dynamic_position_pnl",
+            "fixed_60_pnl",
+            cost_column="entry_bid",
+            draws=draws,
+            seed=20260815,
+        ),
         "denominator": {
             "input_rows": int(len(rows)),
             "d1_rungs": int(len(frame)),
@@ -743,6 +801,7 @@ def write_position_policy_outputs(
         "dynamic_position": result["dynamic"],
         "fixed_30": result["fixed_30"],
         "fixed_60": result["fixed_60"],
+        "dynamic_vs_fixed_60_same_rows": result["dynamic_vs_fixed_60_same_rows"],
         "maker_threshold_selection": result["maker_threshold_selection"].to_dict(
             orient="records"
         ),
@@ -795,6 +854,9 @@ production: live_action=none; orders_changed=0
 | dynamic full-ladder exit | {dynamic['positions']} | {dynamic['target_dates']} | {dynamic['roi']} | [{dynamic['ci_low']}, {dynamic['ci_high']}] |
 | fixed 30m diagnostic | {safe['fixed_30']['positions']} | {safe['fixed_30']['target_dates']} | {safe['fixed_30']['roi']} | [{safe['fixed_30']['ci_low']}, {safe['fixed_30']['ci_high']}] |
 | fixed 60m diagnostic | {safe['fixed_60']['positions']} | {safe['fixed_60']['target_dates']} | {safe['fixed_60']['roi']} | [{safe['fixed_60']['ci_low']}, {safe['fixed_60']['ci_high']}] |
+
+同一 positions 上 dynamic-fixed60 ROI delta={safe['dynamic_vs_fixed_60_same_rows']['roi_delta']}，
+95% CI=[{safe['dynamic_vs_fixed_60_same_rows']['ci_low']}, {safe['dynamic_vs_fixed_60_same_rows']['ci_high']}]。
 
 ## Evidence boundary
 

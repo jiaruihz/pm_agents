@@ -121,3 +121,29 @@ def test_runtime_policy_selects_maker_then_exits_from_full_ladder_state() -> Non
     assert decision.action == "EXIT"
     assert decision.reason == "continuation_exhausted"
     assert decision.predicted_incremental_exit_value == pytest.approx(-0.01)
+
+
+def test_exit_uplift_uses_identical_positions_and_date_blocks() -> None:
+    frame = pd.DataFrame(
+        [
+            {"target_date": "2026-08-01", "entry_bid": 0.1, "dynamic": 0.02, "fixed": 0.01},
+            {"target_date": "2026-08-01", "entry_bid": 0.2, "dynamic": 0.01, "fixed": 0.00},
+            {"target_date": "2026-08-02", "entry_bid": 0.1, "dynamic": -0.01, "fixed": -0.02},
+            {"target_date": "2026-08-03", "entry_bid": 0.1, "dynamic": 0.03, "fixed": None},
+        ]
+    )
+
+    result = subject._paired_position_delta(
+        frame,
+        "dynamic",
+        "fixed",
+        cost_column="entry_bid",
+        draws=100,
+        seed=7,
+    )
+
+    assert result["positions"] == 3
+    assert result["target_dates"] == 2
+    assert result["candidate_roi"] == pytest.approx(0.05)
+    assert result["baseline_roi"] == pytest.approx(-0.025)
+    assert result["roi_delta"] == pytest.approx(0.075)

@@ -19,10 +19,11 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,11 +35,22 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.analysis.market_structure_edge import research_lmvm_single_yes_repricing_v1 as base  # noqa: E402
+from scripts.ops.weather_lmvm_forecast_repricing_shadow_v1 import (  # noqa: E402
+    parse_clock_exact_snapshot_file,
+)
+from weather_data_feed.production_paths import (  # noqa: E402
+    current_strategy_snapshots,
+    historical_full_ladder_root,
+    historical_targeted_root,
+)
 
 
 DEFAULT_OUTPUT = ROOT / "docs/analysis/2026-08/generated/lmvm_forecast_innovation_v2"
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-04-research-lmvm-forecast-innovation-v2.md"
 SEED = 20260804
+DEFAULT_END_TARGET_DATE = (
+    datetime.now(base.ZoneInfo("Asia/Shanghai")).date() - timedelta(days=1)
+).isoformat()
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,7 +62,134 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--draws", type=int, default=5000)
     parser.add_argument("--max-files", type=int)
+    parser.add_argument(
+        "--end-target-date",
+        default=DEFAULT_END_TARGET_DATE,
+        help="inclusive target-date cutoff (default: Asia/Shanghai T-1)",
+    )
+    parser.add_argument(
+        "--current-snapshot-dir",
+        type=Path,
+        default=current_strategy_snapshots(),
+    )
+    parser.add_argument(
+        "--historical-full-ladder-root",
+        type=Path,
+        default=historical_full_ladder_root(),
+    )
+    parser.add_argument(
+        "--historical-targeted-root",
+        type=Path,
+        default=historical_targeted_root(),
+    )
+    parser.add_argument(
+        "--legacy-snapshot-only",
+        action="store_true",
+        help="diagnostic negative control; do not join migrated book sources",
+    )
     return parser.parse_args()
+
+
+_STAMP = re.compile(r"snapshot_(\d{8})_(\d{4})\.json$")
+
+
+def _companion_book(root: Path, snapshot: Path) -> Path | None:
+    match = _STAMP.match(snapshot.name)
+    if match is None:
+        return None
+    day = datetime.strptime(match.group(1), "%Y%m%d").date().isoformat()
+    candidate = (
+        root
+        / "orderbook_snapshots"
+        / day
+        / snapshot.name.replace("snapshot_", "orderbook_snapshot_", 1).replace(".json", ".jsonl.gz")
+    )
+    return candidate if candidate.exists() else None
+
+
+def discover_snapshot_inputs(
+    snapshot_dir: Path,
+    current_dir: Path,
+    full_ladder_root: Path,
+    targeted_root: Path,
+    *,
+    legacy_only: bool,
+) -> list[tuple[str, str | None]]:
+    """Resolve one best snapshot per capture stamp across schema generations."""
+
+    selected: dict[str, tuple[int, Path, Path | None]] = {}
+
+    def add(root: Path, rank: int, book_root: Path | None = None) -> None:
+        if not root.exists():
+            return
+        for snapshot in root.glob("snapshot_*.json"):
+            book = _companion_book(book_root, snapshot) if book_root is not None else None
+            if book is None and not legacy_only:
+                book = _companion_book(full_ladder_root, snapshot) or _companion_book(
+                    targeted_root, snapshot
+                )
+            previous = selected.get(snapshot.name)
+            if previous is None or rank > previous[0]:
+                selected[snapshot.name] = (rank, snapshot, book)
+
+    add(snapshot_dir, 0)
+    if not legacy_only:
+        add(current_dir, 0)
+        add(targeted_root / "paper_snapshots", 1, targeted_root)
+        add(full_ladder_root / "paper_snapshots", 2, full_ladder_root)
+    return [
+        (str(snapshot), str(book) if book is not None else None)
+        for _, snapshot, book in (selected[key] for key in sorted(selected))
+    ]
+
+
+def _normalize_current_state(row: dict[str, Any]) -> dict[str, Any] | None:
+    if int(row.get("lead_days") or -1) not in {1, 2}:
+        return None
+    rungs = [dict(rung) for rung in row.get("rungs") or []]
+    model_mass = sum(float(rung["model_prob"]) for rung in rungs)
+    market_mass = sum(float(rung["market_prob"]) for rung in rungs)
+    if not rungs or not 0.80 <= model_mass <= 1.20 or not 0.50 <= market_mass <= 1.50:
+        return None
+    for rung in rungs:
+        rung["model_prob"] = float(rung["model_prob"]) / model_mass
+        rung["model_prob_raw"] = float(rung["model_prob"])
+        rung["market_mid"] = float(rung["market_prob"])
+        rung["market_prob"] = float(rung["market_prob"]) / market_mass
+    decision_epoch = float(row["decision_epoch"])
+    local = datetime.fromtimestamp(decision_epoch, timezone.utc).astimezone(
+        base.ZoneInfo(str(row["market_timezone"]))
+    )
+    return {
+        **row,
+        "snapshot_epoch": decision_epoch,
+        "snapshot_ts_utc": str(row.get("decision_ts_utc") or row.get("snapshot_ts_utc")),
+        "source_snapshot_ts_utc": row.get("snapshot_ts_utc"),
+        "book_available_at_utc": row.get("decision_ts_utc"),
+        "decision_local": local.isoformat(),
+        "decision_hour_local": local.hour + local.minute / 60.0,
+        "model_probability_sum_raw": model_mass,
+        "market_mid_sum_raw": market_mass,
+        "rungs": rungs,
+    }
+
+
+def parse_repricing_snapshot(
+    item: tuple[str, str | None],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    path = Path(item[0])
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], {"files_read": 1, "files_invalid": 1}
+    if isinstance(payload.get("canonical_orderbook_source"), dict):
+        rows, counts = parse_clock_exact_snapshot_file(path)
+        normalized = [state for row in rows if (state := _normalize_current_state(row)) is not None]
+        counts = dict(counts)
+        counts["current_canonical_states"] = len(normalized)
+        counts["current_canonical_mass_blocked"] = len(rows) - len(normalized)
+        return normalized, counts
+    return base.parse_snapshot_with_orderbook(item)
 
 
 def paired_rungs(previous: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
@@ -110,7 +249,15 @@ def _candidate_base(state: dict[str, Any]) -> dict[str, Any]:
         "model_init_utc_estimated", "forecast_max_f", "rung_count",
         "model_probability_sum_raw", "market_mid_sum_raw",
     )
-    return {key: state[key] for key in keys}
+    output = {key: state[key] for key in keys}
+    for key in (
+        "source_snapshot_ts_utc",
+        "clock_lineage_status",
+        "book_source_path",
+        "book_available_at_utc",
+    ):
+        output[key] = state.get(key)
+    return output
 
 
 def build_innovation_candidates(
@@ -237,10 +384,17 @@ def build_full_ladder_panel(
                     "provider_first_seen_at_utc": None,
                     "provider_first_seen_status": "unavailable_in_reconstructed_archive",
                     "collector_first_seen_at_utc": current["snapshot_ts_utc"],
-                    "collector_first_seen_status": "legacy_earliest_observed_not_collector_exact",
-                    "book_snapshot_time_utc": current["snapshot_ts_utc"],
+                    "collector_first_seen_status": (
+                        "strategy_snapshot_first_observed_not_forecast_collector_event"
+                        if current.get("clock_lineage_status")
+                        == "collector_exact_joined_full_ladder_v1"
+                        else "legacy_earliest_observed_not_collector_exact"
+                    ),
+                    "book_snapshot_time_utc": current.get("book_available_at_utc")
+                    or current["snapshot_ts_utc"],
                     "execution_time_utc": current["snapshot_ts_utc"],
-                    "execution_time_status": "same_snapshot_replay_assumption",
+                    "execution_time_status": current.get("clock_lineage_status")
+                    or "same_snapshot_replay_assumption",
                     "candidate_selected": condition_id == str(selected["condition_id"]),
                 }
             )
@@ -525,17 +679,51 @@ entry/exit 都扣官方 Weather taker fee。静态 residual、forecast mode、ma
 
 def main() -> int:
     args = parse_args()
-    files = sorted(args.snapshot_dir.glob("snapshot_*.json"))
+    inputs = discover_snapshot_inputs(
+        args.snapshot_dir,
+        args.current_snapshot_dir,
+        args.historical_full_ladder_root,
+        args.historical_targeted_root,
+        legacy_only=args.legacy_snapshot_only,
+    )
     if args.max_files is not None:
-        files = files[: args.max_files]
-    if not files:
+        inputs = inputs[: args.max_files]
+    if not inputs:
         raise FileNotFoundError(f"no snapshots under {args.snapshot_dir}")
     states: list[dict[str, Any]] = []
     parse_counts: Counter[str] = Counter()
     with ProcessPoolExecutor(max_workers=max(1, args.workers)) as executor:
-        for parsed, local_counts in executor.map(base.parse_snapshot_file, map(str, files), chunksize=16):
+        for parsed, local_counts in executor.map(parse_repricing_snapshot, inputs, chunksize=8):
             states.extend(parsed)
             parse_counts.update(local_counts)
+    if args.end_target_date:
+        before = len(states)
+        states = [row for row in states if str(row.get("target_date") or "") <= args.end_target_date]
+        parse_counts["states_after_end_target_date"] = len(states)
+        parse_counts["states_beyond_end_target_date_blocked"] = before - len(states)
+
+    deduped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    evidence_rank = {
+        "legacy_inline_snapshot_v1": 0,
+        "historical_companion_orderbook_same_capture_v1": 1,
+        "collector_exact_joined_full_ladder_v1": 2,
+    }
+    for row in states:
+        key = (
+            row.get("city"),
+            row.get("target_date"),
+            row.get("event_slug"),
+            row.get("forecast_source"),
+            row.get("forecast_model"),
+            round(float(row.get("snapshot_epoch") or 0.0)),
+        )
+        previous = deduped.get(key)
+        if previous is None or evidence_rank.get(str(row.get("clock_lineage_status")), -1) > evidence_rank.get(
+            str(previous.get("clock_lineage_status")), -1
+        ):
+            deduped[key] = row
+    parse_counts["duplicate_states_removed"] = len(states) - len(deduped)
+    states = list(deduped.values())
 
     annotated = base.annotate_forecast_updates(states)
     static_candidates, probability_rows = base.build_candidates(annotated)
@@ -563,7 +751,18 @@ def main() -> int:
     payload = {
         "generated_at_utc": generated_at,
         "target_metric": "lmvm_forecast_innovation_v2",
-        "snapshot_files": len(files),
+        "snapshot_files": len(inputs),
+        "end_target_date": args.end_target_date,
+        "input_contract": {
+            "legacy_snapshot_root": str(args.snapshot_dir),
+            "current_snapshot_root": str(args.current_snapshot_dir),
+            "historical_full_ladder_root": str(args.historical_full_ladder_root),
+            "historical_targeted_root": str(args.historical_targeted_root),
+            "legacy_snapshot_only": bool(args.legacy_snapshot_only),
+        },
+        "state_target_date_min": min((str(row["target_date"]) for row in states), default=None),
+        "state_target_date_max": max((str(row["target_date"]) for row in states), default=None),
+        "state_clock_lineage": dict(Counter(str(row.get("clock_lineage_status")) for row in states)),
         "parse_counts": dict(parse_counts),
         "update_counts": dict(update_counts),
         "full_ladder_event_rows": len(full_ladder),
@@ -585,7 +784,7 @@ def main() -> int:
     write_report(
         args.report,
         generated_at=generated_at,
-        file_count=len(files),
+        file_count=len(inputs),
         counts=update_counts,
         cutoff=cutoff,
         probabilities=probabilities,

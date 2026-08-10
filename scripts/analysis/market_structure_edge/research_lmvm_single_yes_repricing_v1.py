@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import gzip
 import hashlib
 import json
 import math
@@ -130,18 +131,90 @@ def _first_present(records: list[dict[str, Any]], field: str) -> Any:
     return None
 
 
-def parse_snapshot_file(path_text: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Return D-2/D-1 ladder states from one immutable snapshot file."""
-    path = Path(path_text)
-    counts: Counter[str] = Counter(files_read=1)
+def _historical_orderbook_quotes(path: Path) -> tuple[dict[str, dict[str, Any]], datetime | None]:
+    """Load effective YES quotes from a retired same-capture orderbook batch."""
+
+    if not path.exists():
+        return {}, None
+    opener = gzip.open if path.suffix == ".gz" else open
+    sides: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    latest_fetched: datetime | None = None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        with opener(path, "rt", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if row.get("status") != "ok":
+                    continue
+                condition = str(row.get("condition_id") or "").strip()
+                outcome = str(row.get("outcome") or "yes").lower()
+                if not condition or outcome not in {"yes", "no"}:
+                    continue
+                sides[condition][outcome] = dict(row.get("summary") or {})
+                fetched = parse_utc(row.get("fetched_at_utc"))
+                if fetched is not None and (latest_fetched is None or fetched > latest_fetched):
+                    latest_fetched = fetched
     except (OSError, json.JSONDecodeError):
-        return [], {"files_read": 1, "files_invalid": 1}
+        return {}, None
+
+    quotes: dict[str, dict[str, Any]] = {}
+    for condition, books in sides.items():
+        yes = books.get("yes") or {}
+        no = books.get("no") or {}
+        yes_bid = finite(yes.get("best_bid"))
+        yes_ask = finite(yes.get("best_ask"))
+        no_bid = finite(no.get("best_bid"))
+        no_ask = finite(no.get("best_ask"))
+        bid_candidates = [
+            pair
+            for pair in (
+                (yes_bid, finite(yes.get("bid_size"))) if yes_bid is not None else None,
+                (1.0 - no_ask, finite(no.get("ask_size"))) if no_ask is not None else None,
+            )
+            if pair is not None
+        ]
+        ask_candidates = [
+            pair
+            for pair in (
+                (yes_ask, finite(yes.get("ask_size"))) if yes_ask is not None else None,
+                (1.0 - no_bid, finite(no.get("bid_size"))) if no_bid is not None else None,
+            )
+            if pair is not None
+        ]
+        bid, bid_size = max(bid_candidates, default=(None, None), key=lambda pair: pair[0])
+        ask, ask_size = min(ask_candidates, default=(None, None), key=lambda pair: pair[0])
+        if bid is not None and ask is not None and ask >= bid:
+            quotes[condition] = {
+                "yes_best_bid": bid,
+                "yes_best_ask": ask,
+                "yes_bid_size": bid_size,
+                "yes_ask_size": ask_size,
+            }
+    return quotes, latest_fetched
+
+
+def _parse_snapshot_payload(
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    book_quotes: dict[str, dict[str, Any]] | None = None,
+    book_available_at: datetime | None = None,
+    book_source_path: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    counts: Counter[str] = Counter(files_read=1)
     snapshot_ts = parse_utc(payload.get("ts_utc") or payload.get("snapshot_ts_utc"))
     records = payload.get("records")
     if snapshot_ts is None or not isinstance(records, list):
         return [], {"files_read": 1, "files_invalid": 1}
+    decision_ts = max(snapshot_ts, book_available_at) if book_available_at else snapshot_ts
+    evidence_class = (
+        "historical_companion_orderbook_same_capture_v1"
+        if book_quotes
+        else "legacy_inline_snapshot_v1"
+    )
+    if book_quotes:
+        counts["historical_companion_orderbook_files"] += 1
     counts["record_rows"] += len(records)
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in records:
@@ -163,7 +236,7 @@ def parse_snapshot_file(path_text: str) -> tuple[list[dict[str, Any]], dict[str,
             counts["missing_timezone"] += 1
             continue
         try:
-            local_ts = snapshot_ts.astimezone(ZoneInfo(tz_name))
+            local_ts = decision_ts.astimezone(ZoneInfo(tz_name))
             target_day = date.fromisoformat(target)
         except (ValueError, KeyError):
             counts["invalid_clock"] += 1
@@ -189,11 +262,12 @@ def parse_snapshot_file(path_text: str) -> tuple[list[dict[str, Any]], dict[str,
         complete = True
         for bracket, record in by_bracket.items():
             model_p = finite(record.get("model_prob"))
-            bid = finite(record.get("yes_best_bid"))
-            ask = finite(record.get("yes_best_ask"))
-            bid_size = finite(record.get("yes_bid_size"))
-            ask_size = finite(record.get("yes_ask_size"))
             condition_id = str(record.get("condition_id") or "").strip()
+            quote = (book_quotes or {}).get(condition_id) or {}
+            bid = finite(quote.get("yes_best_bid", record.get("yes_best_bid")))
+            ask = finite(quote.get("yes_best_ask", record.get("yes_best_ask")))
+            bid_size = finite(quote.get("yes_bid_size", record.get("yes_bid_size")))
+            ask_size = finite(quote.get("yes_ask_size", record.get("yes_ask_size")))
             if (
                 not condition_id
                 or model_p is None
@@ -237,10 +311,17 @@ def parse_snapshot_file(path_text: str) -> tuple[list[dict[str, Any]], dict[str,
             {
                 "snapshot_id": snapshot_identity(path, city, target, event),
                 "source_path": str(path),
-                "snapshot_ts_utc": iso_utc(snapshot_ts),
-                "snapshot_epoch": snapshot_ts.timestamp(),
-                "decision_local": local_ts.isoformat(),
-                "decision_hour_local": local_ts.hour + local_ts.minute / 60.0,
+                "snapshot_ts_utc": iso_utc(decision_ts),
+                "source_snapshot_ts_utc": iso_utc(snapshot_ts),
+                "snapshot_epoch": decision_ts.timestamp(),
+                "decision_local": decision_ts.astimezone(ZoneInfo(tz_name)).isoformat(),
+                "decision_hour_local": (
+                    decision_ts.astimezone(ZoneInfo(tz_name)).hour
+                    + decision_ts.astimezone(ZoneInfo(tz_name)).minute / 60.0
+                ),
+                "clock_lineage_status": evidence_class,
+                "book_source_path": book_source_path,
+                "book_available_at_utc": iso_utc(book_available_at) if book_available_at else None,
                 "lead_days": lead_days,
                 "city": city,
                 "target_date": target,
@@ -261,6 +342,39 @@ def parse_snapshot_file(path_text: str) -> tuple[list[dict[str, Any]], dict[str,
         )
         counts["complete_d2_d1_ladders"] += 1
     return output, dict(counts)
+
+
+def parse_snapshot_file(path_text: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Return D-2/D-1 ladder states from one immutable snapshot file."""
+    path = Path(path_text)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], {"files_read": 1, "files_invalid": 1}
+    return _parse_snapshot_payload(path, payload)
+
+
+def parse_snapshot_with_orderbook(
+    item: tuple[str, str | None],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Parse a snapshot and, when present, its retired same-capture book batch."""
+
+    path = Path(item[0])
+    book_path = Path(item[1]) if item[1] else None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], {"files_read": 1, "files_invalid": 1}
+    quotes, available_at = (
+        _historical_orderbook_quotes(book_path) if book_path is not None else ({}, None)
+    )
+    return _parse_snapshot_payload(
+        path,
+        payload,
+        book_quotes=quotes,
+        book_available_at=available_at,
+        book_source_path=str(book_path) if book_path is not None and book_path.exists() else None,
+    )
 
 
 def _stream_key(state: dict[str, Any]) -> tuple[str, str, str, str, str]:

@@ -1,6 +1,19 @@
 from __future__ import annotations
 
+import gzip
+import json
+from pathlib import Path
+
 from scripts.analysis.market_structure_edge import research_lmvm_forecast_innovation_v2 as module
+
+
+def test_cli_defaults_to_tminus1_cutoff(monkeypatch) -> None:
+    monkeypatch.setattr(module, "DEFAULT_END_TARGET_DATE", "2026-08-09")
+    monkeypatch.setattr(module.sys, "argv", ["research_lmvm_forecast_innovation_v2.py"])
+
+    args = module.parse_args()
+
+    assert args.end_target_date == "2026-08-09"
 
 
 def rung(bracket: str, model: float, market: float) -> dict:
@@ -84,3 +97,62 @@ def test_full_ladder_panel_keeps_selected_and_unselected_rows_and_clock_gaps() -
     assert panel["provider_first_seen_at_utc"].isna().all()
     assert set(panel["provider_first_seen_status"]) == {"unavailable_in_reconstructed_archive"}
     assert set(panel["collector_first_seen_status"]) == {"legacy_earliest_observed_not_collector_exact"}
+
+
+def test_migrated_snapshot_uses_same_capture_orderbook_to_restore_ladder(
+    tmp_path: Path,
+) -> None:
+    snapshot = tmp_path / "snapshot_20260708_1200.json"
+    book = tmp_path / "orderbook_snapshot_20260708_1200.jsonl.gz"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "ts_utc": "2026-07-08T04:00:00Z",
+                "records": [
+                    {
+                        "city": "London",
+                        "target_date": "2026-07-09",
+                        "event_slug": "london-july-9",
+                        "timezone_name": "Europe/London",
+                        "bracket": str(20 + index),
+                        "condition_id": f"condition-{index}",
+                        "model_prob": probability,
+                        "forecast_values_hash": "forecast-a",
+                        "forecast_source": "source",
+                        "forecast_model": "model",
+                    }
+                    for index, probability in enumerate((0.2, 0.3, 0.5))
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with gzip.open(book, "wt", encoding="utf-8") as handle:
+        for index, midpoint in enumerate((0.2, 0.3, 0.5)):
+            handle.write(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "outcome": "yes",
+                        "condition_id": f"condition-{index}",
+                        "fetched_at_utc": "2026-07-08T04:00:03Z",
+                        "summary": {
+                            "best_bid": midpoint - 0.01,
+                            "best_ask": midpoint + 0.01,
+                            "bid_size": 10.0,
+                            "ask_size": 11.0,
+                        },
+                    }
+                )
+                + "\n"
+            )
+
+    rows, counts = module.base.parse_snapshot_with_orderbook((str(snapshot), str(book)))
+
+    assert counts["historical_companion_orderbook_files"] == 1
+    assert counts["complete_d2_d1_ladders"] == 1
+    assert rows[0]["target_date"] == "2026-07-09"
+    assert rows[0]["clock_lineage_status"] == "historical_companion_orderbook_same_capture_v1"
+    assert rows[0]["source_snapshot_ts_utc"] == "2026-07-08T04:00:00Z"
+    assert rows[0]["snapshot_ts_utc"] == "2026-07-08T04:00:03Z"
+    assert rows[0]["rungs"][2]["yes_ask"] == 0.51

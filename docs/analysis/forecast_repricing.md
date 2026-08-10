@@ -4,10 +4,13 @@
 
 本 family 已有可加载的 `forecast_repricing_full_ladder_position_v1`：D-1 revision 后按
 `weather shock × signed mode distance × neighbor propagation` 给所有 rungs 评分，maker-fill-gated entry，
-30m 用完整 ladder continuation head 做 HOLD/EXIT，60m hard exit；不使用 max/min selector。Secondary reconstructed
-holdout 的 conditional dynamic ROI 为 `+13.13%` CI `[+1.50%,+18.89%]`（39 positions/6 dates），但
-entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、actual fills=0、formal forward=NA，因此状态是
-`runnable zero-notional / inconclusive`，不是 live alpha。Taker `-44.08%` 已关闭。实现、命令和证据见
+30m 用完整 ladder continuation head 做 HOLD/EXIT，60m hard exit；不使用 max/min selector。2026-08-10 已修复
+历史重建适配器漏接独立 orderbook/full-ladder 数据层的问题，重建范围由 `2026-07-07` 扩至默认 T-1
+`2026-08-09`。Secondary reconstructed holdout 的 maker-fill-conditional dynamic ROI 为 `+36.39%`
+CI `[+17.20%,+52.44%]`（49 positions/11 active dates），但同 rows dynamic 相对 fixed60 为 `-1.07pp`
+CI `[-7.46pp,+5.01pp]`，taker 反事实 `-48.25%`，entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、
+actual fills=0、formal forward=NA。因此状态仍是 `runnable zero-notional / inconclusive`，不是 live alpha。
+旧 39 positions/6 dates/`+13.13%` 结果已 superseded-for-decision-use。实现、命令和证据见
 [full-ladder position v1](2026-08/2026-08-10-forecast-repricing-full-ladder-position-v1.md)。
 
 `Forecast Repricing` 是独立于 Core Carry 的短周期 market-response family。它预测 D-2/D-1 forecast revision 被本系统 first-seen 后，完整 temperature ladder 在未来 5/15/30/60 分钟的可执行价格变化；它不预测最终 Tmax winner，也不继承 Core Carry 的持仓、阈值或 live 授权。
@@ -16,12 +19,12 @@ entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、actual fills=0、f
 
 状态：`inconclusive / no tradable edge / collector-exact event denominator accumulating / event-book forward not deployed`。
 
-- 固定 `city × target_date × forecast-event` 分母的历史重建覆盖 2,767 个 events、28,038 个 ladder rungs，其中 selected 2,767、未 selected 25,271；D-1 为 2,666 events/40 dates，D-2 只有 101 events/11 dates。
+- 固定 `city × target_date × forecast-event` 分母的修复后历史重建覆盖 6,003 个 events、62,444 个 ladder rungs；D-1 position universe 为 5,902 events/61,392 rungs/65 dates，目标日期覆盖 `2026-05-21..2026-08-09`。`2026-07-08..2026-07-15` 仍因全城 full-ladder collector 尚未开始而是真实 evidence gap。
 - 5m 无覆盖；15m 只有 4 dates；只有 30m/60m 达到历史建模下限。development expanding OOF 选中 60m `weather + market level` Ridge，threshold 固定为 predicted taker net markout > 0。
-- secondary chronological holdout 中，weather+market 相对 market-level 的 full-ladder MSE delta 为 `-0.0000020`，target-date bootstrap 95% CI `[-0.0000058,+0.0000009]`，跨 0。加入静态 microstructure 后相对 market+micro control 的 weather 增量同样跨 0。因此尚未证明独立 forecast alpha。
-- 同一 holdout 的 taker 为 28 个可评分 signals/4 dates，fee-adjusted ROI `-31.96%`，CI `[-58.23%,-17.74%]`；拒绝 taker。
-- 60m conditional-maker point estimate 为 `+6.62%`，CI `[-18.56%,+13.46%]`，actual maker fills=0。future touch 从未当作 fill；queue、partial fill、expire 与 adverse selection 均未观测，所以它不是可实现 ROI。
-- terminal settlement head 单独失败：legacy model Brier `0.08212` vs market `0.06737`，delta `+0.01474` CI `[+0.01249,+0.01691]`；该负结论不能拿来替代短周期 repricing 检验。
+- 修复后 secondary chronological holdout `2026-07-29..2026-08-09` 中，entry challenger 相对 market-level M0 的 full-ladder MSE delta 为 `-0.00000058`，target-date bootstrap 95% CI `[-0.00000195,+0.00000073]`，跨 0；development OOF 也跨 0。因此尚未证明独立 forecast alpha。
+- 早期 fixed-horizon taker diagnostic 为 28 个 signals/4 dates、ROI `-31.96%`；修复后同一 49 个 selected position 的 taker 反事实为 `-48.25%`。两种口径方向一致：拒绝 taker。
+- 修复后 maker-fill-conditional dynamic point estimate 为 `+36.39%`，CI `[+17.20%,+52.44%]`，但同 rows 不胜 fixed60，且同一 selected rows 的 taker 反事实为 `-48.25%`。actual maker fills=0；queue、partial fill、expire 与 adverse selection 均未观测，所以它不是可实现 ROI。
+- terminal settlement head 单独失败：legacy model Brier `0.08423` vs market `0.06716`，delta `+0.01707` CI `[+0.01532,+0.01877]`；该负结论不能拿来替代短周期 repricing 检验。
 
 ## 跨城市 first-seen 关系
 
@@ -55,7 +58,7 @@ D-2/D-1 与日内 observation event burst；不部署真实订单、不改现有
 
 可复跑 artifact：
 
-- base：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_base_20260809`
-- evaluation：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_evaluation_20260809`
-- input SHA-256：`8be4d7c0a0f209f692df7935f6cb99ba9ad8914ef55f518818b20dd62e5f3900`
-- scorer SHA-256：`e6f83778841a864e6770d2a6c9b174c08e82b7bacecc2071be8dbf51a04859ad`；仅 collector-only scoring，不是 live artifact。
+- base：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_base_20260810_tminus1`
+- position：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_position_20260810_tminus1`
+- input SHA-256：`4f7b0f002b19dafd414aaac69a437d03c79f5f6146e2c2de6b5a58ca1ff449a3`
+- position model SHA-256：`812adb1e8f548babedc486a2f35f7b5b967c6d3b0c7bc84f3b155eecf5833c16`；zero-notional artifact，不是 live 授权。
