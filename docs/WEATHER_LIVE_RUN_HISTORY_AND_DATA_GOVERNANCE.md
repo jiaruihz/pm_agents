@@ -1510,7 +1510,58 @@ Production verification after the fixes shows official running max 23°C,
 24 routine EHAM timestamps restored, KNMI notification as a direct wake path,
 Amsterdam in the live city policy, a 10-share city cap, and no critical runtime.
 
-## 23. Immediate Follow-Up Work
+## 23. 2026-08-10 Market Proxy Transport and Market-Books Coverage Gap
+
+The canonical `127.0.0.1:7897` Clash Verge endpoint remained the single proxy
+entry, but its upstream route became intermittent. There were two evidenced
+market-books failure windows: `14:08:43Z..14:16:36Z` and
+`14:18:43Z..14:44:46Z`. In the first, one REST batch lost 1,082/1,276 books
+(582 TLS connect timeouts and 500 read timeouts) before the next batch
+recovered. The hot group was 82/82 failed because the batch endpoint had one
+attempt, while later cold chunks happened to reach the recovered route.
+
+The second window exposed a separate false-OK defect in Gamma discovery.
+Successive batches discovered 8/89, 34/89, 4/89, 0/89 and 0/89 city-date
+events. The first two were nevertheless published as `status=ok` because
+status considered only books for the small discovered subset. The final
+healthy batch at `14:44:45.693Z` restored 79 events, 1,738/1,738 books and only
+the usual 10 expected unavailable city-date events. Strategy snapshot join
+retained the last complete book batches at 22:09 and 22:19 Beijing time, then
+missed the 22:29, 22:39 and 22:49 publication cycles; the first restored
+snapshot was 22:51. No partial-discovery batch was accepted into a later
+strategy snapshot.
+
+Within `14:08:43Z..14:44:46Z`, Core Carry wrote 101 loop summaries: 62 `ok`,
+36 `error` and three `runtime_state_error`, including 38
+`PolyApiException: Request exception!` records. It created zero entry plans,
+entry attempts, live order rows or execution-journal rows. The 404 maker
+lifecycle rows in this interval were all detached historical retry TTL expiry
+records with no source order id. Fast Source wrote 116 opportunity rows (71
+blocked, 45 source-missing), zero eligible rows and zero order-bearing rows.
+Thus evidenced new order/fill/notional impact is zero. Exact missed-opportunity
+count is not reconstructible because the missing PIT books were never captured;
+research must treat both windows as `market_proxy_transport_coverage_gap`, not
+as evidence of zero opportunities.
+
+Commit `3b539342` implements the repair; candidate market-books release
+`742b5fed` is prepared but not yet deployed. Gamma discovery is now bounded
+eight-way concurrent, retries one transport failure, records attempt/failure
+class, and marks operational discovery loss degraded. CLOB `/books` retries
+transport/408/425/429/5xx failures twice within the existing 240-second budget,
+records attempt lineage, and reports hot/cold success separately. Contract and
+payload errors still fail immediately. The WebSocket client pins its actually
+used 15.0.1 API family and handles a proxy reset before `connection_made`
+through the documented connection factory hook, preventing the misleading
+`recv_messages` callback error while retaining the real reconnect failure.
+
+Before deployment, targeted tests passed 195/195 in the control repository and
+102/102 in the specialized market-books release. The registered checkout was
+returned to loaded SHA `cc6744f4`; controller and strict manifest were healthy
+with zero findings. Close this incident only after the release pin advances,
+the controller restarts `weather_market_books`, and a real post-restart Gamma,
+REST book, WebSocket and downstream snapshot cycle all pass.
+
+## 24. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
