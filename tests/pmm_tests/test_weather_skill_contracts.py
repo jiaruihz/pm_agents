@@ -24,6 +24,10 @@ def test_all_weather_skills_are_routed_and_indexed() -> None:
         assert name in index, name
 
 
+def test_strategy_packages_do_not_define_parallel_model_skills() -> None:
+    assert list((ROOT / "src").glob("**/SKILL.md")) == []
+
+
 def test_deploy_skill_uses_only_canonical_jrs_process_context() -> None:
     text = _read("skills/weather-strategy-deploy/SKILL.md")
 

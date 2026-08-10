@@ -6,8 +6,8 @@ domain: pmm
 is_active: true
 runner_module: src.strategies.pmm.main
 strategy_module: src.strategies.weather_edge_v1.pmm_adapter:WeatherEdgeV1Strategy
-description: 基于 weather-predict 概率信号和 Polymarket 盘口价格差的天气 edge 策略；pm_agent 负责 trade plan、paper/live 执行和风控。
+description: Weather strategy shared execution compatibility pack; production instances and model identity are resolved from production.yaml and the strategy registry.
 meta:
-  signal_source: weather-predict
-  style: probability-edge
+  signal_source: production-contract
+  style: compatibility-pack
   live_default: disabled

@@ -168,6 +168,12 @@ def check_skill_surface(errors: list[str]) -> None:
         if name not in index:
             fail(errors, f"WEATHER_DOCS_INDEX.md: missing skill {name}")
 
+    for path in sorted((ROOT / "src").glob("**/SKILL.md")):
+        fail(
+            errors,
+            f"{path.relative_to(ROOT)}: nested model skill is forbidden; route through skills/",
+        )
+
 
 def check_operational_skill_contracts(errors: list[str]) -> None:
     deploy = read("skills/weather-strategy-deploy/SKILL.md")
