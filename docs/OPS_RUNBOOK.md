@@ -69,12 +69,15 @@ Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁
 `.env`、逐脚本改 `--market-proxy` 或恢复历史独立 failover 进程：
 
 ```bash
-# 只读：代理探测、旧端口残留、12 个 proxy consumer 和全部 managed runtime 健康矩阵
+# 只读检查 default/stable 命名 route、Clash group 与 Gamma/CLOB probe
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py status
 
-# 固定 endpoint 下检查/恢复 Clash 节点；生产 runtime monitor 每 60 秒执行同一命令
-.venv/bin/python scripts/ops/weather_market_proxy_ctl.py maintain-node --apply --confirm-live \
-  --trigger manual --reason "named node recovery"
+# 只读预览 Clash profile enhancement；apply 需在已确认的网络维护窗口
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py gateway-overlay
+
+# 默认 route 连续失败后，有界切换 Allblue selector；runtime monitor 每 60 秒执行
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py maintain --apply --confirm-live \
+  --trigger manual --reason "default route recovery"
 
 # 只有本机 endpoint 本身迁移时才在候选 endpoint 中选择；会重载 consumer
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py auto --apply --confirm-live \
@@ -85,11 +88,14 @@ Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁
   --apply --confirm-live --reason "named proxy switch"
 ```
 
-节点切换由 control-plane release 独占：先对固定 endpoint 连续失败两次，再持有单飞锁遍历
-Clash selector 候选；每个候选必须同时通过 Gamma 与 CLOB probe。endpoint 不变时 consumer
-无需重启，结果写入 node failover state 与 append-only audit。Clash external controller 必须只
-监听 `127.0.0.1:9097`，API secret 来自环境或 macOS Keychain；所有候选失败时恢复原节点并显式报错，
-不 fallback direct。
+业务只调用共享接口：默认 route 使用 `7897`；只有公共 CLOB live execution handoff 指定
+`route_key=stable`，解析到同一 Clash 进程的 `7896` 命名 listener。`PM-STABLE` fallback 组按
+TAG 本机 `7890` → Allblue 顺序自动探测切换，切换不修改业务参数、不重启 consumer。Allblue
+当前 selector 连续失败时，controller 从已有延迟证据中最多尝试 12 个候选，并对每个候选做
+Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit。controller
+通过 Clash 既有 Unix socket `/tmp/verge/verge-mihomo.sock` 读取 group/current node，并分别对
+`7897/7896` 做 Gamma+CLOB probe；不启用 TCP external controller，不创建 API secret，所有上游
+失败时显式报错，不 fallback direct。
 
 endpoint 切换成功条件不是“端口能连”：目标 Gamma probe、切换后新 `market-books` batch、
 manifest、live strategy artifact freshness、全部 consumer 进程和 proxy binding 必须同时通过；

@@ -38,7 +38,10 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as signal_runner  # noqa: E402
 from scripts.ops import weather_current_yes_heat_death_shadow_v1 as weather_state  # noqa: E402
-from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
+from scripts.ops.weather_market_proxy import (  # noqa: E402
+    market_httpx_client,
+    production_market_proxy_url,
+)
 from src.strategies.runtime import runtime_state  # noqa: E402
 from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
     CoreCarryLegacyPlanCompatibility,
@@ -483,8 +486,12 @@ def execute_plans(args: argparse.Namespace, plans: list[dict[str, Any]], output_
         str(output_dir / "live_orders.jsonl"),
         "--no-telegram",
     ]
-    if args.market_proxy is not None:
-        command.extend(["--market-proxy", str(args.market_proxy)])
+    executor_proxy = (
+        str(args.market_proxy)
+        if args.market_proxy is not None
+        else production_market_proxy_url(route_key="stable")
+    )
+    command.extend(["--market-proxy", executor_proxy])
     if args.live:
         command.extend(["--live", "--confirm-live", "--allow-taker", "--cancel-expired"])
     env = os.environ.copy()

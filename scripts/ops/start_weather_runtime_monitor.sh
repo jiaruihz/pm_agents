@@ -69,10 +69,10 @@ while true; do
   fi
   proxy_out="$RUNTIME_DIR/market_proxy_health.out.tmp"
   set +e
-  "$CONTROL_PY" -u "$CONTROL_ROOT/scripts/ops/weather_market_proxy_ctl.py" maintain-node \
+  "$CONTROL_PY" -u "$CONTROL_ROOT/scripts/ops/weather_market_proxy_ctl.py" maintain \
     --apply --confirm-live \
     --trigger weather_runtime_monitor \
-    --reason "automatic proxy node recovery" >"$proxy_out" 2>>"$OUT_FILE"
+    --reason "automatic default route recovery" >"$proxy_out" 2>>"$OUT_FILE"
   proxy_rc=$?
   set -e
   if [[ -s "$proxy_out" ]]; then

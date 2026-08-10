@@ -9,6 +9,8 @@ from typing import Any, Callable
 
 import httpx
 
+from scripts.ops.weather_market_proxy import production_market_proxy_url
+
 PM_CLOB_URL = "https://clob.polymarket.com"
 SHARE_CAP_TOLERANCE = 1e-5
 # CLOB V2 rejected GTD expirations below roughly 180 seconds on 2026-07-15,
@@ -220,6 +222,9 @@ def _build_live_limit_place_fn(
     post_only: bool,
     order_mode: str,
 ):
+    # All live placement factories share one named stable route. The caller's
+    # proxy remains the book-read route; execution routing is owned here.
+    proxy_url = production_market_proxy_url(route_key="stable")
     try:
         from dotenv import load_dotenv
 

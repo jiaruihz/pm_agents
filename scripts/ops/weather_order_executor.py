@@ -24,6 +24,7 @@ from src.strategies.weather_edge_v1.tools.execution_policy import (
     build_execution_quotes,
 )
 from src.strategies.weather_edge_v1.tools.current_yes_core_carry import walk_ask_ladder
+from scripts.ops.weather_market_proxy import production_market_proxy_url
 
 PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
 MARKET_PROXY_ENV_KEYS = (
@@ -1020,7 +1021,10 @@ def main() -> int:
     except ModuleNotFoundError:
         pass
     args = _parser().parse_args()
-    market_proxy = configure_market_proxy_env(args.market_proxy)
+    requested_proxy = args.market_proxy
+    if args.live and not _clean_proxy_value(requested_proxy):
+        requested_proxy = production_market_proxy_url(route_key="stable")
+    market_proxy = configure_market_proxy_env(requested_proxy)
     plan_path = Path(args.plans)
     plans_require_live_cancel = _plans_require_live_cancel(plan_path)
     live_place_fn = (

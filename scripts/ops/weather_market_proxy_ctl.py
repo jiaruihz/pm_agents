@@ -5,20 +5,21 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 from urllib.parse import urlparse
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -31,19 +32,16 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
 
 
-def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+def atomic_write_bytes(path: Path, value: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
-            handle.write("\n")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(value)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
@@ -51,126 +49,14 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
         Path(temporary).unlink(missing_ok=True)
 
 
-def load_env_value(path: Path, key: str) -> str:
-    if not path.exists():
-        return ""
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        name, value = line.split("=", 1)
-        if name.strip() == key:
-            return value.strip().strip('"').strip("'")
-    return ""
-
-
-def controller_secret() -> str:
-    spec = load_production_spec()
-    failover = spec.market_proxy_failover
-    if failover is None:
-        return ""
-    value = os.getenv(failover.controller_secret_env, "").strip()
-    if value:
-        return value
-    if spec.canonical_refresh_checkout_root is not None:
-        value = load_env_value(
-            spec.canonical_refresh_checkout_root / ".env",
-            failover.controller_secret_env,
-        )
-        if value:
-            return value
-    result = subprocess.run(
-        [
-            "/usr/bin/security",
-            "find-generic-password",
-            "-w",
-            "-s",
-            failover.controller_secret_keychain_service,
-            "-a",
-            failover.controller_secret_keychain_account,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=3,
-    )
-    if result.returncode == 0:
-        return (result.stdout or "").strip()
-    return ""
-
-
-def controller_json(
-    path: str,
-    *,
-    method: str = "GET",
-    body: dict[str, Any] | None = None,
-) -> Any:
-    spec = load_production_spec()
-    failover = spec.market_proxy_failover
-    if failover is None:
-        raise RuntimeError("market proxy node failover is not configured")
-    secret = controller_secret()
-    if not secret:
-        raise RuntimeError(
-            f"missing controller secret in {failover.controller_secret_env}"
-        )
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {secret}"}
-    request = urllib.request.Request(
-        failover.controller_url.rstrip("/") + path,
-        data=data,
-        method=method,
-        headers=headers,
-    )
-    with urllib.request.urlopen(request, timeout=5) as response:
-        raw = response.read()
-    return json.loads(raw.decode("utf-8")) if raw else None
-
-
-def node_control_status() -> dict[str, Any]:
-    spec = load_production_spec()
-    failover = spec.market_proxy_failover
-    if failover is None:
-        return {"configured": False, "enabled": False, "reachable": False}
-    base = {
-        "configured": True,
-        "enabled": failover.enabled,
-        "controller_url": failover.controller_url,
-        "group": failover.group,
-    }
-    try:
-        payload = controller_json("/proxies")
-        group = (payload.get("proxies") or {}).get(failover.group) or {}
-        candidates = [str(item) for item in (group.get("all") or []) if str(item)]
-        if not group:
-            raise RuntimeError(f"proxy group not found: {failover.group}")
-        return {
-            **base,
-            "reachable": True,
-            "current_node": str(group.get("now") or ""),
-            "candidate_count": len(candidates),
-            "candidates": candidates,
-        }
-    except Exception as exc:  # noqa: BLE001 - surface controller state without secret.
-        return {
-            **base,
-            "reachable": False,
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-
-
-def switch_node(node: str) -> None:
-    failover = load_production_spec().market_proxy_failover
-    if failover is None:
-        raise RuntimeError("market proxy node failover is not configured")
-    controller_json(
-        "/proxies/" + urllib.parse.quote(failover.group, safe=""),
-        method="PUT",
-        body={"name": node},
-    )
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 @contextmanager
-def failover_lock(path: Path) -> Iterator[bool]:
+def exclusive_lock(path: Path) -> Iterator[bool]:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+", encoding="utf-8") as handle:
         try:
@@ -184,6 +70,373 @@ def failover_lock(path: Path) -> Iterator[bool]:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def gateway_overlay_files() -> tuple[dict[str, Any], list[tuple[Path, bytes]]]:
+    spec = load_production_spec()
+    root = spec.market_proxy_gateway_config_root
+    if root is None:
+        raise RuntimeError("market proxy gateway config root is not configured")
+    profiles_path = root / "profiles.yaml"
+    profiles_payload = yaml.safe_load(profiles_path.read_text(encoding="utf-8")) or {}
+    current_uid = str(profiles_payload.get("current") or "")
+    items = profiles_payload.get("items") or []
+    active = next(
+        (
+            item
+            for item in items
+            if isinstance(item, dict)
+            and str(item.get("uid") or "") == current_uid
+        ),
+        None,
+    )
+    if not active or str(active.get("name") or "") != "Allblue 加速器":
+        raise RuntimeError("active Clash profile must be Allblue 加速器")
+    option = active.get("option") or {}
+    required = {name: str(option.get(name) or "") for name in ("merge", "proxies", "groups")}
+    if not all(required.values()):
+        raise RuntimeError("active Clash profile is missing enhancement file identities")
+
+    paths = {name: root / "profiles" / f"{uid}.yaml" for name, uid in required.items()}
+    payloads = {
+        name: (yaml.safe_load(path.read_text(encoding="utf-8")) or {})
+        for name, path in paths.items()
+    }
+    stable_route = next(
+        route for route in spec.market_proxy_routes if route.route_key == "stable"
+    )
+    upstream = urlparse(spec.market_proxy_stable_upstream_url or "")
+
+    merge = payloads["merge"]
+    listeners = [
+        row
+        for row in (merge.get("listeners") or [])
+        if not isinstance(row, dict) or row.get("name") != "pm-stable-in"
+    ]
+    listeners.append(
+        {
+            "name": "pm-stable-in",
+            "type": "mixed",
+            "listen": "127.0.0.1",
+            "port": urlparse(stable_route.proxy_url).port,
+            "proxy": stable_route.clash_group,
+        }
+    )
+    merge["listeners"] = listeners
+
+    proxies = payloads["proxies"]
+    proxy_prepend = [
+        row
+        for row in (proxies.get("prepend") or [])
+        if not isinstance(row, dict) or row.get("name") != "TAG-LOCAL"
+    ]
+    proxy_prepend.insert(
+        0,
+        {
+            "name": "TAG-LOCAL",
+            "type": upstream.scheme,
+            "server": upstream.hostname,
+            "port": upstream.port,
+        },
+    )
+    proxies.update(
+        {
+            "prepend": proxy_prepend,
+            "append": proxies.get("append") or [],
+            "delete": proxies.get("delete") or [],
+        }
+    )
+
+    groups = payloads["groups"]
+    group_prepend = [
+        row
+        for row in (groups.get("prepend") or [])
+        if not isinstance(row, dict) or row.get("name") != stable_route.clash_group
+    ]
+    default_group = next(
+        route.clash_group for route in spec.market_proxy_routes if route.route_key == "default"
+    )
+    group_prepend.insert(
+        0,
+        {
+            "name": stable_route.clash_group,
+            "type": "fallback",
+            "proxies": ["TAG-LOCAL", default_group],
+            "url": "https://clob.polymarket.com/time",
+            "interval": 60,
+            "lazy": False,
+        },
+    )
+    groups.update(
+        {
+            "prepend": group_prepend,
+            "append": groups.get("append") or [],
+            "delete": groups.get("delete") or [],
+        }
+    )
+
+    outputs = [
+        (
+            paths[name],
+            yaml.safe_dump(payloads[name], allow_unicode=True, sort_keys=False).encode("utf-8"),
+        )
+        for name in ("merge", "proxies", "groups")
+    ]
+    plan = {
+        "schema_version": "weather_market_proxy_gateway_overlay_v1",
+        "active_profile_uid": current_uid,
+        "active_profile_name": active.get("name"),
+        "stable_route": stable_route.route_key,
+        "stable_proxy_url": stable_route.proxy_url,
+        "stable_group": stable_route.clash_group,
+        "files": [
+            {
+                "path": str(path),
+                "before_sha256": sha256_bytes(path.read_bytes()),
+                "after_sha256": sha256_bytes(value),
+                "changed": path.read_bytes() != value,
+            }
+            for path, value in outputs
+        ],
+    }
+    return plan, outputs
+
+
+def apply_gateway_overlay() -> dict[str, Any]:
+    spec = load_production_spec()
+    root = spec.market_proxy_gateway_config_root
+    if root is None:
+        raise RuntimeError("market proxy gateway config root is not configured")
+    plan, outputs = gateway_overlay_files()
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    backup_root = root / "pm_agents_backups" / stamp
+    for path, value in outputs:
+        relative = path.relative_to(root)
+        atomic_write_bytes(backup_root / relative, path.read_bytes())
+        atomic_write_bytes(path, value)
+    return {**plan, "applied": True, "backup_root": str(backup_root)}
+
+
+def controller_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> Any:
+    spec = load_production_spec()
+    socket = spec.market_proxy_controller_unix_socket
+    if socket is None:
+        raise RuntimeError("market proxy controller unix socket is not configured")
+    command = [
+        "/usr/bin/curl",
+        "-sS",
+        "--fail",
+        "--unix-socket",
+        str(socket),
+        "--max-time",
+        "5",
+        "-X",
+        method,
+    ]
+    if body is not None:
+        command.extend(
+            [
+                "-H",
+                "Content-Type: application/json",
+                "--data-binary",
+                json.dumps(body, ensure_ascii=False),
+            ]
+        )
+    command.append("http://localhost" + path)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=8,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            (result.stderr or result.stdout or "controller request failed").strip()
+        )
+    return json.loads(result.stdout) if result.stdout else None
+
+
+def switch_group_node(group: str, node: str) -> None:
+    controller_json(
+        "/proxies/" + urllib.parse.quote(group, safe=""),
+        method="PUT",
+        body={"name": node},
+    )
+
+
+def route_status() -> dict[str, Any]:
+    spec = load_production_spec()
+    base = {
+        "configured": True,
+        "controller_unix_socket": str(spec.market_proxy_controller_unix_socket),
+    }
+    try:
+        payload = controller_json("/proxies")
+        proxies = payload.get("proxies") or {}
+        routes = []
+        for route in spec.market_proxy_routes:
+            group = proxies.get(route.clash_group) or {}
+            routes.append(
+                {
+                    "route_key": route.route_key,
+                    "proxy_url": route.proxy_url,
+                    "clash_group": route.clash_group,
+                    "group_present": bool(group),
+                    "group_type": group.get("type"),
+                    "current_node": group.get("now"),
+                    "probe": probe(route.proxy_url),
+                }
+            )
+        return {
+            **base,
+            "reachable": True,
+            "routes": routes,
+            "healthy": all(row["group_present"] and row["probe"]["ok"] for row in routes),
+        }
+    except Exception as exc:  # noqa: BLE001 - status must surface local controller failure.
+        return {
+            **base,
+            "reachable": False,
+            "healthy": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _default_route_candidates(payload: dict[str, Any]) -> tuple[str, list[str]]:
+    spec = load_production_spec()
+    default_route = next(
+        route for route in spec.market_proxy_routes if route.route_key == "default"
+    )
+    proxies = payload.get("proxies") or {}
+    group = proxies.get(default_route.clash_group) or {}
+    if str(group.get("type") or "").lower() != "selector":
+        raise RuntimeError(
+            f"default Clash group is not a selector: {default_route.clash_group}"
+        )
+    original = str(group.get("now") or "")
+
+    def cached_delay(name: str) -> float:
+        history = (proxies.get(name) or {}).get("history") or []
+        delay = (history[-1].get("delay") if history else 0) or 0
+        return float(delay) if isinstance(delay, (int, float)) and delay > 0 else float("inf")
+
+    excluded = {"", original, "DIRECT", "REJECT", "PASS"}
+    candidates = [
+        str(name)
+        for name in (group.get("all") or [])
+        if str(name) not in excluded
+    ]
+    candidates.sort(key=lambda name: (cached_delay(name), name))
+    return original, candidates
+
+
+def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[str, Any]:
+    spec = load_production_spec()
+    default_route = next(
+        route for route in spec.market_proxy_routes if route.route_key == "default"
+    )
+    initial_probes = [probe(default_route.proxy_url, timeout=5.0)]
+    if initial_probes[-1]["ok"]:
+        return {
+            "status": "healthy",
+            "switched": False,
+            "route_key": "default",
+            "initial_probes": initial_probes,
+        }
+    time.sleep(0.5)
+    initial_probes.append(probe(default_route.proxy_url, timeout=5.0))
+    if initial_probes[-1]["ok"]:
+        return {
+            "status": "recovered_before_switch",
+            "switched": False,
+            "route_key": "default",
+            "initial_probes": initial_probes,
+        }
+
+    payload = controller_json("/proxies")
+    original, candidates = _default_route_candidates(payload)
+    preview = {
+        "status": "switch_required",
+        "switched": False,
+        "route_key": "default",
+        "group": default_route.clash_group,
+        "original_node": original,
+        "candidate_count": len(candidates),
+        "bounded_candidate_count": min(12, len(candidates)),
+        "initial_probes": initial_probes,
+        "apply": apply,
+    }
+    if not apply:
+        return preview
+
+    lock_path = spec.data_feed_runtime_root / "config/market_proxy_route_maintenance.lock"
+    with exclusive_lock(lock_path) as acquired:
+        if not acquired:
+            return {**preview, "status": "already_running"}
+        locked_probe = probe(default_route.proxy_url, timeout=5.0)
+        if locked_probe["ok"]:
+            return {
+                **preview,
+                "status": "recovered_before_switch",
+                "locked_probe": locked_probe,
+            }
+        attempts: list[dict[str, Any]] = []
+        selected = ""
+        for node in candidates[:12]:
+            try:
+                switch_group_node(default_route.clash_group, node)
+                time.sleep(0.4)
+                result = probe(default_route.proxy_url, timeout=5.0)
+                attempts.append({"node": node, "probe": result})
+                if result["ok"]:
+                    selected = node
+                    break
+            except Exception as exc:  # noqa: BLE001 - try the next declared candidate.
+                attempts.append(
+                    {"node": node, "error": f"{type(exc).__name__}: {exc}"}
+                )
+        restored = False
+        if not selected and original:
+            try:
+                switch_group_node(default_route.clash_group, original)
+                restored = True
+            except Exception as exc:  # noqa: BLE001 - preserve failed rollback evidence.
+                attempts.append(
+                    {
+                        "node": original,
+                        "restore_error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+        audit = {
+            "schema_version": "weather_market_proxy_route_switch_v1",
+            "ts_utc": utc_now(),
+            "reason": reason,
+            "trigger": trigger,
+            "route_key": "default",
+            "group": default_route.clash_group,
+            "before_node": original,
+            "selected_node": selected,
+            "restored_original": restored,
+            "attempts": attempts,
+        }
+        audit_path = (
+            spec.data_feed_runtime_root
+            / "output/market_proxy_control/route_switches.jsonl"
+        )
+        append_jsonl(audit_path, audit)
+        if not selected:
+            raise RuntimeError(f"no healthy default route candidate: {audit}")
+        return {
+            **preview,
+            "status": "switched",
+            "switched": True,
+            "selected_node": selected,
+            "attempts": attempts,
+            "audit_path": str(audit_path),
+        }
 def validate_proxy_url(value: str) -> str:
     parsed = urlparse(value.strip())
     if parsed.scheme not in {"http", "socks5", "socks5h"} or not parsed.hostname or not parsed.port:
@@ -246,122 +499,6 @@ def probe(proxy_url: str, timeout: float = 8.0) -> dict:
             "error": (result.stderr or "").strip()[:240],
         })
     return {"ok": all(row["ok"] for row in checks), "checks": checks}
-
-
-def confirmed_proxy_failure(proxy_url: str) -> tuple[bool, list[dict[str, Any]]]:
-    failover = load_production_spec().market_proxy_failover
-    confirmations = failover.failure_confirmations if failover is not None else 1
-    timeout = failover.probe_timeout_sec if failover is not None else 8.0
-    checks: list[dict[str, Any]] = []
-    for index in range(confirmations):
-        result = probe(proxy_url, timeout=timeout)
-        checks.append(result)
-        if result["ok"]:
-            return False, checks
-        if index + 1 < confirmations:
-            time.sleep(0.5)
-    return True, checks
-
-
-def recover_node(*, apply: bool, reason: str, trigger: str) -> dict[str, Any]:
-    spec = load_production_spec()
-    failover = spec.market_proxy_failover
-    if failover is None:
-        raise RuntimeError("market proxy node failover is not configured")
-    proxy_url = read_state()["proxy_url"]
-    initial_failed, initial_probes = confirmed_proxy_failure(proxy_url)
-    preview: dict[str, Any] = {
-        "action": "maintain_node",
-        "reason": reason,
-        "trigger": trigger,
-        "proxy_url": proxy_url,
-        "initial_probes": initial_probes,
-        "apply": apply,
-    }
-    if not initial_failed:
-        return {**preview, "status": "healthy", "switched": False}
-    control = node_control_status()
-    preview["node_control"] = control
-    if not apply:
-        return {**preview, "status": "switch_required", "switched": False}
-    if not failover.enabled:
-        raise RuntimeError("market proxy automatic node failover is disabled")
-    if not control.get("reachable"):
-        raise RuntimeError(f"market proxy node controller unavailable: {control}")
-
-    with failover_lock(failover.lock_path) as acquired:
-        if not acquired:
-            return {**preview, "status": "already_running", "switched": False}
-        failed_under_lock, locked_probes = confirmed_proxy_failure(proxy_url)
-        if not failed_under_lock:
-            return {
-                **preview,
-                "status": "recovered_before_switch",
-                "switched": False,
-                "locked_probes": locked_probes,
-            }
-        control = node_control_status()
-        if not control.get("reachable"):
-            raise RuntimeError(f"market proxy node controller unavailable: {control}")
-        original = str(control.get("current_node") or "")
-        candidates = [
-            str(item)
-            for item in (control.get("candidates") or [])
-            if str(item) and str(item) != original and str(item) not in {"DIRECT", "REJECT"}
-        ]
-        attempts: list[dict[str, Any]] = []
-        selected = ""
-        for node in candidates:
-            try:
-                switch_node(node)
-                time.sleep(failover.settle_sec)
-                result = probe(proxy_url, timeout=failover.probe_timeout_sec)
-                attempts.append({"node": node, "probe": result})
-                if result["ok"]:
-                    selected = node
-                    break
-            except Exception as exc:  # noqa: BLE001 - continue through declared candidates.
-                attempts.append(
-                    {"node": node, "error": f"{type(exc).__name__}: {exc}"}
-                )
-        restored = False
-        if not selected and original:
-            try:
-                switch_node(original)
-                restored = True
-            except Exception as exc:  # noqa: BLE001 - report failed rollback explicitly.
-                attempts.append(
-                    {
-                        "node": original,
-                        "restore_error": f"{type(exc).__name__}: {exc}",
-                    }
-                )
-        row = {
-            "schema_version": "weather_market_proxy_node_failover_v1",
-            "ts_utc": utc_now(),
-            "status": "switched" if selected else "failed",
-            "reason": reason,
-            "trigger": trigger,
-            "proxy_url": proxy_url,
-            "before_node": original,
-            "selected_node": selected,
-            "restored_original": restored,
-            "attempts": attempts,
-        }
-        append_jsonl(failover.audit_path, row)
-        atomic_write_json(failover.state_path, row)
-        if not selected:
-            raise RuntimeError(f"no healthy market proxy node: {row}")
-        return {
-            **preview,
-            "status": "switched",
-            "switched": True,
-            "before_node": original,
-            "selected_node": selected,
-            "attempts": attempts,
-            "locked_probes": locked_probes,
-            "audit_path": str(failover.audit_path),
-        }
 
 
 def consumers() -> list:
@@ -472,20 +609,10 @@ def wait_for_chain(proxy_url: str, *, not_before: float, timeout_sec: float = 36
 
 
 def status_payload() -> dict:
-    spec = load_production_spec()
     state = read_state()
     url = state["proxy_url"]
-    failover_state: dict[str, Any] = {}
-    if spec.market_proxy_failover is not None and spec.market_proxy_failover.state_path.exists():
-        try:
-            loaded = json.loads(spec.market_proxy_failover.state_path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                failover_state = loaded
-        except Exception as exc:  # noqa: BLE001 - status must surface corrupt state.
-            failover_state = {"parse_error": f"{type(exc).__name__}: {exc}"}
     return {"state": state, "probe": probe(url),
-            "node_control": node_control_status(),
-            "node_failover_state": failover_state,
+            "route_control": route_status(),
             "consumers": [item.instance_id for item in consumers()],
             "process_mismatches": process_mismatches(url),
             "chain_health": chain_health()}
@@ -514,6 +641,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
+    gateway = sub.add_parser("gateway-overlay")
+    gateway.add_argument("--apply", action="store_true")
+    gateway.add_argument("--confirm-network-change", action="store_true")
+    maintain = sub.add_parser("maintain")
+    maintain.add_argument("--apply", action="store_true")
+    maintain.add_argument("--confirm-live", action="store_true")
+    maintain.add_argument("--reason", required=True)
+    maintain.add_argument("--trigger", default="manual")
     switch = sub.add_parser("switch")
     switch.add_argument("proxy_url")
     switch.add_argument("--apply", action="store_true")
@@ -524,39 +659,49 @@ def main() -> int:
     auto.add_argument("--apply", action="store_true")
     auto.add_argument("--confirm-live", action="store_true")
     auto.add_argument("--reason", required=True)
-    maintain = sub.add_parser("maintain-node")
-    maintain.add_argument("--apply", action="store_true")
-    maintain.add_argument("--confirm-live", action="store_true")
-    maintain.add_argument("--reason", required=True)
-    maintain.add_argument("--trigger", default="manual")
     args = parser.parse_args()
-    if args.command == "status":
-        payload = status_payload()
-        payload["health_artifact"] = str(publish_health(payload))
+    if args.command == "gateway-overlay":
+        if args.apply:
+            if not args.confirm_network_change:
+                raise SystemExit(
+                    "gateway overlay changes persistent local network routing; "
+                    "--confirm-network-change is required"
+                )
+            payload = apply_gateway_overlay()
+        else:
+            payload, _ = gateway_overlay_files()
+            payload["applied"] = False
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-        chain = payload["chain_health"]
-        node_control = payload["node_control"]
-        return 0 if (payload["probe"]["ok"] and not payload["process_mismatches"]
-                     and (not node_control.get("enabled") or node_control.get("reachable"))
-                     and chain["manifest_status"] == "healthy"
-                     and not chain["blocking_consumers"]) else 1
-
-    if args.command == "maintain-node":
-        if args.apply and any(x.expected_live for x in consumers()) and not args.confirm_live:
-            raise SystemExit("node failover affects live traffic; --confirm-live is required")
-        result = recover_node(
+        return 0
+    if args.command == "maintain":
+        if args.apply and any(item.expected_live for item in consumers()) and not args.confirm_live:
+            raise SystemExit("route maintenance affects live traffic; --confirm-live is required")
+        maintenance = maintain_default_route(
             apply=bool(args.apply),
             reason=str(args.reason),
             trigger=str(args.trigger),
         )
         payload = status_payload()
-        payload["maintenance"] = result
+        payload["maintenance"] = maintenance
         payload["health_artifact"] = str(publish_health(payload))
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-        node_control = payload["node_control"]
-        return 0 if result["status"] in {
-            "healthy", "switched", "recovered_before_switch", "already_running"
-        } and (not node_control.get("enabled") or node_control.get("reachable")) else 1
+        route_control = payload["route_control"]
+        return 0 if maintenance["status"] in {
+            "healthy",
+            "recovered_before_switch",
+            "switched",
+            "already_running",
+        } and route_control.get("healthy") else 1
+    if args.command == "status":
+        payload = status_payload()
+        payload["health_artifact"] = str(publish_health(payload))
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        chain = payload["chain_health"]
+        route_control = payload["route_control"]
+        return 0 if (payload["probe"]["ok"] and not payload["process_mismatches"]
+                     and route_control.get("healthy")
+                     and chain["manifest_status"] == "healthy"
+                     and not chain["blocking_consumers"]) else 1
 
     if args.command == "auto":
         candidate_urls = args.candidates or [read_state()["proxy_url"]]

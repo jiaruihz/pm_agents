@@ -4,10 +4,7 @@ import pytest
 
 from scripts.ops import weather_market_proxy_ctl as ctl
 from scripts.ops import weather_market_proxy as shared
-from src.strategies.runtime.production import (
-    WeatherMarketProxyFailoverSpec,
-    load_production_spec,
-)
+from src.strategies.runtime.production import load_production_spec
 
 
 def test_proxy_url_validation():
@@ -28,6 +25,16 @@ def test_shared_proxy_resolves_controller_state_not_legacy_aliases(tmp_path, mon
 
     assert shared.market_proxy_url(None, env={"WEATHER_PREDICT_MARKET_PROXY": "http://127.0.0.1:9999"}) == "http://127.0.0.1:17897"
     assert shared.market_proxy_url(None, env={"WEATHER_DATA_FEED_MARKET_PROXY": "http://127.0.0.1:8888"}) == "http://127.0.0.1:8888"
+    assert shared.market_proxy_url(
+        None,
+        env={"WEATHER_DATA_FEED_MARKET_PROXY": "http://127.0.0.1:8888"},
+        default="http://127.0.0.1:7777",
+        route_key="stable",
+    ) == "http://127.0.0.1:7896"
+    assert shared.market_proxy_url(
+        "http://127.0.0.1:6666",
+        route_key="stable",
+    ) == "http://127.0.0.1:6666"
 
 
 def test_proxy_probe_requires_gamma_and_clob(monkeypatch):
@@ -60,149 +67,157 @@ def test_proxy_consumers_come_only_from_production_manifest():
     assert ctl.consumers()[0].instance_id == "weather_market_books"
 
 
-def failover_spec(tmp_path: Path) -> WeatherMarketProxyFailoverSpec:
-    return WeatherMarketProxyFailoverSpec(
-        enabled=True,
-        controller_url="http://127.0.0.1:19097",
-        group="market-group",
-        controller_secret_env="TEST_PROXY_SECRET",
-        controller_secret_keychain_service="test.weather.proxy",
-        controller_secret_keychain_account="tester",
-        state_path=tmp_path / "config/node.json",
-        audit_path=tmp_path / "output/node.jsonl",
-        lock_path=tmp_path / "config/node.lock",
-        probe_timeout_sec=0.1,
-        failure_confirmations=2,
-        settle_sec=0.0,
-    )
-
-
-def test_node_control_status_reports_current_group(monkeypatch):
+def test_route_status_reports_all_named_groups(monkeypatch):
     monkeypatch.setattr(
         ctl,
         "controller_json",
-        lambda path, **kwargs: {
+        lambda path: {
             "proxies": {
-                "🙂 TAGSS": {
+                "Allblue 加速器": {
                     "type": "Selector",
                     "now": "node-a",
                     "all": ["node-a", "node-b"],
-                }
+                },
+                "PM-STABLE": {
+                    "type": "Fallback",
+                    "now": "TAG-LOCAL",
+                    "all": ["TAG-LOCAL", "Allblue 加速器"],
+                },
             }
         },
     )
-
-    result = ctl.node_control_status()
-
-    assert result["reachable"] is True
-    assert result["current_node"] == "node-a"
-    assert result["candidate_count"] == 2
-
-
-def test_recover_node_switches_to_first_fully_healthy_candidate(tmp_path, monkeypatch):
-    spec = __import__("dataclasses").replace(
-        load_production_spec(),
-        data_feed_runtime_root=tmp_path,
-        market_proxy_state_path=tmp_path / "config/market_proxy.json",
-        market_proxy_failover=failover_spec(tmp_path),
-    )
-    spec.market_proxy_state_path.parent.mkdir(parents=True)
-    spec.market_proxy_state_path.write_text(
-        '{"proxy_url":"http://127.0.0.1:17897"}\n', encoding="utf-8"
-    )
-    monkeypatch.setattr(ctl, "load_production_spec", lambda: spec)
-    failures = iter(((True, [{"ok": False}]), (True, [{"ok": False}])))
-    monkeypatch.setattr(ctl, "confirmed_proxy_failure", lambda proxy: next(failures))
     monkeypatch.setattr(
         ctl,
-        "node_control_status",
-        lambda: {
-            "configured": True,
-            "enabled": True,
-            "reachable": True,
-            "current_node": "node-a",
-            "candidates": ["node-a", "node-b", "node-c"],
-        },
+        "probe",
+        lambda proxy_url, timeout=8.0: {"ok": True, "checks": []},
     )
+
+    result = ctl.route_status()
+
+    assert result["reachable"] is True
+    assert result["healthy"] is True
+    assert {row["route_key"] for row in result["routes"]} == {"default", "stable"}
+    stable = next(row for row in result["routes"] if row["route_key"] == "stable")
+    assert stable["current_node"] == "TAG-LOCAL"
+
+
+def test_gateway_overlay_targets_active_allblue_enhancements(tmp_path, monkeypatch):
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    (tmp_path / "profiles.yaml").write_text(
+        "current: active\n"
+        "items:\n"
+        "  - uid: active\n"
+        "    type: remote\n"
+        "    name: Allblue 加速器\n"
+        "    option:\n"
+        "      merge: merge-id\n"
+        "      proxies: proxy-id\n"
+        "      groups: group-id\n",
+        encoding="utf-8",
+    )
+    (profiles / "merge-id.yaml").write_text("profile:\n  store-selected: true\n", encoding="utf-8")
+    for name in ("proxy-id", "group-id"):
+        (profiles / f"{name}.yaml").write_text(
+            "prepend: []\nappend: []\ndelete: []\n", encoding="utf-8"
+        )
+    spec = __import__("dataclasses").replace(
+        load_production_spec(), market_proxy_gateway_config_root=tmp_path
+    )
+    monkeypatch.setattr(ctl, "load_production_spec", lambda: spec)
+
+    plan, outputs = ctl.gateway_overlay_files()
+
+    assert plan["active_profile_name"] == "Allblue 加速器"
+    assert plan["stable_proxy_url"] == "http://127.0.0.1:7896"
+    by_name = {path.name: value.decode("utf-8") for path, value in outputs}
+    assert "pm-stable-in" in by_name["merge-id.yaml"]
+    assert "TAG-LOCAL" in by_name["proxy-id.yaml"]
+    assert "PM-STABLE" in by_name["group-id.yaml"]
+    assert "Allblue 加速器" in by_name["group-id.yaml"]
+
+
+def test_gateway_overlay_apply_requires_network_confirmation(monkeypatch):
+    monkeypatch.setattr(
+        ctl.sys,
+        "argv",
+        ["weather_market_proxy_ctl.py", "gateway-overlay", "--apply"],
+    )
+
+    with pytest.raises(SystemExit, match="--confirm-network-change is required"):
+        ctl.main()
+
+
+def test_default_route_maintenance_switches_to_verified_candidate(tmp_path, monkeypatch):
+    spec = __import__("dataclasses").replace(
+        load_production_spec(), data_feed_runtime_root=tmp_path
+    )
+    monkeypatch.setattr(ctl, "load_production_spec", lambda: spec)
+    payload = {
+        "proxies": {
+            "Allblue 加速器": {
+                "type": "Selector",
+                "now": "node-a",
+                "all": ["node-a", "node-b", "node-c", "DIRECT"],
+            },
+            "node-b": {"history": [{"delay": 500}]},
+            "node-c": {"history": [{"delay": 200}]},
+        }
+    }
+    monkeypatch.setattr(ctl, "controller_json", lambda path, **kwargs: payload)
     selected = {"node": "node-a"}
     switches = []
 
-    def switch(node):
+    def switch(group, node):
+        assert group == "Allblue 加速器"
         selected["node"] = node
         switches.append(node)
 
-    monkeypatch.setattr(ctl, "switch_node", switch)
-    monkeypatch.setattr(
-        ctl,
-        "probe",
-        lambda proxy, timeout=8.0: {"ok": selected["node"] == "node-b", "checks": []},
-    )
+    monkeypatch.setattr(ctl, "switch_group_node", switch)
+    monkeypatch.setattr(ctl.time, "sleep", lambda seconds: None)
+    calls = {"count": 0}
 
-    result = ctl.recover_node(apply=True, reason="test", trigger="unit")
+    def fake_probe(proxy_url, timeout=8.0):
+        calls["count"] += 1
+        return {
+            "ok": calls["count"] > 3 and selected["node"] == "node-c",
+            "checks": [],
+        }
+
+    monkeypatch.setattr(ctl, "probe", fake_probe)
+
+    result = ctl.maintain_default_route(
+        apply=True,
+        reason="test",
+        trigger="unit",
+    )
 
     assert result["status"] == "switched"
-    assert result["before_node"] == "node-a"
-    assert result["selected_node"] == "node-b"
-    assert switches == ["node-b"]
-    state = __import__("json").loads(spec.market_proxy_failover.state_path.read_text())
-    assert state["selected_node"] == "node-b"
-    assert spec.market_proxy_failover.audit_path.read_text().count("\n") == 1
+    assert result["selected_node"] == "node-c"
+    assert switches == ["node-c"]
+    audit = tmp_path / "output/market_proxy_control/route_switches.jsonl"
+    assert audit.exists()
+    assert '"selected_node": "node-c"' in audit.read_text(encoding="utf-8")
 
 
-def test_recover_node_restores_original_when_all_candidates_fail(tmp_path, monkeypatch):
-    spec = __import__("dataclasses").replace(
-        load_production_spec(),
-        data_feed_runtime_root=tmp_path,
-        market_proxy_state_path=tmp_path / "config/market_proxy.json",
-        market_proxy_failover=failover_spec(tmp_path),
-    )
-    spec.market_proxy_state_path.parent.mkdir(parents=True)
-    spec.market_proxy_state_path.write_text(
-        '{"proxy_url":"http://127.0.0.1:17897"}\n', encoding="utf-8"
-    )
-    monkeypatch.setattr(ctl, "load_production_spec", lambda: spec)
+def test_route_maintenance_apply_requires_live_confirmation(monkeypatch):
     monkeypatch.setattr(
-        ctl,
-        "confirmed_proxy_failure",
-        lambda proxy: (True, [{"ok": False}]),
+        ctl.sys,
+        "argv",
+        [
+            "weather_market_proxy_ctl.py",
+            "maintain",
+            "--apply",
+            "--reason",
+            "test",
+        ],
     )
-    monkeypatch.setattr(
-        ctl,
-        "node_control_status",
-        lambda: {
-            "configured": True,
-            "enabled": True,
-            "reachable": True,
-            "current_node": "node-a",
-            "candidates": ["node-a", "node-b", "node-c"],
-        },
-    )
-    switches = []
-    monkeypatch.setattr(ctl, "switch_node", lambda node: switches.append(node))
-    monkeypatch.setattr(
-        ctl,
-        "probe",
-        lambda proxy, timeout=8.0: {"ok": False, "checks": []},
-    )
-
-    with pytest.raises(RuntimeError, match="no healthy market proxy node"):
-        ctl.recover_node(apply=True, reason="test", trigger="unit")
-
-    assert switches == ["node-b", "node-c", "node-a"]
-    state = __import__("json").loads(spec.market_proxy_failover.state_path.read_text())
-    assert state["status"] == "failed"
-    assert state["restored_original"] is True
-
-
-def test_maintain_node_requires_live_confirmation(monkeypatch):
-    monkeypatch.setattr(ctl.sys, "argv", [
-        "weather_market_proxy_ctl.py", "maintain-node", "--apply", "--reason", "test"
-    ])
     monkeypatch.setattr(
         ctl,
         "consumers",
         lambda: [type("Consumer", (), {"expected_live": True})()],
     )
+
     with pytest.raises(SystemExit, match="--confirm-live is required"):
         ctl.main()
 
@@ -260,7 +275,7 @@ def test_publish_health_is_atomic_and_machine_readable(tmp_path, monkeypatch):
 def test_runtime_monitor_refreshes_proxy_health_matrix():
     root = Path(__file__).resolve().parents[2]
     text = (root / "scripts/ops/start_weather_runtime_monitor.sh").read_text(encoding="utf-8")
-    assert 'weather_market_proxy_ctl.py" maintain-node' in text
+    assert 'weather_market_proxy_ctl.py" maintain' in text
     assert "--apply --confirm-live" in text
     assert "weather_runtime_monitor" in text
     assert "market_proxy_health_failed_utc" in text

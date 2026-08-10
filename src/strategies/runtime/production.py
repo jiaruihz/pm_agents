@@ -64,19 +64,10 @@ class WeatherManagedRuntimeSpec:
 
 
 @dataclass(frozen=True)
-class WeatherMarketProxyFailoverSpec:
-    enabled: bool
-    controller_url: str
-    group: str
-    controller_secret_env: str
-    controller_secret_keychain_service: str
-    controller_secret_keychain_account: str
-    state_path: Path
-    audit_path: Path
-    lock_path: Path
-    probe_timeout_sec: float = 5.0
-    failure_confirmations: int = 2
-    settle_sec: float = 0.4
+class WeatherMarketProxyRouteSpec:
+    route_key: str
+    proxy_url: str
+    clash_group: str
 
 
 @dataclass(frozen=True)
@@ -92,7 +83,10 @@ class WeatherProductionSpec:
     canonical_tmux_binary: Path
     market_proxy_state_path: Path
     market_proxy_default_url: str
-    market_proxy_failover: WeatherMarketProxyFailoverSpec | None = None
+    market_proxy_controller_unix_socket: Path | None = None
+    market_proxy_routes: tuple[WeatherMarketProxyRouteSpec, ...] = ()
+    market_proxy_gateway_config_root: Path | None = None
+    market_proxy_stable_upstream_url: str | None = None
     market_books_root: Path | None = None
     strategy_snapshot_root: Path | None = None
     market_ladder_snapshot_root: Path | None = None
@@ -322,34 +316,20 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError(
             f"unknown canonical_refresh_release_id: {canonical_refresh_release_id}"
         )
-    failover_raw = raw.get("market_proxy_node_failover")
-    if failover_raw is not None and not isinstance(failover_raw, dict):
-        raise ValueError("market_proxy_node_failover must be a mapping")
-    failover = None
-    if failover_raw:
-        failover = WeatherMarketProxyFailoverSpec(
-            enabled=bool(failover_raw.get("enabled", False)),
-            controller_url=str(failover_raw["controller_url"]).rstrip("/"),
-            group=str(failover_raw["group"]),
-            controller_secret_env=str(
-                failover_raw.get("controller_secret_env")
-                or "WEATHER_MARKET_PROXY_CONTROLLER_SECRET"
-            ),
-            controller_secret_keychain_service=str(
-                failover_raw.get("controller_secret_keychain_service")
-                or "pm_agents.weather_market_proxy_controller"
-            ),
-            controller_secret_keychain_account=str(
-                failover_raw.get("controller_secret_keychain_account")
-                or "weather-controller"
-            ),
-            state_path=Path(failover_raw["state_path"]),
-            audit_path=Path(failover_raw["audit_path"]),
-            lock_path=Path(failover_raw["lock_path"]),
-            probe_timeout_sec=float(failover_raw.get("probe_timeout_sec", 5.0)),
-            failure_confirmations=int(failover_raw.get("failure_confirmations", 2)),
-            settle_sec=float(failover_raw.get("settle_sec", 0.4)),
+    routes_raw = raw.get("market_proxy_routes") or {}
+    if not isinstance(routes_raw, dict):
+        raise ValueError("market_proxy_routes must be a mapping")
+    routes = tuple(
+        WeatherMarketProxyRouteSpec(
+            route_key=str(route_key),
+            proxy_url=str(route_raw["proxy_url"]),
+            clash_group=str(route_raw["clash_group"]),
         )
+        for route_key, route_raw in routes_raw.items()
+        if isinstance(route_raw, dict)
+    )
+    if len(routes) != len(routes_raw):
+        raise ValueError("market_proxy_routes values must be mappings")
     spec = WeatherProductionSpec(
         version=str(raw["version"]),
         host_role=str(raw["host_role"]),
@@ -362,7 +342,22 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         canonical_tmux_binary=Path(raw["canonical_tmux_binary"]),
         market_proxy_state_path=Path(raw["market_proxy_state_path"]),
         market_proxy_default_url=str(raw["market_proxy_default_url"]),
-        market_proxy_failover=failover,
+        market_proxy_controller_unix_socket=(
+            Path(raw["market_proxy_controller_unix_socket"])
+            if raw.get("market_proxy_controller_unix_socket")
+            else None
+        ),
+        market_proxy_routes=routes,
+        market_proxy_gateway_config_root=(
+            Path(raw["market_proxy_gateway_config_root"])
+            if raw.get("market_proxy_gateway_config_root")
+            else None
+        ),
+        market_proxy_stable_upstream_url=(
+            str(raw["market_proxy_stable_upstream_url"])
+            if raw.get("market_proxy_stable_upstream_url")
+            else None
+        ),
         market_books_root=(
             Path(raw["market_books_root"]) if raw.get("market_books_root") else None
         ),
@@ -489,41 +484,35 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("canonical_refresh_checkout_root must be absolute")
     if spec.canonical_db_path.parent != spec.pm_runtime_root:
         raise ValueError("canonical_db_path must live directly under pm_runtime_root")
-    if spec.market_proxy_failover is not None:
-        failover = spec.market_proxy_failover
-        controller_url = urlparse(failover.controller_url)
+    if (
+        spec.market_proxy_controller_unix_socket is None
+        or not spec.market_proxy_controller_unix_socket.is_absolute()
+    ):
+        raise ValueError("market proxy controller unix socket must be absolute")
+    route_keys = {route.route_key for route in spec.market_proxy_routes}
+    if "default" not in route_keys or len(route_keys) != len(spec.market_proxy_routes):
+        raise ValueError("market proxy routes require unique keys including default")
+    for route in spec.market_proxy_routes:
+        parsed = urlparse(route.proxy_url)
         if (
-            controller_url.scheme != "http"
-            or controller_url.hostname != "127.0.0.1"
-            or controller_url.port is None
-            or controller_url.username is not None
-            or controller_url.password is not None
-            or controller_url.path not in {"", "/"}
-            or controller_url.query
-            or controller_url.fragment
+            parsed.scheme not in {"http", "socks5", "socks5h"}
+            or parsed.hostname != "127.0.0.1"
+            or parsed.port is None
+            or not route.clash_group.strip()
         ):
-            raise ValueError("market proxy node controller must be loopback HTTP")
-        if not failover.group.strip():
-            raise ValueError("market proxy node failover group is required")
-        if (
-            not failover.controller_secret_env.strip()
-            or not failover.controller_secret_keychain_service.strip()
-            or not failover.controller_secret_keychain_account.strip()
-        ):
-            raise ValueError("market proxy node controller secret identity is required")
-        if failover.failure_confirmations < 1:
-            raise ValueError("market proxy failure_confirmations must be >= 1")
-        if failover.probe_timeout_sec <= 0 or failover.settle_sec < 0:
-            raise ValueError("market proxy node failover timings must be non-negative")
-        for name, path in {
-            "state_path": failover.state_path,
-            "audit_path": failover.audit_path,
-            "lock_path": failover.lock_path,
-        }.items():
-            if not path.is_absolute() or not path.is_relative_to(spec.data_feed_runtime_root):
-                raise ValueError(
-                    f"market proxy node failover {name} must live under data_feed_runtime_root"
-                )
+            raise ValueError(f"invalid market proxy route: {route.route_key}")
+    if (
+        spec.market_proxy_gateway_config_root is None
+        or not spec.market_proxy_gateway_config_root.is_absolute()
+    ):
+        raise ValueError("market proxy gateway config root must be absolute")
+    stable_upstream = urlparse(spec.market_proxy_stable_upstream_url or "")
+    if (
+        stable_upstream.scheme not in {"http", "socks5", "socks5h"}
+        or stable_upstream.hostname != "127.0.0.1"
+        or stable_upstream.port is None
+    ):
+        raise ValueError("market proxy stable upstream must be loopback")
     if not spec.research_artifact_root.is_absolute():
         raise ValueError("research_artifact_root must be absolute")
     research_owner = spec.archive_storage_root / "pm_agents/research"
