@@ -1,10 +1,15 @@
 import json
+import asyncio
 from datetime import datetime, timedelta, timezone
+
+from websockets.client import ClientProtocol
+from websockets.uri import parse_uri
 
 from weather_data_feed_service.market_books_ws import (
     Collector,
     DEFAULT_CITIES,
     HourlyWriter,
+    PreTransportSafeClientConnection,
     Selection,
     SourceEventCursor,
     build_parser,
@@ -14,6 +19,20 @@ from weather_data_feed_service.market_books_ws import (
 
 
 NOW = datetime(2026, 8, 9, 3, 0, tzinfo=timezone.utc)
+
+
+def test_proxy_reset_before_transport_initialization_closes_cleanly() -> None:
+    async def exercise() -> None:
+        connection = PreTransportSafeClientConnection(
+            ClientProtocol(parse_uri("wss://example.com/ws"))
+        )
+        error = ConnectionResetError("proxy reset")
+        connection.connection_lost(error)
+
+        assert connection.connection_lost_waiter.done()
+        assert connection.recv_exc is error
+
+    asyncio.run(exercise())
 
 
 def test_default_microstructure_rollout_excludes_seoul() -> None:

@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 
 from weather_data_feed.models import ObservationRecord
@@ -239,6 +240,83 @@ def test_paper_snapshot_batch_fetches_token_orderbooks(monkeypatch, tmp_path) ->
     assert result["yes-token"][0]["city"] == "Shanghai"
     assert result["yes-token"][1]["summary"]["best_ask"] == 0.5
     assert sorted(seen) == [("no-token", 5), ("yes-token", 5)]
+
+
+def test_paper_snapshot_batch_retries_transient_proxy_failure(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+    monkeypatch.setattr(paper_snapshot, "ORDERBOOK_BATCH_RETRIES", 2)
+    monkeypatch.setattr(paper_snapshot, "ORDERBOOK_BATCH_RETRY_BACKOFF_SEC", 0)
+
+    class FlakyClient:
+        attempts = 0
+
+        def post(self, url, *, json, timeout):
+            self.attempts += 1
+            request = httpx.Request("POST", url)
+            if self.attempts < 3:
+                raise httpx.ConnectTimeout("proxy handshake timeout", request=request)
+            return httpx.Response(
+                200,
+                request=request,
+                json=[
+                    {
+                        "asset_id": row["token_id"],
+                        "bids": [],
+                        "asks": [],
+                        "timestamp": "1",
+                        "hash": row["token_id"],
+                    }
+                    for row in json
+                ],
+            )
+
+    client = FlakyClient()
+    rows = {"hot-token": {"capture_priority": "hot", "token_id": "hot-token"}}
+    result = paper_snapshot.fetch_token_orderbook_batch(client, rows)
+    book = result["hot-token"][1]
+
+    assert client.attempts == 3
+    assert book["status"] == "ok"
+    assert book["request_attempt_count"] == 3
+    assert book["prior_attempt_errors"] == [
+        "ConnectTimeout: proxy handshake timeout",
+        "ConnectTimeout: proxy handshake timeout",
+    ]
+
+
+def test_paper_snapshot_batch_does_not_retry_contract_error(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+    monkeypatch.setattr(paper_snapshot, "ORDERBOOK_BATCH_RETRIES", 2)
+    monkeypatch.setattr(paper_snapshot, "ORDERBOOK_BATCH_RETRY_BACKOFF_SEC", 0)
+
+    class InvalidPayloadClient:
+        attempts = 0
+
+        def post(self, url, *, json, timeout):
+            self.attempts += 1
+            return httpx.Response(200, request=httpx.Request("POST", url), json={})
+
+    client = InvalidPayloadClient()
+    rows = {"hot-token": {"capture_priority": "hot", "token_id": "hot-token"}}
+    result = paper_snapshot.fetch_token_orderbook_batch(client, rows)
+    book = result["hot-token"][1]
+
+    assert client.attempts == 1
+    assert book["status"] == "batch_error"
+    assert book["request_attempt_count"] == 1
+    assert book["error_retryable"] is False
 
 
 def test_paper_snapshot_strategy_live_orderbook_scope_covers_active_strategy_legs(monkeypatch, tmp_path) -> None:

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import websockets
+from websockets.asyncio.client import ClientConnection
 
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
 from weather_data_feed.source_lineage import producer_build_id
@@ -37,6 +38,29 @@ PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
 )
 CLOB_WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 DEFAULT_CITIES = ("Amsterdam", "Tokyo", "Helsinki", "Busan")
+
+
+class PreTransportSafeClientConnection(ClientConnection):
+    """Close cleanly when a proxy resets before ``connection_made``.
+
+    websockets 15.0.1 initializes ``recv_messages`` only in connection_made(),
+    but asyncio can deliver connection_lost() first when a CONNECT/TLS proxy
+    path is reset.  Its default callback then raises AttributeError and hides
+    the actual transport failure.  ``create_connection`` is the documented
+    customization hook; remove this guard after the dependency moves to a
+    version whose base class handles the pre-transport close itself.
+    """
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        if hasattr(self, "recv_messages"):
+            super().connection_lost(exc)
+            return
+        self.protocol.receive_eof()
+        self.set_recv_exc(exc)
+        if self.keepalive_task is not None:
+            self.keepalive_task.cancel()
+        if not self.connection_lost_waiter.done():
+            self.connection_lost_waiter.set_result(None)
 
 
 def _utc_now() -> datetime:
@@ -717,6 +741,8 @@ class Collector:
                 "producer_build_id": PRODUCER_BUILD_ID,
                 "producer_build_id_basis": PRODUCER_BUILD_ID_BASIS,
                 "selector_version": SELECTOR_VERSION,
+                "websockets_version": websockets.__version__,
+                "pre_transport_connection_guard": True,
                 "generated_at_utc": _utc_text(now_utc),
                 "available_at_utc": _utc_text(now_utc),
                 "connected": self.connected,
@@ -796,6 +822,7 @@ class Collector:
             "max_size": None,
             "open_timeout": 20,
             "close_timeout": 5,
+            "create_connection": PreTransportSafeClientConnection,
         }
         if self.args.market_proxy:
             connect_kwargs["proxy"] = self.args.market_proxy

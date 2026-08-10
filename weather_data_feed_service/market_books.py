@@ -12,6 +12,7 @@ import gzip
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,15 @@ LADDER_SCHEMA_VERSION = "weather_market_ladder_snapshot_v1"
 PRODUCER = "weather_data_feed_service.market_books"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
+)
+DEFAULT_DISCOVERY_WORKERS = int(
+    os.environ.get("WEATHER_MARKET_BOOKS_DISCOVERY_WORKERS", "8")
+)
+DEFAULT_DISCOVERY_RETRIES = int(
+    os.environ.get("WEATHER_MARKET_BOOKS_DISCOVERY_RETRIES", "1")
+)
+DISCOVERY_RETRY_BACKOFF_SEC = float(
+    os.environ.get("WEATHER_MARKET_BOOKS_DISCOVERY_RETRY_BACKOFF_SEC", "0.1")
 )
 
 
@@ -92,11 +102,12 @@ def discover_market_ladders(
     now_utc: datetime,
     observation_index: dict[tuple[str, str], dict[str, Any]],
     target_date: str | None = None,
+    max_workers: int = DEFAULT_DISCOVERY_WORKERS,
+    retries: int = DEFAULT_DISCOVERY_RETRIES,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Discover open weather ladders without touching any forecast provider."""
 
-    events: list[dict[str, Any]] = []
-    failures: list[dict[str, Any]] = []
+    requests: list[tuple[str, dict[str, Any], str, str]] = []
     for city, cfg in legacy.CITIES.items():
         for event_date in city_scan_dates(
             city,
@@ -108,6 +119,18 @@ def discover_market_ladders(
             if hours_to_settle < 0 or hours_to_settle > 50:
                 continue
             slug = _event_slug(city, cfg, event_date)
+            requests.append((city, cfg, event_date, slug))
+
+    def discover_one(
+        request: tuple[str, dict[str, Any], str, str]
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        city, cfg, event_date, slug = request
+        status_code = 0
+        raw: Any = None
+        error = "event_unavailable"
+        attempt_count = 0
+        max_attempts = max(1, int(retries) + 1)
+        for attempt_count in range(1, max_attempts + 1):
             try:
                 status_code, raw, error = legacy.curl_json_get(
                     f"{legacy.PM_GAMMA_URL}/events",
@@ -120,48 +143,68 @@ def discover_market_ladders(
                 status_code, raw, error = 0, None, f"{type(exc).__name__}: {exc}"
             if isinstance(raw, list):
                 raw = raw[0] if raw else None
-            if status_code != 200 or not isinstance(raw, dict):
-                failures.append(
-                    {
-                        "city": city,
-                        "target_date": event_date,
-                        "slug": slug,
-                        "status_code": status_code,
-                        "error": error or "event_unavailable",
-                    }
-                )
-                continue
-            _, entries = legacy.gamma_market_ladder(raw.get("markets") or [])
-            if not entries:
-                failures.append(
-                    {
-                        "city": city,
-                        "target_date": event_date,
-                        "slug": slug,
-                        "status_code": status_code,
-                        "error": "empty_market_ladder",
-                    }
-                )
-                continue
-            strategy_targets = legacy.orderbook_targets_for_strategy_live(
-                raw.get("markets") or [],
-                cfg["unit"],
-                _strategy_state_from_observation(observation_index.get((city, event_date))),
+            if status_code == 200 and isinstance(raw, dict):
+                break
+            retryable = status_code == 0 or status_code in {408, 425, 429} or status_code >= 500
+            if not retryable or attempt_count >= max_attempts:
+                break
+            if DISCOVERY_RETRY_BACKOFF_SEC > 0:
+                time.sleep(DISCOVERY_RETRY_BACKOFF_SEC * (2 ** (attempt_count - 1)))
+
+        if status_code != 200 or not isinstance(raw, dict):
+            failure_class = (
+                "expected_unavailable"
+                if status_code == 200 and raw is None
+                else "operational_failure"
             )
-            events.append(
-                {
-                    "city": city,
-                    "target_date": event_date,
-                    "event_slug": slug,
-                    "event_id": raw.get("id", ""),
-                    "condition_count": len(entries),
-                    "entries": entries,
-                    "strategy_targets": strategy_targets,
-                    "city_local_date_at_capture": city_local_datetime(city, now_utc)
-                    .date()
-                    .isoformat(),
-                }
-            )
+            return None, {
+                "city": city,
+                "target_date": event_date,
+                "slug": slug,
+                "status_code": status_code,
+                "error": error or "event_unavailable",
+                "discovery_failure_class": failure_class,
+                "discovery_attempt_count": attempt_count,
+            }
+        _, entries = legacy.gamma_market_ladder(raw.get("markets") or [])
+        if not entries:
+            return None, {
+                "city": city,
+                "target_date": event_date,
+                "slug": slug,
+                "status_code": status_code,
+                "error": "empty_market_ladder",
+                "discovery_failure_class": "expected_unavailable",
+                "discovery_attempt_count": attempt_count,
+            }
+        strategy_targets = legacy.orderbook_targets_for_strategy_live(
+            raw.get("markets") or [],
+            cfg["unit"],
+            _strategy_state_from_observation(observation_index.get((city, event_date))),
+        )
+        return {
+            "city": city,
+            "target_date": event_date,
+            "event_slug": slug,
+            "event_id": raw.get("id", ""),
+            "condition_count": len(entries),
+            "entries": entries,
+            "strategy_targets": strategy_targets,
+            "discovery_attempt_count": attempt_count,
+            "city_local_date_at_capture": city_local_datetime(city, now_utc)
+            .date()
+            .isoformat(),
+        }, None
+
+    events: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as executor:
+        discovered = executor.map(discover_one, requests)
+        for event, failure in discovered:
+            if event is not None:
+                events.append(event)
+            if failure is not None:
+                failures.append(failure)
     return events, failures
 
 
@@ -317,6 +360,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         now_utc=now_utc,
         observation_index=observations,
         target_date=args.target_date,
+        max_workers=getattr(args, "market_discovery_workers", DEFAULT_DISCOVERY_WORKERS),
+        retries=getattr(args, "market_discovery_retries", DEFAULT_DISCOVERY_RETRIES),
     )
     request_rows, hot_tokens, cold_tokens = _token_requests(events, capture_started_at_utc)
     budget = float(args.orderbook_budget_sec)
@@ -353,6 +398,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         for metadata, book in (fetched[token_id] for token_id in request_rows if token_id in fetched)
     ]
     records_by_token = {str(row.get("token_id") or ""): row for row in records}
+    hot_records = [row for row in records if row.get("capture_priority") == "hot"]
+    cold_records = [row for row in records if row.get("capture_priority") == "cold"]
+    operational_discovery_failures = [
+        row
+        for row in discovery_failures
+        if row.get("discovery_failure_class") == "operational_failure"
+    ]
     batch_capture_id = canonical_json_hash(
         {
             "producer": PRODUCER,
@@ -373,7 +425,10 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
 
     batch_status = (
         "ok"
-        if records and len(records) == len(request_rows) and all(row.get("status") == "ok" for row in records)
+        if records
+        and len(records) == len(request_rows)
+        and all(row.get("status") == "ok" for row in records)
+        and not operational_discovery_failures
         else "degraded"
     )
     latest_payload = {
@@ -392,9 +447,20 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             "tokens": len(request_rows),
             "hot_tokens": len(hot_tokens),
             "cold_tokens": len(cold_tokens),
+            "hot_ok_books": sum(row.get("status") == "ok" for row in hot_records),
+            "hot_failed_books": sum(row.get("status") != "ok" for row in hot_records),
+            "cold_ok_books": sum(row.get("status") == "ok" for row in cold_records),
+            "cold_failed_books": sum(row.get("status") != "ok" for row in cold_records),
             "ok_books": sum(row.get("status") == "ok" for row in records),
             "failed_books": sum(row.get("status") != "ok" for row in records),
             "discovery_failures": len(discovery_failures),
+            "discovery_operational_failures": len(operational_discovery_failures),
+            "discovery_expected_unavailable": len(discovery_failures)
+            - len(operational_discovery_failures),
+            "discovery_retries_used": sum(
+                max(0, int(row.get("discovery_attempt_count") or 1) - 1)
+                for row in [*events, *discovery_failures]
+            ),
             "forecast_dependency": False,
         },
         "discovery_failures": discovery_failures,
@@ -438,6 +504,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--now-utc", default=None)
     parser.add_argument("--orderbook-top-n", type=int, default=20)
     parser.add_argument("--orderbook-budget-sec", type=float, default=240.0)
+    parser.add_argument(
+        "--market-discovery-workers", type=int, default=DEFAULT_DISCOVERY_WORKERS
+    )
+    parser.add_argument(
+        "--market-discovery-retries", type=int, default=DEFAULT_DISCOVERY_RETRIES
+    )
     return parser
 
 

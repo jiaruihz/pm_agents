@@ -109,6 +109,12 @@ DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETR
 ORDERBOOK_BATCH_MAX_TOKENS = int(
     os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BATCH_MAX_TOKENS", "500")
 )
+ORDERBOOK_BATCH_RETRIES = int(
+    os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BATCH_RETRIES", "2")
+)
+ORDERBOOK_BATCH_RETRY_BACKOFF_SEC = float(
+    os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BATCH_RETRY_BACKOFF_SEC", "0.25")
+)
 ORDERBOOK_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_TIMEOUT_SEC", "4.0"))
 ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
 WEATHER_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATHER_CURL_TIMEOUT_SEC", "5.0"))
@@ -840,6 +846,12 @@ def fetch_token_orderbook_batch(
         for token_id in tokens:
             results[token_id] = (rows_by_token[token_id], orderbook_budget_book(token_id))
 
+    def retryable_batch_error(exc):
+        if isinstance(exc, httpx.HTTPStatusError):
+            status_code = exc.response.status_code
+            return status_code in {408, 425, 429} or status_code >= 500
+        return isinstance(exc, httpx.TransportError)
+
     tokens = list(rows_by_token)
     chunk_size = max(1, min(int(ORDERBOOK_BATCH_MAX_TOKENS), 500))
     for offset in range(0, len(tokens), chunk_size):
@@ -848,91 +860,119 @@ def fetch_token_orderbook_batch(
         if remaining is not None and remaining <= 0:
             mark_budget_exhausted(tokens[offset:])
             break
-        request_started_at_utc = utc_now_text()
-        batch_capture_id = canonical_json_hash(
-            {
-                "endpoint": "/books",
-                "request_started_at_utc": request_started_at_utc,
-                "token_ids": sorted(chunk),
-            }
-        )
-        try:
-            response = client.post(
-                f"{PM_CLOB_URL}/books",
-                json=[{"token_id": token_id} for token_id in chunk],
-                timeout=min(float(remaining), ORDERBOOK_CURL_TIMEOUT_SEC)
-                if remaining is not None
-                else ORDERBOOK_CURL_TIMEOUT_SEC,
+        attempt_errors = []
+        max_attempts = max(1, ORDERBOOK_BATCH_RETRIES + 1)
+        for attempt in range(1, max_attempts + 1):
+            remaining = budget_remaining()
+            if remaining is not None and remaining <= 0:
+                mark_budget_exhausted(chunk)
+                break
+            request_started_at_utc = utc_now_text()
+            batch_capture_id = canonical_json_hash(
+                {
+                    "endpoint": "/books",
+                    "request_started_at_utc": request_started_at_utc,
+                    "token_ids": sorted(chunk),
+                    "attempt": attempt,
+                }
             )
-            response_received_at_utc = utc_now_text()
-            response.raise_for_status()
-            raw_books = response.json()
-            if not isinstance(raw_books, list):
-                raise ValueError("CLOB /books response is not a list")
-            parsed_at_utc = utc_now_text()
-            by_asset = {
-                str(raw.get("asset_id") or ""): raw
-                for raw in raw_books
-                if isinstance(raw, dict)
-            }
-            for token_id in chunk:
-                raw = by_asset.get(str(token_id))
-                if raw is None:
-                    book = {
-                        "status": "missing_from_batch_response",
-                        "token_id": token_id,
-                        "request_started_at_utc": request_started_at_utc,
-                        "response_received_at_utc": response_received_at_utc,
-                        "parsed_at_utc": parsed_at_utc,
-                        "fetched_at_utc": response_received_at_utc,
-                        "request_batch_capture_id": batch_capture_id,
-                        "clock_lineage_status": "collector_exact_response_clock",
-                        "event_time_pit_scorable": False,
-                        "summary": {},
-                        "raw": {},
-                    }
-                else:
-                    summary = summarize_orderbook(raw, top_n=top_n)
-                    lineage = materialize_orderbook_capture(
-                        token_id=str(token_id),
-                        raw_book=raw,
-                        request_started_at_utc=request_started_at_utc,
-                        response_received_at_utc=response_received_at_utc,
-                        parsed_at_utc=parsed_at_utc,
-                        request_batch_capture_id=batch_capture_id,
-                    )
-                    book = {
-                        **lineage,
-                        "status": "ok",
-                        "summary": summary,
-                        "raw": {
-                            "bids": summary["bids"],
-                            "asks": summary["asks"],
-                            "timestamp": raw.get("timestamp"),
-                            "hash": raw.get("hash"),
-                        },
-                    }
-                results[token_id] = (rows_by_token[token_id], book)
-        except Exception as exc:
-            failed_at_utc = utc_now_text()
-            for token_id in chunk:
-                results[token_id] = (
-                    rows_by_token[token_id],
-                    {
-                        "status": "batch_error",
-                        "token_id": token_id,
-                        "request_started_at_utc": request_started_at_utc,
-                        "response_received_at_utc": failed_at_utc,
-                        "parsed_at_utc": None,
-                        "fetched_at_utc": failed_at_utc,
-                        "request_batch_capture_id": batch_capture_id,
-                        "clock_lineage_status": "batch_request_failed",
-                        "event_time_pit_scorable": False,
-                        "error": f"{type(exc).__name__}: {exc}",
-                        "summary": {},
-                        "raw": {},
-                    },
+            try:
+                response = client.post(
+                    f"{PM_CLOB_URL}/books",
+                    json=[{"token_id": token_id} for token_id in chunk],
+                    timeout=min(float(remaining), ORDERBOOK_CURL_TIMEOUT_SEC)
+                    if remaining is not None
+                    else ORDERBOOK_CURL_TIMEOUT_SEC,
                 )
+                response_received_at_utc = utc_now_text()
+                response.raise_for_status()
+                raw_books = response.json()
+                if not isinstance(raw_books, list):
+                    raise ValueError("CLOB /books response is not a list")
+                parsed_at_utc = utc_now_text()
+                by_asset = {
+                    str(raw.get("asset_id") or ""): raw
+                    for raw in raw_books
+                    if isinstance(raw, dict)
+                }
+                for token_id in chunk:
+                    raw = by_asset.get(str(token_id))
+                    if raw is None:
+                        book = {
+                            "status": "missing_from_batch_response",
+                            "token_id": token_id,
+                            "request_started_at_utc": request_started_at_utc,
+                            "response_received_at_utc": response_received_at_utc,
+                            "parsed_at_utc": parsed_at_utc,
+                            "fetched_at_utc": response_received_at_utc,
+                            "request_batch_capture_id": batch_capture_id,
+                            "clock_lineage_status": "collector_exact_response_clock",
+                            "event_time_pit_scorable": False,
+                            "request_attempt_count": attempt,
+                            "prior_attempt_errors": attempt_errors,
+                            "summary": {},
+                            "raw": {},
+                        }
+                    else:
+                        summary = summarize_orderbook(raw, top_n=top_n)
+                        lineage = materialize_orderbook_capture(
+                            token_id=str(token_id),
+                            raw_book=raw,
+                            request_started_at_utc=request_started_at_utc,
+                            response_received_at_utc=response_received_at_utc,
+                            parsed_at_utc=parsed_at_utc,
+                            request_batch_capture_id=batch_capture_id,
+                        )
+                        book = {
+                            **lineage,
+                            "status": "ok",
+                            "request_attempt_count": attempt,
+                            "prior_attempt_errors": attempt_errors,
+                            "summary": summary,
+                            "raw": {
+                                "bids": summary["bids"],
+                                "asks": summary["asks"],
+                                "timestamp": raw.get("timestamp"),
+                                "hash": raw.get("hash"),
+                            },
+                        }
+                    results[token_id] = (rows_by_token[token_id], book)
+                break
+            except Exception as exc:
+                error = f"{type(exc).__name__}: {exc}"
+                attempt_errors.append(error)
+                retryable = retryable_batch_error(exc)
+                remaining = budget_remaining()
+                if retryable and attempt < max_attempts and (remaining is None or remaining > 0):
+                    delay = ORDERBOOK_BATCH_RETRY_BACKOFF_SEC * (2 ** (attempt - 1))
+                    if remaining is not None:
+                        delay = min(delay, remaining)
+                    if delay > 0:
+                        time.sleep(delay)
+                    continue
+                failed_at_utc = utc_now_text()
+                for token_id in chunk:
+                    results[token_id] = (
+                        rows_by_token[token_id],
+                        {
+                            "status": "batch_error",
+                            "token_id": token_id,
+                            "request_started_at_utc": request_started_at_utc,
+                            "response_received_at_utc": failed_at_utc,
+                            "parsed_at_utc": None,
+                            "fetched_at_utc": failed_at_utc,
+                            "request_batch_capture_id": batch_capture_id,
+                            "clock_lineage_status": "batch_request_failed",
+                            "event_time_pit_scorable": False,
+                            "request_attempt_count": attempt,
+                            "prior_attempt_errors": attempt_errors[:-1],
+                            "error": error,
+                            "error_retryable": retryable,
+                            "summary": {},
+                            "raw": {},
+                        },
+                    )
+                break
     return results
 
 

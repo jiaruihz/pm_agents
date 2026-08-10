@@ -1,5 +1,6 @@
 import argparse
 import json
+import threading
 from datetime import datetime, timezone
 
 from weather_data_feed_service import market_books
@@ -19,8 +20,8 @@ def _book(token_id: str) -> dict:
     }
 
 
-def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
-    events = [
+def _events() -> list[dict]:
+    return [
         {
             "city": "Amsterdam",
             "target_date": "2026-08-08",
@@ -40,7 +41,87 @@ def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
             ],
         }
     ]
-    monkeypatch.setattr(market_books, "discover_market_ladders", lambda **_kwargs: (events, []))
+
+
+def test_market_discovery_is_bounded_parallel_and_retries_transport_failure(
+    monkeypatch,
+) -> None:
+    now = datetime(2026, 8, 10, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "CITIES",
+        {
+            "CityA": {"slug": "city-a", "unit": "C"},
+            "CityB": {"slug": "city-b", "unit": "C"},
+        },
+    )
+    monkeypatch.setattr(
+        market_books,
+        "city_scan_dates",
+        lambda city, now_utc, explicit_target_date=None: ["2026-08-10"],
+    )
+    monkeypatch.setattr(market_books, "local_settle_utc", lambda *_args: now)
+    monkeypatch.setattr(market_books, "city_local_datetime", lambda *_args: now)
+    monkeypatch.setattr(market_books, "DISCOVERY_RETRY_BACKOFF_SEC", 0)
+    barrier = threading.Barrier(2)
+    attempts: dict[str, int] = {}
+
+    def fake_curl(_url, *, params, **_kwargs):
+        slug = params["slug"]
+        attempts[slug] = attempts.get(slug, 0) + 1
+        if attempts[slug] == 1:
+            barrier.wait(timeout=1)
+            return 0, None, "proxy handshake timeout"
+        return 200, {"id": slug, "markets": [{"slug": slug}]}, ""
+
+    monkeypatch.setattr(market_books.legacy, "curl_json_get", fake_curl)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "gamma_market_ladder",
+        lambda markets: (
+            None,
+            [
+                {
+                    "label": "20",
+                    "market_id": markets[0]["slug"],
+                    "condition_id": markets[0]["slug"],
+                    "yes_token_id": f'{markets[0]["slug"]}-yes',
+                    "no_token_id": f'{markets[0]["slug"]}-no',
+                }
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        market_books.legacy,
+        "orderbook_targets_for_strategy_live",
+        lambda *_args: set(),
+    )
+
+    events, failures = market_books.discover_market_ladders(
+        now_utc=now,
+        observation_index={},
+        max_workers=2,
+        retries=1,
+    )
+
+    assert failures == []
+    assert [row["city"] for row in events] == ["CityA", "CityB"]
+    assert [row["discovery_attempt_count"] for row in events] == [2, 2]
+
+
+def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
+    events = _events()
+    unavailable = {
+        "city": "Boston",
+        "status_code": 200,
+        "error": "event_unavailable",
+        "discovery_failure_class": "expected_unavailable",
+    }
+    monkeypatch.setattr(
+        market_books,
+        "discover_market_ladders",
+        lambda **_kwargs: (events, [unavailable]),
+    )
 
     def fake_fetch(_client, request_rows, token_ids, **_kwargs):
         return {token_id: (request_rows[token_id], _book(token_id)) for token_id in token_ids}
@@ -67,9 +148,58 @@ def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
     assert result["status"] == "ok"
     assert latest["summary"]["hot_tokens"] == 1
     assert latest["summary"]["cold_tokens"] == 1
+    assert latest["summary"]["hot_ok_books"] == 1
+    assert latest["summary"]["hot_failed_books"] == 0
+    assert latest["summary"]["cold_ok_books"] == 1
+    assert latest["summary"]["cold_failed_books"] == 0
+    assert latest["summary"]["discovery_operational_failures"] == 0
+    assert latest["summary"]["discovery_expected_unavailable"] == 1
     assert latest["summary"]["forecast_dependency"] is False
     assert ladder["records"][0]["market_distribution_complete"] is True
     assert "legacy_orderbook_path" not in result
+
+
+def test_market_books_degrades_when_discovery_has_operational_failure(
+    monkeypatch, tmp_path
+) -> None:
+    failure = {
+        "city": "Boston",
+        "status_code": 0,
+        "error": "SSL connection timeout",
+        "discovery_failure_class": "operational_failure",
+    }
+    monkeypatch.setattr(
+        market_books,
+        "discover_market_ladders",
+        lambda **_kwargs: (_events(), [failure]),
+    )
+
+    def fake_fetch(_client, request_rows, token_ids, **_kwargs):
+        return {
+            token_id: (request_rows[token_id], _book(token_id))
+            for token_id in token_ids
+        }
+
+    monkeypatch.setattr(market_books, "_fetch_priority_group", fake_fetch)
+    monkeypatch.setattr(
+        market_books.httpx,
+        "Client",
+        lambda **_kwargs: type("C", (), {"close": lambda self: None})(),
+    )
+    result = market_books.collect(
+        argparse.Namespace(
+            output_root=str(tmp_path / "market_books"),
+            market_ladder_root=str(tmp_path / "market_ladders"),
+            observation_cache="",
+            target_date=None,
+            now_utc="2026-08-07T12:00:00Z",
+            orderbook_top_n=20,
+            orderbook_budget_sec=240.0,
+        )
+    )
+
+    assert result["status"] == "degraded"
+    assert result["discovery_operational_failures"] == 1
 
 
 def test_strategy_view_reads_canonical_books_but_keeps_target_scope(tmp_path):
