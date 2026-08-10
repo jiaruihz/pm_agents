@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import parse_bracket_bounds
 from weather_data_feed.city_calendar import city_timezone_name
+from weather_data_feed.production_paths import historical_strategy_snapshots
 
 INSTANCE = "low_price_yes_lottery_tiny_live_v1"
 ENTRY_POLICY = "low_price_yes_lottery_maker_first_v1"
@@ -357,7 +358,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--orders", default=str(ROOT / "runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl"))
     parser.add_argument("--decisions", default=str(ROOT / "runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1/shadow_decisions.jsonl"))
-    parser.add_argument("--snapshot-dir", default="/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots")
+    parser.add_argument("--snapshot-dir", default=str(historical_strategy_snapshots()))
     parser.add_argument("--db", default=str(ROOT / "runtime/weather.db"))
     parser.add_argument("--incident-cutoff-utc", default=INCIDENT_CUTOFF_UTC)
     base = ROOT / "docs/analysis/2026-07/generated/heada_fresh_thesis_entry_audit_v1"

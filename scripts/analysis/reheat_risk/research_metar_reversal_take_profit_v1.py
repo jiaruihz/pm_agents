@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,11 +24,15 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
 SHARD_DIR = ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1"
 SHARDS = sorted(SHARD_DIR.glob("feature_factory_*/reheat_feature_rows.csv"))
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/metar_reversal_take_profit_v1"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-03-metar-reversal-take-profit-v1.md"
 OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-03-metar-reversal-take-profit-v1.json"

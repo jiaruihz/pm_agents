@@ -13,19 +13,25 @@ import argparse
 import datetime as dt
 import json
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 DEFAULT_INPUT = ROOT / "runtime/analysis_inputs/forecast_update_time_repricing_v0"
 DEFAULT_SOURCES = DEFAULT_INPUT / "sources.jsonl"
 DEFAULT_BOOKS = DEFAULT_INPUT / "books.jsonl"
 DEFAULT_CYCLES = DEFAULT_INPUT / "cycles.jsonl"
 DEFAULT_OPPS = DEFAULT_INPUT / "opportunities.jsonl"
-DEFAULT_SNAPSHOTS = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+DEFAULT_SNAPSHOTS = historical_strategy_snapshots()
 OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-26-forecast-update-time-repricing-v0.json"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-26-forecast-update-time-repricing-v0.md"
 

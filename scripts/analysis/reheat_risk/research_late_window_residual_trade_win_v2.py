@@ -41,6 +41,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
 from scripts.analysis.reheat_risk.research_late_window_residual_heating_done_v1 import (  # noqa: E402
     add_buckets,
     fee_per_share,
@@ -55,7 +57,7 @@ from weather_feature_layer.state import heating_done_features  # noqa: E402
 
 
 DB = ROOT / "runtime/weather.db"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 ORDERBOOK_DIR = ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots"
 FORECAST_CURVE_DIR = ROOT / "runtime/weather_edge_v1/market_data/forecast_hourly_curves"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/late_window_residual_trade_win_v2"

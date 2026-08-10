@@ -43,14 +43,21 @@ import hashlib
 import json
 import math
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-SNAPSHOT_DIR_DEFAULT = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
-OBS_DEFAULT = Path.home() / "projects/weather_data_feed_service_runtime/output/observations/latest.json"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
+PRODUCTION_SPEC = load_production_spec()
+SNAPSHOT_DIR_DEFAULT = PRODUCTION_SPEC.strategy_paper_snapshot_dir()
+OBS_DEFAULT = PRODUCTION_SPEC.observation_cache_path()
 RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1"
 DECISIONS_OUT = RUNTIME_DIR / "state_decisions.jsonl"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"

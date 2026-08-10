@@ -30,6 +30,7 @@ if str(ROOT) not in sys.path:
 
 import research_regime_routed_no_expression_v1 as research  # noqa: E402
 from scripts.ops import regime_routed_no_tiny_live as live  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_guard_patch_20260628"
 OUT_JSON = OUT_DIR / "summary.json"
@@ -40,7 +41,7 @@ OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-28-regime-routed-no-guard-patch-r
 
 SELECTED = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_expression_v1/selected_trade_details.csv"
 LIVE_RUNTIME = ROOT / "runtime/weather_edge_v1/remote_pm_agent/regime_routed_no_tiny_live_v1"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 MAIN_VARIANT = "routed_capped_d2_no_relaxed70_best_ask"
 
 

@@ -12,14 +12,20 @@ import json
 import math
 import random
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
 LIVE_DIR = ROOT / "runtime/weather_edge_v1/remote_pm_agent/live"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 DB_PATH = ROOT / "runtime/weather.db"
 OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-21-current-yes-cadence-state-live-counterfactual-v0.json"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-21-current-yes-cadence-state-live-counterfactual-v0.md"

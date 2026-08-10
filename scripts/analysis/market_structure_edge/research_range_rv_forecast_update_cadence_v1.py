@@ -14,13 +14,19 @@ import csv
 import json
 import math
 import sqlite3
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 TARGET_METRIC = "range_rv_forecast_update_cadence_v1"
 OUT_JSON_DEFAULT = ROOT / "docs/analysis/2026-06/2026-06-26-range-rv-forecast-update-cadence-v1.json"
 OUT_MD_DEFAULT = ROOT / "docs/analysis/2026-06/2026-06-26-range-rv-forecast-update-cadence-v1.md"
@@ -29,7 +35,7 @@ OUT_CSV_DEFAULT = ROOT / "docs/analysis/2026-06/generated/range_rv_forecast_upda
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--snapshot-dir", default=str(ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"))
+    parser.add_argument("--snapshot-dir", default=str(historical_strategy_snapshots()))
     parser.add_argument(
         "--range-rv-journal",
         default=str(ROOT / "runtime/weather_edge_v1/remote_pm_agent/range_rv_shadow_v0/shadow_journal.jsonl"),

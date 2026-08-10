@@ -35,6 +35,15 @@ OUT_DIR_DEFAULT = ROOT / "docs/analysis/2026-07/generated/heada_would_live_shado
 RNG_SEED = 20260724
 
 
+def display_path(path: Path) -> str:
+    """Keep repo paths compact while preserving external runtime identity."""
+
+    try:
+        return str(path.resolve().relative_to(ROOT.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--journal", type=Path, default=JOURNAL_DEFAULT)
@@ -313,8 +322,8 @@ def main() -> int:
         "trade_class": "zero_notional_shadow_would_live",
         "primary_execution_assumption": "taker_at_fresh_best_ask_plus_official_weather_fee",
         "maker_counterfactual_caveat": "No maker-fill or queue assumption; maker-limit figures are price-only counterfactuals.",
-        "journal": str(args.journal.relative_to(ROOT)),
-        "db": str(args.db.relative_to(ROOT)),
+        "journal": display_path(args.journal),
+        "db": display_path(args.db),
         "source_rows": len(source),
         "deduped_rows": len(deduped),
         "captured_summary_before_distance_enforcement": captured_summary,

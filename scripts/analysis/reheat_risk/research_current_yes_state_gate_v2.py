@@ -16,16 +16,22 @@ import json
 import math
 import random
 import sqlite3
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 DB_PATH = ROOT / "runtime/weather.db"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 PEAK_TELEMETRY = (
     ROOT
     / "runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_peak_forming_micro_tiny_live_v1/forward_telemetry.jsonl"

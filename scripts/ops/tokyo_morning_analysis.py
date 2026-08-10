@@ -23,9 +23,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.platform.notification.telegram import send_telegram_message_sync
+from src.strategies.runtime.production import load_production_spec
 
-SNAPSHOTS_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
-LEDGER_PATH = ROOT / "runtime/weather_edge_v1/market_data/paper_trades/paper_orders.jsonl"
+PRODUCTION_SPEC = load_production_spec()
+SNAPSHOTS_DIR = PRODUCTION_SPEC.strategy_paper_snapshot_dir()
+LEDGER_PATH = PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1/paper_trades/paper_orders.jsonl"
 
 # ICAO code for Tokyo's settlement station
 TOKYO_ICAO = "RJTT"

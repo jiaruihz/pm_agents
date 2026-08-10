@@ -7,9 +7,16 @@ import argparse
 import csv
 import json
 import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots
 
 
 def f(value: Any) -> float | None:
@@ -33,7 +40,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--snapshots-dir",
-        default="runtime/weather_edge_v1/market_data/paper_snapshots",
+        default=historical_strategy_snapshots(),
         type=Path,
     )
     parser.add_argument("--target-date", action="append", default=[])

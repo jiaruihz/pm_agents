@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from scripts.analysis.observed_max import research_settlement_source_registry_v0 as source_registry  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 STRATEGY_ID = "forecast_bounded_w3_cheaper_default_wu_edge002_shadow_v0"
@@ -86,11 +87,7 @@ def now_utc() -> str:
 
 
 def default_snapshot_glob() -> str:
-    candidates = [
-        Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"),
-        Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"),
-        ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
-    ]
+    candidates = [load_production_spec().strategy_paper_snapshot_dir()]
     latest_by_dir = []
     for snapshot_dir in candidates:
         snapshots = sorted(snapshot_dir.glob("snapshot_*.json")) if snapshot_dir.exists() else []

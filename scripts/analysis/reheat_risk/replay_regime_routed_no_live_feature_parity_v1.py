@@ -37,6 +37,7 @@ import regime_routed_no_tiny_live as live  # noqa: E402
 import research_intraday_weather_regime_atlas_v1 as atlas  # noqa: E402
 import research_regime_routed_no_expression_v1 as research  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_live_feature_parity_v1"
@@ -54,7 +55,7 @@ NYC_REPLAYS = [
     {
         "label": "first_live_order",
         "asof_utc": "2026-06-25T15:54:21+00:00",
-        "snapshot": "runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260625_2330.json",
+        "snapshot": str(historical_strategy_snapshots() / "snapshot_20260625_2330.json"),
         "posted_price": 0.35,
     }
 ]

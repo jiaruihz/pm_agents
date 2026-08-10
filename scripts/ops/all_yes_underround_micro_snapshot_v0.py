@@ -40,7 +40,7 @@ from src.strategies.weather_edge_v1.tools.weather_edge_market_data import WEATHE
 
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
 SNAPSHOT_DIR_DEFAULT = RUN_DIR_DEFAULT / "micro_orderbook_snapshots"
-WEATHER_PREDICT_DIR_DEFAULT = Path(os.environ.get("WEATHER_PREDICT_DIR", "/home/jiarui/projects/weather-predict"))
+WEATHER_PREDICT_DIR_DEFAULT = Path(os.environ.get("WEATHER_PREDICT_DIR", str(ROOT)))
 CLOB_BASE_DEFAULT = os.environ.get("CLOB_BASE_URL", "https://clob.polymarket.com")
 
 

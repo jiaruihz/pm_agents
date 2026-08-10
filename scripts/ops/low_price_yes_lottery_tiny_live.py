@@ -47,19 +47,18 @@ from src.strategies.weather_edge_v1.runtime.non_live import (
     execute_legacy_compatibility_paper,
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime
+from src.strategies.runtime.production import load_production_spec
 from scripts.ops.weather_market_proxy import market_proxy_url as shared_market_proxy_url
 from weather_data_feed.source_policy import city_slug
 from weather_feature_layer.market import bracket_distance_features
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
-MAC_DATA_FEED_SNAPSHOT_DIR = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
-)
+PRODUCTION_SPEC = load_production_spec()
 SNAPSHOT_DIR_DEFAULT = Path(
     os.environ.get(
         "WEATHER_DATA_FEED_SNAPSHOT_DIR",
-        str(MAC_DATA_FEED_SNAPSHOT_DIR if MAC_DATA_FEED_SNAPSHOT_DIR.exists() else ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"),
+        str(PRODUCTION_SPEC.strategy_paper_snapshot_dir()),
     )
 )
 RUNTIME_DIR = ROOT / os.environ.get(

@@ -11,19 +11,24 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 DETAILS = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_mechanism_split_v2/trade_details.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_high_yes_from_regime_no_misroutes_v0"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-29-current-high-yes-from-regime-no-misroutes-v0.md"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 JEDDAH_IEM = (
     ROOT
     / "docs/analysis/2026-06/generated/regime_routed_no_wind_context_v2/iem_direction_cache/"

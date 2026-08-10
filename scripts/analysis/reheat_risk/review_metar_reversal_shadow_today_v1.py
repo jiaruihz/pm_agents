@@ -14,17 +14,23 @@ import argparse
 import json
 import math
 import re
+import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 SHADOW_DIR = ROOT / "runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1"
 SUMMARY_HISTORY = SHADOW_DIR / "summary_history.jsonl"
 STATE_DECISIONS = SHADOW_DIR / "state_decisions.jsonl"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 DB_PATH = ROOT / "runtime/weather.db"
 GATE_JSON = ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
 REPORT_DIR = ROOT / "docs/analysis/2026-07"

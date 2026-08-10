@@ -11,6 +11,7 @@ import glob
 import hashlib
 import json
 import math
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,12 +21,16 @@ import joblib
 import numpy as np
 import pandas as pd
 import requests
-
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 STATES = ROOT / "docs/analysis/2026-07/generated/helsinki_remaining_heat_market_replay_v2/checkpoint_market_states_v2_v7.csv.gz"
 ARTIFACT_PATH = ROOT / "docs/analysis/2026-07/generated/helsinki_market_expression_v2/helsinki_market_expression_v2_research_challenger.joblib"
-SNAPSHOT_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots")
+SNAPSHOT_ROOT = historical_strategy_snapshots()
 OUTPUT = ROOT / "docs/analysis/2026-07/generated/helsinki_prices_history_proxy_v1"
 REPORT = ROOT / "docs/analysis/2026-07/2026-07-31-helsinki-prices-history-proxy-replay-v1.md"
 EXPECTED_ARTIFACT_SHA = "e5290f36ad033d1a526162c124a54106ecfb066e0b1538a3864ed0db1c841288"

@@ -22,10 +22,11 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.observation_sources.iem import build_iem_asos_params
+from weather_data_feed.production_paths import historical_strategy_snapshots
 
 
 DETAILS = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_mechanism_split_v2/trade_details.csv"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/pullback_uncertain_current_high_yes_mechanism_v0"
 IEM_CACHE = OUT_DIR / "iem_case_cache"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-29-pullback-uncertain-current-high-yes-mechanism-v0.md"

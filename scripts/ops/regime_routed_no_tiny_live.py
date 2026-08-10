@@ -40,6 +40,7 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
 from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
 from weather_data_feed.snapshot_protocol import parse_market_event_date  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
@@ -86,16 +87,9 @@ def display_path(path: Path) -> str:
 HIST_FORECAST_BIAS_SUMMARY = (
     ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/city_model_error_summary.csv"
 )
-DEFAULT_SNAPSHOT_DIR_CANDIDATES = [
-    Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"),
-    Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"),
-    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
-]
-DEFAULT_OBSERVATION_CACHE_PATHS = [
-    Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json"),
-    ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
-    ROOT / "runtime/weather_edge_v1/observations/latest.json",
-]
+PRODUCTION_SPEC = load_production_spec()
+DEFAULT_SNAPSHOT_DIR_CANDIDATES = [PRODUCTION_SPEC.strategy_paper_snapshot_dir()]
+DEFAULT_OBSERVATION_CACHE_PATHS = [PRODUCTION_SPEC.observation_cache_path()]
 OBS_STALE_CADENCE_GRACE_MIN = 15.0
 OBS_MAX_DYNAMIC_AGE_MIN = 90.0
 CORE_LIVE_REGIME_COLS = [

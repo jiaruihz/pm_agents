@@ -36,10 +36,11 @@ from scripts.analysis.forecast_quality.research_low_price_yes_sizing_fee_stop_v2
     scan_paths,
 )
 from weather_feature_layer.execution import classify_book_state
+from weather_data_feed.production_paths import historical_strategy_snapshots
 
 INPUT = ROOT / "docs/analysis/2026-07/generated/low_price_yes_integrated_tail_v2/enriched_rows.csv"
 DB_PATH = ROOT / "runtime/weather.db"
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+SNAPSHOT_DIR = historical_strategy_snapshots()
 BIAS_ROWS = ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/low_price_yes_heada_refinement_v1"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-04-low-price-yes-heada-refinement-v1.md"

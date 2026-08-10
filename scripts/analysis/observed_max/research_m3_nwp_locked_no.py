@@ -24,6 +24,7 @@ import glob
 import json
 import math
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -31,6 +32,10 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 WHITELIST_MIN_DAYS = 20
 HOURS = set(range(13, 18))
@@ -91,7 +96,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--snapshots-glob",
-        default=str(REPO / "runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_*.json"),
+        default=str(historical_strategy_snapshots() / "snapshot_*.json"),
     )
     parser.add_argument(
         "--alignment-city-days",

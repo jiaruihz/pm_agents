@@ -31,17 +31,19 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     build_low_price_yes_tail_telemetry,
     load_tail_telemetry_resources_soft,
 )
+from src.strategies.runtime.production import load_production_spec
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc
 from weather_feature_layer.execution import classify_book_state
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
-OBS_DEFAULT = Path.home() / "projects/weather_data_feed_service_runtime/output/observations/latest.json"
+PRODUCTION_SPEC = load_production_spec()
+OBS_DEFAULT = PRODUCTION_SPEC.observation_cache_path()
 SNAPSHOT_DIR_DEFAULT = Path(
     os.environ.get(
         "LOW_PRICE_YES_INTEGRATED_TAIL_SNAPSHOT_DIR",
-        "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots",
+        str(PRODUCTION_SPEC.strategy_paper_snapshot_dir()),
     )
 )
 RUNTIME_DIR = ROOT / os.environ.get(

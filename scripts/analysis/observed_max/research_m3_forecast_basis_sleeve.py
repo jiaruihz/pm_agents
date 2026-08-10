@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import time
 import urllib.request
 from datetime import datetime
@@ -40,6 +41,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Station geometry. Official = Polymarket resolution station (from
@@ -617,7 +624,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--snapshot-dir",
-        default="runtime/weather_edge_v1/market_data/paper_snapshots",
+        default=str(historical_strategy_snapshots()),
     )
     parser.add_argument(
         "--pm-history-dir",

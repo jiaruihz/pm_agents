@@ -22,6 +22,9 @@ if str(ROOT) not in sys.path:
 
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
 from weather_data_feed.city_family import CITY_FAMILY_ATLAS_V1  # noqa: E402
+from weather_data_feed.production_paths import (  # noqa: E402
+    current_forecast_curves,
+)
 
 V2_SCRIPT = ROOT / "scripts/analysis/reheat_risk/research_tmax_single_snapshot_lineage_replay_v2.py"
 V2_OUT_DIR = ROOT / "docs/analysis/2026-07/generated/tmax_single_snapshot_lineage_replay_v2"
@@ -30,8 +33,7 @@ REPORT_MD = ROOT / "docs/analysis/2026-07/2026-07-12-tmax-distribution-v3-model-
 REPORT_JSON = ROOT / "docs/analysis/2026-07/2026-07-12-tmax-distribution-v3-model-v1.json"
 ATLAS_CSV = ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv"
 CURVE_ROOTS = [
-    ROOT / "runtime/weather_edge_v1/market_data/forecast_hourly_curves",
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves"),
+    current_forecast_curves(),
 ]
 
 # Execution policy frozen BEFORE any v3 model comparison; inherited verbatim

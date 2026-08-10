@@ -29,12 +29,6 @@ from weather_feature_layer.builders import build_weather_state_frame_with_audits
 from weather_feature_layer.contracts import PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION
 
 
-DEFAULT_SNAPSHOT = Path(
-    "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots/snapshot_20260701_1556.json"
-)
-DEFAULT_OBSERVATIONS = Path(
-    "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/observations/latest.json"
-)
 DEFAULT_OUT_DIR = Path("docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1")
 
 KEY_FIELDS = ["city", "target_date"]
@@ -231,8 +225,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--snapshot", default=str(DEFAULT_SNAPSHOT))
-    parser.add_argument("--observation-cache", default=str(DEFAULT_OBSERVATIONS))
+    parser.add_argument("--snapshot", required=True)
+    parser.add_argument("--observation-cache", required=True)
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
     parser.add_argument("--atol", type=float, default=1e-6)
     parser.add_argument("--max-examples", type=int, default=50)

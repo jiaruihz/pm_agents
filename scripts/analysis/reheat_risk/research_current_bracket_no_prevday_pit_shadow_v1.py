@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -27,11 +28,15 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-import research_current_bracket_no_pass_through_v1 as pass_through
-
-
 ROOT = Path(__file__).resolve().parents[3]
-SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import research_current_bracket_no_pass_through_v1 as pass_through  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
+SNAPSHOT_DIR = historical_strategy_snapshots()
 GFS_DAILY_DIR = ROOT / "runtime/weather_edge_v1/market_data/cache/gfs_daily"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_bracket_no_prevday_pit_shadow_v1"
 OUT_JSON = OUT_DIR / "summary.json"

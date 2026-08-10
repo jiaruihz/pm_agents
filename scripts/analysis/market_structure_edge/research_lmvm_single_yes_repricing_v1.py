@@ -42,10 +42,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed import city_timezone_name  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 
 DEFAULT_DB = ROOT / "runtime/weather.db"
-DEFAULT_SNAPSHOTS = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+DEFAULT_SNAPSHOTS = historical_strategy_snapshots()
 DEFAULT_OUTPUT = ROOT / "docs/analysis/2026-08/generated/lmvm_single_yes_repricing_v1"
 DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-04-research-lmvm-single-yes-repricing-v1.md"
 HORIZONS_MIN = (5, 15, 30, 60, 120)

@@ -249,7 +249,7 @@ def _write_report(out_path: Path, trades: list[Trade], city_pools: dict[str, str
         "",
         "| 项目 | 值 |",
         "|---|---|",
-        "| 数据源路径 | runtime/weather_edge_v1/market_data/paper_snapshots + cache/pm_history |",
+        "| 数据源路径 | production contract historical snapshots + canonical settlement cache |",
         f"| 数据快照时间 | {snapshot_ts} |",
         f"| replay trades 行数 | {overall['n']} |",
         f"| raw candidate rows | {raw_candidates} |",

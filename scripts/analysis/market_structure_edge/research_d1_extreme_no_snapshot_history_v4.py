@@ -15,6 +15,7 @@ import argparse
 import json
 import math
 import sqlite3
+import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
@@ -25,16 +26,18 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-import research_d1_extreme_no_basket_v1 as base
-import research_d1_extreme_no_tail_probability_v3 as probability
-from weather_data_feed import city_timezone_name
-
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import research_d1_extreme_no_basket_v1 as base  # noqa: E402
+import research_d1_extreme_no_tail_probability_v3 as probability  # noqa: E402
+from weather_data_feed import city_timezone_name  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+
+
 DEFAULT_DB = ROOT / "runtime/weather.db"
-DEFAULT_SNAPSHOTS = (
-    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
-)
+DEFAULT_SNAPSHOTS = historical_strategy_snapshots()
 DEFAULT_OUTPUT = (
     ROOT
     / "docs/analysis/2026-07/generated/d1_extreme_no_snapshot_history_v4"
