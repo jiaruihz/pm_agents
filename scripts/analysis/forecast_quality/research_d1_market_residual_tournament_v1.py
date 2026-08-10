@@ -37,6 +37,13 @@ from scripts.analysis.forecast_quality import research_d1_cross_city_hierarchy_v
 from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_robust_tail as robust  # noqa: E402
 from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_v2 as v2  # noqa: E402
 from scripts.analysis.versioned_artifact_output import resolve_run_output  # noqa: E402
+from weather_model_evaluation.exact_bracket_adapters import (  # noqa: E402
+    precomputed_posterior_head,
+    settlement_ladder_from_rungs,
+)
+from weather_model_evaluation.exact_bracket_probability import (  # noqa: E402
+    PROBABILITY_STACK_SCHEMA_VERSION,
+)
 
 
 DEFAULT_OUT = Path(
@@ -124,6 +131,10 @@ class PreparedState:
     snapshot_key: str
     city: str
     target_date: str
+    decision_ts_utc: str
+    market_unit: str
+    labels: tuple[str, ...]
+    brackets: tuple[base.Bracket, ...]
     model_key: str
     winner_index: int
     market: np.ndarray
@@ -334,6 +345,10 @@ def prepare_states(
                 snapshot_key=str(state["snapshot_key"]),
                 city=str(state["city"]),
                 target_date=str(state["target_date"]),
+                decision_ts_utc=str(state["decision_ts_utc"]),
+                market_unit=str(state["market_unit"]),
+                labels=tuple(str(value) for value in state["labels"]),
+                brackets=tuple(state["brackets"]),
                 model_key=str(state["model_key"]),
                 winner_index=int(state["winner_index"]),
                 market=market,
@@ -423,6 +438,61 @@ def _state_score(state: PreparedState, probabilities: np.ndarray) -> dict[str, f
         "rps": rps,
         "winner_probability": winner_probability,
         "top1_accuracy": float(top1),
+    }
+
+
+def _probability_stack_fields(
+    state: PreparedState,
+    probabilities: np.ndarray,
+    *,
+    arm: str,
+) -> dict[str, Any]:
+    """Attach the shared settlement stack without changing legacy probabilities."""
+
+    rungs = [
+        {
+            "bracket": label,
+            "bracket_id": label,
+            "lower_native": bracket.low,
+            "upper_native": bracket.high,
+        }
+        for label, bracket in zip(state.labels, state.brackets, strict=True)
+    ]
+    unit = state.market_unit.upper()
+    ladder = settlement_ladder_from_rungs(
+        city=state.city,
+        target_date=state.target_date,
+        settlement_source="canonical_settlement_outcome",
+        native_unit=f"deg{unit}_integer",
+        native_step=1.0,
+        rungs=rungs,
+    )
+    component_id = (
+        "d1_market_identity_v1"
+        if arm == "M0_market"
+        else f"d1_{arm.lower()}_market_residual_v1"
+    )
+    head = precomputed_posterior_head(
+        ladder=ladder,
+        market_prior_probabilities=state.market,
+        posterior_probabilities=probabilities,
+        decision_ts_utc=state.decision_ts_utc,
+        model_id=f"d1_{arm.lower()}",
+        model_snapshot_id=f"{state.snapshot_key}:{arm}",
+        market_snapshot_id=state.snapshot_key,
+        weather_path_component_id=component_id,
+    )
+    stack = head.probability_stack
+    return {
+        "probability_stack_status": "scorable",
+        "probability_stack_schema_version": PROBABILITY_STACK_SCHEMA_VERSION,
+        "probability_stack_snapshot_id": stack.stack_snapshot_id,
+        "market_prior_distribution_id": stack.market_prior.distribution_id,
+        "weather_path_component_id": stack.weather_path_component_id,
+        "source_basis_component_id": stack.source_basis_component_id,
+        "calibration_id": stack.calibration_id,
+        "probability_head_kind": str(head.head_kind),
+        "model_book_snapshot_id": head.model_book_snapshot_id,
     }
 
 
@@ -525,6 +595,7 @@ def run_outer_oof(states: list[PreparedState]) -> tuple[pd.DataFrame, pd.DataFra
                             **_state_score(state, vector),
                             "winner_index": state.winner_index,
                             "probabilities_json": json.dumps(vector.tolist(), separators=(",", ":")),
+                            **_probability_stack_fields(state, vector, arm=arm),
                             "reconstructed_revision_f": state.reconstructed_revision_f,
                             "model_spread_f": state.model_spread_f,
                             "assigned_minus_consensus_f": state.assigned_minus_consensus_f,
@@ -551,6 +622,15 @@ def run_outer_oof(states: list[PreparedState]) -> tuple[pd.DataFrame, pd.DataFra
                 **_state_score(state, state.weather),
                 "winner_index": state.winner_index,
                 "probabilities_json": json.dumps(state.weather.tolist(), separators=(",", ":")),
+                "probability_stack_status": "not_applicable_weather_only_baseline",
+                "probability_stack_schema_version": None,
+                "probability_stack_snapshot_id": None,
+                "market_prior_distribution_id": None,
+                "weather_path_component_id": None,
+                "source_basis_component_id": None,
+                "calibration_id": None,
+                "probability_head_kind": "weather_only_baseline",
+                "model_book_snapshot_id": None,
                 "reconstructed_revision_f": state.reconstructed_revision_f,
                 "model_spread_f": state.model_spread_f,
                 "assigned_minus_consensus_f": state.assigned_minus_consensus_f,

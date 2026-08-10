@@ -17,6 +17,15 @@ from .exact_bracket_probability import (
     SettlementLadder,
     compose_exact_bracket_probability,
 )
+from .exact_bracket_adapters import (
+    ADAPTER_SCHEMA_VERSION,
+    ExactBracketAdapterBlocked,
+    final_settlement_head_dict,
+    market_prior_from_book_rows,
+    precomputed_posterior_head,
+    settlement_ladder_from_rungs,
+    source_event_transport_head,
+)
 from .lineage import gzip_content_sha256
 from .ordinal_model import OrderedThresholdClassifier
 from .prior_model import EmpiricalPriorModel
@@ -68,6 +77,7 @@ from .reporting import build_evaluation_report
 __all__ = [
     "AdmissionDecision",
     "AdmissionEvidence",
+    "ADAPTER_SCHEMA_VERSION",
     "binary_calibration_table",
     "binary_loss_values",
     "binary_score",
@@ -82,6 +92,7 @@ __all__ = [
     "EmpiricalPriorModel",
     "EventEnvelope",
     "ExactBracketDistribution",
+    "ExactBracketAdapterBlocked",
     "ExactBracketProbabilityStackResult",
     "ExecutionFillHeadOutput",
     "ExperimentRun",
@@ -92,10 +103,12 @@ __all__ = [
     "FixtureInputCatalog",
     "FeatureDefinition",
     "FinalSettlementHeadOutput",
+    "final_settlement_head_dict",
     "gzip_content_sha256",
     "hazards_to_event_probabilities",
     "integrated_horizon_score",
     "MechanismHypothesis",
+    "market_prior_from_book_rows",
     "LadderLogAdjustment",
     "ordinal_loss_values",
     "ordinal_score",
@@ -103,12 +116,14 @@ __all__ = [
     "PREDICTION_SCHEMA_VERSION",
     "predict_simplex_logit_calibrator",
     "ProbabilityHeadKind",
+    "precomputed_posterior_head",
     "RepricingHeadOutput",
     "ReplayResult",
     "ReplayRunner",
     "simplex_log_ratio_features",
     "SettlementBracket",
     "SettlementLadder",
+    "settlement_ladder_from_rungs",
     "stable_json",
     "stable_sha256",
     "StableModelSpec",
@@ -117,5 +132,6 @@ __all__ = [
     "experiment_alias_manifest",
     "validate_prediction_row",
     "validate_hypothesis_registry",
+    "source_event_transport_head",
     "VirtualClock",
 ]
