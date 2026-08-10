@@ -1598,6 +1598,32 @@ lost all 114 hot books. This proves denominator preservation and fail-closed
 status under a real fault, but not end-to-end availability while the external
 proxy route itself remains unhealthy.
 
+A later Core Carry transport-only continuation ran from
+`2026-08-10T16:32:38Z` through `17:47:50Z`: all 195 loop summaries failed while
+constructing the authenticated CLOB transport. The signal layer still wrote
+five PIT score rows at `17:32:05Z..17:32:06Z`; all five were ineligible
+(Atlanta, Buenos Aires, Miami, NYC and Sao Paulo), so the window produced zero
+would-orders, entry attempts, plans, live-order rows, execution-journal rows,
+fills or notional. Its 780 maker lifecycle decisions were all inactive
+`detached_maker_retry_ttl_expired` records and required no cancel. A read-only
+authenticated account probe found zero open orders before recovery. The
+guarded Core restart restored `status=ok` at `17:48:11Z` with the pinned
+`70dfc002` release and unchanged `10 taker + 5 maker` sizing.
+
+The same recovery found `weather_runtime_monitor` running from the
+`market_books` checkout rather than its registered control-plane release. The
+first controller restart correctly removed that session but exposed a missing
+path-resolver dependency in the pinned release. Commit `fac1c149` makes the
+monitor resolve `pm_runtime_root` directly from the production spec; deployment
+pin commit `1c3134db` advances only the control-plane release. The monitor then
+restarted from the registered checkout, with no other canonical session lost.
+Post-change manifest comparison, JRS/data-feed health, authenticated CLOB
+orders, API health and all 26 managed runtimes passed. The historical proxy
+route-maintenance command can still log a non-blocking failover-control error;
+the active `7897` route and all current consumers are healthy, but persistent
+gateway failover convergence remains separate follow-up rather than a claimed
+root-cause elimination.
+
 ## 24. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
