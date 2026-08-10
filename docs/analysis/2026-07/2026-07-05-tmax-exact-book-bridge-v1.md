@@ -1,6 +1,6 @@
 # Tmax Exact-Book Bridge v1
 
-> generated_at_utc: `2026-07-05T14:16:42+00:00`
+> generated_at_utc: `2026-07-09T03:41:56+00:00`
 > source P5: `docs/analysis/2026-07/generated/tmax_distribution_p5_walk_forward_execution_replay_v1/opportunities.csv`
 > source atlas: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv`
 > Scope: research/shadow only. No live runner or order policy changed.
@@ -8,7 +8,7 @@
 ## 结论
 
 - 这版完成的是 `四桶概率 -> exact sibling 表达` 的最小实验，不是全 ladder hazard 模型。
-- d1/d2 YES 可以从 `1 - NO bid` 构造出可成交 ask proxy；`ask>=0.40 + fee_edge02` verified 上 bridge_no_current_yes_5expr 为 `+9.7%`，legacy_4expr 为 `+8.4%`。
+- d1/d2 YES 可以从 `1 - NO bid` 构造出可成交 ask proxy；`ask>=0.40 + fee_edge02` verified 上 bridge_no_current_yes_5expr 为 `+7.4%`，legacy_4expr 为 `+6.8%`。
 - 这个改善方向是合理的，但 dev/verified 都没有足够窄的 CI，且 d1_yes 单腿仍弱；新的 live 表达不应替换现有策略。合理动作是把 `bridge_no_current_yes_5expr` 作为 shadow target-book bridge 记录，继续补全真正 full-ladder/hazard 概率。
 - `current_yes` 仍然不该回 live：它在 Lucknow 暴露的是重锚和 basis 风险；本实验把 `no_current_yes` 单独列出来，而不是靠单日事故把 d1_no 删掉。
 
@@ -31,13 +31,13 @@
 | dev_cv | 0.40 | fee_edge02 | bridge_no_current_yes_5expr | 373 | 19 | 36 | +67.3% | 240.47 | 10.53 | +4.4% | -0.4% | +8.6% | 0.634 | +4.2% |
 | dev_cv | 0.40 | fee_edge02 | legacy_4expr | 369 | 19 | 36 | +70.5% | 249.29 | 10.71 | +4.3% | -0.8% | +9.7% | 0.665 | +4.2% |
 | dev_cv | 0.40 | fee_edge02 | legacy_no_current_yes_3expr | 339 | 19 | 36 | +71.4% | 231.79 | 10.21 | +4.4% | -0.0% | +8.3% | 0.674 | +4.2% |
-| verified_forward | 0.20 | fee_edge02 | legacy_4expr | 152 | 12 | 34 | +63.2% | 87.86 | 8.14 | +9.3% | +0.3% | +18.9% | 0.568 | +5.2% |
-| verified_forward | 0.20 | fee_edge02 | legacy_no_current_yes_3expr | 137 | 12 | 34 | +64.2% | 81.43 | 6.57 | +8.1% | -1.6% | +16.4% | 0.584 | +5.3% |
-| verified_forward | 0.20 | gross_edge02 | legacy_4expr | 192 | 12 | 36 | +64.1% | 112.56 | 10.44 | +9.3% | +0.2% | +17.8% | 0.576 | +4.0% |
-| verified_forward | 0.40 | fee_edge02 | bridge_6expr | 139 | 12 | 36 | +70.5% | 88.95 | 9.05 | +10.2% | -0.9% | +20.9% | 0.629 | +4.7% |
-| verified_forward | 0.40 | fee_edge02 | bridge_no_current_yes_5expr | 126 | 12 | 35 | +70.6% | 81.10 | 7.90 | +9.7% | -2.4% | +21.0% | 0.633 | +4.8% |
-| verified_forward | 0.40 | fee_edge02 | legacy_4expr | 125 | 12 | 34 | +72.8% | 83.97 | 7.03 | +8.4% | -2.5% | +19.5% | 0.662 | +4.7% |
-| verified_forward | 0.40 | fee_edge02 | legacy_no_current_yes_3expr | 112 | 12 | 33 | +73.2% | 76.12 | 5.88 | +7.7% | -3.7% | +19.8% | 0.670 | +4.8% |
+| verified_forward | 0.20 | fee_edge02 | legacy_4expr | 190 | 15 | 36 | +63.7% | 112.25 | 8.75 | +7.8% | -0.7% | +16.8% | 0.580 | +5.1% |
+| verified_forward | 0.20 | fee_edge02 | legacy_no_current_yes_3expr | 172 | 15 | 36 | +65.1% | 104.35 | 7.65 | +7.3% | -1.5% | +15.1% | 0.596 | +5.2% |
+| verified_forward | 0.20 | gross_edge02 | legacy_4expr | 232 | 15 | 36 | +63.8% | 138.05 | 9.95 | +7.2% | -2.5% | +16.6% | 0.585 | +4.0% |
+| verified_forward | 0.40 | fee_edge02 | bridge_6expr | 177 | 15 | 36 | +68.9% | 113.35 | 8.65 | +7.6% | -2.7% | +17.6% | 0.630 | +4.7% |
+| verified_forward | 0.40 | fee_edge02 | bridge_no_current_yes_5expr | 162 | 15 | 36 | +69.1% | 104.28 | 7.72 | +7.4% | -3.3% | +17.9% | 0.633 | +4.8% |
+| verified_forward | 0.40 | fee_edge02 | legacy_4expr | 160 | 15 | 36 | +71.9% | 107.72 | 7.28 | +6.8% | -2.5% | +16.2% | 0.663 | +4.7% |
+| verified_forward | 0.40 | fee_edge02 | legacy_no_current_yes_3expr | 145 | 15 | 36 | +72.4% | 98.65 | 6.35 | +6.4% | -3.3% | +16.0% | 0.670 | +4.8% |
 
 ## Verified Daily, ask>=0.40 fee_edge02
 
@@ -55,6 +55,9 @@
 | bridge_no_current_yes_5expr | 2026-07-01 | 10 | 10 | 9 | +90.0% | 6.97 | 2.03 | +29.1% | 0.687 | +4.4% |
 | bridge_no_current_yes_5expr | 2026-07-02 | 3 | 3 | 2 | +66.7% | 1.97 | 0.03 | +1.5% | 0.647 | +2.8% |
 | bridge_no_current_yes_5expr | 2026-07-03 | 8 | 8 | 6 | +75.0% | 5.55 | 0.45 | +8.2% | 0.684 | +4.3% |
+| bridge_no_current_yes_5expr | 2026-07-05 | 17 | 17 | 9 | +52.9% | 11.22 | -2.22 | -19.8% | 0.649 | +4.6% |
+| bridge_no_current_yes_5expr | 2026-07-06 | 11 | 11 | 7 | +63.6% | 6.71 | 0.29 | +4.3% | 0.600 | +4.8% |
+| bridge_no_current_yes_5expr | 2026-07-07 | 8 | 8 | 7 | +87.5% | 5.25 | 1.75 | +33.2% | 0.646 | +4.9% |
 | legacy_4expr | 2026-06-21 | 14 | 14 | 10 | +71.4% | 9.95 | 0.05 | +0.5% | 0.701 | +3.5% |
 | legacy_4expr | 2026-06-22 | 12 | 12 | 11 | +91.7% | 8.02 | 2.98 | +37.1% | 0.658 | +6.2% |
 | legacy_4expr | 2026-06-23 | 12 | 12 | 9 | +75.0% | 8.07 | 0.93 | +11.5% | 0.662 | +5.6% |
@@ -67,26 +70,29 @@
 | legacy_4expr | 2026-07-01 | 9 | 9 | 8 | +88.9% | 6.79 | 1.21 | +17.9% | 0.745 | +3.9% |
 | legacy_4expr | 2026-07-02 | 3 | 3 | 3 | +100.0% | 2.36 | 0.64 | +26.9% | 0.780 | +2.7% |
 | legacy_4expr | 2026-07-03 | 8 | 8 | 7 | +87.5% | 5.75 | 1.25 | +21.7% | 0.710 | +4.6% |
+| legacy_4expr | 2026-07-05 | 18 | 18 | 11 | +61.1% | 12.21 | -1.21 | -9.9% | 0.668 | +4.6% |
+| legacy_4expr | 2026-07-06 | 9 | 9 | 6 | +66.7% | 6.02 | -0.02 | -0.3% | 0.658 | +5.0% |
+| legacy_4expr | 2026-07-07 | 8 | 8 | 7 | +87.5% | 5.52 | 1.48 | +26.8% | 0.680 | +4.9% |
 
 ## Expression Contribution
 
 | expression_set | expression | rows | dates | win_rate | cost_net | pnl_net | roi_net | avg_ask | avg_fee_edge |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bridge_6expr | current_yes | 18 | 7 | +61.1% | 11.28 | -0.28 | -2.5% | 0.616 | +4.5% |
-| bridge_6expr | d1_yes | 12 | 9 | +50.0% | 5.81 | 0.19 | +3.3% | 0.472 | +5.8% |
-| bridge_6expr | current_no | 20 | 9 | +70.0% | 12.27 | 1.73 | +14.1% | 0.603 | +7.4% |
-| bridge_6expr | d2_no | 44 | 12 | +77.3% | 31.92 | 2.08 | +6.5% | 0.716 | +4.1% |
-| bridge_6expr | d2_yes | 13 | 8 | +69.2% | 6.68 | 2.32 | +34.8% | 0.502 | +3.6% |
-| bridge_6expr | d1_no | 32 | 10 | +75.0% | 21.00 | 3.00 | +14.3% | 0.646 | +4.1% |
-| bridge_no_current_yes_5expr | d1_yes | 12 | 9 | +50.0% | 5.81 | 0.19 | +3.3% | 0.472 | +5.8% |
-| bridge_no_current_yes_5expr | d2_no | 45 | 12 | +75.6% | 32.76 | 1.24 | +3.8% | 0.719 | +4.1% |
-| bridge_no_current_yes_5expr | current_no | 20 | 9 | +70.0% | 12.27 | 1.73 | +14.1% | 0.603 | +7.4% |
-| bridge_no_current_yes_5expr | d2_yes | 13 | 8 | +69.2% | 6.68 | 2.32 | +34.8% | 0.502 | +3.6% |
-| bridge_no_current_yes_5expr | d1_no | 36 | 10 | +72.2% | 23.58 | 2.42 | +10.3% | 0.645 | +4.3% |
-| legacy_4expr | current_yes | 18 | 7 | +61.1% | 11.28 | -0.28 | -2.5% | 0.616 | +4.5% |
-| legacy_4expr | d2_no | 49 | 12 | +75.5% | 35.41 | 1.59 | +4.5% | 0.713 | +4.2% |
-| legacy_4expr | current_no | 23 | 10 | +73.9% | 14.35 | 2.65 | +18.5% | 0.613 | +6.9% |
-| legacy_4expr | d1_no | 35 | 10 | +74.3% | 22.93 | 3.07 | +13.4% | 0.645 | +4.0% |
+| bridge_6expr | current_yes | 21 | 9 | +61.9% | 13.35 | -0.35 | -2.6% | 0.625 | +4.3% |
+| bridge_6expr | d1_yes | 13 | 10 | +46.2% | 6.23 | -0.23 | -3.7% | 0.467 | +5.7% |
+| bridge_6expr | current_no | 29 | 12 | +69.0% | 18.18 | 1.82 | +10.0% | 0.616 | +6.7% |
+| bridge_6expr | d2_no | 53 | 15 | +75.5% | 37.90 | 2.10 | +5.5% | 0.705 | +4.3% |
+| bridge_6expr | d2_yes | 19 | 11 | +63.2% | 9.67 | 2.33 | +24.1% | 0.497 | +3.8% |
+| bridge_6expr | d1_no | 42 | 13 | +73.8% | 28.02 | 2.98 | +10.6% | 0.657 | +4.2% |
+| bridge_no_current_yes_5expr | d1_yes | 13 | 10 | +46.2% | 6.23 | -0.23 | -3.7% | 0.467 | +5.7% |
+| bridge_no_current_yes_5expr | d2_no | 54 | 15 | +74.1% | 38.75 | 1.25 | +3.2% | 0.708 | +4.3% |
+| bridge_no_current_yes_5expr | current_no | 29 | 12 | +69.0% | 18.18 | 1.82 | +10.0% | 0.616 | +6.7% |
+| bridge_no_current_yes_5expr | d2_yes | 19 | 11 | +63.2% | 9.67 | 2.33 | +24.1% | 0.497 | +3.8% |
+| bridge_no_current_yes_5expr | d1_no | 47 | 13 | +72.3% | 31.45 | 2.55 | +8.1% | 0.659 | +4.3% |
+| legacy_4expr | current_yes | 21 | 9 | +61.9% | 13.35 | -0.35 | -2.6% | 0.625 | +4.3% |
+| legacy_4expr | d2_no | 58 | 15 | +74.1% | 41.39 | 1.61 | +3.9% | 0.704 | +4.4% |
+| legacy_4expr | current_no | 34 | 13 | +70.6% | 21.64 | 2.36 | +10.9% | 0.626 | +6.3% |
+| legacy_4expr | d1_no | 47 | 13 | +74.5% | 31.34 | 3.66 | +11.7% | 0.656 | +4.2% |
 
 ## Bridge vs Legacy Changed Rows
 
@@ -96,35 +102,35 @@
 
 | ask_floor | city | target_date | baseline_expression | bridge_expression | baseline_pnl_net | bridge_pnl_net | pnl_net_delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.40 | Miami | 2026-07-05 | d1_no | d2_yes | 0.32 | -0.70 | -1.02 |
 | 0.40 | NYC | 2026-06-21 | d1_no | d2_yes | 0.28 | -0.60 | -0.88 |
+| 0.40 | Atlanta | 2026-07-06 | d1_no | d2_yes | 0.30 | -0.48 | -0.78 |
 | 0.40 | Denver | 2026-06-27 |  | d2_yes | 0.00 | -0.65 | -0.65 |
 | 0.40 | Ankara | 2026-07-02 | current_no | d1_yes | 0.14 | -0.46 | -0.61 |
 | 0.40 | Chongqing | 2026-06-26 | current_yes |  | 0.56 | 0.00 | -0.56 |
 | 0.40 | Madrid | 2026-06-29 |  | d1_yes | 0.00 | -0.55 | -0.55 |
 | 0.40 | Dallas | 2026-07-03 |  | d2_yes | 0.00 | -0.54 | -0.54 |
+| 0.40 | Amsterdam | 2026-07-05 |  | d2_yes | 0.00 | -0.49 | -0.49 |
 | 0.40 | Chengdu | 2026-06-25 |  | d1_yes | 0.00 | -0.48 | -0.48 |
 | 0.40 | Wellington | 2026-06-23 | current_yes |  | 0.48 | 0.00 | -0.48 |
 | 0.40 | Lucknow | 2026-06-25 |  | d1_yes | 0.00 | -0.42 | -0.42 |
-| 0.40 | BuenosAires | 2026-06-21 | current_yes |  | 0.40 | 0.00 | -0.40 |
-| 0.40 | Istanbul | 2026-06-25 | current_yes |  | 0.31 | 0.00 | -0.31 |
-| 0.40 | Tokyo | 2026-06-28 | current_yes |  | 0.29 | 0.00 | -0.29 |
 
 ### Best Deltas
 
 | ask_floor | city | target_date | baseline_expression | bridge_expression | baseline_pnl_net | bridge_pnl_net | pnl_net_delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0.40 | Busan | 2026-06-21 | current_yes |  | -0.64 | 0.00 | 0.64 |
+| 0.40 | Guangzhou | 2026-07-06 |  | d2_yes | 0.00 | 0.59 | 0.59 |
 | 0.40 | Guangzhou | 2026-06-25 |  | d2_yes | 0.00 | 0.59 | 0.59 |
 | 0.40 | Singapore | 2026-06-21 |  | d2_yes | 0.00 | 0.59 | 0.59 |
 | 0.40 | Ankara | 2026-06-30 |  | d1_yes | 0.00 | 0.55 | 0.55 |
 | 0.40 | Wuhan | 2026-06-28 |  | d2_yes | 0.00 | 0.55 | 0.55 |
+| 0.40 | Manila | 2026-07-06 |  | d2_yes | 0.00 | 0.53 | 0.53 |
 | 0.40 | Dallas | 2026-06-25 | current_yes |  | -0.52 | 0.00 | 0.52 |
 | 0.40 | Munich | 2026-06-21 |  | d1_yes | 0.00 | 0.51 | 0.51 |
 | 0.40 | Tokyo | 2026-06-26 | current_yes |  | -0.48 | 0.00 | 0.48 |
 | 0.40 | Beijing | 2026-07-01 |  | d2_yes | 0.00 | 0.46 | 0.46 |
 | 0.40 | Guangzhou | 2026-06-28 | current_yes |  | -0.46 | 0.00 | 0.46 |
-| 0.40 | Austin | 2026-06-26 |  | d2_yes | 0.00 | 0.41 | 0.41 |
-| 0.40 | Dallas | 2026-06-22 |  | d1_yes | 0.00 | 0.41 | 0.41 |
 
 ## Later Signal Audit
 
@@ -132,14 +138,14 @@
 
 | expression_set | scope | city_days | later_eligible_days | later_different_days | later_opposite_days |
 | --- | --- | --- | --- | --- | --- |
-| bridge_no_current_yes_5expr | verified_forward | 126 | 37 | 30 | 14 |
-| legacy_4expr | verified_forward | 125 | 33 | 25 | 13 |
+| bridge_no_current_yes_5expr | verified_forward | 162 | 51 | 37 | 18 |
+| legacy_4expr | verified_forward | 160 | 45 | 33 | 16 |
 
 ## Data Boundary
 
-- `p5_opportunities`: `{'rows': 196992, 'min_date': '2026-06-02', 'max_date': '2026-07-03', 'scopes': {'dev_cv': 134748, 'verified_forward': 62244}}`
-- `atlas`: `{'rows': 13860, 'min_date': '2026-05-19', 'max_date': '2026-07-04'}`
-- `settlement_outcomes`: `{'rows': 28164, 'min_date': '2026-05-04', 'max_date': '2026-07-04'}`
+- `p5_opportunities`: `{'rows': 209520, 'min_date': '2026-06-02', 'max_date': '2026-07-08', 'scopes': {'dev_cv': 134748, 'verified_forward': 73728, 'extension_forward': 1044}}`
+- `atlas`: `{'rows': 14368, 'min_date': '2026-05-19', 'max_date': '2026-07-08'}`
+- `settlement_outcomes`: `{'rows': 29715, 'min_date': '2026-05-04', 'max_date': '2026-07-07'}`
 - P5/P6 可评分分母当前到 2026-07-03；atlas 虽到 2026-07-04，但 tmax 四桶 label 对 7/04 仍有缺口，不能把 7/04 硬算进 verified。
 
 ## Verdict
