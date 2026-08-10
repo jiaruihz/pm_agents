@@ -13,10 +13,13 @@ attributed children:
   stage while retaining one cent of model edge.
 
 Maker replacements never cross the ask and never convert to taker. They are
-cancelled 90 seconds before the next expected weather update, when an
-unexpected observation epoch arrives, or when the 15-minute order TTL expires.
-When one-tick improvement is impossible, the maker joins best bid instead of
-dropping the maker sleeve.
+cancelled 90 seconds before the next expected source report, when an unexpected
+observation epoch arrives, or when the 15-minute parent TTL expires.  The clock
+is intentionally based on source-report time rather than this collector's later
+availability: another participant may receive the report first.  A maker first
+seen inside that blackout is skipped for live and retained only as an explicit
+post-update shadow counterfactual; it is never silently or automatically
+re-armed.
 """
 
 from __future__ import annotations
@@ -64,9 +67,9 @@ from weather_data_feed.observation_cache import index_observation_cache  # noqa:
 
 STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
-CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_edge_cap_v2"
-EXECUTION_PROFILE = "split_taker_maker_edge_capped_no_fallback_v2"
-DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v2"
+CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_edge_cap_v3"
+EXECUTION_PROFILE = "split_taker_maker_edge_capped_no_fallback_v3"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v3"
 MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
 FROZEN_TAKER_SHARES = 10.0
 FROZEN_MAKER_SHARES = 5.0
@@ -556,6 +559,12 @@ def entry_cost_reservation(args: argparse.Namespace, row: Mapping[str, Any]) -> 
     return (float(args.taker_shares) + float(args.maker_shares)) * ask
 
 
+def entry_plan_cost_reservation(plans: Iterable[Mapping[str, Any]]) -> float:
+    """Reserve only children that can actually reach the executor."""
+
+    return sum(finite(plan.get("order_notional_cap")) or 0.0 for plan in plans)
+
+
 def max_live_child_notional_usd(args: argparse.Namespace) -> float:
     """Maximum principal for one child at the binary-market price ceiling."""
 
@@ -595,35 +604,85 @@ def maker_edge_price_cap(
     return math.floor((raw_cap + 1e-12) / tick_size) * tick_size
 
 
+def maker_clock_assessment(
+    row: Mapping[str, Any],
+    *,
+    now: datetime,
+    order_ttl_min: float,
+) -> dict[str, Any]:
+    profile = get_execution_profile(EXECUTION_PROFILE)
+    source_epoch = parse_utc(row.get("source_report_ts_utc"))
+    cadence_min = finite(row.get("observation_cadence_min"))
+    common = {
+        "maker_clock_basis": str(profile.fixed_parameters.get("clock_basis") or ""),
+        "maker_post_update_live_rearm": bool(
+            profile.fixed_parameters.get("post_update_live_rearm")
+        ),
+        "maker_post_update_shadow_revalidation": bool(
+            profile.fixed_parameters.get("post_update_shadow_revalidation")
+        ),
+        "post_update_reprice_required": False,
+    }
+    if source_epoch is None or cadence_min is None or cadence_min <= 0:
+        return {
+            **common,
+            "maker_clock_status": "invalid_source_clock",
+            "maker_live_eligible": False,
+            "maker_live_skip_reason": "missing_source_epoch_or_cadence",
+            "maker_shadow_policy": "not_scorable_missing_source_clock",
+            "seconds_to_next_source_report": None,
+        }
+    next_update = source_epoch + timedelta(minutes=cadence_min)
+    cancel_before_update = next_update - timedelta(seconds=profile.cancel_buffer_sec)
+    ttl_deadline = now + timedelta(minutes=order_ttl_min)
+    deadline = min(cancel_before_update, ttl_deadline)
+    eligible = deadline > now
+    seconds_to_next_report = (next_update - now).total_seconds()
+    clock_fields = {
+        **common,
+        "data_update_source": str(row.get("obs_source") or "weather_observation"),
+        "data_epoch_ref": str(row.get("source_report_ts_utc") or ""),
+        "data_epoch_ts_utc": source_epoch.isoformat(timespec="seconds"),
+        "next_data_update_due_utc": next_update.isoformat(timespec="seconds"),
+        "next_source_report_due_utc": next_update.isoformat(timespec="seconds"),
+        "cancel_before_data_update_utc": cancel_before_update.isoformat(timespec="seconds"),
+        "cancel_before_source_report_utc": cancel_before_update.isoformat(timespec="seconds"),
+        "cancel_buffer_sec": profile.cancel_buffer_sec,
+        "cancel_reason": "pre_data_update",
+        "maker_clock_guard_reason": "pre_source_report",
+        "seconds_to_next_source_report": round(seconds_to_next_report, 6),
+        "maker_clock_status": (
+            "eligible_before_source_report" if eligible else "pre_source_report_blackout"
+        ),
+        "maker_live_eligible": eligible,
+        "maker_live_skip_reason": "" if eligible else "source_report_deadline_elapsed",
+        "maker_shadow_policy": (
+            "none_live_maker_active"
+            if eligible
+            else "first_post_update_positive_ev_replay_only_v1"
+        ),
+    }
+    if deadline <= now:
+        return clock_fields
+    return {
+        **clock_fields,
+        "expires_at_utc": deadline.isoformat(timespec="seconds"),
+        "maker_lifecycle_deadline_utc": deadline.isoformat(timespec="seconds"),
+    }
+
+
 def maker_deadline_fields(
     row: Mapping[str, Any],
     *,
     now: datetime,
     order_ttl_min: float,
 ) -> dict[str, Any] | None:
-    profile = get_execution_profile(EXECUTION_PROFILE)
-    source_epoch = parse_utc(row.get("source_report_ts_utc"))
-    cadence_min = finite(row.get("observation_cadence_min"))
-    if source_epoch is None or cadence_min is None or cadence_min <= 0:
-        return None
-    next_update = source_epoch + timedelta(minutes=cadence_min)
-    cancel_before_update = next_update - timedelta(seconds=profile.cancel_buffer_sec)
-    ttl_deadline = now + timedelta(minutes=order_ttl_min)
-    deadline = min(cancel_before_update, ttl_deadline)
-    if deadline <= now:
-        return None
-    return {
-        "data_update_source": str(row.get("obs_source") or "weather_observation"),
-        "data_epoch_ref": str(row.get("source_report_ts_utc") or ""),
-        "data_epoch_ts_utc": source_epoch.isoformat(timespec="seconds"),
-        "next_data_update_due_utc": next_update.isoformat(timespec="seconds"),
-        "cancel_before_data_update_utc": cancel_before_update.isoformat(timespec="seconds"),
-        "cancel_buffer_sec": profile.cancel_buffer_sec,
-        "cancel_reason": "pre_data_update",
-        "post_update_reprice_required": True,
-        "expires_at_utc": deadline.isoformat(timespec="seconds"),
-        "maker_lifecycle_deadline_utc": deadline.isoformat(timespec="seconds"),
-    }
+    assessment = maker_clock_assessment(
+        row,
+        now=now,
+        order_ttl_min=order_ttl_min,
+    )
+    return assessment if bool(assessment.get("maker_live_eligible")) else None
 
 
 def staged_maker_resting_price(
@@ -692,11 +751,12 @@ def base_plan_fields(
         if maker
         else ask
     )
-    maker_timing = (
-        maker_deadline_fields(row, now=now, order_ttl_min=order_ttl_min)
+    maker_clock = (
+        maker_clock_assessment(row, now=now, order_ttl_min=order_ttl_min)
         if maker
-        else None
+        else {}
     )
+    maker_timing = maker_clock if bool(maker_clock.get("maker_live_eligible")) else None
     expires = now + timedelta(minutes=order_ttl_min)
     return {
         "strategy": "weather_edge_v1",
@@ -787,7 +847,7 @@ def base_plan_fields(
             else ""
         ),
         "maker_lifecycle_reprice_count": 0,
-        **(maker_timing or {}),
+        **maker_clock,
     }
 
 
@@ -819,8 +879,7 @@ def build_entry_plans(
             order_ttl_min=order_ttl_min,
         )
         if role == "maker" and (
-            not str(fields.get("source_report_ts_utc") or "")
-            or not str(fields.get("maker_lifecycle_deadline_utc") or "")
+            not bool(fields.get("maker_live_eligible"))
             or (finite(fields["limit_price"]) or 0.0) <= 0
         ):
             continue
@@ -1094,8 +1153,6 @@ def new_entry_plans(
             reason = "family_city_day_conflict"
         elif used_city_days >= int(args.max_city_days_per_bj_day):
             reason = "daily_city_day_cap"
-        elif used_cost + entry_cost_reservation(args, row) > float(args.max_daily_cost_usd):
-            reason = "daily_cost_cap"
         entry_plans = (
             []
             if reason
@@ -1111,6 +1168,22 @@ def new_entry_plans(
         if not reason and not any(plan.get("child_order_role") == "taker" for plan in entry_plans):
             reason = "missing_taker_plan"
             entry_plans = []
+        planned_cost = entry_plan_cost_reservation(entry_plans)
+        if (
+            not reason
+            and used_cost + planned_cost > float(args.max_daily_cost_usd)
+        ):
+            reason = "daily_cost_cap"
+            entry_plans = []
+            planned_cost = 0.0
+        maker_clock = maker_clock_assessment(
+            row,
+            now=now,
+            order_ttl_min=float(args.order_ttl_min),
+        )
+        maker_planned = any(
+            plan.get("child_order_role") == "maker" for plan in entry_plans
+        )
         attempts.append(
             {
                 "record_type": "current_yes_core_carry_entry_attempt",
@@ -1123,13 +1196,31 @@ def new_entry_plans(
                 "status": "blocked" if reason else "planned",
                 "reason": reason,
                 "live_enabled": bool(args.live and args.confirm_live),
+                "maker_requested_shares": float(args.maker_shares),
+                "maker_planned_shares": (
+                    float(args.maker_shares) if maker_planned else 0.0
+                ),
+                "maker_live_action": (
+                    "entry_blocked"
+                    if reason
+                    else ("post" if maker_planned else "skip_terminal")
+                ),
+                "maker_shadow_revalidation_shares": (
+                    float(args.maker_shares)
+                    if not reason
+                    and not maker_planned
+                    and maker_clock.get("maker_clock_status")
+                    == "pre_source_report_blackout"
+                    else 0.0
+                ),
+                **maker_clock,
             }
         )
         attempted.add(sid)
         if entry_plans:
             plans.extend(entry_plans)
             used_city_days += 1
-            used_cost += entry_cost_reservation(args, row)
+            used_cost += planned_cost
     return plans, attempts
 
 

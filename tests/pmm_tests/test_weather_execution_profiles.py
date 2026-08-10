@@ -20,6 +20,7 @@ def test_legacy_profile_names_and_behavior_are_preserved_and_json_safe():
         "split_taker_maker_chase_v1": ("fixed_weight_split", 0, (("taker", "current_yes_heat_death_taker_probe_v1", "taker_now", False, 0.5), ("maker", "current_yes_heat_death_maker_probe_v1", "maker_chase_then_taker_fallback_v1", True, 0.5))),
         "split_taker_maker_chase_capped_no_fallback_v1": ("explicit_leg_shares", 0, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v1", "maker_chase_until_observation_or_ttl_v1", True, 1.0))),
         "split_taker_maker_edge_capped_no_fallback_v2": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
+        "split_taker_maker_edge_capped_no_fallback_v3": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
     }
 
     assert tuple(profiles._PROFILES) == tuple(expected)
@@ -131,10 +132,15 @@ def test_core_carry_profile_owns_live_cadence_and_unlimited_repricing():
     assert "taker_fallback" not in maker.order_lifecycle_policy
 
 
-def test_core_carry_edge_capped_profile_owns_price_and_deadline_parameters():
-    profile = profiles.get_execution_profile(
-        "split_taker_maker_edge_capped_no_fallback_v2"
-    )
+def test_core_carry_edge_capped_v2_history_remains_unlimited():
+    profile = profiles.get_execution_profile("split_taker_maker_edge_capped_no_fallback_v2")
+    maker = next(leg for leg in profile.legs if leg.role == "maker")
+
+    assert maker.max_reprices is None
+
+
+def test_core_carry_edge_capped_v3_owns_profit_safe_clock_and_reprices():
+    profile = profiles.get_execution_profile("split_taker_maker_edge_capped_no_fallback_v3")
     maker = next(leg for leg in profile.legs if leg.role == "maker")
 
     assert profile.cancel_buffer_sec == 90
@@ -146,6 +152,9 @@ def test_core_carry_edge_capped_profile_owns_price_and_deadline_parameters():
         "retained_edge": "0.01",
         "stage_midpoint_after_sec": 300,
         "stage_near_ask_after_sec": 600,
+        "clock_basis": "next_source_report_not_collector_availability",
+        "post_update_live_rearm": False,
+        "post_update_shadow_revalidation": True,
     }
     assert maker.reprice_policy == "deadline_staged_follow_best_bid"
     assert maker.price_cap_policy == (
