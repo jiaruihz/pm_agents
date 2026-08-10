@@ -2,9 +2,12 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from weather_data_feed_service.market_books_ws import (
+    Collector,
     DEFAULT_CITIES,
     HourlyWriter,
+    Selection,
     SourceEventCursor,
+    build_parser,
     scheduled_report_windows,
     select_tokens,
 )
@@ -269,3 +272,56 @@ def test_hourly_writer_uses_restart_safe_stream_file(tmp_path) -> None:
     assert writer.stream_id in path.name
     assert path.suffix == ".jsonl"
     assert path.read_text(encoding="utf-8").strip() == '{"message":"one"}'
+
+
+def test_collector_publishes_append_only_subscription_epoch_lineage(tmp_path) -> None:
+    args = build_parser().parse_args(
+        [
+            "--market-books-latest",
+            str(tmp_path / "latest.json"),
+            "--observation-cache",
+            str(tmp_path / "observations.json"),
+            "--source-events-jsonl",
+            str(tmp_path / "sources.jsonl"),
+            "--output-root",
+            str(tmp_path / "ws"),
+            "--health-path",
+            str(tmp_path / "health.json"),
+        ]
+    )
+    collector = Collector(args)
+    collector.selection = Selection(
+        tokens={"yes-token"},
+        token_rows={
+            "yes-token": {
+                "city": "Helsinki",
+                "event_date": "2026-08-09",
+                "bracket": "22",
+                "outcome": "yes",
+                "condition_id": "condition-22",
+            }
+        },
+        city_token_counts={"Helsinki": 1},
+        active_brackets={"Helsinki": ["22"]},
+        grace_brackets={"Helsinki": []},
+        scheduled_cities=["Helsinki"],
+        research_cities=[],
+        burst_cities=[],
+        missing_observation_cities=[],
+        invalidation_state={},
+    )
+    first = collector.publish_subscription_epoch(
+        {"yes-token"}, NOW, reason="connect"
+    )
+    second = collector.publish_subscription_epoch(
+        {"yes-token"}, NOW + timedelta(seconds=5), reason="selector_reconcile"
+    )
+
+    path = tmp_path / "ws" / "subscription_epochs" / "subscription_epochs_2026-08-09.jsonl"
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    assert rows == [first, second]
+    assert first["schema_version"] == "weather_market_books_ws_subscription_epoch_v2"
+    assert first["token_map_id"]
+    assert first["capture_policy_id"]
+    assert first["subscription_set_id"]
+    assert second["previous_subscription_epoch_id"] == first["subscription_epoch_id"]

@@ -1,7 +1,7 @@
 # Weather City Intraday Runtime（WCIR）：总体设计与迁移方案
 
 Status: WCIR runtime/authority migration implemented; model-performance baseline remains rolling; current process/JRS health is intentionally dynamic
-Updated: 2026-08-09 selective CLOB WebSocket reconstruction contract
+Updated: 2026-08-10 shared canonical CLOB WebSocket reconstruction implementation
 Scope: 城市级分钟/小时间隔观测模型从采集、PIT checkpoint、replay 到统一候选与下单执行的目标架构
 Source of truth: 目标模块边界与接口是；当前生产进程、实例和迁移状态不是
 Used by: `AGENTS.md`、`CLAUDE.md`、`weather-strategy-research`、各城市模型研究与接入任务
@@ -254,6 +254,34 @@ checkpoint/time-bin/first-event/state-transition 上产生 feature frame，不�
 quote delta 不得标记为 trade print、executed volume、queue position 或 fill。
 
 这允许东京的 market-offset、赫尔辛基的 residual 研究和阿姆斯特丹的 source-cross/quote policy 共用 runtime，同时保留各自机制。
+
+#### 5.1.1 当前公共实现（2026-08-10）
+
+共享 authority 为 `weather_data_feed/ws_incremental_book.py`，contract 为
+`weather_ws_reconstructed_book_v2`。同一实现同时供 live adapter 和 offline replay 使用，不再由 Helsinki 或单个研究脚本
+各自解释 raw frame。公共接口包含：
+
+- `canonical_ws_frame_id`：以 epoch、receive clock、producer/build 与原始 message 生成 raw identity；
+- `IncrementalBookReconstructor`：处理 baseline/delta、selector-only carry、reconnect fresh baseline、duplicate、
+  receive/exchange out-of-order、可用 sequence gap、best-quote parity 与结构化 blocker；
+- `materialize_reconstructed_books`：按 subscription manifest + raw frame 生成 deterministic immutable snapshot 与 blocker interval；
+- `compare_rest_ws_parity`：只做独立 REST/WS 对照，不允许 REST 回填 WS gap；REST 若只返回 top-N depth，明确标
+  `rest_depth_prefix_parity`，不误报完整 depth 相等。
+
+每个 token snapshot 保存 baseline raw ref、delta first/last ref、delta count/chain hash、parity ref、token-map、
+subscription-set、capture-policy、selector 与 producer build identity。`book_snapshot_id` 不依赖查询时刻；默认模型引用写
+`feature_book_snapshot_id`，执行取价必须另以 `execution_book_snapshot_id` 引用，二者不得互相冒充。
+
+2026-08-10 `10:00:33.687Z–10:07:09.567Z` deployed raw sample 验证覆盖 Amsterdam、Busan、Helsinki、Tokyo：
+1,542 frames 重建为 2,122 immutable states；输入顺序反转后 run ID 仍为
+`3fe99dcaf5193c6126c9a58230812b1a1dcfa179e13053621b282de3e51a83a1`。实际 exchange stream 不提供 sequence，
+因此 snapshot 明确标 `exchange_sequence_unavailable / best_quote_parity_checked_sequence_unavailable`，不得称完整 sequence proof。
+同窗记录 161 个跨帧 pending-parity 窗口，其中153个不超过1ms、p95不超过1ms、最大2.281s；这些窗口内 checkpoint fail closed，
+随后 delta 对齐才恢复。另有5个真实 best-quote parity gap（Helsinki 4、Amsterdam 1），Busan/Tokyo 为0；它们只在 fresh
+baseline/reconnect 后恢复，不能解释成“盘口未变”。Tokyo 同 exchange hash 的 REST 样本通过2/2 top-N prefix parity。
+
+这组数字只描述上述 deployed sample，不是全历史 gap rate，也不是策略筛选或 alpha 证据。公共 contract 已进入控制仓库；
+生产 collector 当前仍由 production manifest 指向的独立 checkout 承载，任何切换到本实现的部署另走 git-first deploy 流程。
 
 ## 6. Live 与 replay 必须同构
 

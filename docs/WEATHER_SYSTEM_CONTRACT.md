@@ -1,7 +1,7 @@
 # Weather Strategy — 系统接口契约
 
 Status: current-source
-Updated: 2026-08-03 WCIR decision contract and canonical build identity overlay
+Updated: 2026-08-10 WCIR canonical reconstructed-book overlay
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -43,6 +43,20 @@ EventEnvelope -> DecisionContext -> ModelOutput -> SignalCandidate -> TradeInten
 
 canonical 物化与报告还必须保存 DB identity、materialization `build_id`/build time 与
 `observed_at_utc`。同一次分析不得静默混合不同 build。
+
+### 0.2 WCIR reconstructed-book contract
+
+选择性 CLOB WebSocket 的共享 contract 为 `weather_ws_reconstructed_book_v2`，authority 是
+`weather_data_feed/ws_incremental_book.py`。raw frame 与 subscription epoch manifest 是 transport truth；重建 snapshot 是
+content-addressed feature evidence，不是新的 raw 正本。最小 lineage 必须含：
+
+`baseline_raw_frame_ref / delta_first_raw_frame_ref / delta_last_raw_frame_ref / delta_frame_count /
+delta_chain_hash / token_map_id / subscription_set_id / capture_policy_id / selector_version /
+producer_build_id / sequence_status / gap_detection_status`。
+
+模型输入使用 `feature_book_snapshot_id`，执行报价使用 `execution_book_snapshot_id`。相同物理 state 可以按不同角色引用，
+但 prediction/candidate 不得用执行时的更新报价回填模型输入。duplicate 幂等忽略；reconnect/new token 没有 fresh baseline、
+out-of-order、sequence gap、pending/mismatched best parity 都返回结构化 blocker。REST 只做 parity，不得修补 WS 历史。
 
 ---
 

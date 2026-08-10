@@ -278,6 +278,12 @@ relative markout、mode distance、邻档传播/lead-lag 与 weather-shock inter
 同socket selector变更只继承仍在订阅的token state，reconnect和新token仍必须等fresh `book` baseline。
 产物位于 `/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_event_ladder_features/`。
 
+共享 raw-to-book authority 已收敛到 `weather_data_feed/ws_incremental_book.py` 的
+`weather_ws_reconstructed_book_v2`；城市研究只能引用其 immutable state/blocker，不再实现自己的 baseline/delta fold。
+`best_bid_ask` 先于同 exchange update 的 delta 时先产生 `best_quote_parity_pending`，期间不可评分；delta 对齐后恢复，
+未对齐则升级为 `best_quote_parity_mismatch` 并等待 fresh baseline。当前 exchange raw 没有 sequence 字段，必须把
+`exchange_sequence_unavailable` 保留为 evidence limit，不能用 best-quote parity 冒充 sequence-complete capture。
+
 #### 5.3.2 交易模型默认使用 market prior + source innovation
 
 城市 weather-only probability 是物理预测基线，不默认等同于可交易 fair price。只要同 checkpoint 市场已经存在，

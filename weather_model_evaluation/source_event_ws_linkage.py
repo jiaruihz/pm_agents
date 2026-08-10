@@ -19,8 +19,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.ws_incremental_book import (  # noqa: E402
-    BookReconstructionError,
-    IncrementalBookReconstructor,
+    canonical_ws_frame_id,
+    materialize_reconstructed_books,
 )
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
@@ -154,21 +154,12 @@ def _load_frames(root: Path, start_ts: float, end_ts: float) -> list[dict[str, A
                 or not row.get("subscription_epoch_id")
             ):
                 continue
-            identity = hashlib.sha256(
-                json.dumps(
-                    {
-                        "epoch": row.get("subscription_epoch_id"),
-                        "received_ns": row.get("received_at_ns"),
-                        "message": row.get("message"),
-                    },
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode()
-            ).hexdigest()
+            enriched = {**row, "_raw_path": str(path)}
+            identity = canonical_ws_frame_id(enriched)
             if identity in seen:
                 continue
             seen.add(identity)
-            frames.append({**row, "_received": received})
+            frames.append({**enriched, "_received": received})
     return sorted(frames, key=lambda row: (row["_received"], row.get("received_at_ns") or 0))
 
 
@@ -179,46 +170,26 @@ def _build_timelines(
     dict[str, list[float]],
     dict[str, int],
 ]:
-    epoch_by_id = {str(row["subscription_epoch_id"]): row for row in epochs}
-    engines: dict[str, IncrementalBookReconstructor] = {}
     timelines: dict[tuple[str, str], list[dict[str, Any]]] = {}
     epoch_frame_times: dict[str, list[float]] = {}
-    errors = 0
     for frame in frames:
         epoch_id = str(frame["subscription_epoch_id"])
-        declaration = epoch_by_id.get(epoch_id)
-        if declaration is None:
-            continue
         epoch_frame_times.setdefault(epoch_id, []).append(frame["_received"])
-        engine = engines.get(epoch_id)
-        if engine is None:
-            engine = IncrementalBookReconstructor()
-            engine.activate_epoch(epoch_id, declaration.get("token_ids") or ())
-            engines[epoch_id] = engine
-        try:
-            updated = engine.apply_envelope(frame)
-        except BookReconstructionError:
-            errors += 1
+    run = materialize_reconstructed_books(epochs, frames, requested_shares=5.0)
+    for snapshot in run.snapshots:
+        observed = _timestamp(snapshot.observed_at_utc)
+        if observed is None:
             continue
-        for token_id in updated:
-            metadata = declaration["_helsinki_tokens"].get(token_id)
-            if not metadata:
-                continue
-            try:
-                snapshot = engine.snapshot(
-                    token_id,
-                    observed_at_utc=str(frame["received_at_utc"]),
-                    requested_shares=5.0,
-                )
-            except BookReconstructionError:
-                continue
-            timelines.setdefault((epoch_id, token_id), []).append(
-                {**snapshot.to_dict(), "_observed": frame["_received"]}
-            )
+        timelines.setdefault(
+            (snapshot.subscription_epoch_id, snapshot.token_id), []
+        ).append({**snapshot.to_dict(), "_observed": observed})
     for values in timelines.values():
         values.sort(key=lambda row: row["_observed"])
     return timelines, epoch_frame_times, {
-        "reconstruction_errors": errors,
+        "reconstruction_errors": run.reconstruction_errors,
+        "reconstruction_blockers": len(run.blockers),
+        "duplicate_frames": run.duplicate_frames,
+        "reconstruction_run_id": run.run_id,
         "timeline_count": len(timelines),
     }
 
@@ -263,7 +234,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if (index := bisect.bisect_right(epoch_times, event["_first_seen"]) - 1) >= 0
     ]
     if active_indexes:
-        frame_start = min(epochs[index]["_started"] for index in active_indexes)
+        chain_starts: list[float] = []
+        for active_index in active_indexes:
+            chain_index = active_index
+            while (
+                chain_index > 0
+                and str(epochs[chain_index].get("reason") or "")
+                == "selector_reconcile"
+            ):
+                chain_index -= 1
+            chain_starts.append(epochs[chain_index]["_started"])
+        frame_start = min(chain_starts)
         frame_end = (
             max(event["_first_seen"] for event in events)
             + max(MARKOUT_HORIZONS_SEC)
@@ -299,7 +280,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "bracket": metadata.get("bracket"),
                 "condition_id": metadata.get("condition_id"),
                 "token_id": token_id,
-                "feature_book_snapshot_id": base["snapshot_id"],
+                "feature_book_snapshot_id": base["feature_book_snapshot_id"],
+                "book_raw_lineage_id": base["raw_lineage_id"],
+                "book_baseline_raw_frame_id": base["baseline_raw_frame_ref"]["frame_id"],
+                "book_delta_chain_hash": base["delta_chain_hash"],
+                "book_delta_frame_count": base["delta_frame_count"],
+                "book_producer_build_id": base["producer_build_id"],
+                "book_selector_version": base["selector_version"],
+                "book_capture_policy_id": base["capture_policy_id"],
+                "book_token_map_id": base["token_map_id"],
+                "book_subscription_set_id": base["subscription_set_id"],
+                "book_sequence_status": base["sequence_status"],
+                "book_gap_detection_status": base["gap_detection_status"],
                 "book_state_age_sec": event["_first_seen"] - base["_observed"],
                 "no_best_bid": base["best_bid"],
                 "no_best_ask": base["best_ask"],

@@ -25,6 +25,7 @@ import websockets
 
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
 from weather_data_feed.source_lineage import producer_build_id
+from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
 
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
@@ -476,6 +477,34 @@ class HourlyWriter:
         self.fd = None
 
 
+class SubscriptionEpochWriter:
+    """Append subscription/capture-policy epochs to their UTC physical shard."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def write(self, payload: dict[str, Any], now_utc: datetime) -> Path:
+        path = (
+            self.root
+            / "subscription_epochs"
+            / f"subscription_epochs_{now_utc:%Y-%m-%d}.jsonl"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        encoded = (
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            + "\n"
+        ).encode("utf-8")
+        fd = os.open(path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+        try:
+            pending = memoryview(encoded)
+            while pending:
+                written = os.write(fd, pending)
+                pending = pending[written:]
+        finally:
+            os.close(fd)
+        return path
+
+
 def _rest_health(path: Path, *, now_utc: datetime, max_age_sec: float) -> dict[str, Any]:
     payload = _load_json(path)
     available = _parse_utc(payload.get("available_at_utc"))
@@ -518,6 +547,10 @@ class Collector:
         self.last_message_at: str | None = None
         self.archive_path: str | None = None
         self.writer = HourlyWriter(self.output_root)
+        self.subscription_writer = SubscriptionEpochWriter(self.output_root)
+        self.connection_sequence = 0
+        self.subscription_epoch_id: str | None = None
+        self.subscription_manifest_path: str | None = None
         self.source_event_cursor = SourceEventCursor(self.source_events)
         self.next_report_at_utc: dict[str, str] = {}
         self.selection = Selection(
@@ -586,6 +619,80 @@ class Collector:
         )
         return self.selection
 
+    def publish_subscription_epoch(
+        self,
+        tokens: set[str],
+        now_utc: datetime,
+        *,
+        reason: str,
+    ) -> dict[str, Any]:
+        self.connection_sequence += 1
+        token_rows = {
+            token: {
+                key: self.selection.token_rows.get(token, {}).get(key)
+                for key in ("city", "event_date", "bracket", "outcome", "condition_id")
+            }
+            for token in sorted(tokens)
+        }
+        capture_policy = {
+            "ladder_scope": "subscription_hot_strip",
+            "active_bracket_count": self.args.active_bracket_count,
+            "research_bracket_count": self.args.research_bracket_count,
+            "event_bracket_count": self.args.event_bracket_count,
+            "post_invalidation_sec": self.args.post_invalidation_sec,
+            "event_burst_sec": self.args.event_burst_sec,
+            "report_window_before_sec": self.args.report_window_before_sec,
+            "report_window_after_sec": self.args.report_window_after_sec,
+            "research_window_before_sec": self.args.research_window_before_sec,
+            "research_sample_modulus": self.args.research_sample_modulus,
+        }
+        token_map_id = hashlib.sha256(
+            json.dumps(token_rows, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        capture_policy_id = hashlib.sha256(
+            json.dumps(capture_policy, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        subscription_set_id = hashlib.sha256(
+            json.dumps(sorted(tokens), separators=(",", ":")).encode()
+        ).hexdigest()
+        identity_basis = {
+            "producer_build_id": PRODUCER_BUILD_ID,
+            "selector_version": SELECTOR_VERSION,
+            "started_at_utc": _utc_text(now_utc),
+            "connection_sequence": self.connection_sequence,
+            "token_map_id": token_map_id,
+            "capture_policy_id": capture_policy_id,
+            "subscription_set_id": subscription_set_id,
+        }
+        epoch_id = hashlib.sha256(
+            json.dumps(identity_basis, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        payload = {
+            "schema_version": "weather_market_books_ws_subscription_epoch_v2",
+            "producer": PRODUCER,
+            "producer_build_id": PRODUCER_BUILD_ID,
+            "selector_version": SELECTOR_VERSION,
+            "subscription_epoch_id": epoch_id,
+            "previous_subscription_epoch_id": self.subscription_epoch_id,
+            "started_at_utc": _utc_text(now_utc),
+            "reason": reason,
+            "connection_sequence": self.connection_sequence,
+            "token_ids": sorted(tokens),
+            "token_rows": token_rows,
+            "token_map_id": token_map_id,
+            "capture_policy": capture_policy,
+            "capture_policy_id": capture_policy_id,
+            "subscription_set_id": subscription_set_id,
+            "active_brackets": self.selection.active_brackets,
+            "scheduled_cities": self.selection.scheduled_cities,
+            "research_cities": self.selection.research_cities,
+            "burst_cities": self.selection.burst_cities,
+        }
+        path = self.subscription_writer.write(payload, now_utc)
+        self.subscription_epoch_id = epoch_id
+        self.subscription_manifest_path = str(path)
+        return payload
+
     def publish_health(self, now_utc: datetime, *, status_override: str | None = None) -> None:
         rest = _rest_health(
             self.market_latest,
@@ -614,6 +721,8 @@ class Collector:
                 "available_at_utc": _utc_text(now_utc),
                 "connected": self.connected,
                 "connection_error": self.connection_error,
+                "subscription_epoch_id": self.subscription_epoch_id,
+                "subscription_manifest_path": self.subscription_manifest_path,
                 "configured_cities": list(self.args.cities),
                 "subscribed_tokens": len(self.selection.tokens),
                 "city_token_counts": self.selection.city_token_counts,
@@ -702,6 +811,7 @@ class Collector:
                 )
             )
             subscribed = set(initial_tokens)
+            self.publish_subscription_epoch(subscribed, _utc_now(), reason="connect")
             self.connected = True
             self.connection_error = None
             next_reconcile = time.monotonic() + self.args.reconcile_sec
@@ -730,9 +840,12 @@ class Collector:
                             "received_at_utc": _utc_text(now_utc),
                             "received_at_ns": received_ns,
                             "subscription_token_count": len(subscribed),
+                            "subscription_epoch_id": self.subscription_epoch_id,
+                            "selector_version": SELECTOR_VERSION,
                             "message_token_ids": sorted(message_tokens),
                             "message": message,
                         }
+                        record["raw_frame_id"] = canonical_ws_frame_id(record)
                         archive_path = self.writer.write(record, now_utc)
                         self.archive_path = str(archive_path)
                         self.session_payload_bytes += len(raw_bytes)
@@ -770,6 +883,12 @@ class Collector:
                             )
                         )
                     subscribed = set(desired)
+                    if new_tokens or expired_tokens:
+                        self.publish_subscription_epoch(
+                            subscribed,
+                            now_utc,
+                            reason="selector_reconcile",
+                        )
                     if not subscribed:
                         self.publish_health(now_utc)
                         return
