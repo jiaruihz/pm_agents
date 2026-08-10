@@ -73,6 +73,19 @@ canonical_tmux_socket: weather-data-feed-jrs
 canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
 market_proxy_state_path: /Volumes/jrs/weather_data_feed_service_runtime/config/market_proxy.json
 market_proxy_default_url: http://127.0.0.1:7897
+market_proxy_node_failover:
+  enabled: true
+  controller_url: http://127.0.0.1:9097
+  group: "🙂 TAGSS"
+  controller_secret_env: WEATHER_MARKET_PROXY_CONTROLLER_SECRET
+  controller_secret_keychain_service: pm_agents.weather_market_proxy_controller
+  controller_secret_keychain_account: weather-controller
+  state_path: /Volumes/jrs/weather_data_feed_service_runtime/config/market_proxy_node_failover.json
+  audit_path: /Volumes/jrs/weather_data_feed_service_runtime/output/market_proxy_control/node_failover.jsonl
+  lock_path: /Volumes/jrs/weather_data_feed_service_runtime/config/market_proxy_node_failover.lock
+  probe_timeout_sec: 5
+  failure_confirmations: 2
+  settle_sec: 0.4
 
 # This is the current Mac production desired state. Historical/research
 # metadata remains in instances.yaml; only runtimes listed here are required to
@@ -341,7 +354,7 @@ managed_runtimes:
     tmux_session: weather_runtime_monitor
     role: monitor
     execution_mode: monitor
-    release_id: strategy_runtime
+    release_id: control_plane
     start_script: scripts/ops/start_weather_runtime_monitor.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/runtime_monitor/latest_summary.json
     max_health_age_sec: 660

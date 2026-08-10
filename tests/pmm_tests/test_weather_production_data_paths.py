@@ -43,6 +43,18 @@ def test_production_data_roots_are_distinct_and_canonical() -> None:
     )
 
 
+def test_production_loader_honors_controller_injected_absolute_config(monkeypatch) -> None:
+    config = ROOT / "src/strategies/runtime/production.yaml"
+    monkeypatch.setenv("WEATHER_PRODUCTION_CONFIG", str(config))
+    assert load_production_spec().host_role == "mac_current_production"
+
+
+def test_production_loader_rejects_relative_injected_config(monkeypatch) -> None:
+    monkeypatch.setenv("WEATHER_PRODUCTION_CONFIG", "src/strategies/runtime/production.yaml")
+    with pytest.raises(ValueError, match="must be absolute"):
+        load_production_spec()
+
+
 def test_semantic_data_path_helpers_cover_current_and_history() -> None:
     spec = load_production_spec()
     assert current_strategy_snapshots() == spec.strategy_paper_snapshot_dir()

@@ -1113,6 +1113,7 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
         return preflight_error
     env = os.environ.copy()
     env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
+    env["WEATHER_PRODUCTION_CONFIG"] = str(ROOT / "src/strategies/runtime/production.yaml")
     if confirm_live:
         env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
     result = subprocess.run(
@@ -1197,6 +1198,7 @@ def _run_restart(
         }
     env = os.environ.copy()
     env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
+    env["WEATHER_PRODUCTION_CONFIG"] = str(ROOT / "src/strategies/runtime/production.yaml")
     if confirm_live:
         env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
     result = subprocess.run(

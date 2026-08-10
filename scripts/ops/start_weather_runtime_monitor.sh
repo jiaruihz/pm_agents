@@ -10,9 +10,8 @@ RUNTIME_DIR="${WEATHER_RUNTIME_MONITOR_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/run
 PID_FILE="$RUNTIME_DIR/loop.pid"
 OUT_FILE="$RUNTIME_DIR/loop.out"
 PY="$PROJECT_DIR/.venv/bin/python"
-CONTROL_ROOT="$(weather_production_path "$PROJECT_DIR" operational_repo_root)"
-CONTROL_PY="$CONTROL_ROOT/.venv/bin/python"
-[[ -x "$CONTROL_PY" ]] || CONTROL_PY="python3"
+CONTROL_ROOT="$PROJECT_DIR"
+CONTROL_PY="$PY"
 
 mkdir -p "$RUNTIME_DIR"
 
@@ -31,7 +30,7 @@ if [[ ! -x "$PY" ]]; then
   PY="python3"
 fi
 
-INTERVAL_SECONDS="${WEATHER_RUNTIME_MONITOR_INTERVAL_SECONDS:-300}"
+INTERVAL_SECONDS="${WEATHER_RUNTIME_MONITOR_INTERVAL_SECONDS:-60}"
 
 if [[ -f "$PROJECT_DIR/.env" ]]; then
   set -a
@@ -70,7 +69,10 @@ while true; do
   fi
   proxy_out="$RUNTIME_DIR/market_proxy_health.out.tmp"
   set +e
-  "$CONTROL_PY" -u "$CONTROL_ROOT/scripts/ops/weather_market_proxy_ctl.py" status >"$proxy_out" 2>>"$OUT_FILE"
+  "$CONTROL_PY" -u "$CONTROL_ROOT/scripts/ops/weather_market_proxy_ctl.py" maintain-node \
+    --apply --confirm-live \
+    --trigger weather_runtime_monitor \
+    --reason "automatic proxy node recovery" >"$proxy_out" 2>>"$OUT_FILE"
   proxy_rc=$?
   set -e
   if [[ -s "$proxy_out" ]]; then

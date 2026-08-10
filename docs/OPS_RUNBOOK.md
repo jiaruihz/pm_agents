@@ -65,23 +65,33 @@ JRS/TCC、canonical tmux crash、历史入口与验收记录统一维护在
   --instance INSTANCE --apply --reason "named runtime restart"
 ```
 
-Market proxy 端口只通过统一入口切换；禁止再编辑多个 `.env` 或逐脚本改
-`--market-proxy`：
+Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁止再编辑多个
+`.env`、逐脚本改 `--market-proxy` 或恢复历史独立 failover 进程：
 
 ```bash
 # 只读：代理探测、旧端口残留、12 个 proxy consumer 和全部 managed runtime 健康矩阵
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py status
 
-# 自动在候选 endpoint 中选择可用项；涉及 live，必须显式确认
+# 固定 endpoint 下检查/恢复 Clash 节点；生产 runtime monitor 每 60 秒执行同一命令
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py maintain-node --apply --confirm-live \
+  --trigger manual --reason "named node recovery"
+
+# 只有本机 endpoint 本身迁移时才在候选 endpoint 中选择；会重载 consumer
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py auto --apply --confirm-live \
-  --reason "named proxy failover"
+  --reason "named endpoint failover"
 
 # 指定 endpoint
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py switch http://127.0.0.1:7897 \
   --apply --confirm-live --reason "named proxy switch"
 ```
 
-切换成功条件不是“端口能连”：目标 Gamma probe、切换后新 `market-books` batch、
+节点切换由 control-plane release 独占：先对固定 endpoint 连续失败两次，再持有单飞锁遍历
+Clash selector 候选；每个候选必须同时通过 Gamma 与 CLOB probe。endpoint 不变时 consumer
+无需重启，结果写入 node failover state 与 append-only audit。Clash external controller 必须只
+监听 `127.0.0.1:9097`，API secret 来自环境或 macOS Keychain；所有候选失败时恢复原节点并显式报错，
+不 fallback direct。
+
+endpoint 切换成功条件不是“端口能连”：目标 Gamma probe、切换后新 `market-books` batch、
 manifest、live strategy artifact freshness、全部 consumer 进程和 proxy binding 必须同时通过；
 失败自动写回旧 endpoint 并重载。稀疏 shadow 在无信号时按 process/dependency/proxy binding
 验收，不因业务 summary 未刷新产生假回滚。机器可读矩阵写到 production contract 解析出的

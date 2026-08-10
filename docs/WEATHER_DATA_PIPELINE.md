@@ -59,7 +59,8 @@ Current production has four explicit ownership stages:
                               │   └── forecast/forecast_hourly_curves
                               └── production-declared strategy runtimes
                                   ├── health_path / live_order_path
-                                  └── runtime monitor (read-only)
+                                  └── runtime monitor
+                                      └── controller-owned proxy node recovery
                                        │
                      bounded canonical refresh one-shot
                                        ▼

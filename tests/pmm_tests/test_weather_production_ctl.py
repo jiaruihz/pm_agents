@@ -783,9 +783,11 @@ def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
 
 def test_controller_injects_tmux_mutation_authority_for_start(tmp_path):
     marker = tmp_path / "authority.txt"
+    config_marker = tmp_path / "production-config.txt"
     script = tmp_path / "start.sh"
     script.write_text(
-        f"#!/bin/sh\nprintf '%s' \"$WEATHER_JRS_TMUX_MUTATION_AUTHORITY\" > {marker}\n",
+        f"#!/bin/sh\nprintf '%s' \"$WEATHER_JRS_TMUX_MUTATION_AUTHORITY\" > {marker}\n"
+        f"printf '%s' \"$WEATHER_PRODUCTION_CONFIG\" > {config_marker}\n",
         encoding="utf-8",
     )
     script.chmod(0o755)
@@ -803,6 +805,9 @@ def test_controller_injects_tmux_mutation_authority_for_start(tmp_path):
 
     assert result["status"] == "started"
     assert marker.read_text(encoding="utf-8") == "controller"
+    assert config_marker.read_text(encoding="utf-8") == str(
+        ROOT / "src/strategies/runtime/production.yaml"
+    )
 
 
 def test_restart_requires_explicit_contract(tmp_path):
