@@ -1445,7 +1445,31 @@ adding the standard local links, controller recovery succeeded. Commit
 session, so a missing `.venv` or required `.env` fails while the old process is
 still running.
 
-## 22. Immediate Follow-Up Work
+## 22. 2026-08-10 Amsterdam local-day and CrossNo state-anchor incident
+
+Amsterdam's observation cache accepted a provider padding METAR from
+`2026-08-09T21:55:00Z` (23:55 local on August 9) into the August 10 running
+maximum. Until EHAM actually printed 23°C on August 10, WCIR therefore anchored
+the current bracket at 23 instead of 22. The polluted interval ended with the
+first-seen 08:25Z EHAM report at `2026-08-10T08:27:54Z`. It contains 62 KNMI
+new-content checkpoints / 184 model-expression bundle rows and two selected
+zero-notional paper candidates; WCIR submitted zero orders, and the live
+CrossNo journal contains zero Amsterdam orders. These rows remain append-only
+evidence but must be tagged/excluded as wrong-anchor data in forward scoring.
+
+The root fix filters observation records by the city's local target date before
+computing day maxima. A second restart-only defect projected an aggregate byte
+cursor onto partitioned source-event shards, losing the earlier 23°C EHAM high
+between `12:22:58Z` and `12:26:24Z`. The retained city-day state now rebuilds
+once from dated shards on migration. No Amsterdam order was submitted or missed
+in that interval: the observed KNMI ta values (22.5°C and 21.3°C) did not satisfy
+the 0.7°C CrossNo margin under either anchor.
+
+Production verification after the fixes shows official running max 23°C,
+24 routine EHAM timestamps restored, KNMI notification as a direct wake path,
+Amsterdam in the live city policy, a 10-share city cap, and no critical runtime.
+
+## 23. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
