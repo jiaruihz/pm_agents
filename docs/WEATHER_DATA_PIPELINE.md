@@ -211,7 +211,7 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 | `output/knmi_open_data/{YYYY-MM-DD}/knmi_observations.jsonl` | raw KNMI first-seen evidence | daily partitions only; `latest.json` is the current cache and wake path | rollover-aware KNMI first-seen, market-book and WCIR readers consume the dated family |
 | `output/observations/{YYYY-MM-DD}/observations.jsonl` | official observation evidence | daily partitions only; `latest.json` is the current cache | readers resolve physical capture-day shards and never fall back to a deleted aggregate |
 | `output/forecast_enrichment/{YYYY-MM-DD}/*.jsonl` | reproducible forecast feature/version evidence | daily partitions only; `latest.json` is the current cache | retain dated evidence needed by frozen research; consumers must select the exact dataset filename |
-| `output/fast_source_prev_no_trial/opportunities.jsonl` | signal/evidence journal | active monolith; current writer records transitions and five-minute heartbeats | cut over in a live maintenance window to daily partitions; hot current day, archive closed days, never treat heartbeat rows as separate opportunities |
+| `output/fast_source_prev_no_trial/{YYYY-MM-DD}/opportunities.jsonl` | signal/evidence journal | daily partitions only; writer records transitions and five-minute heartbeats | hot current day, archive closed days, never treat heartbeat rows as separate opportunities |
 | `weather_edge_v1/*/state_decisions.jsonl` | strategy decision evidence | per-instance append-only monolith | preserve lineage, partition by decision date, and expose one shared partition reader before moving closed days |
 | `*.log` | disposable runtime diagnostics | plain stdout/stderr summaries | controller-managed cap: 64 MiB trigger, retain roughly the last 8 MiB; logs are not raw or canonical evidence |
 
@@ -220,9 +220,13 @@ parse-clean chronological rows across 33 UTC days and 2,706,569,383 bytes at the
 About 79.3% of rows were unchanged-state heartbeats, while 84.8% of bytes came from the older
 2026-07-09..21 high-frequency writing window; since 2026-07-22 the transition/heartbeat contract has
 held current growth to roughly 20–26 MiB/day. This is unique signal evidence, not an aggregate/shard
-duplicate. The shared semantic-path reader, dated writer and byte-preserving no-delete migration tool
-are locally validated; production remains on the monolith until an explicitly confirmed live maintenance
-cutover creates and verifies the daily shards.
+duplicate. During the confirmed maintenance cutover the stopped producer's final 973,506 rows and
+2,706,731,221 bytes were split into 33 dated shards with zero parse errors/date regressions. The ordered
+shards and source both hashed to `e6e86dc30f2640fb0e97666576d8ac75ab88bf4ecf3a6ccda7fcdb36aaac241b`;
+the shard-aware live-chain audit was identical before and after removing the root monolith. The dated writer
+is pinned in the dedicated `fast_source_runtime` release. The live instance remains intentionally stopped
+until its independently degraded market-books/proxy dependency returns healthy; this outage is not a data
+migration or reader error.
 
 The 2026-08-09/10 cleanup verified aggregate bytes against the ordered shard bytes before each deletion,
 backfilled 1,360 missing `forecast_versions` rows into the correct capture-day shard, and removed the
@@ -237,7 +241,7 @@ cut over to 36 rollover-aware shard cursors with no replay; authenticated exchan
 orders and its post-restart order delta was zero. After the producer switched to shard-only, two completed
 source-event cycles grew the current shard while the 3,066,051,726-byte aggregate stayed unchanged. Its SHA-256
 matched the ordered shard prefix, no process or open handle referenced it, and it was removed. This cleanup pass
-has removed 4,641,744,114 bytes in total without removing unique history or changing canonical facts; the runtime
+has removed 7,348,475,335 bytes in total without removing unique history or changing canonical facts; the runtime
 tree no longer contains an aggregate/daily-shard duplicate candidate.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
