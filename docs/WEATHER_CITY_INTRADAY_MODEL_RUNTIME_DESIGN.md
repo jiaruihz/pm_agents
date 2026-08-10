@@ -195,6 +195,34 @@ class CityStrategyPlugin(Protocol):
 
 `PredictionTarget` 必须同时写 source/settlement truth、horizon、native lattice 和 event 语义。`P(new source strict high in 60m)` 只能作为 `physical_path` output；只有已映射为精确 settlement expression probability 的 output 才能产生 `SignalCandidate/TradeIntent`。
 
+#### 4.5.1 共享 exact-bracket probability stack
+
+settlement 模型统一复用 `weather_model_evaluation/exact_bracket_probability.py` 的
+`weather_exact_bracket_probability_stack_v1`。输入必须是包含上下 open tail、在 settlement source native lattice
+上无 gap/overlap 的完整 ladder；每个中间和最终 PMF 都必须覆盖相同 bracket IDs、顺序一致且概率和为 1，不能把
+hot strip、单个 YES/NO 或缺失档位静默归一化成“完整分布”。共享分解固定为：
+
+```text
+market prior
+  + weather/path residual (full-ladder log adjustment)
+  + source-basis correction (full-ladder log adjustment)
+  -> uncalibrated posterior
+  -> PIT-fitted simplex calibration
+  = final exact-bracket settlement distribution
+```
+
+缺少 market prior 时显式返回 coverage/blocker，由纯天气模型走自己的 research baseline；不得用 uniform prior 静默替代。
+每一层保留 component/snapshot identity，最终用 `stack_snapshot_id` 锁定完整计算血缘。
+
+三个 head 使用不同 schema，禁止复用一个概率字段表达不同 target：
+
+- `final_settlement`：最终 settlement-native exact-bracket PMF；
+- `repricing`：15/30/60 秒 full-ladder probability transport，变化量之和必须为 0；
+- `execution_fill`：具体 expression、side、执行盘口和窗口上的 fill probability/expected fill price。
+
+模型盘口写 `model_book_snapshot_id`，执行/fill head 写独立的 `execution_book_snapshot_id`；两者相等必须是事实，
+不能因为接口方便而复用 ID。该合同当前只进入共享 research/runtime library，未授权部署到任何策略或下单链。
+
 ### 4.6 `SignalCandidate`
 
 统一候选是研究与执行之间的事实边界，至少包含：
