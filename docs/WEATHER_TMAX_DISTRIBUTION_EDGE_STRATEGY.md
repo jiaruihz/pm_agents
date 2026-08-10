@@ -1,7 +1,7 @@
 # Weather Tmax Distribution Edge Strategy
 
 Status: current-reference
-Updated: 2026-08-05 semantic consolidation through tmax v3
+Updated: 2026-08-09 convective tail distribution independent sleeve review
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md
 
@@ -44,6 +44,50 @@ production manifest、raw runtime 与 exchange evidence。
 [lineage repair](analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.md) ·
 [clean feature restoration](analysis/2026-07/2026-07-12-tmax-clean-feature-restoration-v1.md) ·
 [v3 fixed-denominator result](analysis/2026-07/2026-07-13-tmax-distribution-v3.md)。
+
+### Convective / Tail Distribution：独立可运行 zero-notional sleeve（不并入 Core Carry）
+
+稳定 identity：`weather.convective_tail_distribution`。它与高价、高命中的 Current-YES Core
+Carry 分账；即使未来成立，也只作为低命中、多腿、凸性 terminal-distribution sleeve。
+
+2026-08-09 May-long retrain 以 2026-05-06–07-28 的 3,378 张原始 HeadA 5–20¢ candidates
+为 signal denominator（1,224 selected + 2,154 unselected）。PIT probability denominator 从
+5/19 immutable snapshots 接到 7/15 `tmax_v2`，共 17,339 states / 63 dates；expanding OOF 为
+15,874 states / 58 dates。5/06–5/18、7/07–7/14 是显式 coverage gap。旧/新 adapter 在 14 个
+重叠日的 330 个 states 上 normalized market L1、forecast peak 差和修正后的 decision-clock 差
+中位数均为 0。
+
+结论比 July-only 结果更弱且取代它：raw market Brier/logloss/RPS 为
+`0.572449/1.113613/0.061441`；weather-only、固定 30% offset、C1–C5 全部未胜 market。
+最接近且 9/9 folds 收敛的是 C2 adjacent diffusion，三项 delta 仍为
+`+0.000376/+0.001470/+0.000077`；C3 0/9、directional split-tail C4 5/9 folds 收敛，均不能冻结。
+更低维的 directional neighbor transport C5 9/9 收敛，但 delta 为
+`+0.001385/+0.004217/+0.000310`，logloss/RPS date-CI 全劣于 market。物理约束解决了方向语义和
+数值收敛，但没有替代稀缺的完整 PIT convective supervision。C2 几乎总 widening（99.79%，平均
+variance ratio 1.149），但 outcomes 不支持这种宽尾。C2 full weather 相对同族 intercept-only
+有极小点估改善 `-0.000177/-0.000627/-0.000037`，三项 target-date CI 全跨 0；因此目前既不能
+确认概率 edge，也不能确认天气时钟 edge。fresh full90 与 partial books 都输 market，盘口 age
+中位约 0.03 min，不支持旧/薄盘口归因。
+
+选模不使用 ROI。旧 299/192/123 结果来自三个不同 first-positive universe，已 superseded-for-decision-use。
+统一 entry-state 后，三种表达同为 294 city-date events / 53 target dates：single/adjacent/basket fee ROI
+`-3.42%/-2.64%/-6.50%`；single/strip CI 跨0，basket CI `[-12.97%,-0.68%]` 全负，标记
+`rejected_for_expression`。故资金表达为 none，runner 只并行记录完整 distribution 与三种 zero-notional
+expression。若以后过门，容量仍按 5–10 shares，不用 displayed depth 冒充 fill capacity。
+
+与 frozen Core replay 的同日完整 calendar 有 29 dates；统一 entry 后 daily PnL correlation 为
+single `-0.178`、strip `+0.145`、basket `+0.102`。低相关不替代 alpha 门。当前状态仍为
+`runnable zero-notional candidate / not confirmed / no funded sleeve`，不并入 Core、不恢复 HeadA live。
+
+frozen artifact 继续为 C2、training 5/19–7/28、63 dates / 17,322 states，final fit 收敛；
+当前 5 个定向测试通过。更新后 current-raw zero-notional smoke 为 79 events→2 scored、77 blocked：
+51 个缺 target-day observation，26 个 full-ladder quote/bracket blocker；0 common-entry tickets、0 orders。统一
+selector 后 formal forward 从
+`0/30 dates, 0/80 tickets` 重新累计，fresh coverage 暂不可算。POP、云、风、湿度和 warming 的历史
+缺失均显式保留，不新增 city/source/price/weather hard filter。
+
+权威报告：
+[convective tail distribution v1](analysis/2026-08/2026-08-09-convective-tail-distribution-v1.md)。
 
 下文保留策略从 P0–P6、target-book、lineage repair 到 runtime contract 的历史演进。
 其中出现的 candidate config、runner 名和 live/shadow 叙述都只属于相应报告时点；与本节冲突时，
