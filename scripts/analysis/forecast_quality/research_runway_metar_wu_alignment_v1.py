@@ -63,7 +63,11 @@ def default_runtime_root() -> Path:
     return DEFAULT_RUNTIME_ROOTS[-1]
 
 
-def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
+def read_json_or_jsonl(
+    path: Path,
+    *,
+    partition_filename: str = "runway_observations.jsonl",
+) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     if path.suffix == ".json":
@@ -73,7 +77,7 @@ def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     paths = dated_jsonl_paths(
         path,
-        filename="runway_observations.jsonl",
+        filename=partition_filename,
         allow_missing=True,
     )
     for source_path in paths:
@@ -219,13 +223,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     runtime_root = default_runtime_root()
     parser.add_argument("--runway-path", default=str(runtime_root / "output/runway_observations"))
-    parser.add_argument("--source-events-path", default=str(runtime_root / "output/source_events/sources.jsonl"))
+    parser.add_argument("--source-events-path", default=str(runtime_root / "output/source_events"))
     parser.add_argument("--out-dir", default=str(ROOT / "docs/analysis/2026-07/generated/runway_metar_wu_alignment_v1"))
     parser.add_argument("--max-abs-lag-min", type=float, default=45.0)
     args = parser.parse_args()
 
     runway_rows = read_json_or_jsonl(Path(args.runway_path).expanduser())
-    source_rows = read_json_or_jsonl(Path(args.source_events_path).expanduser())
+    source_rows = read_json_or_jsonl(
+        Path(args.source_events_path).expanduser(),
+        partition_filename="sources.jsonl",
+    )
     alignment = build_alignment_rows(
         runway_rows,
         source_rows,

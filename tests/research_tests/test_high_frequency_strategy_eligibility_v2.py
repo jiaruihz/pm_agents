@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from scripts.analysis.forecast_quality.research_high_frequency_strategy_eligibility_v2 import (
     ReferenceEvent,
@@ -7,6 +8,7 @@ from scripts.analysis.forecast_quality.research_high_frequency_strategy_eligibil
     build_event_comparison,
     first_cross_rows,
     iter_jsonl,
+    load_reference_events,
     parse_bracket_contains,
     persistent_cross_rows,
 )
@@ -118,6 +120,27 @@ def test_jsonl_reader_ignores_incomplete_trailing_record(tmp_path) -> None:
     path.write_bytes(b'{"ok": 1}\n{"partial":')
 
     assert list(iter_jsonl(path)) == [{"ok": 1}]
+
+
+def test_reference_events_read_dated_source_event_shards(tmp_path) -> None:
+    root = tmp_path / "source_events"
+    shard = root / "2026-07-15" / "sources.jsonl"
+    shard.parent.mkdir(parents=True)
+    shard.write_text(json.dumps({
+        "city": "Test",
+        "source": "aviationweather_metar",
+        "source_report_ts_utc": "2026-07-15T10:00:00Z",
+        "local_detect_ts_utc": "2026-07-15T10:01:00Z",
+        "temp_c": 20.0,
+    }) + "\n")
+
+    awc, synoptic = load_reference_events(
+        root,
+        {"Test": {"timezone_name": "UTC", "unit": "C"}},
+    )
+
+    assert len(awc["Test"]) == 1
+    assert synoptic == {}
 
 
 def test_settlement_label_uses_final_winning_bracket() -> None:

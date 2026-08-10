@@ -131,7 +131,7 @@ def load_reference_events(
     earliest: dict[tuple[str, str, str], ReferenceEvent] = {}
     for row in iter_jsonl(
         path,
-        partition_filename="high_frequency_observations.jsonl",
+        partition_filename="sources.jsonl",
     ):
         source = str(row.get("source") or "")
         if source not in {"aviationweather_metar", "synopticdata_timeseries"}:
@@ -803,7 +803,7 @@ def main() -> int:
 
     runtime = Path(args.runtime_root).expanduser()
     profiles = load_profiles(Path(args.profiles))
-    awc, synoptic = load_reference_events(runtime / "output/source_events/sources.jsonl", profiles)
+    awc, synoptic = load_reference_events(runtime / "output/source_events", profiles)
     fast = load_fast_observations(
         runtime / "output/high_frequency_observations",
         profiles,

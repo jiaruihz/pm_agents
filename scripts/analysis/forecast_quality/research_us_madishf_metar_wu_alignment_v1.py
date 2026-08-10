@@ -524,7 +524,7 @@ def main() -> int:
 
     runtime = Path(args.runtime_root)
     profiles = eligibility.load_profiles(Path(args.profiles))
-    awc, _ = eligibility.load_reference_events(runtime / "output/source_events/sources.jsonl", profiles)
+    awc, _ = eligibility.load_reference_events(runtime / "output/source_events", profiles)
     fast = eligibility.load_fast_observations(
         runtime / "output/high_frequency_observations",
         profiles,

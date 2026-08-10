@@ -59,23 +59,25 @@ def read_first_crosses(path: Path) -> list[dict[str, Any]]:
 
 def read_metar_reports(path: Path) -> dict[tuple[str, str], list[dict[str, Any]]]:
     first: dict[tuple[str, str, str], dict[str, Any]] = {}
-    with path.open(encoding="utf-8", errors="ignore") as fh:
-        for line in fh:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            city = str(row.get("city") or "")
-            source = str(row.get("source") or "")
-            report_ts = row.get("source_report_ts_utc")
-            temp = safe_float(row.get("temp_c"))
-            if city not in CITIES or source not in METAR_SOURCES or not report_ts or temp is None:
-                continue
-            key = (city, str(row.get("target_date")), str(report_ts))
-            detect = parse_dt(row.get("local_detect_ts_utc") or row.get("ts_utc"))
-            old_detect = parse_dt(first.get(key, {}).get("local_detect_ts_utc") or first.get(key, {}).get("ts_utc"))
-            if key not in first or (detect is not None and (old_detect is None or detect < old_detect)):
-                first[key] = row
+    paths = [path] if path.is_file() else sorted(path.glob("????-??-??/sources.jsonl"))
+    for physical_path in paths:
+        with physical_path.open(encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                city = str(row.get("city") or "")
+                source = str(row.get("source") or "")
+                report_ts = row.get("source_report_ts_utc")
+                temp = safe_float(row.get("temp_c"))
+                if city not in CITIES or source not in METAR_SOURCES or not report_ts or temp is None:
+                    continue
+                key = (city, str(row.get("target_date")), str(report_ts))
+                detect = parse_dt(row.get("local_detect_ts_utc") or row.get("ts_utc"))
+                old_detect = parse_dt(first.get(key, {}).get("local_detect_ts_utc") or first.get(key, {}).get("ts_utc"))
+                if key not in first or (detect is not None and (old_detect is None or detect < old_detect)):
+                    first[key] = row
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for (city, target_date, _), row in first.items():
         grouped[(city, target_date)].append(row)
@@ -226,7 +228,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def main() -> int:
     crosses = read_first_crosses(RUNTIME_ROOT / "output/fast_source_prev_no_trial/events.jsonl")
-    reports = read_metar_reports(RUNTIME_ROOT / "output/source_events/sources.jsonl")
+    reports = read_metar_reports(RUNTIME_ROOT / "output/source_events")
     settlements = read_settlements(ROOT / "runtime/weather.db")
     rows = enrich(crosses, reports, settlements)
     summary = summarize(rows)
