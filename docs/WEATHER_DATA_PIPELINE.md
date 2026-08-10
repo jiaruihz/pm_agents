@@ -7,11 +7,13 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 Last updated: 2026-08-10
 
-> **2026-08-10 journal storage override**：`output/forecast_enrichment` 与历史
-> `output/high_frequency_observations` 的 durable history 只写、只读
-> `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写。`latest.json`
-> 仍是当前 cache。`output/live_cross_observations/high_frequency_observations.jsonl`
-> 是低延迟消费者正在 tail 的另一条 active stream，不属于这次 aggregate 清理，继续由其单一 producer 维护。
+> **2026-08-10 journal storage override**：forecast enrichment、forecast version、
+> observations、AMOS fast lane 以及已停止的历史/probe journal 均已切为只写、只读
+> `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写并在逐项校验后删除。
+> `latest.json` 仍是当前 cache。当前仅 `source_events/sources.jsonl`、
+> `live_cross_observations/high_frequency_observations.jsonl` 和
+> `knmi_open_data/knmi_observations.jsonl` 保留 aggregate compatibility journal；它们仍被
+> 增量生产消费者 tail，不能在游标迁移和进程切换前删除。
 
 > **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
 > `src/strategies/runtime/production.yaml` 解析；物理 canonical 是
@@ -206,20 +208,21 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 
 | Family | Class | Current layout | Required lifecycle |
 |---|---|---|---|
-| `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions plus a byte-for-byte aggregate compatibility journal | keep daily partitions; migrate production readers to the partition reader, then remove the duplicate aggregate |
-| `output/high_frequency_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw historical observation evidence | 21 daily partitions plus an exact duplicate stopped aggregate | keep partitions; remove the aggregate after remaining compatibility consumers migrate |
-| `output/forecast_enrichment/{YYYY-MM-DD}/forecast_enrichment.jsonl` | reproducible feature evidence | daily partitions plus an exact duplicate aggregate still written for compatibility | retain dated evidence needed by frozen research; first migrate the producer's tail reader and remaining consumers, then stop and remove the aggregate |
+| `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions plus an active aggregate compatibility journal | keep partitions; migrate persistent byte-offset readers in a live maintenance window, then remove the aggregate |
+| `output/live_cross_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw high-frequency evidence | daily partitions plus an active aggregate compatibility journal | keep partitions; migrate live/shadow and market-book cursors together, then remove the aggregate |
+| `output/knmi_open_data/{YYYY-MM-DD}/knmi_observations.jsonl` | raw KNMI first-seen evidence | daily partitions plus an active aggregate compatibility journal | keep partitions; migrate the KNMI first-seen, market-book and WCIR readers before removing the aggregate |
+| `output/observations/{YYYY-MM-DD}/observations.jsonl` | official observation evidence | daily partitions only; `latest.json` is the current cache | readers resolve physical capture-day shards and never fall back to a deleted aggregate |
+| `output/forecast_enrichment/{YYYY-MM-DD}/*.jsonl` | reproducible forecast feature/version evidence | daily partitions only; `latest.json` is the current cache | retain dated evidence needed by frozen research; consumers must select the exact dataset filename |
 | `output/fast_source_prev_no_trial/opportunities.jsonl` | signal/evidence journal | active monolith; current writer records transitions and five-minute heartbeats | cut over in a live maintenance window to daily partitions; hot current day, archive closed days, never treat heartbeat rows as separate opportunities |
 | `weather_edge_v1/*/state_decisions.jsonl` | strategy decision evidence | per-instance append-only monolith | preserve lineage, partition by decision date, and expose one shared partition reader before moving closed days |
 | `*.log` | disposable runtime diagnostics | plain stdout/stderr summaries | controller-managed cap: 64 MiB trigger, retain roughly the last 8 MiB; logs are not raw or canonical evidence |
 
-The aggregate/shard equality audit on 2026-08-09 found byte-for-byte concatenation parity for
-`forecast_enrichment.jsonl` (895,379,584 bytes at 23:48; still active) and the stopped
-`high_frequency_observations.jsonl` (646,315,053 bytes). The canonical rebuild now reads only dated
-`forecast_enrichment` partitions when given the family directory, explicitly excluding both the root
-compatibility aggregate and sibling `forecast_versions.jsonl` files. The two aggregates remain temporarily
-only for producer/unmigrated-consumer compatibility; their duplication must not be described as additional
-history.
+The 2026-08-09/10 cleanup verified aggregate bytes against the ordered shard bytes before each deletion,
+backfilled 1,360 missing `forecast_versions` rows into the correct capture-day shard, and removed the
+verified forecast, observation, AMOS fast-lane and stopped historical/probe aggregates. These deletions do
+not remove unique history and do not change canonical facts. The three active compatibility journals listed
+above remain deliberately: each has one or more long-running byte-offset consumers, so equality alone is not
+sufficient deletion evidence. Their cutover requires a no-gap cursor handoff and post-restart freshness check.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See

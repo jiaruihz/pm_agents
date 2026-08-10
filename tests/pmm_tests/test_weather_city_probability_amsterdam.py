@@ -74,7 +74,7 @@ def test_amsterdam_v7_maps_knmi_probability_to_wcir_expression(
         ],
     )
     _write_jsonl(
-        observations / "observations.jsonl",
+        observations / "2026-08-03" / "observations.jsonl",
         [
             {
                 "city": "Amsterdam",

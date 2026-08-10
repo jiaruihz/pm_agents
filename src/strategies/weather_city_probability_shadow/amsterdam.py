@@ -15,6 +15,7 @@ import pandas as pd
 
 from weather_modeling.knmi_10m_path import add_knmi_10m_path_features
 from weather_modeling.solar_geometry import add_solar_geometry_features
+from weather_data_feed.input_catalog import JsonlInputCatalog
 
 from .core import CityScore, InputNotReady
 
@@ -53,20 +54,24 @@ def _iter_jsonl(path: Path):
                 yield line_no, row
 
 
-def _official_as_of(profile: dict[str, Any], target_date: str, decision: datetime, source_obs: datetime) -> tuple[int, dict[str, Any]]:
-    path = Path(profile["observation_journal_dir"]) / "observations.jsonl"
-    latest: tuple[int, dict[str, Any]] | None = None
+def _official_as_of(
+    profile: dict[str, Any], target_date: str, decision: datetime, source_obs: datetime
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    root = Path(profile["observation_journal_dir"])
     cutoff = source_obs - timedelta(minutes=10)
-    for line_no, row in _iter_jsonl(path):
-        if row.get("city") != "Amsterdam" or row.get("target_date") != target_date:
-            continue
-        if not row.get("fetched_at_utc") or not row.get("last_obs_utc"):
-            continue
-        fetched = _parse(row["fetched_at_utc"])
-        report = _parse(row["last_obs_utc"])
-        if fetched <= decision and report <= cutoff:
-            latest = (line_no, row)
-    if latest is None:
+    catalog_row = JsonlInputCatalog().latest_from_day_shard_journals(
+        root,
+        filename="observations.jsonl",
+        as_of=decision,
+        available_field="fetched_at_utc",
+        predicate=lambda row: (
+            row.get("city") == "Amsterdam"
+            and row.get("target_date") == target_date
+            and bool(row.get("last_obs_utc"))
+            and _parse(row["last_obs_utc"]) <= cutoff
+        ),
+    )
+    if catalog_row is None:
         raise InputNotReady(
             "missing_official_checkpoint",
             city="Amsterdam",
@@ -74,7 +79,10 @@ def _official_as_of(profile: dict[str, Any], target_date: str, decision: datetim
             decision_ts_utc=decision.isoformat(),
             details={"official_cutoff_utc": cutoff.isoformat()},
         )
-    return latest
+    return {
+        "physical_path": catalog_row.physical_path,
+        "physical_line": catalog_row.physical_line,
+    }, catalog_row.row
 
 
 def _source_frame(profile: dict[str, Any], target_date: str, decision: datetime) -> tuple[pd.DataFrame, dict[str, Any], int]:
@@ -226,7 +234,9 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             )
         if decision < _parse(profile["forward_start_utc"]):
             raise InputNotReady("before_frozen_forward_start", city="Amsterdam", target_date=target_date, decision_ts_utc=decision.isoformat())
-        official_line, official = _official_as_of(profile, target_date, decision, _parse(source["observation_time_utc"]))
+        official_lineage, official = _official_as_of(
+            profile, target_date, decision, _parse(source["observation_time_utc"])
+        )
         current = _half_up(float(official["running_max_c"]))
         row = frame.iloc[-1].copy()
         observed_local = _parse(source["observation_time_utc"]).astimezone(ZoneInfo("Europe/Amsterdam"))
@@ -304,8 +314,8 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 "source_journal": profile["source_journal"],
                 "source_line": source_line,
                 "source_event_id": source["information_event_id"],
-                "official_journal": str(Path(profile["observation_journal_dir"]) / "observations.jsonl"),
-                "official_line": official_line,
+                "official_journal": official_lineage["physical_path"],
+                "official_line": official_lineage["physical_line"],
                 "forecast_feature_semantics": "frozen_previous_day1_forcing_unavailable_live_explicit_nan",
             },
             evaluation_status="scored" if scorable else "not_scorable",

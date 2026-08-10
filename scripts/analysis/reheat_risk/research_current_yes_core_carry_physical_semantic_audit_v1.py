@@ -38,6 +38,7 @@ from scripts.analysis.reheat_risk import (  # noqa: E402
     research_current_yes_core_carry_overshoot_missing_mechanisms_v2 as base,
 )
 from weather_data_feed.city_calendar import CITY_TIMEZONE  # noqa: E402
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths  # noqa: E402
 from weather_data_feed.sky_cover import SKY_COVER_CODE  # noqa: E402
 from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
@@ -63,7 +64,7 @@ CORE_ARTIFACT = (
     "current_yes_core_carry_model_v2.json"
 )
 PRODUCTION_SPEC = load_production_spec()
-OBS_HISTORY = PRODUCTION_SPEC.data_feed_output_root() / "observations/observations.jsonl"
+OBS_HISTORY_ROOT = PRODUCTION_SPEC.data_feed_output_root() / "observations"
 FORECAST_LATEST = PRODUCTION_SPEC.forecast_enrichment_root() / "latest.json"
 SNAPSHOT_DIR = historical_strategy_snapshots()
 WELLINGTON_DECISION_SNAPSHOT = (
@@ -658,20 +659,26 @@ def latest_wellington_state() -> dict[str, Any]:
     )
     cutoff = pd.to_datetime(market["snapshot_ts_utc"], utc=True)
     history_rows: dict[str, dict[str, Any]] = {}
-    with OBS_HISTORY.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            if (
-                '"city": "Wellington"' not in line
-                or '"target_date": "2026-07-29"' not in line
-            ):
-                continue
-            row = json.loads(line)
-            fetched = pd.to_datetime(
-                row.get("fetched_at_utc"), utc=True, errors="coerce"
-            )
-            obs_ts = row.get("last_obs_utc")
-            if pd.notna(fetched) and fetched <= cutoff and obs_ts:
-                history_rows[obs_ts] = row
+    for history_path in dated_jsonl_paths(
+        OBS_HISTORY_ROOT,
+        filename="observations.jsonl",
+        dates=["2026-07-29"],
+        neighbor_days=1,
+    ):
+        with history_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if (
+                    '"city": "Wellington"' not in line
+                    or '"target_date": "2026-07-29"' not in line
+                ):
+                    continue
+                row = json.loads(line)
+                fetched = pd.to_datetime(
+                    row.get("fetched_at_utc"), utc=True, errors="coerce"
+                )
+                obs_ts = row.get("last_obs_utc")
+                if pd.notna(fetched) and fetched <= cutoff and obs_ts:
+                    history_rows[obs_ts] = row
     ordered = [history_rows[key] for key in sorted(history_rows)]
     now = ordered[-1]
     now_ts = pd.to_datetime(now["last_obs_utc"], utc=True)

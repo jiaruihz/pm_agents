@@ -227,8 +227,6 @@ def observation_evidence_asof(path: Path, as_of_utc: str) -> tuple[dict[str, Any
             history_paths.append(path.parent / day / "observations.jsonl")
     seen_paths: set[Path] = set()
     candidate_paths = [history_path for history_path in history_paths if history_path.exists()]
-    if not candidate_paths:
-        candidate_paths = [path.parent / "observations.jsonl"]
     for history_path in candidate_paths:
         if history_path in seen_paths or not history_path.exists():
             continue
