@@ -12,6 +12,7 @@ from weather_data_feed_service.market_books_ws import (
     PreTransportSafeClientConnection,
     Selection,
     SourceEventCursor,
+    _rest_health,
     build_parser,
     scheduled_report_windows,
     select_tokens,
@@ -19,6 +20,24 @@ from weather_data_feed_service.market_books_ws import (
 
 
 NOW = datetime(2026, 8, 9, 3, 0, tzinfo=timezone.utc)
+
+
+def test_rest_health_accepts_fresh_event_contract_reuse(tmp_path) -> None:
+    latest = tmp_path / "latest.json"
+    latest.write_text(
+        json.dumps(
+            {
+                "status": "ok_with_discovery_reuse",
+                "available_at_utc": "2026-08-09T02:59:30Z",
+                "batch_capture_id": "batch-reused",
+            }
+        )
+    )
+
+    health = _rest_health(latest, now_utc=NOW, max_age_sec=420)
+
+    assert health["healthy"] is True
+    assert health["status"] == "ok_with_discovery_reuse"
 
 
 def test_proxy_reset_before_transport_initialization_closes_cleanly() -> None:

@@ -533,7 +533,10 @@ def _rest_health(path: Path, *, now_utc: datetime, max_age_sec: float) -> dict[s
     payload = _load_json(path)
     available = _parse_utc(payload.get("available_at_utc"))
     age = None if available is None else max(0.0, (now_utc - available).total_seconds())
-    ok = payload.get("status") == "ok" and age is not None and age <= max_age_sec
+    ok = payload.get("status") in {
+        "ok",
+        "ok_with_discovery_reuse",
+    } and age is not None and age <= max_age_sec
     return {
         "status": payload.get("status") or "missing",
         "available_at_utc": payload.get("available_at_utc"),

@@ -202,6 +202,115 @@ def test_market_books_degrades_when_discovery_has_operational_failure(
     assert result["discovery_operational_failures"] == 1
 
 
+def test_market_books_reuses_event_contract_but_fetches_fresh_books(
+    monkeypatch, tmp_path
+) -> None:
+    ladders = tmp_path / "market_ladders"
+    archive_dir = ladders / "2026-08-07"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "market_ladder_snapshot_20260807_115500.json").write_text(
+        json.dumps(
+            {
+                "available_at_utc": "2026-08-07T11:55:00Z",
+                "records": [
+                    {
+                        "city": "Boston",
+                        "target_date": "2026-08-08",
+                        "event_slug": "weather-boston",
+                        "event_id": "event-boston",
+                        "rungs": [
+                            {
+                                "bracket": "80-81",
+                                "market_id": "market-boston",
+                                "condition_id": "condition-boston",
+                                "yes_token_id": "yes-boston",
+                                "no_token_id": "no-boston",
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    failure = {
+        "city": "Boston",
+        "target_date": "2026-08-08",
+        "slug": "weather-boston",
+        "status_code": 0,
+        "error": "SSL connection timeout",
+        "discovery_failure_class": "operational_failure",
+        "discovery_attempt_count": 2,
+    }
+    monkeypatch.setattr(
+        market_books,
+        "discover_market_ladders",
+        lambda **_kwargs: (_events(), [failure]),
+    )
+    monkeypatch.setitem(
+        market_books.legacy.CITIES,
+        "Boston",
+        {"slug": "boston", "unit": "F"},
+    )
+
+    fetched_tokens = []
+
+    def fake_fetch(_client, request_rows, token_ids, **_kwargs):
+        fetched_tokens.extend(token_ids)
+        return {
+            token_id: (request_rows[token_id], _book(token_id))
+            for token_id in token_ids
+        }
+
+    monkeypatch.setattr(market_books, "_fetch_priority_group", fake_fetch)
+    monkeypatch.setattr(
+        market_books.httpx,
+        "Client",
+        lambda **_kwargs: type("C", (), {"close": lambda self: None})(),
+    )
+    observations = tmp_path / "observations.json"
+    observations.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Boston",
+                        "target_date": "2026-08-08",
+                        "running_max_f": 80.0,
+                    }
+                ]
+            }
+        )
+    )
+
+    result = market_books.collect(
+        argparse.Namespace(
+            output_root=str(tmp_path / "market_books"),
+            market_ladder_root=str(ladders),
+            observation_cache=str(observations),
+            target_date=None,
+            now_utc="2026-08-07T12:00:00Z",
+            orderbook_top_n=20,
+            orderbook_budget_sec=240.0,
+        )
+    )
+
+    latest = json.loads((tmp_path / "market_books" / "latest.json").read_text())
+    assert result["status"] == "ok_with_discovery_reuse"
+    assert result["discovery_operational_failures"] == 1
+    assert result["discovery_operational_recovered"] == 1
+    assert result["discovery_operational_unrecovered"] == 0
+    assert {"yes-boston", "no-boston"}.issubset(fetched_tokens)
+    boston = [row for row in latest["records"] if row["city"] == "Boston"]
+    assert len(boston) == 2
+    assert {row["status"] for row in boston} == {"ok"}
+    assert {row["market_discovery_source"] for row in boston} == {
+        "cached_event_contract"
+    }
+    assert latest["discovery_failures"][0]["recovered_by_event_contract"] is True
+    cache = json.loads((ladders / "event_contract_cache.json").read_text())
+    assert cache["schema_version"] == "weather_market_event_contract_cache_v1"
+
+
 def test_strategy_view_reads_canonical_books_but_keeps_target_scope(tmp_path):
     latest = tmp_path / "latest.json"
     latest.write_text(

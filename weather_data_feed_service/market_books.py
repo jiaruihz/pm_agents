@@ -27,6 +27,7 @@ from weather_data_feed_service.legacy_weather_predict import paper_snapshot as l
 
 SCHEMA_VERSION = "weather_market_books_batch_v1"
 LADDER_SCHEMA_VERSION = "weather_market_ladder_snapshot_v1"
+EVENT_CONTRACT_CACHE_SCHEMA_VERSION = "weather_market_event_contract_cache_v1"
 PRODUCER = "weather_data_feed_service.market_books"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -39,6 +40,12 @@ DEFAULT_DISCOVERY_RETRIES = int(
 )
 DISCOVERY_RETRY_BACKOFF_SEC = float(
     os.environ.get("WEATHER_MARKET_BOOKS_DISCOVERY_RETRY_BACKOFF_SEC", "0.1")
+)
+EVENT_CONTRACT_MAX_AGE_SEC = float(
+    os.environ.get("WEATHER_MARKET_EVENT_CONTRACT_MAX_AGE_SEC", "86400")
+)
+EVENT_CONTRACT_BOOTSTRAP_FILES = int(
+    os.environ.get("WEATHER_MARKET_EVENT_CONTRACT_BOOTSTRAP_FILES", "72")
 )
 
 
@@ -78,6 +85,229 @@ def _load_observation_index(path: Path | None) -> dict[tuple[str, str], dict[str
         if city and target_date:
             result[(city, target_date)] = row
     return result
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _strategy_targets_for_entries(
+    entries: list[dict[str, Any]],
+    *,
+    unit: str,
+    observation: dict[str, Any] | None,
+) -> set[tuple[str, str]]:
+    metar_max_f = _strategy_state_from_observation(observation).get(
+        "metar_current_max_f"
+    )
+    if metar_max_f is None:
+        return set()
+    if unit == "C":
+        running_native = (float(metar_max_f) - 32.0) * 5.0 / 9.0
+        running_compare_f = (
+            legacy.round_half_up_float(running_native) * 9.0 / 5.0 + 32.0
+        )
+    else:
+        running_compare_f = legacy.round_half_up_float(float(metar_max_f))
+    parsed: list[tuple[str, float, float]] = []
+    for entry in entries:
+        label = str(entry.get("label") or "")
+        lo_f, hi_f = legacy.parse_bracket_bounds(label, unit)
+        if lo_f is not None and hi_f is not None:
+            parsed.append((label, lo_f, hi_f))
+    targets: set[tuple[str, str]] = set()
+    current = [
+        (label, hi_f)
+        for label, lo_f, hi_f in parsed
+        if lo_f <= running_compare_f <= hi_f
+    ]
+    if current:
+        current_label, _ = sorted(current, key=lambda item: item[1])[0]
+        targets.add((current_label, "yes"))
+        targets.add((current_label, "no"))
+    higher = [(label, lo_f) for label, lo_f, _ in parsed if lo_f > running_compare_f]
+    for label, _ in sorted(higher, key=lambda item: item[1])[:2]:
+        targets.add((label, "no"))
+    return targets
+
+
+def _contract_row_from_ladder(
+    row: dict[str, Any], *, discovered_at_utc: str
+) -> dict[str, Any] | None:
+    city = str(row.get("city") or "")
+    target_date = str(row.get("target_date") or "")
+    event_slug = str(row.get("event_slug") or "")
+    entries = []
+    for rung in row.get("rungs") or []:
+        if not isinstance(rung, dict):
+            continue
+        label = str(rung.get("bracket") or "")
+        yes_token_id = str(rung.get("yes_token_id") or "")
+        no_token_id = str(rung.get("no_token_id") or "")
+        if not label or not yes_token_id or not no_token_id:
+            continue
+        entries.append(
+            {
+                "label": label,
+                "market_id": str(rung.get("market_id") or ""),
+                "condition_id": str(rung.get("condition_id") or ""),
+                "yes_token_id": yes_token_id,
+                "no_token_id": no_token_id,
+            }
+        )
+    if not city or not target_date or not event_slug or not entries:
+        return None
+    return {
+        "city": city,
+        "target_date": target_date,
+        "event_slug": event_slug,
+        "event_id": str(row.get("event_id") or ""),
+        "entries": entries,
+        "last_discovered_at_utc": discovered_at_utc,
+    }
+
+
+def _load_event_contracts(
+    ladder_root: Path, *, now_utc: datetime
+) -> dict[tuple[str, str], dict[str, Any]]:
+    cache_path = ladder_root / "event_contract_cache.json"
+    candidates: list[Path] = []
+    if cache_path.exists():
+        candidates.append(cache_path)
+    archived = sorted(
+        ladder_root.rglob("market_ladder_snapshot_*.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )[: max(1, EVENT_CONTRACT_BOOTSTRAP_FILES)]
+    candidates.extend(archived)
+    contracts: dict[tuple[str, str], dict[str, Any]] = {}
+    for path in candidates:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        available_at = str(payload.get("available_at_utc") or "")
+        for row in payload.get("records") or []:
+            if not isinstance(row, dict):
+                continue
+            if path == cache_path:
+                contract = dict(row)
+            else:
+                contract = _contract_row_from_ladder(
+                    row, discovered_at_utc=available_at
+                )
+            if not contract:
+                continue
+            key = (
+                str(contract.get("city") or ""),
+                str(contract.get("target_date") or ""),
+            )
+            discovered_at = _parse_utc(contract.get("last_discovered_at_utc"))
+            if (
+                not all(key)
+                or key in contracts
+                or discovered_at is None
+                or (now_utc - discovered_at).total_seconds()
+                > EVENT_CONTRACT_MAX_AGE_SEC
+            ):
+                continue
+            contracts[key] = contract
+    return contracts
+
+
+def _recover_discovery_contracts(
+    *,
+    events: list[dict[str, Any]],
+    discovery_failures: list[dict[str, Any]],
+    contracts: dict[tuple[str, str], dict[str, Any]],
+    observation_index: dict[tuple[str, str], dict[str, Any]],
+    now_utc: datetime,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    recovered = 0
+    event_keys = {(str(row["city"]), str(row["target_date"])) for row in events}
+    for failure in discovery_failures:
+        if failure.get("discovery_failure_class") != "operational_failure":
+            continue
+        key = (str(failure.get("city") or ""), str(failure.get("target_date") or ""))
+        contract = contracts.get(key)
+        if contract is None or key in event_keys:
+            continue
+        if str(contract.get("event_slug") or "") != str(failure.get("slug") or ""):
+            continue
+        cfg = legacy.CITIES.get(key[0])
+        entries = contract.get("entries") or []
+        if not isinstance(cfg, dict) or not entries:
+            continue
+        events.append(
+            {
+                "city": key[0],
+                "target_date": key[1],
+                "event_slug": contract["event_slug"],
+                "event_id": contract.get("event_id", ""),
+                "condition_count": len(entries),
+                "entries": entries,
+                "strategy_targets": _strategy_targets_for_entries(
+                    entries,
+                    unit=str(cfg["unit"]),
+                    observation=observation_index.get(key),
+                ),
+                "discovery_attempt_count": failure.get("discovery_attempt_count", 1),
+                "market_discovery_source": "cached_event_contract",
+                "market_contract_last_discovered_at_utc": contract.get(
+                    "last_discovered_at_utc"
+                ),
+                "city_local_date_at_capture": city_local_datetime(key[0], now_utc)
+                .date()
+                .isoformat(),
+            }
+        )
+        event_keys.add(key)
+        failure["recovered_by_event_contract"] = True
+        failure["event_contract_last_discovered_at_utc"] = contract.get(
+            "last_discovered_at_utc"
+        )
+        recovered += 1
+    events.sort(key=lambda row: (str(row.get("city")), str(row.get("target_date"))))
+    return events, discovery_failures, recovered
+
+
+def _publish_event_contracts(
+    path: Path,
+    *,
+    contracts: dict[tuple[str, str], dict[str, Any]],
+    events: list[dict[str, Any]],
+    available_at_utc: str,
+) -> None:
+    for event in events:
+        if event.get("market_discovery_source") == "cached_event_contract":
+            continue
+        key = (str(event.get("city") or ""), str(event.get("target_date") or ""))
+        if not all(key):
+            continue
+        contracts[key] = {
+            "city": key[0],
+            "target_date": key[1],
+            "event_slug": str(event.get("event_slug") or ""),
+            "event_id": str(event.get("event_id") or ""),
+            "entries": list(event.get("entries") or []),
+            "last_discovered_at_utc": available_at_utc,
+        }
+    _publish_json_atomic(
+        path,
+        {
+            "schema_version": EVENT_CONTRACT_CACHE_SCHEMA_VERSION,
+            "producer": PRODUCER,
+            "producer_build_id": PRODUCER_BUILD_ID,
+            "available_at_utc": available_at_utc,
+            "records": [contracts[key] for key in sorted(contracts)],
+        },
+    )
 
 
 def _strategy_state_from_observation(row: dict[str, Any] | None) -> dict[str, Any]:
@@ -236,6 +466,12 @@ def _token_requests(
                     "city_local_date_at_snapshot": event["city_local_date_at_capture"],
                     "event_slug": event["event_slug"],
                     "event_id": event["event_id"],
+                    "market_discovery_source": event.get(
+                        "market_discovery_source", "gamma_live"
+                    ),
+                    "market_contract_last_discovered_at_utc": event.get(
+                        "market_contract_last_discovered_at_utc"
+                    ),
                     "market_id": entry.get("market_id", ""),
                     "condition_id": entry.get("condition_id", ""),
                     "bracket": entry["label"],
@@ -356,12 +592,30 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     output_root = Path(args.output_root)
     observation_path = Path(args.observation_cache) if args.observation_cache else None
     observations = _load_observation_index(observation_path)
+    ladder_root = Path(args.market_ladder_root)
+    event_contracts = _load_event_contracts(ladder_root, now_utc=now_utc)
     events, discovery_failures = discover_market_ladders(
         now_utc=now_utc,
         observation_index=observations,
         target_date=args.target_date,
         max_workers=getattr(args, "market_discovery_workers", DEFAULT_DISCOVERY_WORKERS),
         retries=getattr(args, "market_discovery_retries", DEFAULT_DISCOVERY_RETRIES),
+    )
+    events, discovery_failures, recovered_discovery_count = (
+        _recover_discovery_contracts(
+            events=events,
+            discovery_failures=discovery_failures,
+            contracts=event_contracts,
+            observation_index=observations,
+            now_utc=now_utc,
+        )
+    )
+    contract_cache_path = ladder_root / "event_contract_cache.json"
+    _publish_event_contracts(
+        contract_cache_path,
+        contracts=event_contracts,
+        events=events,
+        available_at_utc=capture_started_at_utc,
     )
     request_rows, hot_tokens, cold_tokens = _token_requests(events, capture_started_at_utc)
     budget = float(args.orderbook_budget_sec)
@@ -405,6 +659,11 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         for row in discovery_failures
         if row.get("discovery_failure_class") == "operational_failure"
     ]
+    unrecovered_operational_discovery_failures = [
+        row
+        for row in operational_discovery_failures
+        if not row.get("recovered_by_event_contract")
+    ]
     batch_capture_id = canonical_json_hash(
         {
             "producer": PRODUCER,
@@ -423,14 +682,17 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         for row in records:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
-    batch_status = (
-        "ok"
-        if records
+    books_complete = (
+        bool(records)
         and len(records) == len(request_rows)
         and all(row.get("status") == "ok" for row in records)
-        and not operational_discovery_failures
-        else "degraded"
     )
+    if books_complete and not unrecovered_operational_discovery_failures:
+        batch_status = (
+            "ok_with_discovery_reuse" if recovered_discovery_count else "ok"
+        )
+    else:
+        batch_status = "degraded"
     latest_payload = {
         "schema_version": SCHEMA_VERSION,
         "status": batch_status,
@@ -455,6 +717,10 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             "failed_books": sum(row.get("status") != "ok" for row in records),
             "discovery_failures": len(discovery_failures),
             "discovery_operational_failures": len(operational_discovery_failures),
+            "discovery_operational_recovered": recovered_discovery_count,
+            "discovery_operational_unrecovered": len(
+                unrecovered_operational_discovery_failures
+            ),
             "discovery_expected_unavailable": len(discovery_failures)
             - len(operational_discovery_failures),
             "discovery_retries_used": sum(
@@ -462,6 +728,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 for row in [*events, *discovery_failures]
             ),
             "forecast_dependency": False,
+            "event_contract_cache_path": str(contract_cache_path),
         },
         "discovery_failures": discovery_failures,
     }
@@ -475,12 +742,12 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         available_at_utc=available_at_utc,
     )
     ladder_path = (
-        Path(args.market_ladder_root)
+        ladder_root
         / day
         / f"market_ladder_snapshot_{stamp}.json"
     )
     _publish_json_atomic(ladder_path, ladder_payload)
-    _publish_json_atomic(Path(args.market_ladder_root) / "latest.json", ladder_payload)
+    _publish_json_atomic(ladder_root / "latest.json", ladder_payload)
 
     result = {
         "status": batch_status,
