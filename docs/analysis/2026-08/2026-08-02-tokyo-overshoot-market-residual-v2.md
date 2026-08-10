@@ -366,6 +366,8 @@ frozen forward。正确结论是：这是 Tokyo 当前唯一跑出正 fee ROI �
   (`sha256=c6bc5aa53b2196bb8762fb38f7cb86cdf868f9aae70d16bf765ec3f7f8014296`)
 - 同目录 `market_consensus_threshold_sensitivity.csv`
   (`sha256=15b26dfae73b00d7165f4325331ed8be743d15401aac3c5c97fa6d317b75d973`)
+- 复现入口仍为共享 runner `research_tokyo_jma_multivariate_market_v1.py --trigger-events ...
+  --prior-trigger-join ... --target-shares 5 --consensus-min-ask 0.80`，没有复制 Tokyo v2/v3 一次性入口。
 - 同目录 `phase_policy_trades.csv` 保存全部逐笔结果，固定 shares=5。
 
 ### 冻结后动作
