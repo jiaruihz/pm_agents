@@ -193,8 +193,16 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
     exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
     place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
     place_status = str(place.get("status") or "").lower()
+    cancel = exchange.get("cancel") if isinstance(exchange.get("cancel"), dict) else {}
+    cancel_status = str(cancel.get("status") or "").lower()
+    quote_status = str(row.get("quote_status") or "").lower()
     exchange_order_status = str(row.get("exchange_order_status") or "").lower()
     if status in {"failed", "error", "rejected", "cancelled", "canceled", "blocked"}:
+        return False
+    if quote_status in {"cancelled", "canceled"} or cancel_status in {
+        "cancelled",
+        "canceled",
+    }:
         return False
     if place_status in {"failed", "error", "rejected", "cancelled", "canceled"}:
         return False
@@ -283,7 +291,12 @@ def duplicate_current_execution_examples(
     for row in rows:
         identity_field = ""
         identity = ""
-        for candidate in ("execution_key", "live_order_key", "event_key"):
+        for candidate in (
+            "execution_id",
+            "execution_key",
+            "live_order_key",
+            "event_key",
+        ):
             value = str(row.get(candidate) or "").strip()
             if value:
                 identity_field = candidate

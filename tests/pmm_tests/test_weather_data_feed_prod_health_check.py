@@ -149,10 +149,11 @@ def test_prod_health_check_has_one_active_fast_route():
     assert overall_status(sections) == "ok"
 
 
-def test_prod_health_check_fails_when_active_fast_route_is_missing():
+def test_prod_health_check_fails_when_active_fast_route_is_explicitly_missing():
     sections = {
         "snapshot_parity": {"status": "ok"},
         "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
+        "live_cross_observation_state": {"status": "missing"},
         "telemetry": [],
         "live_orders": {},
         "summaries": [],
@@ -1073,6 +1074,93 @@ def test_live_order_check_allows_distinct_source_events_to_share_market_cap(tmp_
 
     assert report["effective_current_or_future_rows"] == 2
     assert report["duplicate_current_strategy_city_token_count"] == 0
+
+
+def test_live_order_check_allows_distinct_maker_lifecycle_executions(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    base = {
+        "strategy_instance": "current_yes_core_carry_tiny_live_v2",
+        "city": "CapeTown",
+        "target_date": "2026-08-10",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "execution_policy": "current_yes_residual_carry_maker_v2",
+        "child_order_role": "core_carry_maker_reprice",
+        "status": "submitted",
+    }
+    first = {**base, "execution_id": "reprice-1", "order_id": "order-1"}
+    second = {**base, "execution_id": "reprice-2", "order_id": "order-2"}
+    path.write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["duplicate_current_execution_identity_count"] == 0
+
+
+def test_live_order_check_excludes_maker_cancel_projection(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    cancel = {
+        "strategy_instance": "current_yes_core_carry_tiny_live_v2",
+        "city": "CapeTown",
+        "target_date": "2026-08-10",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "execution_policy": "current_yes_residual_carry_maker_v2",
+        "child_order_role": "core_carry_maker_reprice",
+        "execution_id": "cancel-projection",
+        "status": "submitted",
+        "quote_status": "cancelled",
+        "exchange_response": {"cancel": {"status": "cancelled"}},
+    }
+    path.write_text(json.dumps(cancel) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 0
+
+
+def test_live_order_check_flags_repeated_execution_id(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    row = {
+        "strategy_instance": "current_yes_core_carry_tiny_live_v2",
+        "city": "CapeTown",
+        "target_date": "2026-08-10",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "execution_policy": "current_yes_residual_carry_maker_v2",
+        "child_order_role": "core_carry_maker_reprice",
+        "execution_id": "same-reprice",
+        "status": "submitted",
+    }
+    path.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["duplicate_current_execution_identity_count"] == 1
 
 
 def test_live_order_check_flags_current_duplicate_and_yes_no_conflict(tmp_path):
