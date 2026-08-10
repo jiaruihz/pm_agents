@@ -172,6 +172,8 @@ def parse_target_date(value: Any) -> str:
 
 
 def effective_order_id(row: dict[str, Any]) -> str:
+    if str(row.get("venue_order_id") or "").strip():
+        return str(row.get("venue_order_id")).strip()
     if str(row.get("order_id") or "").strip():
         return str(row.get("order_id")).strip()
     if str(row.get("orderID") or "").strip():
@@ -179,6 +181,23 @@ def effective_order_id(row: dict[str, Any]) -> str:
     exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
     place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
     return str(place.get("orderID") or "").strip()
+
+
+def is_order_submission_projection(row: dict[str, Any]) -> bool:
+    """Exclude terminal/cancel projections while retaining actual submissions."""
+
+    role = str(row.get("child_order_role") or "").lower()
+    action = str(row.get("execution_action") or "").lower()
+    status = str(row.get("status") or "").lower()
+    quote_status = str(row.get("quote_status") or "").lower()
+    if role.endswith("_terminal") or action.endswith("_terminal"):
+        return False
+    if status in {"cancelled", "canceled"} or quote_status in {
+        "cancelled",
+        "canceled",
+    }:
+        return False
+    return True
 
 
 def is_current_or_future_order(row: dict[str, Any], *, today_utc: str) -> bool:
@@ -1173,7 +1192,11 @@ def check_live_orders(
             row["_effective_order_id"] = effective_order_id(row)
             rows.append(row)
     duplicate_orders, order_examples = duplicate_examples(
-        [row for row in rows if row.get("_effective_order_id")],
+        [
+            row
+            for row in rows
+            if row.get("_effective_order_id") and is_order_submission_projection(row)
+        ],
         ("_effective_order_id",),
     )
     duplicate_intents, intent_examples = duplicate_examples(

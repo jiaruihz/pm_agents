@@ -1135,6 +1135,67 @@ def test_live_order_check_excludes_maker_cancel_projection(tmp_path):
     assert report["effective_current_or_future_rows"] == 0
 
 
+def test_live_order_check_counts_duplicate_venue_order_submissions(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    row = {
+        "strategy_instance": "current_yes_core_carry_tiny_live_v2",
+        "city": "CapeTown",
+        "target_date": "2026-08-10",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "execution_id": "submission",
+        "venue_order_id": "venue-order",
+        "status": "submitted",
+    }
+    path.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["duplicate_order_id_count"] == 1
+
+
+def test_live_order_check_allows_terminal_projection_to_repeat_venue_order_id(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    submitted = {
+        "strategy_instance": "current_yes_core_carry_tiny_live_v2",
+        "city": "CapeTown",
+        "target_date": "2026-08-10",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "execution_id": "submission",
+        "venue_order_id": "venue-order",
+        "status": "submitted",
+    }
+    terminal = {
+        **submitted,
+        "execution_id": "terminal",
+        "child_order_role": "core_carry_maker_terminal",
+        "execution_action": "core_carry_maker_terminal",
+        "status": "cancelled",
+    }
+    path.write_text(json.dumps(submitted) + "\n" + json.dumps(terminal) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["duplicate_order_id_count"] == 0
+
+
 def test_live_order_check_flags_repeated_execution_id(tmp_path):
     live_dir = tmp_path / "live"
     live_dir.mkdir()

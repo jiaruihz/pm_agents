@@ -1356,10 +1356,11 @@ authenticated CLOB evidence reports all 10 shares matched at `0.94` versus the
 earlier `0.98` ask. The five-share maker sleeve and its three replacements
 produced four venue order ids; all four were cancelled with zero matched
 shares. The final cancel projection created no venue order. Fast Source added
-zero order rows during the maintenance window, and neither live journal has a
-duplicate venue order id. Research and execution reviews must label the failed
-interval `core_carry_clob_transport_error_20260810`; it is 142 failed execution
-cycles and one 15-minute delayed entry, not 142 strategy rejections.
+zero order rows during the maintenance window, and the maintenance delta has
+no repeated venue order submission. Research and execution reviews must label
+the failed interval `core_carry_clob_transport_error_20260810`; it is 142
+failed execution cycles and one 15-minute delayed entry, not 142 strategy
+rejections.
 
 The proxy release then reloaded all 12 registered consumers from their pinned
 checkouts. One real compatibility defect was found during that transaction:
