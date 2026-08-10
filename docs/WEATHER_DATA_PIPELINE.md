@@ -10,10 +10,10 @@ Last updated: 2026-08-10
 > **2026-08-10 journal storage override**：forecast enrichment、forecast version、
 > observations、AMOS fast lane 以及已停止的历史/probe journal 均已切为只写、只读
 > `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写并在逐项校验后删除。
-> `latest.json` 仍是当前 cache。当前仅 `source_events/sources.jsonl`、
-> `live_cross_observations/high_frequency_observations.jsonl` 保留 aggregate compatibility
-> journal；这两条仍被增量生产消费者 tail，不能在游标迁移和进程切换前删除。KNMI 已完成
-> rollover-aware reader 切换，当前只保留 `knmi_open_data/YYYY-MM-DD/knmi_observations.jsonl`。
+> `latest.json` 仍是当前 cache。当前仅 `source_events/sources.jsonl` 保留 aggregate
+> compatibility journal；它仍被真实下单 runner 的持久化 byte cursor tail，不能在 live
+> 维护窗口完成无重放游标迁移前删除。KNMI 与 live-cross 已完成 rollover-aware reader
+> 切换，当前只保留各自的 `YYYY-MM-DD/<dataset>.jsonl` 历史。
 
 > **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
 > `src/strategies/runtime/production.yaml` 解析；物理 canonical 是
@@ -209,7 +209,7 @@ The mutable NVMe layer distinguishes data evidence from disposable process logs:
 | Family | Class | Current layout | Required lifecycle |
 |---|---|---|---|
 | `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions plus an active aggregate compatibility journal | keep partitions; migrate persistent byte-offset readers in a live maintenance window, then remove the aggregate |
-| `output/live_cross_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw high-frequency evidence | daily partitions plus an active aggregate compatibility journal | keep partitions; migrate live/shadow and market-book cursors together, then remove the aggregate |
+| `output/live_cross_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw high-frequency evidence | daily partitions only; `latest.json` is the current cache and notify source | Korea/WCIR/stale-book/market-book readers follow shard rollover; producer no longer writes a root aggregate |
 | `output/knmi_open_data/{YYYY-MM-DD}/knmi_observations.jsonl` | raw KNMI first-seen evidence | daily partitions only; `latest.json` is the current cache and wake path | rollover-aware KNMI first-seen, market-book and WCIR readers consume the dated family |
 | `output/observations/{YYYY-MM-DD}/observations.jsonl` | official observation evidence | daily partitions only; `latest.json` is the current cache | readers resolve physical capture-day shards and never fall back to a deleted aggregate |
 | `output/forecast_enrichment/{YYYY-MM-DD}/*.jsonl` | reproducible forecast feature/version evidence | daily partitions only; `latest.json` is the current cache | retain dated evidence needed by frozen research; consumers must select the exact dataset filename |
@@ -222,10 +222,14 @@ backfilled 1,360 missing `forecast_versions` rows into the correct capture-day s
 verified forecast, observation, AMOS fast-lane and stopped historical/probe aggregates. On 2026-08-10 the
 KNMI producer and its first-seen, market-book and WCIR consumers completed a no-gap shard cutover; a real
 post-restart notification advanced the shard and downstream cursor while the aggregate stayed unchanged,
-after which the 23,147,593-byte root duplicate was removed. This cleanup pass removed 1,451,976,845 bytes in
-total without removing unique history or changing canonical facts. The two active compatibility journals
-listed above remain deliberately: each has one or more long-running byte-offset consumers, so equality alone
-is not sufficient deletion evidence. Their cutover requires a no-gap cursor handoff and post-restart freshness check.
+after which the 23,147,593-byte root duplicate was removed. The live-cross cutover then moved market-books,
+Korea first-seen, three stale-book windows and WCIR to the dated family. After restart, the current shard grew
+from 6,376,875 to 6,384,072 bytes while the 123,715,543-byte aggregate stayed byte-for-byte unchanged; all
+consumer health remained current, and the exact duplicate was removed. This cleanup pass has removed
+1,575,692,388 bytes in total without removing unique history or changing canonical facts. The sole remaining
+compatibility journal is `source_events/sources.jsonl`: its shard bytes are exactly the same size, but a real
+live runner still owns a persistent aggregate byte cursor. The no-replay aggregate-to-shard cursor migration
+is implemented and tested, but production cutover and deletion require an explicitly confirmed live restart.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See
