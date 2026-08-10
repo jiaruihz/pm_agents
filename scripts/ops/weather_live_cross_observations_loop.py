@@ -150,7 +150,10 @@ def observation_args(args: argparse.Namespace, lane: ObservationFastLane | None 
 def run_cycle(args: argparse.Namespace, lane: ObservationFastLane | None = None) -> dict[str, object]:
     obs_args, output_dir, notify_path = observation_args(args, lane)
     payload = build_payload(obs_args)
-    write_outputs(payload, output_dir)
+    # The main compatibility journal is still consumed by live strategies.
+    # Fast lanes are internal fan-outs whose consumers use latest.json or
+    # dated evidence, so a second aggregate only duplicates every shard byte.
+    write_outputs(payload, output_dir, write_aggregate=lane is None)
     notified = write_new_observation_notification(notify_path, payload)
     update_state(payload, Path(obs_args.state_path))
     return {
