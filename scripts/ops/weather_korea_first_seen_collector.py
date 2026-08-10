@@ -126,6 +126,18 @@ def read_appended_rows(
     path: Path,
     cursor: dict[str, Any] | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    configured_path = path
+    if path.is_dir():
+        candidates = sorted(
+            path.glob("????-??-??/high_frequency_observations.jsonl")
+        )
+        if not candidates:
+            return [], _empty_cursor(path), {
+                "status": "source_missing",
+                "path": str(path),
+                "lines_read": 0,
+            }
+        path = candidates[-1]
     try:
         stat = path.stat()
     except FileNotFoundError:
@@ -176,6 +188,8 @@ def read_appended_rows(
     }
     return rows, cursor_out, {
         "status": "ok",
+        "configured_path": str(configured_path),
+        "physical_path": str(path),
         "reset_reason": reset_reason,
         "lines_read": lines_read,
         "bytes_read": max(0, offset - start_offset),
