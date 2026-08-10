@@ -999,8 +999,34 @@ def test_controller_refuses_stop_for_live_runtime(tmp_path):
     assert ctl._run_stop(production_spec(tmp_path, (runtime,)), runtime) == {
         "instance_id": "live",
         "status": "blocked",
-        "reason": "live_stop_not_supported",
+        "reason": "confirm_live_required",
     }
+
+
+def test_controller_stops_exact_confirmed_live_runtime(tmp_path, monkeypatch):
+    restart = tmp_path / "restart.sh"
+    restart.write_text("#!/bin/sh\n", encoding="utf-8")
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live_session",
+        role="strategy",
+        execution_mode="live",
+        checkout_root=tmp_path,
+        restart_script=Path("restart.sh"),
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    calls = []
+
+    def fake_tmux(_spec, *args):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
+
+    assert ctl._run_stop(spec, runtime, confirm_live=True)["status"] == "stopped"
+    assert calls == [("kill-session", "-t", "=live_session")]
 
 
 def test_data_feed_semantics_separates_coverage_warning_from_critical_chain():

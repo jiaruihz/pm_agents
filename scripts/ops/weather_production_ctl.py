@@ -1220,16 +1220,31 @@ def _run_restart(
 def _run_stop(
     spec: WeatherProductionSpec,
     runtime: WeatherManagedRuntimeSpec,
+    *,
+    confirm_live: bool = False,
 ) -> dict[str, Any]:
-    """Stop one exact safe non-live tmux session through controller authority."""
+    """Stop one exact registered tmux session through controller authority."""
 
-    if runtime.expected_live or runtime.execution_mode == "live":
+    is_live = runtime.expected_live or runtime.execution_mode == "live"
+    if is_live and not confirm_live:
         return {
             "instance_id": runtime.instance_id,
             "status": "blocked",
-            "reason": "live_stop_not_supported",
+            "reason": "confirm_live_required",
         }
-    if runtime.recovery_policy != "safe":
+    if is_live and runtime.recovery_policy != "guarded_live":
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "blocked",
+            "reason": "guarded_live_recovery_policy_required",
+        }
+    if is_live and runtime.resolved_restart_script() is None:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "blocked",
+            "reason": "explicit_restart_contract_required",
+        }
+    if not is_live and runtime.recovery_policy != "safe":
         return {
             "instance_id": runtime.instance_id,
             "status": "blocked",
@@ -1301,6 +1316,7 @@ def parse_args() -> argparse.Namespace:
     stop.add_argument("--json", action="store_true")
     stop.add_argument("--apply", action="store_true")
     stop.add_argument("--instance", required=True)
+    stop.add_argument("--confirm-live", action="store_true")
     stop.add_argument("--reason")
     recover = sub.add_parser("recover-jrs-context")
     recover.add_argument("--json", action="store_true")
@@ -1382,7 +1398,11 @@ def main() -> int:
                 raise SystemExit("stop --apply requires --reason")
             if (health.get("jrs_context_health") or {}).get("status") != "healthy":
                 raise SystemExit("stop blocked: jrs_context_unhealthy")
-            action = _run_stop(spec, runtime)
+            action = _run_stop(
+                spec,
+                runtime,
+                confirm_live=bool(args.confirm_live),
+            )
             time.sleep(2)
             after = manifest_tool.collect_manifest(spec)
             after = manifest_tool.compare_prechange_manifest(
