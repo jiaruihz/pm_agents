@@ -631,6 +631,16 @@ def build_manifest(
             )
         )
 
+    declared_checkout_roots = {
+        runtime.checkout_root.resolve()
+        for runtime in spec.managed_runtimes
+        if runtime.checkout_root is not None
+    }
+    if spec.canonical_refresh_checkout_root is not None:
+        declared_checkout_roots.add(spec.canonical_refresh_checkout_root.resolve())
+    for root in sorted(declared_checkout_roots, key=str):
+        git_metadata(root, git_cache)
+
     production_volume = inspect_volume_identity(spec.production_storage_root)
     archive_volume = inspect_volume_identity(spec.archive_storage_root)
     expected_production_uuid = spec.production_storage_volume_uuid
@@ -791,6 +801,20 @@ def build_manifest(
                     },
                 )
             )
+
+    dirty_production_checkouts = sorted(
+        (row for row in git_cache.values() if row.get("dirty_tracked") is True),
+        key=lambda row: str(row.get("root") or ""),
+    )
+    if dirty_production_checkouts:
+        findings.append(
+            finding(
+                "warning",
+                "production_checkouts_dirty",
+                "registered or running production checkouts contain tracked changes",
+                {"checkouts": dirty_production_checkouts},
+            )
+        )
 
     expected_sessions = {
         item.tmux_session

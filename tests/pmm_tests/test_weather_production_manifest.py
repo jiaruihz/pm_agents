@@ -228,6 +228,63 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     assert findings["unregistered_persistent_worktrees"]["severity"] == "warning"
 
 
+def test_manifest_warns_when_declared_production_checkout_is_dirty(tmp_path, monkeypatch):
+    checkout = tmp_path / "prod"
+    spec = WeatherProductionSpec(
+        **{
+            **production_spec(tmp_path).__dict__,
+            "canonical_refresh_checkout_root": checkout,
+        }
+    )
+    spec.canonical_db_path.parent.mkdir(parents=True)
+    spec.canonical_db_path.write_text("canonical", encoding="utf-8")
+    local = tmp_path / "repo/runtime/weather.db"
+    local.parent.mkdir(parents=True)
+    local.symlink_to(spec.canonical_db_path)
+    db_route = manifest.inspect_db_route(spec, repo_root=tmp_path / "repo")
+    monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(manifest, "inspect_persistent_worktrees", lambda _spec: [])
+
+    def fake_git_metadata(root, cache):
+        payload = {
+            "root": str(root),
+            "head": "abc123",
+            "branch": "HEAD",
+            "dirty_tracked": True,
+        }
+        cache[str(root)] = payload
+        return payload
+
+    monkeypatch.setattr(manifest, "git_metadata", fake_git_metadata)
+
+    payload = manifest.build_manifest(
+        spec=spec,
+        processes=[],
+        tmux_rows=[],
+        launchctl_rows=[],
+        db_route=db_route,
+        db_consumers={},
+    )
+
+    findings = {item["kind"]: item for item in payload["findings"]}
+    assert payload["status"] == "warning"
+    assert findings["production_checkouts_dirty"] == {
+        "severity": "warning",
+        "kind": "production_checkouts_dirty",
+        "message": "registered or running production checkouts contain tracked changes",
+        "detail": {
+            "checkouts": [
+                {
+                    "root": str(checkout),
+                    "head": "abc123",
+                    "branch": "HEAD",
+                    "dirty_tracked": True,
+                }
+            ]
+        },
+    }
+
+
 def test_prechange_comparison_fails_when_existing_session_disappears():
     baseline = {
         "generated_at_utc": "2026-08-02T06:00:00Z",

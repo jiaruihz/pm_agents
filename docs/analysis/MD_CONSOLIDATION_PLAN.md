@@ -1,7 +1,7 @@
 # Weather 文档清理账本
 
 Status: current-reference
-Updated: 2026-08-06
+Updated: 2026-08-10
 Source of truth: no
 Used by: `WEATHER_DOCS_INDEX.md`; `docs/analysis/` living docs
 
@@ -118,6 +118,9 @@ system contract 和 ops runbook。
   遗留的 inner loop/stop/status、已 superseded 的 city-probability v2、两个未登记 JRS research wrapper，以及旧
   fast-observation/station-basis loop。对应 Python runner、研究证据和 runtime 数据不动；备份、Cloudflare、Telegram
   等非 weather production 工具明确排除，不借天气清理扩大范围。
+- 2026-08-10：删除 Git 中 12 个 2026-02 遗留 runtime 日志、PID 和 shadow 输出；`.gitignore` 现在同时覆盖根目录
+  `runtime` 目录与 NVMe compatibility symlink，并由 repo hygiene 检查禁止任何 `runtime/` 文件重新进入版本库。production manifest 同时开始把登记或运行中的
+  脏 checkout 明确报为 warning，避免 `dirty_tracked=true` 被藏在 `findings=[]` 的健康结论里。
 
 ## 仍有效的历史边界
 

@@ -455,6 +455,18 @@ def check_generated_artifacts(errors: list[str], tracked: set[str]) -> None:
             fail(errors, f"stale large_generated_allowlist entry: {relative}")
 
 
+def check_runtime_artifacts_are_untracked(errors: list[str], tracked: set[str]) -> None:
+    runtime_artifacts = sorted(
+        relative for relative in tracked if relative.startswith("runtime/")
+    )
+    if runtime_artifacts:
+        fail(
+            errors,
+            "runtime artifacts must not be git tracked: "
+            + ", ".join(runtime_artifacts),
+        )
+
+
 def production_script_closure(tracked: set[str]) -> tuple[set[str], set[str]]:
     production = read("src/strategies/runtime/production.yaml")
     scripts = {
@@ -656,6 +668,7 @@ def main() -> int:
     check_index_links(errors, tracked)
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)
+    check_runtime_artifacts_are_untracked(errors, tracked)
     check_production_entrypoints(errors, tracked)
     check_research_script_debt(errors, tracked, untracked)
     if errors:

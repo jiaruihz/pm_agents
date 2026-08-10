@@ -53,7 +53,7 @@ src/strategies/pmm/backtest/**/plots/
 local_market_collection/market_snapshot_*.json
 
 # Runtime local artifacts
-runtime/
+/runtime
 !src/strategies/weather_edge_v1/runtime/
 !src/strategies/weather_edge_v1/runtime/execution_journal.py
 runtime/*.pid

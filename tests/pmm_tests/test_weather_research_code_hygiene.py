@@ -26,6 +26,31 @@ from scripts.analysis.reheat_risk import research_tmax_cross_hour_coherence_audi
 from scripts.ops import check_weather_docs
 
 
+def test_repo_hygiene_rejects_tracked_runtime_artifacts():
+    errors = []
+
+    check_weather_docs.check_runtime_artifacts_are_untracked(
+        errors,
+        {"runtime/logs/process.log", "runtime/process.pid", "src/runner.py"},
+    )
+
+    assert errors == [
+        "runtime artifacts must not be git tracked: runtime/logs/process.log, "
+        "runtime/process.pid"
+    ]
+
+
+def test_repo_hygiene_accepts_runtime_files_outside_git():
+    errors = []
+
+    check_weather_docs.check_runtime_artifacts_are_untracked(
+        errors,
+        {"src/strategies/weather_edge_v1/runtime/execution_journal.py"},
+    )
+
+    assert errors == []
+
+
 def test_late_window_variants_use_one_shared_helper_implementation(tmp_path):
     assert legacy_v1.best_level is late_window_shared.best_level
     assert feature_layer_v2.best_level is late_window_shared.best_level
