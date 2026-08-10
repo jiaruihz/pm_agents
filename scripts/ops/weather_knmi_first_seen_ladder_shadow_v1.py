@@ -207,17 +207,32 @@ def read_new_events(
     now: datetime,
     max_event_age_seconds: float,
 ) -> list[dict[str, Any]]:
-    size = source_path.stat().st_size
+    if source_path.is_dir():
+        candidates = sorted(source_path.glob("????-??-??/knmi_observations.jsonl"))
+        if not candidates:
+            return []
+        physical_path = candidates[-1]
+    else:
+        physical_path = source_path
+    size = physical_path.stat().st_size
     if not state.get("source_initialized") and bootstrap_at_end:
         state["source_offset"] = size
         state["source_initialized"] = True
+        state["source_physical_path"] = str(physical_path)
         return []
-    offset = int(state.get("source_offset") or 0)
+    if state.get("source_physical_path") not in (None, str(physical_path)):
+        offset = 0
+    elif state.get("source_physical_path") is None and source_path.is_dir():
+        # Aggregate-to-shard migration: replay the bounded current shard. Stable
+        # event ids and max_event_age_seconds suppress historical duplicates.
+        offset = 0
+    else:
+        offset = int(state.get("source_offset") or 0)
     if size < offset:
-        raise RuntimeError(f"KNMI source file shrank: {source_path}")
+        raise RuntimeError(f"KNMI source file shrank: {physical_path}")
     seen = set(state.get("seen_event_ids") or [])
     events = []
-    with source_path.open("rb") as handle:
+    with physical_path.open("rb") as handle:
         handle.seek(offset)
         while True:
             line_start = handle.tell()
@@ -230,7 +245,7 @@ def read_new_events(
             row = json.loads(line)
             if not isinstance(row, dict):
                 continue
-            event = _information_event(row, source_path)
+            event = _information_event(row, physical_path)
             if event is None:
                 continue
             event_id = str(event["information_event_id"])
@@ -245,6 +260,7 @@ def read_new_events(
             seen.add(event_id)
         state["source_offset"] = handle.tell()
     state["source_initialized"] = True
+    state["source_physical_path"] = str(physical_path)
     state["seen_event_ids"] = sorted(seen)[-10000:]
     return events
 

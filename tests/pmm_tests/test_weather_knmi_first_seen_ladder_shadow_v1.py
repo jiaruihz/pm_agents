@@ -182,6 +182,63 @@ def test_read_new_events_bootstraps_then_reads_only_material_initial(tmp_path) -
     assert events[0]["capture_anchor_utc"] == "2026-07-30T01:33:58.000000Z"
 
 
+def test_read_new_events_follows_dated_shard_rollover(tmp_path) -> None:
+    root = tmp_path / "knmi_open_data"
+    state = {"source_initialized": True, "seen_event_ids": []}
+    now = datetime(2026, 7, 30, 1, 34, tzinfo=timezone.utc)
+
+    def write_event(day: str, event_id: str, first_seen: str) -> None:
+        shard = root / day / "knmi_observations.jsonl"
+        shard.parent.mkdir(parents=True, exist_ok=True)
+        shard.write_text(
+            json.dumps(
+                {
+                    "source": "knmi",
+                    "city": "Amsterdam",
+                    "station": "06240",
+                    "target_date": day,
+                    "observation_time_utc": f"{day}T01:30:00Z",
+                    "knmi_first_seen_at_utc": first_seen,
+                    "first_seen_at_utc": first_seen,
+                    "available_at_utc": first_seen,
+                    "source_event_ts_utc": f"{day}T01:30:00Z",
+                    "fetched_at_utc": first_seen,
+                    "knmi_revision_kind": "initial",
+                    "information_event_id": event_id,
+                    "event_role": "new_content",
+                    "information_event_status": "material",
+                    "material_state_change": True,
+                    "temp_c": 18.4,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    write_event("2026-07-30", "day-1", "2026-07-30T01:33:58Z")
+    events = subject.read_new_events(
+        root,
+        state,
+        bootstrap_at_end=True,
+        now=now,
+        max_event_age_seconds=90,
+    )
+    assert [row["information_event_id"] for row in events] == ["day-1"]
+
+    write_event("2026-07-31", "day-2", "2026-07-31T01:33:58Z")
+    events = subject.read_new_events(
+        root,
+        state,
+        bootstrap_at_end=True,
+        now=datetime(2026, 7, 31, 1, 34, tzinfo=timezone.utc),
+        max_event_age_seconds=90,
+    )
+    assert [row["information_event_id"] for row in events] == ["day-2"]
+    assert state["source_physical_path"].endswith(
+        "2026-07-31/knmi_observations.jsonl"
+    )
+
+
 def test_pre_event_archive_skips_newer_partial_ladder(tmp_path) -> None:
     root = tmp_path / "books"
     root.mkdir()
