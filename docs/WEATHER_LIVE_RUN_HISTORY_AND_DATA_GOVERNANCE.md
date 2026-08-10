@@ -1528,8 +1528,17 @@ healthy batch at `14:44:45.693Z` restored 79 events, 1,738/1,738 books and only
 the usual 10 expected unavailable city-date events. Strategy snapshot join
 retained the last complete book batches at 22:09 and 22:19 Beijing time, then
 missed the 22:29, 22:39 and 22:49 publication cycles; the first restored
-snapshot was 22:51. No partial-discovery batch was accepted into a later
-strategy snapshot.
+snapshot was 22:51.
+
+Deployment testing then found that marking discovery loss `degraded` was not
+enough to preserve the denominator. The 23:09 batch contained 1,782 books but
+omitted the failed Miami event. The 23:12 strategy snapshot accepted that
+batch and reported `target_count=108`, `target_ok_count=108`, because its target
+set had already shrunk with the missing event. Later 23:19 and 23:29 batches
+collapsed to 66 and 22 books; the 23:23 and 23:33 joins were correctly retained
+only as partial snapshots with 0 and 11 records. This is a coverage defect, not
+a strategy filter, and supersedes the earlier statement that no
+partial-discovery batch reached a later strategy snapshot.
 
 Within `14:08:43Z..14:44:46Z`, Core Carry wrote 101 loop summaries: 62 `ok`,
 36 `error` and three `runtime_state_error`, including 38
@@ -1543,8 +1552,7 @@ count is not reconstructible because the missing PIT books were never captured;
 research must treat both windows as `market_proxy_transport_coverage_gap`, not
 as evidence of zero opportunities.
 
-Commit `3b539342` implements the repair; candidate market-books release
-`742b5fed` is prepared but not yet deployed. Gamma discovery is now bounded
+Commit `3b539342` implements the transport repair. Gamma discovery is bounded
 eight-way concurrent, retries one transport failure, records attempt/failure
 class, and marks operational discovery loss degraded. CLOB `/books` retries
 transport/408/425/429/5xx failures twice within the existing 240-second budget,
@@ -1554,12 +1562,36 @@ used 15.0.1 API family and handles a proxy reset before `connection_made`
 through the documented connection factory hook, preventing the misleading
 `recv_messages` callback error while retaining the real reconnect failure.
 
-Before deployment, targeted tests passed 195/195 in the control repository and
-102/102 in the specialized market-books release. The registered checkout was
-returned to loaded SHA `cc6744f4`; controller and strict manifest were healthy
-with zero findings. Close this incident only after the release pin advances,
-the controller restarts `weather_market_books`, and a real post-restart Gamma,
-REST book, WebSocket and downstream snapshot cycle all pass.
+Commit `b222b948` closes the denominator defect. `market_books` now maintains
+one immutable event/token identity cache under
+`market_ladder_snapshots/event_contract_cache.json`. On an operational Gamma
+failure it may reuse a matching contract discovered within 24 hours, recompute
+the current hot targets from current observations, and still fetch every CLOB
+book fresh. It never reuses a price or book. Rows record
+`market_discovery_source=gamma_live|cached_event_contract` and the last live
+discovery clock. A fully recovered batch is
+`status=ok_with_discovery_reuse`; any unrecovered contract or fresh-book
+failure remains `degraded`.
+
+The controller deployed release `742b5fed`, then deployed the denominator
+follow-up release `c4531c1899a13efb41b3a0e9b7fc939edee709b8` with a second
+restart limited to `weather_market_books`. The first `c4531c18` REST batch at
+23:35 Beijing time discovered 82 events and fetched 1,804/1,804 fresh books
+(114 hot, 1,690 cold, zero failures) in 15 seconds. It created a 98-record
+event-contract cache. The WebSocket process loaded the same SHA, connected on
+websockets 15.0.1 with the pre-transport guard active, and consumed the same
+healthy REST batch. Main-tree relevant tests passed 155/155 and the specialized
+release module suite passed 62/62. Both live order journals and the Core Carry
+live-order file retained their exact pre-restart line counts and SHA-256, so
+the two market-books restarts created zero order, fill or notional delta.
+The first natural downstream publication after the final restart was
+`snapshot_20260810_2344.json`: it consumed a `c4531c18` batch with 1,804 books,
+published 902 records across 47 cities and 82 city-date pairs, and resolved all
+114/114 live orderbook targets with zero incomplete target. This closes the
+collector-to-strategy-snapshot deployment check. The cached-discovery failure
+path is covered by the regression suite; the observed post-restart batches all
+used live Gamma discovery, so production has not yet exercised
+`ok_with_discovery_reuse` naturally.
 
 ## 24. Immediate Follow-Up Work
 
