@@ -221,7 +221,13 @@ market prior
 - `execution_fill`：具体 expression、side、执行盘口和窗口上的 fill probability/expected fill price。
 
 模型盘口写 `model_book_snapshot_id`，执行/fill head 写独立的 `execution_book_snapshot_id`；两者相等必须是事实，
-不能因为接口方便而复用 ID。该合同当前只进入共享 research/runtime library，未授权部署到任何策略或下单链。
+不能因为接口方便而复用 ID。2026-08-10 UTC 起，该合同已作为 zero-notional probability sidecar 接入
+`weather_market_books` owner 的 Amsterdam/Helsinki/Tokyo `source_event_full_ladder_v1`：每个可评分 material event
+追加 `exact_bracket_probability_stacks.jsonl`，缺口追加结构化 blocker；不产生 candidate、intent、order 或 fill。
+首批部署后真实 Helsinki 与 Amsterdam event 均输出 11 档（含上下 open tail），四层 PMF 均守恒为 1，生产 build
+`fa8093b533f22eb0e088a705424ffe4b7f3df660`。D1 market-aware M0/challenger 也复用同一 adapter 输出该合同；
+weather-only W0 仍明确标为 not-applicable，不能伪装成 market-aware stack。source-basis 与 calibration 目前均为
+`identity_unfitted`，部署只完成合同接线，不代表模型增量、alpha 或下单授权。
 
 ### 4.6 `SignalCandidate`
 

@@ -100,11 +100,12 @@ Denver 单城 stale record，另有 6 个非 trading 城市缺 live METAR state�
 - 当前没有城市通过 market baseline + significance + frozen forward + actual execution 四门，容量与 fee 后 ROI 都是
   `not estimable`；Amsterdam 的 coverage 最好不等于 alpha 最强。
 
-**下一步唯一动作**：Helsinki/FMI 的 zero-notional WS materializer 已于 2026-08-09 16:15 UTC 部署到共享
-`weather_market_books` collector，按现有白天10分钟窗口保存 reconstructed hot-strip
-`pre/t0/+10/+30/+60s`；首个真实 event 为5/5 scorable，且近0/1单边盘口被记录为可执行概率边界而不是缺数据。
-当前模型与交易链不消费这些特征。继续积累至少30个新settled target dates，再以固定rows/labels/split做
-market、incumbent、incumbent+WS dynamics frozen A/B；其间不调参、不部署真实订单、不改变现有 live 策略、不追加 threshold。
+**下一步唯一动作**：Amsterdam/Helsinki/Tokyo 的 zero-notional `source_event_full_ladder_v1` 已于
+2026-08-10 UTC 接入共享 exact-bracket probability stack；首批部署后真实 Helsinki 与 Amsterdam event 均输出11档完整 native ladder，
+market/weather/source-basis/final 四层概率和均为1，单边盘口按显式概率区间进入 market prior。当前
+source-basis/calibration 仍为 `identity_unfitted`，交易链不消费该 sidecar。继续积累至少30个新settled target dates，
+再以固定rows/labels/split做 market、incumbent、incumbent+innovation/WS dynamics frozen A/B；其间不调参、
+不部署真实订单、不改变现有 live 策略、不追加 threshold。
 
 ## 2. 城市内部可以不同
 
