@@ -1,7 +1,7 @@
 # 跨城市细粒度温度模型：统一研究与评测约定
 
 Status: current-source
-Updated: 2026-08-09 selective CLOB WebSocket microstructure evaluation contract
+Updated: 2026-08-09 cross-city first-seen/repricing model review
 Scope: 城市级日内温度概率模型的方法、评测和知识沉淀；运行边界服从 `WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md`，不规定统一算法或统一特征
 
 ## 1. 核心决定
@@ -33,13 +33,78 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 |---|---|---|---|
 | Amsterdam | WCIR Amsterdam adapter；weather head 保留，交易头改为 market-prior + KNMI innovation | standalone weather probability 不能直接当 fair price；captured-book D1 上 market-prior 仅点估改善，CI 跨零且交易未胜纯 market direction | zero-notional；补真实 first-seen lineage 与 frozen forward · [paradigm](analysis/2026-08/2026-08-04-amsterdam-market-prior-event-innovation-paradigm-v1.md) · [executable null](analysis/2026-08/2026-08-04-amsterdam-executable-market-null-v2.md) |
 | Busan | `busan_intraday_exact_no`；固定为 confirmation head + conditional reheat head | AMOS cross persistence 不能替代 source→routine/WU basis；v9/v10/v11 只是同一模型的历史 experiment。非线性 tournament 和连续 residual 都受独立日期、market-aligned rows 与 conditional-reheat 样本限制 | coverage-only；不继续造版本号，按固定 ontology append 新日期 · [stable architecture](analysis/2026-08/2026-08-04-busan-stable-model-architecture-v1.md) · [family benchmark](analysis/2026-08/2026-08-04-busan-model-family-benchmark.md) |
-| Helsinki | frozen remaining-heat/weather artifact + market-expression research head | weather head 有历史 OOF 增量，但当前 expression reliability 未通过；少量正 ROI 不能覆盖 market baseline、active grain 和独立日期不足 | 保持 zero-notional，不改 artifact；补 PIT book/forward · [v7 lineage](analysis/2026-07/2026-07-31-helsinki-v7-forecast-lineage-missing-expert.md) · [reliability](analysis/2026-07/2026-07-31-helsinki-model-reliability-audit-v1.md) |
+| Helsinki | A8 frozen weather reference + FMI-before-next-METAR entry posterior + METAR held-position correction/exit | A8 8/1–8 exact-PIT为936 events/8 dates，exact/within-one=`70.01%/85.23%`。旧mixed-source entry已supersede；FMI-only 35 entries hold ROI `-2.77%`，解释性1c–99c slice 24笔ROI `-4.47%`。market-offset OOF Brier胜market但logloss CI跨0。共享ladder core已在相同808 OOF rows测试：相对incumbent Brier退化`+0.002325` CI `[+0.000798,+0.003979]`，周期checkpoint版本不采用。2026-08-09 16:15 UTC起exact first-seen WS版已开始forward：首个真实FMI event的pre/t0/+10/+30/+60为5/5 scorable、0 blocker/0 reconstruction error，但只有1个未形成settled评测的event，不能判断增量。METAR delayed-snapshot exit点估改善，但quote lag p50 216s、仅1/20≤30s且exit depth为0，执行证据BLOCKED | 保持 zero-notional；entry只读FMI first-seen，METAR永不开新仓；现有模型不读取WS特征，等至少30个新settled target dates后按同rows frozen A/B比较 incumbent 与 `weather+market+WS dynamics`，期间不调参、不换模型，A8 forward仍0/30 · [end-to-end plan/result](analysis/2026-07/2026-07-30-helsinki-remaining-heat-expression-research-plan-v1.md) · [v7 lineage](analysis/2026-07/2026-07-31-helsinki-v7-forecast-lineage-missing-expert.md) · [reliability](analysis/2026-07/2026-07-31-helsinki-model-reliability-audit-v1.md) |
 | Tokyo | frozen weather path head；final-settlement market-offset 以 calibrated market 为 baseline；next-routine-METAR confirmation 只作连续 challenger feature | 三路同raw path回放：`.5`为20笔15胜、ROI+0.68%；`.7`为10笔8胜、ROI+3.61%；weather-only final-settlement positive-EV为10笔7胜、ROI+4.94%，三者date CI均跨0。10个`.5/.7`双执行配对中9个同观测直接跨双阈值，只有1个早10分钟且ask贵8c，故`.5`主要扩大低质信号池而非稳定抢早。模型仍放行7/26 terminal false，且当前journal无多数双边mid，不能评calibrated-market residual | `.7`保持规则基线；`.5`不live，模型三路zero-notional；补每个`.5+` event双边mid/ask/full depth/prediction后做clean forward · [three-way replay](analysis/2026-08/2026-08-06-tokyo-cross-0p5-0p7-model-three-way-replay-v1.md) · [stacked training](analysis/2026-08/2026-08-06-tokyo-final-settlement-stack-training-v1.md) |
 | Seoul | Korea source-event adapter，尚无独立 frozen probability artifact | 与 Busan 共用的 CrossNO/dual-head 不能绕过城市 source→settlement basis；外部负面对照使当前表达不能晋级 | coverage-only；先建 Seoul 自己的 PIT probability/basis，再谈 expression · [Korea dual head](analysis/2026-08/2026-08-03-korea-cross-event-dual-head-v5.md) |
 
 跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
 没有冻结 artifact 的城市输出 structured blocker；有 artifact 的城市也只有在同 checkpoint
 proper score、market baseline、frozen forward 和 executable expression 四层闭合后才能改变交易状态。
+
+### 1.2 First-seen / repricing 跨城 review（2026-08-09）
+
+结论不是再做一批城市模型，而是把 first-seen 分成两个不能混训的 event family，共用同一个
+event-ladder panel、market baseline 和执行评测：
+
+- `forecast_revision`：D-2/D-1 forecast content first-seen，主 markout horizon 固定为
+  `5/15/30/60m`；
+- `fast_observation`：城市快源 observation first-seen，主 markout horizon 固定为
+  `30/120/300s/next_official`，`5/15/30/60m` 只作较慢诊断。
+
+两类事件都使用 pre-event full ladder 作 market prior，但 forecast curve revision 与快源升温打印的
+物理语义、cadence、source basis 和可交易半衰期不同，不能靠一个 `event_type` dummy 强行池化。
+
+#### 当前可训练分母审计
+
+下表来自 2026-08-09 当前 Mac/JRS raw。`distinct obs` 只描述各 source 自己的 immutable observation key，
+不能跨 source 比大小；`cross panel` 是现有通用 stale-book shadow 的事后 cross 子集，不能代替 all-event 分母。
+
+| 城市 / family | 当前 raw 分母 | 当前 book 证据 | 到可用模型还缺什么 | 研究角色 |
+|---|---:|---:|---|---|
+| 52 城 forecast revision | collector-exact unique content：D-1 `5,339/13 dates`（material `2,342`）；D-2 `555/12 dates`（material `177`） | 尚无绑定每个 revision 的 event-driven pre/t0/5/15/30/60m full-ladder burst | provider run/issue time 仍不可见；先建固定 all-rung event panel，不能继续用周期 snapshot 猜执行时钟 | 跨城 partial-pooling 主样本；不是 52 个独立模型 |
+| Amsterdam / KNMI | all-event `2,714/10 dates` | `2,696` events 至少一个完整 book；现有 burst 为 `t0/+15/+30/+60/+120/+300s` | 把 pre-event reference 与 burst 物化成同一训练 panel，并补 next-METAR label；这些 offset 是秒，不是 forecast 的分钟 horizon | **fast-observation 首个 golden pilot** |
+| Helsinki / FMI | `1,586 distinct obs/20 dates` | cross 子集 `46/12 dates`，`44` 有 book | 把 all observations（含 non-cross）接入 KNMI 同级的 pre-event/full-ladder burst；active date-X 作为主 grain | 第二批；保留 frozen weather head 作 challenger feature |
+| Tokyo / JMA | `1,621 distinct obs/19 dates` | cross 子集 `37/7 dates`，`36` 有 book | 每个 material event 保存双边 mid/ask/full depth；`.5/.7` 只作固定规则 baseline；terminal-false 与 next-METAR confirmation 连续入模 | 第二批；不再用阈值扩样本 |
+| Busan / AMOS | `10,985 distinct obs/19 dates` | cross 子集 `91/14 dates`，`90` 有 book；Korea checkpoint 中 `4,502` event keys 有 market capture | 先把多 runway/5 秒轮询归一成 immutable point-group event；单独校准 AMOS→routine/WU basis；既有 locked forward 已输 market | coverage/basis；暂不部署 probability adapter |
+| Seoul / AMOS | `31,045 distinct obs/19 dates` | cross 子集 `71/14 dates`，`70` 有 book；Korea checkpoint 中 `5,880` event keys 有 market capture | 与 Busan 共用 parser/先验但不共用城市 basis；先建 Seoul settlement probability head，再评 repricing | coverage-only |
+| Singapore / MSS | `3,170 distinct obs/19 dates` | cross 子集 `33/13 dates`，`28` 有 book | all-event ladder、source→settlement basis 和负例；当前更新快不等于结算信息强 | 后续 pooled source-family challenger |
+| Atlanta/Miami 等 US MADIS/METAR | 当前 collector Atlanta/Miami 各约 `280/20 dates`；历史 cross 城市更多 | cross-only，Atlanta terminal false 为固定负对照 | all-event denominator、真实 source publication/collector clock、同站 settlement basis | negative control / lower priority |
+| Ankara/Istanbul / MGM | 各约 `1,46x distinct obs/20 dates`，obs→first-seen p50 约 `18.4m` | cross 子集 `24/12`、`15/10 dates` | detection lag 已吃掉大部分窗口；先证明仍有增量再训练 | latency control |
+| HongKong/Shenzhen、TelAviv 等 | 当前只有稀疏 cross episode | 不足 | 先补 all-event collector 和 authoritative/proxy 身份，不做城市模型 | coverage-only |
+
+production identity 审计中 canonical DB route 为 healthy；全局 health 的 observation-cache critical 来自
+Denver 单城 stale record，另有 6 个非 trading 城市缺 live METAR state。这两项不污染上表的 exact first-seen raw，
+但说明 production 不能笼统称为全健康。
+
+#### 可用模型的统一形态
+
+1. **训练表**：grain 固定为 `event × full-ladder rung`，保留 selected/unselected、material/non-material、
+   missing book 和 no-trade 行；每个 event 等权、每个 `target_date` 等权。重复 poll/checkpoint 不增加样本权重。
+2. **markout head**：先预测 coherent ladder 的 `Δlogit(market probability)` / ordinal mass transport；另存
+   `entry ask -> future bid`、depth/VWAP 和双边 fee 的 executable markout，不能用 mid 模型冒充 taker PnL。
+3. **market-prior correction**：`logit(p_post)=logit(p_market_pre)+g(event innovation, path, source basis, city adapter)`。
+   城市只提供 settlement lattice、source-basis calibration 与少量强收缩 random effect；不得按城市历史 ROI 做 eligibility。
+4. **同分母四组**：固定 rows、labels、clocks、quotes 和 split 比较 market-only、innovation-only、
+   innovation+market、innovation+market+microstructure。WS raw 必须先确定性 materialize 成 checkpoint features。
+5. **两个概率头分离**：short-horizon markout/repricing head 决定是否存在未吸收信息；EOD exact-bracket settlement head
+   只负责最终分布。settlement score 好不能替代 markout，短期 markout 好也不证明最终温度判断更准。
+6. **执行头分离**：taker 认真实 ask、future bid、depth/VWAP 和 Weather fee；maker 只有真实 post/ack/queue/
+   partial fill/expire/cancel/fill journal 后才训练 fill/adverse-selection head，future touch 永远不算 fill。
+
+#### Frozen gate 与唯一动作
+
+- development 内只允许一次按 `target_date` blocked inner-CV 选定 event family、horizon、模型和 threshold；
+  后续至少 `30` 个新 settled target dates 做 chronological frozen forward，并按 `target_date` block bootstrap。
+- 先要求 innovation+market 对同 rows market baseline 的 primary loss delta CI 全负；再要求 taker 或真实 maker
+  的 fee-adjusted uplift CI 为正。城市 leave-one-out / source-family holdout 只检验可迁移性，不用于挑赢家城市。
+- 当前没有城市通过 market baseline + significance + frozen forward + actual execution 四门，容量与 fee 后 ROI 都是
+  `not estimable`；Amsterdam 的 coverage 最好不等于 alpha 最强。
+
+**下一步唯一动作**：Helsinki/FMI 的 zero-notional WS materializer 已于 2026-08-09 16:15 UTC 部署到共享
+`weather_market_books` collector，按现有白天10分钟窗口保存 reconstructed hot-strip
+`pre/t0/+10/+30/+60s`；首个真实 event 为5/5 scorable，且近0/1单边盘口被记录为可执行概率边界而不是缺数据。
+当前模型与交易链不消费这些特征。继续积累至少30个新settled target dates，再以固定rows/labels/split做
+market、incumbent、incumbent+WS dynamics frozen A/B；其间不调参、不部署真实订单、不改变现有 live 策略、不追加 threshold。
 
 ## 2. 城市内部可以不同
 
@@ -206,6 +271,12 @@ producer build 和 gap/reconnect status。无消息、未订阅、窗外或 paus
 raw frame/message 不是样本，必须映射到预注册 checkpoint/time-bin/first-event/state-transition，
 并先按 `target_date` 等权。quote add/cancel/replace 只是报价活动；无 trade print/order lifecycle 时，
 不得声称 executed volume、queue/fill 或 maker alpha。
+
+Helsinki 当前生产实现固定使用 FMI `first_seen_at_utc`，输出 `pre/t0/+10/+30/+60s`、5-share双边深度、
+relative markout、mode distance、邻档传播/lead-lag 与 weather-shock interaction。每行保留
+`feature_book_snapshot_id`、subscription epoch、selector/build identity、gap blocker 和 `orders_submitted=0`；
+同socket selector变更只继承仍在订阅的token state，reconnect和新token仍必须等fresh `book` baseline。
+产物位于 `/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_event_ladder_features/`。
 
 #### 5.3.2 交易模型默认使用 market prior + source innovation
 

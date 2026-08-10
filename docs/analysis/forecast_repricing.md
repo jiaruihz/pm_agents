@@ -23,6 +23,18 @@ entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、actual fills=0、f
 - 60m conditional-maker point estimate 为 `+6.62%`，CI `[-18.56%,+13.46%]`，actual maker fills=0。future touch 从未当作 fill；queue、partial fill、expire 与 adverse selection 均未观测，所以它不是可实现 ROI。
 - terminal settlement head 单独失败：legacy model Brier `0.08212` vs market `0.06737`，delta `+0.01474` CI `[+0.01249,+0.01691]`；该负结论不能拿来替代短周期 repricing 检验。
 
+## 跨城市 first-seen 关系
+
+本 family 只池化 `forecast_revision`，不把 FMI/JMA/KNMI/AMOS 等 intraday observation first-seen
+混进同一模型。两者共用 event-ladder panel、market-prior correction、四组 baseline 和执行评测，
+但 observation family 的主 horizon 是 `30/120/300s/next_official`，source-basis/settlement adapter 也不同。
+跨城完整 review 见 [城市模型 living doc](../WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md#12-first-seen--repricing-跨城-review2026-08-09)。
+
+2026-08-09 current raw 已有 52 城 collector-exact forecast content first-seen：D-1 `5,339` 个 unique events /
+`13` 个 first-seen dates（material `2,342`），D-2 `555/12`（material `177`）。这说明事件分母已开始积累，
+但 source response 不暴露 provider run/issue time，且没有把每个 revision 绑定到 event-driven
+pre/t0/5/15/30/60m full-ladder burst；周期 market-books 不能事后拼成 formal forward。
+
 ## 冻结研究合同
 
 - primary horizon：60m；5/15/30m 只保留 coverage/secondary diagnostics，不能在 forward 中重选。
@@ -35,7 +47,11 @@ entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、actual fills=0、f
 
 ## 下一步唯一动作
 
-在取得生产 collector 变更确认后，给共享 `weather_market_books` 增加 D-2/D-1 forecast-event full-ladder burst，并运行 zero-notional order-lifecycle forward；不部署真实订单、不改现有 live 策略。固定设计见 [2026-08-09 full-ladder/readiness snapshot](2026-08/2026-08-09-forecast-repricing-full-ladder-readiness-v1.md)。
+共享 all-event `first_seen_event_ladder_panel_v1` materializer 已实现并离线 contract-test；Amsterdam golden
+2,756 events 的 slot shape coverage 为96.95%–99.06%，但旧 dedicated post captures 没有严格 request/response/parse clocks；
+Helsinki 255 events 的 t0仅10且完整链为0，证明当前周期 snapshot不能替代 event burst。下一步经显式部署确认后补
+D-2/D-1 与日内 observation event burst；不部署真实订单、不改现有 live 策略。固定设计见
+[2026-08-09 full-ladder/readiness snapshot](2026-08/2026-08-09-forecast-repricing-full-ladder-readiness-v1.md)。
 
 可复跑 artifact：
 

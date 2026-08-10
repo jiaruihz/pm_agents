@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from weather_model_evaluation import pooled_ladder_transport  # noqa: E402
 from weather_model_evaluation import source_event_ws_linkage  # noqa: E402
 
 
@@ -533,7 +534,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("first-seen-residual", "helsinki-ws-linkage"),
+        choices=(
+            "first-seen-residual",
+            "helsinki-ws-linkage",
+            "pooled-ladder-transport-readiness",
+        ),
         default="first-seen-residual",
     )
     parser.add_argument("--candidates", type=Path, default=DEFAULT_CANDIDATES)
@@ -550,7 +555,18 @@ def main() -> int:
     )
     parser.add_argument("--ws-fmi-path", type=Path, default=ws_defaults["fmi_path"])
     parser.add_argument("--ws-output-dir", type=Path)
+    pooled_ladder_transport.add_cli_arguments(parser)
     args = parser.parse_args()
+
+    if args.mode == "pooled-ladder-transport-readiness":
+        result = pooled_ladder_transport.run(
+            pooled_ladder_transport.namespace_from_cli(
+                args,
+                entrypoint_path=Path(__file__),
+            )
+        )
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
 
     if args.mode == "helsinki-ws-linkage":
         if not args.ws_target_date or args.ws_output_dir is None:
