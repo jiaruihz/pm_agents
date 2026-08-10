@@ -296,3 +296,76 @@ conclusion=inconclusive / not live eligible
 - `generated/tokyo_overshoot_intraday_replay_v2_forward_20260804_20260809/aggregate_summary.json`
 - `generated/tokyo_overshoot_intraday_replay_v2_forward_20260804_20260809/selected_trades.csv`
 - 含 8 月 3 日 coverage-gap 的诊断分母保存在对应 `20260803_20260809` aggregate，不用于主结论。
+
+## 2026-08-10 第一性原理重构：market-confirmed previous-NO
+
+### 为什么整体正确率尚可，选中交易却很差
+
+`91.76%` 是 255 个十分钟 checkpoint 上用 0.5 阈值计算的分类准确率，包含大量重复且接近定局的状态；
+去掉 market midpoint 两端的容易样本后，模型在 10%–90% 难例上的准确率只有 `82.29%`，还低于同分母
+market 的 `85.42%`。旧 selector 又专门挑 `P_model-P_market` 最大的分歧尾部，而不是挑模型最有把握的结果，
+因此放大了 residual 估计噪声（winner's curse）。最后，current-YES 是 exact-bracket 表达：即使当前档已经出现，
+后续多升一档它仍会输。三件事叠加，便会出现“模型方向 8/9 看似正确、交易却只有 3/9 获胜”。
+
+这不是继续调 edge threshold 可以解决的问题。旧 current-YES/current-NO residual expression 保持
+`rejected_for_expression`；Tokyo 重新拆成两个独立问题：
+
+1. terminal full-ladder probability head：继续要求 weather/path 模型在同分母 PIT Brier/logloss 上胜过 market，
+   当前尚未通过；
+2. source-event execution head：JMA first-seen `.7°C` cross 只作为物理触发，买被跨过档位的 previous-NO；
+   market 只作为 source-basis false-cross veto，不把下一份 METAR confirmation 概率冒充最终结算概率。
+
+### 数据与模型刷新
+
+历史 JMA/METAR 路径已刷新到 `2026-08-09`：JMA `119,784` rows、METAR `40,766` rows，形成
+`117,410` feature rows / `829` dates；event-safe v2 为 `3,419` first-cross events / `753` dates。
+这些长历史数据用于天气路径与 source-basis 研究，但其时钟仍明确标记为
+`historical_observation_clock_not_first_seen`，不能冒充 exact first-seen forward。下载器同时改为复用本年 IEM cache、
+只补缺失尾部并重试瞬时网络错误，避免每次重训重复下载整年文件。
+
+对应 artifact：
+
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tokyo_jma_multivariate_path_refresh_20260810_v2/summary.json`
+  (`sha256=ebc50e720c75bb21a71b3ff19d4ee68547818a4dd4403a30b82d81da90f5fd6d`)
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tokyo_jma_multivariate_path_v2_refresh_20260810/summary.json`
+  (`sha256=f5b42ead0873c925cfc23a88a82588daba87d879fb3e767a903c17eabfe5d5be`)
+
+### 固定策略与结果
+
+固定策略 `first_margin_ge_0p7_market_consensus`：每个 `target_date × previous bracket` 仅取首次真实 JMA
+`.7°C` cross；读取该 event 之后保存的 previous-NO ask，要求 `0.80 <= ask <= 0.97` 且顶档至少 5 shares；
+固定买 5 shares、按官方 entry fee、持有至结算。`0.80` 不是从 q-confirm sweep 中挑出的最优天气阈值，
+而是预先定义的 market-consensus veto：外部物理事件与市场必须同向，避免拿 source cross 单独对赌 terminal basis。
+
+| 窗口 | trades / target dates | 胜负 | cost | fee 后 PnL | ROI |
+|---|---:|---:|---:|---:|---:|
+| 2026-07-09..07-30 development | 7 / 7 | 7 / 0 | $32.3270 | +$2.6731 | +8.27% |
+| 2026-08-01..08-09 retrospective new window | 4 / 3 | 4 / 0 | $18.7654 | +$1.2346 | +6.58% |
+| 合并固定规则 | 11 / 10 | 11 / 0 | $51.0924 | +$3.9076 | +7.65% |
+
+完整 signal funnel 为 64 个首次 date×bracket `.7` signals，其中 60 个已有 settlement、57 个方向正确；
+可执行 market-consensus 子集为上表 11 笔。单用 T13 为 7 笔 6 胜、ROI `-0.19%`；单用 T3 为 8 笔
+6 胜、ROI `-6.33%`，因此“固定等某一期 METAR”不是盈利机制。market veto 排除了三个已知可执行 false cross：
+`7/26 ask=.77`、`7/29 ask=.119`、`8/05 ask=.65`。
+
+合并结果的 date-block bootstrap ROI 95% CI 为 `[+5.96%, +9.74%]`，但这不能单独证明 alpha：平均成交
+ask 为 `0.9255`，含 fee 平均 breakeven win probability 为 `92.90%`，而 11/11 的 Wilson 胜率下界只有
+`74.12%`。更重要的是，8/1–9 数据已在形成规则时被查看过，所以它是 retrospective validation，不是 untouched
+frozen forward。正确结论是：这是 Tokyo 当前唯一跑出正 fee ROI 的候选方向，但仍是
+`point-profitable / unconfirmed / zero-notional only`，不能升 live。
+
+耐久结果：
+
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tokyo_market_confirmed_previous_no_20260810/summary.json`
+  (`sha256=6db5aee02d2b0299eab09c4aeaf8775a5d5b49cb5a3699fab3d47c910bd6c7a3`)
+- 同目录 `phase_policy_trades.csv` 保存全部逐笔结果，固定 shares=5。
+
+### 冻结后动作
+
+从 `2026-08-11`（或规则冻结后的下一完整 settled target date）开始，只做 zero-notional forward；规则、ask
+区间、shares 与 fee 口径全部冻结，至少积累 30 个新 settled target dates。同步采集 event 前 full ladder 与
+event 后 `0/15/30/60s` book，用来区分“market 已吸收后的高胜率 carry”与真正可执行的 first-seen repricing。
+只有新 forward 同时满足 probability/market baseline、fee-adjusted expression 和 stability 三门，才重新讨论 live。
+
+本轮没有创建 candidate/intent/order/fill，也没有修改任何 live runner 或生产行为。8 月 10 日因 market-books
+health 未通过且尚未 settlement，不进入任何准确率或 ROI 分母。

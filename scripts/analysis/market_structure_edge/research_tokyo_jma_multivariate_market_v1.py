@@ -381,6 +381,115 @@ def first_margin_events(
     return list(selected.values())
 
 
+def phase_policy_comparison(
+    current_rows: list[dict[str, Any]],
+    prior_join_paths: list[Path],
+    *,
+    target_shares: float,
+    min_shares: float,
+    max_ask: float,
+    consensus_min_ask: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Evaluate fixed T-13/T-3 source-event policies across append-only runs.
+
+    The phase is defined by the observation clock, not by outcome or price.
+    Prior artifacts extend the date denominator without rewriting their raw
+    evidence; current rows take precedence if the same event was replayed.
+    """
+    combined: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for path in prior_join_paths:
+        for row in read_csv(path):
+            key = (
+                str(row.get("target_date")),
+                str(row.get("market_bracket")),
+                str(row.get("ts_utc")),
+            )
+            combined.setdefault(key, dict(row))
+    for row in current_rows:
+        key = (
+            str(row.get("target_date")),
+            str(row.get("market_bracket")),
+            str(row.get("ts_utc")),
+        )
+        combined[key] = dict(row)
+
+    eligible: list[dict[str, Any]] = []
+    for row in combined.values():
+        margin = finite(row.get("actual_source_margin_c"))
+        if margin is None or margin < 0.7 - EPS:
+            continue
+        if row.get("scheduled_phase") not in {"T13", "T3"}:
+            continue
+        record = dict(row)
+        record.update(
+            {
+                "replay_target_shares": target_shares,
+                "replay_min_shares": min_shares,
+                "replay_max_ask": max_ask,
+            }
+        )
+        eligible.append(record)
+
+    first_rows = first_margin_events(eligible, 0.7)
+    summaries: list[dict[str, Any]] = []
+    trades: list[dict[str, Any]] = []
+    for phase in ("T13", "T3"):
+        phase_rows = [row for row in first_rows if row["scheduled_phase"] == phase]
+        settled = [
+            row for row in phase_rows
+            if finite(row.get("settlement_no_wins")) is not None
+        ]
+        summary, selected = policy_summary(
+            settled, f"first_margin_ge_0p7_{phase.lower()}", lambda row: True
+        )
+        summary.update(
+            {
+                "phase": phase,
+                "signal_events": len(phase_rows),
+                "settled_signal_events": len(settled),
+                "settled_signal_wins": sum(
+                    int(float(row["settlement_no_wins"])) for row in settled
+                ),
+                "source_join_artifacts": len(prior_join_paths) + 1,
+            }
+        )
+        summaries.append(summary)
+        trades.extend(selected)
+    settled_all = [
+        row for row in first_rows if finite(row.get("settlement_no_wins")) is not None
+    ]
+    consensus_rows = [
+        row
+        for row in settled_all
+        if finite(row.get("best_ask")) is not None
+        and float(row["best_ask"]) >= consensus_min_ask
+    ]
+    consensus_summary, consensus_trades = policy_summary(
+        consensus_rows,
+        "first_margin_ge_0p7_market_consensus",
+        lambda row: True,
+    )
+    consensus_summary.update(
+        {
+            "phase": "ALL",
+            "mechanism": (
+                "JMA .7C first-seen trigger plus post-event previous-NO ask "
+                "market consensus; no weather residual threshold"
+            ),
+            "consensus_min_no_ask": consensus_min_ask,
+            "signal_events": len(first_rows),
+            "settled_signal_events": len(settled_all),
+            "settled_signal_wins": sum(
+                int(float(row["settlement_no_wins"])) for row in settled_all
+            ),
+            "source_join_artifacts": len(prior_join_paths) + 1,
+        }
+    )
+    summaries.append(consensus_summary)
+    trades.extend(consensus_trades)
+    return summaries, trades
+
+
 def attach_trigger_evidence(
     rows: list[dict[str, Any]],
     *,
@@ -513,6 +622,20 @@ def max_drawdown(trades: list[dict[str, Any]]) -> float:
     return drawdown
 
 
+def wilson_interval(wins: int, total: int, z: float = 1.96) -> tuple[float | None, float | None]:
+    if total <= 0:
+        return None, None
+    rate = wins / total
+    denominator = 1 + z * z / total
+    center = (rate + z * z / (2 * total)) / denominator
+    half = (
+        z
+        * math.sqrt(rate * (1 - rate) / total + z * z / (4 * total * total))
+        / denominator
+    )
+    return center - half, center + half
+
+
 def policy_summary(
     rows: list[dict[str, Any]], name: str, selected: Callable[[dict[str, Any]], bool]
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -548,13 +671,17 @@ def policy_summary(
     pnl = sum(float(row["fee_adjusted_pnl_usd"]) for row in trades)
     cost = sum(float(row["entry_cost_usd"]) for row in trades)
     roi, low, high = roi_bootstrap(trades)
+    wins = sum(int(row["trade_result"] == "correct") for row in trades)
+    win_low, win_high = wilson_interval(wins, len(trades))
+    total_shares = sum(float(row["shares"]) for row in trades)
     summary = {
         "policy": name,
         "trades": len(trades),
         "target_dates": len({str(row["target_date"]) for row in trades}),
-        "wins": sum(int(row["trade_result"] == "correct") for row in trades),
-        "losses": sum(int(row["trade_result"] == "wrong") for row in trades),
-        "shares": sum(float(row["shares"]) for row in trades),
+        "wins": wins,
+        "losses": len(trades) - wins,
+        "win_rate_wilson_95_ci": [win_low, win_high],
+        "shares": total_shares,
         "entry_cost_usd": cost,
         "fees_usd": sum(float(row["fees_usd"]) for row in trades),
         "fee_adjusted_pnl_usd": pnl,
@@ -566,6 +693,9 @@ def policy_summary(
             / sum(float(row["shares"]) for row in trades)
             if trades
             else None
+        ),
+        "average_fee_adjusted_breakeven_probability": (
+            cost / total_shares if total_shares else None
         ),
         "max_drawdown_usd": max_drawdown(trades),
     }
@@ -999,6 +1129,14 @@ def run_trigger_ab(args: argparse.Namespace) -> int:
         if (str(row["target_date"]), str(row["market_bracket"]))
         not in model_trade_keys
     ]
+    phase_summaries, phase_trades = phase_policy_comparison(
+        joined,
+        args.prior_trigger_join,
+        target_shares=args.target_shares,
+        min_shares=args.min_shares,
+        max_ask=args.max_ask,
+        consensus_min_ask=args.consensus_min_ask,
+    )
     three_way = {
         "universe": "Tokyo raw scheduled JMA cross-candidate path; first date-bracket at .5, first at .7, or first .5+ event with final-settlement positive executable edge",
         "first_05_signal_events": len(first_05_rows),
@@ -1165,6 +1303,8 @@ def run_trigger_ab(args: argparse.Namespace) -> int:
         args.out / "three_way_model_rejected_0p5_trades.csv",
         model_rejected_05_trades,
     )
+    write_csv(args.out / "phase_policy_summaries.csv", phase_summaries)
+    write_csv(args.out / "phase_policy_trades.csv", phase_trades)
     summary = {
         "schema_version": "tokyo_jma_multivariate_market_v1_trigger_ab",
         "window": {"start": args.start_date, "end": args.end_date},
@@ -1178,6 +1318,7 @@ def run_trigger_ab(args: argparse.Namespace) -> int:
         "model_gate": gated_summary,
         "model_gate_minus_direct": policy_delta,
         "three_way_policy_comparison": three_way,
+        "phase_policy_comparison": phase_summaries,
         "threshold_sweep": threshold_sweep,
         "wrong_baseline_trades_avoided": sum(int(row["trade_result"] == "wrong") for row in avoided),
         "correct_baseline_trades_missed": sum(int(row["trade_result"] == "correct") for row in avoided),
@@ -1241,6 +1382,16 @@ def main() -> int:
         help="Use exact live cross events and run same-clock trigger A/B mode.",
     )
     parser.add_argument(
+        "--prior-trigger-join",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Prior trigger_join_rows.csv artifact used only to extend the "
+            "fixed phase-policy date denominator; repeat as needed."
+        ),
+    )
+    parser.add_argument(
         "--confirm-predictions", type=Path, default=DEFAULT_CONFIRM_PREDICTIONS
     )
     parser.add_argument("--pm-history-dir", type=Path, default=DEFAULT_PM_HISTORY)
@@ -1253,6 +1404,15 @@ def main() -> int:
     parser.add_argument("--target-shares", type=float, default=15.0)
     parser.add_argument("--min-shares", type=float, default=5.0)
     parser.add_argument("--max-ask", type=float, default=0.97)
+    parser.add_argument(
+        "--consensus-min-ask",
+        type=float,
+        default=0.80,
+        help=(
+            "Pre-registered market-consensus boundary for the .7 previous-NO "
+            "source-event policy; evaluated as a structural arm, not swept by PnL."
+        ),
+    )
     parser.add_argument("--model-threshold", type=float, default=0.5)
     parser.add_argument(
         "--final-model-id", default="event_safe_selector_v2"

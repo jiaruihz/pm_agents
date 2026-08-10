@@ -11,6 +11,7 @@ from scripts.analysis.market_structure_edge.research_tokyo_jma_multivariate_mark
     load_final_settlement_predictions,
     load_tokyo_winners_from_pm_history,
     paired_policy_delta,
+    phase_policy_comparison,
     policy_summary,
     roi_bootstrap,
     scheduled_report_ts,
@@ -164,6 +165,50 @@ def test_first_margin_events_keeps_earliest_date_bracket_at_each_threshold() -> 
 
     assert first_05[0]["ts_utc"] == "2026-07-20T03:10:01Z"
     assert first_07[0]["ts_utc"] == "2026-07-20T03:20:01Z"
+
+
+def test_phase_policy_combines_prior_rows_and_uses_fixed_five_shares(
+    tmp_path,
+) -> None:
+    prior = tmp_path / "prior.csv"
+    prior.write_text(
+        "target_date,market_bracket,ts_utc,actual_source_margin_c,"
+        "scheduled_phase,settlement_no_wins,best_ask,ask_size\n"
+        "2026-07-20,30,2026-07-20T03:47:00Z,0.7,T13,1,0.8,9\n",
+        encoding="utf-8",
+    )
+    current = [
+        {
+            "target_date": "2026-08-05",
+            "market_bracket": "30",
+            "ts_utc": "2026-08-05T05:57:00Z",
+            "actual_source_margin_c": 0.7,
+            "scheduled_phase": "T3",
+            "settlement_no_wins": 0,
+            "best_ask": 0.65,
+            "ask_size": 20,
+        }
+    ]
+
+    summaries, trades = phase_policy_comparison(
+        current,
+        [prior],
+        target_shares=5,
+        min_shares=5,
+        max_ask=0.97,
+        consensus_min_ask=0.80,
+    )
+
+    by_phase = {row["phase"]: row for row in summaries}
+    assert by_phase["T13"]["wins"] == 1
+    assert by_phase["T3"]["losses"] == 1
+    assert {row["shares"] for row in trades} == {5.0}
+    consensus = next(
+        row for row in summaries if row["policy"].endswith("market_consensus")
+    )
+    assert consensus["trades"] == 1
+    assert consensus["wins"] == 1
+    assert consensus["win_rate_wilson_95_ci"][0] < 0.5
 
 
 def test_final_settlement_loader_keys_prediction_by_prior_bracket(tmp_path) -> None:

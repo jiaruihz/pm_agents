@@ -232,18 +232,28 @@ def download_iem_year(year: int, start: date, end: date, path: Path) -> None:
         ]
     )
     response = None
+    last_error: httpx.RequestError | None = None
     for attempt in range(4):
-        response = httpx.get(
-            IEM_ASOS_API,
-            params=params,
-            timeout=240,
-            follow_redirects=True,
-            headers={"User-Agent": "pm-agents-tokyo-research/1"},
-        )
+        try:
+            response = httpx.get(
+                IEM_ASOS_API,
+                params=params,
+                timeout=240,
+                follow_redirects=True,
+                headers={"User-Agent": "pm-agents-tokyo-research/1"},
+            )
+        except httpx.RequestError as exc:
+            last_error = exc
+            if attempt == 3:
+                raise
+            time.sleep(5 * (attempt + 1))
+            continue
         if response.status_code != 429:
             break
         time.sleep(5 * (attempt + 1))
-    assert response is not None
+    if response is None:
+        assert last_error is not None
+        raise last_error
     response.raise_for_status()
     rows = [
         line
@@ -260,6 +270,14 @@ def download_metar_archives(start: date, end: date, cache_dir: Path) -> list[Pat
     paths: list[Path] = []
     for year in range(start.year, end.year + 1):
         path = cache_dir / f"{STATION_ID}_{year}.csv"
+        iem_path = cache_dir / f"iem_RJTT_{year}.csv"
+        # A current-year IEM cache is an explicit source, not a fallback that
+        # must be discarded merely because NCEI later starts publishing a
+        # partial annual file.  Reuse it and fetch only its uncovered tail;
+        # otherwise every research refresh downloads a multi-megabyte file
+        # and can fail before the already valid cached rows are considered.
+        if not path.exists() and iem_path.exists():
+            path = iem_path
         if not path.exists():
             url = f"{NCEI_BASE}/{year}/{STATION_ID}.csv"
             response = httpx.get(
@@ -272,7 +290,7 @@ def download_metar_archives(start: date, end: date, cache_dir: Path) -> list[Pat
                 # NCEI Global Hourly annual files lag the current year.  IEM's
                 # archived RJTT METAR rows fill that explicit coverage gap;
                 # the distinct filename keeps provenance auditable.
-                path = cache_dir / f"iem_RJTT_{year}.csv"
+                path = iem_path
                 if not path.exists():
                     download_iem_year(year, start, end, path)
             else:
@@ -293,6 +311,30 @@ def download_metar_archives(start: date, end: date, cache_dir: Path) -> list[Pat
                 gap_start = max(start, (latest + timedelta(days=1)) if latest else date(year, 1, 1))
                 gap_path = cache_dir / (
                     f"iem_RJTT_{year}_gap_{gap_start.isoformat()}_{expected_last.isoformat()}.csv"
+                )
+                if not gap_path.exists():
+                    download_iem_year(year, gap_start, expected_last, gap_path)
+                paths.append(gap_path)
+        elif path.name.startswith("iem_RJTT_"):
+            expected_last = min(end, date(year, 12, 31))
+            latest = None
+            with path.open(encoding="utf-8", newline="") as handle:
+                for raw in csv.DictReader(handle):
+                    try:
+                        observed = datetime.strptime(
+                            str(raw["valid"]), "%Y-%m-%d %H:%M"
+                        ).replace(tzinfo=UTC).astimezone(TOKYO).date()
+                    except (KeyError, ValueError):
+                        continue
+                    latest = observed if latest is None else max(latest, observed)
+            if latest is None or latest < expected_last:
+                gap_start = max(
+                    start,
+                    (latest + timedelta(days=1)) if latest else date(year, 1, 1),
+                )
+                gap_path = cache_dir / (
+                    f"iem_RJTT_{year}_gap_{gap_start.isoformat()}_"
+                    f"{expected_last.isoformat()}.csv"
                 )
                 if not gap_path.exists():
                     download_iem_year(year, gap_start, expected_last, gap_path)

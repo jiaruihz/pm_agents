@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from pathlib import Path
 
 from scripts.analysis.market_structure_edge.research_tokyo_jma_multivariate_path_v1 import (
     build_feature_rows,
     cloud_fraction,
+    download_metar_archives,
     parse_iem_row,
     raw_metar_from_rem,
     relative_humidity,
@@ -13,6 +15,31 @@ from scripts.analysis.market_structure_edge.research_tokyo_jma_multivariate_path
 
 
 UTC = timezone.utc
+
+
+def test_existing_iem_current_year_cache_avoids_ncei_redownload(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cached = tmp_path / "iem_RJTT_2026.csv"
+    cached.write_text(
+        "station,valid,tmpc\nRJTT,2026-08-09 14:30,30.0\n",
+        encoding="utf-8",
+    )
+
+    def unexpected_get(*args, **kwargs):
+        raise AssertionError("complete IEM cache must be reused")
+
+    monkeypatch.setattr(
+        "scripts.analysis.market_structure_edge."
+        "research_tokyo_jma_multivariate_path_v1.httpx.get",
+        unexpected_get,
+    )
+
+    paths = download_metar_archives(
+        date(2026, 1, 1), date(2026, 8, 9), tmp_path
+    )
+
+    assert paths == [cached]
 
 
 def test_ncei_parsers_keep_native_metar_semantics() -> None:
