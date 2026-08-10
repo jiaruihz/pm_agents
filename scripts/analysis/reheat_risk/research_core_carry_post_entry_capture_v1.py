@@ -44,20 +44,17 @@ from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (
     walk_ask_ladder,
 )
 from src.strategies.runtime.production import load_production_spec
+from weather_data_feed.production_paths import historical_orderbook_roots
 from scripts.analysis.versioned_artifact_output import (
     prepare_new_run_output,
     resolve_run_output,
 )
 
-RUNTIME = Path(
-    "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
-    "current_yes_core_carry_tiny_live_v2"
-)
-DB = Path("/Volumes/jrs/pm_agents/runtime/weather.db")
+PRODUCTION_SPEC = load_production_spec()
+RUNTIME = PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1/current_yes_core_carry_tiny_live_v2"
+DB = PRODUCTION_SPEC.canonical_db_path
 BOOK_ROOTS = (
-    Path("/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots"),
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/orderbook_snapshots"),
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/orderbook_snapshots"),
+    *historical_orderbook_roots(),
 )
 OUT_DIR = ROOT / (
     "docs/analysis/2026-08/generated/"

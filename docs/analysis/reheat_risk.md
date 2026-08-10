@@ -32,6 +32,28 @@ Current corrective references:
 - `2026-07/2026-07-25-d1-bounded-reheat-overshoot-v2.md`
 - `2026-07/2026-07-27-current-yes-core-carry-overshoot-missing-mechanisms-v2.md`
 
+### 2026-08-07 Core Carry sample semantic audit
+
+The corrected LLM audit is a per-checkpoint feature-alignment study, not a
+selected-versus-rejected strategy comparison. The expanded preregistered audit
+completed 120 weather-only PIT cards covering 40 cities and 110 city-days:
+64 aligned with the sign of `Core p - market`, 48 had semantic tension and 8
+were ambiguous. Production v3 only uses market logit, local hour, dewpoint
+depression and wind speed; all 120 cards had available observation-transition
+evidence that v3 does not consume. The clearest specification problem remains
+unconditional wind speed: 93/120 cards were `mixing_only`, while speed alone
+cannot distinguish maintenance from warming or cooling transport.
+
+This is a confirmed feature-expression gap, not confirmed alpha. Among 60
+settled cards, LLM `upward_exit` was correct only 6/14 times, while six actual
+upward exits were called hold/fade because a forecast cap dominated despite
+the cap transition not yet appearing in observations. Therefore LLM output is
+not a veto. The specified next challenger is a same-denominator
+`transition-confirmation residual`: settlement-native next-bracket margin,
+fresh-high/rebound path, observed confirmation of forecast cloud/rain/cooling,
+forecast innovation, remaining heat and directional transport role. Full report:
+`2026-08/2026-08-07-core-carry-llm-transition-card-v1.md`.
+
 ### 2026-08-08 Core Carry full-ladder prior audit
 
 The static complete exact-bracket ladder is not the missing Core Carry model
@@ -513,6 +535,102 @@ move a script only when it becomes the maintained entrypoint for a new result.
    minutes-since-running-max, and source profile on every would-order before
    taker conversion. Local v0 implementation is complete; N100 parallel
    telemetry deployment and settled forward analysis remain.
+8. `intraday_forecast_curve_morphology`: v1/v2 separate named full-day shapes
+   (double peak, overnight peak with afternoon lobe, broad plateau, late peak)
+   from the primary continuous state: every future local heat lobe's margin and
+   heat area relative to the current exact upward-exit boundary. The old 32/33
+   forward headline is withdrawn: seven rows had a future-hour boundary bug and
+   25 reused stale observations. On the rebuilt 1,508-city-day/50-date evidence
+   denominator there are 90 strict double-lobe city-days, 203 unusual-shape
+   city-days and 90 first peak-clock aliases, so the pattern is common rather
+   than Chengdu-only. It is not independent alpha: alias current NO wins 9/90
+   with fee-adjusted ROI -16.0%; d1 YES wins 7/85 with ROI -24.1%. Keep the
+   checkpoint collector and Chengdu-style forecast-revision interaction, freeze
+   evaluation from 2026-07-29 for 15 target dates, and do not turn a named shape
+   into a live gate. Evidence:
+   `docs/analysis/2026-07/2026-07-29-intraday-forecast-curve-morphology-v2.md`.
+9. `current_yes_core_carry` descriptive baseline: frozen 136 first-positive
+   entries average 4.53 signals/target-date, model p 93.58%, market mid 89.26%
+   and fee/depth-adjusted cost 91.33%.  The selected slice has positive average
+   residual, but on the same 1,350 carry PIT states core-vs-market Brier and
+   logloss deltas remain statistically inconclusive; clock and wind ablations
+   also cross zero. Current 10+5 raw telemetry is dominated by mature-fade or
+   plateau/heating-done states, but rain/cloud/advection/path regimes are not
+   direct frozen-model inputs. Keep fixed 10 and treat richer weather semantics
+   as a probability challenger, not a new gate. Evidence:
+   `docs/analysis/2026-08/2026-08-06-current-yes-core-carry-descriptive-microstructure-v1.md`.
+10. `current_yes_core_carry_semantic_challenger_v3`: preregistered four compact
+    probability challengers on the unchanged 1,349-checkpoint PIT ledger. The
+    development OOF selected calibration-only rather than richer semantic
+    linear, interaction, or spline residuals. On the untouched final eight
+    target dates calibration-only was worse than frozen core (Brier delta
+    +0.00055, logloss delta +0.00241; both CIs cross zero), while its point
+    estimates versus market were better but also inconclusive. This rejects the
+    v3 candidate, not the idea of collecting richer first-seen weather state;
+    do not change live or add gates. Evidence:
+    `docs/analysis/2026-08/2026-08-06-current-yes-core-carry-semantic-challenger-v3.md`.
+11. `current_yes_core_carry_overshoot_survival_v1`: same-expression challenger
+    that converts same-state market hold probability to cumulative overshoot
+    hazard, then applies a non-negative remaining-heat/path exposure multiplier.
+    The fixed 1,349-checkpoint parent has 95 upward overshoots and the final
+    eight target dates remain frozen forward. On primary state-entry grain the
+    challenger was worse than core (Brier/logloss delta +0.00130/+0.01219;
+    both CIs cross zero), and fixed-10 forward replay was -$3.11 versus core
+    +$9.53. Development was also worse, so this scalar-exposure v1 is rejected.
+    The fully time-varying hazard idea remains untested because PIT hourly curve
+    files are currently permission-blocked; do not treat scalar max/peak buckets
+    as an adequate substitute. Evidence:
+    `docs/analysis/2026-08/2026-08-06-current-yes-core-carry-overshoot-survival-v1.md`.
+12. `intraday_state_transition_card_v1`: the 3-card mini seed was withdrawn for
+    a bad denominator. The expanded run preserved all 1,178 Core-scored
+    checkpoints and selected 120 weather-only `gpt-5.4` cards before reading
+    settlement: 31 policy hits, 7 same-day near misses, 31 matched controls and
+    51 semantic-diversity controls. It covered 40 cities/110 city-days; 64 were
+    aligned, 48 had semantic tension and 8 were ambiguous. On the 60 settled
+    cards, `upward_exit` was correct only 6/14 times, so the LLM is not a veto.
+    Keep collector-only and build the deterministic transition-confirmation
+    residual challenger on the full same-denominator PIT set. Evidence:
+    `docs/analysis/2026-08/2026-08-07-core-carry-llm-transition-card-v1.md`.
+13. `current_yes_core_carry_transition_confirmation_challenger_v1`: implemented
+    that deterministic residual without adding a gate. It corrected the primary
+    grain from city-day to 801 city-date-bracket state entries and added native
+    upper-exit geometry, dip/rebound, remaining heat, peak clock, plateau and
+    incumbent wind-boost × transition-risk features. On the last eight dates it
+    was effectively tied on Brier (challenger−core `-0.000003`, CI
+    `[-0.001151,+0.001128]`) but worse on logloss (`+0.000410`, CI
+    `[-0.003645,+0.004540]`); development was also worse. Several fitted signs
+    were not physically stable, so proxying the missing semantics from this old
+    ledger is rejected. Keep Core unchanged and collect true first-seen
+    cloud/rain transition, dewpoint trend and direction×terrain transport for a
+    new forward model. Evidence:
+    `docs/analysis/2026-08/2026-08-07-current-yes-core-carry-transition-confirmation-challenger-v1.md`.
+14. `current_yes_core_carry_actual_transport_tail_v1`: backfilled 36 settlement
+    stations with as-of IEM/METAR dewpoint trends, wind direction/persistence,
+    cloud change, rain, gust and pressure, then fit one monotone Core-offset
+    overshoot head. Coverage was adequate except gust, but the actual-feature
+    challenger did not add tail information: on the last eight dates it and
+    Core marked the same 32/138 state entries high-risk, caught the same 7/14
+    overshoots, and produced the same six 10-to-5-share decisions. Development
+    was worse (22/34 overshoots from 125 flags versus Core 23/34 from 119).
+    Therefore do not keep another entry-time global residual or sizing overlay.
+    Reuse these fields for post-entry event-driven invalidation when a new METAR
+    changes the state; that is a different clock and remains untested. Evidence:
+    `docs/analysis/2026-08/2026-08-07-current-yes-core-carry-actual-transport-tail-v1.md`.
+15. `current_yes_core_carry_mid_floor_forward_v1`: the deployed model was
+    trained across market mid 0.011–0.9895, so 0.80 is a live authorization
+    boundary, not model support.  On 2026-07-31..08-07, 577 settled
+    same-support probability checkpoints and 576 executable 10-share rows
+    produced 21 first-positive entries at floor 0.80 (19 wins, PnL -$2.21,
+    ROI -1.15%).  Lowering to 0.50 produced 26 entries (22 wins, +$0.54,
+    +0.24%); all <0.80 first-positive opportunities together were 7/10 and
+    -$1.55.  The post-hoc best tested floor was 0.90, but six-floor exact
+    target-date sign-flip family-wise p=0.547; every forward proper-score band
+    CI also crossed zero.  Historical 0.50–0.80 OOF remained positive but
+    inconclusive, while Europe floor 0.70 was negative.  Keep 0.80 live as a
+    conservative capital boundary, keep 0.50–0.80 continuous positive-net-EV
+    scoring as shadow evidence, and do not convert any tested price or weather
+    bucket into a new gate. Evidence:
+    `docs/analysis/2026-08/2026-08-08-current-yes-core-carry-mid-floor-forward-v1.md`.
 
 ## Naming Rules
 

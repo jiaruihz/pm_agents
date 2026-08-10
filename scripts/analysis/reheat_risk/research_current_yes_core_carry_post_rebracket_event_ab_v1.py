@@ -37,16 +37,16 @@ from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (  # noq
     walk_ask_ladder,
 )
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 DEFAULT_ARTIFACT = Path(
     "/Users/deepsleep/projects/pm_agents_prod/"
     "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v3.json"
 )
-OBS_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime/output/observations")
-SNAPSHOT_ROOT = Path(
-    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
-)
+OBS_ROOT = load_production_spec().data_feed_output_root() / "observations"
+SNAPSHOT_ROOT = historical_strategy_snapshots()
 PM_HISTORY = ROOT / "runtime/weather_edge_v1/market_data/cache/pm_history"
 OUT_ROOT = ROOT / "docs/analysis/2026-07"
 OUT_JSON = OUT_ROOT / "2026-07-30-current-yes-core-carry-post-rebracket-event-ab-v1.json"

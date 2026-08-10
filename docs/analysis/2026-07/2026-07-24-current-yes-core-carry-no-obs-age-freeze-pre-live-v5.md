@@ -36,4 +36,4 @@ Status: `frozen / user-authorized tiny-live on Mac`
 - 概率层（v2−v1）：Brier Δ `-0.000080`，95% CI `[-0.000372, +0.000185]`；logloss Δ `+0.000198`，95% CI `[-0.001022, +0.001452]`。两项 CI 都跨 0，去掉 age 没有可辨别的概率质量损失。
 - 5-share 全 ladder：v1 `144` 笔、胜率 `95.14%`、ROI `+4.25%`；v2 `136` 笔、胜率 `95.59%`、ROI `+4.67%`。
 - city-day overlap：共同 `133`，仅 v1 `11`，仅 v2 `3`。变化集中在临界 EV，而不是策略主体翻转。
-- 冻结决定：未来 pre-live 默认切到 `current_yes_core_carry_model_v2`；v1 标为 superseded-for-now 并保留历史血缘。v2 仍是 zero-notional pre-live，本报告不启动真实订单。
+- 冻结决定：未来默认使用 `current_yes_core_carry_model_v2`；v1 标为 superseded-for-now 并保留历史血缘。模型选择与历史 alpha 仍按 zero-notional pre-live 口径冻结；其后用户于 2026-07-24 明确授权 Mac tiny-live evidence probe，真实订单状态以本报告“上线状态”和对应 raw runtime 为准。

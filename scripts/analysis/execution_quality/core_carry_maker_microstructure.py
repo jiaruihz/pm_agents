@@ -4,17 +4,23 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-
-
 ROOT = Path(__file__).resolve().parents[3]
-RUNTIME = Path("/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2")
-SNAPSHOTS = Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from weather_data_feed.production_paths import current_strategy_snapshots  # noqa: E402
+
+
+RUNTIME = load_production_spec().pm_runtime_root / "weather_edge_v1/current_yes_core_carry_tiny_live_v2"
+SNAPSHOTS = current_strategy_snapshots()
 PROFILE = "split_taker_maker_edge_capped_no_fallback_v2"
 OUT_DIR = ROOT / "docs/analysis/2026-08/generated/core_carry_maker_microstructure_v1"
 REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-core-carry-maker-microstructure-v1.md"

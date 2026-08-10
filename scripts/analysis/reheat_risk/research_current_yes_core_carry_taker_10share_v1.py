@@ -211,6 +211,7 @@ def main() -> int:
     parser.add_argument("--transition-confirmation-challenger", action="store_true")
     parser.add_argument("--actual-transport-tail", action="store_true")
     parser.add_argument("--overshoot-survival", action="store_true")
+    parser.add_argument("--price-conditioned-challenger", action="store_true")
     args, _ = parser.parse_known_args()
     if args.net_ev_sizing:
         from scripts.analysis.reheat_risk.core_carry_net_ev_sizing import (
@@ -248,6 +249,12 @@ def main() -> int:
         )
 
         return overshoot_survival_main()
+    if args.price_conditioned_challenger:
+        from scripts.analysis.reheat_risk.core_carry_price_conditioned_full_support import (
+            main as price_conditioned_challenger_main,
+        )
+
+        return price_conditioned_challenger_main()
     oof = pd.read_csv(OOF_PATH)
     oof["decision_snapshot_dt"] = pd.to_datetime(
         oof["decision_snapshot_ts_utc"], utc=True, errors="coerce"

@@ -85,6 +85,26 @@ Evidence funnel：
   盈利；maker 必须另建 queue、fill probability 和 adverse-selection 分母。
 - 不修改 Core Carry live taker gate，不扩大 taker entries。
 
+## 生产频率与 filtered delta（合并审计）
+
+原先另生成的 live-funnel 与 filtered-delta 两份报告属于本 A/B 的诊断切片，
+不是独立策略：
+
+- Mac raw `2026-07-27..29` 有 324 个完成评分 checkpoint：128 个进入价格域、
+  42 个 `p_model > mid`、11 个覆盖 full taker cost，最终 11 个 first-positive
+  city-day signals（逐日 `4/4/3`）。平均 `3.67/day` 与历史 `104/31=3.35/day`
+  同量级，低频来自冻结表达，不是 runner 漏跑。
+- 318 个 `mid < p_model <= taker cost` filtered checkpoints 中，248 个来自
+  当前 policy 不会覆盖的 181 个新增 city-days；其 first-per-city-day ROI
+  `-2.24%`。另 70 个 checkpoint 与未来 current-policy signal 重叠，额外叠仓
+  ROI `-0.69%`。
+- filtered cohort 平均 residual 只有 `+1.11pp`，而 taker friction 为
+  `+2.47pp`；即便假设 midpoint/zero-fee 全成交，318 行理论 ROI 也只有
+  `+0.18%`。因此不从 price/hour/city post-hoc 切片新增 gate。
+
+这三项与上文使用同一 OOF parent、label 和 execution-cost contract，后续只从本报告
+读取；详细行级切片保留在 generated artifact。
+
 三门：
 
 - significance：relaxed first/all 均 `FAIL`，95% CI 跨 0；
