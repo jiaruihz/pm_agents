@@ -1094,6 +1094,64 @@ def test_incremental_metar_state_warm_starts_new_day_and_reads_only_appends(tmp_
     assert second_refresh["bytes_read"] == state["byte_offset"] - prior_offset
 
 
+def test_partitioned_source_events_migrate_aggregate_cursor_without_replay(tmp_path):
+    root = tmp_path / "source_events"
+    profiles = load_fast_event_source_profiles()
+    city_profiles = {"Tokyo": profiles[("Tokyo", "jma_amedas")]}
+
+    def source_row(report_ts, temp_c):
+        return {
+            "city": "Tokyo",
+            "target_date": "2026-07-13",
+            "source": "aviationweather_metar",
+            "source_report_ts_utc": report_ts,
+            "local_detect_ts_utc": report_ts,
+            "temp_c": temp_c,
+            "raw_metar": f"METAR RJTT {report_ts}",
+        }
+
+    day_one = root / "2026-07-12" / "sources.jsonl"
+    day_two = root / "2026-07-13" / "sources.jsonl"
+    aggregate = root / "sources.jsonl"
+    day_one.parent.mkdir(parents=True)
+    day_two.parent.mkdir(parents=True)
+    first = json.dumps(source_row("2026-07-12T15:00:00Z", 29.0)) + "\n"
+    second = json.dumps(source_row("2026-07-12T15:30:00Z", 29.5)) + "\n"
+    day_one.write_text(first, encoding="utf-8")
+    day_two.write_text(second, encoding="utf-8")
+    aggregate.write_text(first + second, encoding="utf-8")
+
+    aggregate_state, _ = refresh_source_event_state(
+        aggregate,
+        None,
+        target_dates_by_city={"Tokyo": "2026-07-13"},
+        city_profiles=city_profiles,
+    )
+    appended = json.dumps(source_row("2026-07-12T16:00:00Z", 30.0)) + "\n"
+    with aggregate.open("a", encoding="utf-8") as handle:
+        handle.write(appended)
+    with day_two.open("a", encoding="utf-8") as handle:
+        handle.write(appended)
+
+    partitioned_state, refresh = refresh_source_event_state(
+        root,
+        aggregate_state,
+        target_dates_by_city={"Tokyo": "2026-07-13"},
+        city_profiles=city_profiles,
+    )
+
+    assert refresh["migrated_from_aggregate"] is True
+    assert refresh["full_rebuild"] is False
+    assert refresh["lines_read"] == 1
+    assert refresh["reset_reason"] == "aggregate_cursor_migrated"
+    assert partitioned_state["source_path"] == str(root)
+    assert len(partitioned_state["shard_cursors"]) == 2
+    daily = metar_running_max_from_state(
+        partitioned_state, {"Tokyo": "2026-07-13"}
+    )[("Tokyo", "2026-07-13")]
+    assert daily["metar_running_max_market_value"] == 30
+
+
 def test_opportunity_journal_only_writes_changes_or_heartbeat():
     now = datetime(2026, 7, 21, 0, 0, tzinfo=timezone.utc)
     row = {

@@ -72,6 +72,174 @@ def _empty_state(path: Path) -> dict[str, Any]:
     }
 
 
+def _source_event_shards(root: Path) -> list[Path]:
+    return sorted(root.glob("????-??-??/sources.jsonl"))
+
+
+def _relevant_shard_dates(retained_dates: dict[str, set[str]]) -> tuple[date, date] | None:
+    parsed = [
+        parsed_date
+        for values in retained_dates.values()
+        for value in values
+        if (parsed_date := date.fromisoformat(value))
+    ]
+    if not parsed:
+        return None
+    return min(parsed) - timedelta(days=2), max(parsed) + timedelta(days=1)
+
+
+def _migrate_aggregate_offset_to_shards(
+    root: Path,
+    shards: list[Path],
+    aggregate_offset: int,
+) -> dict[str, dict[str, Any]]:
+    remaining = aggregate_offset
+    cursors: dict[str, dict[str, Any]] = {}
+    for shard in shards:
+        stat = shard.stat()
+        offset = min(int(stat.st_size), remaining)
+        cursors[str(shard)] = {
+            "file_identity": [int(stat.st_dev), int(stat.st_ino)],
+            "byte_offset": offset,
+        }
+        remaining -= offset
+    if remaining:
+        raise ValueError(
+            f"aggregate cursor exceeds dated shard bytes: root={root} remaining={remaining}"
+        )
+    return cursors
+
+
+def _refresh_partitioned_source_event_state(
+    root: Path,
+    existing_state: dict[str, Any] | None,
+    *,
+    retained_dates: dict[str, set[str]],
+    city_profiles: dict[str, FastEventSourceProfile],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    shards = _source_event_shards(root)
+    if not shards:
+        empty = _empty_state(root)
+        empty["shard_cursors"] = {}
+        return empty, {
+            "status": "source_events_missing",
+            "full_rebuild": True,
+            "reset_reason": "dated_shards_missing",
+            "lines_read": 0,
+            "bytes_read": 0,
+        }
+
+    state = dict(existing_state or {})
+    source_path = Path(str(state.get("source_path") or ""))
+    migrated_from_aggregate = (
+        state.get("schema_version") == STATE_SCHEMA
+        and source_path == root / "sources.jsonl"
+    )
+    if migrated_from_aggregate:
+        shard_cursors = _migrate_aggregate_offset_to_shards(
+            root,
+            shards,
+            int(state.get("byte_offset") or 0),
+        )
+        reset_reason = "aggregate_cursor_migrated"
+    elif (
+        state.get("schema_version") == STATE_SCHEMA
+        and source_path == root
+        and isinstance(state.get("shard_cursors"), dict)
+    ):
+        shard_cursors = {
+            str(path): dict(cursor)
+            for path, cursor in dict(state.get("shard_cursors") or {}).items()
+        }
+        reset_reason = ""
+    else:
+        shard_cursors = {}
+        reset_reason = "partition_state_initialized"
+
+    daily = {
+        key: dict(value)
+        for key, value in dict(state.get("daily") or {}).items()
+        if str(value.get("target_date") or "")
+        in retained_dates.get(str(value.get("city") or ""), set())
+    }
+    fresh_partition_state = not migrated_from_aggregate and not shard_cursors
+    relevant_window = _relevant_shard_dates(retained_dates)
+    lines_read = 0
+    bytes_read = 0
+    for shard in shards:
+        stat = shard.stat()
+        identity = [int(stat.st_dev), int(stat.st_ino)]
+        cursor = dict(shard_cursors.get(str(shard)) or {})
+        if fresh_partition_state and relevant_window is not None:
+            try:
+                shard_date = date.fromisoformat(shard.parent.name)
+            except ValueError:
+                shard_date = relevant_window[0]
+            if not (relevant_window[0] <= shard_date <= relevant_window[1]):
+                shard_cursors[str(shard)] = {
+                    "file_identity": identity,
+                    "byte_offset": int(stat.st_size),
+                }
+                continue
+        offset = int(cursor.get("byte_offset") or 0)
+        if cursor and (
+            cursor.get("file_identity") != identity or int(stat.st_size) < offset
+        ):
+            offset = 0
+        start_offset = offset
+        with shard.open("rb") as handle:
+            handle.seek(offset)
+            while True:
+                line_start = handle.tell()
+                raw_line = handle.readline()
+                if not raw_line:
+                    break
+                if not raw_line.endswith(b"\n"):
+                    offset = line_start
+                    break
+                offset = handle.tell()
+                lines_read += 1
+                try:
+                    row = json.loads(raw_line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if isinstance(row, dict):
+                    _update_daily_row(
+                        daily,
+                        row,
+                        retained_dates=retained_dates,
+                        city_profiles=city_profiles,
+                    )
+        bytes_read += max(0, offset - start_offset)
+        shard_cursors[str(shard)] = {
+            "file_identity": identity,
+            "byte_offset": offset,
+        }
+
+    refreshed = {
+        "schema_version": STATE_SCHEMA,
+        "source_path": str(root),
+        "file_identity": None,
+        "byte_offset": sum(
+            int(cursor.get("byte_offset") or 0)
+            for cursor in shard_cursors.values()
+        ),
+        "shard_cursors": shard_cursors,
+        "daily": daily,
+    }
+    return refreshed, {
+        "status": "ok",
+        "full_rebuild": bool(fresh_partition_state),
+        "reset_reason": reset_reason,
+        "migrated_from_aggregate": migrated_from_aggregate,
+        "lines_read": lines_read,
+        "bytes_read": bytes_read,
+        "byte_offset": refreshed["byte_offset"],
+        "shard_count": len(shards),
+        "daily_rows": len(daily),
+    }
+
+
 def _update_daily_row(
     daily: dict[str, dict[str, Any]],
     raw: dict[str, Any],
@@ -142,6 +310,13 @@ def refresh_source_event_state(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Consume only complete lines appended since the persisted byte cursor."""
     retained_dates = retained_target_dates(target_dates_by_city)
+    if path.is_dir():
+        return _refresh_partitioned_source_event_state(
+            path,
+            existing_state,
+            retained_dates=retained_dates,
+            city_profiles=city_profiles,
+        )
     state = dict(existing_state or {})
     reset_reason = ""
     try:
