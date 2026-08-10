@@ -429,3 +429,14 @@ def test_controller_contracts_separate_historical_stale_book_modes():
     assert "--sources fmi" in helsinki
     assert "--continuous-active-brackets" in helsinki
     assert "--live" not in helsinki
+
+
+def test_source_event_repricing_uses_canonical_live_cross_inputs():
+    text = (OPS / "start_weather_source_event_ladder_repricing_shadow.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert text.count("--high-frequency-latest") == 2
+    assert text.count("--high-frequency-jsonl") == 2
+    assert "live_cross_observations_root" in text
+    assert "output/high_frequency_observations" not in text

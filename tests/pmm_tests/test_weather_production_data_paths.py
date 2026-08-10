@@ -186,6 +186,7 @@ def test_current_entrypoints_do_not_depend_on_retired_data_roots() -> None:
         "start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh",
         "start_weather_korea_first_seen_collector.sh",
         "start_weather_fast_source_stale_book_production.sh",
+        "start_weather_source_event_ladder_repricing_shadow.sh",
         "start_weather_runtime_monitor.sh",
     ]
     for name in current_entrypoints:
@@ -202,6 +203,7 @@ def test_current_executable_consumers_do_not_use_retired_fast_observation_root()
         "weather_fast_source_stale_book_observer.py",
         "tmax_distribution_edge_live_candidate_v1.py",
         "start_weather_fast_source_stale_book_production.sh",
+        "start_weather_source_event_ladder_repricing_shadow.sh",
     ]
     for name in current_consumers:
         text = (ROOT / "scripts/ops" / name).read_text(encoding="utf-8")

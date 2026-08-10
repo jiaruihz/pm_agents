@@ -10,6 +10,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
+LIVE_CROSS_OBSERVATIONS_ROOT="${WEATHER_LIVE_CROSS_OBSERVATIONS_ROOT:-$(weather_production_path "$PROJECT_DIR" live_cross_observations_root)}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_EVENT_LADDER_TMUX_SESSION:-weather_source_event_ladder_repricing_shadow}"
 OUTPUT_DIR="${WEATHER_EVENT_LADDER_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_event_ladder_repricing_shadow}"
@@ -31,6 +32,8 @@ cmd=(
   "$PROJECT_DIR/scripts/ops/weather_fast_source_stale_book_observer.py"
   --loop
   --output-dir "$OUTPUT_DIR"
+  --high-frequency-latest "$LIVE_CROSS_OBSERVATIONS_ROOT/latest.json"
+  --high-frequency-jsonl "$LIVE_CROSS_OBSERVATIONS_ROOT"
   --interval-seconds "$INTERVAL_SECONDS"
   --follow-minutes "$FOLLOW_MINUTES"
   --fresh-scope all
@@ -47,6 +50,8 @@ lowest_cmd=(
   "$PROJECT_DIR/scripts/ops/weather_fast_source_stale_book_observer.py"
   --loop
   --output-dir "$LOWEST_OUTPUT_DIR"
+  --high-frequency-latest "$LIVE_CROSS_OBSERVATIONS_ROOT/latest.json"
+  --high-frequency-jsonl "$LIVE_CROSS_OBSERVATIONS_ROOT"
   --signal-basis official-running-extreme
   --extreme-kind min
   --gamma-market-index
@@ -82,4 +87,5 @@ echo "lowest_output_dir=$LOWEST_OUTPUT_DIR"
 echo "log=$LOG_FILE"
 echo "lowest_log=$LOWEST_LOG_FILE"
 echo "fresh_scope=all"
+echo "live_cross_observations_root=$LIVE_CROSS_OBSERVATIONS_ROOT"
 echo "market_proxy=$([[ -n "$MARKET_PROXY" ]] && echo configured || echo direct)"
