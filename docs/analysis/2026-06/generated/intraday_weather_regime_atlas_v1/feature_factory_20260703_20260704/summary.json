@@ -1,14 +1,14 @@
 {
-  "generated_at_utc": "2026-07-04T04:16:44+00:00",
+  "generated_at_utc": "2026-07-22T07:08:13+00:00",
   "target_metric": "reheat_risk_shared_feature_factory",
   "row_grain": "city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome",
   "evidence_layer": "time-aligned orderbook replay / opportunity feature layer, not live fills",
   "data_self_check": {
-    "fact_trades_max_built_at_utc": "2026-07-04T00:27:38.408651+00:00",
+    "fact_trades_max_built_at_utc": "2026-07-22T07:03:00.520616+00:00",
     "fact_trades_by_class": [
       {
         "trade_class": "live_real",
-        "rows": 931
+        "rows": 1111
       },
       {
         "trade_class": "live_simulated",
@@ -25,81 +25,96 @@
     ],
     "fact_trades_by_settlement_status": [
       {
-        "settlement_status": "",
-        "rows": 165
+        "settlement_status": "missing_bracket",
+        "rows": 31
       },
       {
         "settlement_status": "settled",
-        "rows": 4311
+        "rows": 4625
       }
     ],
     "fact_signal_candidate_coverage": {
-      "rows": 45094,
-      "eligible": 16764,
+      "rows": 62258,
+      "eligible": 24120,
       "paper_ordered": 5834,
-      "live_filled": 400
+      "live_filled": 510
     },
     "clob_order_fill_join": [
       {
+        "status": "blocked",
+        "orders": 1866,
+        "with_fill": 0
+      },
+      {
+        "status": "cancelled",
+        "orders": 5,
+        "with_fill": 0
+      },
+      {
         "status": "error",
-        "orders": 36,
+        "orders": 64,
+        "with_fill": 0
+      },
+      {
+        "status": "failed",
+        "orders": 146,
         "with_fill": 0
       },
       {
         "status": "submitted",
-        "orders": 1051,
-        "with_fill": 931
+        "orders": 1373,
+        "with_fill": 1111
       }
     ]
   },
   "funnel": {
-    "orderbook_files_seen": 108,
-    "orderbook_records_seen": 29419,
-    "orderbook_records_ok": 29330,
-    "orderbook_records_kept_before_dedupe": 3451,
-    "records_missing_timezone": 6496,
-    "records_wrong_local_date_or_hour": 18995,
-    "records_without_observed_state": 388,
+    "orderbook_files_seen": 151,
+    "orderbook_records_seen": 73889,
+    "orderbook_records_ok": 73606,
+    "orderbook_records_kept_before_dedupe": 7397,
+    "records_missing_timezone": 16915,
+    "records_wrong_local_date_or_hour": 47862,
+    "records_without_observed_state": 1432,
     "records_without_quote": 0,
-    "quote_rows_after_hourly_dedupe": 1160,
-    "feature_rows": 1160,
-    "state_rows_date_city_hour": 150,
+    "quote_rows_after_hourly_dedupe": 2478,
+    "feature_rows": 2478,
+    "state_rows_date_city_hour": 286,
     "min_target_date": "2026-07-03",
-    "max_target_date": "2026-07-03",
-    "active_dates": 1,
-    "cities": 22,
-    "complete_core_state_rows": 0
+    "max_target_date": "2026-07-04",
+    "active_dates": 2,
+    "cities": 27,
+    "complete_core_state_rows": 145
   },
   "field_non_null_rates_by_feature_row": {
     "current_temp_c": 1.0,
     "running_max_c": 1.0,
     "decline_from_max_c": 1.0,
     "minutes_since_running_max": 1.0,
-    "forecast_peak_hour_local": 0.8482758620689655,
-    "forecast_peak_delta_hours_local": 0.8482758620689655,
-    "forecast_values_hash": 0.8482758620689655,
-    "gfs_forecast_peak_hour_local": 0.0,
-    "gfs_forecast_peak_delta_hours_local": null,
-    "gfs_forecast_gap_to_running_native": null,
-    "ecmwf_forecast_peak_hour_local": 0.0,
-    "ecmwf_forecast_peak_delta_hours_local": null,
-    "ecmwf_forecast_gap_to_running_native": null,
-    "forecast_peak_models_agree_le_1h": 0.0,
-    "forecast_peak_hour_spread": 0.0,
-    "dwpf_now": 1.0,
-    "relative_humidity_pct": 1.0,
-    "wind_speed_kt": 1.0,
-    "sky_cover_code": 0.8120689655172414,
-    "temp_trend_1h_f": 1.0,
-    "current_yes_ask": 0.7905172413793103,
-    "d1_no_ask": 0.8396551724137931,
-    "d2_no_ask": 0.7836206896551724,
-    "target_yes_ask": 0.9258620689655173,
-    "final_winning_bracket": 0.0,
-    "current_bracket_held": 0.0,
-    "d1_hit": 0.0,
-    "skip_over_d1": 0.0,
-    "target_hit": 0.0
+    "forecast_peak_hour_local": 1.0,
+    "forecast_peak_delta_hours_local": 1.0,
+    "forecast_values_hash": 1.0,
+    "gfs_forecast_peak_hour_local": 1.0,
+    "gfs_forecast_peak_delta_hours_local": 1.0,
+    "gfs_forecast_gap_to_running_native": 1.0,
+    "ecmwf_forecast_peak_hour_local": 1.0,
+    "ecmwf_forecast_peak_delta_hours_local": 1.0,
+    "ecmwf_forecast_gap_to_running_native": 1.0,
+    "forecast_peak_models_agree_le_1h": 1.0,
+    "forecast_peak_hour_spread": 1.0,
+    "dwpf_now": 0.5730427764326069,
+    "relative_humidity_pct": 0.5730427764326069,
+    "wind_speed_kt": 0.5730427764326069,
+    "sky_cover_code": 0.4632768361581921,
+    "temp_trend_1h_f": 0.5730427764326069,
+    "current_yes_ask": 0.5048426150121066,
+    "d1_no_ask": 0.5811138014527845,
+    "d2_no_ask": 0.6404358353510896,
+    "target_yes_ask": 0.9636803874092009,
+    "final_winning_bracket": 1.0,
+    "current_bracket_held": 1.0,
+    "d1_hit": 1.0,
+    "skip_over_d1": 1.0,
+    "target_hit": 1.0
   },
   "field_coverage_by_state_rate": {
     "has_current_temp": 1.0,
@@ -107,43 +122,46 @@
     "has_minutes_since_max": 1.0,
     "has_forecast_peak_hour": 1.0,
     "has_forecast_hash": 1.0,
-    "has_dewpoint": 1.0,
-    "has_rh": 1.0,
-    "has_wind": 1.0,
-    "has_sky": 0.7333333333333333,
-    "has_temp_trend": 1.0,
-    "has_current_yes_quote": 0.7933333333333333,
-    "has_d1_no_quote": 0.82,
-    "has_d2_no_quote": 0.6666666666666666,
-    "has_any_target_yes_quote": 0.9533333333333334,
-    "has_final_winner": 0.0
+    "has_dewpoint": 0.5979020979020979,
+    "has_rh": 0.5979020979020979,
+    "has_wind": 0.5979020979020979,
+    "has_sky": 0.44755244755244755,
+    "has_temp_trend": 0.5979020979020979,
+    "has_current_yes_quote": 0.534965034965035,
+    "has_d1_no_quote": 0.6013986013986014,
+    "has_d2_no_quote": 0.5874125874125874,
+    "has_any_target_yes_quote": 0.9755244755244755,
+    "has_final_winner": 1.0
   },
   "missing_field_state_counts": {
-    "final_winner": 150,
-    "d2_no_quote": 50,
-    "sky": 40,
-    "current_yes_quote": 31,
-    "d1_no_quote": 27,
+    "sky": 158,
+    "current_yes_quote": 133,
+    "d2_no_quote": 118,
+    "dewpoint": 115,
+    "rh": 115,
+    "temp_trend": 115,
+    "wind": 115,
+    "d1_no_quote": 114,
     "any_target_yes_quote": 7
   },
   "forecast_gap": {
-    "fact_signal_candidates_rows": 45094,
-    "forecast_peak_hour_feature_row_rate": 0.8482758620689655,
-    "forecast_values_hash_feature_row_rate": 0.8482758620689655,
-    "gfs_forecast_peak_hour_feature_row_rate": 0.0,
-    "ecmwf_forecast_peak_hour_feature_row_rate": 0.0,
+    "fact_signal_candidates_rows": 62258,
+    "forecast_peak_hour_feature_row_rate": 1.0,
+    "forecast_values_hash_feature_row_rate": 1.0,
+    "gfs_forecast_peak_hour_feature_row_rate": 1.0,
+    "ecmwf_forecast_peak_hour_feature_row_rate": 1.0,
     "forecast_peak_sources": {
-      "native_fact": 984,
-      "missing": 176
+      "native_fact": 2127,
+      "backfill_single_runs_d_minus_1_12z_gfs_primary": 351
     }
   },
   "inputs": {
     "db": "runtime/weather.db",
-    "orderbook_dir": "runtime/weather_edge_v1/market_data/orderbook_snapshots",
+    "orderbook_dir": "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots",
     "observed_detail": "docs/analysis/2026-06/generated/m3_observed_max_v15_h10_21_iem_patch_20260703_20260704/m3_observed_max_residual_detail.csv",
     "station_summary": "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json",
     "ext_cache_dir": "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v15_20260703_20260704",
-    "forecast_peak_backfill": "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
+    "forecast_peak_backfill": "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
     "start_date": "2026-07-03",
     "end_date": "2026-07-04",
     "decision_hours": [

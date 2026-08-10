@@ -3,10 +3,10 @@
 ## 数据快照
 
 - 数据源：`runtime/weather.db` + atlas feature-factory 分片；CLOB coverage gate=`True`。
-- 生成时间 UTC：`2026-07-05T06:21:23+00:00`。
-- feature rows：`140308`；state rows(city/date/hour)：`13860`；日期：`2026-05-19`..`2026-07-04`。
+- 生成时间 UTC：`2026-07-22T07:17:34+00:00`。
+- feature rows：`144567`；state rows(city/date/hour)：`14369`；日期：`2026-05-19`..`2026-07-08`。
 - 覆盖城市：`36`；小时：`[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]`。
-- fact 自检：`fact_signal_candidates` 46007 rows / max event_date `2026-07-06`；`settlement_outcomes` max target_date `2026-07-04`。
+- fact 自检：`fact_signal_candidates` 62258 rows / max event_date `2026-07-23`；`settlement_outcomes` max target_date `2026-07-21`。
 
 ## 结论
 
@@ -18,24 +18,23 @@
 
 | day_regime | states | reheat_step | capped_day | avg_remaining | current_yes_roi | current_bracket_no_roi | d1_no_roi | lottery_yes_roi |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `day_open_runway` | 3979 | 68.9% | 26.9% | 2.87 | -3.7% | -3.4% | -1.8% | -31.3% |
-| `day_forecast_busted` | 3772 | 15.0% | 81.9% | 0.22 | -0.2% | -20.6% | -1.1% | -46.0% |
-| `day_forecast_capped` | 2444 | 30.6% | 66.7% | 0.52 | -3.4% | -7.8% | -3.3% | -50.1% |
-| `day_marginal_runway` | 2023 | 47.6% | 51.8% | 1.09 | -5.9% | -2.3% | -0.8% | -28.2% |
-| `day_space_unknown` | 1642 | 41.1% | 54.1% | 1.37 | -3.9% | -4.2% | -4.2% | -6.0% |
+| `day_open_runway` | 4705 | 68.9% | 26.8% | 2.90 | -3.3% | -3.8% | -2.1% | -33.3% |
+| `day_forecast_busted` | 4461 | 15.5% | 81.1% | 0.23 | -0.2% | -19.7% | -1.1% | -40.3% |
+| `day_forecast_capped` | 2841 | 30.7% | 65.5% | 0.54 | -5.1% | -6.1% | -3.4% | -46.3% |
+| `day_marginal_runway` | 2362 | 48.3% | 50.8% | 1.10 | -7.0% | -1.2% | -1.0% | -14.7% |
 
 ## Top Intraday States
 
 | intraday_state | states | reheat_step | capped_day | avg_remaining | current_yes_roi | current_bracket_no_roi | d1_no_roi |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `active_warming` | 4847 | 78.5% | 23.8% | 2.79 | -9.4% | -2.5% | -1.5% |
-| `mature_fade` | 3497 | 2.7% | 86.5% | 0.07 | 0.2% | -32.3% | 0.2% |
-| `fresh_high` | 2170 | 42.7% | 58.1% | 0.98 | -1.6% | -11.6% | -4.2% |
-| `pullback_uncertain` | 1271 | 4.8% | 92.1% | 0.08 | -0.2% | -27.4% | -0.3% |
-| `plateau_near_high` | 790 | 44.2% | 52.7% | 0.74 | -5.4% | -7.1% | -5.2% |
-| `false_fade_risk` | 674 | 55.2% | 43.9% | 1.81 | -3.7% | -7.4% | -4.6% |
-| `reheating_after_dip` | 380 | 15.0% | 79.7% | 0.30 | -4.2% | 2.5% | -5.8% |
-| `state_unknown` | 131 | 2.3% | 17.6% | 0.18 | -6.9% | 25.6% | -2.7% |
+| `active_warming` | 5055 | 78.6% | 23.7% | 2.81 | -9.3% | -2.6% | -1.3% |
+| `mature_fade` | 3588 | 2.7% | 86.3% | 0.07 | 0.2% | -32.7% | 0.1% |
+| `fresh_high` | 2247 | 43.0% | 57.7% | 0.98 | -2.2% | -10.7% | -4.4% |
+| `pullback_uncertain` | 1321 | 4.8% | 92.2% | 0.08 | -0.1% | -29.2% | -0.3% |
+| `plateau_near_high` | 831 | 44.5% | 52.2% | 0.76 | -6.3% | -6.1% | -5.1% |
+| `false_fade_risk` | 700 | 55.6% | 43.4% | 1.82 | -3.4% | -7.7% | -4.6% |
+| `reheating_after_dip` | 396 | 14.9% | 79.8% | 0.31 | -3.8% | -0.4% | -4.7% |
+| `state_unknown` | 131 | 2.3% | 4.6% | 0.18 | -82.3% | 25.6% | 36.9% |
 | `slow_warming` | 76 | 30.3% | 69.7% | 0.42 | -6.8% | 1.3% | -2.6% |
 | `flat_or_cooling` | 24 | 12.5% | 87.5% | 0.21 | -2.4% | -26.9% | 5.5% |
 
@@ -43,31 +42,26 @@
 
 | day_regime | expression | states | active_dates | avg_ask | hit_rate | roi |
 |---|---|---:|---:|---:|---:|---:|
-| `day_forecast_busted` | `current_bracket_no` | 3528 | 43 | 0.16 | 12.4% | -20.6% |
-| `day_forecast_busted` | `current_yes` | 3181 | 44 | 0.84 | 84.3% | -0.2% |
-| `day_forecast_busted` | `d1_no` | 2893 | 44 | 0.88 | 86.7% | -1.1% |
-| `day_forecast_busted` | `d2_no` | 2059 | 44 | 0.95 | 94.3% | -1.0% |
-| `day_forecast_busted` | `lottery_yes` | 3399 | 44 | 0.02 | 1.1% | -46.0% |
-| `day_forecast_capped` | `current_bracket_no` | 2239 | 44 | 0.30 | 28.1% | -7.8% |
-| `day_forecast_capped` | `current_yes` | 2153 | 45 | 0.70 | 68.0% | -3.4% |
-| `day_forecast_capped` | `d1_no` | 2072 | 45 | 0.79 | 76.7% | -3.3% |
-| `day_forecast_capped` | `d2_no` | 1663 | 45 | 0.92 | 89.5% | -2.2% |
-| `day_forecast_capped` | `lottery_yes` | 2327 | 45 | 0.02 | 0.8% | -50.1% |
-| `day_marginal_runway` | `current_bracket_no` | 1843 | 44 | 0.44 | 43.2% | -2.3% |
-| `day_marginal_runway` | `current_yes` | 1830 | 45 | 0.54 | 51.1% | -5.9% |
-| `day_marginal_runway` | `d1_no` | 1757 | 45 | 0.78 | 76.9% | -0.8% |
-| `day_marginal_runway` | `d2_no` | 1539 | 45 | 0.83 | 77.3% | -6.7% |
-| `day_marginal_runway` | `lottery_yes` | 1922 | 45 | 0.02 | 1.5% | -28.2% |
-| `day_open_runway` | `current_bracket_no` | 2702 | 44 | 0.63 | 60.4% | -3.4% |
-| `day_open_runway` | `current_yes` | 2873 | 45 | 0.35 | 33.9% | -3.7% |
-| `day_open_runway` | `d1_no` | 3104 | 45 | 0.83 | 81.4% | -1.8% |
-| `day_open_runway` | `d2_no` | 3156 | 45 | 0.82 | 80.5% | -1.2% |
-| `day_open_runway` | `lottery_yes` | 3853 | 45 | 0.02 | 1.1% | -31.3% |
-| `day_space_unknown` | `current_bracket_no` | 1387 | 12 | 0.38 | 36.0% | -4.2% |
-| `day_space_unknown` | `current_yes` | 1361 | 13 | 0.63 | 60.9% | -3.9% |
-| `day_space_unknown` | `d1_no` | 1342 | 13 | 0.83 | 79.7% | -4.2% |
-| `day_space_unknown` | `d2_no` | 1100 | 13 | 0.87 | 85.3% | -2.2% |
-| `day_space_unknown` | `lottery_yes` | 1545 | 13 | 0.01 | 0.8% | -6.0% |
+| `day_forecast_busted` | `current_bracket_no` | 4172 | 49 | 0.16 | 13.2% | -19.7% |
+| `day_forecast_busted` | `current_yes` | 3786 | 50 | 0.84 | 83.7% | -0.2% |
+| `day_forecast_busted` | `d1_no` | 3456 | 50 | 0.87 | 86.4% | -1.1% |
+| `day_forecast_busted` | `d2_no` | 2465 | 50 | 0.95 | 94.6% | -0.5% |
+| `day_forecast_busted` | `lottery_yes` | 3977 | 49 | 0.02 | 1.2% | -40.3% |
+| `day_forecast_capped` | `current_bracket_no` | 2597 | 49 | 0.30 | 28.4% | -6.1% |
+| `day_forecast_capped` | `current_yes` | 2505 | 50 | 0.71 | 67.1% | -5.1% |
+| `day_forecast_capped` | `d1_no` | 2418 | 50 | 0.80 | 77.2% | -3.4% |
+| `day_forecast_capped` | `d2_no` | 1899 | 50 | 0.91 | 89.2% | -2.4% |
+| `day_forecast_capped` | `lottery_yes` | 2679 | 48 | 0.02 | 0.8% | -46.3% |
+| `day_marginal_runway` | `current_bracket_no` | 2165 | 49 | 0.45 | 44.6% | -1.2% |
+| `day_marginal_runway` | `current_yes` | 2142 | 50 | 0.54 | 50.3% | -7.0% |
+| `day_marginal_runway` | `d1_no` | 2055 | 50 | 0.77 | 76.6% | -1.0% |
+| `day_marginal_runway` | `d2_no` | 1800 | 50 | 0.83 | 77.6% | -6.4% |
+| `day_marginal_runway` | `lottery_yes` | 2233 | 50 | 0.02 | 1.7% | -14.7% |
+| `day_open_runway` | `current_bracket_no` | 3205 | 49 | 0.63 | 60.7% | -3.8% |
+| `day_open_runway` | `current_yes` | 3400 | 50 | 0.35 | 34.0% | -3.3% |
+| `day_open_runway` | `d1_no` | 3688 | 50 | 0.83 | 81.5% | -2.1% |
+| `day_open_runway` | `d2_no` | 3746 | 50 | 0.82 | 81.1% | -0.9% |
+| `day_open_runway` | `lottery_yes` | 4524 | 50 | 0.01 | 1.0% | -33.3% |
 
 ## Forward Recording Protocol
 

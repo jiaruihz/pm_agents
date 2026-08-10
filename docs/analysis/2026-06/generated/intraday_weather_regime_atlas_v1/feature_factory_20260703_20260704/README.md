@@ -3,9 +3,9 @@
 ## Data Snapshot
 
 - Data source: `runtime/weather.db` (`fact_signal_candidates`, `fact_trades`, `settlement_outcomes`) plus time-aligned raw orderbook snapshots under `runtime/weather_edge_v1/market_data/orderbook_snapshots`.
-- Generated at UTC: `2026-07-04T04:16:44+00:00`.
-- DB fact built at UTC: `2026-07-04T00:27:38.408651+00:00`.
-- Actual feature target-date range: `2026-07-03`..`2026-07-03` (1 active dates).
+- Generated at UTC: `2026-07-22T07:08:13+00:00`.
+- DB fact built at UTC: `2026-07-22T07:03:00.520616+00:00`.
+- Actual feature target-date range: `2026-07-03`..`2026-07-04` (2 active dates).
 - Row grain: `city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome`.
 - Evidence layer: time-aligned orderbook replay / opportunity feature layer, not live fills.
 
@@ -21,11 +21,11 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
 
 ```json
 {
-  "fact_trades_max_built_at_utc": "2026-07-04T00:27:38.408651+00:00",
+  "fact_trades_max_built_at_utc": "2026-07-22T07:03:00.520616+00:00",
   "fact_trades_by_class": [
     {
       "trade_class": "live_real",
-      "rows": 931
+      "rows": 1111
     },
     {
       "trade_class": "live_simulated",
@@ -42,30 +42,45 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
   ],
   "fact_trades_by_settlement_status": [
     {
-      "settlement_status": "",
-      "rows": 165
+      "settlement_status": "missing_bracket",
+      "rows": 31
     },
     {
       "settlement_status": "settled",
-      "rows": 4311
+      "rows": 4625
     }
   ],
   "fact_signal_candidate_coverage": {
-    "rows": 45094,
-    "eligible": 16764,
+    "rows": 62258,
+    "eligible": 24120,
     "paper_ordered": 5834,
-    "live_filled": 400
+    "live_filled": 510
   },
   "clob_order_fill_join": [
     {
+      "status": "blocked",
+      "orders": 1866,
+      "with_fill": 0
+    },
+    {
+      "status": "cancelled",
+      "orders": 5,
+      "with_fill": 0
+    },
+    {
       "status": "error",
-      "orders": 36,
+      "orders": 64,
+      "with_fill": 0
+    },
+    {
+      "status": "failed",
+      "orders": 146,
       "with_fill": 0
     },
     {
       "status": "submitted",
-      "orders": 1051,
-      "with_fill": 931
+      "orders": 1373,
+      "with_fill": 1111
     }
   ]
 }
@@ -75,15 +90,15 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
 
 | Stage | Rows/count |
 |---|---:|
-| orderbook files seen | 108 |
-| orderbook records seen | 29419 |
-| ok orderbook records | 29330 |
-| kept before hourly dedupe | 3451 |
-| feature rows after hourly dedupe/enrichment | 1160 |
-| date/city/hour state rows | 150 |
-| complete core state rows | 0 |
-| active dates | 1 |
-| cities | 22 |
+| orderbook files seen | 151 |
+| orderbook records seen | 73889 |
+| ok orderbook records | 73606 |
+| kept before hourly dedupe | 7397 |
+| feature rows after hourly dedupe/enrichment | 2478 |
+| date/city/hour state rows | 286 |
+| complete core state rows | 145 |
+| active dates | 2 |
+| cities | 27 |
 
 Core state means current temp, running max, minutes since max, current YES quote, d1 NO quote, and final winner are all present.
 
@@ -95,23 +110,23 @@ Core state means current temp, running max, minutes since max, current YES quote
 | `running_max_c` | 100.0% | 100.0% |
 | `decline_from_max_c` | 100.0% | 100.0% |
 | `minutes_since_running_max` | 100.0% | 100.0% |
-| `forecast_peak_hour_local` | 84.8% | 100.0% |
-| `forecast_peak_delta_hours_local` | 84.8% | 100.0% |
-| `forecast_values_hash` | 84.8% | 100.0% |
-| `gfs_forecast_peak_hour_local` | 0.0% | 100.0% |
-| `gfs_forecast_peak_delta_hours_local` | NA | 100.0% |
-| `ecmwf_forecast_peak_hour_local` | 0.0% | 100.0% |
-| `ecmwf_forecast_peak_delta_hours_local` | NA | 100.0% |
-| `dwpf_now` | 100.0% | 100.0% |
-| `relative_humidity_pct` | 100.0% | 100.0% |
-| `wind_speed_kt` | 100.0% | 100.0% |
-| `sky_cover_code` | 81.2% | 73.3% |
-| `temp_trend_1h_f` | 100.0% | 100.0% |
-| `current_yes_ask` | 79.1% | 79.3% |
-| `d1_no_ask` | 84.0% | 82.0% |
-| `d2_no_ask` | 78.4% | 66.7% |
-| `target_yes_ask` | 92.6% | 95.3% |
-| `final_winning_bracket` | 0.0% | 0.0% |
+| `forecast_peak_hour_local` | 100.0% | 100.0% |
+| `forecast_peak_delta_hours_local` | 100.0% | 100.0% |
+| `forecast_values_hash` | 100.0% | 100.0% |
+| `gfs_forecast_peak_hour_local` | 100.0% | 100.0% |
+| `gfs_forecast_peak_delta_hours_local` | 100.0% | 100.0% |
+| `ecmwf_forecast_peak_hour_local` | 100.0% | 100.0% |
+| `ecmwf_forecast_peak_delta_hours_local` | 100.0% | 100.0% |
+| `dwpf_now` | 57.3% | 59.8% |
+| `relative_humidity_pct` | 57.3% | 59.8% |
+| `wind_speed_kt` | 57.3% | 59.8% |
+| `sky_cover_code` | 46.3% | 44.8% |
+| `temp_trend_1h_f` | 57.3% | 59.8% |
+| `current_yes_ask` | 50.5% | 53.5% |
+| `d1_no_ask` | 58.1% | 60.1% |
+| `d2_no_ask` | 64.0% | 58.7% |
+| `target_yes_ask` | 96.4% | 97.6% |
+| `final_winning_bracket` | 100.0% | 100.0% |
 
 ## Output Files
 
@@ -125,11 +140,14 @@ The coverage CSV has one row per `target_date + city + decision_hour_local` with
 
 | Missing field | State rows |
 |---|---:|
-| `final_winner` | 150 |
-| `d2_no_quote` | 50 |
-| `sky` | 40 |
-| `current_yes_quote` | 31 |
-| `d1_no_quote` | 27 |
+| `sky` | 158 |
+| `current_yes_quote` | 133 |
+| `d2_no_quote` | 118 |
+| `dewpoint` | 115 |
+| `rh` | 115 |
+| `temp_trend` | 115 |
+| `wind` | 115 |
+| `d1_no_quote` | 114 |
 | `any_target_yes_quote` | 7 |
 
 Use the coverage CSV to inspect the exact date/city/hour rows before running any strategy-head experiment.
