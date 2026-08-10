@@ -1,6 +1,10 @@
-# weather_edge_v1 Current Status And Roadmap
+# weather_edge_v1 Historical Status And Roadmap
 
 Last updated: 2026-05-12
+
+This file is a frozen historical planning snapshot. It is not a current
+production runbook; current topology and physical paths come only from
+`src/strategies/runtime/production.yaml` and the production manifest.
 
 ## Strategy Name
 
@@ -20,7 +24,6 @@ N100 host:
 
 ```text
 jiarui@192.168.0.200
-/home/jiarui/projects/weather-predict
 ```
 
 Running user timers:

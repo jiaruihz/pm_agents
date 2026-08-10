@@ -77,7 +77,7 @@ market evidence 当前未与 one-shot 拼接；D-2 market residual 明确为 `d2
 
 ## Legacy 模型开发（与 clean forward 分轨）
 
-已有数据并未停用。`research_d1_legacy_weather_only_v2.py` 用 5561 条 long-history rows 训练，前 18 个 reconstructed dates 选参数，最后 9 dates / 46 states / 21 cities 保持未调参 holdout。最佳 F 为 75% ensemble median、25% assigned forecast，spread beta 被选为 0：
+已有数据并未停用。`research_d1_legacy_weather_only_v2.py` 使用 legacy artifact 的 May–Aug best-model training slice：原输入 42,705 rows / 52 城，经 best-model 过滤为 16,916，再得到 5,561 rows / 39 城；这不是项目全部历史。前 18 个 reconstructed dates 选参数，最后 9 dates / 46 states / 21 cities 保持未调参 holdout。最佳 F 为 75% ensemble median、25% assigned forecast，spread beta 被选为 0：
 
 - logloss `1.9763`，pooled Normal `2.8902`，paired Δ=`-0.9139`，95% CI `[-1.3574,-0.4532]`；
 - Brier `0.0771` vs `0.0873`；RPS `0.0903` vs `0.1451`；
