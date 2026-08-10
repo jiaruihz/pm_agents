@@ -4,6 +4,10 @@
 
 不同模型族已经在完全相同的PIT rows、labels、date splits和quotes上比较。development最优是 `p_factorized_random_forest_full_weather`，但在同盘口18 states/5天上logloss `0.6419`，仍差于market `0.3665`；selected−market delta `+0.2755`，95% CI `[-0.1010, +0.7441]`。因此问题不只是“没换高级算法”：当前最大的限制是独立日期与conditional-reheat证据不足。
 
+### 2026-08-08 锁模 forward 更新
+
+8/3 后不再重选模型或更新参数。8/4–8/7 已补齐 canonical settlement 后，同盘口 26 states/4天的固定冠军 logloss `0.6955`，market `0.3106`；model−market `+0.3849`，95% CI `[-0.0893,+1.0335]`。13 个正 edge date-rung replay PnL `-$3.4298`、ROI `-6.42%`，95% CI `[-23.02%,+12.85%]`。四天仅 8/7 胜 market，因此 `forward=FAIL`，继续 collector/research，不部署 Busan probability adapter。完整快照见 [8/8 forward performance](2026-08-08-korea-model-forward-performance-v1.md)。
+
 ## 固定研究设计
 
 - target：`P(final exact current routine rung NO | PIT source/path/weather state)`。
@@ -44,4 +48,4 @@ full-weather已覆盖全部 `159/159 states、13天`；其中PIT archive回填 `
 2. feature selection是否能解决：basis、path、full weather的ridge ablation已在同分母比较；只报告OOF，不看训练拟合。
 3. 下一步不继续无序换模型。保持这个固定tournament，新增日期只append并重跑；conditional nonconfirmation达到预注册日期数后，才允许训练独立reheat head。
 
-验收：`significance=FAIL`，`baseline=FAIL`，`forward=NA_SETTLEMENT_PENDING`，`conclusion=inconclusive`；不改live，不启动概率shadow。
+验收（2026-08-08 更新）：`significance=FAIL`，`baseline=FAIL`，`forward=FAIL`，`conclusion=inconclusive`；不改live，不启动概率shadow。

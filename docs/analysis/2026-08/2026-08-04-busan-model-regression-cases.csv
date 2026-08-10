@@ -1,0 +1,4 @@
+case_id,target_date,evidence_cutoff_ts_utc,case_family,regression_assertion,allowed_use
+busan_2026_08_01_terminal_false_cross,2026-08-01,2026-08-01T05:00:43Z,source_settlement_basis,A routine nonconfirmation must switch final pricing away from the pending confirmation mixture and must not remain near-certain solely because AMOS persistence was high.,diagnostic_and_regression_only
+busan_2026_07_20_late_reheat,2026-07-20,2026-07-20T03:00:00Z,conditional_remaining_heat,After routine nonconfirmation the model must retain a separate positive late-reheat probability when meaningful heating runway remains.,diagnostic_and_regression_only
+busan_2026_08_04_late_fade,2026-08-04,2026-08-04T03:15:14Z,conditional_remaining_heat,With the same nonconfirmation branch a near-peak deep fade must rank below the morning late-reheat case; the case cannot introduce a new feature or threshold.,diagnostic_and_regression_only

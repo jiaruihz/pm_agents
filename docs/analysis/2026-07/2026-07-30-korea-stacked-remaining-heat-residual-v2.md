@@ -137,5 +137,5 @@ exact-bracket full-ladder distribution。它不能保证同一时点各档概率
 在 favorite 换档后继续重估原持仓。详见
 `docs/analysis/2026-07/2026-07-31-korea-stacked-residual-semantic-audit-v1.md`。
 
-因此新增 `model_semantics=FAIL`：保留 long-history prior，当前 residual head
+因此新增 `model_semantics=FAIL`：保留已声明窗口的 IEM physical prior，当前 residual head
 停止用于 entry/position 优化，下一版改为 fixed-ladder joint distribution。

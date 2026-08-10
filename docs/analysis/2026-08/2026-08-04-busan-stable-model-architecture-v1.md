@@ -10,6 +10,22 @@
 
 当前只完成研究架构与训练合同，**没有部署概率 adapter、没有改变 CrossNO 或 WCIR 生产行为**；Busan 继续是 coverage-only。
 
+### 历史 experiment 账（已合并）
+
+此前自动生成的 v7-v11 与 exit overlay 都是同一研究链的中间 run，不是独立模型：
+
+| experiment | 固定证据 | 结论 |
+|---|---|---|
+| v7 cross-event residual | OOF 55 rows / 13 dates；model-market logloss `+0.2543` | baseline FAIL |
+| v8 continuous comparison | PIT book 仅 5 settled dates | 两臂均未证明，继续采集 |
+| v9 AMOS context | development 197 rows / 7 dates；market-aligned 48 rows / 5 dates；logloss `0.2371` vs market `0.2804`，CI 跨 0 | 历史研究基线，未晋升 |
+| v10 confirmation-aware | development logloss `0.5596`，差于 v9 `0.5576`；交易与 v9 同 12 单 | rejected experiment |
+| v11 giveback interaction | development `0.5584`，仍差于 v9；frozen 只有 1 日 | rejected experiment |
+| CrossNO exit overlay | 31 entries / 11 dates；first-routine-nonconfirmation 点估改善 `$4.6159`，有效 bootstrap 仅 5 日 | inconclusive，不改 live |
+
+详细数值产物由对应 run artifact 保存；耐久结论只从本表、registry 和稳定模型合同读取，
+不再把每次参数/窗口迭代保留为平行“当前报告”。
+
 ## 一、完整概率表达
 
 模型不再用一个 residual 同时解释“快源是否可信”和“后面还会不会升温”，而按信息到达顺序分成两个 head：

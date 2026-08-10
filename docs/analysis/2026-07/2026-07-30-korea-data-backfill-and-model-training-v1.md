@@ -81,6 +81,22 @@ Candidate − raw market：Brier `+0.042884`
 （95% CI `[+0.074670, +0.229759]`）。正值表示更差，因此 market baseline gate
 明确失败。
 
+### 迭代账（已合并）
+
+早期 runner 曾按数据覆盖扩展分别生成 `baseline-v1`、`expanded-v2/v3/v4`
+四份日期报告；它们不是四个策略，也不应作为四个当前入口继续保留：
+
+| run | 窗口 / opportunity | holdout model vs market | 结论 |
+|---|---|---|---|
+| baseline-v1 | 07-15..27 / 297 | Brier `+0.017779`；logloss `+0.072484` | market gate FAIL |
+| expanded-v2 | 07-08..28 / 483 | Brier `+0.042884`；logloss `+0.133465` | market gate FAIL |
+| expanded-v3 | 同窗口 / 803（混入更宽 book states） | Brier `+0.051831`；logloss `+0.157991` | 更差，未晋升 |
+| expanded-v4 | 回到可审计 483-row evidence contract | 与 expanded-v2 相同 | 作为最终 historical run identity |
+
+这些 run 的耐久结论、分母与 coverage gap 以本报告为准；详细机器产物仍由
+`/Volumes/jrs/pm_agents/research/korea_intraday_residual/v4/` 保存和复跑，不再为同一
+runner 的窗口扩展保留平行 Markdown。
+
 ## 信号、订单与 ROI
 
 完整 `21` 日、`34` city-day 分布：
@@ -115,7 +131,5 @@ delta `+0.087861`（95% CI `[+0.032741,+0.139633]`）、logloss delta
   `/Volumes/jrs/pm_agents/research/korea_iem_remaining_heat/v1/`
 - 盘口 residual 全量 replay：
   `/Volumes/jrs/pm_agents/research/korea_intraday_residual/v4/`
-- 详细报告：
+- 物理模型细节：
   `docs/analysis/2026-07/2026-07-30-korea-iem-remaining-heat-model-v1.md`
-  和
-  `docs/analysis/2026-07/2026-07-30-korea-intraday-residual-expanded-v4.md`
