@@ -30,7 +30,7 @@
       "schema_fingerprint": "789563c9c429f760b1578897c7086563cb876956e9d4d69a191abc185d5b1bf1"
     },
     {
-      "journal_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/knmi_observations.jsonl",
+      "journal_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
       "latest_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/latest.json",
       "schema_version": "weather_knmi_open_data_payload_v1",
       "schema_fingerprint": "401ae97fea4cd0f75399a50944949e658b5b17df80a06ac6d6056531b254c883"
@@ -45,7 +45,7 @@
       "strategy_family": "weather.city_intraday_probability",
       "profile_id": "amsterdam_knmi_remaining_heat_frozen_v7_clean_forward",
       "source": "knmi",
-      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/knmi_observations.jsonl",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
       "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
       "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
       "forward_start_utc": "2026-08-01T00:00:00Z",

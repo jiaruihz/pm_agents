@@ -47,7 +47,7 @@ def test_amsterdam_v7_maps_knmi_probability_to_wcir_expression(
     ladders = tmp_path / "ladders"
     event_id = "knmi-event-1"
     _write_jsonl(
-        source,
+        source.parent / "2026-08-03" / source.name,
         [
             {
                 "city": "Amsterdam",

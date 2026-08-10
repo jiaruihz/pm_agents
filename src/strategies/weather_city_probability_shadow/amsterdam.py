@@ -86,12 +86,25 @@ def _official_as_of(
 
 
 def _source_frame(profile: dict[str, Any], target_date: str, decision: datetime) -> tuple[pd.DataFrame, dict[str, Any], int]:
+    source_journal = Path(profile["source_journal"])
+    source_root = source_journal if source_journal.is_dir() else source_journal.parent
+    source_filename = (
+        "knmi_observations.jsonl" if source_journal.is_dir() else source_journal.name
+    )
+    catalog_rows = JsonlInputCatalog().rows_from_day_shards(
+        source_root,
+        filename=source_filename,
+        as_of=decision,
+        predicate=lambda row: (
+            row.get("city") == "Amsterdam"
+            and row.get("source") == "knmi"
+            and row.get("target_date") == target_date
+            and row.get("information_event_status") == "material"
+        ),
+    )
     by_obs: dict[str, tuple[int, dict[str, Any]]] = {}
-    for line_no, row in _iter_jsonl(Path(profile["source_journal"])):
-        if row.get("city") != "Amsterdam" or row.get("source") != "knmi":
-            continue
-        if row.get("target_date") != target_date or row.get("information_event_status") != "material":
-            continue
+    for catalog_row in catalog_rows:
+        row = catalog_row.row
         fields = row.get("knmi_station_fields") or {}
         if fields.get("ta") is None or fields.get("tx") is None:
             continue
@@ -101,7 +114,7 @@ def _source_frame(profile: dict[str, Any], target_date: str, decision: datetime)
         key = str(row.get("observation_time_utc"))
         previous = by_obs.get(key)
         if previous is None or available > _available(previous[1]):
-            by_obs[key] = (line_no, row)
+            by_obs[key] = (catalog_row.physical_line, row)
     if not by_obs:
         raise InputNotReady(
             "missing_knmi_source_day",

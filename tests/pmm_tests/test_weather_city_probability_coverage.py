@@ -22,8 +22,7 @@ from weather_city_runtime import DecisionContractJournalSink
 UTC = timezone.utc
 ROOT = Path(__file__).resolve().parents[2]
 KNMI_PRODUCTION_JOURNAL = (
-    "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/"
-    "knmi_observations.jsonl"
+    "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data"
 )
 
 
