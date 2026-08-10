@@ -224,6 +224,43 @@ def test_source_event_cursor_ignores_revisions(tmp_path) -> None:
     assert active == {("Busan", "2026-08-09")}
 
 
+def test_source_event_cursor_follows_dated_shard_rollover(tmp_path) -> None:
+    root = tmp_path / "source_events"
+    first = root / "2026-08-09" / "sources.jsonl"
+    second = root / "2026-08-10" / "sources.jsonl"
+    first.parent.mkdir(parents=True)
+    first.write_text(json.dumps({
+        "city": "Busan",
+        "target_date": "2026-08-09",
+        "event_role": "new_content",
+        "information_event_status": "material",
+        "material_state_change": True,
+        "first_seen_at_utc": "2026-08-09T02:59:30Z",
+    }) + "\n")
+    cursor = SourceEventCursor(root)
+    assert cursor.read(cities={"Busan"}, now_utc=NOW, burst_sec=120) == {
+        ("Busan", "2026-08-09")
+    }
+
+    second.parent.mkdir(parents=True)
+    second.write_text(json.dumps({
+        "city": "Tokyo",
+        "target_date": "2026-08-10",
+        "event_role": "new_content",
+        "information_event_status": "material",
+        "material_state_change": True,
+        "first_seen_at_utc": "2026-08-09T03:01:30Z",
+    }) + "\n")
+
+    assert cursor.read(
+        cities={"Tokyo"},
+        now_utc=NOW + timedelta(minutes=2),
+        burst_sec=120,
+    ) == {
+        ("Tokyo", "2026-08-10")
+    }
+
+
 def test_hourly_writer_uses_restart_safe_stream_file(tmp_path) -> None:
     writer = HourlyWriter(tmp_path)
     path = writer.write({"message": "one"}, NOW)

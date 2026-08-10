@@ -46,7 +46,7 @@ PRODUCTION = load_production_spec()
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", str(PRODUCTION.data_feed_runtime_root)))
 HIGH_FREQUENCY_JSONL = PRODUCTION.live_cross_observations_root()
 HIGH_FREQUENCY_LATEST = HIGH_FREQUENCY_JSONL / "latest.json"
-SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
+SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events"
 PAPER_SNAPSHOT_DIR = Path(
     os.environ.get("WEATHER_STRATEGY_PAPER_SNAPSHOT_DIR", str(PRODUCTION.strategy_paper_snapshot_dir()))
 )

@@ -140,7 +140,16 @@ class SourceEventCursor:
         self.path = path
         self.bootstrap_bytes = bootstrap_bytes
         self.offset = 0
+        self.physical_path: Path | None = None
         self.recent: dict[tuple[str, str, str], datetime] = {}
+
+    def _resolve_path(self) -> Path:
+        if not self.path.is_dir():
+            return self.path
+        candidates = sorted(self.path.glob("????-??-??/sources.jsonl"))
+        if not candidates:
+            raise FileNotFoundError(f"no dated source-event shard under {self.path}")
+        return candidates[-1]
 
     def read(
         self,
@@ -150,8 +159,12 @@ class SourceEventCursor:
         burst_sec: float,
     ) -> set[tuple[str, str]]:
         try:
-            size = self.path.stat().st_size
-            with self.path.open("rb") as handle:
+            physical_path = self._resolve_path()
+            if self.physical_path != physical_path:
+                self.offset = 0
+            self.physical_path = physical_path
+            size = physical_path.stat().st_size
+            with physical_path.open("rb") as handle:
                 if self.offset <= 0 or self.offset > size:
                     start = max(0, size - self.bootstrap_bytes)
                     handle.seek(start)

@@ -57,7 +57,7 @@ from weather_data_feed.source_event_incremental_state import (  # noqa: E402
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_prev_no_trial"
 DEFAULT_HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
-DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
+DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events"
 PERSISTENT_CROSS_POLICY = "persistent_candidate_margin_v5"
 SOURCE_OBSERVATION_HISTORY_SUFFIX = "__source_observations__"
 
