@@ -67,15 +67,26 @@ def write_state(proxy_url: str, *, reason: str, previous_url: str) -> None:
 
 
 def probe(proxy_url: str, timeout: float = 8.0) -> dict:
-    command = [
-        "curl", "-sS", "--proxy", proxy_url, "--max-time", str(timeout),
-        "-o", "/dev/null", "-w", "%{http_code}",
-        "https://gamma-api.polymarket.com/events?limit=1",
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    status = (result.stdout or "").strip()
-    return {"ok": result.returncode == 0 and status == "200", "http_status": status,
-            "returncode": result.returncode, "error": (result.stderr or "").strip()[:240]}
+    checks = []
+    for name, url in (
+        ("gamma", "https://gamma-api.polymarket.com/events?limit=1"),
+        ("clob", "https://clob.polymarket.com/time"),
+    ):
+        command = [
+            "curl", "-sS", "--proxy", proxy_url, "--max-time", str(timeout),
+            "-o", "/dev/null", "-w", "%{http_code}", url,
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        status = (result.stdout or "").strip()
+        checks.append({
+            "name": name,
+            "url": url,
+            "ok": result.returncode == 0 and status == "200",
+            "http_status": status,
+            "returncode": result.returncode,
+            "error": (result.stderr or "").strip()[:240],
+        })
+    return {"ok": all(row["ok"] for row in checks), "checks": checks}
 
 
 def consumers() -> list:
@@ -92,16 +103,7 @@ def restart_consumer(instance, *, proxy_url: str, reason: str, confirm_live: boo
             raise RuntimeError(f"--confirm-live required for {instance.instance_id}")
         command.append("--confirm-live")
     env = os.environ.copy()
-    env.update({
-        "WEATHER_DATA_FEED_MARKET_PROXY": proxy_url,
-        "WEATHER_PREDICT_MARKET_PROXY": proxy_url,
-        "POLYMARKET_PROXY_URL": proxy_url,
-        "LOW_PRICE_YES_INTEGRATED_TAIL_MARKET_PROXY": proxy_url,
-        "WEATHER_KNMI_LADDER_MARKET_PROXY": proxy_url,
-        "WEATHER_KOREA_FIRST_SEEN_MARKET_PROXY": proxy_url,
-        "WEATHER_EVENT_LADDER_MARKET_PROXY": proxy_url,
-        "WEATHER_STALE_BOOK_MARKET_PROXY": proxy_url,
-    })
+    env["WEATHER_DATA_FEED_MARKET_PROXY"] = proxy_url
     result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
     try:
         controller = json.loads(result.stdout)
@@ -232,7 +234,7 @@ def main() -> int:
     switch.add_argument("--confirm-live", action="store_true")
     switch.add_argument("--reason", required=True)
     auto = sub.add_parser("auto")
-    auto.add_argument("--candidates", nargs="+", default=["http://127.0.0.1:7890", "http://127.0.0.1:7897"])
+    auto.add_argument("--candidates", nargs="+")
     auto.add_argument("--apply", action="store_true")
     auto.add_argument("--confirm-live", action="store_true")
     auto.add_argument("--reason", required=True)
@@ -247,7 +249,8 @@ def main() -> int:
                      and not chain["blocking_consumers"]) else 1
 
     if args.command == "auto":
-        tested = [(validate_proxy_url(url), probe(validate_proxy_url(url))) for url in args.candidates]
+        candidate_urls = args.candidates or [read_state()["proxy_url"]]
+        tested = [(validate_proxy_url(url), probe(validate_proxy_url(url))) for url in candidate_urls]
         target = next((url for url, result in tested if result["ok"]), "")
         if not target:
             raise SystemExit(f"no healthy proxy candidate: {tested}")

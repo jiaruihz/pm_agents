@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.platform.clients.polymarket_data import PolymarketDataClient
+from scripts.ops.weather_market_proxy import market_proxy_url as shared_market_proxy_url
 from src.strategies.weather_edge_v1.tools.execution_pipeline import cancel_log_path_for_live_out
 
 RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/low_price_yes_take_profit_exit_v1"
@@ -154,35 +155,8 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def market_proxy_url() -> str:
-    proxy = os.getenv("LOW_PRICE_YES_LOTTERY_MARKET_PROXY", "").strip()
-    if proxy.lower() in {"", "direct", "none", "off", "0"}:
-        return ""
-    return proxy
-
-
-def maybe_failover_market_proxy(*, timeout_sec: float) -> dict[str, Any]:
-    proxy = market_proxy_url()
-    if not proxy:
-        return {"status": "skipped", "reason": "direct_connection"}
-    script = ROOT / "scripts/ops/weather_market_proxy_failover.py"
-    if not script.exists():
-        return {"status": "skipped", "reason": "missing_failover_script"}
-    env = os.environ.copy()
-    env.setdefault("WEATHER_DATA_FEED_MARKET_PROXY", proxy)
-    proc = subprocess.run(
-        [sys.executable, str(script), "--proxy", proxy, "--timeout-sec", str(max(5, int(timeout_sec)))],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        timeout=max(20.0, float(timeout_sec) + 15.0),
-        env=env,
-    )
-    return {
-        "status": "ok" if proc.returncode == 0 else "failed",
-        "returncode": proc.returncode,
-        "stdout_tail": (proc.stdout or "").strip().splitlines()[-1:] or [],
-        "stderr": (proc.stderr or "").strip()[:240],
-    }
+    explicit = os.getenv("LOW_PRICE_YES_LOTTERY_MARKET_PROXY")
+    return shared_market_proxy_url(explicit if explicit is not None else None)
 
 
 def fetch_book(token_id: str, *, timeout_sec: float) -> dict[str, Any]:
@@ -201,31 +175,14 @@ def fetch_book_with_retry(
     timeout_sec: float,
     retries: int,
     retry_sleep_sec: float,
-    failover_on_timeout: bool,
 ) -> dict[str, Any]:
     attempts = max(1, int(retries) + 1)
     last_exc: Exception | None = None
-    did_failover = False
     for attempt in range(1, attempts + 1):
         try:
             return fetch_book(token_id, timeout_sec=timeout_sec)
         except (httpx.TimeoutException, httpx.ConnectError) as exc:
             last_exc = exc
-            if failover_on_timeout and not did_failover:
-                did_failover = True
-                try:
-                    failover = maybe_failover_market_proxy(timeout_sec=timeout_sec)
-                    print(
-                        "[low_price_yes_take_profit] book_fetch_failover "
-                        f"attempt={attempt} status={failover.get('status')} token_id={token_id}",
-                        flush=True,
-                    )
-                except Exception as failover_exc:  # noqa: BLE001
-                    print(
-                        "[low_price_yes_take_profit] book_fetch_failover_failed "
-                        f"{type(failover_exc).__name__}: {failover_exc}",
-                        flush=True,
-                    )
             if attempt < attempts and retry_sleep_sec > 0:
                 time.sleep(float(retry_sleep_sec))
         except Exception:
@@ -590,7 +547,6 @@ def evaluate_token(
             timeout_sec=float(args.book_timeout_sec),
             retries=int(args.book_retries),
             retry_sleep_sec=float(args.book_retry_sleep_sec),
-            failover_on_timeout=bool(args.book_failover_on_timeout),
         )
     except Exception as exc:  # noqa: BLE001
         return {
@@ -920,7 +876,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--book-timeout-sec", type=float, default=10.0)
     parser.add_argument("--book-retries", type=int, default=1)
     parser.add_argument("--book-retry-sleep-sec", type=float, default=0.4)
-    parser.add_argument("--book-failover-on-timeout", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--executor-timeout-sec", type=float, default=180.0)
     parser.add_argument("--interval-seconds", type=float, default=300.0)
     parser.add_argument("--cancel-log", default="")

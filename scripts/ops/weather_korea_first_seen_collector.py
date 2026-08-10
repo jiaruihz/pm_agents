@@ -39,6 +39,7 @@ from weather_data_feed.korea_amos_features import (  # noqa: E402
 )
 from weather_data_feed.physical_features import forecast_window_features  # noqa: E402
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from scripts.ops.weather_market_proxy import market_proxy_url  # noqa: E402
 
 
 PRODUCTION_SPEC = load_production_spec()
@@ -677,7 +678,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument(
         "--market-proxy",
-        default=os.environ.get("WEATHER_DATA_FEED_MARKET_PROXY", "http://127.0.0.1:7890"),
+        default=market_proxy_url(None),
     )
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-seconds", type=float, default=5.0)

@@ -24,11 +24,13 @@ import httpx
 
 REPO = Path(__file__).resolve().parents[3]
 WEATHER_PREDICT = Path("/Users/deepsleep/projects/weather-predict")
+sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(WEATHER_PREDICT))
+from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
 
 from city_pools import FULL_CITY_CONFIGS  # noqa: E402
 
-PROXIES = ["http://127.0.0.1:7897", "http://127.0.0.1:7890"]
+PROXIES = [production_market_proxy_url()]
 GAMMA = "https://gamma-api.polymarket.com"
 
 MONTHS = [

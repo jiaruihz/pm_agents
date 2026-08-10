@@ -509,7 +509,7 @@ def main() -> int:
     parser.add_argument("--end-date", default="2026-07-17")
     parser.add_argument("--max-fast-age-min", type=float, default=30.0)
     parser.add_argument("--max-next-metar-min", type=float, default=90.0)
-    parser.add_argument("--wu-proxy", default="http://127.0.0.1:7897")
+    parser.add_argument("--wu-proxy", default=os.environ.get("WEATHER_DATA_FEED_WEATHER_PROXY", ""))
     parser.add_argument("--wu-timeout-sec", type=float, default=20.0)
     parser.add_argument("--wu-workers", type=int, default=6)
     parser.add_argument(

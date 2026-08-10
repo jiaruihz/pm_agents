@@ -90,7 +90,7 @@ if [[ "$RUN_MODE" == "--shadow" ]]; then
   LOW_PRICE_YES_LOTTERY_NO_TELEGRAM=1
 fi
 
-LOW_PRICE_YES_LOTTERY_MARKET_PROXY="${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}}"
+LOW_PRICE_YES_LOTTERY_MARKET_PROXY="$(weather_resolve_market_proxy "$ROOT")"
 export LOW_PRICE_YES_LOTTERY_MARKET_PROXY
 weather_export_market_proxy_env "$LOW_PRICE_YES_LOTTERY_MARKET_PROXY"
 
@@ -115,7 +115,6 @@ args=(
   --max-candidates-per-run "$LOW_PRICE_YES_LOTTERY_MAX_CANDIDATES"
   --book-timeout-sec "$LOW_PRICE_YES_LOTTERY_BOOK_TIMEOUT_SECONDS"
   --book-retries "$LOW_PRICE_YES_LOTTERY_BOOK_RETRIES"
-  --book-failover-on-timeout
   --token-resolution-timeout-sec "$LOW_PRICE_YES_LOTTERY_TOKEN_TIMEOUT_SECONDS"
   --taker-fee-rate "$LOW_PRICE_YES_LOTTERY_TAKER_FEE_RATE"
   --maker-rebate-rate "$LOW_PRICE_YES_LOTTERY_MAKER_REBATE_RATE"

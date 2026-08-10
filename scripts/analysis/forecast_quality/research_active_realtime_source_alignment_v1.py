@@ -13,6 +13,7 @@ import concurrent.futures
 import csv
 import json
 import math
+import os
 import sqlite3
 import statistics
 import sys
@@ -451,7 +452,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start-date", default="2026-07-08")
     parser.add_argument("--end-date", default="2026-07-17")
-    parser.add_argument("--wu-proxy", default="http://127.0.0.1:7897")
+    parser.add_argument("--wu-proxy", default=os.environ.get("WEATHER_DATA_FEED_WEATHER_PROXY", ""))
     parser.add_argument("--wu-timeout-sec", type=float, default=25.0)
     parser.add_argument("--wu-workers", type=int, default=8)
     args = parser.parse_args()

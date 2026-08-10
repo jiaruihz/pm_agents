@@ -20,8 +20,8 @@ runtime work after disk I/O errors and an ext4 emergency read-only remount.
   `~/projects/weather_data_feed_service_runtime`
 - Strategy runtime is written to:
   `runtime/weather_edge_v1/regime_routed_no_tiny_live_v1`
-- Polymarket market traffic uses an explicit, replaceable market proxy such as:
-  `WEATHER_DATA_FEED_MARKET_PROXY=http://127.0.0.1:7890`
+- Polymarket market traffic resolves the controller-owned endpoint from
+  `production.yaml` and `market_proxy.json`; consumer-local endpoints are forbidden.
 - Weather source traffic stays direct unless a separate weather proxy is
   explicitly configured.
 
@@ -52,8 +52,7 @@ LaunchAgents are disabled at both filename and launchd override layers.
 `verify` should show:
 
 - mihomo `🙂 TAGSS` selected to a cheap node such as `🇯🇵 日本 01丨1x JP`
-- N100 reverse tunnel, if enabled:
-  `127.0.0.1:18089 -> Mac 127.0.0.1:7890`
+- any historical N100 reverse tunnel is outside the current production contract
 - observation cache with about `34/34 OK`
 - latest targeted snapshot with hundreds of rows
 - strategy `latest_summary.json`
@@ -68,25 +67,18 @@ Current healthy example:
 
 ## Proxy Policy
 
-Do not rely on global `HTTP_PROXY` / `HTTPS_PROXY` for the collector. The data
-feed code uses `trust_env=false` in the market path to avoid accidental global
-proxy burn. Configure market proxy explicitly in:
-
-- `/Users/deepsleep/projects/weather_data_feed_service/.env`
-- `/Users/deepsleep/projects/pm_agents/.env`
-
-Required keys. The port is configurable; use whichever local proxy endpoint has
-been verified on a cheap node and can reach Gamma/CLOB:
+Do not configure consumer-local proxy endpoints in `.env`. Read or switch the
+single controller-owned endpoint with:
 
 ```bash
-WEATHER_DATA_FEED_MARKET_PROXY=http://127.0.0.1:7890
-WEATHER_PREDICT_MARKET_PROXY=http://127.0.0.1:7890
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py status
+.venv/bin/python scripts/ops/weather_market_proxy_ctl.py switch URL --reason REASON
 ```
 
 Live order submission uses the same market proxy contract. The common executor
 `scripts/ops/weather_order_executor.py` maps `WEATHER_DATA_FEED_MARKET_PROXY`
 into `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` before constructing the CLOB
-client, so strategy runners should not carry their own unrelated proxy path.
+client, so strategy runners must not carry their own unrelated proxy path.
 Set `WEATHER_EXECUTOR_MARKET_PROXY=direct` only for an intentional direct CLOB
 test.
 
