@@ -326,7 +326,7 @@ def annotate_settlement_labels(
 
 def load_wu_daily_max(path: Path, profiles: dict[str, dict[str, Any]]) -> dict[tuple[str, str], int]:
     output: dict[tuple[str, str], int] = {}
-    for row in iter_jsonl(path):
+    for row in iter_jsonl(path, partition_filename="wu_history_latency.jsonl"):
         city = canonical_city(row.get("city"))
         temp_c = safe_float(row.get("temp_c"))
         target_date = str(row.get("target_date") or "")
@@ -810,7 +810,7 @@ def main() -> int:
         args.max_fast_age_min,
     )
     events = build_event_comparison(fast, awc, args.max_next_metar_min)
-    wu_max = load_wu_daily_max(runtime / "output/wu_history_latency/wu_history_latency.jsonl", profiles)
+    wu_max = load_wu_daily_max(runtime / "output/wu_history_latency", profiles)
     official_max = official_daily_max(synoptic, {"Istanbul", "TelAviv"})
     winners, ladders = load_market_ladders(Path(args.db_path))
     annotate_market_brackets(events, ladders)

@@ -7,12 +7,19 @@ import argparse
 import csv
 import json
 import statistics
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths  # noqa: E402
+
+
 DEFAULT_RUNTIME_ROOTS = [
     Path("/Volumes/jrs/weather_data_feed_service_runtime"),
     Path("~/projects/weather_data_feed_service_runtime").expanduser(),
@@ -64,13 +71,19 @@ def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
         records = payload.get("records") if isinstance(payload, dict) else payload
         return [row for row in records or [] if isinstance(row, dict)]
     rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            if isinstance(row, dict):
-                rows.append(row)
+    paths = dated_jsonl_paths(
+        path,
+        filename="runway_observations.jsonl",
+        allow_missing=True,
+    )
+    for source_path in paths:
+        with source_path.open(encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if isinstance(row, dict):
+                    rows.append(row)
     return rows
 
 
@@ -205,7 +218,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     runtime_root = default_runtime_root()
-    parser.add_argument("--runway-path", default=str(runtime_root / "output/runway_observations/runway_observations.jsonl"))
+    parser.add_argument("--runway-path", default=str(runtime_root / "output/runway_observations"))
     parser.add_argument("--source-events-path", default=str(runtime_root / "output/source_events/sources.jsonl"))
     parser.add_argument("--out-dir", default=str(ROOT / "docs/analysis/2026-07/generated/runway_metar_wu_alignment_v1"))
     parser.add_argument("--max-abs-lag-min", type=float, default=45.0)
