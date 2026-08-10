@@ -1157,12 +1157,11 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         ingested_at_utc=ingested_at,
     )
     write_json(state_path, lineage_state)
-    capture_day = (
-        str(versions[0].get("available_at_utc") or "")[:10]
-        if versions
-        else datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    )
-    append_jsonl(output_dir / "forecast_versions.jsonl", versions)
+    # Physical partitions follow the collector capture boundary.  A reused
+    # provider version may have an older available_at_utc, so deriving the
+    # shard from the first version silently writes current captures into a
+    # previous day's file.
+    capture_day = record_day
     append_jsonl(
         output_dir / capture_day / "forecast_versions.jsonl", versions
     )
@@ -1171,9 +1170,7 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         versions,
         read_json(contract_state_path, {}),
     )
-    append_jsonl(output_dir / "forecast_run_rows_v2.jsonl", contract_rows)
     append_jsonl(output_dir / capture_day / "forecast_run_rows_v2.jsonl", contract_rows)
-    append_jsonl(output_dir / "forecast_batches_v2.jsonl", contract_batches)
     append_jsonl(output_dir / capture_day / "forecast_batches_v2.jsonl", contract_batches)
     write_json(contract_state_path, contract_state)
     expected_model_keys = {
@@ -1186,7 +1183,6 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         batch_id=batch_id,
         expected_model_keys=expected_model_keys,
     )
-    append_jsonl(output_dir / "forecast_batch_summaries.jsonl", summaries)
     append_jsonl(output_dir / capture_day / "forecast_batch_summaries.jsonl", summaries)
     target_dates = sorted(
         {

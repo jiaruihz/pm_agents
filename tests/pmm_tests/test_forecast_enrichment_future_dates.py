@@ -106,16 +106,26 @@ def test_forecast_versions_keep_each_target_model_capture(tmp_path) -> None:
     )
 
     payload = {
-        "generated_at_utc": "2026-07-28T00:00:04+00:00",
+        # The capture is on the following UTC day while the provider evidence
+        # remains available on 7/28.  Physical storage follows capture time.
+        "generated_at_utc": "2026-07-29T00:00:04+00:00",
         "records": [row],
     }
     write_outputs(payload, tmp_path)
     write_outputs(payload, tmp_path)
 
     version_lines = (
-        tmp_path / "2026-07-28" / "forecast_versions.jsonl"
+        tmp_path / "2026-07-29" / "forecast_versions.jsonl"
     ).read_text(encoding="utf-8").splitlines()
     assert len(version_lines) == 8
+    assert not (tmp_path / "2026-07-28" / "forecast_versions.jsonl").exists()
+    for aggregate_name in (
+        "forecast_versions.jsonl",
+        "forecast_run_rows_v2.jsonl",
+        "forecast_batches_v2.jsonl",
+        "forecast_batch_summaries.jsonl",
+    ):
+        assert not (tmp_path / aggregate_name).exists()
     latest = (
         tmp_path / "latest_versions.json"
     ).read_text(encoding="utf-8")
