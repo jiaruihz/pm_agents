@@ -9,6 +9,12 @@ import pytest
 from scripts.ops import weather_lmvm_forecast_repricing_shadow_v1 as shadow
 
 
+def test_default_forward_input_is_current_strategy_snapshot_root() -> None:
+    assert len(shadow.DEFAULT_SNAPSHOTS) == 1
+    assert "strategy_snapshots/paper_snapshots" in str(shadow.DEFAULT_SNAPSHOTS[0])
+    assert "full_ladder_output" not in str(shadow.DEFAULT_SNAPSHOTS[0])
+
+
 def write_snapshot(
     root: Path,
     stamp: str,
@@ -161,6 +167,83 @@ def test_maker_quote_records_visible_queue_without_claiming_fill() -> None:
     assert quote["maker_limit_price"] == 0.20
     assert quote["visible_queue_ahead_shares"] == 14.0
     assert quote["maker_fill_status"] == "not_observable_without_order_or_trade_prints"
+
+
+def test_maker_quote_joins_best_bid_even_when_spread_is_wide() -> None:
+    quote = shadow.maker_quote(
+        {
+            "yes_bid": 0.02,
+            "yes_ask": 0.08,
+            "yes_bid_size": 25.0,
+            "tick_size": 0.001,
+        }
+    )
+    assert quote["maker_limit_price"] == 0.02
+    assert quote["visible_queue_ahead_shares"] == 25.0
+
+
+def test_completion_policy_builds_zero_notional_maker_trigger() -> None:
+    def state(key: str, epoch: float, model: tuple[float, float, float]) -> dict:
+        return {
+            "snapshot_id": f"snapshot-{key}",
+            "snapshot_ts_utc": "2026-08-10T10:00:00Z",
+            "decision_ts_utc": "2026-08-10T10:00:00Z",
+            "decision_epoch": epoch,
+            "clock_lineage_status": "collector_exact_joined_full_ladder_v1",
+            "source_path": f"/fixture/{key}.json",
+            "city": "London",
+            "target_date": "2026-08-11",
+            "event_slug": "london-aug-11",
+            "market_timezone": "Europe/London",
+            "forecast_source": "fixture",
+            "forecast_model": "fixture",
+            "model_version": "fixture-v1",
+            "forecast_state_key": key,
+            "lead_days": 1,
+            "rung_count": 3,
+            "rungs": [
+                {
+                    "condition_id": f"c{index}",
+                    "bracket": str(20 + index),
+                    "question": str(20 + index),
+                    "yes_token_id": f"token-{index}",
+                    "model_prob": model[index],
+                    "market_prob": (0.2, 0.4, 0.4)[index],
+                    "yes_bid": (0.10, 0.28, 0.28)[index],
+                    "yes_ask": (0.30, 0.30, 0.30)[index],
+                    "yes_bid_size": 10.0,
+                    "yes_ask_size": 10.0,
+                    "tick_size": 0.001,
+                }
+                for index in range(3)
+            ],
+        }
+
+    bundle = {
+        "schema_version": "forecast_repricing_position_policy_v2",
+        "model_id": "forecast_repricing_full_ladder_position_v1",
+        "primary_policy": "full_ladder_completion_v1",
+        "maker_quote_ttl_min": 60,
+        "completion_policy": {
+            "buffer_per_set": 0.01,
+            "requested_shares": 5.0,
+            "hedge_slippage_per_leg": 0.001,
+        },
+    }
+    built = shadow.build_update(
+        state("before", 1_000.0, (0.2, 0.5, 0.3)),
+        state("after", 1_600.0, (0.4, 0.4, 0.2)),
+        bundle,
+    )
+    assert built is not None
+    update, bundles, intent, open_candidate = built
+    assert update["decision"] == "POST_MAKER"
+    assert len(bundles) == 3
+    assert intent is not None
+    assert intent["requested_size"] == 0.0
+    assert intent["metadata"]["completion_hedge_after_actual_fill"] is True
+    assert open_candidate is not None
+    assert open_candidate["maker_limit_price"] == 0.10
 
 
 def test_current_snapshot_adapter_joins_canonical_full_ladder(

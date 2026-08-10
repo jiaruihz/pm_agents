@@ -47,9 +47,11 @@ from weather_data_feed.information_events import (  # noqa: E402
     build_information_event,
     canonical_json_hash,
 )
+from weather_data_feed.production_paths import current_strategy_snapshots  # noqa: E402
 from weather_model_evaluation.forecast_repricing_position import (  # noqa: E402
     load_position_policy,
     score_runtime_entry,
+    score_runtime_pending_order,
     score_runtime_position,
 )
 from weather_model_evaluation.first_seen_event_ladder_panel import (  # noqa: E402
@@ -63,7 +65,7 @@ SCHEMA_VERSION = "weather_lmvm_forecast_repricing_shadow_v1"
 CLOCK_CONTRACT_VERSION = "weather_orderbook_capture_v3_available_clock"
 STRATEGY_KEY = "lmvm_forecast_innovation_single_yes_v1"
 POLICY_ID = "delta_model_minus_delta_market_argmax_v1"
-POSITION_POLICY_ID = "full_ladder_maker_fill_gated_position_v1"
+POSITION_POLICY_ID = "full_ladder_antitoxic_maker_position_v1"
 FEATURE_SET_ID = canonical_json_hash(
     [
         "model_probability_before_after",
@@ -76,10 +78,7 @@ FEATURE_SET_ID = canonical_json_hash(
 PRODUCTION_SPEC = load_production_spec()
 DEFAULT_RUNTIME = PRODUCTION_SPEC.data_feed_runtime_root
 DEFAULT_OUTPUT = DEFAULT_RUNTIME / "output/lmvm_forecast_repricing_shadow_v1"
-DEFAULT_SNAPSHOTS = (
-    PRODUCTION_SPEC.historical_full_ladder_root() / "paper_snapshots",
-    PRODUCTION_SPEC.resolved_historical_paper_snapshot_root(),
-)
+DEFAULT_SNAPSHOTS = (current_strategy_snapshots(),)
 
 
 def parse_clock_exact_snapshot_file(
@@ -408,7 +407,10 @@ def maker_quote(rung: dict[str, Any]) -> dict[str, Any]:
     bid = float(rung["yes_bid"])
     ask = float(rung["yes_ask"])
     tick = finite(rung.get("tick_size")) or 0.001
-    limit_price = max(bid, min(bid + tick, ask - tick))
+    # The historical trade-through proxy is defined at the observed best bid.
+    # Joining that queue keeps runtime and replay prices identical; improving
+    # inside the spread is a separate execution experiment.
+    limit_price = bid
     joins_best = math.isclose(limit_price, bid, abs_tol=tick / 10.0)
     return {
         "maker_limit_price": round(limit_price, 6),
@@ -568,12 +570,26 @@ def build_update(
     if position_policy is not None:
         model_id = str(position_policy["model_id"])
         artifact_id = str(position_policy.get("_artifact_sha256") or model_id)
-        feature_set_id = canonical_json_hash(
-            {
-                "entry": position_policy["entry_features"],
-                "continuation": position_policy["continuation_features"],
-            }
-        )
+        if position_policy.get("primary_policy") == "full_ladder_completion_v1":
+            feature_set_id = canonical_json_hash(
+                {
+                    "primary_policy": "full_ladder_completion_v1",
+                    "completion_policy": position_policy.get("completion_policy"),
+                    "features": [
+                        "complete_native_ladder",
+                        "direct_yes_bid_ask_depth",
+                        "official_weather_taker_fee",
+                        "hedge_slippage_per_leg",
+                    ],
+                }
+            )
+        else:
+            feature_set_id = canonical_json_hash(
+                {
+                    "entry": position_policy["entry_features"],
+                    "continuation": position_policy["continuation_features"],
+                }
+            )
     bundles = []
     selected_candidate: SignalCandidate | None = None
     for rung in paired:
@@ -652,6 +668,24 @@ def build_update(
                 "forecast_innovation_score": rung["forecast_innovation_score"],
                 "predicted_relative_markout": finite(rung.get("predicted_relative_markout")),
                 "predicted_entry_net_value": finite(rung.get("predicted_entry_net_value")),
+                "predicted_touch_probability": finite(
+                    rung.get("predicted_touch_probability")
+                ),
+                "predicted_touch_conditional_pnl": finite(
+                    rung.get("predicted_touch_conditional_pnl")
+                ),
+                "predicted_fill_adjusted_pnl": finite(
+                    rung.get("predicted_fill_adjusted_pnl")
+                ),
+                "entry_completion_cost_1tick_per_hedge_leg": finite(
+                    rung.get("entry_completion_cost_1tick_per_hedge_leg")
+                ),
+                "entry_completion_margin_1tick_per_hedge_leg": finite(
+                    rung.get("entry_completion_margin_1tick_per_hedge_leg")
+                ),
+                "entry_completion_depth_shares": finite(
+                    rung.get("entry_completion_depth_shares")
+                ),
                 "signed_mode_distance": finite(rung.get("signed_mode_distance")),
                 "neighbor_propagation": finite(rung.get("neighbor_propagation")),
                 "neighbor_lead_lag": finite(rung.get("neighbor_lead_lag")),
@@ -704,6 +738,10 @@ def build_update(
     if selected_candidate is None or not selected_candidate.token_id or selected is None:
         return update, bundles, None, None
     selected_quote = maker_quote(selected)
+    completion_primary = (
+        position_policy is not None
+        and position_policy.get("primary_policy") == "full_ladder_completion_v1"
+    )
     intent = TradeIntent.create(
         candidate_id=selected_candidate.candidate_id,
         condition_id=str(selected_candidate.condition_id),
@@ -711,9 +749,20 @@ def build_update(
         side="BUY",
         requested_size=0.0,
         sizing_profile="zero_notional_v1",
-        execution_profile="single_yes_maker_first_repricing_v1",
+        execution_profile=(
+            "full_ladder_completion_maker_trigger_v1"
+            if completion_primary
+            else "single_yes_antitoxic_best_bid_v1"
+        ),
         max_cost=float(selected_quote["maker_limit_price"]),
-        ttl_seconds=180 * 60,
+        ttl_seconds=int(
+            60
+            * float(
+                position_policy.get("maker_quote_ttl_min", 60)
+                if position_policy is not None
+                else 60
+            )
+        ),
         dedupe_key=f"{STRATEGY_KEY}|{selected_candidate.candidate_id}",
         exposure_bucket=f"{current['city']}|{current['target_date']}",
         mode="zero_notional",
@@ -724,6 +773,7 @@ def build_update(
             "maker_fill_requires_trade_or_order_evidence": True,
             "position_opens_only_after_actual_fill": True,
             "conditional_position_telemetry": position_policy is not None,
+            "completion_hedge_after_actual_fill": completion_primary,
         },
     )
     update.update({
@@ -732,6 +782,11 @@ def build_update(
         "selected_bracket": selected_candidate.bracket,
         "selected_innovation_score": selected["forecast_innovation_score"],
         "predicted_entry_net_value": selected.get("predicted_entry_net_value"),
+        "predicted_touch_probability": selected.get("predicted_touch_probability"),
+        "predicted_touch_conditional_pnl": selected.get(
+            "predicted_touch_conditional_pnl"
+        ),
+        "predicted_fill_adjusted_pnl": selected.get("predicted_fill_adjusted_pnl"),
     })
     open_candidate = {
         "candidate_id": selected_candidate.candidate_id,
@@ -788,7 +843,25 @@ def markouts_for_state(
         continuation_value = None
         observed_relative = None
         neighbor_propagation = None
+        pending_order_action = "MARKOUT_ONLY"
+        pending_order_reason = "legacy_quote_telemetry"
+        rescored_touch_probability = None
+        rescored_touch_conditional_pnl = None
+        rescored_fill_adjusted_pnl = None
         if position_policy is not None and candidate.get("position_policy_enabled"):
+            pending_decision = score_runtime_pending_order(
+                candidate,
+                list(rungs.values()),
+                position_policy,
+                elapsed_minutes=elapsed,
+            )
+            pending_order_action = pending_decision.action
+            pending_order_reason = pending_decision.reason
+            rescored_touch_probability = pending_decision.predicted_touch_probability
+            rescored_touch_conditional_pnl = (
+                pending_decision.predicted_touch_conditional_pnl
+            )
+            rescored_fill_adjusted_pnl = pending_decision.predicted_fill_adjusted_pnl
             decision = score_runtime_position(
                 candidate,
                 list(rungs.values()),
@@ -801,6 +874,11 @@ def markouts_for_state(
             observed_relative = decision.observed_relative_markout
             neighbor_propagation = decision.neighbor_propagation
             if decision.action == "EXIT":
+                expired.append(candidate_id)
+            elif (
+                pending_decision.action == "CANCEL_MAKER"
+                and ask > maker_price
+            ):
                 expired.append(candidate_id)
         output.append(
             {
@@ -824,6 +902,11 @@ def markouts_for_state(
                 "maker_entry_to_taker_exit_net_per_share_before_maker_fee": bid - exit_fee - maker_price,
                 "position_action": position_action,
                 "position_reason": position_reason,
+                "pending_order_action": pending_order_action,
+                "pending_order_reason": pending_order_reason,
+                "rescored_touch_probability": rescored_touch_probability,
+                "rescored_touch_conditional_pnl": rescored_touch_conditional_pnl,
+                "rescored_fill_adjusted_pnl": rescored_fill_adjusted_pnl,
                 "predicted_incremental_exit_value": continuation_value,
                 "observed_rung_relative_markout": observed_relative,
                 "neighbor_propagation": neighbor_propagation,
@@ -968,7 +1051,7 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
             "record_type": "lmvm_position_decision",
         }
         for row in markouts
-        if row.get("position_action") in {"HOLD", "EXIT"}
+        if row.get("position_action") in {"HOLD", "EXIT", "HEDGE"}
     ]
     position_decisions.extend(
         {
@@ -983,7 +1066,14 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
             "snapshot_id": row["snapshot_id"],
             "position_action": row["decision"],
             "position_reason": (
-                "maker_fill_gated_entry_score" if row["decision"] == "POST_MAKER"
+                (
+                    "full_ladder_completion_margin"
+                    if getattr(args, "position_policy", None) is not None
+                    and getattr(args, "position_policy").get("primary_policy")
+                    == "full_ladder_completion_v1"
+                    else "maker_fill_gated_entry_score"
+                )
+                if row["decision"] == "POST_MAKER"
                 else "no_positive_maker_conditional_value"
             ),
             "conditional_maker_fill_position": row["decision"] == "POST_MAKER",
@@ -1025,7 +1115,13 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
             if getattr(args, "position_policy", None) is None
             else getattr(args, "position_policy")["model_id"]
         ),
-        "position_semantics": "conditional_until_actual_maker_fill",
+        "position_semantics": (
+            "actual_fill_then_immediate_all-other-YES-completion"
+            if getattr(args, "position_policy", None) is not None
+            and getattr(args, "position_policy").get("primary_policy")
+            == "full_ladder_completion_v1"
+            else "conditional_until_actual_maker_fill"
+        ),
         "signal_funnel_unit": "forecast_update_city_target_model_stream",
         "evidence_funnel_unit": "candidate_snapshot_markout",
     }

@@ -534,17 +534,29 @@ def attach_markouts(candidates: pd.DataFrame, histories: dict[str, list[Quote]])
         output = dict(candidate)
         history = histories.get(str(candidate["condition_id"]), [])
         entry_cost = float(candidate["entry_ask"]) + float(candidate["entry_fee_per_share"])
+        entry_epoch = float(candidate["snapshot_epoch"])
+        entry_bid = finite(candidate.get("entry_bid"))
         for horizon in HORIZONS_MIN:
-            quote, gap = first_quote_after(history, float(candidate["snapshot_epoch"]), horizon)
+            quote, gap = first_quote_after(history, entry_epoch, horizon)
             prefix = f"h{horizon}"
             output[f"{prefix}_quote_gap_min"] = gap
             if quote is None:
                 for suffix in (
-                    "bid", "bid_size", "exit_fee_per_share", "net_markout_per_share",
-                    "net_markout_roi", "executable_shares", "net_pnl_usd",
+                    "bid", "ask", "bid_size", "ask_size", "exit_fee_per_share",
+                    "net_markout_per_share", "net_markout_roi", "executable_shares",
+                    "net_pnl_usd", "window_min_bid", "window_max_bid",
+                    "window_min_ask", "window_max_ask", "window_quote_count",
+                    "maker_bid_touch", "maker_bid_touch_after_min",
                 ):
                     output[f"{prefix}_{suffix}"] = math.nan
                 continue
+            window = [
+                item for item in history
+                if entry_epoch < item.epoch <= quote.epoch
+            ]
+            touched = [] if entry_bid is None else [
+                item for item in window if item.ask <= entry_bid + 1e-12
+            ]
             exit_fee = weather_fee_per_share(quote.bid)
             net = quote.bid - exit_fee - entry_cost
             sizes = [MIN_EXECUTABLE_SHARES]
@@ -554,14 +566,132 @@ def attach_markouts(candidates: pd.DataFrame, histories: dict[str, list[Quote]])
                 sizes.append(float(quote.bid_size))
             executable = max(0.0, min(sizes))
             output[f"{prefix}_bid"] = quote.bid
+            output[f"{prefix}_ask"] = quote.ask
             output[f"{prefix}_bid_size"] = quote.bid_size
+            output[f"{prefix}_ask_size"] = quote.ask_size
             output[f"{prefix}_exit_fee_per_share"] = exit_fee
             output[f"{prefix}_net_markout_per_share"] = net
             output[f"{prefix}_net_markout_roi"] = net / entry_cost if entry_cost else math.nan
             output[f"{prefix}_executable_shares"] = executable
             output[f"{prefix}_net_pnl_usd"] = net * executable
+            output[f"{prefix}_window_min_bid"] = min(item.bid for item in window)
+            output[f"{prefix}_window_max_bid"] = max(item.bid for item in window)
+            output[f"{prefix}_window_min_ask"] = min(item.ask for item in window)
+            output[f"{prefix}_window_max_ask"] = max(item.ask for item in window)
+            output[f"{prefix}_window_quote_count"] = len(window)
+            output[f"{prefix}_maker_bid_touch"] = bool(touched)
+            output[f"{prefix}_maker_bid_touch_after_min"] = (
+                (touched[0].epoch - entry_epoch) / 60.0 if touched else math.nan
+            )
         rows.append(output)
     return pd.DataFrame(rows)
+
+
+def quote_at_epoch(
+    quotes: list[Quote], epoch: float, *, tolerance_seconds: float = 1.0
+) -> Quote | None:
+    epochs = [quote.epoch for quote in quotes]
+    index = bisect.bisect_left(epochs, epoch)
+    if index >= len(quotes):
+        return None
+    quote = quotes[index]
+    return quote if abs(quote.epoch - epoch) <= tolerance_seconds else None
+
+
+def attach_full_ladder_completion(
+    rungs: pd.DataFrame,
+    histories: dict[str, list[Quote]],
+    *,
+    requested_shares: float = MIN_EXECUTABLE_SHARES,
+    hedge_slippage_per_leg: float = 0.001,
+) -> pd.DataFrame:
+    """Price an exhaustive YES completion after one hypothetical maker fill.
+
+    ``touch_completion_*`` is conditional on the own rung's ask trading down
+    to the posted best bid within 60 minutes.  It remains a trade-through
+    proxy, not an inferred fill.  The other rungs are priced at the exact same
+    archived ladder epoch and pay taker fees plus one tick per hedge leg.
+    """
+
+    if rungs.empty:
+        return rungs.copy()
+    output = rungs.copy()
+    result_rows: list[dict[str, Any]] = []
+    for _, event in output.groupby("forecast_event_id", sort=False):
+        event_rows = event.to_dict(orient="records")
+        entry_ask_sum = sum(float(row["entry_ask"]) for row in event_rows)
+        entry_fee_sum = sum(
+            weather_fee_per_share(float(row["entry_ask"])) for row in event_rows
+        )
+        for row in event_rows:
+            item = dict(row)
+            own_ask = float(row["entry_ask"])
+            own_bid = float(row["entry_bid"])
+            entry_other_fee = entry_fee_sum - weather_fee_per_share(own_ask)
+            item["entry_completion_cost"] = (
+                own_bid + entry_ask_sum - own_ask + entry_other_fee
+            )
+            item["entry_completion_margin"] = 1.0 - item["entry_completion_cost"]
+            touch_after = finite(row.get("h60_maker_bid_touch_after_min"))
+            touch_fields = {
+                "touch_completion_epoch": math.nan,
+                "touch_completion_rungs": math.nan,
+                "touch_completion_other_ask_sum": math.nan,
+                "touch_completion_other_fee_sum": math.nan,
+                "touch_completion_cost": math.nan,
+                "touch_completion_margin": math.nan,
+                "touch_completion_cost_1tick_per_hedge_leg": math.nan,
+                "touch_completion_margin_1tick_per_hedge_leg": math.nan,
+                "touch_completion_depth_shares": math.nan,
+                "touch_completion_5share_executable": math.nan,
+                "touch_completion_5share_locked_pnl": math.nan,
+            }
+            if touch_after is not None:
+                touch_epoch = float(row["snapshot_epoch"]) + touch_after * 60.0
+                other_quotes: list[Quote] = []
+                complete = True
+                for other in event_rows:
+                    if str(other["condition_id"]) == str(row["condition_id"]):
+                        continue
+                    quote = quote_at_epoch(
+                        histories.get(str(other["condition_id"]), []), touch_epoch
+                    )
+                    if quote is None:
+                        complete = False
+                        break
+                    other_quotes.append(quote)
+                if complete and len(other_quotes) == len(event_rows) - 1:
+                    other_ask_sum = sum(quote.ask for quote in other_quotes)
+                    other_fee_sum = sum(
+                        weather_fee_per_share(quote.ask) for quote in other_quotes
+                    )
+                    cost = own_bid + other_ask_sum + other_fee_sum
+                    stressed_cost = cost + hedge_slippage_per_leg * len(other_quotes)
+                    depth_values = [
+                        quote.ask_size for quote in other_quotes if quote.ask_size is not None
+                    ]
+                    depth = min(depth_values) if len(depth_values) == len(other_quotes) else 0.0
+                    margin = 1.0 - cost
+                    stressed_margin = 1.0 - stressed_cost
+                    executable = depth >= requested_shares
+                    touch_fields = {
+                        "touch_completion_epoch": touch_epoch,
+                        "touch_completion_rungs": len(event_rows),
+                        "touch_completion_other_ask_sum": other_ask_sum,
+                        "touch_completion_other_fee_sum": other_fee_sum,
+                        "touch_completion_cost": cost,
+                        "touch_completion_margin": margin,
+                        "touch_completion_cost_1tick_per_hedge_leg": stressed_cost,
+                        "touch_completion_margin_1tick_per_hedge_leg": stressed_margin,
+                        "touch_completion_depth_shares": depth,
+                        "touch_completion_5share_executable": executable,
+                        "touch_completion_5share_locked_pnl": (
+                            stressed_margin * requested_shares if executable else math.nan
+                        ),
+                    }
+            item.update(touch_fields)
+            result_rows.append(item)
+    return pd.DataFrame(result_rows)
 
 
 def connect_ro(path: Path) -> sqlite3.Connection:

@@ -1,5 +1,22 @@
 # Forecast Repricing
 
+## Anti-toxic maker / full-ladder completion handoff（2026-08-10）
+
+旧 position policy 的 maker-fill-conditional `+36.39%` 已完成 fillability 体检：secondary holdout 48 个旧
+quotes 中 `0/48` 出现 best-bid trade-through；全体 D-1 的 trade-through rows 98% 以上 60m markout 为负。
+这说明旧收益来自未成交报价，不是可复制 maker edge。linear/HGB 能识别 toxicity（holdout ROC-AUC
+`0.84156`），但找不到成交后为正的单腿 slice。
+
+当前可运行 expression 改为 `full_ladder_completion_v1` zero-notional probe：一档 best-bid maker fill 后只在
+其余所有 YES asks + official fee + 1 tick/leg 仍把完整 set 成本压到 `$0.99` 以下时立即补齐；挂单期间每个
+完整 ladder checkpoint 重算并动态撤单。历史 development 33 quotes 仅1个 trade-through，触价时 completion
+ROI `-11.45%`；holdout 2 quotes/0 touch，所以 research gate 为 FAIL，不能 live。current raw 106 个真实 revision
+pairs/1,155 rungs 中最大 margin `-4.72c`，runner 正确输出0个 POST_MAKER。完整证据、artifact 和命令见
+[anti-toxic maker v1](2026-08/2026-08-10-forecast-repricing-antitoxic-maker-v1.md)。
+
+Runner 默认输入已从历史 `full_ladder_output` 修正为 current canonical `strategy_snapshots`。当前 WS 只覆盖
+intraday hot strip，D-1 candidate tape/queue/own-fill 仍缺；扩 subscription 前需显式部署确认。
+
 ## Full-ladder position handoff（2026-08-10）
 
 本 family 已有可加载的 `forecast_repricing_full_ladder_position_v1`：D-1 revision 后按

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -105,6 +106,86 @@ def test_horizon_quote_outside_tolerance_is_coverage_gap() -> None:
     )
     assert quote is None
     assert gap == 25.0
+
+
+def test_markout_window_records_future_ask_touch_without_claiming_fill() -> None:
+    entry = 1_000.0
+    histories = {
+        "condition-30": [
+            module.Quote(entry, 0.20, 0.24, 10.0, 10.0),
+            module.Quote(entry + 10 * 60, 0.18, 0.20, 8.0, 9.0),
+            module.Quote(entry + 30 * 60, 0.17, 0.19, 7.0, 8.0),
+        ]
+    }
+    candidates = pd.DataFrame(
+        [
+            {
+                "condition_id": "condition-30",
+                "snapshot_epoch": entry,
+                "entry_bid": 0.20,
+                "entry_ask": 0.24,
+                "entry_fee_per_share": module.weather_fee_per_share(0.24),
+                "entry_ask_size": 10.0,
+            }
+        ]
+    )
+
+    result = module.attach_markouts(candidates, histories).iloc[0]
+
+    assert result["h30_ask"] == pytest.approx(0.19)
+    assert result["h30_window_min_ask"] == pytest.approx(0.19)
+    assert bool(result["h30_maker_bid_touch"])
+    assert result["h30_maker_bid_touch_after_min"] == pytest.approx(10.0)
+    assert result["h30_window_quote_count"] == 2
+
+
+def test_full_ladder_completion_prices_other_rungs_at_touch_epoch() -> None:
+    entry = 1_000.0
+    histories = {
+        "c0": [
+            module.Quote(entry, 0.20, 0.30, 10.0, 10.0),
+            module.Quote(entry + 30 * 60, 0.18, 0.20, 8.0, 9.0),
+        ],
+        "c1": [
+            module.Quote(entry, 0.30, 0.35, 10.0, 10.0),
+            module.Quote(entry + 30 * 60, 0.31, 0.34, 8.0, 9.0),
+        ],
+        "c2": [
+            module.Quote(entry, 0.30, 0.35, 10.0, 10.0),
+            module.Quote(entry + 30 * 60, 0.32, 0.34, 8.0, 9.0),
+        ],
+    }
+    rows = pd.DataFrame(
+        [
+            {
+                "forecast_event_id": "event-1",
+                "condition_id": condition,
+                "snapshot_epoch": entry,
+                "entry_bid": bid,
+                "entry_ask": ask,
+                "h60_maker_bid_touch_after_min": 30.0 if condition == "c0" else math.nan,
+            }
+            for condition, bid, ask in (
+                ("c0", 0.20, 0.30),
+                ("c1", 0.30, 0.35),
+                ("c2", 0.30, 0.35),
+            )
+        ]
+    )
+
+    result = module.attach_full_ladder_completion(rows, histories)
+    first = result.loc[result["condition_id"].eq("c0")].iloc[0]
+    expected_cost = (
+        0.20
+        + 0.34
+        + 0.34
+        + module.weather_fee_per_share(0.34) * 2
+    )
+    assert first["touch_completion_cost"] == pytest.approx(expected_cost)
+    assert first["touch_completion_margin_1tick_per_hedge_leg"] == pytest.approx(
+        1.0 - expected_cost - 0.002
+    )
+    assert bool(first["touch_completion_5share_executable"])
 
 
 def test_probability_summary_bootstraps_paired_target_date_delta() -> None:

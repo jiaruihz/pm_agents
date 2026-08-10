@@ -734,6 +734,7 @@ def main() -> int:
     quote_history = base.quote_history(states)
     candidates = base.attach_markouts(candidates, quote_history)
     full_ladder = base.attach_markouts(full_ladder, quote_history)
+    full_ladder = base.attach_full_ladder_completion(full_ladder, quote_history)
     candidates, cutoff = assign_period(candidates)
     probabilities = base.score_probabilities(probability_rows, base.load_winners(args.db))
     summary = markout_summary(candidates, args.draws)
