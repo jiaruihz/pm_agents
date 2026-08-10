@@ -29,6 +29,25 @@ DEFAULT_GLOBAL_SINGLE_RUN_MODELS: tuple[str, ...] = (
     "jma_seamless",
 )
 
+SYNOPTIC_HOURLY_VARIABLES: tuple[str, ...] = (
+    "temperature_2m",
+    "dew_point_2m",
+    "surface_pressure",
+    "boundary_layer_height",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "temperature_925hPa",
+    "relative_humidity_925hPa",
+    "wind_speed_925hPa",
+    "wind_direction_925hPa",
+    "geopotential_height_925hPa",
+    "temperature_850hPa",
+    "relative_humidity_850hPa",
+    "wind_speed_850hPa",
+    "wind_direction_850hPa",
+    "geopotential_height_850hPa",
+)
+
 
 class ModelRunUnavailable(RuntimeError):
     """The archive does not contain the exact requested initialization."""
@@ -177,6 +196,148 @@ def fetch_single_run_batch(
         "raw_hash": stable_hash(data),
         "run": run,
         "models": list(models),
+    }
+
+
+def fetch_single_run_synoptic_batch(
+    locations: list[dict[str, Any]],
+    *,
+    run: str,
+    model: str,
+    forecast_hours: int = 24,
+    cache_dir: Path | None = None,
+    timeout_sec: float = 90.0,
+    max_attempts: int = 6,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Fetch PIT-reconstructable multilevel fields for spatial advection.
+
+    Locations may include several stencil points for the same city.  The
+    response order is guaranteed to match the request order and is preserved
+    in the immutable cache.
+    """
+
+    if not locations:
+        return [], {"cache_hit": False, "request_key": "", "raw_hash": ""}
+    if forecast_hours <= 0:
+        raise ValueError("forecast_hours must be positive")
+    request_key = stable_hash(
+        {
+            "purpose": "synoptic_advection_v1",
+            "run": run,
+            "locations": [
+                {
+                    "city": str(row["city"]),
+                    "point": str(row.get("point") or "center"),
+                    "latitude": float(row["latitude"]),
+                    "longitude": float(row["longitude"]),
+                }
+                for row in locations
+            ],
+            "model": model,
+            "forecast_hours": forecast_hours,
+            "hourly": list(SYNOPTIC_HOURLY_VARIABLES),
+        }
+    )
+    cache_path = (
+        cache_dir
+        / f"{run.replace(':', '')}_{model}_{request_key}.json"
+        if cache_dir is not None
+        else None
+    )
+    cache_hit = bool(cache_path and cache_path.exists())
+    if cache_hit:
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+    else:
+        params = {
+            "latitude": ",".join(
+                f"{float(row['latitude']):.6f}" for row in locations
+            ),
+            "longitude": ",".join(
+                f"{float(row['longitude']):.6f}" for row in locations
+            ),
+            "models": model,
+            "hourly": ",".join(SYNOPTIC_HOURLY_VARIABLES),
+            "run": run,
+            "forecast_hours": str(forecast_hours),
+            "temperature_unit": "celsius",
+            "wind_speed_unit": "ms",
+            "timezone": "UTC",
+        }
+        last_error: Exception | None = None
+        for attempt in range(max_attempts):
+            try:
+                response = httpx.get(
+                    OPEN_METEO_SINGLE_RUN_API,
+                    params=params,
+                    timeout=timeout_sec,
+                    trust_env=False,
+                    headers={
+                        "User-Agent": (
+                            "pm-agent-weather-synoptic-backfill/1.0"
+                        )
+                    },
+                )
+                if (
+                    "modelRunUnavailable" in response.text
+                    or "requested model run is not available"
+                    in response.text.lower()
+                ):
+                    raise ModelRunUnavailable(response.text.strip())
+                response.raise_for_status()
+                if not response.content.strip():
+                    raise RuntimeError("empty HTTP 200 response")
+                data = response.json()
+                break
+            except ModelRunUnavailable:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                if attempt + 1 >= max_attempts:
+                    raise RuntimeError(
+                        "synoptic single-run fetch failed "
+                        f"run={run} model={model}: {exc}"
+                    ) from exc
+                retry_after = 0.0
+                if (
+                    isinstance(exc, httpx.HTTPStatusError)
+                    and exc.response.status_code == 429
+                ):
+                    try:
+                        retry_after = float(
+                            exc.response.headers.get("Retry-After") or 0.0
+                        )
+                    except ValueError:
+                        retry_after = 0.0
+                time.sleep(
+                    max(retry_after, 5.0 * (2**attempt))
+                    if retry_after or (
+                        isinstance(exc, httpx.HTTPStatusError)
+                        and exc.response.status_code == 429
+                    )
+                    else 2**attempt
+                )
+        else:  # pragma: no cover
+            raise RuntimeError(str(last_error))
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(
+                json.dumps(data, ensure_ascii=False, separators=(",", ":")),
+                encoding="utf-8",
+            )
+    responses = data if isinstance(data, list) else [data]
+    if len(responses) != len(locations):
+        raise RuntimeError(
+            f"synoptic response count mismatch: {len(responses)} "
+            f"!= {len(locations)}"
+        )
+    return responses, {
+        "cache_hit": cache_hit,
+        "request_key": request_key,
+        "raw_hash": stable_hash(data),
+        "run": run,
+        "model": model,
+        "forecast_hours": forecast_hours,
+        "hourly": list(SYNOPTIC_HOURLY_VARIABLES),
     }
 
 

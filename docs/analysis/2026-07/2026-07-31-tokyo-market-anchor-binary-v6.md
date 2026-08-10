@@ -189,3 +189,15 @@ price/path hard filters，不修改 live runner、plan/order/fill/exit。
 ```
 
 产物：`docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/`。
+
+## 2026-08-01 forward 审计更正
+
+首个 frozen-forward target date 的 Tokyo journal 位于 runtime migration 前的
+`city_probability_shadow_v1`，不是之后才创建的 v2 output：actual 为 50 个决策
+checkpoints、100 条 YES/NO evaluations、4 个首次 position、1 胜 3 负。actual model
+Brier `0.06331`，差于同分母 market `0.01712`。首日 `06:00–09:02 JST` 因旧 consumer
+按 target date 猜 physical shard 而缺 official journal，故 forward coverage 只算
+partial；v2 InputCatalog 已改为 decision-clock 跨日定位。v2 的 61 条 Tokyo error 全部发生在
+评分窗口后，不代表白天漏跑。保存数据 PIT coverage replay 为60 checkpoints，4个 intent
+与 actual 逐项一致。完整证据见
+`docs/analysis/2026-08/2026-08-02-tokyo-probability-shadow-day-audit-v1.md`。

@@ -41,6 +41,22 @@ state-entry 仍差于 market。因此动作是继续 exact collector + zero-noti
 `7/17、7/18` 没有进入当前 weather-to-book settled join，`7/30` 在本次 artifact 冻结时
 没有 settlement。这些是 evidence coverage gap，不是信号筛除。
 
+### `/prices-history` 补充审计（只补 price proxy，不改上表 exact-book 口径）
+
+后续 v8 实测确认，CLOB `/prices-history` 可显著扩展历史 market-anchor，但它不是历史
+orderbook。`2026-04-01..07-15` 的 Tokyo 06:00–18:00 JST 天气分母共 7,632 checkpoints /
+106 dates；其中 6,691 rows / 104 dates 能映射 exact-current YES token，6,661 rows /
+103 dates 在假定 `observation+15m` 后 15 分钟内取得 price point。缺口是 5/17–18 无 event、
+5/19 market 在目标日结束后才创建。
+
+与现有 238 条 collector/archive book midpoint 重合校验中，220 条能取得 2 分钟内 prior
+history point；median absolute difference 0.1c，但 MAE 2.57c、p90 8.1c（快速重定价与
+proxy 语义共同影响）。因此它只能作为 `midpoint_proxy` 训练 market-offset correction、
+做同 rows probability baseline 或 repricing path；不能补 best bid/ask、spread、size/depth，
+不能计算 executable ROI，也不能把 `archive_reconstructed_plus_15m` 改写成 exact first-seen。
+完整审计与可复现脚本见
+[`generated/tokyo_clob_price_history_coverage_v8/report.md`](generated/tokyo_clob_price_history_coverage_v8/report.md)。
+
 相关 collector 当前仍在积累：`live_cross_observations` 中 Tokyo `jma_amedas`
 在 `2026-07-31T12:56:54Z` 记录了 observation `12:50Z` 的 exact
 `source_first_seen_at_utc` 和 raw hash；生产 orderbook 在本次检查时最新为
