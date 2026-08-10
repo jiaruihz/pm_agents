@@ -1339,7 +1339,7 @@ manifest was healthy with no findings or lost persistent sessions. Data-feed
 health is `warn` only for missing same-day state in four non-trading cities;
 all registered runtimes and the JRS context are healthy.
 
-## 20. 2026-08-07..Ongoing WCIR Helsinki Forecast-Path Drift
+## 20. 2026-08-07..2026-08-10 WCIR Helsinki Forecast-Path Drift
 
 The registered WCIR production checkout continued to read Helsinki forecast
 curves from the retired `targeted_output/forecast_hourly_curves` directory after
@@ -1370,7 +1370,18 @@ adapter cycle records an exception, and the production contract now accepts
 only `status=ok`. The still-running old build is therefore reported critical
 instead of being treated as healthy merely because its summary timestamp moves.
 
-## 21. 2026-07-28..Ongoing Retired Fast-Observation Consumer Gap
+Production checkout `a97d064d` was restarted through the controller at
+`2026-08-10T01:53:39Z`. The first completed production cycle at
+`2026-08-10T01:54:28.761232Z` reported `status=ok`, `errors=0`,
+`evaluated=8`, `scored=7` and `orders_submitted=0`; later cycles remained
+healthy. The loaded config resolves `forecast_curve_dir` to
+`/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves`.
+No new Helsinki information event arrived during the deployment validation
+window, so no new durable Helsinki bundle was fabricated merely to close the
+incident. The path outage ends at the first healthy production cycle; the next
+natural Helsinki event will be the first post-recovery durable bundle.
+
+## 21. 2026-07-28..2026-08-10 Retired Fast-Observation Consumer Gap
 
 The `weather_live_cross_observations` controller instance became the sole
 current high-frequency observation owner, but the broad stale-book collector,
@@ -1403,6 +1414,37 @@ freshness, while the Tmax summary must report healthy source-context inputs.
 Until the new builds are deployed, controller health intentionally reports
 both old runtimes critical rather than preserving their former false-OK state.
 
+The production integration is `a8113585` in the dedicated immutable checkout
+`pm_agents_fast_observation_prod`; controller contract commit `796753b1`
+separates these telemetry consumers from the checkout used by Core Carry live.
+The old shared checkout was returned to its loaded live SHA `0983b0d7`, so no
+live restart was needed and the final manifest has no loaded-SHA drift.
+
+Recovery evidence is:
+
+- at `2026-08-10T01:58:24Z`, Tmax reported `status=ok`, canonical
+  high-frequency input with 63 rows / 6 city-date keys, all three source-context
+  components `ok`, `paper_executor_only`, and `live_orders_written=0`;
+- broad stale-book and source-event health both reported canonical route and
+  fresh input, six current cities, `telemetry_only_no_orders`, and
+  `orders_submitted=0`;
+- the lowest-temperature ladder wrote the first two restored durable quote rows
+  for Seoul and Tokyo, with fresh CLOB fetches from
+  `2026-08-10T01:58:38.069358Z` through `01:58:44.282235Z`. The broad path had
+  no qualifying cross in that cycle, so its zero new events is a real idle
+  cycle, not an empty retired input;
+- Core Carry PID `57664` and fast-source live PID `35905` were identical before
+  and after deployment. Final production manifest and storage identity audit
+  were healthy; controller health had no critical runtime and retained only the
+  known missing-weather-state warning for six non-trading cities.
+
+The first attempt to move the collector into its isolated checkout failed
+before process start because ignored `.venv` bootstrap state was absent. After
+adding the standard local links, controller recovery succeeded. Commit
+`86d632cb` now preflights a git production checkout before killing an existing
+session, so a missing `.venv` or required `.env` fails while the old process is
+still running.
+
 ## 22. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
@@ -1420,4 +1462,4 @@ both old runtimes critical rather than preserving their former false-OK state.
    - `sizing_mode`
 4. Add daily automated reconciliation:
    - alert when source order count, fill count, and account position count diverge beyond expected partial-fill cases
-5. Keep local live execution stopped unless explicitly requested.
+5. Do not start, stop or restart local live execution without explicit confirmation.
