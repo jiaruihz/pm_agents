@@ -24,7 +24,7 @@ production_releases:
     expected_repo_sha: 6931caf9b8676a023dbb6041e0154b57412395de
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
-    expected_repo_sha: 28f43e70cfe86c9f0a154c9485806ad725665362
+    expected_repo_sha: 1afc04ec889d399466d5a69228775a5ed7b0ada0
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     expected_repo_sha: 2280ead248e38a5475f9c6366717050e522affba
