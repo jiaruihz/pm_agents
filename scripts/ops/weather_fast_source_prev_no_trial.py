@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -37,7 +38,6 @@ from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
     latest_orderbook_snapshot,
     latest_paper_snapshot,
     market_city,
-    metar_running_max,
     parse_dt,
     safe_float,
     source_latest_by_city,
@@ -47,6 +47,11 @@ from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
 from scripts.ops.weather_market_proxy import market_proxy_url  # noqa: E402
 from weather_data_feed.fast_event_source_policy import load_fast_event_source_profiles  # noqa: E402
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
+from weather_data_feed.source_event_incremental_state import (  # noqa: E402
+    metar_report_clocks_from_state,
+    metar_running_max_from_state,
+    refresh_source_event_state,
+)
 
 
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
@@ -318,7 +323,9 @@ def next_metar_window_status(clock: dict[str, Any] | None, now: datetime, *, win
             "next_metar_window_blocker": "metar_report_clock_missing",
         }
     minutes_to_next = (next_report - now).total_seconds() / 60.0
-    eligible = abs(minutes_to_next) <= float(window_min) + 1e-9
+    # The report clock is an entry deadline, not a symmetric time range. A
+    # source observation after the report belongs to the next report cycle.
+    eligible = 0.0 <= minutes_to_next <= float(window_min) + 1e-9
     return {
         **(clock or {}),
         "minutes_to_next_expected_metar": round(minutes_to_next, 3),
@@ -331,6 +338,64 @@ def next_metar_window_status(clock: dict[str, Any] | None, now: datetime, *, win
 
 def next_metar_burst_cities(opportunity_rows: list[dict[str, Any]]) -> list[str]:
     return sorted({str(row["city"]) for row in opportunity_rows if row.get("next_metar_window_eligible") and row.get("city")})
+
+
+OPPORTUNITY_FINGERPRINT_FIELDS = (
+    "status",
+    "blockers",
+    "live_blockers",
+    "source_obs_ts_utc",
+    "source_detect_ts_utc",
+    "latest_metar_report_ts_utc",
+    "metar_running_max_market_value",
+    "t_minus_1_no_market_bracket",
+    "next_metar_window_eligible",
+    "next_metar_window_blocker",
+    "best_ask",
+    "ask_size",
+    "fresh_book_status",
+    "market_resolution",
+    "live_enabled",
+)
+
+
+def opportunity_journal_rows(
+    rows: list[dict[str, Any]],
+    prior_state: dict[str, Any] | None,
+    *,
+    now: datetime,
+    heartbeat_sec: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Journal state transitions immediately and unchanged rows as heartbeats."""
+    previous = dict(prior_state or {})
+    selected: list[dict[str, Any]] = []
+    refreshed: dict[str, Any] = {}
+    for row in rows:
+        key = "|".join(
+            [
+                str(row.get("city") or ""),
+                str(row.get("target_date") or ""),
+                str(row.get("t_minus_1_no_market_bracket") or row.get("t_minus_1_no_bracket") or ""),
+            ]
+        )
+        payload = {field: row.get(field) for field in OPPORTUNITY_FINGERPRINT_FIELDS}
+        fingerprint = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        old = previous.get(key) or {}
+        last_written = parse_dt(old.get("last_written_at_utc"))
+        heartbeat_due = last_written is None or (now - last_written).total_seconds() >= float(heartbeat_sec)
+        changed = str(old.get("fingerprint") or "") != fingerprint
+        if changed or heartbeat_due:
+            selected.append(row)
+            written_at = now
+        else:
+            written_at = last_written
+        refreshed[key] = {
+            "fingerprint": fingerprint,
+            "last_written_at_utc": iso(written_at),
+        }
+    return selected, refreshed
 
 
 def _load_runtime_inputs(args: argparse.Namespace, now: datetime) -> dict[str, Any]:
@@ -400,8 +465,14 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         key = (city, target_dates[city])
         if key in policy_rows:
             source_rows[key] = policy_rows[key]
-    metar_rows = metar_running_max(Path(args.source_events_jsonl), args.target_date, city_profiles, now)
-    clocks = metar_report_clocks(Path(args.source_events_jsonl), target_dates)
+    source_event_state, source_event_refresh = refresh_source_event_state(
+        Path(args.source_events_jsonl),
+        state.get("source_event_incremental_state"),
+        target_dates_by_city=target_dates,
+        city_profiles=city_profiles,
+    )
+    metar_rows = metar_running_max_from_state(source_event_state, target_dates)
+    clocks = metar_report_clocks_from_state(source_event_state, target_dates, now=now)
     paper_path = latest_paper_snapshot()
     orderbook_path = latest_orderbook_snapshot()
     market_index = build_market_index(paper_path, set(target_dates.values()))
@@ -726,7 +797,13 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
                 append_jsonl(out_dir / "orders.jsonl", order_row)
                 order_rows.append(order_row)
 
-    for row in opportunity_rows:
+    journal_rows, opportunity_journal_state = opportunity_journal_rows(
+        opportunity_rows,
+        state.get("opportunity_journal_state"),
+        now=now,
+        heartbeat_sec=args.opportunity_heartbeat_sec,
+    )
+    for row in journal_rows:
         append_jsonl(out_dir / "opportunities.jsonl", row)
     active_dates = set(target_dates.values())
     confirmation_state = {
@@ -742,6 +819,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "seen_event_keys": sorted(seen)[-5000:],
             "live_order_keys": sorted(live_order_keys)[-5000:],
             "source_cross_confirmation": confirmation_state,
+            "source_event_incremental_state": source_event_state,
+            "opportunity_journal_state": opportunity_journal_state,
             "share_cap_paused": share_cap_paused,
             "share_cap_pause_reason": share_cap_pause_reason,
         },
@@ -793,6 +872,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "metar_cities": sorted({city for city, _target_date in metar_rows}),
         "events": len(event_rows),
         "opportunities": len(opportunity_rows),
+        "opportunity_journal_rows": len(journal_rows),
+        "source_event_incremental_refresh": source_event_refresh,
         "execution_eligible": len(order_rows),
         "live_orders_attempted": len(order_rows),
         "live_orders_submitted": sum(row.get("live_submit_status") == "submitted" for row in order_rows),
@@ -846,6 +927,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-sec", type=float, default=30.0)
     parser.add_argument("--burst-interval-sec", type=float, default=10.0)
+    parser.add_argument("--opportunity-heartbeat-sec", type=float, default=300.0)
     return parser
 
 

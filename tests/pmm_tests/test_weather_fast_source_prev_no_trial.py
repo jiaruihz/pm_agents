@@ -9,6 +9,7 @@ from scripts.ops.weather_fast_source_prev_no_trial import (
     metar_report_clocks,
     next_metar_burst_cities,
     next_metar_window_status,
+    opportunity_journal_rows,
     resolve_share_cap_pause,
     source_temp_in_market_unit,
     source_cross_confirmation,
@@ -24,6 +25,12 @@ from scripts.ops.weather_fast_source_execution import (
     submit_post_only_gtd,
 )
 from scripts.ops.weather_fast_source_stale_book_observer import MarketToken
+from weather_data_feed.fast_event_source_policy import load_fast_event_source_profiles
+from weather_data_feed.source_event_incremental_state import (
+    metar_report_clocks_from_state,
+    metar_running_max_from_state,
+    refresh_source_event_state,
+)
 
 
 def evaluate(
@@ -764,7 +771,12 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     )
     monkeypatch.setattr(
         runner,
-        "metar_running_max",
+        "refresh_source_event_state",
+        lambda *_args, **_kwargs: ({}, {"status": "ok", "lines_read": 0, "bytes_read": 0}),
+    )
+    monkeypatch.setattr(
+        runner,
+        "metar_running_max_from_state",
         lambda *_args, **_kwargs: {
             ("Tokyo", target_date): {
                 "metar_running_max_market_value": 21,
@@ -778,7 +790,7 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     )
     monkeypatch.setattr(
         runner,
-        "metar_report_clocks",
+        "metar_report_clocks_from_state",
         lambda *_args, **_kwargs: {
             ("Tokyo", target_date): {"next_expected_metar_report_ts_utc": (now + timedelta(minutes=5)).isoformat()}
         },
@@ -1019,7 +1031,98 @@ def test_metar_report_clock_uses_routine_reports_and_ignores_speci(tmp_path):
     assert clock["next_expected_metar_report_ts_utc"] == "2026-07-13T06:00:00+00:00"
 
 
-def test_next_metar_execution_window_covers_twenty_minutes_before_and_after():
+def test_incremental_metar_state_warm_starts_new_day_and_reads_only_appends(tmp_path):
+    path = tmp_path / "sources.jsonl"
+    profiles = load_fast_event_source_profiles()
+    city_profiles = {"Tokyo": profiles[("Tokyo", "jma_amedas")]}
+
+    def source_row(target_date, report_ts, temp_c, raw_metar):
+        return {
+            "city": "Tokyo",
+            "target_date": target_date,
+            "source": "aviationweather_metar",
+            "source_report_ts_utc": report_ts,
+            "local_detect_ts_utc": report_ts,
+            "temp_c": temp_c,
+            "raw_metar": raw_metar,
+        }
+
+    rows = [
+        source_row("2026-07-12", "2026-07-12T13:30:00+00:00", 28.0, "METAR RJTT 121330Z"),
+        source_row("2026-07-12", "2026-07-12T14:00:00+00:00", 28.0, "METAR RJTT 121400Z"),
+        source_row("2026-07-12", "2026-07-12T14:30:00+00:00", 28.0, "METAR RJTT 121430Z"),
+        source_row("2026-07-13", "2026-07-12T15:00:00+00:00", 29.0, "METAR RJTT 121500Z"),
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    state, first_refresh = refresh_source_event_state(
+        path,
+        None,
+        target_dates_by_city={"Tokyo": "2026-07-13"},
+        city_profiles=city_profiles,
+    )
+    clocks = metar_report_clocks_from_state(
+        state,
+        {"Tokyo": "2026-07-13"},
+        now=datetime(2026, 7, 12, 15, 17, tzinfo=timezone.utc),
+    )
+    clock = clocks[("Tokyo", "2026-07-13")]
+
+    assert first_refresh["full_rebuild"] is True
+    assert first_refresh["lines_read"] == 4
+    assert clock["routine_metar_clock_source"] == "cross_day_warm_start"
+    assert clock["routine_metar_cadence_min"] == 30.0
+    assert clock["routine_metar_report_count"] == 1
+    assert clock["next_expected_metar_report_ts_utc"] == "2026-07-12T15:30:00+00:00"
+    assert metar_running_max_from_state(state, {"Tokyo": "2026-07-13"})[("Tokyo", "2026-07-13")][
+        "metar_running_max_market_value"
+    ] == 29
+
+    appended = source_row("2026-07-13", "2026-07-12T15:30:00+00:00", 29.0, "METAR RJTT 121530Z")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(appended) + "\n")
+    prior_offset = state["byte_offset"]
+    state, second_refresh = refresh_source_event_state(
+        path,
+        state,
+        target_dates_by_city={"Tokyo": "2026-07-13"},
+        city_profiles=city_profiles,
+    )
+
+    assert second_refresh["full_rebuild"] is False
+    assert second_refresh["lines_read"] == 1
+    assert second_refresh["bytes_read"] == state["byte_offset"] - prior_offset
+
+
+def test_opportunity_journal_only_writes_changes_or_heartbeat():
+    now = datetime(2026, 7, 21, 0, 0, tzinfo=timezone.utc)
+    row = {
+        "city": "Tokyo",
+        "target_date": "2026-07-21",
+        "status": "blocked",
+        "blockers": ["missing_best_ask"],
+    }
+
+    first, state = opportunity_journal_rows([row], None, now=now, heartbeat_sec=300)
+    unchanged, state = opportunity_journal_rows(
+        [{**row, "ts_utc": (now + timedelta(seconds=10)).isoformat()}],
+        state,
+        now=now + timedelta(seconds=10),
+        heartbeat_sec=300,
+    )
+    heartbeat, _state = opportunity_journal_rows(
+        [row],
+        state,
+        now=now + timedelta(seconds=301),
+        heartbeat_sec=300,
+    )
+
+    assert len(first) == 1
+    assert unchanged == []
+    assert len(heartbeat) == 1
+
+
+def test_next_metar_execution_window_is_pre_report_deadline():
     clock = {"next_expected_metar_report_ts_utc": "2026-07-13T06:00:00+00:00"}
 
     too_early = next_metar_window_status(clock, datetime(2026, 7, 13, 5, 18, tzinfo=timezone.utc), window_min=20)
@@ -1030,7 +1133,8 @@ def test_next_metar_execution_window_covers_twenty_minutes_before_and_after():
     assert too_early["next_metar_window_eligible"] is False
     assert too_early["minutes_to_next_expected_metar"] == 42.0
     assert at_open["next_metar_window_eligible"] is True
-    assert after_due["next_metar_window_eligible"] is True
+    assert after_due["next_metar_window_eligible"] is False
+    assert after_due["next_metar_window_blocker"] == "outside_next_metar_execution_window"
     assert too_late["next_metar_window_eligible"] is False
 
 
