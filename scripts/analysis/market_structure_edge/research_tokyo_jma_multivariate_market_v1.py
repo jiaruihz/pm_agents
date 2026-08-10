@@ -1437,8 +1437,8 @@ def main() -> int:
         type=float,
         default=0.80,
         help=(
-            "Pre-registered market-consensus boundary for the .7 previous-NO "
-            "source-event policy; evaluated as a structural arm, not swept by PnL."
+            "Frozen-forward market-consensus boundary for the .7 previous-NO "
+            "source-event policy; retrospective sensitivity is reported separately."
         ),
     )
     parser.add_argument("--model-threshold", type=float, default=0.5)
