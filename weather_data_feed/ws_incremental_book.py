@@ -22,6 +22,7 @@ from typing import Any, Iterable, Mapping, Sequence
 RECONSTRUCTION_SCHEMA_VERSION = "weather_ws_reconstructed_book_v2"
 RECONSTRUCTION_RUN_SCHEMA_VERSION = "weather_ws_reconstruction_run_v1"
 REST_WS_PARITY_SCHEMA_VERSION = "weather_rest_ws_book_parity_v1"
+MARKET_TRADE_PRINT_SCHEMA_VERSION = "weather_market_trade_print_v1"
 
 
 class BookReconstructionError(RuntimeError):
@@ -42,6 +43,36 @@ class RawFrameRef:
     archive_path: str | None
     line_number: int | None
     producer_build_id: str | None
+
+
+@dataclass(frozen=True)
+class MarketTradePrint:
+    """An exchange-reported match carried by the public market channel.
+
+    ``side`` is retained exactly as reported by the exchange.  Consumers may
+    compare it with the immediately preceding reconstructed book, but this
+    data-layer contract deliberately does not relabel it as maker or taker.
+    """
+
+    trade_print_id: str
+    subscription_epoch_id: str
+    token_id: str
+    market: str | None
+    price: float
+    size: float
+    side: str
+    exchange_ts_ms: int | None
+    received_at_utc: str
+    received_at_ns: int | None
+    transaction_hash: str | None
+    fee_rate_bps: int | None
+    raw_frame_ref: RawFrameRef
+    producer_build_id: str | None
+    selector_version: str | None
+    schema_version: str = MARKET_TRADE_PRINT_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -193,6 +224,81 @@ def canonical_ws_frame_id(envelope: Mapping[str, Any]) -> str:
             f"raw_frame_id mismatch: declared={declared} computed={computed}"
         )
     return computed
+
+
+def extract_market_trade_prints(
+    envelope: Mapping[str, Any],
+) -> tuple[MarketTradePrint, ...]:
+    """Extract immutable ``last_trade_price`` evidence from one raw frame.
+
+    The public market channel reports a completed match, not our own order
+    lifecycle.  This helper therefore materializes tape evidence while
+    leaving queue position and own-fill attribution to downstream joins.
+    """
+
+    frame_id = canonical_ws_frame_id(envelope)
+    frame_ref = _frame_ref(envelope, frame_id)
+    payload = envelope.get("message")
+    messages = payload if isinstance(payload, list) else [payload]
+    output: list[MarketTradePrint] = []
+    for message in messages:
+        if not isinstance(message, Mapping):
+            continue
+        event_type = str(message.get("event_type") or message.get("type") or "")
+        if event_type != "last_trade_price":
+            continue
+        token_id = str(message.get("asset_id") or "")
+        side = str(message.get("side") or "").upper()
+        if not token_id or side not in {"BUY", "SELL"}:
+            raise BookReconstructionError("trade print requires asset_id and BUY/SELL side")
+        price = _float_or_none(message.get("price"))
+        size = _float_or_none(message.get("size"))
+        if price is None or not 0.0 < price < 1.0 or size is None or size <= 0:
+            raise BookReconstructionError("trade print has invalid price or size")
+        exchange_ts_ms = _int_or_none(message.get("timestamp"))
+        transaction_hash = (
+            str(message.get("transaction_hash"))
+            if message.get("transaction_hash")
+            else None
+        )
+        basis = {
+            "subscription_epoch_id": envelope.get("subscription_epoch_id"),
+            "token_id": token_id,
+            "market": message.get("market"),
+            "price": price,
+            "size": size,
+            "side": side,
+            "exchange_ts_ms": exchange_ts_ms,
+            "transaction_hash": transaction_hash,
+        }
+        output.append(
+            MarketTradePrint(
+                trade_print_id=_canonical_hash(basis),
+                subscription_epoch_id=str(envelope.get("subscription_epoch_id") or ""),
+                token_id=token_id,
+                market=(str(message.get("market")) if message.get("market") else None),
+                price=price,
+                size=size,
+                side=side,
+                exchange_ts_ms=exchange_ts_ms,
+                received_at_utc=str(envelope.get("received_at_utc") or ""),
+                received_at_ns=_int_or_none(envelope.get("received_at_ns")),
+                transaction_hash=transaction_hash,
+                fee_rate_bps=_int_or_none(message.get("fee_rate_bps")),
+                raw_frame_ref=frame_ref,
+                producer_build_id=(
+                    str(envelope.get("producer_build_id"))
+                    if envelope.get("producer_build_id")
+                    else None
+                ),
+                selector_version=(
+                    str(envelope.get("selector_version"))
+                    if envelope.get("selector_version")
+                    else None
+                ),
+            )
+        )
+    return tuple(output)
 
 
 def _frame_ref(envelope: Mapping[str, Any], frame_id: str) -> RawFrameRef:

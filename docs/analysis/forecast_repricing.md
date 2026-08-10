@@ -1,5 +1,18 @@
 # Forecast Repricing
 
+## Tape / queue-conservative execution update（2026-08-11）
+
+`0/48` 只表示旧 48 个 holdout quotes 没有 observed ask 跌到原 best bid，不能排除主动 SELL 打 bid；现已用
+现有 WS `last_trade_price` 做独立 execution transport 复核。固定 60s post、真实 SELL volume 吃完 visible
+queue+5 股才记保守成交：4,017 posts、44 possible fills、23 个 exit-scoreable fills，fixed60 ROI `-6.57%`
+（1/23 为正）。tight spread/light queue/supportive tape 仍为负；首次可保本动态退出为 `-6.93%`。
+盘口恶化前撤单只剩2 fills/1 date、ROI `+6.72%`，不足以冻结且不与 D-1 candidate 同分母。
+
+历史 D-1 已更新至 `2026-08-10`：5,973 events/62,173 rungs/66 dates。entry challenger 相对 M0 的 holdout
+MSE delta `-0.000000487`，CI `[-0.000001851,+0.000000939]`，仍跨0；新 holdout anti-toxic selector 选择0笔，
+full-ladder completion 仍未通过。single-leg passive expression 判 `rejected_for_expression`，completion runner
+继续 zero-notional abstain。完整证据见 [tape execution v1](2026-08/2026-08-11-forecast-repricing-tape-execution-v1.md)。
+
 ## Anti-toxic maker / full-ladder completion handoff（2026-08-10）
 
 旧 position policy 的 maker-fill-conditional `+36.39%` 已完成 fillability 体检：secondary holdout 48 个旧

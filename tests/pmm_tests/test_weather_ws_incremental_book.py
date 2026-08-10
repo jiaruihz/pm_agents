@@ -6,6 +6,7 @@ from weather_data_feed.ws_incremental_book import (
     BookReconstructionError,
     IncrementalBookReconstructor,
     compare_rest_ws_parity,
+    extract_market_trade_prints,
     materialize_reconstructed_books,
 )
 
@@ -66,6 +67,61 @@ def test_reconstructs_baseline_delta_and_five_share_depth() -> None:
     assert second.best_bid == 0.61
     assert second.sell_proceeds == pytest.approx(3.05)
     assert second.snapshot_id != first.snapshot_id
+
+
+def test_extracts_trade_print_without_claiming_own_fill() -> None:
+    envelope = {
+        **_envelope(
+            "epoch-1",
+            [
+                {
+                    "event_type": "last_trade_price",
+                    "asset_id": "yes-token",
+                    "market": "0xcondition",
+                    "price": "0.20",
+                    "size": "7.5",
+                    "side": "SELL",
+                    "timestamp": "1786320032527",
+                    "transaction_hash": "0xtx",
+                    "fee_rate_bps": "0",
+                },
+                {"event_type": "tick_size_change", "asset_id": "yes-token"},
+            ],
+            "2026-08-10T00:00:32.590Z",
+        ),
+        "received_at_ns": 1_786_320_032_590_148_000,
+        "producer_build_id": "build-1",
+        "selector_version": "selector-1",
+        "_raw_path": "/raw/ws.jsonl",
+        "_line_number": 9,
+    }
+
+    rows = extract_market_trade_prints(envelope)
+
+    assert len(rows) == 1
+    assert rows[0].token_id == "yes-token"
+    assert rows[0].side == "SELL"
+    assert rows[0].price == 0.20
+    assert rows[0].size == 7.5
+    assert rows[0].raw_frame_ref.archive_path == "/raw/ws.jsonl"
+    assert rows[0].raw_frame_ref.line_number == 9
+    assert rows[0].trade_print_id
+
+
+def test_trade_print_rejects_invalid_exchange_fields() -> None:
+    with pytest.raises(BookReconstructionError, match="asset_id and BUY/SELL"):
+        extract_market_trade_prints(
+            _envelope(
+                "epoch-1",
+                {
+                    "event_type": "last_trade_price",
+                    "asset_id": "yes-token",
+                    "price": "0.20",
+                    "size": "5",
+                    "side": "UNKNOWN",
+                },
+            )
+        )
 
 
 def test_delta_before_baseline_and_new_epoch_fail_closed() -> None:
