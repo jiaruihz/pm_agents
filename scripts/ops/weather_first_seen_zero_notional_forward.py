@@ -74,16 +74,17 @@ def _incremental_rows(
 ) -> Iterator[tuple[dict[str, Any], Path]]:
     offsets = dict(state.get("offsets") or {})
     seen_files = set(state.get("seen_files") or [])
+    initial_bootstrap = bootstrap_at_end and not bool(state.get("bootstrap_complete"))
     for path in _raw_files(paths):
         key = str(path.resolve())
         immutable_file = path.parent.name[:4].isdigit() or path.name.startswith("forecast_hourly_curves_")
         if immutable_file and key in seen_files:
             continue
         size = path.stat().st_size
-        if key not in offsets and bootstrap_at_end and not immutable_file:
+        if key not in offsets and initial_bootstrap and not immutable_file:
             offsets[key] = size
             continue
-        if immutable_file and bootstrap_at_end and key not in seen_files:
+        if immutable_file and initial_bootstrap and key not in seen_files:
             seen_files.add(key)
             continue
         offset = int(offsets.get(key) or 0)
@@ -110,6 +111,7 @@ def _incremental_rows(
             seen_files.add(key)
     state["offsets"] = offsets
     state["seen_files"] = sorted(seen_files)
+    state["bootstrap_complete"] = True
 
 
 def _recent_snapshot_files(path: Path, limit: int) -> list[Path]:

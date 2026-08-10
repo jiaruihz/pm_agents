@@ -174,6 +174,23 @@ def test_forward_bootstrap_skips_history_then_reads_only_new_complete_lines(tmp_
     assert [row["sequence"] for row, _path in rows] == [2]
 
 
+def test_forward_reads_new_dated_shard_after_initial_bootstrap(tmp_path) -> None:
+    root = tmp_path / "source_events"
+    first = root / "2026-08-09" / "sources.jsonl"
+    first.parent.mkdir(parents=True)
+    first.write_text(json.dumps({"sequence": 1}) + "\n", encoding="utf-8")
+    state = {}
+
+    assert list(_incremental_rows([root], state, bootstrap_at_end=True)) == []
+
+    second = root / "2026-08-10" / "sources.jsonl"
+    second.parent.mkdir(parents=True)
+    second.write_text(json.dumps({"sequence": 2}) + "\n", encoding="utf-8")
+    rows = list(_incremental_rows([root], state, bootstrap_at_end=True))
+
+    assert [row["sequence"] for row, _path in rows] == [2]
+
+
 def test_forward_pipeline_can_defer_bulk_settlement_updates(tmp_path) -> None:
     conn = sqlite3.connect(tmp_path / "weather.db")
     conn.row_factory = sqlite3.Row
