@@ -137,7 +137,7 @@ managed_runtimes:
     tmux_session: weather_knmi_first_seen_ladder_v1
     role: market_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     start_script: scripts/ops/start_weather_knmi_first_seen_ladder_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/state.json
     max_health_age_sec: 180
@@ -231,7 +231,7 @@ managed_runtimes:
     tmux_session: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     start_script: scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1/latest_summary.json
     max_health_age_sec: 1800
@@ -255,7 +255,7 @@ managed_runtimes:
     tmux_session: weather_fast_source_stale_book
     role: collector
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     start_script: scripts/ops/start_weather_fast_source_stale_book_production.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_stale_book/health.json
     max_health_age_sec: 180
@@ -323,7 +323,7 @@ managed_runtimes:
     tmux_session: weather_source_event_ladder_repricing_shadow
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     start_script: scripts/ops/start_weather_source_event_ladder_repricing_shadow.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/source_event_ladder_repricing_shadow/health.json
     max_health_age_sec: 1200
