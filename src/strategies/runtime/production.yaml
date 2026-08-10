@@ -6,7 +6,7 @@ operational_repo_root: /Users/deepsleep/projects/pm_agents
 production_releases:
   - release_id: control_plane
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
-    expected_repo_sha: 8e68b6c929c21275e3d8d55f05b9cfa676ec17f4
+    expected_repo_sha: 801076116313e4906f9b13b85e28239f956c9182
   - release_id: data_feed
     checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
     expected_repo_sha: b98396b1fecc9ab098d51164844d3710330f10f9
@@ -15,7 +15,7 @@ production_releases:
     expected_repo_sha: 27d6f4bb788f0a1fe522b40bb0a5ef6de51de063
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
-    expected_repo_sha: e3a62746d807b2e983c1093e649594b7e0103dca
+    expected_repo_sha: cc6744f43e326ea86f67a474700debb93d5ac414
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     expected_repo_sha: 472e8871fe147a249505fc643163ad567ae4e0e4
@@ -24,13 +24,13 @@ production_releases:
     expected_repo_sha: 6931caf9b8676a023dbb6041e0154b57412395de
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
-    expected_repo_sha: 2dd820deaee511025e68748eb95a5d4caf67a8e6
+    expected_repo_sha: 28f43e70cfe86c9f0a154c9485806ad725665362
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
-    expected_repo_sha: d122aabe01623fb8cb4841dd2bed10491389b347
+    expected_repo_sha: 2280ead248e38a5475f9c6366717050e522affba
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
-    expected_repo_sha: f17f59e30f2b42be7ffb525d72896d946262fcfa
+    expected_repo_sha: 1866ed88f75608854e023f27cd3b3f63b231b610
   - release_id: knmi
     checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
     expected_repo_sha: 2e8ba3be9aa6c2e3278fa78c7c1f8fe32753f976
