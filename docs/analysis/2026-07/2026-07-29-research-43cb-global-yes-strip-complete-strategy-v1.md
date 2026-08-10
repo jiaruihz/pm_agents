@@ -40,9 +40,8 @@
 - [完整 event portfolios](generated/wallet_43cb_strategy_v1/event_portfolios.json)
 - [城市集中度](generated/wallet_43cb_strategy_v1/city_preferences.json)
 - [leaderboard 快照](generated/wallet_43cb_strategy_v1/leaderboard.json)
-- [全历史 manifest](generated/wallet_43cb_full_history_v1/manifest.json)
-- [全历史 weather activity](generated/wallet_43cb_full_history_v1/weather_activity.jsonl.gz)
-- [全 event metadata](generated/wallet_43cb_full_history_v1/event_metadata.jsonl.gz)
+- [全历史 artifact locator](generated/wallet_43cb_full_history_v1/README.md)：manifest、weather activity
+  与 event metadata 位于登记的 immutable archive snapshot；Git 不提交本机绝对 symlink。
 - [可续跑采集脚本](../../../scripts/analysis/wallet_weather/collect_external_wallet_weather_history_v1.py)
 
 全历史采集完整性验收：

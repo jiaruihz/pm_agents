@@ -11,7 +11,8 @@ fi
 
 WALLET="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
 SNAPSHOT_ID="$2"
-JRS_ROOT="${EXTERNAL_WALLET_WEATHER_JRS_ROOT:-/Volumes/jrs/pm_agents/research/external_wallet_weather}"
+ARCHIVE_STORAGE_ROOT="$("$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/scripts/ops/weather_production_path.py" archive_storage_root)"
+JRS_ROOT="${EXTERNAL_WALLET_WEATHER_JRS_ROOT:-$ARCHIVE_STORAGE_ROOT/pm_agents/research/external_wallet_weather}"
 
 if [[ ! "$WALLET" =~ ^0x[0-9a-f]{40}$ ]]; then
   echo "invalid wallet: $WALLET" >&2

@@ -104,6 +104,18 @@ docs/analysis/**/generated/**/*.npy
 docs/analysis/**/generated/**/*.npz
 docs/analysis/**/generated/**/*.png
 
+# Local compatibility links into the external research stores.  These are
+# absolute, host-specific symlinks; commit the adjacent README/manifest locator
+# instead of the links themselves.
+docs/analysis/2026-06/generated/theta_no_iem_ext_patch_actual_v1
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/analysis
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/daily_activity
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/event_metadata.jsonl.gz
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/event_metadata_by_slug
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_activity.jsonl.gz
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_closed_positions.jsonl.gz
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_open_positions.jsonl.gz
+
 # Local agent state
 .claude/
 

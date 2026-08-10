@@ -15,7 +15,14 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 SCHEMA_VERSION = "external_wallet_weather_research_v1"
@@ -138,7 +145,10 @@ def main() -> int:
     parser.add_argument(
         "--jrs-root",
         type=Path,
-        default=Path("/Volumes/jrs/pm_agents/research/external_wallet_weather"),
+        default=(
+            load_production_spec().archive_storage_root
+            / "pm_agents/research/external_wallet_weather"
+        ),
     )
     parser.add_argument("--wallet")
     args = parser.parse_args()

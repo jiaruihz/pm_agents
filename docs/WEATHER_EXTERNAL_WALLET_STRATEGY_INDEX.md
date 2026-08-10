@@ -58,6 +58,13 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
   卖确定性 YES、提前释放 collateral；失败尾腿低价清理或到期。
 - 自动化：独立交易中位间隔 22 秒，23.5% `<=2s`，峰值 25 tx/min。
   `bot execution` 高可信，完全自动信号为中高可信，仍可能人工设 regime/预算/启停。
+- JRS 全历史快照：`20260729T145856Z`，44/44 UTC days、1,944 全账户
+  activity rows、1,817 weather rows、30/30 event metadata、330 Gamma markets，
+  已生成完整 ladder lifecycle analysis。
+- 描述性绩效：29 个 cashflow-complete settled dates 中 24 胜、5 负，
+  public cashflow `+$2,539.18 / $62,222.29 BUY cost`，turnover ROI `+4.08%`；
+  target-date bootstrap 95% CI `[-18.35%,+23.96%]`。平均亏损约为平均盈利
+  3.55 倍，最大回撤 `$5,649.25`，结论 `inconclusive / shadow_candidate`。
 - 可复制性：不建议直接跟单；钱包公开 activity 是成交后信息，而且最有价值的
   AMOS edge 已在秒级执行。可把其动作作为外部 confirmation/veto 特征。
 - 研究方向：
@@ -70,6 +77,7 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
   - [交易全貌复盘](analysis/2026-07/2026-07-29-research-yourthos-rksi-complete-trade-replay-v1.md)
   - [触发条件与自动化推断](analysis/2026-07/2026-07-29-research-yourthos-rksi-trigger-and-automation-inference-v1.md)
   - [自建跨档概率 vs 跟钱包](analysis/2026-07/2026-07-29-research-rksi-cross-probability-vs-wallet-follow-v1.md)
+  - [yourthos vs Seoul cross-NO 四次完整生命周期](analysis/2026-07/2026-07-29-research-yourthos-vs-cross-no-lifecycle-v1.md)
 
 ### Gptball
 
@@ -146,6 +154,7 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
 - 完整报告：
   - [0x43cb 全球 YES-strip 完整策略复盘](analysis/2026-07/2026-07-29-research-43cb-global-yes-strip-complete-strategy-v1.md)
   - [0x43cb 全历史 ladder 生命周期 v2](analysis/2026-07/2026-07-29-research-43cb-full-history-ladder-lifecycle-v2.md)
+  - [0x43cb 三个典型 city-day 的逐 phase 时间线](analysis/2026-07/2026-07-29-research-43cb-current-strategy-case-timelines-v1.md)
 
 ## 使用边界
 

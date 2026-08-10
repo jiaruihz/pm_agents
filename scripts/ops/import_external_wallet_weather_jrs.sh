@@ -11,7 +11,8 @@ fi
 
 SOURCE_DIR="$1"
 WALLET="${2:-}"
-JRS_ROOT="${EXTERNAL_WALLET_WEATHER_JRS_ROOT:-/Volumes/jrs/pm_agents/research/external_wallet_weather}"
+ARCHIVE_STORAGE_ROOT="$("$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/scripts/ops/weather_production_path.py" archive_storage_root)"
+JRS_ROOT="${EXTERNAL_WALLET_WEATHER_JRS_ROOT:-$ARCHIVE_STORAGE_ROOT/pm_agents/research/external_wallet_weather}"
 
 if [[ ! -f "$SOURCE_DIR/manifest.json" ]]; then
   echo "missing source manifest: $SOURCE_DIR/manifest.json" >&2

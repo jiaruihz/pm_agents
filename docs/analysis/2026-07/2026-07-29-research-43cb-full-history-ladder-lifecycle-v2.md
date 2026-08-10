@@ -18,10 +18,8 @@
 
 复现：
 
-- [完整 summary](generated/wallet_43cb_full_history_v1/analysis/full_ladder_history_v1/summary.json)
-- [逐 event portfolio](generated/wallet_43cb_full_history_v1/analysis/full_ladder_history_v1/event_portfolios.csv)
-- [月度漂移](generated/wallet_43cb_full_history_v1/analysis/full_ladder_history_v1/monthly_summary.csv)
-- [城市切片](generated/wallet_43cb_full_history_v1/analysis/full_ladder_history_v1/city_summary.csv)
+- [artifact locator](generated/wallet_43cb_full_history_v1/README.md)；完整 summary、逐 event
+  portfolio、月度漂移和城市切片均位于其中登记的 immutable archive snapshot，Git 不提交本机绝对 symlink。
 - [采集与 JRS 流程](../../WEATHER_EXTERNAL_WALLET_RESEARCH_PIPELINE.md)
 - [全历史 replay 脚本](../../../scripts/analysis/wallet_weather/research_external_wallet_full_ladder_history_v1.py)
 
@@ -207,8 +205,72 @@ Gamma resolved
 - public cashflow PnL `+$26,443.56`；
 - turnover ROI `+4.85%`；
 - target-date block bootstrap 95% CI `[+4.07%, +5.64%]`；
+- 正 PnL events `2,306/2,966 = 77.75%`，负 PnL events 660；
 - 正 PnL target dates 85.84%；
 - 另有 resolved current value `$3,227.57` 未混入 realized。
+
+winner 落在 positive YES strip 内的 2,882 个 events 中，79.49% 为正 PnL，
+public-cashflow turnover ROI 为 `+4.96%`；winner 落在 strip 外的 84 个 events
+合计 ROI 为 `-57.87%`。因此“覆盖 winner”非常重要，但仍不足以保证 event
+盈利：不均匀中心加权、组合成本与 SELL/conversion 都会改变最终现金流。
+
+按 BUY span 做纯描述性切片，`>60m` 的 2,249 个 events 正 PnL 率 79.77%、
+ROI `+4.97%`；`<=60m` 的 717 个 events 正 PnL 率 71.41%、ROI `+2.96%`。
+这与“长时间等待 maker/市场流量、再补齐篮子”一致，但不构成概率横跳的因果
+证据，因为时期、城市、仓位和选择分母均不同。
+
+### 亏损形态
+
+2,966 个 cashflow-complete events 中有 660 个亏损，gross loss
+`$5,714.31`；单次亏损中位 `$2.91`、均值 `$8.66`、p90 `$19.49`、最大
+`$166.95`。对应 2,306 个盈利 events 的 gross gain 为 `$32,157.87`，
+profit factor `5.63`。
+
+按完整 ladder 与最终净 YES shares 做互斥诊断：
+
+| 亏损形态 | events | gross loss | 单次中位 | 单次均值 | p90 | 最大 |
+|---|---:|---:|---:|---:|---:|---:|
+| winner 在整个持仓区间之外（真上/下尾） | 49 | $313.36 | $1.39 | $6.40 | $13.68 | $96.28 |
+| winner 位于区间内部、但该 exact bracket 最终无正 YES（internal hole） | 20 | $222.26 | $2.54 | $11.11 | $11.64 | $138.73 |
+| winner 在 strip 内、但不是最终最大 shares 档（modal miss） | 572 | $5,032.74 | $3.22 | $8.80 | $20.51 | $166.95 |
+| winner 正好是最大 shares 档、但成本/现金流仍亏 | 19 | $145.94 | $0.49 | $7.68 | $19.97 | $62.24 |
+
+亏损比例口径：
+
+| 亏损形态 | 亏损事件投入 | 加权亏损率 | 单次亏损率中位 | 占全部 gross loss |
+|---|---:|---:|---:|---:|
+| winner 在整个持仓区间之外 | $313.36 | -100.00% | -100.00% | 5.48% |
+| internal hole | $222.26 | -100.00% | -100.00% | 3.89% |
+| modal miss | $64,377.55 | -7.82% | -5.44% | 88.08% |
+| modal hit 仍亏 | $4,257.30 | -3.43% | -3.12% | 2.55% |
+
+全部 660 个亏损 events 共投入 `$69,170.47`、亏 `$5,714.31`，亏损事件
+加权亏损率 `-8.26%`；单次亏损率中位 `-6.14%`，p75 `-23.68%`，因为尾部与
+internal-hole 事件均为 `-100%`，p90/p95 都是 `-100%`。相对全部已结算投入
+`$544,942.37`，gross loss 占 `1.05%`。
+
+作为对照，2,306 个盈利 events 共投入 `$475,771.90`、gross gain
+`$32,157.87`，加权盈利率 `+6.76%`、单次盈利率中位 `+3.80%`。高胜率
+`77.75%` 与 gross profit factor `5.63` 最终把全样本净 turnover ROI 推到
+`+4.85%`。
+
+真尾部进一步拆分：
+
+- lower-tail 38 次，合计 `$206.09`，单次中位 `$1.50`、最大 `$55.75`；
+- upper-tail 11 次，合计 `$107.27`，单次中位 `$1.33`、最大 `$96.28`；
+- 49 次全部是 100% buy-cost loss。美元中位数小，是因为很多尾部 strip 本身
+  以低价小成本买入，不代表风险率低。
+
+`internal hole` 是 public fills 能观察到的“某腿没形成”的最接近代理，但不能
+直接命名为 maker non-fill：也可能是主动跳档、SELL/NegRisk conversion 后的净
+仓位形态。全样本 non-contiguous strip 共 44 个，正 PnL 率 43.18%、ROI
+`-6.29%`；contiguous strip 为 2,922 个，正 PnL 率 78.27%、ROI `+4.91%`。
+因此缺腿形态明显危险，但未成交 maker 的真实尝试分母仍不可见。
+
+最大损失来源不是尾部，而是 modal miss：它占 gross loss 的 88.08%。典型形态是
+winner 仍在宽 strip 内，但资金大量压在相邻中心档，winning bracket shares 不足以
+覆盖整个篮子成本。另有 19 次 modal hit 仍亏，说明即使天气中心判断正确，组合
+买贵、fee/执行或 conversion 现金流也可令 event 亏损。
 
 这能确认该钱包的已成交 temperature portfolio 长期赚钱，不只是一两天样本。
 但它仍是 **selected wallet fills**：
