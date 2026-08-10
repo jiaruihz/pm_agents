@@ -103,17 +103,23 @@ def _fmi_history(
     path: Path, target_date: str, available_through: datetime | None = None
 ) -> list[dict[str, Any]]:
     by_obs: dict[str, dict[str, Any]] = {}
-    found_target = False
-    for catalog_row in JsonlInputCatalog.iter_path_reverse(path):
+    as_of = available_through or datetime.now(tz=UTC)
+    paths = [path] if path.is_file() else JsonlInputCatalog().day_shard_paths(
+        path,
+        filename="high_frequency_observations.jsonl",
+        as_of=as_of,
+    )
+    for catalog_row in (
+        row
+        for history_path in reversed(paths)
+        for row in JsonlInputCatalog.iter_path_reverse(history_path)
+    ):
         row = catalog_row.row
         if row.get("city") != "Helsinki" or row.get("source") != "fmi":
             continue
         row_target = row.get("target_date")
-        if found_target and row_target != target_date:
-            break
         if row_target != target_date:
             continue
-        found_target = True
         available = pd.Timestamp(row.get("source_first_seen_at_utc"))
         if available_through is not None and available > pd.Timestamp(available_through):
             continue

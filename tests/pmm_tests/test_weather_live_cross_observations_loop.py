@@ -4,7 +4,7 @@ from scripts.ops import weather_live_cross_observations_loop as loop
 from weather_data_feed.observation_fast_lane import parse_observation_fast_lane
 
 
-def test_fast_lane_omits_aggregate_but_main_keeps_it(monkeypatch, tmp_path: Path) -> None:
+def test_main_and_fast_lane_write_only_dated_shards(monkeypatch, tmp_path: Path) -> None:
     args = loop.build_parser().parse_args(
         [
             "--output-dir",
@@ -40,6 +40,6 @@ def test_fast_lane_omits_aggregate_but_main_keeps_it(monkeypatch, tmp_path: Path
     loop.run_cycle(args)
     loop.run_cycle(args, parse_observation_fast_lane("amos_core=amos_runway:Busan@20"))
 
-    assert writes[0] == (tmp_path / "live_cross", True)
+    assert writes[0] == (tmp_path / "live_cross", False)
     assert writes[1][0] == tmp_path / "live_cross" / "fast_lanes" / "amos_core"
     assert writes[1][1] is False

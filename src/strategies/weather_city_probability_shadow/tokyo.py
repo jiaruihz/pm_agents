@@ -135,10 +135,19 @@ def _jma_history(
     observation_through: datetime,
     available_through: datetime | None = None,
 ) -> list[dict[str, Any]]:
+    shard_as_of = available_through or observation_through
     available_through = available_through or datetime.max.replace(tzinfo=UTC)
     earliest: dict[str, dict[str, Any]] = {}
-    found_target = False
-    for catalog_row in JsonlInputCatalog.iter_path_reverse(path):
+    paths = [path] if path.is_file() else JsonlInputCatalog().day_shard_paths(
+        path,
+        filename="high_frequency_observations.jsonl",
+        as_of=shard_as_of,
+    )
+    for catalog_row in (
+        row
+        for history_path in reversed(paths)
+        for row in JsonlInputCatalog.iter_path_reverse(history_path)
+    ):
         row = catalog_row.row
         if (
             row.get("city") != "Tokyo"
@@ -147,11 +156,8 @@ def _jma_history(
         ):
             continue
         row_target = row.get("target_date")
-        if found_target and row_target != target_date:
-            break
         if row_target != target_date:
             continue
-        found_target = True
         obs = _parse_ts(str(row["observation_time_utc"]))
         available = _parse_ts(str(row["source_first_seen_at_utc"]))
         if obs > observation_through or available > available_through:

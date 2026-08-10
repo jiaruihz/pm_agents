@@ -43,7 +43,7 @@ from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 PRODUCTION_SPEC = load_production_spec()
 RUNTIME_ROOT = PRODUCTION_SPEC.data_feed_runtime_root
-DEFAULT_SOURCE_JSONL = PRODUCTION_SPEC.live_cross_observations_root() / "high_frequency_observations.jsonl"
+DEFAULT_SOURCE_JSONL = PRODUCTION_SPEC.live_cross_observations_root()
 DEFAULT_FORECAST_ROOT = PRODUCTION_SPEC.forecast_hourly_curve_dir()
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/korea_first_seen_state_v1"
 DEFAULT_CONFIG = ROOT / "configs/weather/korea_first_seen_collector_v1.json"
@@ -120,6 +120,18 @@ def read_appended_rows(
     path: Path,
     cursor: dict[str, Any] | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    configured_path = path
+    if path.is_dir():
+        candidates = sorted(
+            path.glob("????-??-??/high_frequency_observations.jsonl")
+        )
+        if not candidates:
+            return [], _empty_cursor(path), {
+                "status": "source_missing",
+                "path": str(path),
+                "lines_read": 0,
+            }
+        path = candidates[-1]
     try:
         stat = path.stat()
     except FileNotFoundError:
@@ -170,6 +182,8 @@ def read_appended_rows(
     }
     return rows, cursor_out, {
         "status": "ok",
+        "configured_path": str(configured_path),
+        "physical_path": str(path),
         "reset_reason": reset_reason,
         "lines_read": lines_read,
         "bytes_read": max(0, offset - start_offset),

@@ -31,12 +31,11 @@ def _parse_ts(value: Any) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def _tail_jsonl(path: Path, *, max_bytes: int) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
+def _tail_jsonl_file(path: Path, *, max_bytes: int) -> tuple[list[dict[str, Any]], int]:
     size = path.stat().st_size
+    read_bytes = min(size, max_bytes)
     with path.open("rb") as handle:
-        offset = max(0, size - max_bytes)
+        offset = max(0, size - read_bytes)
         handle.seek(offset)
         if offset:
             handle.readline()
@@ -49,7 +48,25 @@ def _tail_jsonl(path: Path, *, max_bytes: int) -> list[dict[str, Any]]:
             continue
         if isinstance(row, dict):
             rows.append(row)
-    return rows
+    return rows, read_bytes
+
+
+def _tail_jsonl(path: Path, *, max_bytes: int) -> list[dict[str, Any]]:
+    if path.is_file():
+        return _tail_jsonl_file(path, max_bytes=max_bytes)[0]
+    if not path.is_dir():
+        return []
+    remaining = max_bytes
+    chunks: list[list[dict[str, Any]]] = []
+    for shard in sorted(
+        path.glob("????-??-??/high_frequency_observations.jsonl"), reverse=True
+    ):
+        if remaining <= 0:
+            break
+        rows, consumed = _tail_jsonl_file(shard, max_bytes=remaining)
+        chunks.append(rows)
+        remaining -= consumed
+    return [row for chunk in reversed(chunks) for row in chunk]
 
 
 def _available_at(row: dict[str, Any]) -> datetime | None:
