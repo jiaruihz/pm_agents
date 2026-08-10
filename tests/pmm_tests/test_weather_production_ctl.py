@@ -79,6 +79,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["fast_source_prev_no_trial_v1"].dependencies == (
         "weather_data_feed_jrs",
         "weather_live_cross_observations",
+        "weather_knmi_open_data_jrs",
     )
     assert "weather_canonical_refresh" in spec.allowed_unmanaged_sessions
     assert by_id["weather_knmi_open_data_jrs"].checkout_root == Path(
