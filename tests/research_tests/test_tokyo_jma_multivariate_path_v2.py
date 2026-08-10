@@ -209,6 +209,18 @@ def test_phase_policy_combines_prior_rows_and_uses_fixed_five_shares(
     assert consensus["trades"] == 1
     assert consensus["wins"] == 1
     assert consensus["win_rate_wilson_95_ci"][0] < 0.5
+    sensitivity = consensus["retrospective_threshold_sensitivity"]
+    assert [row["consensus_min_no_ask"] for row in sensitivity] == [
+        0.70,
+        0.75,
+        0.80,
+        0.85,
+        0.90,
+        0.93,
+        0.95,
+    ]
+    assert sensitivity[0]["trades"] == 1
+    assert sensitivity[2]["trades"] == 1
 
 
 def test_final_settlement_loader_keys_prediction_by_prior_bracket(tmp_path) -> None:

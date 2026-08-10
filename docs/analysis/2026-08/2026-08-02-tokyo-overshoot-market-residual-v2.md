@@ -334,8 +334,9 @@ market 的 `85.42%`。旧 selector 又专门挑 `P_model-P_market` 最大的分�
 
 固定策略 `first_margin_ge_0p7_market_consensus`：每个 `target_date × previous bracket` 仅取首次真实 JMA
 `.7°C` cross；读取该 event 之后保存的 previous-NO ask，要求 `0.80 <= ask <= 0.97` 且顶档至少 5 shares；
-固定买 5 shares、按官方 entry fee、持有至结算。`0.80` 不是从 q-confirm sweep 中挑出的最优天气阈值，
-而是预先定义的 market-consensus veto：外部物理事件与市场必须同向，避免拿 source cross 单独对赌 terminal basis。
+固定买 5 shares、按官方 entry fee、持有至结算。`0.80` 是 round-number structural arm，不是 q-confirm
+天气概率 threshold，也不是 untouched 数据前预注册的最优点；外部物理事件与市场必须同向，用来避免拿 source cross
+单独对赌 terminal basis。本段所有 ask sensitivity 都明确是 retrospective diagnosis。
 
 | 窗口 | trades / target dates | 胜负 | cost | fee 后 PnL | ROI |
 |---|---:|---:|---:|---:|---:|
@@ -354,10 +355,17 @@ ask 为 `0.9255`，含 fee 平均 breakeven win probability 为 `92.90%`，而 1
 frozen forward。正确结论是：这是 Tokyo 当前唯一跑出正 fee ROI 的候选方向，但仍是
 `point-profitable / unconfirmed / zero-notional only`，不能升 live。
 
+为避免把单个 cutpoint 包装成局部最优，固定 round-number ask sensitivity 同时保留：下限 `.70/.75` 都是
+12笔11胜、ROI仅 `+0.02%`；`.80/.85` 都是11笔全胜、ROI `+7.65%`；`.90/.93/.95` 分别为
+9/7/3笔全胜、ROI `+6.54%/+5.74%/+4.30%`。正收益并非只存在于一个小数点，但主要跳变恰好来自
+排除 ask `.77` 的7/26败单，因此仍存在明显的 selection risk；这正是必须冻结向前而不能继续调阈值的原因。
+
 耐久结果：
 
-- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tokyo_market_confirmed_previous_no_20260810/summary.json`
-  (`sha256=6db5aee02d2b0299eab09c4aeaf8775a5d5b49cb5a3699fab3d47c910bd6c7a3`)
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tokyo_market_confirmed_previous_no_20260810_v2/summary.json`
+  (`sha256=c6bc5aa53b2196bb8762fb38f7cb86cdf868f9aae70d16bf765ec3f7f8014296`)
+- 同目录 `market_consensus_threshold_sensitivity.csv`
+  (`sha256=15b26dfae73b00d7165f4325331ed8be743d15401aac3c5c97fa6d317b75d973`)
 - 同目录 `phase_policy_trades.csv` 保存全部逐笔结果，固定 shares=5。
 
 ### 冻结后动作

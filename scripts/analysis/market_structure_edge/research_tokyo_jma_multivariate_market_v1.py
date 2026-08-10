@@ -485,6 +485,22 @@ def phase_policy_comparison(
             "source_join_artifacts": len(prior_join_paths) + 1,
         }
     )
+    sensitivity: list[dict[str, Any]] = []
+    for lower_ask in (0.70, 0.75, 0.80, 0.85, 0.90, 0.93, 0.95):
+        threshold_rows = [
+            row
+            for row in settled_all
+            if finite(row.get("best_ask")) is not None
+            and float(row["best_ask"]) >= lower_ask
+        ]
+        threshold_summary, _ = policy_summary(
+            threshold_rows,
+            f"market_consensus_ask_ge_{lower_ask:.2f}",
+            lambda row: True,
+        )
+        threshold_summary["consensus_min_no_ask"] = lower_ask
+        sensitivity.append(threshold_summary)
+    consensus_summary["retrospective_threshold_sensitivity"] = sensitivity
     summaries.append(consensus_summary)
     trades.extend(consensus_trades)
     return summaries, trades
@@ -1305,6 +1321,18 @@ def run_trigger_ab(args: argparse.Namespace) -> int:
     )
     write_csv(args.out / "phase_policy_summaries.csv", phase_summaries)
     write_csv(args.out / "phase_policy_trades.csv", phase_trades)
+    consensus_sensitivity = next(
+        (
+            row.get("retrospective_threshold_sensitivity", [])
+            for row in phase_summaries
+            if row["policy"] == "first_margin_ge_0p7_market_consensus"
+        ),
+        [],
+    )
+    write_csv(
+        args.out / "market_consensus_threshold_sensitivity.csv",
+        consensus_sensitivity,
+    )
     summary = {
         "schema_version": "tokyo_jma_multivariate_market_v1_trigger_ab",
         "window": {"start": args.start_date, "end": args.end_date},
