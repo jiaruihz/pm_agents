@@ -56,6 +56,33 @@ their version history:
    checkpoints. Do not create another numbered strategy because one case was
    bad.
 
+### 2026-08-10 Core Carry maker clock profit review
+
+- The adverse-selection boundary is the next expected **source report time**,
+  not this collector's later `available_at`. Using local collection lag would
+  leave a stale maker exposed to participants who receive the report first, so
+  the existing 90-second pre-report cancel buffer remains the live clock.
+- An entry first seen after that deadline may still follow the frozen ten-share
+  taker policy, but its five-share maker sleeve is terminal for live and must be
+  logged explicitly. It is not automatically re-armed after the next report.
+- On the settled first-new-report replay currently available, post-report
+  positive-EV re-entry of five shares selected 12 rows (11 wins, 1 loss) but
+  still produced `-$2.37`; not adding those shares is `$0`. The current v2
+  maker's actually settled non-zero fills are 20 shares, all winners, `+$1.65`,
+  but only three target dates are represented. The two expressions therefore
+  remain distinct and low-sample.
+- Execution profile v3 is a code candidate, not a live promotion: it preserves
+  the source clock and no-fallback edge cap, makes skipped-maker/shadow lineage
+  explicit, preserves historical v2 identity, and caps queue-preserving staged
+  repricing at two. Raw impact replay found 60 planned Core entries, 12 already
+  inside the source-report blackout; five of those occurred in the current v2
+  period and already had taker-only live behavior, so v3 changes their lineage
+  and capital reservation rather than adding an order. Among 29 v2 maker
+  intents, Lucknow, Ankara and Manila exceeded two reprices (21 excess
+  replacements in total); none produced a confirmed non-zero fill after the
+  second reprice, while the known Amsterdam fill occurred exactly on reprice
+  two. Production remains unchanged until a separate deployment.
+
 Current routing:
 
 - model/strategy state and production-independent verdict:

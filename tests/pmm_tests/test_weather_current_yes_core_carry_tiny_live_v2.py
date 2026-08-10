@@ -43,7 +43,7 @@ def test_runtime_contract_proves_pit_clock_and_clean_deployment() -> None:
     assert runner.DEPLOYMENT_METADATA["critical_source_dirty"] is False
     assert (
         runner.DEPLOYMENT_METADATA["deployment_contract_version"]
-        == "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v2"
+        == "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v3"
     )
 
 
@@ -108,9 +108,12 @@ def test_entry_is_exactly_ten_taker_plus_five_maker() -> None:
     assert plans[1]["cancel_before_data_update_utc"] == "2026-07-24T04:48:30+00:00"
     assert plans[1]["expires_at_utc"] == "2026-07-24T04:46:00+00:00"
     assert plans[1]["cancel_buffer_sec"] == 90
+    assert plans[1]["maker_live_eligible"] is True
+    assert plans[1]["maker_post_update_live_rearm"] is False
+    assert plans[1]["post_update_reprice_required"] is False
     assert all(
         plan["resolved_execution_profile"]
-        == "split_taker_maker_edge_capped_no_fallback_v2"
+        == "split_taker_maker_edge_capped_no_fallback_v3"
         for plan in plans
     )
     assert plans[0]["execution_config_id"] == plans[1]["execution_config_id"]
@@ -125,7 +128,7 @@ def test_live_parser_defaults_match_frozen_ten_plus_five_contract() -> None:
     assert args.maker_shares == runner.FROZEN_MAKER_SHARES == 5
     assert args.summary_filename == "signal_latest_summary.json"
     assert args.summary_history_filename == "signal_summary_history.jsonl"
-    assert runner.CONFIG_ID.endswith("split_10_taker_5_maker_edge_cap_v2")
+    assert runner.CONFIG_ID.endswith("split_10_taker_5_maker_edge_cap_v3")
 
 
 def test_market_above_frozen_training_support_is_not_eligible() -> None:
@@ -594,6 +597,76 @@ def test_maker_is_not_created_inside_pre_update_blackout() -> None:
 
     assert [plan["child_order_role"] for plan in plans] == ["taker"]
 
+    clock = runner.maker_clock_assessment(
+        score_row(),
+        now=datetime(2026, 7, 24, 4, 49, tzinfo=timezone.utc),
+        order_ttl_min=15,
+    )
+    assert clock["maker_clock_basis"] == (
+        "next_source_report_not_collector_availability"
+    )
+    assert clock["maker_clock_status"] == "pre_source_report_blackout"
+    assert clock["maker_live_eligible"] is False
+    assert clock["maker_live_skip_reason"] == "source_report_deadline_elapsed"
+    assert clock["maker_post_update_live_rearm"] is False
+    assert clock["maker_post_update_shadow_revalidation"] is True
+    assert clock["maker_shadow_policy"] == (
+        "first_post_update_positive_ev_replay_only_v1"
+    )
+
+
+def test_maker_clock_does_not_use_our_late_collector_availability() -> None:
+    row = {
+        **score_row(),
+        "source_report_ts_utc": "2026-08-10T10:55:00Z",
+        "observation_cadence_min": 30.0,
+        "available_at_utc": "2026-08-10T11:32:00Z",
+    }
+    clock = runner.maker_clock_assessment(
+        row,
+        now=datetime(2026, 8, 10, 11, 31, 49, tzinfo=timezone.utc),
+        order_ttl_min=15,
+    )
+
+    assert clock["next_source_report_due_utc"] == "2026-08-10T11:25:00+00:00"
+    assert clock["cancel_before_source_report_utc"] == "2026-08-10T11:23:30+00:00"
+    assert clock["seconds_to_next_source_report"] == pytest.approx(-409.0)
+    assert clock["maker_live_eligible"] is False
+
+
+def test_late_epoch_entry_records_terminal_live_maker_and_shadow_counterfactual(
+    tmp_path,
+) -> None:
+    row = score_row()
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [
+            {
+                "checkpoint_key": row["checkpoint_key"],
+                "family_city_day_conflict": False,
+            }
+        ],
+    )
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--max-daily-cost-usd", "100"]
+    )
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 49, tzinfo=timezone.utc),
+    )
+
+    assert [plan["child_order_role"] for plan in plans] == ["taker"]
+    assert runner.entry_plan_cost_reservation(plans) == pytest.approx(8.4)
+    assert attempts[0]["status"] == "planned"
+    assert attempts[0]["maker_clock_status"] == "pre_source_report_blackout"
+    assert attempts[0]["maker_live_action"] == "skip_terminal"
+    assert attempts[0]["maker_planned_shares"] == 0.0
+    assert attempts[0]["maker_shadow_revalidation_shares"] == 5.0
+    assert attempts[0]["maker_post_update_live_rearm"] is False
+
 
 def test_maker_cancels_at_pre_update_deadline(tmp_path) -> None:
     now = datetime(2026, 7, 24, 4, 48, 31, tzinfo=timezone.utc)
@@ -687,6 +760,12 @@ def test_default_split_and_cost_caps_track_ten_plus_five() -> None:
     assert args.taker_shares == 10.0
     assert args.maker_shares == 5.0
     assert runner.entry_cost_reservation(args, {"current_yes_ask": 0.84}) == pytest.approx(12.6)
+    assert runner.entry_plan_cost_reservation(
+        [
+            {"order_notional_cap": 8.4},
+            {"order_notional_cap": 4.0},
+        ]
+    ) == pytest.approx(12.4)
     assert runner.max_live_child_notional_usd(args) == pytest.approx(10.0)
 
 
