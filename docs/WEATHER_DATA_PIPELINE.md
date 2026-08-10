@@ -224,9 +224,11 @@ duplicate. During the confirmed maintenance cutover the stopped producer's final
 2,706,731,221 bytes were split into 33 dated shards with zero parse errors/date regressions. The ordered
 shards and source both hashed to `e6e86dc30f2640fb0e97666576d8ac75ab88bf4ecf3a6ccda7fcdb36aaac241b`;
 the shard-aware live-chain audit was identical before and after removing the root monolith. The dated writer
-is pinned in the dedicated `fast_source_runtime` release. The live instance remains intentionally stopped
-until its independently degraded market-books/proxy dependency returns healthy; this outage is not a data
-migration or reader error.
+is pinned in the dedicated `fast_source_runtime` release. The live instance was held stopped for 22m11s while
+an independently degraded market-books/proxy dependency recovered, then restarted from release
+`1cb1db431bc1a156f8e28dfb9e00dae7a4c72c2b`. Its first cycles added 13 rows/46,761 bytes to the current-day
+shard without recreating the monolith or changing the 318-row order journal; authenticated exchange open
+orders stayed at zero and the pre/post live-chain audit remained identical.
 
 The 2026-08-09/10 cleanup verified aggregate bytes against the ordered shard bytes before each deletion,
 backfilled 1,360 missing `forecast_versions` rows into the correct capture-day shard, and removed the
