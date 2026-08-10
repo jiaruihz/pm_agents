@@ -423,6 +423,12 @@ def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_pa
     assert (tmp_path / "source_events" / "sources.jsonl").exists()
     assert (tmp_path / "source_events" / "latest.json").exists()
 
+    shard_only = tmp_path / "source_events_shard_only"
+    source_events.write_outputs({**payload, "_write_aggregate": False}, shard_only)
+    assert not (shard_only / "sources.jsonl").exists()
+    assert len(list(shard_only.glob("????-??-??/sources.jsonl"))) == 1
+    assert parser.parse_args(["--shard-only"]).shard_only is True
+
 
 def test_source_events_cli_summary_excludes_private_state(monkeypatch, capsys, tmp_path) -> None:
     from weather_data_feed_service import source_events

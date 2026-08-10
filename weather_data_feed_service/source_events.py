@@ -364,6 +364,7 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
         **summary,
         "records": [] if args.history_reconcile_only else rows,
         "append_records": backfill_rows,
+        "_write_aggregate": not args.shard_only,
         "_state": state,
         "_state_path": str(state_path),
     }
@@ -375,7 +376,11 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     append_rows = list(payload.get("append_records") or [])
     state = dict(payload.get("_state") or {})
     available_at_utc = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    raw_source_path = str(output_dir / "sources.jsonl")
+    write_aggregate = bool(payload.get("_write_aggregate", True))
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    raw_source_path = str(
+        output_dir / ("sources.jsonl" if write_aggregate else f"{day}/sources.jsonl")
+    )
     rows = annotate_information_events(
         rows,
         state,
@@ -391,12 +396,12 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     latest_payload = {
         key: value
         for key, value in payload.items()
-        if key not in {"append_records", "_state", "_state_path"}
+        if key not in {"append_records", "_write_aggregate", "_state", "_state_path"}
     }
     latest_payload["records"] = rows
     if payload.get("history_reconcile_only"):
-        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        append_jsonl(output_dir / "sources.jsonl", append_rows)
+        if write_aggregate:
+            append_jsonl(output_dir / "sources.jsonl", append_rows)
         append_jsonl(output_dir / day / "sources.jsonl", append_rows)
         write_json(Path(str(payload["_state_path"])), state)
         return
@@ -405,6 +410,7 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         latest_payload=latest_payload,
         rows=rows + append_rows,
         jsonl_name="sources.jsonl",
+        write_aggregate=write_aggregate,
     )
     write_json(Path(str(payload["_state_path"])), state)
 
@@ -425,6 +431,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-workers", type=int, default=12)
     parser.add_argument("--recent-minutes", type=int, default=240)
     parser.add_argument("--history-reconcile-only", action="store_true")
+    parser.add_argument("--shard-only", action="store_true")
     return parser
 
 
