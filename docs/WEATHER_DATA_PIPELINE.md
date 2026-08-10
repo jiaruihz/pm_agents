@@ -243,8 +243,10 @@ cut over to 36 rollover-aware shard cursors with no replay; authenticated exchan
 orders and its post-restart order delta was zero. After the producer switched to shard-only, two completed
 source-event cycles grew the current shard while the 3,066,051,726-byte aggregate stayed unchanged. Its SHA-256
 matched the ordered shard prefix, no process or open handle referenced it, and it was removed. This cleanup pass
-has removed 7,348,475,335 bytes in total without removing unique history or changing canonical facts; the runtime
-tree no longer contains an aggregate/daily-shard duplicate candidate.
+has removed 7,348,475,335 root-file bytes without removing unique history or changing canonical facts. Of that,
+4,641,744,114 bytes were duplicate capacity actually reclaimed; the 2,706,731,221-byte opportunity monolith was
+replaced one-for-one by equally sized shards, so that part improves lifecycle/retention but does not reduce net
+storage. The runtime tree no longer contains an aggregate/daily-shard duplicate candidate.
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See
