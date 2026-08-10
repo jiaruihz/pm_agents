@@ -1588,10 +1588,15 @@ The first natural downstream publication after the final restart was
 `snapshot_20260810_2344.json`: it consumed a `c4531c18` batch with 1,804 books,
 published 902 records across 47 cities and 82 city-date pairs, and resolved all
 114/114 live orderbook targets with zero incomplete target. This closes the
-collector-to-strategy-snapshot deployment check. The cached-discovery failure
-path is covered by the regression suite; the observed post-restart batches all
-used live Gamma discovery, so production has not yet exercised
-`ok_with_discovery_reuse` naturally.
+collector-to-strategy-snapshot deployment check. Production then exercised the
+cached-discovery path during another proxy degradation: the 23:45 and 23:50
+batches recovered 63/70 event contracts from cache and retained the 82-event,
+1,804-token denominator. Their 114 hot targets were still fetched fresh, but
+1,500 and 1,690 cold books failed and 7/6 operational contracts remained
+unrecovered, so both batches correctly stayed `degraded`. The 23:55 batch also
+lost all 114 hot books. This proves denominator preservation and fail-closed
+status under a real fault, but not end-to-end availability while the external
+proxy route itself remains unhealthy.
 
 ## 24. Immediate Follow-Up Work
 
