@@ -27,9 +27,10 @@ def _previous_records(output_dir: Path) -> list[dict[str, Any]]:
     records = latest.get("records") if isinstance(latest, dict) else None
     if isinstance(records, list) and records:
         return [dict(row) for row in records if isinstance(row, dict)]
-    history_path = output_dir / "knmi_observations.jsonl"
-    if not history_path.exists():
+    history_paths = sorted(output_dir.glob("????-??-??/knmi_observations.jsonl"))
+    if not history_paths:
         return []
+    history_path = history_paths[-1]
     with history_path.open("r", encoding="utf-8", errors="ignore") as handle:
         last_lines = deque(handle, maxlen=1)
     if not last_lines:
@@ -102,13 +103,10 @@ def collect_once(
     filename = str(result.metadata.get("filename") or last_filename)
 
     if new_rows:
-        append_jsonl(output_dir / "knmi_observations.jsonl", new_rows)
-        by_day: dict[str, list[dict[str, Any]]] = {}
-        for row in new_rows:
-            day = str(row.get("target_date") or now[:10])
-            by_day.setdefault(day, []).append(row)
-        for day, day_rows in by_day.items():
-            append_jsonl(output_dir / day / "knmi_observations.jsonl", day_rows)
+        append_jsonl(
+            output_dir / now[:10] / "knmi_observations.jsonl",
+            new_rows,
+        )
 
     payload = {
         "schema_version": "weather_knmi_open_data_payload_v1",

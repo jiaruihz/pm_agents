@@ -154,3 +154,39 @@ def test_collect_once_does_not_append_when_revision_is_unchanged(
     assert payload["append_rows"] == 0
     assert payload["records"][0]["temp_c"] == 20.6
     assert not (tmp_path / "knmi_observations.jsonl").exists()
+
+
+def test_collect_once_writes_only_capture_day_shard(monkeypatch, tmp_path: Path) -> None:
+    from weather_data_feed_service import knmi_open_data as service
+    from weather_data_feed.high_frequency_observation_sources import (
+        HighFrequencyFetchResult,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "fetch_knmi_open_data",
+        lambda **_kwargs: HighFrequencyFetchResult(
+            source_key="knmi",
+            city="Amsterdam",
+            status="ok",
+            fetched_at_utc="2026-08-10T07:00:00+00:00",
+            latency_ms=1.0,
+            records=(
+                {
+                    "source": "knmi",
+                    "city": "Amsterdam",
+                    "target_date": "2026-08-10",
+                    "observation_time_utc": "2026-08-10T06:50:00+00:00",
+                    "temp_c": 20.0,
+                },
+            ),
+            metadata={"filename": "test.nc", "seen_revisions": {}},
+        ),
+    )
+
+    payload = collect_once(output_dir=tmp_path)
+
+    shards = list(tmp_path.glob("????-??-??/knmi_observations.jsonl"))
+    assert payload["append_rows"] == 1
+    assert len(shards) == 1
+    assert not (tmp_path / "knmi_observations.jsonl").exists()
