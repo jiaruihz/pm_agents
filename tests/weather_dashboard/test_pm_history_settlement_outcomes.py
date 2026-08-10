@@ -5,7 +5,7 @@ import pytest
 
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.connection import apply_pragmas
-from weather_dashboard.ingest.pm_history_settlements import ingest
+from weather_dashboard.ingest.pm_history_settlements import _signal_lookup_map, ingest
 
 
 @pytest.fixture
@@ -124,9 +124,63 @@ def test_pm_history_ingest_filters_target_date(canonical_conn, tmp_path):
         str(pmh_dir),
         start_date="2026-07-15",
         end_date="2026-07-15",
+        cities=["Tokyo"],
     )
 
     assert stats["files_seen"] == 1
     assert canonical_conn.execute(
         "SELECT DISTINCT target_date FROM settlement_outcomes"
     ).fetchone()[0] == "2026-07-15"
+
+
+def test_signal_lookup_map_filters_target_date_before_scanning(canonical_conn):
+    rows = []
+    for index, target_date in enumerate(("2026-07-14", "2026-07-15"), start=1):
+        rows.append(
+            (
+                str(index) * 64,
+                "pm_agent_local",
+                f"snapshot_{index}",
+                f"{target_date}T12:00:00Z",
+                "snapshot.json",
+                target_date,
+                "Tokyo",
+                "t1_trading",
+                "RJTT",
+                "23",
+                "C",
+                "YES",
+                "gfs",
+                0.8,
+                "open_meteo_live_gfs",
+                0.55,
+                0.25,
+                0.25,
+                f"condition-{index}",
+                f"market-{index}",
+                f"token-{index}",
+                18.0,
+            )
+        )
+    canonical_conn.executemany(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+
+    lookup = _signal_lookup_map(
+        canonical_conn,
+        start_date="2026-07-15",
+        end_date="2026-07-15",
+    )
+
+    assert lookup == {
+        ("Tokyo", "2026-07-15", "23"): ("condition-2", "market-2")
+    }

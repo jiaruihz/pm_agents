@@ -1,7 +1,7 @@
 // HTTP client for the weather dashboard FastAPI backend
 import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail, StrategyDefinitionRow, StrategyDefinitionDetail, StrategyInstanceRow, StrategyInstanceDetail } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
-import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse, OrderBlotterResponse } from "./v2-types";
+import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse, OrderBlotterResponse, OrderBlotterDailySummaryResponse } from "./v2-types";
 
 const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
 
@@ -234,5 +234,18 @@ export const weatherApi = {
     offset?: number;
   }): Promise<OrderBlotterResponse> {
     return get("/order-blotter", params);
+  },
+
+  getOrderBlotterDailySummary(params?: {
+    trade_class?: string;
+    status?: string;
+    instance_id?: string;
+    config_id?: string;
+    strategy_key?: string;
+    strategy_id?: string;
+    target_date?: string;
+    city?: string;
+  }): Promise<OrderBlotterDailySummaryResponse> {
+    return get("/order-blotter/daily-summary", params);
   },
 };

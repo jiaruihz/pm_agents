@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from weather_dashboard.api.deps import get_db
 from weather_dashboard.api.routers.runs import _SETTLEMENTS_DEDUP  # shared settlement dedup CTE
+from src.strategies.runtime.production import load_production_spec
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -136,7 +137,10 @@ def _condition_slug_map() -> dict:
     import glob
     import json as _json
     import os as _os
-    snap_dir = _os.environ.get("WEATHER_SNAPSHOTS_DIR", "runtime/weather_edge_v1/market_data/paper_snapshots")
+    snap_dir = _os.environ.get(
+        "WEATHER_SNAPSHOTS_DIR",
+        str(load_production_spec().strategy_paper_snapshot_dir()),
+    )
     files = sorted(glob.glob(_os.path.join(snap_dir, "snapshot_*.json")), reverse=True)
     out: dict = {}
     for fp in files[:3]:  # last few snapshots cover current + recent markets

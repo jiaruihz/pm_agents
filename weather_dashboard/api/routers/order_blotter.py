@@ -26,6 +26,80 @@ def _row_ts(row: dict[str, Any]) -> str:
     return str(row.get("fill_ts_utc") or row.get("order_ts_utc") or row.get("snapshot_ts_utc") or "")
 
 
+@router.get("/daily-summary")
+def get_order_blotter_daily_summary(
+    db: Db,
+    trade_class: str = Query("live_real", description="live_real | paper | snapshot_replay | live_simulated | all"),
+    status: str = Query("all", description="all | open | settled | unfilled"),
+    instance_id: Optional[str] = Query(None),
+    config_id: Optional[str] = Query(None),
+    strategy_key: Optional[str] = Query(None),
+    strategy_id: Optional[str] = Query(None),
+    target_date: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+) -> dict[str, Any]:
+    """Aggregate fill-grain PnL by target date for the order blotter."""
+    if instance_id:
+        instance = db.execute(
+            "SELECT 1 FROM strategy_instance WHERE instance_id = ?", (instance_id,)
+        ).fetchone()
+        if instance is None:
+            raise HTTPException(status_code=404, detail=f"unknown strategy_instance: {instance_id}")
+
+    fact_where = ["1=1"]
+    fact_params: list[Any] = []
+    if instance_id:
+        fact_where.append("ft.instance_id = ?")
+        fact_params.append(instance_id)
+    if trade_class != "all":
+        fact_where.append("ft.trade_class = ?")
+        fact_params.append(trade_class)
+    if status == "open":
+        fact_where.append("COALESCE(ft.settled, 0) = 0")
+    elif status == "settled":
+        fact_where.append("COALESCE(ft.settled, 0) = 1")
+    elif status == "unfilled":
+        fact_where.append("0")
+    if config_id:
+        fact_where.append("ft.config_id = ?")
+        fact_params.append(config_id)
+    if strategy_key:
+        fact_where.append("ft.strategy_key = ?")
+        fact_params.append(strategy_key)
+    if strategy_id:
+        fact_where.append("ft.strategy_id = ?")
+        fact_params.append(strategy_id)
+    if target_date:
+        fact_where.append("ft.target_date = ?")
+        fact_params.append(target_date)
+    if city:
+        fact_where.append("ft.city = ?")
+        fact_params.append(city)
+
+    rows = [
+        dict(row)
+        for row in db.execute(
+            f"""
+            SELECT
+                COALESCE(ft.target_date, '') AS target_date,
+                COUNT(*) AS fill_count,
+                SUM(COALESCE(ft.cost_usd, 0) + COALESCE(ft.fees_usd, 0)) AS cost_with_fees_usd,
+                SUM(CASE WHEN COALESCE(ft.settled, 0) = 1 THEN 1 ELSE 0 END) AS settled_count,
+                SUM(CASE WHEN COALESCE(ft.settled, 0) = 1 THEN COALESCE(ft.pnl_usd_at_fill, 0) ELSE 0 END) AS realized_pnl_usd,
+                SUM(CASE WHEN COALESCE(ft.settled, 0) = 0 THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN COALESCE(ft.settled, 0) = 0 AND ft.unrealized_pnl_mid IS NOT NULL THEN 1 ELSE 0 END) AS marked_open_count,
+                SUM(CASE WHEN COALESCE(ft.settled, 0) = 0 THEN COALESCE(ft.unrealized_pnl_mid, 0) ELSE 0 END) AS unrealized_pnl_mid_usd
+            FROM fact_trades ft
+            WHERE {' AND '.join(fact_where)}
+            GROUP BY COALESCE(ft.target_date, '')
+            ORDER BY target_date DESC
+            """,
+            fact_params,
+        ).fetchall()
+    ]
+    return {"rows": rows, "filters": {"trade_class": trade_class, "status": status}}
+
+
 @router.get("")
 def get_order_blotter(
     db: Db,
@@ -104,7 +178,8 @@ def get_order_blotter(
                 ft.order_ts_utc, ft.fill_ts_utc, ft.snapshot_ts_utc,
                 ft.market_price, ft.limit_price, ft.fill_price, ft.fill_qty,
                 ft.cost_usd, ft.notional, ft.fees_usd,
-                ft.settled, ft.final_yes, ft.pnl_usd_at_fill,
+                ft.settlement_status, ft.settled, ft.final_yes, ft.contract_won,
+                ft.pnl_usd_at_fill,
                 ft.unrealized_pnl_mid, ft.val_mid, ft.val_snapshot_ts_utc,
                 ft.condition_id, ft.market_id
             FROM fact_trades ft
@@ -175,7 +250,8 @@ def get_order_blotter(
                     o.placed_at_utc AS order_ts_utc, NULL AS fill_ts_utc, sig.snapshot_ts_utc,
                     sig.market_price, o.limit_price, NULL AS fill_price, NULL AS fill_qty,
                     o.cost_usd, o.notional, NULL AS fees_usd,
-                    0 AS settled, NULL AS final_yes, NULL AS pnl_usd_at_fill,
+                    NULL AS settlement_status, 0 AS settled, NULL AS final_yes,
+                    NULL AS contract_won, NULL AS pnl_usd_at_fill,
                     NULL AS unrealized_pnl_mid, NULL AS val_mid, NULL AS val_snapshot_ts_utc,
                     sig.condition_id, sig.market_id,
                     r.state AS run_state

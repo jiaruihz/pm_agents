@@ -78,6 +78,10 @@ canonical 物化与报告还必须保存 DB identity、materialization `build_id
 | 预报源时区 | `forecast_timezone` | TEXT | Open-Meteo response timezone，用于审计本地峰值小时 |
 | 预报UTC偏移秒 | `forecast_utc_offset_seconds` | INTEGER | Open-Meteo response `utc_offset_seconds` |
 | 决策相对峰值小时 | `forecast_peak_delta_hours_local` | REAL | `decision_local_hour - forecast_peak_hour_local`；正数表示已过预报峰值小时 |
+| 决策时刻预报温度 | `forecast_temperature_at_decision_f` | REAL °F | 从当时 PIT hourly curve 线性插值；不访问事后 API |
+| 决策后的预报最高温 | `forecast_remaining_max_f` | REAL °F | 只使用决策时刻及之后的同版 hourly curve；不得复用已经过去的全天峰值 |
+| 决策后预报再升温空间 | `forecast_reheat_after_now_f` | REAL °F | `max(0, forecast_remaining_max_f - forecast_temperature_at_decision_f)` |
+| 剩余预报高出观测最高温 | `forecast_remaining_gap_to_running_native` | REAL °C/°F | future-only forecast max 减 running max；no-reheat/remaining-heat 使用此字段，不用全天 `forecast_gap_to_running_native` |
 | 预报最高温是否落入本 bracket | `forecast_max_in_bracket` | INTEGER 0/1 | 按当前 record 的 bracket 边界判断 |
 | 预报最高温高出本 bracket | `forecast_max_above_bracket_f` | REAL °F | 若未高出则 0；top bracket 可能为空 |
 | 预报最高温低于本 bracket | `forecast_max_below_bracket_f` | REAL °F | 若未低于则 0 |
@@ -89,6 +93,27 @@ canonical 物化与报告还必须保存 DB identity、materialization `build_id
 | 市场condition | `condition_id` | TEXT | 0x... |
 | 市场ID | `market_id` | TEXT | |
 | 距结算小时数 | `hours_to_settle` | REAL | |
+
+等高平台的 observation clock 必须区分：
+
+- `running_max_obs_utc` / `minutes_since_running_max`：兼容字段，指最后一次等于 running max 的报文；重复等高会刷新。
+- `first_running_max_obs_utc` / `minutes_since_first_running_max`：当前 running max 首次出现。
+- `minutes_since_last_strict_new_high`：最后一次严格抬高 running max 后经过的时间；判断成熟 plateau 优先使用它。
+- `same_running_max_obs_count`：当前 running max 在可见 PIT history 中出现的独立报文数。
+
+`running_max_state_v2` / `intraday_state_v2` 使用 strict-high clock；旧
+`running_max_state` / `intraday_state` 是兼容标签，仍使用 last-equal-high
+clock。`solar_phase_v2` 使用真实太阳高度及未来两小时变化，不得用固定本地
+hour bucket 冒充物理太阳阶段。湿度本身不得标成 convection evidence。
+
+Observation cache 刷新失败并复用上一条事实时，`status` 必须为
+`reused_after_fetch_error`，并按当前时刻重算 `age_min` 和 observation clocks；
+不得保留 `status=ok` 或旧 age。任何已知 availability 晚于 feature
+`as_of_ts_utc` 的 observation 都不得进入 frame。
+
+天气转场使用连续 duration/change 字段：`clear_sky_regime_minutes`、
+`precip_free_regime_minutes`、对应 `*_temp_change_f` 与 `*_left_censored`；
+缺历史时保留 null/censored，不转换为“未下雨”或“刚放晴”的策略条件。
 
 ### 1.1.1 First-seen information event（target contract）
 
@@ -132,20 +157,21 @@ late_backfill_first_seen_unknown
 时间戳升级。完整 grain、ID、source-specific 规则、candidate v1/v2 共存方式和
 验收标准见
 [WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
+
 ### 1.2 Order / 订单
 
 | 概念 | 规范字段名 | 类型 | 说明 |
 |---|---|---|---|
-| 订单ID | `order_id` | TEXT | N100生成的原始ID；paper CSV已有 |
-| 执行ID | `execution_id` | TEXT (64位hex) | live专有，来自N100执行器 |
-| 计划ID | `plan_id` | TEXT (64位hex) | N100生成；见 §2 |
-| 订单方向 | `order_side` | TEXT BUY_YES/BUY_NO | ~~BUY~~ 废弃；见 §3 |
+| 订单ID | `order_id` | TEXT | venue 原始订单ID；paper 可以由 `execution_id` 确定性派生 |
+| 执行ID | `execution_id` | TEXT (64位hex) | canonical order-attempt ID；保留 raw 值，缺失时按 §2.2 补全 |
+| 计划ID | `plan_id` | TEXT (64位hex) | canonical decision ID；由 §2.2 的当前 helper 确定性生成 |
+| 订单方向 | `order_side` | TEXT BUY_YES/BUY_NO/SELL_YES/SELL_NO | ~~BUY~~ 废弃；见 §3 |
 | 成交价 | `entry_price` | REAL 0-1 | |
 | 成交份额 | `shares` | REAL | |
 | 成本USD | `cost_usd` | REAL | |
 | 名义价值 | `notional` | REAL | |
 | 限价 | `limit_price` | REAL 0-1 | |
-| 执行档案 | `execution_profile` | TEXT | 策略选择的 taker/maker 组合档案 |
+| 执行档案 | `execution_profile` | TEXT | plan-owned；策略选择的稳定、版本化 taker/maker 组合档案，order 通过 `plan_id` 继承 |
 | 执行策略 | `execution_policy` | TEXT | mid_price_core_v1 等 |
 | token ID | `token_id` | TEXT | Polymarket CLOB token |
 | 交易所 | `venue` | TEXT | polymarket_clob |
@@ -209,7 +235,24 @@ signal_id = SHA256(target_date + "|" + city + "|" + bracket + "|" + signal_side 
 
 ### 2.2 plan_id / execution_id
 
-`plan_id` 和 `execution_id` 均由 N100 执行器生成（64位hex），pm_agent 透传，不自行生成。
+当前权威实现是
+[`src/strategies/weather_edge_v1/ids.py`](../src/strategies/weather_edge_v1/ids.py)，
+并由 canonical migration 复用；不是 N100 单独生成的 ID 口径。
+
+```text
+plan_id = SHA256(run_id | signal_id | canonical_order_side | execution_policy
+                 [| execution_profile | child_order_role])
+execution_id = raw execution_id（若 runtime journal 已提供）
+             否则 make_execution_id(run_id, canonical_plan_id, venue,
+                                  attempt_index=stable_attempt_key)
+```
+
+`execution_profile` / `child_order_role` 都为空时，`plan_id` 保持 legacy
+single-leg 算法；任一存在时二者进入 identity，避免一个 signal 的多个 child
+折叠。`make_execution_id` 的正式参数名是 `attempt_index`；runtime migration
+把按已知原始 order/attempt 字段选择的 `stable_attempt_key` 作为该参数传入，
+缺失时才使用整行的稳定 hash。旧 raw `plan_id` 仅作为 source mapping 使用，
+canonical `plan_id` 由上述算法生成。
 
 ### 2.3 run_id
 
@@ -229,8 +272,25 @@ NO     — 押注该区间结算为 NO（价格→0）
 ```
 BUY_YES   — 买入 YES token
 BUY_NO    — 买入 NO token  (= 卖出 YES 仓位)
+SELL_YES  — 卖出 YES token
+SELL_NO   — 卖出 NO token
 ```
-> ⚠️ 当前 N100 live JSONL 里 `order_side` = "BUY"（未区分YES/NO）——这是已知 bug，待修正（§6）。
+
+canonical schema 当前只持久化 `order_side`；后续 execution module 所说的
+`venue_side` / `outcome_side` 是它的无损内部投影，尚不是额外的 canonical
+字段：
+
+| legacy raw `order_side` | signal outcome | canonical `order_side` | `venue_side` | `outcome_side` |
+|---|---|---|---|---|
+| `BUY` / 空 | YES | `BUY_YES` | BUY | YES |
+| `BUY` / 空 | NO | `BUY_NO` | BUY | NO |
+| `SELL` | YES | `SELL_YES` | SELL | YES |
+| `SELL` | NO | `SELL_NO` | SELL | NO |
+
+已是四值 canonical 形式的 raw 值原样通过。权威映射在
+[`weather_dashboard/legacy_migration/live_cycle.py`](../weather_dashboard/legacy_migration/live_cycle.py)
+和 [`weather_dashboard/legacy_migration/strategy_runtime_orders.py`](../weather_dashboard/legacy_migration/strategy_runtime_orders.py)；
+不得把裸 `BUY` 直接写进 canonical plans/orders。
 
 ### city_pool
 ```

@@ -25,9 +25,14 @@ if str(ROOT) not in sys.path:
 
 from scripts.analysis.weather_polymarket_account_activity import iter_activity  # noqa: E402
 from weather_dashboard.ingest.clob_fill_sync import (  # noqa: E402
+    _exact_activity_fee_for_fill,
     _extract_immediate_place_fill,
+    _fallback_fee_details,
+    _index_public_activity_by_tx,
     _make_fill_id,
     _make_public_trade_fill_id,
+    _maker_only,
+    _public_buy_fee_details,
     _public_trade_key,
     _select_public_partial_fills,
     _ts_to_iso,
@@ -81,6 +86,7 @@ def placed_ts(row: dict[str, Any]) -> int:
 
 def build_cache_rows(orders: list[dict[str, Any]], activity_rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     public_trades = [row for row in activity_rows if row.get("type") == "TRADE"]
+    activity_by_tx = _index_public_activity_by_tx(public_trades)
     used: set[str] = set()
     cache_rows: list[dict[str, Any]] = []
     orders_with_fill = 0
@@ -92,6 +98,17 @@ def build_cache_rows(orders: list[dict[str, Any]], activity_rows: list[dict[str,
             continue
         immediate_fill = _extract_immediate_place_fill(order)
         if immediate_fill is not None:
+            fee_details = _exact_activity_fee_for_fill(
+                transaction_hashes=immediate_fill["transaction_hashes"],
+                activity_by_tx=activity_by_tx,
+                condition_id=str(order.get("condition_id") or ""),
+                token_id=str(order.get("token_id") or ""),
+                order_side=str(order.get("order_side") or ""),
+                expected_shares=immediate_fill["filled_shares"],
+            ) or {
+                key: immediate_fill[key]
+                for key in ("fees_usd", "fee_source", "fee_rate", "transaction_hash", "fee_metadata")
+            }
             created_at = dt.datetime.now(dt.timezone.utc).isoformat()
             cache_rows.append(
                 {
@@ -100,7 +117,11 @@ def build_cache_rows(orders: list[dict[str, Any]], activity_rows: list[dict[str,
                     "order_id": clob_order_id,
                     "filled_shares": immediate_fill["filled_shares"],
                     "filled_price": immediate_fill["filled_price"],
-                    "fees_usd": immediate_fill["fees_usd"],
+                    "fees_usd": fee_details["fees_usd"],
+                    "fee_source": fee_details["fee_source"],
+                    "fee_rate": fee_details["fee_rate"],
+                    "fee_metadata": fee_details["fee_metadata"],
+                    "transaction_hash": fee_details["transaction_hash"],
                     "filled_at_utc": immediate_fill["filled_at_utc"],
                     "created_at_utc": created_at,
                     "source": "order_exchange_response_matched",
@@ -145,6 +166,11 @@ def build_cache_rows(orders: list[dict[str, Any]], activity_rows: list[dict[str,
             except (TypeError, ValueError):
                 filled_price = 0.0
             filled_at = _ts_to_iso(trade.get("timestamp"))
+            fee_details = _public_buy_fee_details(trade) or _fallback_fee_details(
+                shares=filled_shares,
+                price=filled_price,
+                maker_only=_maker_only(order),
+            )
             created_at = dt.datetime.now(dt.timezone.utc).isoformat()
             cache_rows.append(
                 {
@@ -153,12 +179,15 @@ def build_cache_rows(orders: list[dict[str, Any]], activity_rows: list[dict[str,
                     "order_id": clob_order_id,
                     "filled_shares": filled_shares,
                     "filled_price": filled_price,
-                    "fees_usd": 0.0,
+                    "fees_usd": fee_details["fees_usd"],
+                    "fee_source": fee_details["fee_source"],
+                    "fee_rate": fee_details["fee_rate"],
+                    "fee_metadata": fee_details["fee_metadata"],
                     "filled_at_utc": filled_at,
                     "created_at_utc": created_at,
                     "source": "polymarket_public_activity",
                     "public_trade_key": key,
-                    "transactionHash": trade.get("transactionHash"),
+                    "transaction_hash": fee_details["transaction_hash"],
                 }
             )
             used.add(key)

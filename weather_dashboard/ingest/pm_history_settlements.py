@@ -49,7 +49,8 @@ import argparse
 import hashlib
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date as calendar_date
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.strategies.weather_edge_v1.ids import make_settlement_id
@@ -105,15 +106,30 @@ def _parse_filename(name: str) -> tuple[str, str] | None:
     return parse_pm_history_filename(name)
 
 
-def _signal_lookup_map(conn: sqlite3.Connection) -> dict[tuple, tuple[str, str]]:
+def _signal_lookup_map(
+    conn: sqlite3.Connection,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[tuple, tuple[str, str]]:
     """(city, target_date, bracket) -> (condition_id, market_id) from signals.
     Brackets the strategy never touched won't be in this map; their settlement
     is still written but with NULL condition_id.
     """
+    clauses = ["condition_id IS NOT NULL"]
+    params: list[str] = []
+    if start_date:
+        clauses.append("target_date >= ?")
+        params.append(start_date)
+    if end_date:
+        clauses.append("target_date <= ?")
+        params.append(end_date)
+
     out: dict[tuple, tuple[str, str]] = {}
     for r in conn.execute(
         "SELECT DISTINCT city, target_date, bracket, condition_id, market_id "
-        "FROM signals WHERE condition_id IS NOT NULL"
+        f"FROM signals WHERE {' AND '.join(clauses)}",
+        params,
     ):
         out[(r["city"], r["target_date"], str(r["bracket"]))] = (
             r["condition_id"], r["market_id"]
@@ -128,21 +144,43 @@ def ingest(
     dry_run: bool = False,
     start_date: str | None = None,
     end_date: str | None = None,
+    cities: list[str] | None = None,
 ) -> dict:
     conn.row_factory = sqlite3.Row
     ensure_settlement_outcomes_schema(conn)
-    sig_lookup = _signal_lookup_map(conn)
-    files = []
-    for path in sorted(Path(pmh_dir).glob("*_2026-*.json")):
-        parsed = _parse_filename(path.name)
-        if parsed is None:
-            continue
-        _, target_date = parsed
-        if start_date and target_date < start_date:
-            continue
-        if end_date and target_date > end_date:
-            continue
-        files.append(path)
+    sig_lookup = _signal_lookup_map(
+        conn,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    files: list[Path] = []
+    pmh_root = Path(pmh_dir)
+    if cities and start_date and end_date:
+        current = calendar_date.fromisoformat(start_date)
+        final = calendar_date.fromisoformat(end_date)
+        while current <= final:
+            target_date = current.isoformat()
+            for city in sorted(set(cities)):
+                path = pmh_root / f"{city}_{target_date}.json"
+                if path.exists():
+                    files.append(path)
+            current += timedelta(days=1)
+    else:
+        # Path.glob() stats every matching directory entry.  The production
+        # cache contains years of city-day files on an external volume, so
+        # filter names before doing any per-file I/O.
+        for path in sorted(pmh_root.iterdir(), key=lambda item: item.name):
+            if "_2026-" not in path.name or path.suffix != ".json":
+                continue
+            parsed = _parse_filename(path.name)
+            if parsed is None:
+                continue
+            _, target_date = parsed
+            if start_date and target_date < start_date:
+                continue
+            if end_date and target_date > end_date:
+                continue
+            files.append(path)
 
     stats = {
         "files_seen": 0, "files_skipped_null": 0,
@@ -224,6 +262,7 @@ def main() -> None:
     ap.add_argument("--pmh-dir", default=DEFAULT_PMH_DIR)
     ap.add_argument("--start-date")
     ap.add_argument("--end-date")
+    ap.add_argument("--city", action="append", dest="cities")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -235,6 +274,7 @@ def main() -> None:
             dry_run=args.dry_run,
             start_date=args.start_date,
             end_date=args.end_date,
+            cities=args.cities,
         )
         print(json.dumps(out, indent=2))
     finally:

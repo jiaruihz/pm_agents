@@ -263,8 +263,10 @@ export interface OrderBlotterRow {
   cost_usd: number | null;
   notional: number | null;
   fees_usd: number | null;
+  settlement_status: string | null;
   settled: number | null;
   final_yes: number | null;
+  contract_won: number | null;
   pnl_usd_at_fill: number | null;
   unrealized_pnl_mid: number | null;
   val_mid: number | null;
@@ -278,5 +280,21 @@ export interface OrderBlotterResponse {
   total: number;
   limit: number;
   offset: number;
+  filters: Record<string, string | number | null>;
+}
+
+export interface OrderBlotterDailySummary {
+  target_date: string;
+  fill_count: number;
+  cost_with_fees_usd: number;
+  settled_count: number;
+  realized_pnl_usd: number;
+  open_count: number;
+  marked_open_count: number;
+  unrealized_pnl_mid_usd: number;
+}
+
+export interface OrderBlotterDailySummaryResponse {
+  rows: OrderBlotterDailySummary[];
   filters: Record<string, string | number | null>;
 }

@@ -18,6 +18,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 
 from weather_dashboard.api.deps import get_db
+from src.strategies.runtime.production import load_production_spec
 
 router = APIRouter(prefix="/data-sources", tags=["data-sources"])
 
@@ -27,7 +28,7 @@ Db = Annotated[sqlite3.Connection, Depends(get_db)]
 def _snapshots_dir() -> Path:
     return Path(os.environ.get(
         "WEATHER_SNAPSHOTS_DIR",
-        "runtime/weather_edge_v1/market_data/paper_snapshots",
+        str(load_production_spec().strategy_paper_snapshot_dir()),
     ))
 
 

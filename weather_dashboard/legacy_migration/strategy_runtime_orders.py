@@ -23,6 +23,7 @@ from weather_dashboard.ingest.canonical import (
     insert_universe,
 )
 from src.strategies.runtime.ownership import strategy_key_for_params
+from src.strategies.runtime.production import load_production_spec
 from src.strategies.weather_edge_v1.ids import make_execution_id
 from weather_dashboard.legacy_migration.live_cycle import (
     CITY_ICAO,
@@ -46,7 +47,11 @@ DEFAULT_ROOTS = (
     # 必须进 canonical 血缘，否则 tiny-live fill 不出现在 fact_trades（数据审计 v1 §1.2）。
     "runtime/weather_edge_v1",
 )
-SNAPSHOT_DIR = Path("runtime/weather_edge_v1/market_data/paper_snapshots")
+PRODUCTION_SPEC = load_production_spec()
+SNAPSHOT_DIRS = (
+    PRODUCTION_SPEC.strategy_paper_snapshot_dir(),
+    PRODUCTION_SPEC.resolved_historical_paper_snapshot_root(),
+)
 GAMMA_HOST = os.getenv("POLYMARKET_GAMMA_HOST", "https://gamma-api.polymarket.com").rstrip("/")
 _GAMMA_MARKET_CACHE: dict[str, dict[str, Any] | None] = {}
 _CONDITION_ID_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
@@ -151,9 +156,14 @@ def _parse_dt(value: Any) -> datetime | None:
 
 def _snapshot_files_for_date(target_date: str) -> list[Path]:
     ymd = target_date.replace("-", "")
-    if not ymd or not SNAPSHOT_DIR.exists():
+    if not ymd:
         return []
-    return sorted(SNAPSHOT_DIR.glob(f"snapshot_{ymd}_*.json"))
+    by_name: dict[str, Path] = {}
+    for root in SNAPSHOT_DIRS:
+        if root.exists():
+            for path in root.glob(f"snapshot_{ymd}_*.json"):
+                by_name.setdefault(path.name, path)
+    return [by_name[name] for name in sorted(by_name)]
 
 
 def _snapshot_file_ts(path: Path) -> datetime | None:

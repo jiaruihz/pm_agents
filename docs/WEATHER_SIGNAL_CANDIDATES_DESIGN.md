@@ -1,7 +1,7 @@
 # Weather Signal Candidates 底表设计
 
 Status: design-draft
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-07-28 event-checkpoint grain correction; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
 
@@ -23,6 +23,17 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 > 关联:[WEATHER_FACT_TRADES_DESIGN.md](WEATHER_FACT_TRADES_DESIGN.md) §8(本表的占位)、
 > [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)(口径)、
 > [WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md)(管道)
+
+> **2026-07-28 grain correction:** 本文原来的 `(condition_id, side,
+> event_date)` 一行和“不物化 snapshot 时序”只适用于固定 T-24 日级机会研究。
+> first-seen/event-driven 研究一天可能有多个真正不同的信息 checkpoint，不能再
+> 压成一行。目标实现仍使用同一张 `fact_signal_candidates`，新增
+> `candidate_grain_version=v2_event_checkpoint`、`trigger_event_id`、
+> `state_checkpoint_id` 与 PIT book/model lineage；旧
+> `v1_legacy_daily` rows 保留且不改 ID。完整设计见
+> [WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
+> 这不是把所有轮询 snapshot 灌进 fact：只有 material information event
+> 触发 checkpoint，重复 poll 不产生新 candidate。
 
 ---
 

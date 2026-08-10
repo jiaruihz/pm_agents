@@ -203,6 +203,28 @@ def test_order_blotter_returns_filled_fact_rows(client, api_db):
     assert data["rows"][0]["fill_id"] == fill["fill_id"]
     assert data["rows"][0]["config_id"] == config_id
     assert data["rows"][0]["pnl_usd_at_fill"] is not None
+    assert data["rows"][0]["settlement_status"] == "settled"
+    assert data["rows"][0]["final_yes"] in {0.0, 1.0}
+
+
+def test_order_blotter_daily_summary_groups_complete_fill_grain(client, api_db):
+    config_id, run_id, signal, plan, order, fill, settlement = _canonical_bundle()
+    _insert_metadata(api_db, config_id, run_id)
+    ingest_canonical_signals(api_db, [signal], "signals.jsonl")
+    ingest_canonical_plans(api_db, [plan], "plans.jsonl")
+    ingest_canonical_orders(api_db, [order], "orders.jsonl")
+    ingest_canonical_fills(api_db, [fill], "fills.jsonl")
+    ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
+    _rebuild_fact(api_db)
+
+    r = client.get("/api/order-blotter/daily-summary?trade_class=paper")
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 1
+    assert rows[0]["target_date"] == signal["target_date"]
+    assert rows[0]["fill_count"] == 1
+    assert rows[0]["settled_count"] == 1
+    assert rows[0]["open_count"] == 0
 
 
 def test_order_blotter_includes_unfilled_orders(client, api_db):

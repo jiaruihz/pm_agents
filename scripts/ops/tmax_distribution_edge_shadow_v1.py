@@ -84,6 +84,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selected-only", action="store_true", help="Default keeps both selected and blocked.")
     parser.add_argument("--max-events-per-run", type=int, default=5000)
     parser.add_argument("--refresh-source", action="store_true")
+    parser.add_argument(
+        "--refresh-script",
+        action="append",
+        default=[],
+        help=(
+            "Repeatable. Override the scripts run by --refresh-source "
+            "(default: the P5/P6 materializers). The v3 adapter points this at "
+            "research_tmax_distribution_v3_model_v1.py."
+        ),
+    )
     parser.add_argument("--interval-seconds", type=float, default=900.0)
     return parser.parse_args()
 

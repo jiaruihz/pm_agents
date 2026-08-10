@@ -114,7 +114,8 @@ snapshot replay CSV (`t24_paper_snapshot_replay_trades.csv`) 是 35 列，结构
 
 ### ✅ P0 — 已完成 (2026-05-17)
 
-以下 6 列已加入 `signals` 表，ingest/API/前端全栈已更新。DB 已用 rebuild 路径重建，所有历史数据已填充。
+以下 6 列已加入 `signals` 表，ingest/API/前端全栈已更新。DB 已用当时的 rebuild 输入重建；下表计数只表示
+2026-05-17 该次 `signals` materialization scope 内已填充的 rows，不表示项目全部历史或当前 canonical coverage。
 
 | 字段 | 类型 | 状态 | 验证数据 |
 |---|---|---|---|

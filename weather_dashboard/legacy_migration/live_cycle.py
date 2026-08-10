@@ -170,7 +170,8 @@ def _order_side(row: dict[str, Any]) -> str:
 
 def _snapshot_ts(row: dict[str, Any]) -> str:
     return str(
-        row.get("snapshot_ts_utc")
+        row.get("decision_snapshot_ts_utc")
+        or row.get("snapshot_ts_utc")
         or row.get("snapshot_fetched_at_utc")
         or row.get("imported_at_utc")
         or row.get("created_at_utc")
@@ -247,17 +248,25 @@ def _strategy_params(summary: dict[str, Any], raw_plans: list[dict[str, Any]]) -
     """
     config = dict(summary.get("config") or {})
     first_plan = raw_plans[0] if raw_plans else {}
-    execution_policy = str(
-        first_plan.get("execution_policy")
-        or first_plan.get("combo")
-        or config.get("execution_policy")
-        or "mid_price_core_v1"
-    ).strip() or "mid_price_core_v1"
+    execution_profile, execution_policy, order_lifecycle_policy, _child_role = (
+        _execution_identity(
+            {
+                **config,
+                **first_plan,
+                "execution_policy": first_plan.get("execution_policy")
+                or first_plan.get("combo")
+                or config.get("execution_policy")
+                or "mid_price_core_v1",
+            }
+        )
+    )
 
     params: dict[str, Any] = {
         "strategy_family": "weather_edge_v1",
         "algorithm_version": "mid_price_core_v1",         # base signal/sizing algorithm (stable)
+        "execution_profile": execution_profile,
         "execution_policy": execution_policy,              # order-placement policy
+        "order_lifecycle_policy": order_lifecycle_policy,
         "signal_builder_version": "weather_snapshot_signal_builder",
         "trade_planner_version": "weather_trade_planner",
         "city_pool": config.get("city_pool") or first_plan.get("city_pool") or "t1_trading",
@@ -459,6 +468,40 @@ def _canonical_signal(raw: dict[str, Any], *, producer_system: str, cycle_id: st
     }
 
 
+def _execution_identity(raw: dict[str, Any]) -> tuple[str, str, str, str]:
+    """Return profile, child quote policy, lifecycle policy, and child role."""
+
+    execution_policy = str(raw.get("execution_policy") or raw.get("combo") or "live_cycle").strip()
+    child_order_role = str(raw.get("child_order_role") or "").strip()
+    execution_profile = str(raw.get("execution_profile") or "").strip()
+    if not execution_profile:
+        execution_mode = str(raw.get("execution_mode") or "").strip()
+        if execution_mode == "tiny_live_split_taker_maker_probe" or execution_policy in {
+            "current_yes_heat_death_maker_probe_v1",
+            "current_yes_heat_death_maker_chase_v1",
+            "current_yes_heat_death_maker_fallback_taker_v1",
+        }:
+            execution_profile = "split_taker_maker_chase_v1"
+        elif execution_policy in {
+            "taker_top_ask_v1",
+            "current_yes_heat_death_taker_probe_v1",
+        }:
+            execution_profile = "taker_now_v1"
+        elif execution_policy == "maker_queue_v2":
+            execution_profile = "single_side_maker_v1"
+    order_lifecycle_policy = str(raw.get("order_lifecycle_policy") or "").strip()
+    if not order_lifecycle_policy:
+        if execution_policy in {"taker_top_ask_v1", "current_yes_heat_death_taker_probe_v1"}:
+            order_lifecycle_policy = "taker_now"
+        elif execution_policy == "maker_queue_v2":
+            order_lifecycle_policy = "maker_until_data_update"
+        elif execution_profile == "split_taker_maker_chase_v1" and (
+            raw.get("maker_only") is True or child_order_role != "taker"
+        ):
+            order_lifecycle_policy = "maker_chase_then_taker_fallback_v1"
+    return execution_profile, execution_policy, order_lifecycle_policy, child_order_role
+
+
 def _canonical_plan(
     raw: dict[str, Any],
     *,
@@ -470,12 +513,16 @@ def _canonical_plan(
     notional = _float(raw.get("notional"), _float(raw.get("posted_notional")))
     limit_price = _float(raw.get("limit_price"), _float(raw.get("market_price")))
     order_side = _order_side(raw)
-    execution_policy = str(raw.get("execution_policy") or raw.get("combo") or "live_cycle").strip()
+    execution_profile, execution_policy, order_lifecycle_policy, child_order_role = (
+        _execution_identity(raw)
+    )
     plan_id = make_plan_id(
         run_id=run_id,
         signal_id=signal_id,
         order_side=order_side,
         execution_policy=execution_policy,
+        execution_profile=execution_profile,
+        child_order_role=child_order_role,
     )
     return {
         "plan_id": plan_id,
@@ -487,7 +534,12 @@ def _canonical_plan(
         "desired_shares": shares,
         "sizing_mode": str(raw.get("sizing_mode") or "").strip() or None,
         "entry_price_window": str(raw.get("entry_price_window") or "").strip() or None,
+        "execution_profile": execution_profile or None,
         "execution_policy": execution_policy,
+        "order_lifecycle_policy": order_lifecycle_policy or None,
+        "child_order_role": child_order_role or None,
+        "comparison_group_id": str(raw.get("comparison_group_id") or signal_id).strip(),
+        "maker_only": 1 if raw.get("maker_only") is True else (0 if raw.get("maker_only") is False else None),
         "limit_price": limit_price,
         "skip_reason": str(raw.get("risk_reason") or "").strip() or None,
         "status": str(raw.get("status") or raw.get("risk_status") or "").strip() or None,

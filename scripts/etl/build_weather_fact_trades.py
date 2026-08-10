@@ -200,17 +200,41 @@ def _compute_pnl(
 # Load settlements into lookup structures
 # ---------------------------------------------------------------------------
 
-def _load_settlements(conn: sqlite3.Connection) -> tuple[
+def _load_settlements(
+    conn: sqlite3.Connection,
+    target_dates: set[str] | None = None,
+) -> tuple[
     dict[str, dict],          # by_token:   token_id → row
     dict[tuple, list[dict]],  # by_key_cid: (target_date, condition_id, bracket) → [rows]
     dict[tuple, list[dict]],  # by_key_mid: (target_date, market_id, bracket) → [rows]
 ]:
-    rows = conn.execute(
-        "SELECT settlement_id, target_date, condition_id, market_id, bracket, "
-        "token_id, final_price, settlement_status FROM settlements"
-    ).fetchall()
+    if target_dates == set():
+        return {}, {}, {}
+    if target_dates is None:
+        rows = conn.execute(
+            "SELECT settlement_id, target_date, condition_id, market_id, bracket, "
+            "token_id, final_price, settlement_status, 'settlements' AS source_table FROM settlements "
+            "UNION ALL "
+            "SELECT settlement_outcome_id AS settlement_id, target_date, condition_id, market_id, bracket, "
+            "token_id, final_price, settlement_status, 'settlement_outcomes' AS source_table "
+            "FROM settlement_outcomes"
+        ).fetchall()
+        dates = []
+    else:
+        dates = sorted(target_dates)
+        placeholders = ",".join("?" for _ in dates)
+        rows = conn.execute(
+            "SELECT settlement_id, target_date, condition_id, market_id, bracket, "
+            "token_id, final_price, settlement_status, 'settlements' AS source_table FROM settlements "
+            f"WHERE target_date IN ({placeholders}) "
+            "UNION ALL "
+            "SELECT settlement_outcome_id AS settlement_id, target_date, condition_id, market_id, bracket, "
+            "token_id, final_price, settlement_status, 'settlement_outcomes' AS source_table "
+            f"FROM settlement_outcomes WHERE target_date IN ({placeholders})",
+            [*dates, *dates],
+        ).fetchall()
     cols = ["settlement_id", "target_date", "condition_id", "market_id", "bracket",
-            "token_id", "final_price", "settlement_status"]
+            "token_id", "final_price", "settlement_status", "source_table"]
     by_token: dict[str, dict] = {}
     by_cid: dict[tuple, list[dict]] = {}
     by_mid: dict[tuple, list[dict]] = {}
@@ -218,7 +242,14 @@ def _load_settlements(conn: sqlite3.Connection) -> tuple[
         row = dict(zip(cols, r))
         tok = row.get("token_id")
         if tok:
-            by_token[tok] = row
+            # The normalized settlements row is preferred when both sources
+            # cover the token; settlement_outcomes fills its known coverage gaps.
+            prior = by_token.get(tok)
+            if prior is None or (
+                prior.get("source_table") != "settlements"
+                and row.get("source_table") == "settlements"
+            ):
+                by_token[tok] = row
         key_cid = (row["target_date"], row["condition_id"], row["bracket"])
         key_mid = (row["target_date"], row["market_id"], row["bracket"])
         by_cid.setdefault(key_cid, []).append(row)
@@ -261,7 +292,12 @@ def _match_settlement(
         return "none", None, 0
 
     # Deterministic dedup: sort by settlement_id, take first
-    candidates.sort(key=lambda x: x["settlement_id"])
+    candidates.sort(
+        key=lambda x: (
+            0 if x.get("source_table") == "settlements" else 1,
+            x["settlement_id"],
+        )
+    )
     return "fallback", candidates[0], len(candidates)
 
 
@@ -275,10 +311,22 @@ SELECT
   f.execution_id,
   f.order_id,
   f.filled_shares      AS fill_qty,
-  f.filled_price       AS fill_price,
-  f.fees_usd,
+  COALESCE(price_adj.corrected_filled_price, f.filled_price) AS fill_price,
+  f.fees_usd           AS base_fees_usd,
+  COALESCE(fee_adj.fee_adjustment_usd, 0.0) AS fee_adjustment_usd,
+  f.fees_usd + COALESCE(fee_adj.fee_adjustment_usd, 0.0) AS fees_usd,
+  COALESCE(fee_adj.fee_source, f.fee_source) AS fee_source,
+  COALESCE(fee_adj.fee_evidence_class,
+           CASE
+             WHEN f.fee_source LIKE '%estimate%' THEN 'estimate'
+             WHEN f.fee_source IN ('legacy_unknown', '') THEN NULL
+             ELSE 'exact'
+           END) AS fee_evidence_class,
+  COALESCE(fee_adj.transaction_hash, f.transaction_hash) AS fee_transaction_hash,
+  COALESCE(fee_adj.fee_rate, f.fee_rate) AS fee_rate,
+  COALESCE(fee_adj.market_fee_metadata_json, f.fee_metadata_json) AS fee_metadata_json,
   f.status             AS fill_status,
-  f.filled_at_utc,
+  COALESCE(timestamp_adj.corrected_filled_at_utc, f.filled_at_utc) AS filled_at_utc,
   f.created_at_utc     AS fill_created_at_utc,
 
   o.run_id,
@@ -290,7 +338,11 @@ SELECT
   o.entry_price        AS plan_price,
   o.shares             AS order_shares,
   o.notional,
-  o.status             AS order_status,
+  CASE
+    WHEN COALESCE(fill_totals.filled_shares, 0) >= o.shares - 0.000001 THEN 'filled'
+    WHEN COALESCE(fill_totals.filled_shares, 0) > 0 THEN 'partial'
+    ELSE o.status
+  END                  AS order_status,
   o.placed_at_utc,
   COALESCE(o.placed_at_utc, o.created_at_utc) AS order_ts_utc,
 
@@ -299,7 +351,12 @@ SELECT
   p.desired_shares,
   p.sizing_mode,
   p.entry_price_window,
+  p.execution_profile,
   p.execution_policy,
+  p.order_lifecycle_policy,
+  COALESCE(p.child_order_role, o.child_order_role) AS child_order_role,
+  p.comparison_group_id,
+  COALESCE(p.maker_only, o.maker_only) AS maker_only,
 
   s.target_date,
   s.city,
@@ -331,14 +388,38 @@ SELECT
   sc.name              AS config_name,
   sc.config_id         AS strategy_id
 FROM fills f
+LEFT JOIN (
+  SELECT
+    fill_id,
+    SUM(fee_delta_usd) AS fee_adjustment_usd,
+    MAX(fee_source) AS fee_source,
+    MAX(fee_evidence_class) AS fee_evidence_class,
+    MAX(transaction_hash) AS transaction_hash,
+    MAX(fee_rate) AS fee_rate,
+    MAX(market_fee_metadata_json) AS market_fee_metadata_json
+  FROM fill_fee_adjustments
+  GROUP BY fill_id
+) fee_adj ON fee_adj.fill_id = f.fill_id
+LEFT JOIN fill_price_adjustments price_adj ON price_adj.fill_id = f.fill_id
+LEFT JOIN fill_timestamp_adjustments timestamp_adj ON timestamp_adj.fill_id = f.fill_id
 JOIN orders o        ON o.execution_id = f.execution_id
+LEFT JOIN (
+  SELECT execution_id, SUM(filled_shares) AS filled_shares
+  FROM fills
+  WHERE status IN ('filled', 'simulated')
+  GROUP BY execution_id
+) fill_totals ON fill_totals.execution_id = o.execution_id
 JOIN plans p         ON p.plan_id      = o.plan_id
 JOIN signals s       ON s.signal_id    = p.signal_id
 JOIN runs r          ON r.run_id       = o.run_id
 LEFT JOIN strategy_config sc ON sc.config_id = r.config_id
 LEFT JOIN strategy_def sd ON sd.strategy_key = sc.strategy_key
 LEFT JOIN order_instance_lineage oil ON oil.execution_id = o.execution_id
+LEFT JOIN order_execution_aliases alias ON alias.alias_execution_id = o.execution_id
+LEFT JOIN fill_validity_adjustments validity ON validity.fill_id = f.fill_id
 WHERE f.status IN ('filled', 'simulated')
+  AND alias.alias_execution_id IS NULL
+  AND COALESCE(validity.effective_status, 'valid') <> 'excluded'
 """
 
 # ---------------------------------------------------------------------------
@@ -367,7 +448,12 @@ CREATE TABLE IF NOT EXISTS fact_trades (
   order_status         TEXT,
   trade_class          TEXT,
   code_version         TEXT,
+  execution_profile    TEXT,
   execution_policy     TEXT,
+  order_lifecycle_policy TEXT,
+  child_order_role     TEXT,
+  comparison_group_id  TEXT,
+  maker_only           INTEGER,
   sizing_mode          TEXT,
   venue                TEXT,
   producer_system      TEXT,
@@ -413,7 +499,14 @@ CREATE TABLE IF NOT EXISTS fact_trades (
   fill_qty             REAL,
   desired_shares       REAL,
   order_shares         REAL,
+  base_fees_usd        REAL,
+  fee_adjustment_usd   REAL,
   fees_usd             REAL,
+  fee_source           TEXT,
+  fee_evidence_class   TEXT,
+  fee_transaction_hash TEXT,
+  fee_rate             REAL,
+  fee_metadata_json    TEXT,
   cost_usd             REAL,
   cost_usd_at_plan     REAL,
   notional             REAL,
@@ -491,14 +584,31 @@ def _snap_valuation(
 # Main build logic
 # ---------------------------------------------------------------------------
 
-def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
+def build(
+    conn: sqlite3.Connection,
+    *,
+    fill_ids: list[str] | None = None,
+) -> tuple[list[dict], list[str]]:
     """Build all fact rows. Returns (rows, alerts)."""
-    by_token, by_cid, by_mid = _load_settlements(conn)
-    snap_prices, snap_ts = _load_snapshot_prices()
-
-    cursor = conn.execute(BASE_SQL)
+    sql = BASE_SQL
+    params: list[str] = []
+    if fill_ids:
+        unique_fill_ids = sorted(set(fill_ids))
+        placeholders = ",".join("?" for _ in unique_fill_ids)
+        sql += f" AND f.fill_id IN ({placeholders})"
+        params.extend(unique_fill_ids)
+    cursor = conn.execute(sql, params)
     base_cols = [d[0] for d in cursor.description]
     base_rows = [dict(zip(base_cols, r)) for r in cursor.fetchall()]
+    by_token, by_cid, by_mid = _load_settlements(
+        conn,
+        {
+            str(row["target_date"])
+            for row in base_rows
+            if row.get("target_date")
+        },
+    )
+    snap_prices, snap_ts = _load_snapshot_prices()
 
     now_utc = datetime.now(timezone.utc).isoformat()
     alerts: list[str] = []
@@ -552,9 +662,14 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
         )
 
         # settlement fields
+        # No settlements-table match means pm_history has no matching bracket/event
+        # for this (token/condition/bracket): per WEATHER_ANALYSIS_CONTRACT §0 that is
+        # `missing_bracket`, not NULL. NULL was leaking out-of-enum rows (the
+        # `settlements` table itself only uses settled/missing_bracket). A later rebuild
+        # flips these to `settled` once pm_history publishes the bracket.
         settlement_id = sett["settlement_id"] if sett else None
-        settlement_status = sett["settlement_status"] if sett else None
-        settled = int(settlement_status == "settled") if settlement_status else 0
+        settlement_status = sett["settlement_status"] if sett else "missing_bracket"
+        settled = int(settlement_status == "settled")
 
         # final_yes only for settled; non-{0,1} on settled rows → alert
         final_yes: float | None = None
@@ -595,7 +710,12 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
             "order_status": b.get("order_status"),
             "trade_class": trade_class,
             "code_version": b.get("code_version"),
+            "execution_profile": b.get("execution_profile"),
             "execution_policy": b.get("execution_policy"),
+            "order_lifecycle_policy": b.get("order_lifecycle_policy"),
+            "child_order_role": b.get("child_order_role"),
+            "comparison_group_id": b.get("comparison_group_id"),
+            "maker_only": b.get("maker_only"),
             "sizing_mode": b.get("sizing_mode"),
             "venue": b.get("venue"),
             "producer_system": b.get("producer_system"),
@@ -637,7 +757,14 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
             "fill_qty": fill_qty,
             "desired_shares": _safe_float(b.get("desired_shares")),
             "order_shares": _safe_float(b.get("order_shares")),
+            "base_fees_usd": _safe_float(b.get("base_fees_usd")) or 0.0,
+            "fee_adjustment_usd": _safe_float(b.get("fee_adjustment_usd")) or 0.0,
             "fees_usd": fees_usd,
+            "fee_source": b.get("fee_source"),
+            "fee_evidence_class": b.get("fee_evidence_class"),
+            "fee_transaction_hash": b.get("fee_transaction_hash"),
+            "fee_rate": _safe_float(b.get("fee_rate")),
+            "fee_metadata_json": b.get("fee_metadata_json"),
             "cost_usd": cost_usd,
             "cost_usd_at_plan": cost_usd_at_plan,
             "notional": _safe_float(b.get("notional")),
@@ -677,14 +804,8 @@ def _fact_ddl(table_name: str) -> str:
     )
 
 
-def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
-    """Build beside the published fact, then atomically replace it.
-
-    The old implementation dropped ``fact_trades`` before inserting every row,
-    holding a schema-changing write transaction for the whole rebuild.  On the
-    shared production DB that blocked live runtime-state heartbeats.  Readers
-    now keep seeing the prior complete table until the short final rename.
-    """
+def _full_replace_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    """Schema-changing fallback used only when the fact columns changed."""
     staging_table = "fact_trades_next"
     conn.execute(f"DROP TABLE IF EXISTS {staging_table}")
     conn.execute(_fact_ddl(staging_table))
@@ -705,6 +826,103 @@ def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
     conn.execute("DROP TABLE IF EXISTS fact_trades")
     conn.execute(f"ALTER TABLE {staging_table} RENAME TO fact_trades")
     conn.commit()
+
+
+def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    """Publish only changed fact rows so routine refreshes hold the writer briefly."""
+    if not rows:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("DELETE FROM fact_trades")
+        conn.commit()
+        print("fact_trades delta: inserted_or_changed=0 removed=all")
+        return
+
+    cols = list(rows[0].keys())
+    existing_cols = [
+        str(info[1]) for info in conn.execute("PRAGMA table_info(fact_trades)").fetchall()
+    ]
+    if set(existing_cols) != set(cols):
+        _full_replace_db(conn, rows)
+        print("fact_trades delta: full_replace_reason=schema_change")
+        return
+
+    compare_cols = [col for col in cols if col != "fact_built_at_utc"]
+    select_cols = ",".join(cols)
+    existing = {
+        str(row[0]): dict(zip(cols, row))
+        for row in conn.execute(f"SELECT {select_cols} FROM fact_trades").fetchall()
+    }
+    desired = {str(row["fill_id"]): row for row in rows}
+    removed_ids = sorted(set(existing) - set(desired))
+    changed_rows = [
+        row
+        for fill_id, row in desired.items()
+        if fill_id not in existing
+        or any(existing[fill_id].get(col) != row.get(col) for col in compare_cols)
+    ]
+    if not removed_ids and not changed_rows:
+        print("fact_trades delta: inserted_or_changed=0 removed=0")
+        return
+
+    placeholders = ",".join("?" for _ in cols)
+    conn.execute("BEGIN IMMEDIATE")
+    if removed_ids:
+        conn.executemany(
+            "DELETE FROM fact_trades WHERE fill_id=?",
+            [(fill_id,) for fill_id in removed_ids],
+        )
+    if changed_rows:
+        conn.executemany(
+            f"INSERT OR REPLACE INTO fact_trades ({select_cols}) VALUES ({placeholders})",
+            [[row[col] for col in cols] for row in changed_rows],
+        )
+    conn.commit()
+    print(
+        "fact_trades delta: "
+        f"inserted_or_changed={len(changed_rows)} removed={len(removed_ids)}"
+    )
+
+
+def write_db_incremental(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    """Update only already-materialized fill rows without changing other facts."""
+    if not rows:
+        print("fact_trades incremental delta: updated=0")
+        return
+
+    cols = list(rows[0].keys())
+    existing_cols = [
+        str(info[1]) for info in conn.execute("PRAGMA table_info(fact_trades)").fetchall()
+    ]
+    existing_col_set = set(existing_cols)
+    fill_ids = [str(row["fill_id"]) for row in rows]
+    placeholders = ",".join("?" for _ in fill_ids)
+    materialized_ids = {
+        str(row[0])
+        for row in conn.execute(
+            f"SELECT fill_id FROM fact_trades WHERE fill_id IN ({placeholders})",
+            fill_ids,
+        )
+    }
+    missing_ids = sorted(set(fill_ids) - materialized_ids)
+    if missing_ids:
+        raise RuntimeError(
+            "incremental fact update cannot create previously unmaterialized fills: "
+            + ",".join(missing_ids)
+        )
+
+    update_cols = [col for col in cols if col in existing_col_set and col != "fill_id"]
+    assignments = ",".join(f"{col}=?" for col in update_cols)
+    conn.execute("BEGIN IMMEDIATE")
+    conn.executemany(
+        f"UPDATE fact_trades SET {assignments} WHERE fill_id=?",
+        [[row[col] for col in update_cols] + [row["fill_id"]] for row in rows],
+    )
+    conn.commit()
+    ignored_cols = sorted(set(cols) - existing_col_set)
+    print(
+        "fact_trades incremental delta: "
+        f"updated={len(rows)} ignored_new_columns={len(ignored_cols)}"
+    )
 
 
 def write_parquet(rows: list[dict], path: Path) -> None:
@@ -762,6 +980,12 @@ def main() -> None:
                     help="Write the DB table only; skip parquet export")
     ap.add_argument("--dry-run", action="store_true",
                     help="Compute rows but do not write to DB or parquet")
+    ap.add_argument(
+        "--fill-id",
+        action="append",
+        dest="fill_ids",
+        help="Build and update only this already-materialized fill id; repeatable.",
+    )
     args = ap.parse_args()
 
     db_path = Path(args.db_path)
@@ -772,12 +996,15 @@ def main() -> None:
 
     conn = sqlite3.connect(db_path)
     try:
-        rows, alerts = build(conn)
+        rows, alerts = build(conn, fill_ids=args.fill_ids)
         print_summary(rows, alerts)
         if args.dry_run:
             print("\n[dry-run] skipping write")
             return
-        write_db(conn, rows)
+        if args.fill_ids:
+            write_db_incremental(conn, rows)
+        else:
+            write_db(conn, rows)
         print(f"fact_trades written to DB: {db_path}")
         if args.no_parquet:
             print("fact_trades parquet export skipped (--no-parquet)")

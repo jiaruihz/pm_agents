@@ -103,3 +103,18 @@ def test_make_plan_id_rejects_ambiguous_live_buy_side():
             order_side="BUY",
             execution_policy="mid_price_core_v1",
         )
+
+
+def test_profiled_split_plan_ids_keep_child_legs_distinct():
+    base = {
+        "run_id": "run-split",
+        "signal_id": "a" * 64,
+        "order_side": "BUY_YES",
+        "execution_policy": "shared_quote_policy_v1",
+        "execution_profile": "split_taker_maker_v1",
+    }
+    taker = make_plan_id(**base, child_order_role="taker")
+    maker = make_plan_id(**base, child_order_role="maker")
+
+    assert taker != maker
+    assert len(taker) == len(maker) == 64

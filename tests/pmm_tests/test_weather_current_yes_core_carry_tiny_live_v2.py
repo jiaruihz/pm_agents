@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import inspect
 import sqlite3
+from dataclasses import replace
+from decimal import Decimal
 from datetime import datetime, timezone
 
 import pytest
@@ -50,6 +53,93 @@ def test_entry_is_exactly_five_taker_plus_five_maker() -> None:
     assert plans[1]["limit_price"] == pytest.approx(0.81)
     assert plans[1]["maker_price_cap"] == pytest.approx(0.82)
     assert plans[1]["model_token_probability"] == pytest.approx(0.91)
+
+
+def test_shared_core_carry_comparator_has_no_split_entry_differences() -> None:
+    legacy = runner.build_entry_plans(
+        score_row(),
+        live_enabled=False,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        taker_shares=5,
+        maker_shares=5,
+        order_ttl_min=15,
+    )
+
+    shared = runner.build_shared_core_carry_plan_parity(legacy)
+
+    assert runner.compare_shared_core_carry_plan_parity(legacy, shared) == ()
+    assert [child.child_role for child in shared.children] == ["taker", "maker"]
+    assert [float(child.requested_shares) for child in shared.children] == [5.0, 5.0]
+    assert shared.intents[0].comparison_group_id == shared.intents[1].comparison_group_id
+    assert shared.intents[0].live_exposure_key == shared.intents[1].live_exposure_key
+    assert shared.intents[1].execution_profile == legacy[1]["execution_profile"]
+    assert shared.intents[1].metadata["legacy_profile_resolution"] == "opaque_unregistered_legacy_profile_v1"
+
+
+def test_shared_core_carry_comparator_supports_taker_only_entry() -> None:
+    legacy_all = runner.build_entry_plans(
+        score_row(),
+        live_enabled=False,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        taker_shares=5,
+        maker_shares=0,
+        order_ttl_min=15,
+    )
+    legacy = [plan for plan in legacy_all if float(plan["size"]) > 0]
+
+    shared = runner.build_shared_core_carry_plan_parity(legacy)
+
+    assert runner.compare_shared_core_carry_plan_parity(legacy, shared) == ()
+    assert len(shared.children) == 1
+    assert shared.children[0].child_role == "taker"
+    assert shared.children[0].maker_only is False
+
+
+def test_shared_core_carry_comparator_reports_deliberate_field_mismatch() -> None:
+    legacy = runner.build_entry_plans(
+        score_row(),
+        live_enabled=False,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        taker_shares=5,
+        maker_shares=5,
+        order_ttl_min=15,
+    )
+    shared = runner.build_shared_core_carry_plan_parity(legacy)
+    changed_taker = replace(shared.children[0], requested_shares=Decimal("6"))
+    mismatched = replace(shared, children=(changed_taker, *shared.children[1:]))
+
+    differences = runner.compare_shared_core_carry_plan_parity(legacy, mismatched)
+
+    assert [(difference.plan_index, difference.field) for difference in differences] == [(0, "shares")]
+    assert differences[0].legacy_value == "5"
+    assert differences[0].standardized_value == "6"
+
+
+def test_shared_core_carry_entry_bridge_rejects_lifecycle_plan() -> None:
+    entry = runner.build_entry_plans(
+        score_row(),
+        live_enabled=False,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        taker_shares=5,
+        maker_shares=5,
+        order_ttl_min=15,
+    )[1]
+    lifecycle = runner.build_maker_lifecycle_plan(
+        entry,
+        action="core_carry_maker_reprice",
+        limit_price=0.82,
+        cancel_only=False,
+        now=datetime(2026, 7, 24, 4, 32, tzinfo=timezone.utc),
+        live_enabled=False,
+    )
+
+    with pytest.raises(ValueError, match="rejects lifecycle replacement/cancel plans"):
+        runner.build_shared_core_carry_plan_parity([lifecycle])
+
+
+def test_shared_core_carry_comparator_is_not_called_by_normal_run() -> None:
+    assert "build_shared_core_carry_plan_parity" not in inspect.getsource(runner.run_once)
+    assert "compare_shared_core_carry_plan_parity" not in inspect.getsource(runner.run_once)
 
 
 def test_model_probability_can_be_the_lower_maker_cap() -> None:
@@ -178,13 +268,6 @@ def test_runtime_state_db_busy_is_deferred_without_failing_trading_loop(
     assert summary["status"] == "ok"
     assert summary["runtime_state_publish_status"] == "deferred_db_busy"
     assert "database is locked" in summary["runtime_state_publish_error"]
-
-
-def test_live_runtime_isolates_signal_health_artifacts() -> None:
-    args = runner.parser().parse_args(["run"])
-
-    assert args.summary_filename == "signal_latest_summary.json"
-    assert args.summary_history_filename == "signal_summary_history.jsonl"
     assert "runtime_state_error" not in summary
 
 

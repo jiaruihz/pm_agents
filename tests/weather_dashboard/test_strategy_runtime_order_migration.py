@@ -1,14 +1,22 @@
 import json
 import sqlite3
 
+import pytest
+
 import weather_dashboard.legacy_migration.strategy_runtime_orders as strategy_runtime_orders
+from weather_dashboard.legacy_migration import live_cycle
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.connection import apply_pragmas
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
     iter_strategy_order_paths,
     migrate_strategy_runtime_orders,
 )
-from scripts.etl.build_weather_fact_trades import build as build_fact_trades
+from scripts.etl.build_weather_fact_trades import (
+    _load_settlements,
+    _match_settlement,
+    build as build_fact_trades,
+    write_db_incremental as write_fact_trades_incremental,
+)
 from src.strategies.runtime.sync import sync_instance_specs
 
 
@@ -24,6 +32,167 @@ def _conn():
 def _write_jsonl(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+
+def test_execution_identity_infers_profile_for_pre_restart_live_rows():
+    assert live_cycle._execution_identity(
+        {
+            "execution_mode": "tiny_live_split_taker_maker_probe",
+            "execution_policy": "current_yes_heat_death_maker_probe_v1",
+            "child_order_role": "maker",
+            "maker_only": True,
+        }
+    ) == (
+        "split_taker_maker_chase_v1",
+        "current_yes_heat_death_maker_probe_v1",
+        "maker_chase_then_taker_fallback_v1",
+        "maker",
+    )
+
+
+def test_decision_snapshot_timestamp_has_priority_over_order_creation():
+    row = strategy_runtime_orders._enrich_runtime_order(
+        {
+            "city": "Busan",
+            "target_date": "2026-07-15",
+            "token_id": "token",
+            "decision_snapshot_ts_utc": "2026-07-15T04:01:22Z",
+            "created_at_utc": "2026-07-15T04:05:00Z",
+        },
+        {"snapshot_ts_utc": "2026-07-15T00:59:59Z"},
+    )
+
+    assert row["snapshot_ts_utc"] == "2026-07-15T04:01:22Z"
+    assert live_cycle._snapshot_ts(row) == "2026-07-15T04:01:22Z"
+
+
+def test_runtime_order_uses_selected_token_probability_for_core_carry_signal():
+    row = strategy_runtime_orders._enrich_runtime_order(
+        {
+            "city": "Wellington",
+            "target_date": "2026-08-05",
+            "signal_side": "BUY_YES",
+            "order_side": "BUY",
+            "model_token_probability": 0.962749510235,
+            "model_p_yes_raw": 0.0,
+            "model_p_yes_used": 0.0,
+            "best_ask": 0.91,
+            "edge": 0.0,
+        },
+        None,
+    )
+
+    assert row["model_p_yes"] == 0.962749510235
+    assert row["market_price"] == 0.91
+    assert row["edge"] == pytest.approx(0.052749510235)
+
+
+def test_heat_death_legacy_rows_infer_historical_plan_config():
+    assert strategy_runtime_orders._runtime_plan_config_id(
+        {
+            "strategy_instance": "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
+            "execution_mode": "tiny_live_taker_probe",
+            "size": 10,
+        },
+        "fallback",
+    ) == "current_yes_heat_death_tiny_live_h2_early_dislocation_v1_fixed10"
+    assert strategy_runtime_orders._runtime_plan_config_id(
+        {
+            "strategy_instance": "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
+            "execution_mode": "tiny_live_split_taker_maker_probe",
+            "size": 5,
+        },
+        "fallback",
+    ) == "current_yes_heat_death_tiny_live_h2_early_dislocation_v3_split_taker_maker"
+
+
+def test_blocked_lifecycle_attempt_without_exchange_order_is_not_canonical_order(tmp_path):
+    order_path = tmp_path / "runtime" / "weather_edge_v1" / "heat" / "live_orders.jsonl"
+    _write_jsonl(
+        order_path,
+        [
+            {
+                "record_type": "weather_edge_live_order",
+                "strategy_instance": "heat",
+                "execution_id": "e" * 64,
+                "status": "blocked",
+                "source_order_id": "0xsource",
+                "execution_action": "h1_maker_cancel_stale_thesis",
+                "created_at_utc": "2026-07-18T10:00:00Z",
+                "city": "Jeddah",
+                "target_date": "2026-07-18",
+                "bracket": "41",
+                "token_id": "token",
+                "signal_side": "BUY_YES",
+                "order_side": "BUY",
+            }
+        ],
+    )
+    conn = _conn()
+    try:
+        report = migrate_strategy_runtime_orders(conn, order_path=order_path)
+
+        assert report.orders == 0
+        assert report.skipped_reasons == {"non_exchange_order_lifecycle_attempt": 1}
+        assert conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_runtime_journal_preserves_plan_config_transition(tmp_path):
+    order_path = tmp_path / "runtime" / "weather_edge_v1" / "heat" / "live_orders.jsonl"
+    base = {
+        "record_type": "weather_edge_live_order",
+        "strategy_instance": "heat",
+        "venue": "polymarket_clob",
+        "status": "submitted",
+        "target_date": "2026-07-18",
+        "city": "Warsaw",
+        "bracket": "27",
+        "unit": "C",
+        "condition_id": "0xcondition",
+        "market_id": "0xmarket",
+        "token_id": "token",
+        "question": "Will Warsaw be 27C?",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "limit_price": 0.95,
+        "size": 5,
+        "forecast_source": "open_meteo_live_ecmwf",
+        "model_version": "ecmwf",
+    }
+    _write_jsonl(
+        order_path,
+        [
+            {
+                **base,
+                "execution_id": "1" * 64,
+                "order_id": "0xorder1",
+                "created_at_utc": "2026-07-18T10:00:00Z",
+                "decision_snapshot_ts_utc": "2026-07-18T09:59:00Z",
+                "config_id": "heat-config-v2",
+            },
+            {
+                **base,
+                "execution_id": "2" * 64,
+                "order_id": "0xorder2",
+                "created_at_utc": "2026-07-18T11:00:00Z",
+                "decision_snapshot_ts_utc": "2026-07-18T10:59:00Z",
+                "config_id": "heat-config-v3",
+            },
+        ],
+    )
+    conn = _conn()
+    try:
+        report = migrate_strategy_runtime_orders(conn, order_path=order_path)
+
+        assert report.orders == 2
+        assert {
+            row[0] for row in conn.execute("SELECT DISTINCT config_id FROM plans")
+        } == {"heat-config-v2", "heat-config-v3"}
+        assert conn.execute("SELECT config_id FROM runs").fetchone()[0].startswith("live_weather_edge_v1_")
+    finally:
+        conn.close()
 
 
 def test_migrate_mac_live_strategy_order_file_as_live(tmp_path):
@@ -61,7 +230,12 @@ def test_migrate_mac_live_strategy_order_file_as_live(tmp_path):
                 "shares": 13.0,
                 "notional": 0.8,
                 "edge": 0.3054,
+                "execution_profile": "single_side_maker_v1",
                 "execution_policy": "maker_first_taker_fallback",
+                "order_lifecycle_policy": "maker_until_data_update",
+                "child_order_role": "single",
+                "comparison_group_id": "comparison-1",
+                "maker_only": True,
                 "exchange_response": {"place": {"orderID": "0xabc", "success": True}},
             }
         ],
@@ -86,6 +260,21 @@ def test_migrate_mac_live_strategy_order_file_as_live(tmp_path):
             "venue": "polymarket_clob",
             "status": "submitted",
             "order_id": "0xabc",
+        }
+        plan = conn.execute(
+            """
+            SELECT execution_profile, execution_policy, order_lifecycle_policy,
+                   child_order_role, comparison_group_id, maker_only
+            FROM plans
+            """
+        ).fetchone()
+        assert dict(plan) == {
+            "execution_profile": "single_side_maker_v1",
+            "execution_policy": "maker_first_taker_fallback",
+            "order_lifecycle_policy": "maker_until_data_update",
+            "child_order_role": "single",
+            "comparison_group_id": "comparison-1",
+            "maker_only": 1,
         }
     finally:
         conn.close()
@@ -327,13 +516,110 @@ def test_fact_trades_uses_sell_side_cashflow_and_pnl(tmp_path):
             """,
             ("settle-sell", "2026-07-03", "0xcondition", "0xmarket", "28", "token-yes", 0.0, "settled"),
         )
+        conn.execute(
+            """
+            INSERT INTO fill_fee_adjustments (
+                adjustment_id, fill_id, fee_delta_usd, fee_source,
+                fee_evidence_class, transaction_hash, evidence_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("fee-adjustment", "fill-sell", 0.05, "public_activity_tx_exact", "exact", "0xtx", "{}"),
+        )
 
         rows, alerts = build_fact_trades(conn)
         assert not [alert for alert in alerts if alert.startswith("SIDE_MISMATCH")]
         assert len(rows) == 1
         assert rows[0]["side"] == "SELL_YES"
         assert rows[0]["signal_side"] == "YES"
+        assert rows[0]["order_status"] == "filled"
         assert rows[0]["cost_usd"] == 2.0
-        assert rows[0]["pnl_usd_at_fill"] == 2.0
+        assert rows[0]["base_fees_usd"] == 0.0
+        assert rows[0]["fee_adjustment_usd"] == 0.05
+        assert rows[0]["fees_usd"] == 0.05
+        assert rows[0]["pnl_usd_at_fill"] == 1.95
+
+        targeted_rows, targeted_alerts = build_fact_trades(
+            conn,
+            fill_ids=["fill-sell"],
+        )
+        assert not targeted_alerts
+        assert [row["fill_id"] for row in targeted_rows] == ["fill-sell"]
+        missing_rows, _ = build_fact_trades(conn, fill_ids=["missing-fill"])
+        assert missing_rows == []
+
+    finally:
+        conn.close()
+
+
+def test_fact_trades_incremental_update_preserves_older_schema():
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute(
+            "CREATE TABLE fact_trades (fill_id TEXT PRIMARY KEY, settled INTEGER, pnl_usd_at_fill REAL)"
+        )
+        conn.execute(
+            "INSERT INTO fact_trades VALUES ('fill-1', 0, NULL)"
+        )
+        conn.commit()
+
+        write_fact_trades_incremental(
+            conn,
+            [
+                {
+                    "fill_id": "fill-1",
+                    "settled": 1,
+                    "pnl_usd_at_fill": 1.25,
+                    "new_builder_column": "ignored-until-explicit-schema-rebuild",
+                }
+            ],
+        )
+
+        assert conn.execute(
+            "SELECT settled, pnl_usd_at_fill FROM fact_trades WHERE fill_id='fill-1'"
+        ).fetchone() == (1, 1.25)
+    finally:
+        conn.close()
+
+
+def test_fact_settlement_lookup_uses_token_complete_outcomes_fallback():
+    conn = _conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO settlement_outcomes (
+                settlement_outcome_id, source_system, city, target_date, bracket,
+                condition_id, market_id, token_id, final_price, settlement_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "outcome-only",
+                "pm_history",
+                "Munich",
+                "2026-07-15",
+                "27",
+                "0xcondition",
+                "0xmarket",
+                "token-only",
+                1.0,
+                "settled",
+            ),
+        )
+        by_token, by_cid, by_mid = _load_settlements(conn)
+        method, row, count = _match_settlement(
+            "token-only",
+            "2026-07-15",
+            "0xcondition",
+            "0xmarket",
+            "27",
+            by_token,
+            by_cid,
+            by_mid,
+        )
+
+        assert method == "token"
+        assert count == 1
+        assert row is not None
+        assert row["settlement_id"] == "outcome-only"
+        assert row["source_table"] == "settlement_outcomes"
     finally:
         conn.close()

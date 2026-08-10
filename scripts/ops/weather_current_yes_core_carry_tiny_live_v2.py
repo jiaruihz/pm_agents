@@ -40,6 +40,12 @@ from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as signal_run
 from scripts.ops import weather_current_yes_heat_death_shadow_v1 as weather_state  # noqa: E402
 from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
 from src.strategies.runtime import runtime_state  # noqa: E402
+from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
+    CoreCarryLegacyPlanCompatibility,
+    LegacyPlanFieldDifference,
+    build_core_carry_legacy_plan_compatibility,
+    compare_core_carry_legacy_plan_fields,
+)
 from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (  # noqa: E402
     load_artifact,
 )
@@ -443,6 +449,26 @@ def build_entry_plans(
     return plans
 
 
+def build_shared_core_carry_plan_parity(
+    legacy_plans: list[dict[str, Any]],
+) -> CoreCarryLegacyPlanCompatibility:
+    """Test-only, in-memory bridge; ``build_entry_plans`` remains authoritative."""
+
+    return build_core_carry_legacy_plan_compatibility(legacy_plans=legacy_plans)
+
+
+def compare_shared_core_carry_plan_parity(
+    legacy_plans: list[dict[str, Any]],
+    compatibility: CoreCarryLegacyPlanCompatibility,
+) -> tuple[LegacyPlanFieldDifference, ...]:
+    """Test-only in-memory comparator; it never writes journals or plans."""
+
+    return compare_core_carry_legacy_plan_fields(
+        legacy_plans=legacy_plans,
+        compatibility=compatibility,
+    )
+
+
 def execute_plans(args: argparse.Namespace, plans: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
@@ -761,13 +787,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     ap = signal_runner.parser()
     ap.description = __doc__
-    ap.set_defaults(
-        output_dir=str(OUTPUT_DIR),
-        artifact=str(ARTIFACT_PATH),
-        interval_seconds=15.0,
-        summary_filename="signal_latest_summary.json",
-        summary_history_filename="signal_summary_history.jsonl",
-    )
+    ap.set_defaults(output_dir=str(OUTPUT_DIR), artifact=str(ARTIFACT_PATH), interval_seconds=15.0)
     ap.add_argument("--taker-shares", type=float, default=5.0)
     ap.add_argument("--maker-shares", type=float, default=5.0)
     ap.add_argument("--maker-refresh-sec", type=float, default=15.0)
