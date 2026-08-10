@@ -1,6 +1,27 @@
 # Tokyo overshoot market residual v2
 
+## 数据快照
+
+- observed_at_utc：`2026-08-10T10:25:40Z`；当前生产 manifest 的 canonical DB route 为同 inode healthy，
+  但全局 health 仍因非 Tokyo observation coverage 与旧 canonical-refresh LaunchAgent last-exit 非零而为
+  `CRITICAL`。本轮不读 canonical DB，不发布 live PnL，只使用 Tokyo raw first-seen/book 与 detached settlement。
+- PIT 输入：`/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations` 与
+  `tokyo_current_break_active_ladder_shadow/active_bracket_books`；冻结 artifact training_end=`2026-07-15`。
+- primary forward slice：`2026-08-04..08-09`，6 target dates，理论 288 个十分钟 checkpoint，捕获 287，
+  同刻 current-bracket 双边盘口可评分 255；8 月 3 日仅捕获 15/48，单列 coverage-gap，不混入主结论。
+- settlement：8 月 3–8 日使用 raw `pm_history` near-binary winner；8 月 9 日 `pm_history` 尚缺，使用
+  IEM RJTT 48 条完整本地日报文得到 33°C，只标 `late_backfill_label_only_not_first_seen`。missing settlement=0，
+  但 8 月 9 日证据等级低一层。8 月 10 日截至 18:25 CST 已有 48/48 个 10:00–17:50 JST source/book
+  checkpoint，文件仍在增长且事件未结算，故不进入 accuracy、Brier、胜率或 ROI。
+- 本轮是 zero-notional research replay：actual fills=0；盈亏均为每个选中信号 taker 买 5 shares、按官方
+  Weather fee curve 持有到结算的 counterfactual，不是实盘 PnL。
+
 ## 结论
+
+截至 2026-08-10 的当前结论：8 月 4–9 日 frozen forward checkpoint proper score 未胜 market，
+current-NO 仍 0 触发；机械双边 first-per-bracket 为 9 笔 3 胜、fee 后 ROI `-16.48%`。
+因此 v2 只保留 zero-notional 数据链，`significance/baseline/forward=FAIL`，不具备 live 资格。
+下文早期阶段结论按时间保留，最新复评见末节。
 
 `P(final Tmax > current bracket)` 与 `P(final Tmax = current bracket)` 在**当前已观测最高档**上互为补集：
 
@@ -192,3 +213,73 @@ midpoint logit 为固定 prior，ridge correction 很小，而交易必须跨 as
 截至北京时间 `2026-08-03 00:26`（东京 `01:26 JST`），东京 8 月 3 日 active 日内窗口尚未开始，
 还没有 `2026-08-03.jsonl` JMA/book checkpoint，故不存在可发布的 8/3 胜率、edge 或 PnL。collector
 健康状态只能说明进程已恢复，不能提前把 8/2 或 future 数据当 8/3 first-seen。
+
+## 2026-08-04..08-09 frozen forward（8 月 10 日复评）
+
+### 根因修正与影响半径
+
+旧 replay 用 official observation journal 的最后一条 `running_max_c` 充当最终标签；journal shard 缺失时，
+会把不完整盘中最高值冒充 settlement。8 月 3 日因此曾被错标成 26°C，而 raw pm_history 与完整 RJTT
+METAR 的最终档均为 27°C。修复后：PIT current anchor 优先读取 book 在当时保存的
+`capture_anchor_values.official`；最终 label 只读 pm_history，缺失时必须显式提供 label-only late backfill，
+且绝不进入特征或 first-seen clock。
+
+污染窗口为本轮曾生成过的 8 月 3 日旧 summary：15 个 scored checkpoint 的 label 与 Brier/PnL 全部受影响；
+没有 candidate、intent、order 或 fill，生产影响为 0 笔。修复前 Brier `0.37625` vs market `0.42337` 的
+“模型优于市场”结论作废；修复后为 `0.09059` vs `0.06537`，实际是模型更差。8 月 4–8 日旧 final bracket
+与 pm_history 一致；8 月 9 日从一开始就按 late-backfill label-only 分层。
+
+### 概率质量
+
+主分母只取覆盖完整的 8 月 4–9 日：287/288 exact source checkpoints，255 行有同刻双边盘口。
+
+| grain | rows / dates | v2 Brier | market Brier | v2-market | date-block 95% CI | accuracy v2 / market |
+|---|---:|---:|---:|---:|---:|---:|
+| 每十分钟 checkpoint | 255 / 6 | 0.07673 | 0.06897 | +0.00777 | [-0.00541, +0.02340] | 91.76% / 92.94% |
+| 每次新 current bracket 首行 | 21 / 6 | 0.03989 | 0.04554 | -0.00565 | [-0.01186, +0.00017] | 100.00% / 95.24% |
+
+checkpoint 主口径下模型比 market 差约 11.3%，logloss 也是 `0.26924` vs `0.23792`；不能称为
+market residual alpha。state-entry 点估反而略优，说明“刚升入新档时的路径信息”可能比每十分钟重复预测更有价值，
+但 21 rows/6 dates 且 CI 仍跨 0，只能继续积累，不能拿 100% accuracy 升级策略。
+
+逐日 checkpoint Brier delta（负数才是模型优于 market）：
+
+| target_date | delta | 判定 |
+|---|---:|---|
+| 08-04 | +0.02048 | 模型更差 |
+| 08-05 | -0.01212 | 模型更好 |
+| 08-06 | +0.04182 | 模型明显更差 |
+| 08-07 | -0.00277 | 模型略好 |
+| 08-08 | -0.00601 | 模型更好 |
+| 08-09 | +0.00509 | 模型更差 |
+
+### 交易表达
+
+固定此前规则：`edge_after_fee >= 2%`，每个 `target_date × current_bracket × side` 只取首次信号，
+5 shares、taker ask、官方 entry fee、持有至结算。
+
+- current-NO：**0 笔**。这仍是结构性无 edge，不是漏跑。
+- 对称开放 current-YES：9 笔、3 胜 6 负，投入 `$17.9598`，fee 后 PnL **`-$2.9598`**，
+  ROI **`-16.48%`**；target-date block bootstrap 95% CI `[-69.30%, +24.95%]`。
+- 分日 PnL：08-04 `-$1.1943`、08-05 `+$1.9150`、08-06 `-$2.8244`、
+  08-07 `-$0.0497`、08-08 `+$1.2031`、08-09 `-$2.0095`。
+
+91.8% checkpoint accuracy 与 3/9 策略胜率并不矛盾：多数 checkpoint 是 market 与模型都判断很容易的
+current-NO；真正入选的是最不确定、模型相对盘口最激进的 current-YES 尾部。8 月 6 日 15:07 的 30 YES
+就是主要错误之一：模型给 54.37%、ask 50c，但最终升到 31；这类边界 residual 的校准还不够稳定。
+
+因此结论为：`current-NO expression rejected`；机械双边 YES 同样未通过。state-entry probability 方向保留为
+下一轮研究假设，但不改当前 zero-notional 行为。
+
+```text
+significance=FAIL（概率与交易 CI 均跨 0）
+baseline=FAIL（checkpoint proper score 未胜同 rows market）
+forward=FAIL（6 dates，双边交易 -16.48%，且低于 10 active-day 门槛）
+conclusion=inconclusive / not live eligible
+```
+
+耐久产物：
+
+- `generated/tokyo_overshoot_intraday_replay_v2_forward_20260804_20260809/aggregate_summary.json`
+- `generated/tokyo_overshoot_intraday_replay_v2_forward_20260804_20260809/selected_trades.csv`
+- 含 8 月 3 日 coverage-gap 的诊断分母保存在对应 `20260803_20260809` aggregate，不用于主结论。

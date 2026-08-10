@@ -63,6 +63,40 @@ def test_select_first_pit_current_book_retains_one_sided_fallback(monkeypatch):
     assert replay._market_prices(selected.book)["no_mid"] is None
 
 
+def test_select_first_pit_current_book_prefers_captured_official_anchor(monkeypatch):
+    monkeypatch.setattr(
+        replay,
+        "_official_history",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("must not backfill PIT")),
+    )
+    current = _book("2026-08-08T01:07:14+00:00", "31", 0.6, 0.7)
+    current["capture_anchor_values"] = {"official": 31, "source": 31}
+
+    selected = replay.select_first_pit_current_book(
+        [current], Path("unused"), "2026-08-08"
+    )
+
+    assert selected is not None
+    assert selected.official == []
+    assert selected.official_anchor == 31
+    assert selected.official_anchor_provenance == "book_capture_anchor_values"
+
+
+def test_pm_history_settlement_is_detached_post_event_label(tmp_path):
+    (tmp_path / "Tokyo_2026-08-08.json").write_text(
+        '{"brackets": [{"label": "33", "final_price": 0.0}, '
+        '{"label": "34", "final_price": 1.0}]}'
+    )
+
+    bracket, source, ref = replay._pm_history_final_bracket(
+        tmp_path, "2026-08-08"
+    )
+
+    assert bracket == 34
+    assert source == "pm_history_near_binary"
+    assert ref.endswith("Tokyo_2026-08-08.json")
+
+
 def test_fee_is_zero_at_binary_boundaries_and_positive_inside():
     assert replay.official_fee_per_share(0.0) == 0.0
     assert replay.official_fee_per_share(1.0) == 0.0

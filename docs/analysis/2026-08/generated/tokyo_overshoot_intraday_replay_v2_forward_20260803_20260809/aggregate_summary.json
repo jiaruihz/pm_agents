@@ -1,0 +1,649 @@
+{
+  "denominator_scope": "Tokyo frozen v2; 10:00-17:59 JST exact JMA first-seen checkpoints; same-row two-sided current-bracket book",
+  "target_dates": [
+    "2026-08-03",
+    "2026-08-04",
+    "2026-08-05",
+    "2026-08-06",
+    "2026-08-07",
+    "2026-08-08",
+    "2026-08-09"
+  ],
+  "signal_funnel": {
+    "expected_10m_checkpoints": 336,
+    "captured_source_checkpoints": 302,
+    "scored_two_sided_checkpoints": 270,
+    "state_entry_rows": 23,
+    "all_checkpoint_two_sided_triggers": 46,
+    "selected_first_per_date_bracket_side": 10
+  },
+  "checkpoint_probability": {
+    "rows": 270,
+    "target_dates": [
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09"
+    ],
+    "model_brier": 0.07750279617706803,
+    "market_brier": 0.06876761666666667,
+    "model_minus_market_brier": 0.008735179510401356,
+    "date_equal_model_minus_market_brier": 0.010244978159868029,
+    "date_block_bootstrap_95ci_model_minus_market_brier": [
+      -0.002383659420410173,
+      0.024104908678000806
+    ],
+    "model_logloss": 0.27247835807598775,
+    "market_logloss": 0.23964665189359885,
+    "model_minus_market_logloss": 0.0328317061823889,
+    "model_accuracy_at_0_5": 0.9222222222222223,
+    "market_accuracy_at_0_5": 0.9333333333333333,
+    "by_date_brier_delta": {
+      "2026-08-03": 0.025221932396898003,
+      "2026-08-04": 0.020484594785682382,
+      "2026-08-05": -0.012119750577860336,
+      "2026-08-06": 0.04181558581877409,
+      "2026-08-07": -0.0027686637770581095,
+      "2026-08-08": -0.006005929022736549,
+      "2026-08-09": 0.005087077495376723
+    }
+  },
+  "state_entry_probability": {
+    "rows": 23,
+    "target_dates": [
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09"
+    ],
+    "model_brier": 0.03772795848212536,
+    "market_brier": 0.042797097826086955,
+    "model_minus_market_brier": -0.005069139343961596,
+    "date_equal_model_minus_market_brier": -0.004550141892111643,
+    "date_block_bootstrap_95ci_model_minus_market_brier": [
+      -0.010495701954685964,
+      0.0005266012260345388
+    ],
+    "model_logloss": 0.15452763792607307,
+    "market_logloss": 0.16620291308376728,
+    "model_minus_market_logloss": -0.011675275157694204,
+    "model_accuracy_at_0_5": 1.0,
+    "market_accuracy_at_0_5": 0.9565217391304348,
+    "by_date_brier_delta": {
+      "2026-08-03": 0.0010150635069735706,
+      "2026-08-04": 0.0026665736301252838,
+      "2026-08-05": -0.019783881001277162,
+      "2026-08-06": 0.0037036427589910515,
+      "2026-08-07": -0.00775523435604087,
+      "2026-08-08": -0.0066945251846122975,
+      "2026-08-09": -0.005002632598941081
+    }
+  },
+  "trade_policy": {
+    "edge_threshold_after_fee": 0.02,
+    "selection": "first qualifying checkpoint per target_date,current_bracket,side",
+    "shares_per_order": 5.0,
+    "orders": 10,
+    "wins": 3,
+    "cost_5shares": 19.8174,
+    "pnl_5shares_fee_adjusted": -4.817399999999999,
+    "roi": -0.24308940627933026,
+    "target_date_block_bootstrap_95ci_roi": [
+      -0.7309600421854653,
+      0.167765923656135
+    ],
+    "by_target_date": {
+      "2026-08-03": {
+        "cost": 1.8575999999999997,
+        "pnl": -1.8575999999999997
+      },
+      "2026-08-04": {
+        "cost": 1.1943,
+        "pnl": -1.1943
+      },
+      "2026-08-05": {
+        "cost": 3.085,
+        "pnl": 1.915
+      },
+      "2026-08-06": {
+        "cost": 2.8244000000000002,
+        "pnl": -2.8244000000000002
+      },
+      "2026-08-07": {
+        "cost": 5.0497,
+        "pnl": -0.049699999999999855
+      },
+      "2026-08-08": {
+        "cost": 3.7969,
+        "pnl": 1.2031000000000003
+      },
+      "2026-08-09": {
+        "cost": 2.0095,
+        "pnl": -2.0095
+      }
+    },
+    "by_side": {
+      "NO": {
+        "orders": 0,
+        "wins": 0,
+        "cost_5shares": 0,
+        "pnl_5shares_fee_adjusted": 0,
+        "roi": null
+      },
+      "YES": {
+        "orders": 10,
+        "wins": 3,
+        "cost_5shares": 19.8174,
+        "pnl_5shares_fee_adjusted": -4.817399999999999,
+        "roi": -0.24308940627933026
+      }
+    }
+  },
+  "daily_coverage": [
+    {
+      "target_date": "2026-08-03",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 1306,
+      "source_observations_all_day": 40,
+      "source_observations_in_window": 15,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 0.3125,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 15,
+      "pit_current_book_rows": 15,
+      "scored_two_sided_rows": 15,
+      "one_sided_current_book_rows": 0,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 4,
+      "v2_yes_trigger_wins": 0,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.09058969906356468,
+      "market_brier_on_scored_rows": 0.06536776666666667,
+      "v2_edge_after_fee_min": -0.15451318071897804,
+      "v2_edge_after_fee_max": -0.02034775991755303,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 15,
+        "wins": 15,
+        "cost_1share_each": 12.10849,
+        "fee_adjusted_pnl_1share_each": 2.8915100000000002,
+        "cost_5shares_each": 60.54245,
+        "fee_adjusted_pnl_5shares_each": 14.457550000000001
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 15,
+        "wins": 15,
+        "cost_1share_each": 12.10849,
+        "fee_adjusted_pnl_1share_each": 2.8915100000000002,
+        "cost_5shares_each": 60.54245,
+        "fee_adjusted_pnl_5shares_each": 14.457550000000001
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 4,
+        "wins": 0,
+        "cost_5shares_each": 7.7341,
+        "fee_adjusted_pnl_5shares_each": -7.7341
+      },
+      "final_official_bracket": 27,
+      "settlement_source": "pm_history_near_binary",
+      "settlement_ref": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history/Tokyo_2026-08-03.json",
+      "settlement_availability_clock_class": "post_event_settlement",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    },
+    {
+      "target_date": "2026-08-04",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 3932,
+      "source_observations_all_day": 97,
+      "source_observations_in_window": 48,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 1.0,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 48,
+      "pit_current_book_rows": 48,
+      "scored_two_sided_rows": 43,
+      "one_sided_current_book_rows": 5,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 5,
+      "v2_yes_trigger_wins": 0,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.0693869901345196,
+      "market_brier_on_scored_rows": 0.04890239534883722,
+      "v2_edge_after_fee_min": -0.24903194215277658,
+      "v2_edge_after_fee_max": -0.00020269231753965942,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 43,
+        "wins": 28,
+        "cost_1share_each": 23.69223,
+        "fee_adjusted_pnl_1share_each": 4.3077700000000005,
+        "cost_5shares_each": 118.46114999999999,
+        "fee_adjusted_pnl_5shares_each": 21.53885
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 24,
+        "wins": 24,
+        "cost_1share_each": 20.93637,
+        "fee_adjusted_pnl_1share_each": 3.0636300000000003,
+        "cost_5shares_each": 104.68185,
+        "fee_adjusted_pnl_5shares_each": 15.318150000000001
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 5,
+        "wins": 0,
+        "cost_5shares_each": 8.88575,
+        "fee_adjusted_pnl_5shares_each": -8.88575
+      },
+      "final_official_bracket": 29,
+      "settlement_source": "pm_history_near_binary",
+      "settlement_ref": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history/Tokyo_2026-08-04.json",
+      "settlement_availability_clock_class": "post_event_settlement",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    },
+    {
+      "target_date": "2026-08-05",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 3467,
+      "source_observations_all_day": 97,
+      "source_observations_in_window": 48,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 1.0,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 48,
+      "pit_current_book_rows": 48,
+      "scored_two_sided_rows": 48,
+      "one_sided_current_book_rows": 0,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 7,
+      "v2_yes_trigger_wins": 6,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.027015254630472996,
+      "market_brier_on_scored_rows": 0.03913500520833333,
+      "v2_edge_after_fee_min": -0.20185082936260526,
+      "v2_edge_after_fee_max": -0.0006659704605266642,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 48,
+        "wins": 22,
+        "cost_1share_each": 26.23611,
+        "fee_adjusted_pnl_1share_each": -4.23611,
+        "cost_5shares_each": 131.18055,
+        "fee_adjusted_pnl_5shares_each": -21.18055
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 23,
+        "wins": 22,
+        "cost_1share_each": 22.09261,
+        "fee_adjusted_pnl_1share_each": -0.09260999999999986,
+        "cost_5shares_each": 110.46305000000001,
+        "fee_adjusted_pnl_5shares_each": -0.4630499999999991
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 7,
+        "wins": 6,
+        "cost_5shares_each": 19.4527,
+        "fee_adjusted_pnl_5shares_each": 10.5473
+      },
+      "final_official_bracket": 30,
+      "settlement_source": "pm_history_near_binary",
+      "settlement_ref": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history/Tokyo_2026-08-05.json",
+      "settlement_availability_clock_class": "post_event_settlement",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    },
+    {
+      "target_date": "2026-08-06",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 1976,
+      "source_observations_all_day": 72,
+      "source_observations_in_window": 47,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 0.9791666666666666,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 47,
+      "pit_current_book_rows": 47,
+      "scored_two_sided_rows": 43,
+      "one_sided_current_book_rows": 4,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 16,
+      "v2_yes_trigger_wins": 0,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.25602612070249503,
+      "market_brier_on_scored_rows": 0.2142105348837209,
+      "v2_edge_after_fee_min": -0.31078738642215037,
+      "v2_edge_after_fee_max": -0.0025719267448808315,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 43,
+        "wins": 41,
+        "cost_1share_each": 29.48887,
+        "fee_adjusted_pnl_1share_each": 11.51113,
+        "cost_5shares_each": 147.44435,
+        "fee_adjusted_pnl_5shares_each": 57.55565
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 27,
+        "wins": 27,
+        "cost_1share_each": 25.49797,
+        "fee_adjusted_pnl_1share_each": 1.5020300000000004,
+        "cost_5shares_each": 127.48984999999999,
+        "fee_adjusted_pnl_5shares_each": 7.510150000000002
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 16,
+        "wins": 0,
+        "cost_5shares_each": 48.47324999999999,
+        "fee_adjusted_pnl_5shares_each": -48.47325
+      },
+      "final_official_bracket": 31,
+      "settlement_source": "pm_history_near_binary",
+      "settlement_ref": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history/Tokyo_2026-08-06.json",
+      "settlement_availability_clock_class": "post_event_settlement",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    },
+    {
+      "target_date": "2026-08-07",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 22015,
+      "source_observations_all_day": 97,
+      "source_observations_in_window": 48,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 1.0,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 48,
+      "pit_current_book_rows": 48,
+      "scored_two_sided_rows": 41,
+      "one_sided_current_book_rows": 7,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 9,
+      "v2_yes_trigger_wins": 8,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.026978244759527252,
+      "market_brier_on_scored_rows": 0.029746908536585365,
+      "v2_edge_after_fee_min": -0.17099425874424665,
+      "v2_edge_after_fee_max": -0.002694466604675553,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 41,
+        "wins": 12,
+        "cost_1share_each": 13.272310000000001,
+        "fee_adjusted_pnl_1share_each": -1.2723100000000003,
+        "cost_5shares_each": 66.36155000000001,
+        "fee_adjusted_pnl_5shares_each": -6.36155
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 12,
+        "wins": 12,
+        "cost_1share_each": 9.9042,
+        "fee_adjusted_pnl_1share_each": 2.0957999999999997,
+        "cost_5shares_each": 49.521,
+        "fee_adjusted_pnl_5shares_each": 10.479
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 9,
+        "wins": 8,
+        "cost_5shares_each": 34.87375,
+        "fee_adjusted_pnl_5shares_each": 5.126250000000001
+      },
+      "final_official_bracket": 33,
+      "settlement_source": "pm_history_near_binary",
+      "settlement_ref": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history/Tokyo_2026-08-07.json",
+      "settlement_availability_clock_class": "post_event_settlement",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    },
+    {
+      "target_date": "2026-08-08",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 25278,
+      "source_observations_all_day": 97,
+      "source_observations_in_window": 48,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 1.0,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 48,
+      "pit_current_book_rows": 48,
+      "scored_two_sided_rows": 37,
+      "one_sided_current_book_rows": 11,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 4,
+      "v2_yes_trigger_wins": 4,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.03303563178807426,
+      "market_brier_on_scored_rows": 0.03904156081081081,
+      "v2_edge_after_fee_min": -0.12110694371958763,
+      "v2_edge_after_fee_max": -0.002649216482163108,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 37,
+        "wins": 12,
+        "cost_1share_each": 13.7136,
+        "fee_adjusted_pnl_1share_each": -1.7136,
+        "cost_5shares_each": 68.568,
+        "fee_adjusted_pnl_5shares_each": -8.568
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 12,
+        "wins": 12,
+        "cost_1share_each": 10.21536,
+        "fee_adjusted_pnl_1share_each": 1.78464,
+        "cost_5shares_each": 51.076800000000006,
+        "fee_adjusted_pnl_5shares_each": 8.923200000000001
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 4,
+        "wins": 4,
+        "cost_5shares_each": 16.53195,
+        "fee_adjusted_pnl_5shares_each": 3.4680500000000003
+      },
+      "final_official_bracket": 34,
+      "settlement_source": "pm_history_near_binary",
+      "settlement_ref": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history/Tokyo_2026-08-08.json",
+      "settlement_availability_clock_class": "post_event_settlement",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    },
+    {
+      "target_date": "2026-08-09",
+      "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+      "window_jst": [
+        10.0,
+        18.0
+      ],
+      "raw_book_rows": 15687,
+      "source_observations_all_day": 97,
+      "source_observations_in_window": 48,
+      "expected_10m_observations_in_window": 48,
+      "source_observation_coverage": 1.0,
+      "max_book_after_first_seen_seconds": 900.0,
+      "checkpoint_rows_preserved": 48,
+      "pit_current_book_rows": 48,
+      "scored_two_sided_rows": 43,
+      "one_sided_current_book_rows": 5,
+      "missing_current_book_rows": 0,
+      "edge_threshold_after_fee": 0.02,
+      "v2_trigger_count": 0,
+      "v2_trigger_wins": 0,
+      "v2_yes_trigger_count": 1,
+      "v2_yes_trigger_wins": 0,
+      "no_floor_trigger_count": 0,
+      "no_floor_trigger_wins": 0,
+      "v2_brier_on_scored_rows": 0.045325280983748814,
+      "market_brier_on_scored_rows": 0.04023820348837209,
+      "v2_edge_after_fee_min": -0.17404656099244187,
+      "v2_edge_after_fee_max": -0.0014466752160027484,
+      "unconditional_buy_every_scored_checkpoint": {
+        "shares_per_order": 5.0,
+        "orders": 43,
+        "wins": 22,
+        "cost_1share_each": 19.556,
+        "fee_adjusted_pnl_1share_each": 2.4440000000000004,
+        "cost_5shares_each": 97.78,
+        "fee_adjusted_pnl_5shares_each": 12.22
+      },
+      "model_direction_p_no_gte_0_5": {
+        "shares_per_order": 5.0,
+        "orders": 20,
+        "wins": 20,
+        "cost_1share_each": 17.61059,
+        "fee_adjusted_pnl_1share_each": 2.3894100000000003,
+        "cost_5shares_each": 88.05295,
+        "fee_adjusted_pnl_5shares_each": 11.94705
+      },
+      "v2_edge_policy": {
+        "shares_per_order": 5.0,
+        "orders": 0,
+        "wins": 0,
+        "cost_1share_each": 0,
+        "fee_adjusted_pnl_1share_each": 0.0,
+        "cost_5shares_each": 0.0,
+        "fee_adjusted_pnl_5shares_each": 0.0
+      },
+      "v2_yes_edge_policy_all_checkpoints": {
+        "shares_per_order": 5.0,
+        "orders": 1,
+        "wins": 0,
+        "cost_5shares_each": 2.0095,
+        "fee_adjusted_pnl_5shares_each": -2.0095
+      },
+      "final_official_bracket": 33,
+      "settlement_source": "explicit_late_backfill_label_only",
+      "settlement_ref": "IEM_RJTT_48_METAR_rows_2026-08-09_local_max_33C_fetched_2026-08-10",
+      "settlement_availability_clock_class": "late_backfill_label_only_not_first_seen",
+      "model_training_end": "2026-07-15",
+      "model_market_logit_floor": 0.005,
+      "label_joined_after_scoring": true
+    }
+  ],
+  "bootstrap_seed": 20260810,
+  "bootstrap_replicates": 20000
+}
