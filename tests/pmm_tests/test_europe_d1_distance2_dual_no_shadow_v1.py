@@ -1,9 +1,11 @@
 import gzip
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from scripts.ops.weather_europe_d1_distance2_dual_no_shadow_v1 import (
     build_cycle,
+    load_versions,
 )
 
 
@@ -38,6 +40,28 @@ def config_payload() -> dict:
             }
         },
     }
+
+
+def test_load_versions_reads_only_dated_shards(tmp_path: Path) -> None:
+    dated = tmp_path / "2026-07-28"
+    dated.mkdir()
+    row = {
+        "city": "Amsterdam",
+        "forecast_target_date": "2026-07-29",
+        "model_label": "ECMWF",
+        "available_at_utc": "2026-07-28T15:00:00Z",
+    }
+    write_jsonl(dated / "forecast_versions.jsonl", [row])
+    write_jsonl(
+        tmp_path / "forecast_versions.jsonl",
+        [{**row, "model_label": "ROOT_DUPLICATE"}],
+    )
+
+    history = load_versions(
+        tmp_path, datetime(2026, 7, 28, 16, tzinfo=timezone.utc)
+    )
+
+    assert set(history) == {("Amsterdam", "2026-07-29", "ECMWF")}
 
 
 def test_build_cycle_selects_paired_distance_two_without_orders(

@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.market_brackets import parse_market_bracket
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
 from weather_data_feed.production_paths import (  # noqa: E402
     historical_full_ladder_root,
     historical_targeted_root,
@@ -26,7 +27,7 @@ from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 RUNTIME = load_production_spec().data_feed_runtime_root
-DEFAULT_VERSIONS = RUNTIME / "output/forecast_enrichment/forecast_versions.jsonl"
+DEFAULT_VERSIONS = RUNTIME / "output/forecast_enrichment"
 DEFAULT_CURVES = historical_targeted_root() / "forecast_hourly_curves"
 DEFAULT_LADDERS = historical_full_ladder_root() / "paper_snapshots"
 DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_d2_forecast_lineage_audit_v1"
@@ -64,7 +65,16 @@ def iter_jsonl(path: Path):
 
 
 def audit_versions(path: Path, start: date, end: date) -> dict[str, Any]:
-    rows = [row for row in iter_jsonl(path) if in_window(row.get("available_at_utc"), start, end)]
+    rows = [
+        row
+        for version_path in dated_jsonl_paths(
+            path,
+            filename="forecast_versions.jsonl",
+            allow_missing=True,
+        )
+        for row in iter_jsonl(version_path)
+        if in_window(row.get("available_at_utc"), start, end)
+    ]
     by_horizon = Counter(int(row.get("forecast_horizon_days_local")) for row in rows if row.get("forecast_horizon_days_local") is not None)
     run_present = sum(bool(row.get("forecast_run_at_utc")) for row in rows)
     available_present = sum(bool(row.get("available_at_utc")) for row in rows)

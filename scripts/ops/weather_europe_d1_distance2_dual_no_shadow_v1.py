@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.market_brackets import parse_market_bracket
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths, iter_jsonl_lines
 from weather_data_feed_service.io_utils import append_jsonl, read_json, write_json
 from src.strategies.runtime.production import load_production_spec
 
@@ -28,7 +29,7 @@ from src.strategies.runtime.production import load_production_spec
 RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
 DEFAULT_BOOK_ROOT = load_production_spec().resolved_market_books_root() / "batches"
 DEFAULT_VERSIONS = (
-    RUNTIME_ROOT / "output/forecast_enrichment/forecast_versions.jsonl"
+    RUNTIME_ROOT / "output/forecast_enrichment"
 )
 DEFAULT_CONFIG = (
     ROOT / "configs/weather/europe_d1_distance2_dual_no_shadow_v1.json"
@@ -150,23 +151,25 @@ def load_versions(
     path: Path, asof: datetime
 ) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
     history: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
-    if not path.exists():
-        return history
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            available = utc(row.get("available_at_utc"))
-            if available is None or available > asof:
-                continue
-            key = (
-                str(row.get("city") or ""),
-                str(row.get("forecast_target_date") or ""),
-                str(row.get("model_label") or ""),
-            )
-            history[key].append(row)
+    paths = dated_jsonl_paths(
+        path,
+        filename="forecast_versions.jsonl",
+        allow_missing=True,
+    )
+    for line in iter_jsonl_lines(paths):
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        available = utc(row.get("available_at_utc"))
+        if available is None or available > asof:
+            continue
+        key = (
+            str(row.get("city") or ""),
+            str(row.get("forecast_target_date") or ""),
+            str(row.get("model_label") or ""),
+        )
+        history[key].append(row)
     for rows in history.values():
         rows.sort(key=lambda row: str(row.get("available_at_utc") or ""))
     return history

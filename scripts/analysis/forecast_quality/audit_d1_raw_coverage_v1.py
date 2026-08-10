@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.market_brackets import parse_market_bracket
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths
 from weather_data_feed.production_paths import (  # noqa: E402
     historical_full_ladder_root,
     historical_targeted_root,
@@ -214,26 +215,35 @@ def forecast_versions_census(path: Path) -> dict[str, Any]:
     cities: set[str] = set()
     targets: set[str] = set()
     capture_dates: set[str] = set()
-    for row in iter_jsonl(path):
-        captured = parse_day(row.get("available_at_utc") or row.get("captured_at_utc"))
-        if captured is None or not (START <= captured <= END):
-            continue
-        counts["rows"] += 1
-        cities.add(str(row.get("city") or ""))
-        targets.add(str(row.get("forecast_target_date") or row.get("target_date") or ""))
-        capture_dates.add(str(captured))
-        horizon = row.get("forecast_horizon_days_local")
-        if horizon is not None:
-            counts[f"horizon_{horizon}"] += 1
-        for field in (
-            "forecast_run_at_utc",
-            "available_at_utc",
-            "source_fetch_start_utc",
-            "source_raw_payload_hash",
-            "batch_capture_id",
-            "first_seen_at_utc",
-        ):
-            counts[f"present_{field}"] += int(bool(row.get(field)))
+    for version_path in dated_jsonl_paths(
+        path,
+        filename="forecast_versions.jsonl",
+        allow_missing=True,
+    ):
+        for row in iter_jsonl(version_path):
+            captured = parse_day(
+                row.get("available_at_utc") or row.get("captured_at_utc")
+            )
+            if captured is None or not (START <= captured <= END):
+                continue
+            counts["rows"] += 1
+            cities.add(str(row.get("city") or ""))
+            targets.add(
+                str(row.get("forecast_target_date") or row.get("target_date") or "")
+            )
+            capture_dates.add(str(captured))
+            horizon = row.get("forecast_horizon_days_local")
+            if horizon is not None:
+                counts[f"horizon_{horizon}"] += 1
+            for field in (
+                "forecast_run_at_utc",
+                "available_at_utc",
+                "source_fetch_start_utc",
+                "source_raw_payload_hash",
+                "batch_capture_id",
+                "first_seen_at_utc",
+            ):
+                counts[f"present_{field}"] += int(bool(row.get(field)))
     return {
         "path": str(path),
         "rows": counts["rows"],
@@ -362,8 +372,8 @@ def run_capture_census(root: Path) -> dict[str, Any]:
         "valid_event_keys": sorted([list(key) for key in valid_keys]),
         "complete_event_keys": sorted([list(key) for key in complete_keys]),
         "v2_integrated_outputs_present": {
-            "forecast_run_rows_v2": (RUNTIME / "output/forecast_enrichment/forecast_run_rows_v2.jsonl").exists(),
-            "forecast_batches_v2": (RUNTIME / "output/forecast_enrichment/forecast_batches_v2.jsonl").exists(),
+            "forecast_run_rows_v2": bool(tuple((RUNTIME / "output/forecast_enrichment").glob("????-??-??/forecast_run_rows_v2.jsonl"))),
+            "forecast_batches_v2": bool(tuple((RUNTIME / "output/forecast_enrichment").glob("????-??-??/forecast_batches_v2.jsonl"))),
             "forecast_run_contract_state": (RUNTIME / "output/forecast_enrichment/forecast_run_contract_state.json").exists(),
         },
     }
@@ -417,7 +427,7 @@ def main() -> int:
         "window": [str(START), str(END)],
         "runtime": str(RUNTIME),
         "forecast_versions": forecast_versions_census(
-            RUNTIME / "output/forecast_enrichment/forecast_versions.jsonl"
+            RUNTIME / "output/forecast_enrichment"
         ),
         "forecast_hourly_curves": curves_census(
             targeted_root / "forecast_hourly_curves"

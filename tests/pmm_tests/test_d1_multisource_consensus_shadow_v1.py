@@ -2,7 +2,9 @@ import gzip
 import json
 from pathlib import Path
 
-from scripts.ops.d1_multisource_consensus_shadow_v1 import build_cycle
+from datetime import datetime, timezone
+
+from scripts.ops.d1_multisource_consensus_shadow_v1 import build_cycle, version_history
 
 
 def write_jsonl_gz(path: Path, rows: list[dict]) -> None:
@@ -10,6 +12,30 @@ def write_jsonl_gz(path: Path, rows: list[dict]) -> None:
     with gzip.open(path, "wt", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row) + "\n")
+
+
+def test_version_history_reads_only_dated_shards(tmp_path) -> None:
+    dated = tmp_path / "2026-07-28"
+    dated.mkdir()
+    row = {
+        "city": "Amsterdam",
+        "forecast_target_date": "2026-07-29",
+        "model_label": "ECMWF",
+        "available_at_utc": "2026-07-28T17:00:00Z",
+    }
+    (dated / "forecast_versions.jsonl").write_text(
+        json.dumps(row) + "\n", encoding="utf-8"
+    )
+    (tmp_path / "forecast_versions.jsonl").write_text(
+        json.dumps({**row, "model_label": "ROOT_DUPLICATE"}) + "\n",
+        encoding="utf-8",
+    )
+
+    history = version_history(
+        tmp_path, datetime(2026, 7, 28, 18, tzinfo=timezone.utc)
+    )
+
+    assert set(history) == {("Amsterdam", "2026-07-29", "ECMWF")}
 
 
 def test_build_cycle_uses_forecast_available_before_endpoint_book(tmp_path) -> None:
