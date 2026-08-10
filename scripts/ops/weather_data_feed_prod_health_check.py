@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops.weather_data_feed_parity_check import check_snapshot, latest_snapshot, load_snapshot
 from src.strategies.runtime.production import load_production_spec
+from weather_data_feed.jsonl_partitions import dated_jsonl_paths, recent_jsonl_lines
 
 
 PRODUCTION_SPEC = load_production_spec()
@@ -31,7 +32,7 @@ DEFAULT_ORDERBOOK_DIR = PRODUCTION_SPEC.resolved_market_books_root() / "batches"
 DEFAULT_FORECAST_CURVE_DIR = PRODUCTION_SPEC.forecast_hourly_curve_dir()
 DEFAULT_LIVE_CROSS_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/live_cross_observations/state.json"
 DEFAULT_OBSERVATION_CACHE = MAC_DATA_FEED_RUNTIME / "output/observations/latest.json"
-DEFAULT_OBSERVATION_HISTORY = MAC_DATA_FEED_RUNTIME / "output/observations/observations.jsonl"
+DEFAULT_OBSERVATION_HISTORY = MAC_DATA_FEED_RUNTIME / "output/observations"
 DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
 DEFAULT_SUMMARY_FILES = tuple(
     runtime.health_path
@@ -102,21 +103,40 @@ def latest_forecast_curve_capture(root: Path) -> Path | None:
     return latest_partitioned_file(root, ("forecast_hourly_curves_*.jsonl",))
 
 
-def read_jsonl_tail(path: Path, limit: int) -> list[dict[str, Any]]:
+def read_jsonl_tail(
+    path: Path,
+    limit: int,
+    *,
+    partition_filename: str | None = None,
+) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     wanted = max(1, limit)
-    chunk_size = 64 * 1024
-    with path.open("rb") as fh:
-        fh.seek(0, 2)
-        position = fh.tell()
-        buffer = b""
-        while position > 0 and buffer.count(b"\n") <= wanted:
-            read_size = min(chunk_size, position)
-            position -= read_size
-            fh.seek(position)
-            buffer = fh.read(read_size) + buffer
-    lines = [line for line in buffer.splitlines() if line.strip()][-wanted:]
+    if path.is_dir():
+        if not partition_filename:
+            raise ValueError("partition_filename is required for a directory input")
+        paths = dated_jsonl_paths(
+            path,
+            filename=partition_filename,
+            allow_missing=True,
+        )
+        lines = [
+            line.encode("utf-8")
+            for line in recent_jsonl_lines(paths, max_lines=wanted)
+            if line.strip()
+        ]
+    else:
+        chunk_size = 64 * 1024
+        with path.open("rb") as fh:
+            fh.seek(0, 2)
+            position = fh.tell()
+            buffer = b""
+            while position > 0 and buffer.count(b"\n") <= wanted:
+                read_size = min(chunk_size, position)
+                position -= read_size
+                fh.seek(position)
+                buffer = fh.read(read_size) + buffer
+        lines = [line for line in buffer.splitlines() if line.strip()][-wanted:]
     rows: list[dict[str, Any]] = []
     for tail_index, line in enumerate(lines, start=1):
         try:
@@ -635,10 +655,19 @@ def check_observation_cache(
             awaiting_first_rows.append(city)
 
     history_age_limit = max_cache_age_min if max_history_age_min is None else max_history_age_min
-    history_exists = history_path.is_file()
+    history_files = dated_jsonl_paths(
+        history_path,
+        filename="observations.jsonl",
+        allow_missing=True,
+    )
+    history_exists = bool(history_files)
     history_error = ""
     try:
-        history_rows = read_jsonl_tail(history_path, history_tail_rows)
+        history_rows = read_jsonl_tail(
+            history_path,
+            history_tail_rows,
+            partition_filename="observations.jsonl",
+        )
     except OSError as exc:
         history_rows = []
         history_error = f"{type(exc).__name__}: {exc}"
@@ -704,10 +733,20 @@ def check_observation_cache(
         and len(latest_batch_rows) == len(rows)
         and history_identities == cache_identities
     )
-    daily_history_path = (
-        history_path.parent / latest_batch_generated.date().isoformat() / history_path.name
-        if latest_batch_generated else None
-    )
+    daily_history_path = None
+    if latest_batch_generated:
+        if history_path.is_dir():
+            daily_history_path = (
+                history_path
+                / latest_batch_generated.date().isoformat()
+                / "observations.jsonl"
+            )
+        else:
+            daily_history_path = (
+                history_path.parent
+                / latest_batch_generated.date().isoformat()
+                / history_path.name
+            )
     daily_error = ""
     try:
         daily_rows = (

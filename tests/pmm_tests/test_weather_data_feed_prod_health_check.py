@@ -231,6 +231,40 @@ def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
     assert report["reused_record_count"] == 1
 
 
+def test_prod_health_check_reads_shard_only_observation_history(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache_payload = {
+        "generated_at_utc": "2026-07-19T10:19:00Z",
+        "records": [
+            {
+                "city": "Singapore",
+                "target_date": "2026-07-19",
+                "station": "WSSS",
+                "status": "ok",
+                "current_temp_c": 31.0,
+                "running_max_c": 31.0,
+                "age_min": 5.0,
+            }
+        ],
+    }
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    _write_observation_history(history, cache_payload)
+    history.unlink()
+
+    report = check_observation_cache(
+        cache,
+        history_path=tmp_path,
+        now_utc=datetime(2026, 7, 19, 10, 20, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "ok"
+    assert report["history_exists"] is True
+    assert report["daily_history_parity"] is True
+
+
 def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
     cache = tmp_path / "latest.json"
     history = tmp_path / "observations.jsonl"
