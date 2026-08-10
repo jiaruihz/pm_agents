@@ -7,6 +7,9 @@ production_releases:
   - release_id: control_plane
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     expected_repo_sha: 801076116313e4906f9b13b85e28239f956c9182
+  - release_id: fast_source_runtime
+    checkout_root: /Users/deepsleep/projects/pm_agents_fast_source_prod
+    expected_repo_sha: 1cb1db431bc1a156f8e28dfb9e00dae7a4c72c2b
   - release_id: data_feed
     checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
     expected_repo_sha: b98396b1fecc9ab098d51164844d3710330f10f9
@@ -203,7 +206,7 @@ managed_runtimes:
     tmux_session: weather_fast_source_prev_no_trial
     role: strategy
     execution_mode: live
-    release_id: control_plane
+    release_id: fast_source_runtime
     start_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
     restart_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/latest_summary.json
