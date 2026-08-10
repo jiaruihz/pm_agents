@@ -1302,7 +1302,7 @@ the global file and `2026-08-09/observations.jsonl`; every row carries build
 pre/post missing session was the expected completion of bounded one-shot
 `weather_canonical_refresh`, explicitly allowed in the comparison.
 
-## 19. 2026-08-09 Health Identity, Proxy Consumer And Loaded-SHA Convergence
+## 19. 2026-08-09..10 Health Identity, Proxy Consumer And Loaded-SHA Convergence
 
 Production health had two blind/misclassified states. First, a fresh
 `observations/latest.json` could hide a stopped append-only history writer.
@@ -1338,6 +1338,46 @@ post-restart authenticated query also returned zero open orders. The final
 manifest was healthy with no findings or lost persistent sessions. Data-feed
 health is `warn` only for missing same-day state in four non-trading cities;
 all registered runtimes and the JRS context are healthy.
+
+On August 10 the same control boundary exposed a later Core Carry transport
+outage. The last successful loop summary was `2026-08-10T12:56:38Z`; from
+`12:57:07Z` through `13:52:28Z` the append-only summary history contains 142
+consecutive `PolyApiException: Request exception!` cycles. The old loop wrote
+those errors only to history, so `latest_summary.json` remained stale and hid
+the current failure reason. The repaired release writes every caught loop error
+to latest, history and runtime state before sleeping. Controller restart loaded
+release `1866ed88`, and the first recovered cycle was healthy at
+`13:52:57Z`.
+
+Persisted PIT score rows inside the affected window contain exactly one
+eligible city-day: Cape Town at decision time `13:37:36Z`. It was delayed, not
+lost: recovery submitted the corresponding 10-share taker at `13:52:55Z`, and
+authenticated CLOB evidence reports all 10 shares matched at `0.94` versus the
+earlier `0.98` ask. The five-share maker sleeve and its three replacements
+produced four venue order ids; all four were cancelled with zero matched
+shares. The final cancel projection created no venue order. Fast Source added
+zero order rows during the maintenance window, and neither live journal has a
+duplicate venue order id. Research and execution reviews must label the failed
+interval `core_carry_clob_transport_error_20260810`; it is 142 failed execution
+cycles and one 15-minute delayed entry, not 142 strategy rejections.
+
+The proxy release then reloaded all 12 registered consumers from their pinned
+checkouts. One real compatibility defect was found during that transaction:
+the older city-runtime release lacked the controller-owned proxy-state fields,
+so the Tokyo zero-notional session exited before process start. The release now
+contains the shared proxy-state contract, resolves `127.0.0.1:7897` in an
+executed smoke, and was restored through the controller. Final Gamma and CLOB
+probes both returned HTTP 200, all 12 process bindings match the controller
+state, controller/manifest/API/data-feed/storage checks are healthy, and the
+pre/post manifest comparison lost no persistent session.
+
+The full data-feed check also misclassified Core Carry maker replacements as
+duplicate current executions because it ignored their stable `execution_id`
+and treated cancel projections as active rows. Health now keys modern rows by
+execution identity, retains the conservative coarse key only for legacy rows,
+and excludes exchange-confirmed maker cancel projections. The production check
+now reports zero duplicate order ids, zero duplicate current execution ids and
+zero current YES/NO conflicts.
 
 ## 20. 2026-08-07..2026-08-10 WCIR Helsinki Forecast-Path Drift
 
