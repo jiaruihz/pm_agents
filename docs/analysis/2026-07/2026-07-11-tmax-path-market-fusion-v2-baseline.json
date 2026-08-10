@@ -1,125 +1,422 @@
 {
-  "blocker": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+  "blocker": "minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates",
   "comparisons": [
     {
       "date_block_ci": "NA",
       "date_equal_brier": null,
       "date_equal_logloss": null,
       "model": "market_full_ladder",
-      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "reason": "minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates",
       "roi_fee_adjusted": null,
-      "status": "not_run_data_not_answerable"
+      "status": "not_run_audit_only_thin"
     },
     {
       "date_block_ci": "NA",
       "date_equal_brier": null,
       "date_equal_logloss": null,
       "model": "current_coherent_base",
-      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "reason": "minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates",
       "roi_fee_adjusted": null,
-      "status": "not_run_data_not_answerable"
+      "status": "not_run_audit_only_thin"
     },
     {
       "date_block_ci": "NA",
       "date_equal_brier": null,
       "date_equal_logloss": null,
       "model": "global_physical_hazard",
-      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "reason": "minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates",
       "roi_fee_adjusted": null,
-      "status": "not_run_data_not_answerable"
+      "status": "not_run_audit_only_thin"
     },
     {
       "date_block_ci": "NA",
       "date_equal_brier": null,
       "date_equal_logloss": null,
       "model": "market_plus_global_hazard_residual",
-      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "reason": "minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates",
       "roi_fee_adjusted": null,
-      "status": "not_run_data_not_answerable"
+      "status": "not_run_audit_only_thin"
     }
   ],
   "counts": {
-    "absolute_complete_quoted_states": 14,
-    "absolute_eligible_states": 13,
-    "fixed_complete_ladder_city_days": 0,
+    "absolute_complete_quoted_states": 72,
+    "absolute_eligible_states": 47,
+    "fixed_complete_ladder_city_days": 1,
     "p0_states": 8347,
-    "post_cutoff_absolute_dates": 2,
-    "post_cutoff_absolute_rows": 13,
-    "pre_cutoff_absolute_dates": 0,
-    "pre_cutoff_absolute_rows": 0,
-    "snapshot_matched_states": 834
+    "post_cutoff_absolute_dates": 4,
+    "post_cutoff_absolute_rows": 17,
+    "pre_cutoff_absolute_dates": 11,
+    "pre_cutoff_absolute_rows": 30,
+    "snapshot_matched_states": 8325
   },
   "daily": [
     {
+      "absolute_eligible_states": 5,
+      "cities": 6,
+      "complete_identity_states": 7,
+      "complete_quoted_states": 7,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 10,
+      "target_date": "2026-05-19"
+    },
+    {
       "absolute_eligible_states": 0,
-      "cities": 2,
+      "cities": 34,
+      "complete_identity_states": 3,
+      "complete_quoted_states": 3,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 241,
+      "target_date": "2026-05-20"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 32,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 220,
+      "target_date": "2026-05-21"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 34,
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": true,
-      "snapshot_matched_states": 9,
+      "snapshot_matched_states": 177,
+      "target_date": "2026-05-22"
+    },
+    {
+      "absolute_eligible_states": 3,
+      "cities": 34,
+      "complete_identity_states": 3,
+      "complete_quoted_states": 3,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 189,
+      "target_date": "2026-05-23"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 30,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 170,
+      "target_date": "2026-05-24"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 32,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 168,
+      "target_date": "2026-05-25"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 33,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 1,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 156,
+      "target_date": "2026-05-26"
+    },
+    {
+      "absolute_eligible_states": 2,
+      "cities": 35,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 253,
+      "target_date": "2026-05-27"
+    },
+    {
+      "absolute_eligible_states": 3,
+      "cities": 30,
+      "complete_identity_states": 3,
+      "complete_quoted_states": 3,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 184,
+      "target_date": "2026-05-28"
+    },
+    {
+      "absolute_eligible_states": 1,
+      "cities": 32,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 1,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 199,
+      "target_date": "2026-05-29"
+    },
+    {
+      "absolute_eligible_states": 2,
+      "cities": 31,
+      "complete_identity_states": 3,
+      "complete_quoted_states": 3,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 186,
+      "target_date": "2026-05-30"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 33,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 207,
+      "target_date": "2026-05-31"
+    },
+    {
+      "absolute_eligible_states": 3,
+      "cities": 33,
+      "complete_identity_states": 4,
+      "complete_quoted_states": 4,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 195,
+      "target_date": "2026-06-01"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 30,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 174,
+      "target_date": "2026-06-02"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 31,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 162,
+      "target_date": "2026-06-03"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 34,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 1,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 181,
+      "target_date": "2026-06-04"
+    },
+    {
+      "absolute_eligible_states": 2,
+      "cities": 32,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 196,
+      "target_date": "2026-06-05"
+    },
+    {
+      "absolute_eligible_states": 6,
+      "cities": 35,
+      "complete_identity_states": 7,
+      "complete_quoted_states": 7,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 214,
+      "target_date": "2026-06-06"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 36,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 221,
+      "target_date": "2026-06-07"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 36,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 219,
+      "target_date": "2026-06-08"
+    },
+    {
+      "absolute_eligible_states": 2,
+      "cities": 36,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 230,
+      "target_date": "2026-06-09"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 33,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 1,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 208,
+      "target_date": "2026-06-10"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 35,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 1,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 195,
+      "target_date": "2026-06-11"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 36,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 208,
+      "target_date": "2026-06-12"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 35,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 192,
+      "target_date": "2026-06-13"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 36,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 220,
+      "target_date": "2026-06-14"
+    },
+    {
+      "absolute_eligible_states": 1,
+      "cities": 34,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 188,
+      "target_date": "2026-06-15"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 35,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 207,
+      "target_date": "2026-06-16"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 34,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 200,
+      "target_date": "2026-06-17"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 24,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 146,
+      "target_date": "2026-06-18"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 35,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 210,
       "target_date": "2026-06-19"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 5,
+      "cities": 30,
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": true,
-      "snapshot_matched_states": 13,
+      "snapshot_matched_states": 155,
       "target_date": "2026-06-20"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 10,
+      "cities": 34,
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": false,
-      "snapshot_matched_states": 10,
+      "snapshot_matched_states": 201,
       "target_date": "2026-06-21"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 9,
+      "cities": 31,
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": false,
-      "snapshot_matched_states": 9,
+      "snapshot_matched_states": 215,
       "target_date": "2026-06-22"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 5,
+      "cities": 27,
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": false,
-      "snapshot_matched_states": 5,
+      "snapshot_matched_states": 146,
+      "target_date": "2026-06-23"
+    },
+    {
+      "absolute_eligible_states": 3,
+      "cities": 36,
+      "complete_identity_states": 6,
+      "complete_quoted_states": 6,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 222,
       "target_date": "2026-06-25"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 2,
-      "complete_identity_states": 0,
-      "complete_quoted_states": 0,
+      "cities": 36,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
       "pre_cutoff": false,
-      "snapshot_matched_states": 3,
+      "snapshot_matched_states": 235,
       "target_date": "2026-06-26"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 10,
-      "complete_identity_states": 0,
-      "complete_quoted_states": 0,
+      "cities": 35,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
       "pre_cutoff": false,
-      "snapshot_matched_states": 10,
+      "snapshot_matched_states": 202,
       "target_date": "2026-06-27"
     },
     {
       "absolute_eligible_states": 0,
-      "cities": 16,
+      "cities": 11,
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": false,
-      "snapshot_matched_states": 62,
+      "snapshot_matched_states": 28,
+      "target_date": "2026-06-28"
+    },
+    {
+      "absolute_eligible_states": 1,
+      "cities": 20,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 1,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 81,
       "target_date": "2026-06-29"
     },
     {
@@ -146,7 +443,7 @@
       "complete_identity_states": 0,
       "complete_quoted_states": 0,
       "pre_cutoff": false,
-      "snapshot_matched_states": 28,
+      "snapshot_matched_states": 29,
       "target_date": "2026-07-02"
     },
     {
@@ -203,48 +500,48 @@
     },
     {
       "cities": 36,
-      "dates": 15,
+      "dates": 48,
       "note": "captured paper snapshot at matching Beijing wall-clock minute",
-      "rows": 834,
+      "rows": 8325,
       "stage": "snapshot_path_matched"
     },
     {
-      "cities": 8,
-      "dates": 3,
+      "cities": 23,
+      "dates": 25,
       "note": "after-the-fact settlement inventory audit only",
-      "rows": 15,
+      "rows": 73,
       "stage": "complete_identity_ladder_audit"
     },
     {
-      "cities": 7,
-      "dates": 2,
+      "cities": 23,
+      "dates": 24,
       "note": "all audited siblings have a direct/cross-side YES quote",
-      "rows": 14,
+      "rows": 72,
       "stage": "complete_quoted_absolute_ladder"
     },
     {
-      "cities": 6,
-      "dates": 2,
+      "cities": 19,
+      "dates": 15,
       "note": "complete quote + ordered anchors + final label present; label not a feature",
-      "rows": 13,
+      "rows": 47,
       "stage": "absolute_eligible_with_label"
     },
     {
-      "cities": 0,
-      "dates": 0,
+      "cities": 1,
+      "dates": 1,
       "note": "at least two matched states; every state complete-quoted; one identical absolute signature",
-      "rows": 0,
+      "rows": 1,
       "stage": "fixed_complete_ladder_city_days"
     },
     {
-      "cities": 0,
-      "dates": 0,
+      "cities": 17,
+      "dates": 11,
       "note": "requires at least 5 dates for inner walk-forward",
-      "rows": 0,
+      "rows": 30,
       "stage": "pre_cutoff_absolute_eligible"
     }
   ],
-  "generated_at_utc": "2026-07-11T03:17:33+00:00",
+  "generated_at_utc": "2026-08-10T04:33:56+00:00",
   "model_fit_performed": false,
   "parameters": {
     "fee_formula": "0.05 * price * (1 - price)",
@@ -299,19 +596,18 @@
     }
   ],
   "roi_performed": false,
+  "sample_status": "minimally_answerable_but_thin",
   "scope": "offline absolute-ladder data answerability audit only",
   "snapshot_inventory": {
-    "/Users/deepsleep/projects/pm_agents/runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots": 480,
-    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots": 780
+    "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots": 6569
   },
   "sources": {
     "coherent_baseline": "docs/analysis/2026-07/generated/tmax_coherent_expression_calibrator_v1/coherent_predictions.csv",
     "p0_relative_states": "docs/analysis/2026-07/generated/tmax_distribution_p0_anchor_scorecard_v1/scored_rows.csv",
     "paper_snapshot_roots": [
-      "/Users/deepsleep/projects/pm_agents/runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots",
-      "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
+      "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots"
     ],
     "settlement_outcomes": "runtime/weather.db"
   },
-  "verdict": "kill_current_historical_absolute_ladder_experiment_continue_forward_collection"
+  "verdict": "absolute_ladder_minimally_answerable_but_too_thin_for_strategy_claim"
 }

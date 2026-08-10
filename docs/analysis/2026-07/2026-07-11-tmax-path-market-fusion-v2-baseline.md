@@ -1,12 +1,12 @@
 # Tmax Path-Market Fusion V2 Baseline
 
-> generated_at_utc: `2026-07-11T03:17:33+00:00`
+> generated_at_utc: `2026-08-10T04:33:56+00:00`
 > Scope: offline data-answerability audit only. No live runner, configuration, order behavior, or database was changed.
 
 ## 结论
 
-- **当前历史数据不能回答 V2 absolute-ladder 模型问题，故本轮不拟合 hazard、不输出伪 logloss/Brier/ROI，也不把 `current/d1/d2/tail` 重命名为 absolute bracket。**
-- 可回指 paper snapshot 的 P0 state 是 `834` / `8347`；absolute-complete quoted state 是 `14`，但能证明同一 city-day 多个 state 都拥有相同完整 quoted ladder 的 city-day 是 `0`。pre-cutoff 只有 `0` 个日期，低于 inner walk-forward 最低 `5` 天。
+- **当前历史数据可以形成最小 absolute-ladder PIT 分母，但样本极薄；本轮只完成可答性审计，不拟合 hazard，也不输出无统计意义的 ROI。**
+- 可回指 paper snapshot 的 P0 state 是 `8325` / `8347`；完整逐档 quoted state `72`，带标签可评估 `47`。pre-cutoff `30` 行 / `11` 天，post-cutoff `17` 行 / `4` 天；仅 `1` 个 city-day 在多个 state 上持续保存完整固定梯子。
 - `settlement_outcomes` 只用于事后 collector-completeness 审计；final bracket、actual bucket、outcome-derived slice 都没有进入特征。P3/atlas 的历史 forecast backfill 与全窗口 city bias 被明确排除。
 
 ## Funnel
@@ -15,39 +15,72 @@
 | --- | --- | --- | --- | --- |
 | p0_relative_state_universe | 8347 | 48 | 36 | relative current/d1/d2/tail; not an absolute ladder |
 | has_decision_snapshot_timestamp | 8347 | 48 | 36 | P0 decision-state lineage |
-| snapshot_path_matched | 834 | 15 | 36 | captured paper snapshot at matching Beijing wall-clock minute |
-| complete_identity_ladder_audit | 15 | 3 | 8 | after-the-fact settlement inventory audit only |
-| complete_quoted_absolute_ladder | 14 | 2 | 7 | all audited siblings have a direct/cross-side YES quote |
-| absolute_eligible_with_label | 13 | 2 | 6 | complete quote + ordered anchors + final label present; label not a feature |
-| fixed_complete_ladder_city_days | 0 | 0 | 0 | at least two matched states; every state complete-quoted; one identical absolute signature |
-| pre_cutoff_absolute_eligible | 0 | 0 | 0 | requires at least 5 dates for inner walk-forward |
+| snapshot_path_matched | 8325 | 48 | 36 | captured paper snapshot at matching Beijing wall-clock minute |
+| complete_identity_ladder_audit | 73 | 25 | 23 | after-the-fact settlement inventory audit only |
+| complete_quoted_absolute_ladder | 72 | 24 | 23 | all audited siblings have a direct/cross-side YES quote |
+| absolute_eligible_with_label | 47 | 15 | 19 | complete quote + ordered anchors + final label present; label not a feature |
+| fixed_complete_ladder_city_days | 1 | 1 | 1 | at least two matched states; every state complete-quoted; one identical absolute signature |
+| pre_cutoff_absolute_eligible | 30 | 11 | 17 | requires at least 5 dates for inner walk-forward |
 
 ## Same-Denominator Model Comparison
 
-所有四个预注册模型都要求同一 frozen absolute PIT denominator。这个分母无法形成，因此 metrics、date-block CI 和 fee-adjusted ROI 均为 `NA`，而不是零或负数。
+四个预注册模型已有同一 absolute PIT 分母，但 47 个可评估 state 只够 smoke test，不够在 inner selection 后再给独立 forward 结论。本审计因此保留 metrics/CI/ROI 为 `NA`，后续模型实验必须继续积累 fresh complete-ladder states。
 
 | model | status | date_equal_logloss | date_equal_brier | date_block_ci | roi_fee_adjusted | reason |
 | --- | --- | --- | --- | --- | --- | --- |
-| market_full_ladder | not_run_data_not_answerable | NA | NA | NA | NA | absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5 |
-| current_coherent_base | not_run_data_not_answerable | NA | NA | NA | NA | absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5 |
-| global_physical_hazard | not_run_data_not_answerable | NA | NA | NA | NA | absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5 |
-| market_plus_global_hazard_residual | not_run_data_not_answerable | NA | NA | NA | NA | absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5 |
+| market_full_ladder | not_run_audit_only_thin | NA | NA | NA | NA | minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates |
+| current_coherent_base | not_run_audit_only_thin | NA | NA | NA | NA | minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates |
+| global_physical_hazard | not_run_audit_only_thin | NA | NA | NA | NA | minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates |
+| market_plus_global_hazard_residual | not_run_audit_only_thin | NA | NA | NA | NA | minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates |
 
 ## 日期覆盖
 
 | target_date | snapshot_matched_states | complete_identity_states | complete_quoted_states | cities | pre_cutoff |
 | --- | --- | --- | --- | --- | --- |
-| 2026-06-19 | 9 | 0 | 0 | 2 | True |
-| 2026-06-20 | 13 | 0 | 0 | 5 | True |
-| 2026-06-21 | 10 | 0 | 0 | 10 | False |
-| 2026-06-22 | 9 | 0 | 0 | 9 | False |
-| 2026-06-25 | 5 | 0 | 0 | 5 | False |
-| 2026-06-26 | 3 | 0 | 0 | 2 | False |
-| 2026-06-27 | 10 | 0 | 0 | 10 | False |
-| 2026-06-29 | 62 | 0 | 0 | 16 | False |
+| 2026-05-19 | 10 | 7 | 7 | 6 | True |
+| 2026-05-20 | 241 | 3 | 3 | 34 | True |
+| 2026-05-21 | 220 | 2 | 2 | 32 | True |
+| 2026-05-22 | 177 | 0 | 0 | 34 | True |
+| 2026-05-23 | 189 | 3 | 3 | 34 | True |
+| 2026-05-24 | 170 | 0 | 0 | 30 | True |
+| 2026-05-25 | 168 | 0 | 0 | 32 | True |
+| 2026-05-26 | 156 | 1 | 1 | 33 | True |
+| 2026-05-27 | 253 | 2 | 2 | 35 | True |
+| 2026-05-28 | 184 | 3 | 3 | 30 | True |
+| 2026-05-29 | 199 | 1 | 1 | 32 | True |
+| 2026-05-30 | 186 | 3 | 3 | 31 | True |
+| 2026-05-31 | 207 | 2 | 2 | 33 | True |
+| 2026-06-01 | 195 | 4 | 4 | 33 | True |
+| 2026-06-02 | 174 | 0 | 0 | 30 | True |
+| 2026-06-03 | 162 | 0 | 0 | 31 | True |
+| 2026-06-04 | 181 | 1 | 1 | 34 | True |
+| 2026-06-05 | 196 | 2 | 2 | 32 | True |
+| 2026-06-06 | 214 | 7 | 7 | 35 | True |
+| 2026-06-07 | 221 | 0 | 0 | 36 | True |
+| 2026-06-08 | 219 | 0 | 0 | 36 | True |
+| 2026-06-09 | 230 | 2 | 2 | 36 | True |
+| 2026-06-10 | 208 | 1 | 1 | 33 | True |
+| 2026-06-11 | 195 | 1 | 1 | 35 | True |
+| 2026-06-12 | 208 | 0 | 0 | 36 | True |
+| 2026-06-13 | 192 | 0 | 0 | 35 | True |
+| 2026-06-14 | 220 | 0 | 0 | 36 | True |
+| 2026-06-15 | 188 | 2 | 2 | 34 | True |
+| 2026-06-16 | 207 | 0 | 0 | 35 | True |
+| 2026-06-17 | 200 | 0 | 0 | 34 | True |
+| 2026-06-18 | 146 | 0 | 0 | 24 | True |
+| 2026-06-19 | 210 | 0 | 0 | 35 | True |
+| 2026-06-20 | 155 | 0 | 0 | 30 | True |
+| 2026-06-21 | 201 | 0 | 0 | 34 | False |
+| 2026-06-22 | 215 | 0 | 0 | 31 | False |
+| 2026-06-23 | 146 | 0 | 0 | 27 | False |
+| 2026-06-25 | 222 | 6 | 6 | 36 | False |
+| 2026-06-26 | 235 | 2 | 2 | 36 | False |
+| 2026-06-27 | 202 | 2 | 2 | 35 | False |
+| 2026-06-28 | 28 | 0 | 0 | 11 | False |
+| 2026-06-29 | 81 | 1 | 1 | 20 | False |
 | 2026-06-30 | 155 | 2 | 2 | 30 | False |
 | 2026-07-01 | 132 | 12 | 12 | 29 | False |
-| 2026-07-02 | 28 | 0 | 0 | 9 | False |
+| 2026-07-02 | 29 | 0 | 0 | 9 | False |
 | 2026-07-03 | 79 | 0 | 0 | 19 | False |
 | 2026-07-05 | 155 | 0 | 0 | 26 | False |
 | 2026-07-06 | 106 | 0 | 0 | 18 | False |
@@ -61,9 +94,9 @@
 
 ## Verdict
 
-significance=NA; baseline=NA; forward=FAIL; conclusion=`kill_current_historical_absolute_ladder_experiment_continue_forward_collection`。
+significance=NA; baseline=NA; forward=FAIL_THIN; conclusion=`absolute_ladder_minimally_answerable_but_too_thin_for_strategy_claim`。
 
-当前应停止的是**这份历史样本上的 V2 模型拟合**，不是停止方向。继续前要积累：每个 city-day 固定 sibling ladder、每档 direct quote、state-to-snapshot key、以及至少 5 个 pre-cutoff PIT date blocks；满足后再按 target_date 外层 walk-forward，以 proper score 选择正则，最后才冻结 fee-adjusted ROI secondary replay。
+现有 47 行只能验证 materializer/model plumbing。策略结论必须等待更多完整逐档 fresh states，并按 target_date 做 outer walk-forward；proper score 先选模型，fee-adjusted ROI 只能在模型冻结后作为 secondary。
 
 ## Artifacts
 

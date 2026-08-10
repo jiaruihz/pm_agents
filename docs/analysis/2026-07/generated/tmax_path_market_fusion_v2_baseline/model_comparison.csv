@@ -1,5 +1,5 @@
 model,status,date_equal_logloss,date_equal_brier,date_block_ci,roi_fee_adjusted,reason
-market_full_ladder,not_run_data_not_answerable,,,NA,,absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5
-current_coherent_base,not_run_data_not_answerable,,,NA,,absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5
-global_physical_hazard,not_run_data_not_answerable,,,NA,,absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5
-market_plus_global_hazard_residual,not_run_data_not_answerable,,,NA,,absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5
+market_full_ladder,not_run_audit_only_thin,,,NA,,"minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates"
+current_coherent_base,not_run_audit_only_thin,,,NA,,"minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates"
+global_physical_hazard,not_run_audit_only_thin,,,NA,,"minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates"
+market_plus_global_hazard_residual,not_run_audit_only_thin,,,NA,,"minimal denominator is available but thin: pre=30 rows/11 dates, post=17 rows/4 dates"

@@ -35,16 +35,14 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket  # noqa: E402
+from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 import research_tmax_target_book_v2 as target_book  # noqa: E402
 
 
 P0_SCORES = ROOT / "docs/analysis/2026-07/generated/tmax_distribution_p0_anchor_scorecard_v1/scored_rows.csv"
 COHERENT_PREDICTIONS = ROOT / "docs/analysis/2026-07/generated/tmax_coherent_expression_calibrator_v1/coherent_predictions.csv"
 DB_PATH = ROOT / "runtime/weather.db"
-SNAPSHOT_ROOTS = [
-    ROOT / "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots",
-    Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
-]
+SNAPSHOT_ROOTS = [historical_strategy_snapshots()]
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/tmax_path_market_fusion_v2_baseline"
 REPORT_PATH = ROOT / "docs/analysis/2026-07/2026-07-11-tmax-path-market-fusion-v2-baseline.md"
 JSON_PATH = ROOT / "docs/analysis/2026-07/2026-07-11-tmax-path-market-fusion-v2-baseline.json"
@@ -315,6 +313,25 @@ def _write_report(payload: dict[str, Any]) -> None:
     funnel = pd.DataFrame(payload["funnel"])
     daily = pd.DataFrame(payload["daily"])
     comparisons = pd.DataFrame(payload["comparisons"])
+    minimally_answerable = payload["sample_status"] == "minimally_answerable_but_thin"
+    headline = (
+        "- **当前历史数据可以形成最小 absolute-ladder PIT 分母，但样本极薄；本轮只完成可答性审计，不拟合 hazard，也不输出无统计意义的 ROI。**"
+        if minimally_answerable
+        else "- **当前历史数据不能形成最小 absolute-ladder PIT 分母；本轮不拟合 hazard、不输出伪 logloss/Brier/ROI，也不把 `current/d1/d2/tail` 重命名为 absolute bracket。**"
+    )
+    count_summary = (
+        f"- 可回指 paper snapshot 的 P0 state 是 `{payload['counts']['snapshot_matched_states']}` / `{payload['counts']['p0_states']}`；完整逐档 quoted state `{payload['counts']['absolute_complete_quoted_states']}`，带标签可评估 `{payload['counts']['absolute_eligible_states']}`。pre-cutoff `{payload['counts']['pre_cutoff_absolute_rows']}` 行 / `{payload['counts']['pre_cutoff_absolute_dates']}` 天，post-cutoff `{payload['counts']['post_cutoff_absolute_rows']}` 行 / `{payload['counts']['post_cutoff_absolute_dates']}` 天；仅 `{payload['counts']['fixed_complete_ladder_city_days']}` 个 city-day 在多个 state 上持续保存完整固定梯子。"
+    )
+    comparison_note = (
+        "四个预注册模型已有同一 absolute PIT 分母，但 47 个可评估 state 只够 smoke test，不够在 inner selection 后再给独立 forward 结论。本审计因此保留 metrics/CI/ROI 为 `NA`，后续模型实验必须继续积累 fresh complete-ladder states。"
+        if minimally_answerable
+        else "所有四个预注册模型都要求同一 frozen absolute PIT denominator。当前分母无法形成，因此 metrics、date-block CI 和 fee-adjusted ROI 均为 `NA`，而不是零或负数。"
+    )
+    next_step = (
+        "现有 47 行只能验证 materializer/model plumbing。策略结论必须等待更多完整逐档 fresh states，并按 target_date 做 outer walk-forward；proper score 先选模型，fee-adjusted ROI 只能在模型冻结后作为 secondary。"
+        if minimally_answerable
+        else "继续前必须积累固定 sibling ladder、每档 direct quote 和 state-to-snapshot key；达到预注册日期支持后再做 target_date 外层 walk-forward。"
+    )
     lines = [
         "# Tmax Path-Market Fusion V2 Baseline",
         "",
@@ -323,8 +340,8 @@ def _write_report(payload: dict[str, Any]) -> None:
         "",
         "## 结论",
         "",
-        "- **当前历史数据不能回答 V2 absolute-ladder 模型问题，故本轮不拟合 hazard、不输出伪 logloss/Brier/ROI，也不把 `current/d1/d2/tail` 重命名为 absolute bracket。**",
-        f"- 可回指 paper snapshot 的 P0 state 是 `{payload['counts']['snapshot_matched_states']}` / `{payload['counts']['p0_states']}`；absolute-complete quoted state 是 `{payload['counts']['absolute_complete_quoted_states']}`，但能证明同一 city-day 多个 state 都拥有相同完整 quoted ladder 的 city-day 是 `{payload['counts']['fixed_complete_ladder_city_days']}`。pre-cutoff 只有 `{payload['counts']['pre_cutoff_absolute_dates']}` 个日期，低于 inner walk-forward 最低 `{payload['parameters']['min_inner_train_dates']}` 天。",
+        headline,
+        count_summary,
         "- `settlement_outcomes` 只用于事后 collector-completeness 审计；final bracket、actual bucket、outcome-derived slice 都没有进入特征。P3/atlas 的历史 forecast backfill 与全窗口 city bias 被明确排除。",
         "",
         "## Funnel",
@@ -333,7 +350,7 @@ def _write_report(payload: dict[str, Any]) -> None:
         "",
         "## Same-Denominator Model Comparison",
         "",
-        "所有四个预注册模型都要求同一 frozen absolute PIT denominator。这个分母无法形成，因此 metrics、date-block CI 和 fee-adjusted ROI 均为 `NA`，而不是零或负数。",
+        comparison_note,
         "",
         *_markdown_table(comparisons, ["model", "status", "date_equal_logloss", "date_equal_brier", "date_block_ci", "roi_fee_adjusted", "reason"]),
         "",
@@ -349,9 +366,9 @@ def _write_report(payload: dict[str, Any]) -> None:
         "",
         "## Verdict",
         "",
-        "significance=NA; baseline=NA; forward=FAIL; conclusion=`kill_current_historical_absolute_ladder_experiment_continue_forward_collection`。",
+        f"significance=NA; baseline=NA; forward=FAIL_THIN; conclusion=`{payload['verdict']}`。",
         "",
-        "当前应停止的是**这份历史样本上的 V2 模型拟合**，不是停止方向。继续前要积累：每个 city-day 固定 sibling ladder、每档 direct quote、state-to-snapshot key、以及至少 5 个 pre-cutoff PIT date blocks；满足后再按 target_date 外层 walk-forward，以 proper score 选择正则，最后才冻结 fee-adjusted ROI secondary replay。",
+        next_step,
         "",
         "## Artifacts",
         "",
@@ -458,13 +475,13 @@ def run(output_dir: Path) -> dict[str, Any]:
     not_run_reason = (
         f"absolute PIT denominator lacks pre-cutoff inner walk-forward support: {pre_dates} dates < {MIN_INNER_TRAIN_DATES}"
         if not absolute_answerable
-        else "available"
+        else f"minimal denominator is available but thin: pre={len(pre_cutoff)} rows/{pre_dates} dates, post={len(post_cutoff)} rows/{post_cutoff['target_date'].nunique()} dates"
     )
     comparisons = pd.DataFrame(
         [
             {
                 "model": model,
-                "status": "not_run_data_not_answerable" if not absolute_answerable else "pending_model_fit",
+                "status": "not_run_data_not_answerable" if not absolute_answerable else "not_run_audit_only_thin",
                 "date_equal_logloss": math.nan,
                 "date_equal_brier": math.nan,
                 "date_block_ci": "NA",
@@ -489,6 +506,12 @@ def run(output_dir: Path) -> dict[str, Any]:
     comparisons.to_csv(output_dir / "model_comparison.csv", index=False)
     feature_audit.to_csv(output_dir / "pit_feature_audit.csv", index=False)
 
+    sample_status = "minimally_answerable_but_thin" if absolute_answerable else "not_answerable"
+    verdict = (
+        "absolute_ladder_minimally_answerable_but_too_thin_for_strategy_claim"
+        if absolute_answerable
+        else "kill_current_historical_absolute_ladder_experiment_continue_forward_collection"
+    )
     payload = {
         "generated_at_utc": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "scope": "offline absolute-ladder data answerability audit only",
@@ -524,7 +547,8 @@ def run(output_dir: Path) -> dict[str, Any]:
         "pit_feature_audit": feature_audit.to_dict("records"),
         "model_fit_performed": False,
         "roi_performed": False,
-        "verdict": "kill_current_historical_absolute_ladder_experiment_continue_forward_collection",
+        "sample_status": sample_status,
+        "verdict": verdict,
         "blocker": not_run_reason,
     }
     JSON_PATH.write_text(json.dumps(_json_ready(payload), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
