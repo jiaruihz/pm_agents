@@ -641,6 +641,28 @@ def build_manifest(
     for root in sorted(declared_checkout_roots, key=str):
         git_metadata(root, git_cache)
 
+    releases_by_root: dict[Path, list[Any]] = {}
+    for release in spec.releases:
+        root = release.checkout_root.resolve()
+        releases_by_root.setdefault(root, []).append(release)
+        metadata = git_metadata(root, git_cache)
+        metadata.setdefault("release_ids", []).append(release.release_id)
+        metadata.setdefault("expected_repo_shas", []).append(release.expected_repo_sha)
+        if metadata.get("head") != release.expected_repo_sha:
+            findings.append(
+                finding(
+                    "critical",
+                    "production_release_checkout_sha_mismatch",
+                    "production release checkout HEAD differs from its pinned SHA",
+                    {
+                        "release_id": release.release_id,
+                        "checkout_root": str(root),
+                        "expected_repo_sha": release.expected_repo_sha,
+                        "observed_head": metadata.get("head"),
+                    },
+                )
+            )
+
     production_volume = inspect_volume_identity(spec.production_storage_root)
     archive_volume = inspect_volume_identity(spec.archive_storage_root)
     expected_production_uuid = spec.production_storage_volume_uuid
@@ -788,6 +810,26 @@ def build_manifest(
             )
         deployed_sha = summary.get("deployed_repo_sha")
         checkout_head = checkout_meta.get("head") if checkout_meta else None
+        declared_releases = releases_by_root.get(checkout.resolve(), []) if checkout else []
+        row["production_releases"] = [release.release_id for release in declared_releases]
+        expected_release_shas = {
+            release.expected_repo_sha for release in declared_releases
+        }
+        if deployed_sha and expected_release_shas and deployed_sha not in expected_release_shas:
+            findings.append(
+                finding(
+                    "critical" if mode == "live_confirmed" else "warning",
+                    "process_release_sha_mismatch",
+                    "running process loaded SHA differs from its pinned production release",
+                    {
+                        "pid": row["pid"],
+                        "execution_mode": mode,
+                        "release_ids": row["production_releases"],
+                        "deployed_repo_sha": deployed_sha,
+                        "expected_repo_shas": sorted(expected_release_shas),
+                    },
+                )
+            )
         if deployed_sha and checkout_head and deployed_sha != checkout_head:
             findings.append(
                 finding(
@@ -803,7 +845,12 @@ def build_manifest(
             )
 
     dirty_production_checkouts = sorted(
-        (row for row in git_cache.values() if row.get("dirty_tracked") is True),
+        (
+            row
+            for row in git_cache.values()
+            if row.get("dirty_tracked") is True
+            and Path(str(row.get("root") or "")).resolve() in declared_checkout_roots
+        ),
         key=lambda row: str(row.get("root") or ""),
     )
     if dirty_production_checkouts:
@@ -889,6 +936,14 @@ def build_manifest(
             "research_artifact_root": str(spec.research_artifact_root),
             "canonical_tmux_socket": spec.canonical_tmux_socket,
             "canonical_tmux_binary": str(spec.canonical_tmux_binary),
+            "production_releases": [
+                {
+                    "release_id": release.release_id,
+                    "checkout_root": str(release.checkout_root),
+                    "expected_repo_sha": release.expected_repo_sha,
+                }
+                for release in spec.releases
+            ],
             "managed_runtime_sessions": [
                 item.tmux_session for item in spec.managed_runtimes
             ],

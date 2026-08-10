@@ -1,9 +1,44 @@
 version: weather_production_v1
 host_role: mac_current_production
 operational_repo_root: /Users/deepsleep/projects/pm_agents
-# Bounded refresh executes the same committed code as current production.
-# Operational scripts/status remain owned by operational_repo_root.
-canonical_refresh_checkout_root: /Users/deepsleep/projects/pm_agents_prod
+# Immutable release identities. Runtime entries reference these IDs instead of
+# repeating mutable checkout paths. A release SHA update is an explicit deploy.
+production_releases:
+  - release_id: control_plane
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    expected_repo_sha: 8e68b6c929c21275e3d8d55f05b9cfa676ec17f4
+  - release_id: data_feed
+    checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
+    expected_repo_sha: b98396b1fecc9ab098d51164844d3710330f10f9
+  - release_id: forecast_collector
+    checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
+    expected_repo_sha: 27d6f4bb788f0a1fe522b40bb0a5ef6de51de063
+  - release_id: market_books
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
+    expected_repo_sha: 8b36e7abf7c7087c50cf520bf23016baa1c4d631
+  - release_id: forecast_capture
+    checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
+    expected_repo_sha: 472e8871fe147a249505fc643163ad567ae4e0e4
+  - release_id: wcir
+    checkout_root: /Users/deepsleep/projects/pm_agents_wcir_prod
+    expected_repo_sha: 6931caf9b8676a023dbb6041e0154b57412395de
+  - release_id: city_runtime
+    checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
+    expected_repo_sha: 2dd820deaee511025e68748eb95a5d4caf67a8e6
+  - release_id: fast_observation
+    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
+    expected_repo_sha: d122aabe01623fb8cb4841dd2bed10491389b347
+  - release_id: strategy_runtime
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    expected_repo_sha: f17f59e30f2b42be7ffb525d72896d946262fcfa
+  - release_id: knmi
+    checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
+    expected_repo_sha: 2e8ba3be9aa6c2e3278fa78c7c1f8fe32753f976
+  - release_id: market_tail
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_tail_prod
+    expected_repo_sha: 536807cd089ddbde90482347d8984b34a51c3750
+
+canonical_refresh_release_id: control_plane
 # The mount name is a compatibility contract; UUID is the physical identity.
 # A same-named replacement disk must fail closed instead of becoming production.
 production_storage_root: /Volumes/jrs
@@ -50,7 +85,7 @@ managed_runtimes:
     tmux_session: weather_dashboard_api
     role: dashboard_api
     execution_mode: read_only_api
-    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    release_id: control_plane
     start_script: scripts/ops/start_weather_dashboard_api_jrs_tmux.sh
     health_url: http://127.0.0.1:8000/health
     health_format: http_json
@@ -62,7 +97,7 @@ managed_runtimes:
     tmux_session: weather_data_feed_jrs
     role: data_feed
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
+    release_id: data_feed
     start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
     max_health_age_sec: 1800
@@ -73,7 +108,7 @@ managed_runtimes:
     tmux_session: weather_forecast_curve_collector_v1
     role: source_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
+    release_id: forecast_collector
     start_script: scripts/ops/start_weather_forecast_curve_collector_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_curve_collector/latest.json
     health_format: json
@@ -87,7 +122,7 @@ managed_runtimes:
     tmux_session: weather_market_books
     role: market_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
+    release_id: market_books
     start_script: scripts/ops/start_weather_market_books.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
     health_format: json
@@ -100,7 +135,7 @@ managed_runtimes:
     tmux_session: weather_forecast_run_capture_v1
     role: source_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
+    release_id: forecast_capture
     start_script: scripts/ops/start_weather_forecast_run_capture_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/latest.json
     health_format: json
@@ -113,7 +148,7 @@ managed_runtimes:
     tmux_session: weather_live_cross_observations
     role: source_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_wcir_prod
+    release_id: wcir
     start_script: scripts/ops/start_weather_live_cross_observations.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/latest.json
     max_health_age_sec: 180
@@ -124,7 +159,7 @@ managed_runtimes:
     tmux_session: weather_city_probability_runtime_v3
     role: probability_runtime
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
+    release_id: city_runtime
     start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
     max_health_age_sec: 1200
@@ -137,7 +172,7 @@ managed_runtimes:
     tmux_session: weather_knmi_first_seen_ladder_v1
     role: market_collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
+    release_id: fast_observation
     start_script: scripts/ops/start_weather_knmi_first_seen_ladder_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/state.json
     max_health_age_sec: 180
@@ -149,7 +184,7 @@ managed_runtimes:
     tmux_session: weather_current_yes_core_carry_tiny_live_v2
     role: strategy
     execution_mode: live
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     restart_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json
@@ -165,7 +200,7 @@ managed_runtimes:
     tmux_session: weather_fast_source_prev_no_trial
     role: strategy
     execution_mode: live
-    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    release_id: control_plane
     start_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
     restart_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/latest_summary.json
@@ -189,7 +224,7 @@ managed_runtimes:
     tmux_session: low_price_yes_integrated_tail_shadow_v2
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_low_price_yes_integrated_tail_shadow_v2.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2/latest_summary.json
     max_health_age_sec: 1200
@@ -200,7 +235,7 @@ managed_runtimes:
     tmux_session: low_price_yes_lottery_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_low_price_yes_lottery_shadow_tmux.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1/latest_summary.json
     max_health_age_sec: 1200
@@ -210,7 +245,7 @@ managed_runtimes:
     tmux_session: metar_reversal_false_fade_reheat_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_metar_reversal_false_fade_reheat_shadow_v1.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1/summary_history.jsonl
     health_format: mtime
@@ -221,7 +256,7 @@ managed_runtimes:
     tmux_session: regime_routed_no_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_mac_regime_routed_no_shadow_loop.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/regime_routed_no_shadow_v1/latest_summary.json
     max_health_age_sec: 180
@@ -231,7 +266,7 @@ managed_runtimes:
     tmux_session: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
+    release_id: fast_observation
     start_script: scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1/latest_summary.json
     max_health_age_sec: 1800
@@ -243,7 +278,7 @@ managed_runtimes:
     tmux_session: weather_current_yes_heat_death_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_weather_current_yes_heat_death_shadow_v1.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_heat_death_shadow_v1/latest_summary.json
     max_health_age_sec: 2400
@@ -255,7 +290,7 @@ managed_runtimes:
     tmux_session: weather_fast_source_stale_book
     role: collector
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
+    release_id: fast_observation
     start_script: scripts/ops/start_weather_fast_source_stale_book_production.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_stale_book/health.json
     max_health_age_sec: 180
@@ -267,7 +302,7 @@ managed_runtimes:
     tmux_session: weather_helsinki_pre_cross_active_ladder_shadow
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_weather_helsinki_pre_cross_active_ladder_shadow.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/latest.json
     max_health_age_sec: 180
@@ -278,7 +313,7 @@ managed_runtimes:
     tmux_session: weather_knmi_open_data_jrs
     role: collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
+    release_id: knmi
     start_script: /Users/deepsleep/projects/pm_agents/scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
     restart_script: /Users/deepsleep/projects/pm_agents/scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/state.json
@@ -289,7 +324,7 @@ managed_runtimes:
     tmux_session: weather_korea_first_seen_state_v1
     role: collector
     execution_mode: collector
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_weather_korea_first_seen_collector.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/korea_first_seen_state_v1/latest.json
     max_health_age_sec: 60
@@ -300,7 +335,7 @@ managed_runtimes:
     tmux_session: weather_runtime_monitor
     role: monitor
     execution_mode: monitor
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
+    release_id: strategy_runtime
     start_script: scripts/ops/start_weather_runtime_monitor.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/runtime_monitor/latest_summary.json
     max_health_age_sec: 660
@@ -311,7 +346,7 @@ managed_runtimes:
     tmux_session: weather_runtime_log_maintainer
     role: monitor
     execution_mode: infrastructure
-    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    release_id: control_plane
     start_script: scripts/ops/start_weather_runtime_log_maintainer.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/runtime_log_maintainer/latest_summary.json
     max_health_age_sec: 900
@@ -323,7 +358,7 @@ managed_runtimes:
     tmux_session: weather_source_event_ladder_repricing_shadow
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
+    release_id: fast_observation
     start_script: scripts/ops/start_weather_source_event_ladder_repricing_shadow.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/source_event_ladder_repricing_shadow/health.json
     max_health_age_sec: 1200
@@ -334,7 +369,7 @@ managed_runtimes:
     tmux_session: market_implied_tail_residual_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_tail_prod
+    release_id: market_tail
     start_script: scripts/ops/start_market_implied_tail_residual_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/latest_summary.json
     health_format: json
@@ -347,7 +382,7 @@ managed_runtimes:
     tmux_session: weather_tokyo_current_break_active_ladder_shadow_v1
     role: shadow
     execution_mode: shadow
-    checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
+    release_id: city_runtime
     start_script: scripts/ops/start_weather_tokyo_current_break_active_ladder_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/latest.json
     max_health_age_sec: 180

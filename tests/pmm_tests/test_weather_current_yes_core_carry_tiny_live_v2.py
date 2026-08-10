@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import inspect
+import json
 import sqlite3
 from dataclasses import replace
 from decimal import Decimal
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -306,3 +308,19 @@ def test_executor_maker_never_crosses_or_exceeds_cap() -> None:
         tick_size=0.01,
         price_cap=0.82,
     ) == 0.0
+def test_loop_error_refreshes_latest_health_artifact(tmp_path, monkeypatch):
+    args = SimpleNamespace(
+        output_dir=str(tmp_path),
+        runtime_db=str(tmp_path / "weather.db"),
+        live=True,
+        confirm_live=True,
+    )
+    monkeypatch.setattr(runner, "publish_runtime_state_best_effort", lambda *a, **k: None)
+
+    row = runner.publish_loop_error(args, TimeoutError("CLOB handshake timed out"))
+
+    latest = json.loads((tmp_path / "latest_summary.json").read_text(encoding="utf-8"))
+    assert row["status"] == "error"
+    assert latest["status"] == "error"
+    assert latest["live_enabled"] is True
+    assert "CLOB handshake timed out" in latest["error"]

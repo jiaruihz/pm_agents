@@ -6,10 +6,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+import re
 
 
 ROOT = Path(__file__).resolve().parents[3]
 PRODUCTION_PATH = ROOT / "src/strategies/runtime/production.yaml"
+
+
+@dataclass(frozen=True)
+class WeatherProductionReleaseSpec:
+    release_id: str
+    checkout_root: Path
+    expected_repo_sha: str
 
 
 @dataclass(frozen=True)
@@ -32,6 +40,7 @@ class WeatherManagedRuntimeSpec:
     dependencies: tuple[str, ...] = ()
     recovery_policy: str = "manual"
     uses_market_proxy: bool = False
+    release_id: str | None = None
 
     def resolved_start_script(self) -> Path | None:
         if self.start_script is None:
@@ -82,7 +91,14 @@ class WeatherProductionSpec:
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"
     )
     managed_runtimes: tuple[WeatherManagedRuntimeSpec, ...] = field(default_factory=tuple)
+    releases: tuple[WeatherProductionReleaseSpec, ...] = field(default_factory=tuple)
     allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
+
+    def release(self, release_id: str) -> WeatherProductionReleaseSpec:
+        for release in self.releases:
+            if release.release_id == release_id:
+                return release
+        raise KeyError(release_id)
 
     def resolved_market_books_root(self) -> Path:
         return self.market_books_root or self.data_feed_runtime_root / "market_books"
@@ -180,6 +196,27 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     managed_raw = raw.get("managed_runtimes") or []
     if not isinstance(managed_raw, list):
         raise ValueError("production spec managed_runtimes must be a list")
+    releases_raw = raw.get("production_releases") or []
+    if not isinstance(releases_raw, list):
+        raise ValueError("production spec production_releases must be a list")
+    releases: list[WeatherProductionReleaseSpec] = []
+    release_by_id: dict[str, WeatherProductionReleaseSpec] = {}
+    for item in releases_raw:
+        if not isinstance(item, dict):
+            raise ValueError("each production release must be a mapping")
+        release = WeatherProductionReleaseSpec(
+            release_id=str(item["release_id"]),
+            checkout_root=Path(item["checkout_root"]),
+            expected_repo_sha=str(item["expected_repo_sha"]).lower(),
+        )
+        if release.release_id in release_by_id:
+            raise ValueError(f"duplicate production release_id: {release.release_id}")
+        if not release.checkout_root.is_absolute():
+            raise ValueError(f"release checkout_root must be absolute: {release.release_id}")
+        if not re.fullmatch(r"[0-9a-f]{40}", release.expected_repo_sha):
+            raise ValueError(f"release expected_repo_sha must be a full SHA: {release.release_id}")
+        releases.append(release)
+        release_by_id[release.release_id] = release
     managed: list[WeatherManagedRuntimeSpec] = []
     seen_instances: set[str] = set()
     seen_sessions: set[str] = set()
@@ -194,6 +231,20 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(f"duplicate managed runtime tmux_session: {tmux_session}")
         seen_instances.add(instance_id)
         seen_sessions.add(tmux_session)
+        release_id = str(item.get("release_id") or "") or None
+        if release_id and item.get("checkout_root"):
+            raise ValueError(
+                f"managed runtime cannot declare both release_id and checkout_root: {instance_id}"
+            )
+        if release_id and release_id not in release_by_id:
+            raise ValueError(f"unknown production release_id for {instance_id}: {release_id}")
+        checkout_root = (
+            release_by_id[release_id].checkout_root
+            if release_id
+            else Path(item["checkout_root"])
+            if item.get("checkout_root")
+            else None
+        )
         managed.append(
             WeatherManagedRuntimeSpec(
                 instance_id=instance_id,
@@ -201,11 +252,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 role=str(item.get("role") or "strategy"),
                 execution_mode=str(item.get("execution_mode") or "unknown"),
                 desired_state=str(item.get("desired_state") or "running"),
-                checkout_root=(
-                    Path(item["checkout_root"])
-                    if item.get("checkout_root")
-                    else None
-                ),
+                checkout_root=checkout_root,
                 start_script=(
                     Path(item["start_script"])
                     if item.get("start_script")
@@ -242,11 +289,17 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 ),
                 recovery_policy=str(item.get("recovery_policy") or "manual"),
                 uses_market_proxy=bool(item.get("uses_market_proxy", False)),
+                release_id=release_id,
             )
         )
     allowed_unmanaged = raw.get("allowed_unmanaged_sessions") or []
     if not isinstance(allowed_unmanaged, list):
         raise ValueError("production spec allowed_unmanaged_sessions must be a list")
+    canonical_refresh_release_id = str(raw.get("canonical_refresh_release_id") or "") or None
+    if canonical_refresh_release_id and canonical_refresh_release_id not in release_by_id:
+        raise ValueError(
+            f"unknown canonical_refresh_release_id: {canonical_refresh_release_id}"
+        )
     spec = WeatherProductionSpec(
         version=str(raw["version"]),
         host_role=str(raw["host_role"]),
@@ -314,12 +367,15 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             else None
         ),
         canonical_refresh_checkout_root=(
-            Path(raw["canonical_refresh_checkout_root"])
+            release_by_id[canonical_refresh_release_id].checkout_root
+            if canonical_refresh_release_id
+            else Path(raw["canonical_refresh_checkout_root"])
             if raw.get("canonical_refresh_checkout_root")
             else None
         ),
         research_artifact_root=Path(raw["research_artifact_root"]),
         managed_runtimes=tuple(managed),
+        releases=tuple(releases),
         allowed_unmanaged_sessions=tuple(str(item) for item in allowed_unmanaged),
     )
     if not spec.canonical_db_path.is_absolute():
@@ -390,6 +446,17 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             "research_artifact_root must live under the archive research root"
         )
     managed_ids = {item.instance_id for item in spec.managed_runtimes}
+    if spec.releases:
+        missing_release_ids = [
+            item.instance_id
+            for item in spec.managed_runtimes
+            if item.instance_id != "weather_jrs_context_keeper" and not item.release_id
+        ]
+        if missing_release_ids:
+            raise ValueError(
+                "managed business runtimes must declare release_id: "
+                f"{missing_release_ids}"
+            )
     for item in spec.managed_runtimes:
         if item.desired_state != "running":
             raise ValueError(

@@ -75,6 +75,9 @@ canonical tmux socket、binary path/hash 和系统设置中的 Full Disk Access 
 `src/strategies/runtime/production.yaml.managed_runtimes` 是当前生产 desired state；
 `instances.yaml` 仍是研究/历史 registry，不能代替 active production list。生产启停和恢复优先走
 `scripts/ops/weather_production_ctl.py`。底层 start script 是 controller 的执行合同，不是 AI/操作员的默认直接入口；禁止手拼 tmux/live 命令绕过 desired-state、依赖和后置检查。
+业务 runtime 必须通过 `release_id` 引用 `production_releases` 的 checkout root 与 full
+`expected_repo_sha`。部署不是把 branch 往前推：先提交、更新 release pin，再由 controller
+重载并核对 loaded SHA；release checkout 或 live process SHA mismatch 时不得声称部署完成。
 共享 helper 是 attach-only，并用 tmux `-N` 保证 server 缺失时 fail closed，不会由业务脚本或 LaunchAgent 抢建；persistent
 session mutation 必须由 controller 注入 authority。不得通过设置同名环境变量或直接执行 start/stop
 脚本模拟 controller。canonical refresh 仅是已登记的 bounded one-shot，不拥有 permission-host 创建权。

@@ -802,6 +802,23 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
+def publish_loop_error(args: argparse.Namespace, exc: Exception) -> dict[str, Any]:
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    error = {
+        "status": "error",
+        "generated_at_utc": utc_now(),
+        "strategy_instance": STRATEGY_INSTANCE,
+        "mode": "tiny_live" if args.live else "paper_would_order",
+        "live_enabled": bool(args.live and args.confirm_live),
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+    publish_runtime_state_best_effort(args, output_dir, error, {})
+    write_json(output_dir / "latest_summary.json", error)
+    append_jsonl(output_dir / "summary_history.jsonl", error)
+    return error
+
+
 def main() -> int:
     try:
         from dotenv import load_dotenv
@@ -817,13 +834,7 @@ def main() -> int:
         try:
             print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True), flush=True)
         except Exception as exc:  # noqa: BLE001
-            error = {
-                "status": "error",
-                "generated_at_utc": utc_now(),
-                "strategy_instance": STRATEGY_INSTANCE,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-            append_jsonl(Path(args.output_dir) / "summary_history.jsonl", error)
+            error = publish_loop_error(args, exc)
             print(json.dumps(error, ensure_ascii=False, sort_keys=True), flush=True)
         time.sleep(max(10.0, float(args.interval_seconds)))
 
