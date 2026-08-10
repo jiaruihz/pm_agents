@@ -242,6 +242,19 @@ checkpoint 主口径下模型比 market 差约 11.3%，logloss 也是 `0.26924` 
 market residual alpha。state-entry 点估反而略优，说明“刚升入新档时的路径信息”可能比每十分钟重复预测更有价值，
 但 21 rows/6 dates 且 CI 仍跨 0，只能继续积累，不能拿 100% accuracy 升级策略。
 
+为避免 91.76% 被重复、近定局 checkpoint 抬高，另固定 market midpoint uncertainty slice：
+
+| 去重/难例口径 | rows | v2 accuracy | market accuracy | 解释 |
+|---|---:|---:|---:|---|
+| market midpoint 10%–90% | 96 | 79/96 = 82.29% | 82/96 = 85.42% | 去掉两端近定局行后的主难例诊断 |
+| market midpoint 20%–80% | 70 | 59/70 = 84.29% | 62/70 = 88.57% | 更窄 uncertainty band，结论同号 |
+| 每个 date×current bracket 首行 | 21 | 21/21 = 100.00% | 20/21 = 95.24% | 去掉十分钟重复，但样本极小、CI未过门 |
+| 最终选中交易 | 9 | 模型方向 8/9 = 88.89% | 市场方向 8/9 = 88.89% | 交易实际仅3/9获胜，见下文 |
+
+原 255 行也不是单纯 NO class imbalance：最终停在 current（YES）118 行，v2 答对 117；最终继续
+overshoot（NO）137 行，v2 只答对 117，弱于 market 的 122。更诚实的 headline 因此是
+**hard-checkpoint accuracy 82.29%（market 85.42%）**，而不是 91.76%。
+
 逐日 checkpoint Brier delta（负数才是模型优于 market）：
 
 | target_date | delta | 判定 |

@@ -658,7 +658,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         raise RuntimeError("replay produced no rows")
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -707,6 +707,30 @@ def _probability_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         sum(date_deltas[rng.choice(dates)] for _ in dates) / len(dates)
         for _ in range(20000)
     ]
+    by_outcome: dict[str, Any] = {}
+    for label, name in ((0, "final_stays_current_yes"), (1, "final_overshoots_current_no")):
+        label_rows = [row for row in rows if row_values(row)[2] == label]
+        by_outcome[name] = {
+            "rows": len(label_rows),
+            "model_accuracy_at_0_5": (
+                None
+                if not label_rows
+                else sum(
+                    int((row_values(row)[0] >= 0.5) == bool(label))
+                    for row in label_rows
+                )
+                / len(label_rows)
+            ),
+            "market_accuracy_at_0_5": (
+                None
+                if not label_rows
+                else sum(
+                    int((row_values(row)[1] >= 0.5) == bool(label))
+                    for row in label_rows
+                )
+                / len(label_rows)
+            ),
+        }
     return {
         "rows": len(rows),
         "target_dates": dates,
@@ -731,6 +755,7 @@ def _probability_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
             for row in rows
         )
         / len(rows),
+        "classification_by_realized_outcome": by_outcome,
         "by_date_brier_delta": date_deltas,
     }
 
@@ -788,6 +813,11 @@ def aggregate_replays(
                     "current_bracket": int(row["current_bracket"]),
                     "side": side,
                     "model_probability": probability,
+                    "market_probability": (
+                        float(row["no_mid"])
+                        if side == "NO"
+                        else 1.0 - float(row["no_mid"])
+                    ),
                     "ask": ask,
                     "fee_per_share": fee,
                     "edge_after_fee": edge,
@@ -852,12 +882,49 @@ def aggregate_replays(
         },
         "checkpoint_probability": _probability_metrics(scored),
         "state_entry_probability": _probability_metrics(state_entries),
+        "market_uncertain_probability": {
+            "market_mid_10_to_90pct": _probability_metrics(
+                [row for row in scored if 0.1 <= float(row["no_mid"]) <= 0.9]
+            ),
+            "market_mid_20_to_80pct": _probability_metrics(
+                [row for row in scored if 0.2 <= float(row["no_mid"]) <= 0.8]
+            ),
+        },
         "trade_policy": {
             "edge_threshold_after_fee": edge_threshold,
             "selection": "first qualifying checkpoint per target_date,current_bracket,side",
             "shares_per_order": REPLAY_SHARES,
             "orders": len(selected),
             "wins": sum(int(row["payout"]) for row in selected),
+            "trade_hit_rate": (
+                None
+                if not selected
+                else sum(int(row["payout"]) for row in selected) / len(selected)
+            ),
+            "model_direction_accuracy_on_selected": (
+                None
+                if not selected
+                else sum(
+                    int(
+                        (float(row["model_probability"]) >= 0.5)
+                        == bool(row["payout"])
+                    )
+                    for row in selected
+                )
+                / len(selected)
+            ),
+            "market_direction_accuracy_on_selected": (
+                None
+                if not selected
+                else sum(
+                    int(
+                        (float(row["market_probability"]) >= 0.5)
+                        == bool(row["payout"])
+                    )
+                    for row in selected
+                )
+                / len(selected)
+            ),
             "cost_5shares": cost,
             "pnl_5shares_fee_adjusted": pnl,
             "roi": None if cost == 0 else pnl / cost,

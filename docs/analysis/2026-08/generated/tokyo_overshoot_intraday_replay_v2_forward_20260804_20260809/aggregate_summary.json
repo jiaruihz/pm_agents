@@ -39,6 +39,18 @@
     "model_minus_market_logloss": 0.03132579302497801,
     "model_accuracy_at_0_5": 0.9176470588235294,
     "market_accuracy_at_0_5": 0.9294117647058824,
+    "classification_by_realized_outcome": {
+      "final_stays_current_yes": {
+        "rows": 118,
+        "model_accuracy_at_0_5": 0.9915254237288136,
+        "market_accuracy_at_0_5": 0.9745762711864406
+      },
+      "final_overshoots_current_no": {
+        "rows": 137,
+        "model_accuracy_at_0_5": 0.8540145985401459,
+        "market_accuracy_at_0_5": 0.8905109489051095
+      }
+    },
     "by_date_brier_delta": {
       "2026-08-04": 0.020484594785682382,
       "2026-08-05": -0.012119750577860336,
@@ -71,6 +83,18 @@
     "model_minus_market_logloss": -0.013526287544300714,
     "model_accuracy_at_0_5": 1.0,
     "market_accuracy_at_0_5": 0.9523809523809523,
+    "classification_by_realized_outcome": {
+      "final_stays_current_yes": {
+        "rows": 6,
+        "model_accuracy_at_0_5": 1.0,
+        "market_accuracy_at_0_5": 0.8333333333333334
+      },
+      "final_overshoots_current_no": {
+        "rows": 15,
+        "model_accuracy_at_0_5": 1.0,
+        "market_accuracy_at_0_5": 1.0
+      }
+    },
     "by_date_brier_delta": {
       "2026-08-04": 0.0026665736301252838,
       "2026-08-05": -0.019783881001277162,
@@ -80,12 +104,105 @@
       "2026-08-09": -0.005002632598941081
     }
   },
+  "market_uncertain_probability": {
+    "market_mid_10_to_90pct": {
+      "rows": 96,
+      "target_dates": [
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08",
+        "2026-08-09"
+      ],
+      "model_brier": 0.16217466414575016,
+      "market_brier": 0.1441311640625,
+      "model_minus_market_brier": 0.018043500083250147,
+      "date_equal_model_minus_market_brier": 0.015485706096582771,
+      "date_block_bootstrap_95ci_model_minus_market_brier": [
+        -0.02031457088735832,
+        0.053969192686848
+      ],
+      "model_logloss": 0.5268002848241488,
+      "market_logloss": 0.47133228618224216,
+      "model_minus_market_logloss": 0.0554679986419066,
+      "model_accuracy_at_0_5": 0.8229166666666666,
+      "market_accuracy_at_0_5": 0.8541666666666666,
+      "classification_by_realized_outcome": {
+        "final_stays_current_yes": {
+          "rows": 34,
+          "model_accuracy_at_0_5": 0.9705882352941176,
+          "market_accuracy_at_0_5": 0.9117647058823529
+        },
+        "final_overshoots_current_no": {
+          "rows": 62,
+          "model_accuracy_at_0_5": 0.7419354838709677,
+          "market_accuracy_at_0_5": 0.8225806451612904
+        }
+      },
+      "by_date_brier_delta": {
+        "2026-08-04": 0.046683042232994076,
+        "2026-08-05": -0.050220573680525106,
+        "2026-08-06": 0.09555179154048253,
+        "2026-08-07": -0.005066427050466577,
+        "2026-08-08": -0.013706340750055708,
+        "2026-08-09": 0.019672744287067407
+      }
+    },
+    "market_mid_20_to_80pct": {
+      "rows": 70,
+      "target_dates": [
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08",
+        "2026-08-09"
+      ],
+      "model_brier": 0.14452593571019046,
+      "market_brier": 0.12852517857142856,
+      "model_minus_market_brier": 0.016000757138761895,
+      "date_equal_model_minus_market_brier": 0.016681670052815817,
+      "date_block_bootstrap_95ci_model_minus_market_brier": [
+        -0.02540324430011187,
+        0.06035313524658626
+      ],
+      "model_logloss": 0.4656910271697046,
+      "market_logloss": 0.4332705375204657,
+      "model_minus_market_logloss": 0.03242048964923894,
+      "model_accuracy_at_0_5": 0.8428571428571429,
+      "market_accuracy_at_0_5": 0.8857142857142857,
+      "classification_by_realized_outcome": {
+        "final_stays_current_yes": {
+          "rows": 23,
+          "model_accuracy_at_0_5": 0.9565217391304348,
+          "market_accuracy_at_0_5": 0.8695652173913043
+        },
+        "final_overshoots_current_no": {
+          "rows": 47,
+          "model_accuracy_at_0_5": 0.7872340425531915,
+          "market_accuracy_at_0_5": 0.8936170212765957
+        }
+      },
+      "by_date_brier_delta": {
+        "2026-08-04": 0.05538660253747034,
+        "2026-08-05": -0.06487388558322672,
+        "2026-08-06": 0.10376478037249832,
+        "2026-08-07": -0.0016138547105713158,
+        "2026-08-08": -0.014481645129065855,
+        "2026-08-09": 0.021908022829790128
+      }
+    }
+  },
   "trade_policy": {
     "edge_threshold_after_fee": 0.02,
     "selection": "first qualifying checkpoint per target_date,current_bracket,side",
     "shares_per_order": 5.0,
     "orders": 9,
     "wins": 3,
+    "trade_hit_rate": 0.3333333333333333,
+    "model_direction_accuracy_on_selected": 0.8888888888888888,
+    "market_direction_accuracy_on_selected": 0.8888888888888888,
     "cost_5shares": 17.9598,
     "pnl_5shares_fee_adjusted": -2.9597999999999995,
     "roi": -0.1648013897704874,
