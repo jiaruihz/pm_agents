@@ -432,12 +432,20 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
         and str(row.get("city_local_date_at_snapshot") or "") == str(row.get("target_date") or "")
     ]
     same_local_day_cities = {str(row.get("city") or "") for row in same_local_day_rows}
-    required_fields = (
-        "metar_current_max_f",
-        "metar_latest_temp_f",
+    forecast_required_fields = (
         "forecast_peak_delta_hours_local",
         "forecast_max_native",
     )
+    observation_required_fields = (
+        "metar_current_max_f",
+        "metar_latest_temp_f",
+    )
+    required_fields = observation_required_fields + forecast_required_fields
+    live_source_cities = {
+        str(row.get("city") or "")
+        for row in same_local_day_rows
+        if str(row.get("live_observation_source") or "").strip()
+    }
     field_city_counts: dict[str, int] = {}
     missing_required_by_field: dict[str, list[str]] = {}
     for field in required_fields:
@@ -446,26 +454,26 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
             for row in same_local_day_rows
             if row.get(field) is not None and str(row.get(field)).strip() != ""
         }
-        field_city_counts[field] = len(ok_cities)
-        missing_required_by_field[field] = sorted(same_local_day_cities - ok_cities)
+        required_cities = (
+            live_source_cities
+            if field in observation_required_fields
+            else same_local_day_cities
+        )
+        field_city_counts[field] = len(ok_cities & required_cities)
+        missing_required_by_field[field] = sorted(required_cities - ok_cities)
 
     missing_record_cities = sorted(expected_cities - record_cities)
     missing_required_total = sorted({city for cities in missing_required_by_field.values() for city in cities})
-    trading_pools = {"t1_trading"}
-    live_source_cities = {
-        str(row.get("city") or "")
-        for row in same_local_day_rows
-        if str(row.get("live_observation_source") or "").strip()
-    }
     missing_required_trading = sorted(
-        city for city in missing_required_total if city_pools.get(city) in trading_pools and city in live_source_cities
+        city for city in missing_required_total if city in live_source_cities
     )
-    missing_required_non_trading = sorted(city for city in missing_required_total if city not in missing_required_trading)
+    missing_required_non_trading: list[str] = []
+    cities_without_live_observation_source = sorted(
+        same_local_day_cities - live_source_cities
+    )
     status = "ok"
-    if missing_required_trading:
+    if missing_required_total:
         status = "missing_same_day_weather_state"
-    elif missing_required_total:
-        status = "missing_non_trading_weather_state"
     elif missing_record_cities:
         status = "missing_record_cities"
 
@@ -478,6 +486,7 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
         "record_city_count": len(record_cities),
         "same_local_day_city_count": len(same_local_day_cities),
         "same_local_day_live_source_city_count": len(live_source_cities),
+        "cities_without_live_observation_source": cities_without_live_observation_source,
         "missing_record_cities": missing_record_cities,
         "required_fields": list(required_fields),
         "field_city_counts": field_city_counts,
@@ -1285,7 +1294,6 @@ def overall_status(sections: dict[str, Any]) -> str:
         return "fail"
     warn = (
         snapshot.get("snapshot_stale")
-        or city_state.get("status") == "missing_non_trading_weather_state"
         or city_state.get("status") == "missing_record_cities"
         or orderbook.get("stale")
         or (bool(observation_cache) and observation_cache.get("status") == "warn")

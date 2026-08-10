@@ -509,7 +509,7 @@ def test_snapshot_source_model_counts_explicit_cached_curve_as_effective_coverag
     assert report["lineage_errors"] == []
 
 
-def test_prod_health_check_warns_for_non_trading_weather_state_gap(tmp_path):
+def test_prod_health_check_does_not_require_metar_without_live_source(tmp_path):
     snapshot = tmp_path / "snapshot_20260707_1200.json"
     rows = [
         {
@@ -532,9 +532,36 @@ def test_prod_health_check_warns_for_non_trading_weather_state_gap(tmp_path):
 
     report = check_snapshot_city_state_coverage(snapshot)
 
-    assert report["status"] == "missing_non_trading_weather_state"
+    assert report["status"] == "ok"
+    assert report["missing_required_cities"] == []
     assert report["missing_required_trading_cities"] == []
-    assert report["missing_required_non_trading_cities"] == ["Denver"]
+    assert report["missing_required_non_trading_cities"] == []
+    assert report["cities_without_live_observation_source"] == ["Denver"]
+
+
+def test_prod_health_check_requires_forecast_without_live_source(tmp_path):
+    snapshot = tmp_path / "snapshot_20260707_1200.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "city_pools": {"Denver": "t2_research"},
+                "records": [
+                    {
+                        "city": "Denver",
+                        "target_date": "2026-07-07",
+                        "city_local_date_at_snapshot": "2026-07-07",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_city_state_coverage(snapshot)
+
+    assert report["status"] == "missing_same_day_weather_state"
+    assert report["missing_required_cities"] == ["Denver"]
+    assert report["missing_required_by_field"]["forecast_max_native"] == ["Denver"]
 
 
 def test_prod_health_check_does_not_treat_supported_registry_as_active_universe(tmp_path):
