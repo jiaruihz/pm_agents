@@ -107,19 +107,32 @@ d1 promotion 受影响 5 个 city-days，其中 Taipei 仍为零资金 shadow；
 | city | 错误记录 current→d1 | 正确 current→d1 | 正确 d1 mid | 实际成交 |
 |---|---:|---:|---:|---:|
 | Singapore | 31→32 | 32→33 | 0.0070 | 5 @ 0.999 |
-| Beijing | 32→33 | 33→34 | 0.0065 | 10 @ avg 0.9985 |
+| Beijing | 32→33 | 33→34 | 0.0065 | 10 @ canonical avg 0.995 |
 | Busan | 28→29 | 29→30 | 0.0015 | 5 @ 0.999 |
 | Chongqing | 34→35 | 35→36 | 0.0040 | 5 @ 0.999 |
 | Taipei | 34→35 | 35→36 | — | zero-notional shadow |
 
 正确口径下四个 live city-days 的 d1 mid 均远低于 0.80，反事实为**全部不下单**；污染造成 25 filled
-shares / `$24.97` fill cost。Singapore、Busan、Chongqing maker 均 0 fill 后取消；Beijing maker 5 shares
+shares / `$24.935` canonical fill cost。Singapore、Busan、Chongqing maker 均 0 fill 后取消；Beijing maker 5 shares
 成交。已提交生产修复 `f81a3efb`：同 station + local-date 的 running max 在 source failover/截断历史间保持
 单调，保留此前最高点和时间戳，并记录 `history_continuity_status=merged_previous_running_max`；定向测试 5 passed。
 修复后首轮生产 cache `2026-07-19T10:33:32Z` 已实际触发 4 次 continuity merge，证明生效。
 
 这 25 shares 是事故持仓，不得计入 d1 策略 promotion PnL；结算/退出后 canonical rebuild 必须按该污染窗口
 和四个 opportunity IDs 分层。未获单独资金指令前不自动平仓。
+
+2026-07-20 完整加固生产 commits `cc109b02`、`e915a312`：fetch error 复用行现在显式标
+`reused_after_fetch_error` 并重算 age；该状态仍可作为下一轮 continuity merge 的可信历史；d1 live runner
+额外持久化 station-day running-max 不变量，任何倒退均 fail closed + journal；prod health 直接检查实际
+observation cache 和近 30 分钟 history；runner 同时要求 cache generated age 不超过 10 分钟，避免单循环
+collector 卡住时冻结旧 age。production runner 在 0 trigger / 0 plan 窗口重启，首轮 cache age `1.628m`、
+40 城 invariant、0 violation、0 新单；production/develop 定向回归分别 `66/66`、`70/70`。
+
+结果核对必须分两层：Polymarket closed event 显示事故实际买入的 current brackets——Singapore `32`、
+Beijing `33`、Busan `29`、Chongqing `35`——均 YES；canonical fills 为 25 shares、cost `$24.935`、fees
+`$0.00096`，待 settlement bridge 落库后对应 payout profit `$0.06404`。但修正后的真正 d1
+`33/34/30/36` 均 NO；由于入场时这四档 mid 仅 `0.0070/0.0065/0.0015/0.0040`，正确策略决策仍是四笔
+全部不下单，而不是换档后继续买入。这次偶然盈利不得计入 d1 promotion alpha。
 
 ## 2026-07-16 current→d1 语义修复影响账
 

@@ -3,8 +3,8 @@
 ## 数据快照
 
 - 数据源：`/Users/deepsleep/projects/pm_agents/runtime/weather.db` canonical `tmax_v2_*` + `settlement_outcomes(pm_history)`。
-- 覆盖：2026-07-11..2026-07-23；13 个 target dates，40 城。
-- canonical states=235,248；PIT+normalized curve states=47,269；checkpoint rows=1,762。
+- 覆盖：2026-07-11..2026-07-27；17 个 target dates，40 城。
+- canonical states=281,269；PIT+normalized curve states=64,630；checkpoint rows=2,298。
 - unsettled=0；missing_bracket=0（feature study 只保留已有 pm_history winner 的 city-day）。
 - 2026-07-24..27 raw 已同步，但追加物化因全量扫描约 8GB 且本机可用空间仅约 7.7GB而安全中止；本报告冻结到 7/23。
 
@@ -40,18 +40,18 @@ Tmax_hat = model_Tmax + rolling_city/source_bias + beta(checkpoint, regime) * in
 
 | 层 | grain | rows | dates |
 |---|---|---:|---:|
-| canonical raw state | city-date-snapshot | 235248 | 20 |
-| PIT observation+curve | city-date-snapshot | 47269 | 14 |
-| first checkpoint state | city-date-checkpoint | 1762 | 13 |
-| settled + common model fields | city-date-checkpoint | 1728 | 13 |
+| canonical raw state | city-date-snapshot | 281269 | 20 |
+| PIT observation+curve | city-date-snapshot | 64630 | 14 |
+| first checkpoint state | city-date-checkpoint | 2375 | 13 |
+| settled + common model fields | city-date-checkpoint | 2253 | 17 |
 
 ## Evidence funnel
 
 | 层 | grain | rows | dates | gap |
 |---|---|---:|---:|---|
-| PIT feature/source | city-date-checkpoint | 1762 | 13 | none after selected checkpoint |
-| continuous settlement midpoint | city-date-checkpoint | 1728 | 13 | open top/bottom winners excluded from MAE |
-| expanding OOF score | city-date-checkpoint | 1019 | 8 | first 5 dates train-only |
+| PIT feature/source | city-date-checkpoint | 2298 | 17 | none after selected checkpoint |
+| continuous settlement midpoint | city-date-checkpoint | 2253 | 17 | open top/bottom winners excluded from MAE |
+| expanding OOF score | city-date-checkpoint | 1544 | 12 | first 5 dates train-only |
 | PIT full two-sided ladder | city-date-checkpoint | 109 | NA | archive/book coverage gap |
 | executable expression | expression | 0 | 0 | not evaluated |
 | fill | fill | 0 | 0 | feature study, not fill study |
@@ -60,10 +60,10 @@ Tmax_hat = model_Tmax + rolling_city/source_bias + beta(checkpoint, regime) * in
 
 | checkpoint_hour_local | rows | dates | innovation_final_error_corr | mean_innovation_f |
 | --- | --- | --- | --- | --- |
-| 3 | 460.0000 | 13.0000 | 0.1332 | 1.4130 |
-| 6 | 432.0000 | 13.0000 | 0.0452 | 0.7119 |
-| 9 | 413.0000 | 13.0000 | 0.4921 | -0.0259 |
-| 12 | 423.0000 | 13.0000 | 0.6825 | -0.7703 |
+| 3 | 616.0000 | 17.0000 | 0.0838 | 1.4292 |
+| 6 | 563.0000 | 17.0000 | 0.0572 | 0.8477 |
+| 9 | 539.0000 | 17.0000 | 0.4907 | -0.0584 |
+| 12 | 535.0000 | 17.0000 | 0.6820 | -0.7428 |
 
 03:00/06:00 的弱相关与 09:00/12:00 的增强是主结果：夜间 boundary-layer/station-grid bias 并不自动延续到白天 Tmax；日出后的 path innovation 才更接近“当天升温轨迹整体偏离模型”。
 
@@ -71,35 +71,35 @@ Tmax_hat = model_Tmax + rolling_city/source_bias + beta(checkpoint, regime) * in
 
 | checkpoint_hour_local | variant | rows | dates | mae_f | rmse_f | mae_delta_vs_rolling_bias_f | delta_ci_low_f | delta_ci_high_f |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 3 | rolling_bias | 293 | 8 | 2.0933 | 2.8139 | NA | NA | NA |
-| 3 | innovation | 293 | 8 | 2.0708 | 2.7866 | -0.0225 | -0.0648 | 0.0214 |
-| 3 | innovation_regime | 293 | 8 | 2.0585 | 2.7966 | -0.0348 | -0.0646 | 0.0079 |
-| 6 | rolling_bias | 256 | 8 | 2.0438 | 2.7342 | NA | NA | NA |
-| 6 | innovation | 256 | 8 | 2.0379 | 2.7223 | -0.0059 | -0.0180 | 0.0074 |
-| 6 | innovation_regime | 256 | 8 | 2.0329 | 2.7542 | -0.0109 | -0.0631 | 0.0730 |
-| 9 | rolling_bias | 239 | 8 | 2.0015 | 2.5808 | NA | NA | NA |
-| 9 | innovation | 239 | 8 | 1.8268 | 2.3570 | -0.1746 | -0.2782 | -0.0269 |
-| 9 | innovation_regime | 239 | 8 | 1.8400 | 2.3586 | -0.1615 | -0.2705 | -0.0046 |
-| 12 | rolling_bias | 231 | 8 | 1.9124 | 2.5171 | NA | NA | NA |
-| 12 | innovation | 231 | 8 | 1.5574 | 1.9895 | -0.3550 | -0.4557 | -0.2544 |
-| 12 | innovation_regime | 231 | 8 | 1.6521 | 2.0818 | -0.2603 | -0.3790 | -0.1673 |
+| 3 | rolling_bias | 449 | 12 | 2.0701 | 2.7552 | NA | NA | NA |
+| 3 | innovation | 449 | 12 | 2.0737 | 2.7516 | 0.0037 | -0.0311 | 0.0392 |
+| 3 | innovation_regime | 449 | 12 | 2.0828 | 2.7780 | 0.0127 | -0.0295 | 0.0617 |
+| 6 | rolling_bias | 387 | 12 | 2.1009 | 2.8068 | NA | NA | NA |
+| 6 | innovation | 387 | 12 | 2.0903 | 2.7937 | -0.0106 | -0.0221 | 0.0020 |
+| 6 | innovation_regime | 387 | 12 | 2.1022 | 2.8268 | 0.0013 | -0.0400 | 0.0566 |
+| 9 | rolling_bias | 365 | 12 | 2.0254 | 2.5899 | NA | NA | NA |
+| 9 | innovation | 365 | 12 | 1.8490 | 2.3802 | -0.1764 | -0.2390 | -0.0759 |
+| 9 | innovation_regime | 365 | 12 | 1.8748 | 2.3938 | -0.1506 | -0.2259 | -0.0332 |
+| 12 | rolling_bias | 343 | 12 | 1.9546 | 2.5208 | NA | NA | NA |
+| 12 | innovation | 343 | 12 | 1.5661 | 1.9733 | -0.3885 | -0.4668 | -0.3071 |
+| 12 | innovation_regime | 343 | 12 | 1.6294 | 2.0659 | -0.3252 | -0.4218 | -0.2462 |
 
 Primary 09:00 rows：
 
 | variant | rows | dates | mae_f | mae_delta_vs_rolling_bias_f | delta_ci_low_f | delta_ci_high_f |
 | --- | --- | --- | --- | --- | --- | --- |
-| rolling_bias | 239 | 8 | 2.0015 | NA | NA | NA |
-| innovation | 239 | 8 | 1.8268 | -0.1746 | -0.2782 | -0.0269 |
-| innovation_regime | 239 | 8 | 1.8400 | -0.1615 | -0.2705 | -0.0046 |
+| rolling_bias | 365 | 12 | 2.0254 | NA | NA | NA |
+| innovation | 365 | 12 | 1.8490 | -0.1764 | -0.2390 | -0.0759 |
+| innovation_regime | 365 | 12 | 1.8748 | -0.1506 | -0.2259 | -0.0332 |
 
 ## β stability
 
 | checkpoint_hour_local | target_date | train_dates | beta_innovation | beta_innovation_regime |
 | --- | --- | --- | --- | --- |
-| 6 | 2026-07-23 | 12 | 0.0761 | 0.0648 |
-| 3 | 2026-07-23 | 12 | 0.2111 | 0.2980 |
-| 9 | 2026-07-23 | 12 | 0.4941 | 0.4368 |
-| 12 | 2026-07-23 | 12 | 0.5642 | 0.5723 |
+| 6 | 2026-07-27 | 16 | 0.0979 | 0.0720 |
+| 3 | 2026-07-27 | 16 | 0.1672 | 0.2532 |
+| 9 | 2026-07-27 | 16 | 0.4507 | 0.4184 |
+| 12 | 2026-07-27 | 16 | 0.5828 | 0.5873 |
 
 β 是概率模型参数，不写死在数据层。共享层只保存 raw innovation、model current、remaining warming 与 PIT lineage；不同策略在自己的 frozen OOF 模型里学习 β。
 
@@ -107,13 +107,13 @@ Primary 09:00 rows：
 
 | region | rows | dates | cities | rolling_bias_mae_f | innovation_mae_f | mae_delta_f | delta_ci_low_f | delta_ci_high_f |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| AF | 8 | 8 | 1 | 1.5450 | 1.5146 | -0.0304 | -0.5418 | 0.3294 |
-| AS | 102 | 8 | 13 | 2.1199 | 1.7338 | -0.3861 | -0.5790 | -0.2119 |
-| EU | 70 | 8 | 9 | 1.8858 | 1.8867 | 0.0009 | -0.2798 | 0.3175 |
-| ME | 12 | 8 | 2 | 1.9442 | 2.0561 | 0.1119 | -0.2521 | 0.4592 |
-| OC | 5 | 5 | 1 | 0.7037 | 1.2601 | 0.5564 | -0.4739 | 1.6810 |
-| SA | 9 | 3 | 3 | 1.6983 | 1.4164 | -0.2819 | -0.5106 | -0.0351 |
-| US | 33 | 3 | 11 | 2.2913 | 2.1774 | -0.1140 | -0.2770 | 0.0363 |
+| AF | 11 | 11 | 1 | 1.6392 | 1.6993 | 0.0601 | -0.3882 | 0.4623 |
+| AS | 152 | 12 | 13 | 2.1015 | 1.7495 | -0.3520 | -0.4717 | -0.2244 |
+| EU | 106 | 12 | 9 | 1.9470 | 1.8843 | -0.0627 | -0.2537 | 0.1772 |
+| ME | 17 | 12 | 2 | 1.7889 | 1.6986 | -0.0904 | -0.6071 | 0.2662 |
+| OC | 9 | 9 | 1 | 0.8044 | 1.5581 | 0.7538 | -0.0578 | 1.5918 |
+| SA | 15 | 5 | 3 | 2.0978 | 1.9974 | -0.1004 | -0.3460 | 0.1583 |
+| US | 55 | 5 | 11 | 2.2966 | 2.1398 | -0.1568 | -0.2478 | -0.0566 |
 
 该切片只解释传递机制，不作为事后城市/region gate。
 
@@ -121,10 +121,10 @@ Primary 09:00 rows：
 
 | checkpoint_hour_local | checkpoint_rows | dates | full_two_sided_ladders | full_direct_yes_ask_ladders |
 | --- | --- | --- | --- | --- |
-| 3 | 469 | 13 | 25 | 72 |
-| 6 | 440 | 13 | 11 | 62 |
-| 9 | 421 | 13 | 44 | 90 |
-| 12 | 432 | 13 | 29 | 60 |
+| 3 | 628 | 17 | 25 | 130 |
+| 6 | 574 | 17 | 11 | 109 |
+| 9 | 550 | 17 | 44 | 124 |
+| 12 | 546 | 17 | 29 | 96 |
 
 盘口缺失属于 evidence gap，不是策略筛选。当前不能把较少的完整 book 行包装成“精选可交易样本”，也不能从 weather MAE 改善外推 ROI。
 
@@ -132,26 +132,26 @@ Primary 09:00 rows：
 
 | checkpoint_hour_local | variant | rows | dates | cities | date_equal_logloss | date_equal_brier |
 | --- | --- | --- | --- | --- | --- | --- |
-| 3 | fusion_innovation | 21 | 3 | 20 | 1.3504 | 0.0892 |
-| 3 | fusion_rolling_bias | 21 | 3 | 20 | 1.3582 | 0.0897 |
+| 3 | fusion_innovation | 21 | 3 | 20 | 1.3497 | 0.0892 |
+| 3 | fusion_rolling_bias | 21 | 3 | 20 | 1.3569 | 0.0898 |
 | 3 | market | 21 | 3 | 20 | 1.3152 | 0.0861 |
-| 3 | weather_innovation | 21 | 3 | 20 | 1.9155 | 0.1143 |
-| 3 | weather_rolling_bias | 21 | 3 | 20 | 1.9639 | 0.1153 |
-| 6 | fusion_innovation | 9 | 4 | 9 | 1.2807 | 0.0877 |
-| 6 | fusion_rolling_bias | 9 | 4 | 9 | 1.2798 | 0.0877 |
+| 3 | weather_innovation | 21 | 3 | 20 | 1.9236 | 0.1157 |
+| 3 | weather_rolling_bias | 21 | 3 | 20 | 1.9733 | 0.1171 |
+| 6 | fusion_innovation | 9 | 4 | 9 | 1.3053 | 0.0903 |
+| 6 | fusion_rolling_bias | 9 | 4 | 9 | 1.3050 | 0.0904 |
 | 6 | market | 9 | 4 | 9 | 1.2299 | 0.0890 |
-| 6 | weather_innovation | 9 | 4 | 9 | 1.6726 | 0.0990 |
-| 6 | weather_rolling_bias | 9 | 4 | 9 | 1.6646 | 0.0986 |
-| 9 | fusion_innovation | 29 | 3 | 27 | 1.2075 | 0.0843 |
-| 9 | fusion_rolling_bias | 29 | 3 | 27 | 1.2163 | 0.0849 |
+| 6 | weather_innovation | 9 | 4 | 9 | 1.7546 | 0.1076 |
+| 6 | weather_rolling_bias | 9 | 4 | 9 | 1.7474 | 0.1073 |
+| 9 | fusion_innovation | 29 | 3 | 27 | 1.2106 | 0.0844 |
+| 9 | fusion_rolling_bias | 29 | 3 | 27 | 1.2188 | 0.0849 |
 | 9 | market | 29 | 3 | 27 | 1.1779 | 0.0841 |
-| 9 | weather_innovation | 29 | 3 | 27 | 1.7233 | 0.1142 |
-| 9 | weather_rolling_bias | 29 | 3 | 27 | 1.8203 | 0.1182 |
-| 12 | fusion_innovation | 24 | 3 | 17 | 1.0425 | 0.1035 |
-| 12 | fusion_rolling_bias | 24 | 3 | 17 | 1.0466 | 0.1042 |
+| 9 | weather_innovation | 29 | 3 | 27 | 1.7219 | 0.1139 |
+| 9 | weather_rolling_bias | 29 | 3 | 27 | 1.8060 | 0.1174 |
+| 12 | fusion_innovation | 24 | 3 | 17 | 1.0451 | 0.1038 |
+| 12 | fusion_rolling_bias | 24 | 3 | 17 | 1.0521 | 0.1050 |
 | 12 | market | 24 | 3 | 17 | 1.0107 | 0.1030 |
-| 12 | weather_innovation | 24 | 3 | 17 | 1.4815 | 0.1335 |
-| 12 | weather_rolling_bias | 24 | 3 | 17 | 1.5485 | 0.1400 |
+| 12 | weather_innovation | 24 | 3 | 17 | 1.5227 | 0.1367 |
+| 12 | weather_rolling_bias | 24 | 3 | 17 | 1.6611 | 0.1471 |
 
 Weather distribution 使用固定 σ=3.0°F；fusion 为固定 log-linear market/weather=0.7/0.3，没有按结果调权重。该表是 coverage-limited diagnostic，不满足 market baseline 晋升门。
 

@@ -1,7 +1,7 @@
 # Active realtime source alignment v1
 
-Generated: `2026-07-22T15:27:55.270650+00:00`
-Window: `2026-07-08..2026-07-21` settled city-days
+Generated: `2026-07-22T18:06:31.914686+00:00`
+Window: `2026-07-08..2026-07-22` settled city-days
 Status: `research/shadow_only`; no live authorization
 
 ## 结论
@@ -12,10 +12,10 @@ Status: `research/shadow_only`; no live authorization
 
 | city/source | first-seen p50/p90 | next METAR exact / within1 | source daily max in WU winner | terminal false-cross days | persistent event correct | correct executable | false executable | action |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| `Helsinki/fmi` | 2.9/6.5m | 952/1282 (74.3%) / 1262/1282 (98.4%) | 9/10 (90.0%) | 1 | 15/15 (100.0%) | 2/15 (13.3%) | NA | `P1_research_feature_shadow` |
-| `Seoul/amos_runway` | 0.4/0.6m | 12562/16626 (75.6%) / 16541/16626 (99.5%) | 9/13 (69.2%) | 4 | 33/35 (94.3%) | 9/33 (27.3%) | 2/2 (100.0%) | `feature_only_not_cross_trigger` |
-| `Busan/amos_runway` | 1.4/1.8m | 5280/7311 (72.2%) / 7196/7311 (98.4%) | 8/13 (61.5%) | 5 | 35/37 (94.6%) | 5/35 (14.3%) | 1/2 (50.0%) | `feature_only_not_cross_trigger` |
-| `Singapore/singapore_mss` | 2.4/3.5m | 1651/2384 (69.3%) / 2371/2384 (99.5%) | 9/14 (64.3%) | 5 | 14/15 (93.3%) | 1/14 (7.1%) | 1/1 (100.0%) | `feature_only_not_cross_trigger` |
+| `Helsinki/fmi` | 2.8/6.4m | 1016/1373 (74.0%) / 1352/1373 (98.5%) | 9/10 (90.0%) | 1 | 15/15 (100.0%) | 2/15 (13.3%) | NA | `P1_research_feature_shadow` |
+| `Seoul/amos_runway` | 0.4/0.6m | 13849/18031 (76.8%) / 17946/18031 (99.5%) | 9/13 (69.2%) | 4 | 33/35 (94.3%) | 9/33 (27.3%) | 2/2 (100.0%) | `feature_only_not_cross_trigger` |
+| `Busan/amos_runway` | 1.4/1.8m | 5758/8041 (71.6%) / 7922/8041 (98.5%) | 8/13 (61.5%) | 5 | 35/37 (94.6%) | 5/35 (14.3%) | 1/2 (50.0%) | `feature_only_not_cross_trigger` |
+| `Singapore/singapore_mss` | 2.4/3.5m | 1798/2576 (69.8%) / 2558/2576 (99.3%) | 9/14 (64.3%) | 5 | 14/15 (93.3%) | 1/14 (7.1%) | 1/1 (100.0%) | `feature_only_not_cross_trigger` |
 | `Tokyo/jma_amedas` | 7.4/8.0m | 1235/1537 (80.4%) / 1530/1537 (99.5%) | 11/13 (84.6%) | 2 | 41/43 (95.3%) | 10/41 (24.4%) | 1/2 (50.0%) | `benchmark_shadow` |
 
 这里的 daily denominator 只保留快源时间覆盖 WU peak 的 city-day。WU 用 market native `units=m` 直接取摄氏度日高，**没有 C→F→C 或 double rounding**；canonical winning bracket 是 label。routine METAR、WU native 和快源日高分开列，不能相互替代。

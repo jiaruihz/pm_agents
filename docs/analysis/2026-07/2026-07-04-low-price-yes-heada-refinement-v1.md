@@ -1,6 +1,6 @@
 # HeadA Low-Price YES Refinement v1
 
-Generated: 2026-07-04T00:55:11+00:00
+Generated: 2026-07-06T17:18:16+00:00
 
 Scope: only HeadA `forecast_tail_low_price_yes`.  This is a refinement study for the existing low-price forecast-tail YES sleeve, not METAR reversal and not tmax distribution.
 
@@ -151,12 +151,13 @@ Fresh live/shadow rows accumulated in the local HeadA journal since 2026-07-04:
 
 | decision_status | blocker | rows |
 | --- | --- | --- |
-| blocked | decision_snapshot_too_stale | 94 |
-| blocked | dist_lt0_cold_or_inside_forecast_tail_v1 | 30 |
-| blocked | duplicate_submitted_signal | 624 |
-| blocked | fresh_ask_exceeds_cushion_or_band | 172 |
+| blocked | decision_snapshot_too_stale | 1090 |
+| blocked | dist_eq0_forecast_boundary_tail_v1 | 466 |
+| blocked | dist_lt0_cold_or_inside_forecast_tail_v1 | 5754 |
+| blocked | duplicate_submitted_signal | 3758 |
+| blocked | fresh_ask_exceeds_cushion_or_band | 204 |
 | blocked | missing_yes_token_id | 114 |
-| planned |  | 5 |
+| planned |  | 12 |
 
 This is too fresh to score; keep it as the W3 forward clock.  The key forward questions are fillability by `book_state_v1`, maker fill adverse selection, and whether `adj_dist_p50_br` keeps the same shape after 2026-07-04.
 

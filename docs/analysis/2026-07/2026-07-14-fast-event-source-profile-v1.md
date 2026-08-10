@@ -44,9 +44,3 @@
 ## 当前状态
 
 `calibration_only_zero_notional_no_live`。下一阶段按 city × source 收集 side-neutral YES/NO repricing，不能把 pooled current-NO 点估直接升级为 5-share live。
-
-## 现存 live runner 边界
-
-本次没有修改或停止既有 `fast_source_prev_no_trial_v1` live runner。运行态核对显示它仍以 Helsinki / Busan / Singapore / Tokyo 为 live cities；2026-07-14 Busan 有一次 FOK 失败，随后一笔订单 `0x65ef26…f444d` 返回 `matched`（making 8.899998 USDC，taking 10.348835 shares）。
-
-这四城在新 profile 中均尚未 `live_eligible`：Helsinki、Busan、Tokyo 需要做 alternate-feed / sensor 与 settlement basis 对齐；Singapore 是 cross-station reference，当前明确 blocked。因此 profile 结论与这个旧 live runner 的现状冲突，推荐将该 runner 暂停或改为 shadow-only；这是生产行为变更，本次未越权执行。

@@ -4009,12 +4009,12 @@
     "maker_fee": 0,
     "weather_taker_fee_rate": 0.05
   },
-  "generated_at_utc": "2026-07-04T00:55:11+00:00",
+  "generated_at_utc": "2026-07-06T17:18:16+00:00",
   "input": "docs/analysis/2026-07/generated/low_price_yes_integrated_tail_v2/enriched_rows.csv",
   "rows": {
     "base": 476,
     "expression_rows": 1483,
-    "fresh_live_journal_rows": 1039,
+    "fresh_live_journal_rows": 11398,
     "hot_only_dist_gt0": 333
   },
   "sizing_attribution": [

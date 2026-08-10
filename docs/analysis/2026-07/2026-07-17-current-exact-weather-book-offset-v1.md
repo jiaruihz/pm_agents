@@ -172,7 +172,7 @@ next=weather_innovation_repricing_collector_only
 
 - [Temperature context feature layer](../../WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md)
 - [Temperature path mechanism decomposition](2026-07-05-temperature-path-mechanism-decomposition-v1.md)
-- [Tmax distribution v3](2026-07-12-tmax-distribution-v3-model-v1.md)
+- [Tmax distribution v3](2026-07-13-tmax-distribution-v3.md)
 - [Tmax clean feature restoration](2026-07-12-tmax-clean-feature-restoration-v1.md)
 - [Strategy search reset](2026-07-14-strategy-search-reset-v1.md)
 - [Previous maker hypothesis](2026-07-17-current-exact-favorite-maker-v1.md)
