@@ -484,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
         rows=observation_history_rows(cache),
         jsonl_name="observations.jsonl",
         day=generated_at_utc[:10] or None,
+        write_aggregate=False,
     )
     print(json.dumps({"status": "ok", "output": str(output), **cache.get("summary", {})}, sort_keys=True))
     return 0

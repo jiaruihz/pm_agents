@@ -1090,7 +1090,7 @@ def test_observations_additional_city_adds_coverage_without_live_eligibility(
     assert cache["summary"]["additional_cities"] == ["Seoul"]
 
 
-def test_observations_main_writes_global_and_daily_append_only_history(
+def test_observations_main_writes_daily_append_only_history(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -1124,10 +1124,6 @@ def test_observations_main_writes_global_and_daily_append_only_history(
     assert observations.main(["--output", str(output)]) == 0
 
     latest = json.loads(output.read_text(encoding="utf-8"))
-    global_rows = [
-        json.loads(line)
-        for line in (output.parent / "observations.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
     daily_rows = [
         json.loads(line)
         for line in (output.parent / "2026-08-09" / "observations.jsonl")
@@ -1136,9 +1132,9 @@ def test_observations_main_writes_global_and_daily_append_only_history(
     ]
 
     assert latest == cache
-    assert global_rows == daily_rows
-    assert len(global_rows) == 1
-    row = global_rows[0]
+    assert not (output.parent / "observations.jsonl").exists()
+    assert len(daily_rows) == 1
+    row = daily_rows[0]
     assert row["observation_cache_generated_at_utc"] == generated_at_utc
     assert row["producer"] == "weather_data_feed_service.observations"
     assert row["producer_build_id"] == "test-sha"
