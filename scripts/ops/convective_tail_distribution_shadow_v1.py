@@ -302,7 +302,11 @@ def candidate_rows(
     forecast_native: float,
     build_id: str,
 ) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+    choices: dict[str, list[dict[str, Any]]] = {
+        "single_yes": [],
+        "adjacent_hot_strip": [],
+        "bounded_hot_tail_basket": [],
+    }
     for anchor, rung in enumerate(rungs):
         ask = finite(rung.get("yes_ask"))
         center = finite(rung.get("bracket_center_native"))
@@ -316,7 +320,7 @@ def candidate_rows(
             probability = sum(float(leg["model_probability"]) for leg in legs)
             edge = probability - cost
             candidate_id = hashlib.sha256(f"{model_output_id}|{policy}|{anchor}".encode()).hexdigest()
-            rows.append({
+            choices[policy].append({
                 "schema_version": SCHEMA_VERSION,
                 "record_kind": "SignalCandidate",
                 "candidate_id": candidate_id,
@@ -336,12 +340,26 @@ def candidate_rows(
                 "predicted_probability": probability,
                 "observed_ask_fee_adjusted_cost": cost,
                 "continuous_tail_residual": edge,
-                "eligible": edge > 0.0,
-                "signal_status": "shadow_ticket" if edge > 0.0 else "no_positive_edge",
+                "expression_positive_edge": edge > 0.0,
                 "top_ask_capacity_shares": min(float(leg.get("yes_ask_size") or 0.0) for leg in legs),
                 "depth_5c_capacity_shares": min(float(leg.get("yes_depth_ask_5c") or 0.0) for leg in legs),
                 "producer_build_id": build_id,
             })
+    best = [max(rows, key=lambda row: float(row["continuous_tail_residual"])) for rows in choices.values() if rows]
+    complete = len(best) == len(choices)
+    common_trigger = complete and any(bool(row["expression_positive_edge"]) for row in best)
+    for row in best:
+        row["common_entry_trigger"] = common_trigger
+        row["selected_for_common_entry_score"] = common_trigger
+        row["eligible"] = common_trigger and bool(row["expression_positive_edge"])
+        row["signal_status"] = (
+            "common_entry_positive_expression"
+            if row["eligible"]
+            else "common_entry_counterfactual_expression"
+            if common_trigger
+            else "no_common_positive_edge"
+        )
+    rows = best
     return rows
 
 
@@ -356,6 +374,7 @@ def build_outputs(
     seen: set[str],
     decision: datetime,
     build_id: str,
+    entered_city_dates: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     books_batch = str(books.get("batch_capture_id") or "")
     if not books_batch or books_batch != str(ladders.get("batch_capture_id") or ""):
@@ -372,7 +391,17 @@ def build_outputs(
     outputs: list[dict[str, Any]] = []
     candidates: list[dict[str, Any]] = []
     blockers: list[dict[str, Any]] = []
-    counters = {"events_seen": 0, "events_scored": 0, "events_blocked": 0, "candidates": 0, "tail_tickets": 0, "fresh_books": 0}
+    entered_city_dates = entered_city_dates if entered_city_dates is not None else set()
+    counters = {
+        "events_seen": 0,
+        "events_scored": 0,
+        "events_blocked": 0,
+        "candidates": 0,
+        "tail_tickets": 0,
+        "common_entry_events": 0,
+        "expression_rows_at_common_entry": 0,
+        "fresh_books": 0,
+    }
     for event in ladders.get("records", []):
         if not isinstance(event, dict):
             continue
@@ -485,10 +514,25 @@ def build_outputs(
         event_candidates = candidate_rows(
             model_output_id, city, target_date, decision, rung_rows, forecast_native, build_id
         )
+        city_date_key = f"{city}|{target_date}"
+        common_trigger = any(bool(row.get("common_entry_trigger")) for row in event_candidates)
+        if common_trigger and city_date_key in entered_city_dates:
+            for row in event_candidates:
+                row["common_entry_trigger"] = False
+                row["selected_for_common_entry_score"] = False
+                row["eligible"] = False
+                row["signal_status"] = "common_entry_already_recorded"
+            common_trigger = False
+        if common_trigger:
+            entered_city_dates.add(city_date_key)
         candidates.extend(event_candidates)
         counters["events_scored"] += 1
         counters["candidates"] += len(event_candidates)
-        counters["tail_tickets"] += sum(bool(row["eligible"]) for row in event_candidates)
+        counters["tail_tickets"] += int(common_trigger)
+        counters["common_entry_events"] += int(common_trigger)
+        counters["expression_rows_at_common_entry"] += sum(
+            bool(row.get("common_entry_trigger")) for row in event_candidates
+        )
         seen.add(checkpoint_key)
     return outputs, candidates, blockers, counters
 
@@ -507,9 +551,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     first = hydrate_first_observations(state, args.source_events_daily_root, city_dates, decision)
     curves = load_curve_vintages(args.forecast_root, decision)
     seen = set(state.get("seen_checkpoint_keys") or [])
+    entered_city_dates = set(state.get("common_entry_city_dates") or [])
     build_id = candidate_build_id(args.model_artifact)
     outputs, candidates, blockers, counters = build_outputs(
-        books, ladders, strategy_snapshot, observations, curves, first, artifact, seen, decision, build_id
+        books, ladders, strategy_snapshot, observations, curves, first, artifact, seen, decision, build_id,
+        entered_city_dates,
     )
     append_jsonl(args.output_dir / "model_outputs.jsonl", outputs)
     append_jsonl(args.output_dir / "signal_candidates.jsonl", candidates)
@@ -517,6 +563,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     atomic_json(state_path, {
         "schema_version": SCHEMA_VERSION, "updated_at_utc": iso_utc(started),
         "seen_checkpoint_keys": sorted(seen), "first_observation_by_city_date": first,
+        "common_entry_city_dates": sorted(entered_city_dates),
     })
     scored = counters["events_scored"]
     summary = {

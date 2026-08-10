@@ -35,12 +35,19 @@ CHALLENGERS = (
     "c1_market_power_temperature",
     "c2_adjacent_kernel_diffusion",
     "c3_center_curvature_offset",
+    "c4_directional_split_tail_offset",
+    "c5_directional_neighbor_transport",
 )
 REGULARIZATION = {
     "c1_market_power_temperature": 20.0,
     "c2_adjacent_kernel_diffusion": 20.0,
     "c3_center_curvature_offset": 30.0,
+    "c4_directional_split_tail_offset": 30.0,
+    "c5_directional_neighbor_transport": 20.0,
 }
+
+C4_CENTER_DIMENSIONS = 8
+C4_TAIL_DIMENSIONS = 7
 
 
 @dataclass(frozen=True)
@@ -124,6 +131,54 @@ def adjacent_diffusion(p: np.ndarray) -> np.ndarray:
     return out / out.sum()
 
 
+def neighbor_transport(p: np.ndarray, direction: str) -> np.ndarray:
+    """Retain half the mass and move half by one ordered ladder rung."""
+    if len(p) == 1:
+        return p.copy()
+    out = 0.50 * p
+    if direction == "hot":
+        out[1:] += 0.50 * p[:-1]
+        out[-1] += 0.50 * p[-1]
+    elif direction == "cold":
+        out[:-1] += 0.50 * p[1:]
+        out[0] += 0.50 * p[0]
+    else:
+        raise ValueError(f"unknown transport direction: {direction}")
+    return out / out.sum()
+
+
+def directional_physical_projection(feature_vector: Iterable[float]) -> tuple[np.ndarray, np.ndarray]:
+    """Project the wide PIT feature contract into low-dimensional physical heads.
+
+    The projection keeps missing rows in the denominator.  Missing weather
+    values contribute zero standardized signal, while the tail head receives
+    the observed weather-field coverage fraction as a reliability feature.
+    """
+    vector = np.asarray(list(feature_vector), dtype=float)
+    expected = 2 * len(BASE_FEATURES)
+    if len(vector) != expected:
+        raise ValueError(f"directional feature vector must have {expected} values")
+    values = vector[: len(BASE_FEATURES)].copy()
+    missing = vector[len(BASE_FEATURES) :] > 0.5
+    values[missing] = 0.0
+
+    weather_indices = np.array([2, 3, 4, 5], dtype=int)
+    available = ~missing[weather_indices]
+    coverage = float(available.mean())
+    convective = float(values[weather_indices][available].mean()) if available.any() else 0.0
+    warming = float(values[7])
+
+    center = np.array(
+        [1.0, values[0], values[1], warming, values[8], values[9], values[10], values[11]],
+        dtype=float,
+    )
+    tail = np.array(
+        [1.0, convective, coverage, values[6], warming, abs(warming), values[8]],
+        dtype=float,
+    )
+    return center, tail
+
+
 def initial_parameters(challenger: str, dimensions: int) -> np.ndarray:
     if challenger == "c1_market_power_temperature":
         # tau=1 under the registered [0.67, 2.5] logistic map.
@@ -135,6 +190,15 @@ def initial_parameters(challenger: str, dimensions: int) -> np.ndarray:
         center = np.r_[0.0, np.zeros(dimensions)]
         tail = np.r_[-4.0, np.zeros(dimensions)]
         return np.r_[center, tail]
+    if challenger == "c4_directional_split_tail_offset":
+        center = np.r_[0.0, np.zeros(C4_CENTER_DIMENSIONS - 1)]
+        hot = np.r_[-4.0, np.zeros(C4_TAIL_DIMENSIONS - 1)]
+        cold = np.r_[-4.0, np.zeros(C4_TAIL_DIMENSIONS - 1)]
+        return np.r_[center, hot, cold]
+    if challenger == "c5_directional_neighbor_transport":
+        direction = np.zeros(C4_CENTER_DIMENSIONS)
+        width = np.r_[-4.0, np.zeros(C4_TAIL_DIMENSIONS - 1)]
+        return np.r_[direction, width]
     raise ValueError(f"unknown challenger: {challenger}")
 
 
@@ -169,6 +233,40 @@ def apply_challenger(
         logits = np.log(p) + center * z + tail * centered_square
         logits -= float(np.max(logits))
         q = np.exp(logits)
+    elif challenger == "c4_directional_split_tail_offset":
+        expected = C4_CENTER_DIMENSIONS + 2 * C4_TAIL_DIMENSIONS
+        if len(theta) != expected:
+            raise ValueError("C4 parameter length does not match physical projection")
+        center_x, tail_x = directional_physical_projection(feature_vector)
+        center_eta = float(center_x @ theta[:C4_CENTER_DIMENSIONS])
+        hot_start = C4_CENTER_DIMENSIONS
+        cold_start = hot_start + C4_TAIL_DIMENSIONS
+        hot_eta = float(tail_x @ theta[hot_start:cold_start])
+        cold_eta = float(tail_x @ theta[cold_start:])
+        center = 2.0 * math.tanh(center_eta)
+        hot = 1.5 / (1.0 + math.exp(-float(np.clip(hot_eta, -30, 30))))
+        cold = 1.5 / (1.0 + math.exp(-float(np.clip(cold_eta, -30, 30))))
+        z = native_distance_z(distances)
+        hot_basis = np.maximum(z, 0.0) ** 2
+        cold_basis = np.minimum(z, 0.0) ** 2
+        hot_basis -= float(np.sum(p * hot_basis))
+        cold_basis -= float(np.sum(p * cold_basis))
+        logits = np.log(p) + center * z + hot * hot_basis + cold * cold_basis
+        logits -= float(np.max(logits))
+        q = np.exp(logits)
+    elif challenger == "c5_directional_neighbor_transport":
+        expected = C4_CENTER_DIMENSIONS + C4_TAIL_DIMENSIONS
+        if len(theta) != expected:
+            raise ValueError("C5 parameter length does not match physical projection")
+        direction_x, width_x = directional_physical_projection(feature_vector)
+        direction_eta = float(direction_x @ theta[:C4_CENTER_DIMENSIONS])
+        width_eta = float(width_x @ theta[C4_CENTER_DIMENSIONS:])
+        hot_share = 1.0 / (1.0 + math.exp(-float(np.clip(direction_eta, -30, 30))))
+        width = 1.0 / (1.0 + math.exp(-float(np.clip(width_eta, -30, 30))))
+        hot = neighbor_transport(p, "hot")
+        cold = neighbor_transport(p, "cold")
+        kernel = (1.0 - hot_share) * cold + hot_share * hot
+        q = (1.0 - width) * p + width * kernel
     else:
         raise ValueError(f"unknown challenger: {challenger}")
     q = np.clip(q, EPS, None)
@@ -240,6 +338,53 @@ def fit_challenger(
                 )
                 gradient[:width] += weights[index] * center_derivative * x
                 gradient[width:] += weights[index] * tail_derivative * x
+            elif challenger == "c4_directional_split_tail_offset":
+                center_x, tail_x = directional_physical_projection(feature_matrix[index])
+                hot_start = C4_CENTER_DIMENSIONS
+                cold_start = hot_start + C4_TAIL_DIMENSIONS
+                center_eta = float(center_x @ theta[:hot_start])
+                hot_eta = float(tail_x @ theta[hot_start:cold_start])
+                cold_eta = float(tail_x @ theta[cold_start:])
+                center_tanh = math.tanh(center_eta)
+                hot_logistic = 1.0 / (1.0 + math.exp(-float(np.clip(hot_eta, -30, 30))))
+                cold_logistic = 1.0 / (1.0 + math.exp(-float(np.clip(cold_eta, -30, 30))))
+                center = 2.0 * center_tanh
+                hot = 1.5 * hot_logistic
+                cold = 1.5 * cold_logistic
+                hot_basis = np.maximum(z, 0.0) ** 2
+                cold_basis = np.minimum(z, 0.0) ** 2
+                hot_basis -= float(np.sum(p * hot_basis))
+                cold_basis -= float(np.sum(p * cold_basis))
+                logits = np.log(p) + center * z + hot * hot_basis + cold * cold_basis
+                logits -= float(np.max(logits))
+                q = np.exp(logits)
+                q /= q.sum()
+                residual = q - y
+                center_derivative = float(np.sum(residual * z)) * 2.0 * (1.0 - center_tanh**2)
+                hot_derivative = float(np.sum(residual * hot_basis)) * 1.5 * hot_logistic * (1.0 - hot_logistic)
+                cold_derivative = float(np.sum(residual * cold_basis)) * 1.5 * cold_logistic * (1.0 - cold_logistic)
+                gradient[:hot_start] += weights[index] * center_derivative * center_x
+                gradient[hot_start:cold_start] += weights[index] * hot_derivative * tail_x
+                gradient[cold_start:] += weights[index] * cold_derivative * tail_x
+            elif challenger == "c5_directional_neighbor_transport":
+                direction_x, width_x = directional_physical_projection(feature_matrix[index])
+                direction_eta = float(direction_x @ theta[:C4_CENTER_DIMENSIONS])
+                width_eta = float(width_x @ theta[C4_CENTER_DIMENSIONS:])
+                hot_share = 1.0 / (1.0 + math.exp(-float(np.clip(direction_eta, -30, 30))))
+                width = 1.0 / (1.0 + math.exp(-float(np.clip(width_eta, -30, 30))))
+                hot = neighbor_transport(p, "hot")
+                cold = neighbor_transport(p, "cold")
+                kernel = (1.0 - hot_share) * cold + hot_share * hot
+                q = (1.0 - width) * p + width * kernel
+                q = np.clip(q, EPS, 1.0)
+                direction_derivative = -float(
+                    np.sum(y * (width * hot_share * (1.0 - hot_share) * (hot - cold)) / q)
+                )
+                width_derivative = -float(
+                    np.sum(y * ((kernel - p) * width * (1.0 - width)) / q)
+                )
+                gradient[:C4_CENTER_DIMENSIONS] += weights[index] * direction_derivative * direction_x
+                gradient[C4_CENTER_DIMENSIONS:] += weights[index] * width_derivative * width_x
             else:
                 raise ValueError(f"unknown challenger: {challenger}")
             loss += weights[index] * float(-np.sum(y * np.log(np.clip(q, EPS, 1.0))))
@@ -249,6 +394,15 @@ def fit_challenger(
             mask = np.ones_like(theta)
             mask[0] = 0.0
             mask[width] = 0.0
+        elif challenger == "c4_directional_split_tail_offset":
+            mask = np.ones_like(theta)
+            mask[0] = 0.0
+            mask[C4_CENTER_DIMENSIONS] = 0.0
+            mask[C4_CENTER_DIMENSIONS + C4_TAIL_DIMENSIONS] = 0.0
+        elif challenger == "c5_directional_neighbor_transport":
+            mask = np.ones_like(theta)
+            mask[0] = 0.0
+            mask[C4_CENTER_DIMENSIONS] = 0.0
         else:
             mask = np.ones_like(theta)
             mask[0] = 0.0

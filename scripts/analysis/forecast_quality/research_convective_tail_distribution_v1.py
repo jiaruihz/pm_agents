@@ -53,7 +53,11 @@ from weather_model_evaluation.ladder_snapshot_history import load_history
 DEFAULT_DB = ROOT / "runtime/weather.db"
 DEFAULT_OUT = Path(
     "/Volumes/jrs-archive/pm_agents/research/artifact_store/"
-    "convective_tail_distribution_v1/2026-08-09-may-retrain"
+    "convective_tail_distribution_v1/2026-08-09-directional-c5"
+)
+DEFAULT_ADAPTER_CACHE = Path(
+    "/Volumes/jrs-archive/pm_agents/research/artifact_store/"
+    "convective_tail_distribution_v1/2026-08-09-may-retrain/adapter_cache"
 )
 DEFAULT_HISTORY_SNAPSHOTS = Path(
     "/Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/"
@@ -102,6 +106,8 @@ FEATURES = [
 ATTRIBUTION_MODELS = (
     "c1_market_power_intercept_only",
     "c2_adjacent_kernel_intercept_only",
+    "c4_directional_split_tail_intercept_only",
+    "c5_directional_neighbor_intercept_only",
 )
 MODEL_NAMES = ("market", "weather", "offset", *CHALLENGERS, *ATTRIBUTION_MODELS)
 
@@ -115,6 +121,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-start-date", default="2026-05-19")
     parser.add_argument("--history-cutover-date", default="2026-07-15")
     parser.add_argument("--history-snapshot-dir", type=Path, default=DEFAULT_HISTORY_SNAPSHOTS)
+    parser.add_argument("--adapter-cache", type=Path, default=DEFAULT_ADAPTER_CACHE)
     parser.add_argument("--single-run-dir", type=Path, default=DEFAULT_SINGLE_RUNS)
     parser.add_argument("--atlas-states", type=Path, default=DEFAULT_ATLAS_STATES)
     parser.add_argument("--history-workers", type=int, default=12)
@@ -963,6 +970,48 @@ def challenger_oof(
             "attribution_only": True,
             **c2_intercept_fit,
         })
+        c4_intercept_matrix = np.c_[
+            np.zeros((len(train_rows), len(BASE_FEATURES))),
+            np.ones((len(train_rows), len(BASE_FEATURES))),
+        ]
+        c4_intercept_parameters, c4_intercept_fit = fit_challenger(
+            "c4_directional_split_tail_offset",
+            c4_intercept_matrix,
+            train_market,
+            train_outcome,
+            train_distance,
+            weights,
+        )
+        fit_rows.append({
+            "test_date_start": test_dates[0],
+            "test_date_end": test_dates[-1],
+            "test_dates": len(test_dates),
+            "challenger": "c4_directional_split_tail_intercept_only",
+            "train_dates": len(train_dates),
+            "train_states": len(train_rows),
+            "parameter_count": len(c4_intercept_parameters),
+            "attribution_only": True,
+            **c4_intercept_fit,
+        })
+        c5_intercept_parameters, c5_intercept_fit = fit_challenger(
+            "c5_directional_neighbor_transport",
+            c4_intercept_matrix,
+            train_market,
+            train_outcome,
+            train_distance,
+            weights,
+        )
+        fit_rows.append({
+            "test_date_start": test_dates[0],
+            "test_date_end": test_dates[-1],
+            "test_dates": len(test_dates),
+            "challenger": "c5_directional_neighbor_intercept_only",
+            "train_dates": len(train_dates),
+            "train_states": len(train_rows),
+            "parameter_count": len(c5_intercept_parameters),
+            "attribution_only": True,
+            **c5_intercept_fit,
+        })
         for index, row in enumerate(test_rows):
             state_id = str(row["tmax_state_id"])
             if state_id not in eligible_oof_ids:
@@ -1015,6 +1064,38 @@ def challenger_oof(
                     "tmax_state_id": row["tmax_state_id"],
                     "rank": rank,
                     "challenger": "c2_adjacent_kernel_intercept_only",
+                    "probability": float(probability),
+                })
+            c4_intercept_vector = np.r_[
+                np.zeros(len(BASE_FEATURES)),
+                np.ones(len(BASE_FEATURES)),
+            ]
+            c4_intercept_probability = apply_challenger(
+                "c4_directional_split_tail_offset",
+                test_market[index],
+                c4_intercept_vector,
+                c4_intercept_parameters,
+                test_distance[index],
+            )
+            for rank, probability in enumerate(c4_intercept_probability):
+                probability_rows.append({
+                    "tmax_state_id": row["tmax_state_id"],
+                    "rank": rank,
+                    "challenger": "c4_directional_split_tail_intercept_only",
+                    "probability": float(probability),
+                })
+            c5_intercept_probability = apply_challenger(
+                "c5_directional_neighbor_transport",
+                test_market[index],
+                c4_intercept_vector,
+                c5_intercept_parameters,
+                test_distance[index],
+            )
+            for rank, probability in enumerate(c5_intercept_probability):
+                probability_rows.append({
+                    "tmax_state_id": row["tmax_state_id"],
+                    "rank": rank,
+                    "challenger": "c5_directional_neighbor_intercept_only",
                     "probability": float(probability),
                 })
     challenger_predictions = pd.DataFrame(probability_rows)
@@ -1294,6 +1375,36 @@ def expression_ledger(
     return ledger, tickets
 
 
+def common_entry_expression_tickets(ledger: pd.DataFrame) -> pd.DataFrame:
+    """Score every expression on one shared, expression-independent entry state."""
+    if ledger.empty:
+        return pd.DataFrame()
+    policies = {"single_yes", "adjacent_hot_strip", "bounded_hot_tail_basket"}
+    complete_states = (
+        ledger.groupby("tmax_state_id")["policy"]
+        .agg(lambda values: set(values) == policies)
+    )
+    complete = ledger[ledger["tmax_state_id"].isin(complete_states[complete_states].index)].copy()
+    trigger_states = (
+        complete.groupby(
+            ["tmax_state_id", "city", "target_date", "decision_ts_utc"],
+            as_index=False,
+        )["predicted_edge"]
+        .max()
+    )
+    trigger_states = trigger_states[trigger_states["predicted_edge"].gt(0)].sort_values("decision_ts_utc")
+    first = trigger_states.drop_duplicates(["city", "target_date"], keep="first")
+    tickets = complete.merge(
+        first[["tmax_state_id"]],
+        on="tmax_state_id",
+        how="inner",
+        validate="many_to_one",
+    )
+    tickets["common_entry_trigger"] = True
+    tickets["expression_positive_edge"] = tickets["predicted_edge"].gt(0)
+    return tickets.sort_values(["target_date", "city", "policy"]).reset_index(drop=True)
+
+
 def trade_summary(tickets: pd.DataFrame, draws: int) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     summaries, daily_rows, stability = [], [], []
     rng = np.random.default_rng(SEED + 9)
@@ -1505,7 +1616,7 @@ def main() -> None:
             args.history_start_date,
             args.end_date,
             args.history_workers,
-            args.output_dir / "adapter_cache",
+            args.adapter_cache,
         )
         lineage, weather = load_observation_context(conn, args.history_cutover_date, args.end_date)
         core_daily = load_core_live_real_daily(conn)
@@ -1546,6 +1657,8 @@ def main() -> None:
     attribution_baseline = {
         "c1_market_power_temperature": "c1_market_power_intercept_only",
         "c2_adjacent_kernel_diffusion": "c2_adjacent_kernel_intercept_only",
+        "c4_directional_split_tail_offset": "c4_directional_split_tail_intercept_only",
+        "c5_directional_neighbor_transport": "c5_directional_neighbor_intercept_only",
     }.get(selected_challenger, "c1_market_power_intercept_only")
     intercept_score = scorecard[scorecard["model"].eq(attribution_baseline)].iloc[0]
     attribution = weather_attribution_scorecard(
@@ -1557,7 +1670,8 @@ def main() -> None:
     calibration = calibration_bins(pred)
     shape_diagnostics = distribution_shape_diagnostics(pred, selected_challenger)
     slices = slice_scorecard(per_state, selected_challenger)
-    expr, tickets = expression_ledger(pred, heada, selected_challenger)
+    expr, policy_specific_tickets = expression_ledger(pred, heada, selected_challenger)
+    tickets = common_entry_expression_tickets(expr)
     trade, daily, stability = trade_summary(tickets, args.draws)
     audit = temporal_audit(
         heada,
@@ -1627,6 +1741,14 @@ def main() -> None:
             "oof_hotter_tail_mass_positive_fraction": float(shape_diagnostics["hotter_tail_mass_residual"].gt(0).mean()),
             "oof_mean_variance_ratio": float(shape_diagnostics["variance_ratio"].mean()),
             "pop_gate": "none; POP is continuous and POP>=50 is descriptive baseline only",
+            "expression_entry_contract": "first state per city/target-date where any expression has positive net edge and all three expressions are executable; all expressions scored on that shared state",
+        },
+        "trade_denominator": {
+            "common_entry_states": int(tickets["tmax_state_id"].nunique()) if len(tickets) else 0,
+            "common_entry_target_dates": int(tickets["target_date"].nunique()) if len(tickets) else 0,
+            "common_entry_city_dates": int(tickets[["city", "target_date"]].drop_duplicates().shape[0]) if len(tickets) else 0,
+            "expression_rows": int(len(tickets)),
+            "policy_specific_first_positive_rows_diagnostic_only": int(len(policy_specific_tickets)),
         },
         "promotion_gate": {"new_pit_target_dates_required": 30, "tail_tickets_required": 80, "fresh_book_coverage_required": 0.90},
         "weather_feature_attribution": {
@@ -1669,7 +1791,9 @@ def main() -> None:
         "weather_attribution_scorecard.csv": attribution,
         "calibration_bins.csv": calibration, "slice_scorecard.csv": slices,
         "distribution_shape_diagnostics.csv": shape_diagnostics,
-        "expression_ledger.csv": expr, "tickets.csv": tickets, "trade_scorecard.csv": trade,
+        "expression_ledger.csv": expr, "tickets.csv": tickets,
+        "policy_specific_tickets_diagnostic.csv": policy_specific_tickets,
+        "trade_scorecard.csv": trade,
         "daily_portfolio.csv": daily, "stability.csv": stability, "core_carry_daily.csv": core_daily,
         "core_carry_frozen_daily.csv": core_frozen_daily,
         "research_window_audit.csv": audit, "portfolio_correlation.csv": correlation,

@@ -5,9 +5,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
-from scripts.ops.convective_tail_distribution_shadow_v1 import build_outputs
+from scripts.analysis.forecast_quality.research_convective_tail_distribution_v1 import (
+    common_entry_expression_tickets,
+)
+from scripts.ops.convective_tail_distribution_shadow_v1 import build_outputs, candidate_rows
 from src.strategies.weather_edge_v1.tools.convective_tail_distribution import (
+    C4_CENTER_DIMENSIONS,
+    C4_TAIL_DIMENSIONS,
+    apply_challenger,
     fit_feature_transform,
     score_from_artifact,
     transform_features,
@@ -32,6 +39,86 @@ def test_frozen_candidate_returns_complete_distribution() -> None:
     assert len(probability) == 4
     assert probability.sum() == 1.0
     assert (probability > 0).all()
+
+
+def test_directional_neighbor_transport_moves_mass_with_warming_signal() -> None:
+    transform = fit_feature_transform([
+        {"warming_innovation_f": -2.0},
+        {"warming_innovation_f": 2.0},
+    ])
+    cold_feature = transform_features([{"warming_innovation_f": -2.0}], transform)[0]
+    hot_feature = transform_features([{"warming_innovation_f": 2.0}], transform)[0]
+    parameters = np.zeros(C4_CENTER_DIMENSIONS + C4_TAIL_DIMENSIONS)
+    parameters[3] = 3.0
+    parameters[C4_CENTER_DIMENSIONS] = 4.0
+    market = np.array([0.1, 0.4, 0.4, 0.1])
+    distances = np.array([-1.5, -0.5, 0.5, 1.5])
+    cold = apply_challenger(
+        "c5_directional_neighbor_transport", market, cold_feature, parameters, distances
+    )
+    hot = apply_challenger(
+        "c5_directional_neighbor_transport", market, hot_feature, parameters, distances
+    )
+    assert float(hot @ distances) > float(cold @ distances)
+    assert np.isclose(cold.sum(), 1.0)
+    assert np.isclose(hot.sum(), 1.0)
+
+
+def test_common_entry_scores_all_expressions_on_the_same_first_state() -> None:
+    rows = []
+    for state, decision, edges in (
+        ("state-1", "2026-08-09T10:00:00Z", (0.01, -0.02, -0.03)),
+        ("state-2", "2026-08-09T12:00:00Z", (0.02, 0.01, 0.01)),
+    ):
+        for policy, edge in zip(
+            ("single_yes", "adjacent_hot_strip", "bounded_hot_tail_basket"),
+            edges,
+            strict=True,
+        ):
+            rows.append({
+                "tmax_state_id": state,
+                "city": "London",
+                "target_date": "2026-08-09",
+                "decision_ts_utc": decision,
+                "policy": policy,
+                "predicted_edge": edge,
+            })
+    tickets = common_entry_expression_tickets(pd.DataFrame(rows))
+    assert set(tickets["tmax_state_id"]) == {"state-1"}
+    assert set(tickets["policy"]) == {
+        "single_yes",
+        "adjacent_hot_strip",
+        "bounded_hot_tail_basket",
+    }
+    assert tickets["common_entry_trigger"].all()
+    assert tickets["expression_positive_edge"].sum() == 1
+
+
+def test_shadow_candidates_choose_one_best_row_per_policy_and_share_trigger() -> None:
+    rungs = [
+        {
+            "bracket": str(70 + rank),
+            "condition_id": f"condition-{rank}",
+            "bracket_center_native": 70.0 + rank,
+            "yes_ask": 0.10,
+            "yes_ask_size": 20.0,
+            "yes_depth_ask_5c": 100.0,
+            "model_probability": probability,
+        }
+        for rank, probability in enumerate((0.30, 0.25, 0.20, 0.10))
+    ]
+    candidates = candidate_rows(
+        "model-output", "London", "2026-08-09", datetime(2026, 8, 9, tzinfo=timezone.utc),
+        rungs, 69.0, "test-build",
+    )
+    assert len(candidates) == 3
+    assert {row["expression_policy"] for row in candidates} == {
+        "single_yes",
+        "adjacent_hot_strip",
+        "bounded_hot_tail_basket",
+    }
+    assert all(row["common_entry_trigger"] for row in candidates)
+    assert all(row["selected_for_common_entry_score"] for row in candidates)
 
 
 def test_shadow_build_emits_model_and_candidates_without_execution_objects() -> None:
