@@ -25,7 +25,7 @@ collection_runtime = active central market_books Tmin full ladder for HongKong/S
 model_implementation = D-1 18:00 PIT panel + W0 weather residual development baseline
 probability_artifact = none
 forward = not_started
-runtime = central full-ladder collection + partial source telemetry; zero orders
+runtime = central full-ladder collection + cross-prev-NO zero-notional shadow; zero orders
 promotion = no live
 ```
 
@@ -229,6 +229,24 @@ current lowest observer 累计 48 个 source events、3,371 个 quote snapshots�
 source calibration 明确为 pending。7/29–8/9 的日期断层按 coverage gap 保留，不能从剩余日期反推策略质量。
 
 readiness verdict：`BLOCKED_FOR_FIT / KEEP_ZERO_NOTIONAL_COLLECTION`。
+
+### Cross previous-NO forward shadow
+
+`weather_tmin_cross_prev_no_shadow_v1` 把 Seoul AMOS 与 Tokyo JMA AMeDAS 的第一次向下跨档
+映射为“观察刚离开的上一档（更暖 exact bracket）的 NO”。它只消费现有
+`source_event_ladder_repricing_shadow/lowest_10m` event 与 fresh quote journal，不请求盘口、不读取
+私有 collector，也不创建订单。
+
+2026-08-11 启动时固定 raw denominator 为 49 个 first-cross events / 16 target dates；49 个都回连到
+首个 quote checkpoint，29 个有 raw executable NO ask。全部写成 WCIR `ModelOutput +
+SignalCandidate`，但在 next-colder-NO probability artifact 冻结前统一标
+`next_colder_no_model_not_frozen`，因此 scored/selected/TradeIntent/order/fill 均为 0。价格不作为
+signal eligibility gate；source→settlement alignment、official fee 与 settlement label 分别留在
+evidence funnel。
+
+生产 runtime 使用 `fast_observation` release
+`f0b390b4004a7397d7cefb73e899463ca210d668`，实例 identity 为
+`weather_tmin_cross_prev_no_shadow_v1`。
 
 ### 首轮实现与真实 denominator
 

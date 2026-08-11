@@ -30,7 +30,7 @@ production_releases:
     expected_repo_sha: 1afc04ec889d399466d5a69228775a5ed7b0ada0
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
-    expected_repo_sha: 2280ead248e38a5475f9c6366717050e522affba
+    expected_repo_sha: f0b390b4004a7397d7cefb73e899463ca210d668
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
     expected_repo_sha: 1866ed88f75608854e023f27cd3b3f63b231b610
@@ -380,6 +380,18 @@ managed_runtimes:
     max_health_age_sec: 1200
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: safe
+  - instance_id: weather_tmin_cross_prev_no_shadow_v1
+    tmux_session: weather_tmin_cross_prev_no_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: fast_observation
+    start_script: scripts/ops/start_weather_tmin_cross_prev_no_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tmin_cross_prev_no_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    dependencies: [weather_source_event_ladder_repricing_shadow]
     recovery_policy: safe
   - instance_id: market_implied_tail_residual_shadow_v1
     tmux_session: market_implied_tail_residual_shadow_v1
