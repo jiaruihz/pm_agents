@@ -2,6 +2,25 @@
 
 ## Tape / queue-conservative execution update（2026-08-11）
 
+同日又在**完整 D-1 ladder signal 分母**上重跑 execution matrix，而不是沿用 generic 60s tape。T-1 base
+覆盖47城、5,973 events/62,173 rungs/66 target dates（`2026-05-21..2026-08-10`）；secondary holdout
+为 `2026-07-30..2026-08-10`。legacy selector 共55个 signals，其中46个有 frozen 30m full-ladder
+continuation / 60m hard-exit 证据：42个可挂 `bid+1 native tick`，4个因新报价达到 ask 改按真实
+`TAKER_ASK+official fee`。
+
+- 若假设42个 maker 全成交，mixed 46笔 ROI `+27.92%`，target-date block-bootstrap 95% CI
+  `[+8.85%,+44.85%]`；移除最大赢家仍为 `+16.19%`。这是 fill-conditional 上限。
+- 42个 maker 中40个有60m window-min-ask证据，`0/40` observed ask 触及 `bid+1`；另2个缺60m
+  touch窗口。ask-touch 不能排除主动 SELL 直接打我们的 bid，因此它是保守 fill proxy，不是 `0 actual fills` 的证明。
+- 4个自动 taker（Dallas/Miami/Chicago/MexicoCity）全部亏，合计 ROI `-30.38%`；把同一46笔
+  全部改 taker 为 `-45.71%`，95% CI `[-56.96%,-34.95%]`。所以“bid+1碰ask就无条件taker”被当前
+  holdout 拒绝；cross 后必须按 ask+fee 重新算 edge，不能继承 maker-price signal。
+- fill-selection 敏感度仍留下可研究空间：即使所有26个亏损 maker 都成交，16个盈利 maker 只需成交
+  `22.39%` 的条件 PnL 才覆盖 maker亏损和4个taker亏损；最大赢家占正PnL `41.37%`。但旧 archive
+  没有这批 D-1 token 的 own queue/trade prints，不能用该数学缓冲替代 actual-fill 证据。
+
+可复跑结果：`forecast_repricing/full_ladder_mixed_execution_20260811_tminus1/{summary.json,report.md,secondary_holdout_legacy_execution_expressions.csv,position_policy.joblib}`。
+
 `0/48` 只表示旧 48 个 holdout quotes 没有 observed ask 跌到原 best bid，不能排除主动 SELL 打 bid；现已用
 现有 WS `last_trade_price` 做独立 execution transport 复核。固定 60s post、真实 SELL volume 吃完 visible
 queue+5 股才记保守成交：4,017 posts、44 possible fills、23 个 exit-scoreable fills，fixed60 ROI `-6.57%`
@@ -17,8 +36,9 @@ candidate 同分母 WS + own order lifecycle，不能拿本次 hot-strip 1日样
 generic 60s 结果不得用于扣减旧 D-1 selected-position `+36.39%`：旧策略实际是30m continuation
 checkpoint / 60m hard exit。对旧49笔改成native bid+1 tick，3笔因达到ask不再post-only；余下46笔在冻结
 原dynamic exit path后，条件ROI仍为`+25.20%`（原同子集`+36.60%`），剔除最大赢家仍为`+13.69%`。
-所以1个native tick不会消灭条件edge；当前唯一关键未知是actual fills是否逆向集中于31笔亏单。generic tape
-只能证明无signal普挂逆选，不能回答D-1 selected fill distribution。
+所以1个native tick不会消灭条件edge；上面的T-1同分母重跑已将范围更新为46个动态可评分仓位中的
+42 maker/4 taker，并确认关键未知仍是actual fills是否逆向集中于亏单。generic tape只能证明无signal普挂
+逆选，不能回答D-1 selected fill distribution。
 
 历史 D-1 已更新至 `2026-08-10`：5,973 events/62,173 rungs/66 dates。entry challenger 相对 M0 的 holdout
 MSE delta `-0.000000487`，CI `[-0.000001851,+0.000000939]`，仍跨0；新 holdout anti-toxic selector 选择0笔，

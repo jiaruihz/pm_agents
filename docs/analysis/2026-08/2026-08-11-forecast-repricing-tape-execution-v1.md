@@ -66,6 +66,37 @@ postable 子集调整后 ROI 为 `-3.07%`，不能把“+1 tick”写成“+1 ce
 可能集中成交31笔亏损而跳过15笔赢家。旧 archive 没有这些 D-1 token 的同期 tape/queue/own-order lifecycle，
 所以当前正确状态是“signal-conditioned native bid+1 tick 值得采集验证”，不是“被 generic 60s 反证”。
 
+### T-1 full-ladder 同分母 mixed execution 重跑
+
+上述旧49笔诊断随后用截至 `2026-08-10` 的完整 ladder panel、当前 chronological split 和同一条 frozen
+30m continuation/60m hard-exit重新训练与回放。基础分母为47城、5,973 D-1 events、62,173 rungs、66 dates；
+secondary holdout=`2026-07-30..2026-08-10`。55个 signals 中46个动态退出可评分（29城/11 active dates），
+其余9个是30/60m checkpoint coverage gap，不是策略筛除。
+
+| 同一 signal / 同一退出路径 | positions/fills | maker | taker | ROI | target-date 95% CI |
+|---|---:|---:|---:|---:|---:|
+| best bid，假设maker全成交 | 46 | 46 | 0 | +40.45% | [+21.26%,+56.57%] |
+| native bid+1，假设maker全成交 | 42 | 42 | 0 | +28.64% | [+10.04%,+46.90%] |
+| bid+1；碰ask则taker，假设maker全成交 | 46 | 42 | 4 | +27.92% | [+8.85%,+44.85%] |
+| bid+1 ask-touch代理；碰ask则taker | 4 | 0 | 4 | -30.38% | [-54.76%,-24.56%] |
+| 全部taker（1 share depth） | 46 | 0 | 46 | -45.71% | [-56.96%,-34.95%] |
+
+关键不是“一个tick是否吃掉利润”——答案是否定的；而是 maker 到底成交谁。42个动态可评分 maker 中
+40个有60m window-min-ask，`0/40` observed ask 触及 `bid+1`，另外2个缺该窗口。该 proxy 很保守：主动
+SELL 可以直接打最高 bid 而不留下 ask 下移，所以不能据此断言实际0成交；但也不能把42个全记为成交。
+
+4个会cross的票（Dallas 106-107、Miami 82-83、Chicago 90-91、MexicoCity 21）按 entry ask+官方fee
+立即买入后全部亏。因此无条件 `TAKER_ASK` fallback 被拒绝；未来 route 必须在 cross 时用 ask+fee 重算
+full-ladder predicted EV。条件maker的16个赢家合计 `+$0.4061`、26个亏/平合计 `-$0.0868`，自动taker
+再亏 `-$0.00415`；若所有亏损maker均成交，赢家兑现 `22.39%` 的条件PnL可保本。移除最大赢家后
+fill-conditional mixed ROI仍 `+16.19%`，但这仍不是actual-fill ROI。
+
+盈利来源也不是 maker 退出或 fee rebate：42个条件maker以 `bid+1` 入场，30m根据完整ladder决定退出或
+持到60m，最终统一按 future bid、扣官方退出fee。scoreable mixed entry cost中位数仅 `2.1c`，条件收益主要
+来自少数低价tail rung大幅repricing：KualaLumpur `22c→40c`贡献`+$0.1680`，SaoPaulo贡献`+$0.0551`，
+PanamaCity `+$0.0362`，Lucknow `+$0.0262`，MexicoCity合计`+$0.0259`。最大赢家占全部正PnL `41.37%`；
+`2026-08-08`单日贡献`+$0.1625`。因此百分比收益高既有低基数，也有明显单城/单日集中，不能只看总ROI。
+
 ## 更新到 T-1（2026-08-10）
 
 历史重建输入已从 `2026-05-21..2026-08-09` 增量到 `2026-05-21..2026-08-10`：
@@ -104,6 +135,7 @@ development 33 quotes / 1 negative proxy fill（ROI `-11.45%`），holdout 2 quo
   - SHA-256 `eb2fe47a82fa309f8d8908f709f5fa909c34a78fa0faa5bb2380e95affffdcb5`
 - position：`forecast_repricing/full_ladder_position_20260811_tminus1/position_policy.joblib`
   - SHA-256 `c7074670a73eb26e461a94aa68e15cb502edbf8c60246515ca81067d12599c26`
+- mixed full-ladder execution：`forecast_repricing/full_ladder_mixed_execution_20260811_tminus1/{summary.json,report.md,secondary_holdout_legacy_execution_expressions.csv,position_policy.joblib}`
 - tape：`forecast_repricing/tape_passive_execution_20260810/{passive_orders.csv,policy_summary.csv,summary.json,report.md}`
 - native tick A/B：`forecast_repricing/tape_passive_native_tick_20260810/{passive_orders.csv,policy_summary.csv,summary.json,report.md}`
 - fixed +1c A/B：`forecast_repricing/tape_passive_plus_cent_20260810/{passive_orders.csv,policy_summary.csv,summary.json,report.md}`

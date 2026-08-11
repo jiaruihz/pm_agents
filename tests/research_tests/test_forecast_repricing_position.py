@@ -287,3 +287,92 @@ def test_exit_uplift_uses_identical_positions_and_date_blocks() -> None:
     assert result["candidate_roi"] == pytest.approx(0.05)
     assert result["baseline_roi"] == pytest.approx(-0.025)
     assert result["roi_delta"] == pytest.approx(0.075)
+
+
+def test_mixed_execution_uses_native_tick_and_taker_when_quote_reaches_ask() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "target_date": "2026-08-01",
+                "entry_bid": 0.020,
+                "entry_ask": 0.040,
+                "entry_ask_size": 5.0,
+                "h30_bid": 0.050,
+                "h60_bid": 0.060,
+                "h60_window_min_ask": 0.021,
+                "dynamic_exit_bid": 0.060,
+                "dynamic_exit_fee": subject.weather_fee(0.060),
+            },
+            {
+                "target_date": "2026-08-01",
+                "entry_bid": 0.001,
+                "entry_ask": 0.002,
+                "entry_ask_size": 5.0,
+                "h30_bid": 0.003,
+                "h60_bid": 0.004,
+                "h60_window_min_ask": 0.002,
+                "dynamic_exit_bid": 0.004,
+                "dynamic_exit_fee": subject.weather_fee(0.004),
+            },
+            {
+                "target_date": "2026-08-02",
+                "entry_bid": 0.040,
+                "entry_ask": 0.080,
+                "entry_ask_size": 0.5,
+                "h30_bid": 0.050,
+                "h60_bid": 0.060,
+                "h60_window_min_ask": 0.060,
+                "dynamic_exit_bid": 0.060,
+                "dynamic_exit_fee": subject.weather_fee(0.060),
+            },
+        ]
+    )
+
+    priced = subject.add_mixed_execution_expressions(frame)
+
+    assert priced.loc[0, "native_entry_tick"] == pytest.approx(0.001)
+    assert priced.loc[0, "maker_plus_tick_price"] == pytest.approx(0.021)
+    assert priced.loc[0, "mixed_entry_route"] == "MAKER_BID_PLUS_TICK"
+    assert priced.loc[0, "maker_plus_tick_touch_proxy"] == pytest.approx(1.0)
+
+    assert priced.loc[1, "maker_plus_tick_price"] == pytest.approx(0.002)
+    assert priced.loc[1, "mixed_entry_route"] == "TAKER_ASK"
+    assert priced.loc[1, "mixed_entry_cost"] == pytest.approx(
+        0.002 + subject.weather_fee(0.002)
+    )
+
+    assert priced.loc[2, "native_entry_tick"] == pytest.approx(0.01)
+    assert priced.loc[2, "maker_plus_tick_price"] == pytest.approx(0.05)
+    assert priced.loc[2, "mixed_entry_route"] == "MAKER_BID_PLUS_TICK"
+
+
+def test_mixed_fill_sensitivity_keeps_taker_fills_immediate() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "mixed_entry_route": "MAKER_BID_PLUS_TICK",
+                "mixed_dynamic_pnl": 0.10,
+                "mixed_entry_cost": 0.20,
+            },
+            {
+                "mixed_entry_route": "MAKER_BID_PLUS_TICK",
+                "mixed_dynamic_pnl": -0.02,
+                "mixed_entry_cost": 0.10,
+            },
+            {
+                "mixed_entry_route": "TAKER_ASK",
+                "mixed_dynamic_pnl": -0.01,
+                "mixed_entry_cost": 0.05,
+            },
+        ]
+    )
+
+    result = subject._mixed_fill_sensitivity(frame)
+
+    assert result["winner_fill_rate_break_even_if_all_losers_fill"] == pytest.approx(
+        0.30
+    )
+    assert result["winner_fill_rate_break_even_if_loser_rate_is_2x"] == pytest.approx(
+        1.0 / 6.0
+    )
+    assert result["conditional_roi_without_top_winner"] == pytest.approx(-0.20)

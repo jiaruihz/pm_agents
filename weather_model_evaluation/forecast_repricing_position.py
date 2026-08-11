@@ -1027,6 +1027,222 @@ def _position_stats(
     }
 
 
+def _add_dynamic_exit_policy(
+    entries: pd.DataFrame, exit_model: Any
+) -> pd.DataFrame:
+    """Apply the frozen 30m full-ladder continuation / 60m hard-exit head."""
+
+    work = entries.copy()
+    for column in (
+        "predicted_continuation_net_value",
+        "position_action_at_30m",
+        "position_exit_horizon_min",
+        "dynamic_exit_bid",
+        "dynamic_exit_fee",
+        "dynamic_position_pnl",
+        "fixed_30_pnl",
+        "fixed_60_pnl",
+    ):
+        if column not in work:
+            work[column] = np.nan
+    if work.empty:
+        return work
+    work["predicted_continuation_net_value"] = _predict(
+        exit_model, work, CONTINUATION_FEATURES
+    )
+    work["position_action_at_30m"] = np.where(
+        work["predicted_continuation_net_value"] > 0.0, "HOLD", "EXIT"
+    )
+    work["position_exit_horizon_min"] = np.where(
+        work["position_action_at_30m"].eq("HOLD"), 60, 30
+    )
+    work["dynamic_exit_bid"] = np.where(
+        work["position_action_at_30m"].eq("HOLD"),
+        work["h60_bid"],
+        work["h30_bid"],
+    )
+    work["dynamic_exit_fee"] = weather_fee(work["dynamic_exit_bid"])
+    work["dynamic_position_pnl"] = (
+        work["dynamic_exit_bid"]
+        - work["dynamic_exit_fee"]
+        - work["entry_bid"]
+    )
+    for horizon in (30, 60):
+        work[f"fixed_{horizon}_pnl"] = (
+            work[f"h{horizon}_bid"]
+            - weather_fee(work[f"h{horizon}_bid"])
+            - work["entry_bid"]
+        )
+    return work
+
+
+def _native_entry_tick(frame: pd.DataFrame) -> pd.Series:
+    bid = pd.to_numeric(frame["entry_bid"], errors="coerce")
+    ask = pd.to_numeric(frame["entry_ask"], errors="coerce")
+    non_cent = (
+        (bid.mul(100.0).sub(bid.mul(100.0).round()).abs() > 1e-8)
+        | (ask.mul(100.0).sub(ask.mul(100.0).round()).abs() > 1e-8)
+    )
+    extreme = bid.lt(0.04 - 1e-12) | ask.gt(0.96 + 1e-12)
+    return pd.Series(np.where(non_cent | extreme, 0.001, 0.01), index=frame.index)
+
+
+def add_mixed_execution_expressions(entries: pd.DataFrame) -> pd.DataFrame:
+    """Price fixed-signal entries under maker/taker execution expressions.
+
+    The signal and full-ladder exit path are held fixed.  A native bid+1 quote
+    remains maker only when it is strictly below the ask; otherwise the mixed
+    expression crosses the displayed ask and pays the official Weather fee.
+    Maker rows remain fill-conditional because the historical D-1 archive has
+    no own-order/queue lifecycle.
+    """
+
+    work = entries.copy()
+    work["native_entry_tick"] = _native_entry_tick(work)
+    work["maker_plus_tick_price"] = work["entry_bid"] + work["native_entry_tick"]
+    work["maker_plus_tick_postable"] = (
+        work["maker_plus_tick_price"] < work["entry_ask"] - 1e-12
+    )
+    h60_window_min_ask = pd.to_numeric(
+        work.get(
+            "h60_window_min_ask",
+            pd.Series(np.nan, index=work.index, dtype=float),
+        ),
+        errors="coerce",
+    )
+    maker_touch_scoreable = h60_window_min_ask.notna()
+    work["maker_plus_tick_touch_proxy"] = np.where(
+        maker_touch_scoreable,
+        h60_window_min_ask <= work["maker_plus_tick_price"] + 1e-12,
+        np.nan,
+    )
+    work["taker_ask_one_share_executable"] = (
+        pd.to_numeric(work["entry_ask_size"], errors="coerce").ge(1.0)
+    )
+    work["taker_entry_fee"] = weather_fee(work["entry_ask"])
+    work["taker_entry_cost"] = work["entry_ask"] + work["taker_entry_fee"]
+    work["mixed_entry_route"] = np.where(
+        work["maker_plus_tick_postable"], "MAKER_BID_PLUS_TICK", "TAKER_ASK"
+    )
+    work["mixed_entry_executable"] = (
+        work["maker_plus_tick_postable"] | work["taker_ask_one_share_executable"]
+    )
+    work["mixed_fill_proxy"] = np.where(
+        work["maker_plus_tick_postable"],
+        work["maker_plus_tick_touch_proxy"],
+        work["taker_ask_one_share_executable"].astype(float),
+    )
+    work["mixed_entry_cost"] = np.where(
+        work["maker_plus_tick_postable"],
+        work["maker_plus_tick_price"],
+        work["taker_entry_cost"],
+    )
+    work.loc[~work["mixed_entry_executable"], "mixed_entry_cost"] = np.nan
+    work["dynamic_exit_net_proceeds"] = (
+        work["dynamic_exit_bid"] - work["dynamic_exit_fee"]
+    )
+    work["best_bid_conditional_dynamic_pnl"] = (
+        work["dynamic_exit_net_proceeds"] - work["entry_bid"]
+    )
+    work["plus_tick_conditional_dynamic_pnl"] = (
+        work["dynamic_exit_net_proceeds"] - work["maker_plus_tick_price"]
+    ).where(work["maker_plus_tick_postable"])
+    work["mixed_dynamic_pnl"] = (
+        work["dynamic_exit_net_proceeds"] - work["mixed_entry_cost"]
+    )
+    work["all_taker_dynamic_pnl"] = (
+        work["dynamic_exit_net_proceeds"] - work["taker_entry_cost"]
+    ).where(work["taker_ask_one_share_executable"])
+    for horizon in (30, 60):
+        proceeds = work[f"h{horizon}_bid"] - weather_fee(work[f"h{horizon}_bid"])
+        work[f"mixed_fixed_{horizon}_pnl"] = proceeds - work["mixed_entry_cost"]
+    return work
+
+
+def _execution_expression_stats(
+    frame: pd.DataFrame,
+    *,
+    pnl_column: str,
+    cost_column: str,
+    draws: int,
+    seed: int,
+) -> dict[str, Any]:
+    stats = _position_stats(
+        frame,
+        pnl_column,
+        cost_column=cost_column,
+        draws=draws,
+        seed=seed,
+    )
+    work = frame.dropna(subset=[pnl_column, cost_column]).copy()
+    stats.update(
+        {
+            "positive_positions": int(work[pnl_column].gt(0.0).sum()),
+            "negative_or_flat_positions": int(work[pnl_column].le(0.0).sum()),
+            "maker_routes": int(
+                work.get("mixed_entry_route", pd.Series(index=work.index, dtype=object))
+                .eq("MAKER_BID_PLUS_TICK")
+                .sum()
+            ),
+            "taker_routes": int(
+                work.get("mixed_entry_route", pd.Series(index=work.index, dtype=object))
+                .eq("TAKER_ASK")
+                .sum()
+            ),
+        }
+    )
+    return stats
+
+
+def _mixed_fill_sensitivity(frame: pd.DataFrame) -> dict[str, Any]:
+    """Stress maker winner/loser fill asymmetry while taker rows fill immediately."""
+
+    work = frame.dropna(subset=["mixed_dynamic_pnl", "mixed_entry_cost"]).copy()
+    maker = work.loc[work["mixed_entry_route"].eq("MAKER_BID_PLUS_TICK")]
+    taker = work.loc[work["mixed_entry_route"].eq("TAKER_ASK")]
+    winner = maker.loc[maker["mixed_dynamic_pnl"].gt(0.0)]
+    loser = maker.loc[maker["mixed_dynamic_pnl"].le(0.0)]
+    winner_pnl = float(winner["mixed_dynamic_pnl"].sum())
+    loser_pnl = float(loser["mixed_dynamic_pnl"].sum())
+    taker_pnl = float(taker["mixed_dynamic_pnl"].sum())
+    positive = winner["mixed_dynamic_pnl"]
+    all_loser_threshold = (
+        -(loser_pnl + taker_pnl) / winner_pnl if winner_pnl > 0.0 else math.nan
+    )
+    two_x_denominator = winner_pnl + 2.0 * loser_pnl
+    two_x_loser_threshold = (
+        -taker_pnl / two_x_denominator
+        if two_x_denominator > 0.0
+        else math.nan
+    )
+    conditional_cost = float(work["mixed_entry_cost"].sum())
+    top_index = (
+        winner["mixed_dynamic_pnl"].idxmax() if not winner.empty else None
+    )
+    without_top_roi = math.nan
+    if top_index is not None:
+        without_top_cost = conditional_cost - float(work.loc[top_index, "mixed_entry_cost"])
+        without_top_pnl = float(work["mixed_dynamic_pnl"].sum()) - float(
+            work.loc[top_index, "mixed_dynamic_pnl"]
+        )
+        if without_top_cost > 0.0:
+            without_top_roi = without_top_pnl / without_top_cost
+    return {
+        "maker_winners": int(len(winner)),
+        "maker_losers_or_flat": int(len(loser)),
+        "maker_winner_pnl_usd": winner_pnl,
+        "maker_loser_pnl_usd": loser_pnl,
+        "taker_positions": int(len(taker)),
+        "taker_pnl_usd": taker_pnl,
+        "winner_fill_rate_break_even_if_all_losers_fill": all_loser_threshold,
+        "winner_fill_rate_break_even_if_loser_rate_is_2x": two_x_loser_threshold,
+        "positive_pnl_top_trade_share": (
+            float(positive.max() / positive.sum()) if not positive.empty else math.nan
+        ),
+        "conditional_roi_without_top_winner": without_top_roi,
+    }
+
+
 def _paired_position_delta(
     frame: pd.DataFrame,
     candidate_pnl: str,
@@ -1172,6 +1388,8 @@ def train_position_policy(
         execution_style="maker_fill_gated",
         threshold=maker_threshold,
     ).copy()
+    legacy_entries = _add_dynamic_exit_policy(legacy_entries, exit_model)
+    legacy_execution = add_mixed_execution_expressions(legacy_entries)
 
     family_oof: dict[str, pd.DataFrame] = {}
     threshold_tables: list[pd.DataFrame] = []
@@ -1273,45 +1491,7 @@ def train_position_policy(
         touch_probability_min=touch_probability_min,
         touch_conditional_pnl_min=touch_conditional_pnl_min,
     ).copy()
-    for column in (
-        "predicted_continuation_net_value",
-        "position_action_at_30m",
-        "position_exit_horizon_min",
-        "dynamic_exit_bid",
-        "dynamic_exit_fee",
-        "dynamic_position_pnl",
-        "fixed_30_pnl",
-        "fixed_60_pnl",
-    ):
-        if column not in entries:
-            entries[column] = np.nan
-    if not entries.empty:
-        entries["predicted_continuation_net_value"] = _predict(
-            exit_model, entries, CONTINUATION_FEATURES
-        )
-        entries["position_action_at_30m"] = np.where(
-            entries["predicted_continuation_net_value"] > 0.0, "HOLD", "EXIT"
-        )
-        entries["position_exit_horizon_min"] = np.where(
-            entries["position_action_at_30m"].eq("HOLD"), 60, 30
-        )
-        entries["dynamic_exit_bid"] = np.where(
-            entries["position_action_at_30m"].eq("HOLD"),
-            entries["h60_bid"],
-            entries["h30_bid"],
-        )
-        entries["dynamic_exit_fee"] = weather_fee(entries["dynamic_exit_bid"])
-        entries["dynamic_position_pnl"] = (
-            entries["dynamic_exit_bid"]
-            - entries["dynamic_exit_fee"]
-            - entries["entry_bid"]
-        )
-        for horizon in (30, 60):
-            entries[f"fixed_{horizon}_pnl"] = (
-                entries[f"h{horizon}_bid"]
-                - weather_fee(entries[f"h{horizon}_bid"])
-                - entries["entry_bid"]
-            )
+    entries = _add_dynamic_exit_policy(entries, exit_model)
 
     completion_development = _select_completion_quotes(development)
     completion_holdout = _select_completion_quotes(holdout)
@@ -1350,6 +1530,13 @@ def train_position_policy(
         "touch_conditional_pnl_min": touch_conditional_pnl_min,
         "maker_quote_ttl_min": 60,
         "primary_policy": "full_ladder_completion_v1",
+        "execution_challenger": {
+            "entry": "native_bid_plus_tick_else_taker_ask",
+            "maker_fill_evidence": "h60_window_min_ask_touch_proxy_only",
+            "taker_depth": "displayed_entry_ask_size_ge_1_share",
+            "entry_fee": "official_weather_fee_for_taker_only",
+            "exit": "30m_full_ladder_continuation_else_60m_hard_exit",
+        },
         "research_verdict": (
             "development_gate_pass"
             if completion_development_gate
@@ -1378,6 +1565,7 @@ def train_position_policy(
         "holdout": holdout,
         "positions": entries,
         "legacy_positions": legacy_entries,
+        "legacy_execution": legacy_execution,
         "completion_development": completion_development,
         "completion_holdout": completion_holdout,
         "completion_development_stats": completion_development_stats,
@@ -1399,6 +1587,66 @@ def train_position_policy(
         "legacy_proxy_fill_holdout": _proxy_fill_stats(
             legacy_entries, draws=draws, seed=20260822
         ),
+        "legacy_best_bid_dynamic": _execution_expression_stats(
+            legacy_execution,
+            pnl_column="best_bid_conditional_dynamic_pnl",
+            cost_column="entry_bid",
+            draws=draws,
+            seed=20260831,
+        ),
+        "legacy_plus_tick_dynamic": _execution_expression_stats(
+            legacy_execution.loc[legacy_execution["maker_plus_tick_postable"]],
+            pnl_column="plus_tick_conditional_dynamic_pnl",
+            cost_column="maker_plus_tick_price",
+            draws=draws,
+            seed=20260832,
+        ),
+        "legacy_plus_tick_proxy_dynamic": _execution_expression_stats(
+            legacy_execution.loc[
+                legacy_execution["maker_plus_tick_postable"]
+                & legacy_execution["maker_plus_tick_touch_proxy"].eq(1.0)
+            ],
+            pnl_column="plus_tick_conditional_dynamic_pnl",
+            cost_column="maker_plus_tick_price",
+            draws=draws,
+            seed=20260837,
+        ),
+        "legacy_mixed_dynamic": _execution_expression_stats(
+            legacy_execution.loc[legacy_execution["mixed_entry_executable"]],
+            pnl_column="mixed_dynamic_pnl",
+            cost_column="mixed_entry_cost",
+            draws=draws,
+            seed=20260833,
+        ),
+        "legacy_mixed_fill_proxy_dynamic": _execution_expression_stats(
+            legacy_execution.loc[legacy_execution["mixed_fill_proxy"].eq(1.0)],
+            pnl_column="mixed_dynamic_pnl",
+            cost_column="mixed_entry_cost",
+            draws=draws,
+            seed=20260838,
+        ),
+        "legacy_all_taker_dynamic": _execution_expression_stats(
+            legacy_execution.loc[legacy_execution["taker_ask_one_share_executable"]],
+            pnl_column="all_taker_dynamic_pnl",
+            cost_column="taker_entry_cost",
+            draws=draws,
+            seed=20260834,
+        ),
+        "legacy_mixed_fixed_30": _execution_expression_stats(
+            legacy_execution.loc[legacy_execution["mixed_entry_executable"]],
+            pnl_column="mixed_fixed_30_pnl",
+            cost_column="mixed_entry_cost",
+            draws=draws,
+            seed=20260835,
+        ),
+        "legacy_mixed_fixed_60": _execution_expression_stats(
+            legacy_execution.loc[legacy_execution["mixed_entry_executable"]],
+            pnl_column="mixed_fixed_60_pnl",
+            cost_column="mixed_entry_cost",
+            draws=draws,
+            seed=20260836,
+        ),
+        "legacy_mixed_fill_sensitivity": _mixed_fill_sensitivity(legacy_execution),
         "dynamic": _position_stats(
             entries,
             "dynamic_position_pnl",
@@ -1489,6 +1737,10 @@ def write_position_policy_outputs(
     result["legacy_positions"].to_csv(
         output_dir / "secondary_holdout_legacy_positions.csv", index=False
     )
+    result["legacy_execution"].to_csv(
+        output_dir / "secondary_holdout_legacy_execution_expressions.csv",
+        index=False,
+    )
     result["completion_development"].to_csv(
         output_dir / "development_completion_quotes.csv", index=False
     )
@@ -1530,6 +1782,21 @@ def write_position_policy_outputs(
         "touch_classifier_holdout": result["touch_classifier_holdout"],
         "proxy_fill_holdout": result["proxy_fill_holdout"],
         "legacy_proxy_fill_holdout": result["legacy_proxy_fill_holdout"],
+        "execution_expressions": {
+            "best_bid_fill_conditional": result["legacy_best_bid_dynamic"],
+            "native_bid_plus_tick_fill_conditional": result[
+                "legacy_plus_tick_dynamic"
+            ],
+            "native_bid_plus_tick_touch_proxy": result[
+                "legacy_plus_tick_proxy_dynamic"
+            ],
+            "mixed_fill_conditional": result["legacy_mixed_dynamic"],
+            "mixed_fill_proxy": result["legacy_mixed_fill_proxy_dynamic"],
+            "all_taker_one_share": result["legacy_all_taker_dynamic"],
+            "mixed_fixed_30": result["legacy_mixed_fixed_30"],
+            "mixed_fixed_60": result["legacy_mixed_fixed_60"],
+        },
+        "mixed_fill_sensitivity": result["legacy_mixed_fill_sensitivity"],
         "completion_development_gate": result["completion_development_gate"],
         "completion_development": result["completion_development_stats"],
         "completion_holdout": result["completion_holdout_stats"],
@@ -1556,6 +1823,12 @@ def write_position_policy_outputs(
             "h60_touch_scoreable_rungs": result["denominator"]["h60_touch_scoreable_rungs"],
             "h60_trade_through_proxy_rungs": result["denominator"]["h60_trade_through_proxy_rungs"],
             "selected_trade_through_proxies": result["proxy_fill_holdout"]["proxy_fills"],
+            "legacy_execution_signals": int(len(result["legacy_execution"])),
+            "mixed_maker_routes": result["legacy_mixed_dynamic"]["maker_routes"],
+            "mixed_taker_routes": result["legacy_mixed_dynamic"]["taker_routes"],
+            "mixed_fill_proxy_positions": result["legacy_mixed_fill_proxy_dynamic"][
+                "positions"
+            ],
             "completion_selected_quotes": result["completion_holdout_stats"]["selected_quotes"],
             "completion_proxy_fills": result["completion_holdout_stats"][
                 "proxy_fills_with_complete_hedge"
@@ -1576,6 +1849,8 @@ def write_position_policy_outputs(
     touch = safe["touch_classifier_holdout"]
     completion_dev = safe["completion_development"]
     completion_holdout = safe["completion_holdout"]
+    expressions = safe["execution_expressions"]
+    fill_sensitivity = safe["mixed_fill_sensitivity"]
     report = f"""# Forecast repricing full-ladder position policy
 
 significance={'PASS' if holdout_delta['ci_high'] is not None and holdout_delta['ci_high'] < 0 else 'FAIL'}
@@ -1584,6 +1859,30 @@ forward=NA; secondary reconstructed holdout only
 execution=best-bid maker quote; 60m ask trade-through proxy; anti-toxicity gate; dynamic full-ladder re-score; actual fills=0
 
 production: live_action=none; orders_changed=0
+
+## Same-signal execution expressions
+
+下面所有行使用同一批 legacy full-ladder signal 和同一条 30m continuation / 60m hard-exit
+路径。`fill conditional` 假定所有 maker 报价均成交，是上限而非可执行回测；`touch proxy`
+只把 60 分钟窗口内 observed ask 触及报价的 maker 行计作成交；taker 行按 entry ask、官方 fee
+和至少 1 share displayed depth 计。
+
+| expression | positions/fills | dates | maker | taker | ROI | 95% CI |
+|---|---:|---:|---:|---:|---:|---:|
+| best bid, fill conditional | {expressions['best_bid_fill_conditional']['positions']} | {expressions['best_bid_fill_conditional']['target_dates']} | {expressions['best_bid_fill_conditional']['positions']} | 0 | {expressions['best_bid_fill_conditional']['roi']} | [{expressions['best_bid_fill_conditional']['ci_low']}, {expressions['best_bid_fill_conditional']['ci_high']}] |
+| native bid+1, fill conditional | {expressions['native_bid_plus_tick_fill_conditional']['positions']} | {expressions['native_bid_plus_tick_fill_conditional']['target_dates']} | {expressions['native_bid_plus_tick_fill_conditional']['positions']} | 0 | {expressions['native_bid_plus_tick_fill_conditional']['roi']} | [{expressions['native_bid_plus_tick_fill_conditional']['ci_low']}, {expressions['native_bid_plus_tick_fill_conditional']['ci_high']}] |
+| native bid+1, touch proxy | {expressions['native_bid_plus_tick_touch_proxy']['positions']} | {expressions['native_bid_plus_tick_touch_proxy']['target_dates']} | {expressions['native_bid_plus_tick_touch_proxy']['positions']} | 0 | {expressions['native_bid_plus_tick_touch_proxy']['roi']} | [{expressions['native_bid_plus_tick_touch_proxy']['ci_low']}, {expressions['native_bid_plus_tick_touch_proxy']['ci_high']}] |
+| bid+1 else taker, fill conditional | {expressions['mixed_fill_conditional']['positions']} | {expressions['mixed_fill_conditional']['target_dates']} | {expressions['mixed_fill_conditional']['maker_routes']} | {expressions['mixed_fill_conditional']['taker_routes']} | {expressions['mixed_fill_conditional']['roi']} | [{expressions['mixed_fill_conditional']['ci_low']}, {expressions['mixed_fill_conditional']['ci_high']}] |
+| bid+1 touch proxy else taker | {expressions['mixed_fill_proxy']['positions']} | {expressions['mixed_fill_proxy']['target_dates']} | {expressions['mixed_fill_proxy']['maker_routes']} | {expressions['mixed_fill_proxy']['taker_routes']} | {expressions['mixed_fill_proxy']['roi']} | [{expressions['mixed_fill_proxy']['ci_low']}, {expressions['mixed_fill_proxy']['ci_high']}] |
+| all taker, 1 share | {expressions['all_taker_one_share']['positions']} | {expressions['all_taker_one_share']['target_dates']} | 0 | {expressions['all_taker_one_share']['positions']} | {expressions['all_taker_one_share']['roi']} | [{expressions['all_taker_one_share']['ci_low']}, {expressions['all_taker_one_share']['ci_high']}] |
+
+Mixed route 的固定退出诊断：30m ROI={expressions['mixed_fixed_30']['roi']}，60m ROI={expressions['mixed_fixed_60']['roi']}。
+
+Maker 成交敏感度：若全部亏损 maker 都成交，盈利 maker 至少要成交其
+{fill_sensitivity['winner_fill_rate_break_even_if_all_losers_fill']} 才能覆盖 maker 亏损和自动 taker 亏损；
+即使亏损 maker 的成交率是盈利 maker 的 2 倍，盈利 maker 成交率超过
+{fill_sensitivity['winner_fill_rate_break_even_if_loser_rate_is_2x']} 时组合数学期望才转正。最大赢家占正 PnL
+{fill_sensitivity['positive_pnl_top_trade_share']}；移除它后的条件 ROI={fill_sensitivity['conditional_roi_without_top_winner']}。
 
 ## Primary completion expression
 
