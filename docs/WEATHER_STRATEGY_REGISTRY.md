@@ -149,6 +149,14 @@ daily_low_temperature   Tmin 日内路径：双冷却窗口内判断是否会再
 
 ### Amsterdam KNMI previous-bracket NO（2026-07-28）
 
+2026-08-11 clean-forward 更新：`.7°C` first-seen 固定规则累计 23 个 signal/8日，其中 4 个具备
+t0 NO ask≤0.97 与至少5-share depth；3个已结算均胜，5-share官方fee后 ROI `+15.81%`，另1个open。
+但4笔在入场时已经全部是market favorite，且taker买入后在+15/+30/+60/+120/+300秒卖回bid的组合ROI
+均为负，因此只保留为“持有至结算”的低样本forward cohort，不能称weather alpha或短线退出alpha。
+同分母probability上，V7 clean 144 rows/4日的date-equal ΔBrier=`+0.16021`（model-market，CI全正）；
+market-prior A 143/4日也为`+0.001905`（CI全正）。V7不再作为standalone fair price，market-prior A冻结为
+negative control；不改变现有production行为。详见 [8/11 scorecard](analysis/2026-08/2026-08-04-amsterdam-crossno-v7-shadow-scorecard-v1.md)。
+
 `knmi_ta_prev_no_v1` 当前为 `shadow_candidate / zero-notional only`：10 个 PIT-book days
 中 `ta +0.5°C / 1 confirmation` 有 4 笔可执行、4 胜，Weather taker fee 后 ROI
 `+6.61%`，但仅 4 个独立交易日；冻结 holdout 为 2 笔、2 胜、ROI `+4.48%`。

@@ -1,7 +1,7 @@
 # 跨城市细粒度温度模型：统一研究与评测约定
 
 Status: current-source
-Updated: 2026-08-09 cross-city first-seen/repricing model review
+Updated: 2026-08-11 Amsterdam KNMI frozen-forward shadow review
 Scope: 城市级日内温度概率模型的方法、评测和知识沉淀；运行边界服从 `WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md`，不规定统一算法或统一特征
 
 ## 1. 核心决定
@@ -31,7 +31,7 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 
 | 城市 | 稳定模型/接入身份 | 已吸收结论 | 当前研究动作 |
 |---|---|---|---|
-| Amsterdam | WCIR Amsterdam adapter；weather head 保留，交易头改为 market-prior + KNMI innovation | standalone weather probability 不能直接当 fair price；captured-book D1 上 market-prior 仅点估改善，CI 跨零且交易未胜纯 market direction | zero-notional；补真实 first-seen lineage 与 frozen forward · [paradigm](analysis/2026-08/2026-08-04-amsterdam-market-prior-event-innovation-paradigm-v1.md) · [executable null](analysis/2026-08/2026-08-04-amsterdam-executable-market-null-v2.md) |
+| Amsterdam | WCIR Amsterdam adapter；V7 weather head、market-prior A 与 next-routine head分层 | clean 8/6–10 上 V7 144 rows/4日、market-prior A 143/4日都输同刻market；V7 date-equal ΔBrier `+0.16021` CI全正，market-prior A `+0.001905` CI也全正。next-routine 240 rows/3日 Brier `0.03201` 优于always-NO `0.06667`，但正例集中1日。`.7 CrossNO` 4个t0 executable/4日、3 settled全胜且fee ROI `+15.81%`，但全部已是market favorite，尚不能归因天气alpha | V7 standalone停止作为fair price；market-prior A冻结为negative control。继续同一first-seen panel训练`+30/+60/next-official` markout与EOD correction，满30个新settled dates后同分母A/B；CrossNO只保留低样本forward，不改live · [8/11 scorecard](analysis/2026-08/2026-08-04-amsterdam-crossno-v7-shadow-scorecard-v1.md) |
 | Busan | `busan_intraday_exact_no`；固定为 confirmation head + conditional reheat head | AMOS cross persistence 不能替代 source→routine/WU basis；v9/v10/v11 只是同一模型的历史 experiment。非线性 tournament 和连续 residual 都受独立日期、market-aligned rows 与 conditional-reheat 样本限制 | coverage-only；不继续造版本号，按固定 ontology append 新日期 · [stable architecture](analysis/2026-08/2026-08-04-busan-stable-model-architecture-v1.md) · [family benchmark](analysis/2026-08/2026-08-04-busan-model-family-benchmark.md) |
 | Helsinki | A8 frozen weather reference + FMI-before-next-METAR entry posterior + METAR held-position correction/exit | A8 8/1–8 exact-PIT为936 events/8 dates，exact/within-one=`70.01%/85.23%`。旧mixed-source entry已supersede；FMI-only 35 entries hold ROI `-2.77%`，解释性1c–99c slice 24笔ROI `-4.47%`。market-offset OOF Brier胜market但logloss CI跨0。共享ladder core已在相同808 OOF rows测试：相对incumbent Brier退化`+0.002325` CI `[+0.000798,+0.003979]`，周期checkpoint版本不采用。2026-08-09 16:15 UTC起exact first-seen WS版已开始forward：首个真实FMI event的pre/t0/+10/+30/+60为5/5 scorable、0 blocker/0 reconstruction error，但只有1个未形成settled评测的event，不能判断增量。METAR delayed-snapshot exit点估改善，但quote lag p50 216s、仅1/20≤30s且exit depth为0，执行证据BLOCKED | 保持 zero-notional；entry只读FMI first-seen，METAR永不开新仓；现有模型不读取WS特征，等至少30个新settled target dates后按同rows frozen A/B比较 incumbent 与 `weather+market+WS dynamics`，期间不调参、不换模型，A8 forward仍0/30 · [end-to-end plan/result](analysis/2026-07/2026-07-30-helsinki-remaining-heat-expression-research-plan-v1.md) · [v7 lineage](analysis/2026-07/2026-07-31-helsinki-v7-forecast-lineage-missing-expert.md) · [reliability](analysis/2026-07/2026-07-31-helsinki-model-reliability-audit-v1.md) |
 | Tokyo | terminal full-ladder probability head 与 source-event execution head 分层；next-routine-METAR confirmation/reheat morphology 只作连续特征，不冒充 final settlement | current-bracket v2 在8/4–9的255 checkpoint Brier `0.07673`劣于market `0.06897`，旧双边residual 9笔仅3胜、fee ROI`-16.48%`，expression rejected。continuous-ladder同runner episode-state A/B用62,214 train rows/804日、1,170 untouched checkpoints/15日：direct/coherent/multigrain paired Brier delta分别`+0.000494/+0.001988/-0.000701`且CI全跨0；248个market rows上direct+episode Brier`0.16581`仍差market`0.12542`。recross slice点估改善但CI跨0，故只是feature telemetry，不是新模型或gate。第一性原理`.7 cross + previous-NO market-consensus veto`历史规则仍为未确认 | 旧current-YES/NO residual不live；不替换现有模型、不新建conditional-reheat模型。保留episode特征于同一run identity，随source-event full-ladder clean forward积累；≥30个新settled dates后同rows复核incumbent vs +episode/strict-PIT forecast，期间不调参 · [episode fixed A/B](analysis/2026-08/2026-08-11-tokyo-continuous-ladder-episode-state-ab-v1.md) · [first-principles rebuild](analysis/2026-08/2026-08-02-tokyo-overshoot-market-residual-v2.md#2026-08-10-第一性原理重构market-confirmed-previous-no) |
@@ -62,7 +62,7 @@ event-ladder panel、market baseline 和执行评测：
 | 城市 / family | 当前 raw 分母 | 当前 book 证据 | 到可用模型还缺什么 | 研究角色 |
 |---|---:|---:|---|---|
 | 52 城 forecast revision | collector-exact unique content：D-1 `5,339/13 dates`（material `2,342`）；D-2 `555/12 dates`（material `177`） | 尚无绑定每个 revision 的 event-driven pre/t0/5/15/30/60m full-ladder burst | provider run/issue time 仍不可见；先建固定 all-rung event panel，不能继续用周期 snapshot 猜执行时钟 | 跨城 partial-pooling 主样本；不是 52 个独立模型 |
-| Amsterdam / KNMI | all-event `2,714/10 dates` | `2,696` events 至少一个完整 book；现有 burst 为 `t0/+15/+30/+60/+120/+300s` | 把 pre-event reference 与 burst 物化成同一训练 panel，并补 next-METAR label；这些 offset 是秒，不是 forecast 的分钟 horizon | **fast-observation 首个 golden pilot** |
+| Amsterdam / KNMI | captured panel `3,530 events/12 obs dates` | `21,180` event-offset rows，`20,894` complete（`98.65%`）；burst 为 `t0/+15/+30/+60/+120/+300s` | pre-event/next-METAR 已能成表；当地12–15点140个new-content events中，30/60s至少1c整梯变化为`40.0%/54.3%`。下一步要预测方向和可执行markout，不能把quote movement率当alpha | **fast-observation 首个 golden pilot** |
 | Helsinki / FMI | `1,586 distinct obs/20 dates` | cross 子集 `46/12 dates`，`44` 有 book | 把 all observations（含 non-cross）接入 KNMI 同级的 pre-event/full-ladder burst；active date-X 作为主 grain | 第二批；保留 frozen weather head 作 challenger feature |
 | Tokyo / JMA | `1,621 distinct obs/19 dates` | cross 子集 `37/7 dates`，`36` 有 book | 每个 material event 保存双边 mid/ask/full depth；`.5/.7` 只作固定规则 baseline；terminal-false 与 next-METAR confirmation 连续入模 | 第二批；不再用阈值扩样本 |
 | Busan / AMOS | `10,985 distinct obs/19 dates` | cross 子集 `91/14 dates`，`90` 有 book；Korea checkpoint 中 `4,502` event keys 有 market capture | 先把多 runway/5 秒轮询归一成 immutable point-group event；单独校准 AMOS→routine/WU basis；既有 locked forward 已输 market | coverage/basis；暂不部署 probability adapter |
@@ -103,8 +103,10 @@ Denver 单城 stale record，另有 6 个非 trading 城市缺 live METAR state�
 **下一步唯一动作**：Amsterdam/Helsinki/Tokyo 的 zero-notional `source_event_full_ladder_v1` 已于
 2026-08-10 UTC 接入共享 exact-bracket probability stack；首批部署后真实 Helsinki 与 Amsterdam event 均输出11档完整 native ladder，
 market/weather/source-basis/final 四层概率和均为1，单边盘口按显式概率区间进入 market prior。当前
-source-basis/calibration 仍为 `identity_unfitted`，交易链不消费该 sidecar。继续积累至少30个新settled target dates，
-再以固定rows/labels/split做 market、incumbent、incumbent+innovation/WS dynamics frozen A/B；其间不调参、
+source-basis/calibration 仍为 `identity_unfitted`，Amsterdam 只有8/10–11两日106 rows，交易链不消费该 sidecar。
+继续积累至少30个新settled target dates；Amsterdam 同步用现有 first-seen panel冻结开发
+`+30/+60/next-official` ladder markout head。满窗后以固定rows/labels/split做 market、incumbent、
+incumbent+innovation/WS dynamics frozen A/B；其间不调参、
 不部署真实订单、不改变现有 live 策略、不追加 threshold。
 
 ## 2. 城市内部可以不同
