@@ -112,3 +112,33 @@ def test_new_partial_fill_invalidates_existing_sibling_fill():
         assert scope == {"first", "second"}
     finally:
         conn.close()
+
+
+def test_watermarked_incremental_preserves_older_schema_and_extra_columns():
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute(
+            "CREATE TABLE fact_trades ("
+            "fill_id TEXT PRIMARY KEY, settled INTEGER, legacy_note TEXT)"
+        )
+        conn.execute("INSERT INTO fact_trades VALUES ('fill-1', 0, 'keep-me')")
+        conn.commit()
+        ddl_conn = sqlite3.connect(":memory:")
+        ddl_conn.execute(FACT_DDL)
+        cols = [row[1] for row in ddl_conn.execute("PRAGMA table_info(fact_trades)")]
+        ddl_conn.close()
+        replacement = {col: None for col in cols}
+        replacement.update({"fill_id": "fill-1", "settled": 1})
+
+        write_db_watermarked_incremental(
+            conn,
+            [replacement],
+            {"fill-1"},
+            {"fills": 1},
+        )
+
+        assert conn.execute(
+            "SELECT settled, legacy_note FROM fact_trades WHERE fill_id='fill-1'"
+        ).fetchone() == (1, "keep-me")
+    finally:
+        conn.close()

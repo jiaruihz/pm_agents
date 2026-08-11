@@ -1166,13 +1166,13 @@ def write_db_watermarked_incremental(
         ]
     finally:
         ddl_conn.close()
-    if set(existing_cols) != set(fact_cols):
-        raise RuntimeError(
-            "incremental fact build cannot migrate a changed fact_trades schema; "
-            "run the explicit full rebuild"
-        )
+    if "fill_id" not in existing_cols:
+        raise RuntimeError("incremental fact build requires fact_trades.fill_id")
     if rows and set(rows[0]) != set(fact_cols):
         raise RuntimeError("incremental fact rows do not match fact_trades schema")
+
+    publish_cols = [col for col in fact_cols if col in set(existing_cols)]
+    ignored_builder_cols = sorted(set(fact_cols) - set(existing_cols))
 
     desired = {str(row["fill_id"]): row for row in rows}
     unexpected = set(desired) - scope_fill_ids
@@ -1185,16 +1185,16 @@ def write_db_watermarked_incremental(
     existing: dict[str, dict] = {}
     if scope_fill_ids:
         placeholders = ",".join("?" for _ in scope_fill_ids)
-        select_cols = ",".join(fact_cols)
+        select_cols = ",".join(publish_cols)
         existing = {
-            str(row[0]): dict(zip(fact_cols, row))
+            str(row[0]): dict(zip(publish_cols, row))
             for row in conn.execute(
                 f"SELECT {select_cols} FROM fact_trades "
                 f"WHERE fill_id IN ({placeholders})",
                 sorted(scope_fill_ids),
             ).fetchall()
         }
-    compare_cols = [col for col in fact_cols if col != "fact_built_at_utc"]
+    compare_cols = [col for col in publish_cols if col != "fact_built_at_utc"]
     removed_ids = sorted(set(existing) - set(desired))
     changed_rows = [
         row
@@ -1211,11 +1211,14 @@ def write_db_watermarked_incremental(
             [(fill_id,) for fill_id in removed_ids],
         )
     if changed_rows:
-        placeholders = ",".join("?" for _ in fact_cols)
+        placeholders = ",".join("?" for _ in publish_cols)
+        update_cols = [col for col in publish_cols if col != "fill_id"]
+        assignments = ",".join(f"{col}=excluded.{col}" for col in update_cols)
         conn.executemany(
-            f"INSERT OR REPLACE INTO fact_trades ({','.join(fact_cols)}) "
-            f"VALUES ({placeholders})",
-            [[row[col] for col in fact_cols] for row in changed_rows],
+            f"INSERT INTO fact_trades ({','.join(publish_cols)}) "
+            f"VALUES ({placeholders}) "
+            f"ON CONFLICT(fill_id) DO UPDATE SET {assignments}",
+            [[row[col] for col in publish_cols] for row in changed_rows],
         )
     conn.executemany(
         f"INSERT OR REPLACE INTO {INCREMENTAL_WATERMARK_TABLE} "
@@ -1229,7 +1232,7 @@ def write_db_watermarked_incremental(
     print(
         "fact_trades watermarked incremental: "
         f"scope={len(scope_fill_ids)} inserted_or_changed={len(changed_rows)} "
-        f"removed={len(removed_ids)}"
+        f"removed={len(removed_ids)} ignored_new_columns={len(ignored_builder_cols)}"
     )
 
 
