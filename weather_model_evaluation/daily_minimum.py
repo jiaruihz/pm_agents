@@ -251,6 +251,12 @@ def run_daily_minimum_development(
         else {}
     )
     market_ready = all(market_dates.get(city, 0) >= promotion_min_dates for city in cities)
+    if sum(market_dates.values()) == 0:
+        market_blocker = "same_row_tmin_market_baseline_not_yet_available"
+    elif not market_ready:
+        market_blocker = "same_row_tmin_market_baseline_below_promotion_dates"
+    else:
+        market_blocker = "same_row_market_score_not_yet_evaluated"
     summary = {
         "schema_version": SCHEMA_VERSION,
         "mechanism_id": MECHANISM_ID,
@@ -289,9 +295,7 @@ def run_daily_minimum_development(
         "promotion_ready": False,
         "blockers": [
             "exchange_settlement_labels_not_joined",
-            "same_row_tmin_market_baseline_not_yet_available"
-            if not market_ready
-            else "same_row_market_score_not_yet_evaluated",
+            market_blocker,
             "minimum_clean_forward_dates_not_met",
         ],
         "production": {

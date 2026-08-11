@@ -262,6 +262,10 @@ ladder。data-feed 首个新 observation batch 为 41/41 rows 写入 running-min
 DB/storage identity healthy；Tmin raw 只有 book rows、没有 order 字段，现有 source telemetry mode
 仍为 `telemetry_only_no_orders`。
 
+post-deploy readiness artifact 位于 `daily_minimum_exact_bracket_v1/run_20260811_post_deploy`；中央
+full-ladder coverage 已从 0 更新为三城各 2 个 target dates（合计 6），仍远低于 30-date gate，且
+settlement truth 仍为 0。
+
 ## Probability 与资金晋级门
 
 ### Gate A：历史/开发概率门
