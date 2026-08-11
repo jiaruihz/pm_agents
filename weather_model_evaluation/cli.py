@@ -33,6 +33,18 @@ from .market_prior_posterior import (
 )
 from .daily_minimum import run_daily_minimum_development
 from .daily_minimum_next_colder import run_daily_minimum_next_colder_development
+from .busan_market_prior import (
+    DEFAULT_WEATHER_COLUMN as BUSAN_DEFAULT_WEATHER_COLUMN,
+    DEFAULT_WEATHER_WEIGHT as BUSAN_DEFAULT_WEATHER_WEIGHT,
+    ONLINE_MODEL_ID as BUSAN_ONLINE_MARKET_PRIOR_MODEL_ID,
+    SCHEMA_VERSION as BUSAN_MARKET_PRIOR_SCHEMA_VERSION,
+    evaluate_busan_market_prior,
+    evaluate_online_busan_market_prior,
+    evaluate_weight_grid as evaluate_busan_weight_grid,
+    load_prediction_frame as load_busan_prediction_frame,
+    replay_first_positive_edge as replay_busan_first_positive_edge,
+    summarize_trade_replay as summarize_busan_trade_replay,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -225,6 +237,29 @@ def _add_daily_minimum_next_colder_parser(subparsers: Any) -> None:
     parser.set_defaults(handler=run_daily_minimum_next_colder)
 
 
+def _add_busan_market_prior_parser(subparsers: Any) -> None:
+    parser = subparsers.add_parser(
+        "busan-market-prior",
+        help=(
+            "Score the frozen Busan weather probability as a bounded correction "
+            "to the contemporaneous market prior."
+        ),
+    )
+    parser.add_argument("--development-input", type=Path, required=True)
+    parser.add_argument("--evaluation-input", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--weather-column", default=BUSAN_DEFAULT_WEATHER_COLUMN
+    )
+    parser.add_argument(
+        "--weather-weight", type=float, default=BUSAN_DEFAULT_WEATHER_WEIGHT
+    )
+    parser.add_argument("--freeze-cutoff", required=True)
+    parser.add_argument("--forward-start", required=True)
+    parser.add_argument("--bootstrap-draws", type=int, default=10_000)
+    parser.set_defaults(handler=run_busan_market_prior)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="workflow", required=True)
@@ -234,6 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_forecast_repricing_tape_parser(subparsers)
     _add_daily_minimum_parser(subparsers)
     _add_daily_minimum_next_colder_parser(subparsers)
+    _add_busan_market_prior_parser(subparsers)
     return parser
 
 
@@ -265,6 +301,287 @@ def run_daily_minimum_next_colder(args: argparse.Namespace) -> int:
         code_revision=args.code_revision,
     )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def run_busan_market_prior(args: argparse.Namespace) -> int:
+    development_raw = load_busan_prediction_frame(args.development_input)
+    evaluation = load_busan_prediction_frame(args.evaluation_input)
+    evaluation_dates = pd.to_datetime(
+        evaluation["target_date"].astype(str), errors="raise"
+    )
+    evaluation_start = evaluation_dates.min()
+    development_dates = pd.to_datetime(
+        development_raw["target_date"].astype(str), errors="raise"
+    )
+    development = development_raw.loc[
+        development_dates < evaluation_start
+    ].copy()
+    if development.empty:
+        raise ValueError("no non-overlapping development dates before evaluation")
+    freeze_cutoff = pd.Timestamp(args.freeze_cutoff)
+    forward_start = pd.Timestamp(args.forward_start)
+    if evaluation_dates.max() > freeze_cutoff:
+        raise ValueError(
+            "evaluation input extends beyond freeze cutoff; this would contaminate "
+            "the declared next-forward window"
+        )
+    if forward_start <= freeze_cutoff:
+        raise ValueError("forward-start must be after freeze-cutoff")
+
+    development_grid = evaluate_busan_weight_grid(
+        development,
+        weather_column=args.weather_column,
+        bootstrap_draws=args.bootstrap_draws,
+        seed=8400,
+    )
+    evaluation_grid = evaluate_busan_weight_grid(
+        evaluation,
+        weather_column=args.weather_column,
+        bootstrap_draws=args.bootstrap_draws,
+        seed=8500,
+    )
+    selected = evaluate_busan_market_prior(
+        evaluation,
+        weather_column=args.weather_column,
+        weather_weight=args.weather_weight,
+        bootstrap_draws=args.bootstrap_draws,
+        seed=8600,
+    )
+    online = evaluate_online_busan_market_prior(
+        development,
+        evaluation,
+        weather_column=args.weather_column,
+        bootstrap_draws=args.bootstrap_draws,
+        seed=8700,
+    )
+    robustness_specs = (
+        ("logloss_primary", (0.0, 0.125, 0.25, 0.375, 0.5, 1.0), "logloss"),
+        ("brier_primary", (0.0, 0.125, 0.25, 0.375, 0.5, 1.0), "brier"),
+        ("logloss_coarse", (0.0, 0.25, 0.5, 1.0), "logloss"),
+        ("logloss_decimal", (0.0, 0.1, 0.2, 0.3, 0.4, 0.5), "logloss"),
+    )
+    robustness_rows: list[dict[str, Any]] = []
+    for index, (name, weights, metric) in enumerate(robustness_specs):
+        result = evaluate_online_busan_market_prior(
+            development,
+            evaluation,
+            weather_column=args.weather_column,
+            weights=weights,
+            selection_metric=metric,
+            bootstrap_draws=args.bootstrap_draws,
+            seed=8800 + index * 100,
+        )
+        score = result.summary["scores"]["online_market_prior_posterior"]
+        delta = result.summary["paired_candidate_minus_market"]
+        replay = result.summary["fee_adjusted_taker_replay"]
+        robustness_rows.append(
+            {
+                "variant": name,
+                "selection_metric": metric,
+                "weight_grid": json.dumps(list(weights)),
+                "logloss": score["logloss"],
+                "logloss_delta_vs_market": delta["logloss"]["delta"],
+                "logloss_delta_ci_low": delta["logloss"]["ci_low"],
+                "logloss_delta_ci_high": delta["logloss"]["ci_high"],
+                "brier": score["brier"],
+                "brier_delta_vs_market": delta["brier"]["delta"],
+                "brier_delta_ci_low": delta["brier"]["ci_low"],
+                "brier_delta_ci_high": delta["brier"]["ci_high"],
+                "orders": replay["orders"],
+                "trade_dates": replay["target_dates"],
+                "pnl_usd": replay["pnl_usd"],
+                "roi": replay["roi"],
+                "roi_ci_low": replay["roi_ci95"][0],
+                "roi_ci_high": replay["roi_ci95"][1],
+                "next_weather_weight": result.summary["next_date_state"][
+                    "selected_weather_weight"
+                ],
+            }
+        )
+    robustness = pd.DataFrame(robustness_rows)
+    execution_rows: list[dict[str, Any]] = []
+    for index, edge_buffer in enumerate((0.0, 0.005, 0.01, 0.02, 0.03, 0.05)):
+        buffered_trades = replay_busan_first_positive_edge(
+            online.predictions, minimum_edge=edge_buffer
+        )
+        buffered_summary = summarize_busan_trade_replay(
+            buffered_trades,
+            draws=args.bootstrap_draws,
+            seed=9300 + index,
+        )
+        execution_rows.append(
+            {
+                "minimum_edge_per_share": edge_buffer,
+                **buffered_summary,
+            }
+        )
+    execution_sensitivity = pd.DataFrame(execution_rows)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    predictions_path = args.output_dir / "online_oof_predictions.csv.gz"
+    trades_path = args.output_dir / "online_oof_first_positive_edge_trades.csv"
+    weight_history_path = args.output_dir / "online_weight_history.csv"
+    fixed_predictions_path = args.output_dir / "fixed_weight_seen_predictions.csv.gz"
+    fixed_trades_path = args.output_dir / "fixed_weight_seen_trades.csv"
+    robustness_path = args.output_dir / "online_robustness_variants.csv"
+    execution_sensitivity_path = (
+        args.output_dir / "online_execution_edge_buffer_sensitivity.csv"
+    )
+    development_grid_path = args.output_dir / "development_weight_grid.csv"
+    evaluation_grid_path = args.output_dir / "seen_window_weight_grid.csv"
+    candidate_path = args.output_dir / "candidate_spec.json"
+    online.predictions.to_csv(predictions_path, index=False, compression="gzip")
+    online.trades.to_csv(trades_path, index=False)
+    online.weight_history.to_csv(weight_history_path, index=False)
+    selected.predictions.to_csv(
+        fixed_predictions_path, index=False, compression="gzip"
+    )
+    selected.trades.to_csv(fixed_trades_path, index=False)
+    robustness.to_csv(robustness_path, index=False)
+    execution_sensitivity.to_csv(execution_sensitivity_path, index=False)
+    development_grid.to_csv(development_grid_path, index=False)
+    evaluation_grid.to_csv(evaluation_grid_path, index=False)
+
+    probability_delta = online.summary["paired_candidate_minus_market"]
+    trade = online.summary["fee_adjusted_taker_replay"]
+    gates = {
+        "proper_score_point_better_than_market": bool(
+            probability_delta["logloss"]["delta"] < 0.0
+            and probability_delta["brier"]["delta"] < 0.0
+        ),
+        "proper_score_ci_better_than_market": bool(
+            probability_delta["logloss"]["ci_high"] < 0.0
+            and probability_delta["brier"]["ci_high"] < 0.0
+        ),
+        "fee_adjusted_roi_positive": bool(
+            trade["roi"] is not None and trade["roi"] > 0.0
+        ),
+        "fee_adjusted_roi_ci_positive": bool(
+            trade["roi_ci95"] is not None and trade["roi_ci95"][0] > 0.0
+        ),
+        "minimum_five_independent_innovation_dates": bool(
+            online.weight_history["selected_weather_weight"].gt(0.0).sum() >= 5
+        ),
+        "clean_forward_evidence_present": False,
+    }
+    candidate_spec = {
+        "schema_version": BUSAN_MARKET_PRIOR_SCHEMA_VERSION,
+        "model_id": BUSAN_ONLINE_MARKET_PRIOR_MODEL_ID,
+        "city": "Busan",
+        "target": "final exact-rung NO settlement probability",
+        "formula": (
+            "daily expanding-date selection of weather_weight, then "
+            "logit(p_post)=logit(p_market)+weather_weight*"
+            "(logit(p_weather)-logit(p_market))"
+        ),
+        "weather_probability_model": args.weather_column,
+        "weight_grid": [0.0, 0.125, 0.25, 0.375, 0.5, 1.0],
+        "weight_selection_metric": "date-equal prior-settlement logloss",
+        "current_weather_weight": online.summary["next_date_state"][
+            "selected_weather_weight"
+        ],
+        "current_weight_trained_through": online.summary["next_date_state"][
+            "trained_through"
+        ],
+        "market_feature_role": "prior_offset",
+        "market_feature_clock": "decision_current",
+        "weight_selection_provenance": (
+            "each seen-window date is OOF using strictly earlier settled dates; "
+            "the online family itself was selected after reviewing the seen window"
+        ),
+        "freeze_cutoff": args.freeze_cutoff,
+        "clean_forward_start": args.forward_start,
+        "clean_forward_scored_dates": 0,
+        "execution_policy": (
+            "first fee-positive taker edge per target_date/routine rung; "
+            "max 5 shares; official Weather fee"
+        ),
+        "signal_notional": 0.0,
+        "research_only_zero_notional": True,
+        "live_eligible": False,
+        "ws_feature_role": "coverage_diagnostic_only_not_model_input",
+        "admission_gates_on_seen_window": gates,
+        "admission_status": "fail_low_sample_and_no_clean_forward",
+    }
+    write_summary(candidate_path, candidate_spec)
+
+    development_sha = sha256_file(args.development_input)
+    evaluation_sha = sha256_file(args.evaluation_input)
+    model_source = Path(__file__).with_name("busan_market_prior.py").resolve()
+    summary = {
+        "schema_version": BUSAN_MARKET_PRIOR_SCHEMA_VERSION,
+        "status": "runnable_zero_notional_candidate_unconfirmed",
+        "candidate": candidate_spec,
+        "development": {
+            "input": str(args.development_input.resolve()),
+            "input_sha256": development_sha,
+            "raw_rows": int(len(development_raw)),
+            "nonoverlapping_rows": int(len(development)),
+            "overlap_rows_removed": int(len(development_raw) - len(development)),
+            "overlap_policy": "target_date strictly before evaluation start",
+            "target_date_start": str(development["target_date"].astype(str).min()),
+            "target_date_end": str(development["target_date"].astype(str).max()),
+            "weight_grid": development_grid.to_dict(orient="records"),
+        },
+        "online_walk_forward_seen_window": {
+            "input": str(args.evaluation_input.resolve()),
+            "input_sha256": evaluation_sha,
+            "raw_rows": int(len(evaluation)),
+            **online.summary,
+            "weight_history": online.weight_history.to_dict(orient="records"),
+        },
+        "fixed_weight_seen_window_diagnostic": {
+            **selected.summary,
+            "weight_grid": evaluation_grid.to_dict(orient="records"),
+        },
+        "fixed_denominator": (
+            "Busan settled exact-NO checkpoints with causal contemporaneous "
+            "market probability; no price/edge eligibility filter for proper scores"
+        ),
+        "outputs": {
+            "predictions": str(predictions_path),
+            "trades": str(trades_path),
+            "weight_history": str(weight_history_path),
+            "fixed_weight_diagnostic_predictions": str(fixed_predictions_path),
+            "fixed_weight_diagnostic_trades": str(fixed_trades_path),
+            "robustness_variants": str(robustness_path),
+            "execution_edge_buffer_sensitivity": str(execution_sensitivity_path),
+            "development_weight_grid": str(development_grid_path),
+            "seen_window_weight_grid": str(evaluation_grid_path),
+            "candidate_spec": str(candidate_path),
+        },
+        "producer": {
+            "entrypoint": "weather_model_evaluation.cli:busan-market-prior",
+            "cli_source_sha256": sha256_file(Path(__file__).resolve()),
+            "model_source_sha256": sha256_file(model_source),
+            "build_id": sha256_json(
+                {
+                    "development_sha256": development_sha,
+                    "evaluation_sha256": evaluation_sha,
+                    "weather_column": args.weather_column,
+                    "fixed_diagnostic_weather_weight": args.weather_weight,
+                    "online_weight_grid": [0.0, 0.125, 0.25, 0.375, 0.5, 1.0],
+                    "freeze_cutoff": args.freeze_cutoff,
+                    "forward_start": args.forward_start,
+                }
+            ),
+            "observed_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        },
+        "qualification": {
+            "formal_forward": False,
+            "reason": (
+                "Seen-window dates are expanding-date OOF, but the online model "
+                "family was chosen after inspecting that window. Only dates from "
+                "clean_forward_start onward may be used for formal admission."
+            ),
+            "live_eligible": False,
+        },
+        "robustness_variants": robustness.to_dict(orient="records"),
+        "execution_edge_buffer_sensitivity": execution_sensitivity.to_dict(
+            orient="records"
+        ),
+    }
+    write_summary(args.output_dir / "summary.json", summary)
     return 0
 
 
