@@ -80,6 +80,14 @@ def logit_shrunk_probability(
         raise ValueError("weather_weight must be in [0, 1]")
     market = _clip_probability(market_probability)
     weather = _clip_probability(weather_probability)
+    # Preserve the two nested-model endpoints exactly.  Besides making the
+    # contract explicit, this prevents floating-point round trips through
+    # logit/expit from turning a true zero candidate-minus-market delta into a
+    # tiny negative value that can be mistaken for statistical evidence.
+    if weight == 0.0:
+        return market.copy()
+    if weight == 1.0:
+        return weather.copy()
     market_logit = np.log(market / (1.0 - market))
     weather_logit = np.log(weather / (1.0 - weather))
     posterior_logit = market_logit + weight * (weather_logit - market_logit)

@@ -45,10 +45,10 @@ def test_logit_shrink_endpoints_and_finite_extremes() -> None:
     weather = np.array([1.0, 0.8, 0.0])
     assert logit_shrunk_probability(
         market, weather, weather_weight=0.0
-    ) == pytest.approx(np.clip(market, 1e-5, 1 - 1e-5))
+    ).tolist() == np.clip(market, 1e-5, 1 - 1e-5).tolist()
     assert logit_shrunk_probability(
         market, weather, weather_weight=1.0
-    ) == pytest.approx(np.clip(weather, 1e-5, 1 - 1e-5))
+    ).tolist() == np.clip(weather, 1e-5, 1 - 1e-5).tolist()
     posterior = logit_shrunk_probability(market, weather, weather_weight=0.125)
     assert np.isfinite(posterior).all()
     assert ((posterior > 0.0) & (posterior < 1.0)).all()
@@ -167,3 +167,9 @@ def test_online_weight_for_date_does_not_use_same_date_label() -> None:
         first.weight_history.iloc[0]["selected_weather_weight"]
         == second.weight_history.iloc[0]["selected_weather_weight"]
     )
+    assert first.summary["paired_candidate_minus_market"]["logloss"][
+        "ci_high"
+    ] == 0.0
+    assert first.summary["paired_candidate_minus_market"]["brier"][
+        "ci_high"
+    ] == 0.0

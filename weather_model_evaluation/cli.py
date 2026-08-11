@@ -450,8 +450,8 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
             and probability_delta["brier"]["delta"] < 0.0
         ),
         "proper_score_ci_better_than_market": bool(
-            probability_delta["logloss"]["ci_high"] < 0.0
-            and probability_delta["brier"]["ci_high"] < 0.0
+            probability_delta["logloss"]["ci_high"] < -1e-12
+            and probability_delta["brier"]["ci_high"] < -1e-12
         ),
         "fee_adjusted_roi_positive": bool(
             trade["roi"] is not None and trade["roi"] > 0.0
@@ -498,10 +498,14 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
         ),
         "signal_notional": 0.0,
         "research_only_zero_notional": True,
+        "offline_evaluator_only": True,
+        "zero_notional_shadow_ready": False,
         "live_eligible": False,
         "ws_feature_role": "coverage_diagnostic_only_not_model_input",
         "admission_gates_on_seen_window": gates,
-        "admission_status": "fail_low_sample_and_no_clean_forward",
+        "admission_status": (
+            "fail_ci_low_sample_no_clean_forward_and_no_online_adapter"
+        ),
     }
     write_summary(candidate_path, candidate_spec)
 
@@ -510,7 +514,7 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
     model_source = Path(__file__).with_name("busan_market_prior.py").resolve()
     summary = {
         "schema_version": BUSAN_MARKET_PRIOR_SCHEMA_VERSION,
-        "status": "runnable_zero_notional_candidate_unconfirmed",
+        "status": "offline_candidate_blocked_for_shadow",
         "candidate": candidate_spec,
         "development": {
             "input": str(args.development_input.resolve()),
