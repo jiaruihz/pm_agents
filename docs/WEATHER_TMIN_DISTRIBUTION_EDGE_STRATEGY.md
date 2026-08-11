@@ -284,6 +284,30 @@ post-deploy readiness artifact 位于 `daily_minimum_exact_bracket_v1/run_202608
 full-ladder coverage 已从 0 更新为三城各 2 个 target dates（合计 6），仍远低于 30-date gate，且
 settlement truth 仍为 0。
 
+### Next-colder NO development baseline
+
+`daily_low_temperature_next_colder_no_v1` 已作为同一家族的 research-only transition/expression head
+接入共享 `weather_model_evaluation` CLI。它明确分开两个不能互换的 target：
+
+- `no_next_colder_touch_to_eod`：从 checkpoint 起不再打印更低 native tick；
+- `next_colder_exact_no`：最终 Tmin 不等于紧邻的下一更冷 exact rung。若最终一次跨两档，前者为 false，
+  后者反而为 true，不能用 no-touch probability 直接给 exact NO 定价。
+
+首轮固定 local 06/09/12/18/21/23 checkpoints，保留 morning/daytime/evening window，不按价格或结果筛行。
+真实 development 分母为 594 fixed rows、152 PIT running-min rows、128 completed proxy-label rows；
+expanding OOF 为 86 rows / 14 target dates（Tokyo 79 rows/14 dates、Seoul 7 rows/2 dates，HongKong 无
+observation proxy）。physical no-touch head 相对 date-equal clock baseline 的 logloss
+`0.2471 vs 0.5508`，paired delta `-0.3037`、95% CI `[-0.4835,-0.1465]`；但实际要交易的 exact-NO
+head 仅为 `0.5664 vs 0.5821`，delta `-0.0157`、CI `[-0.0654,+0.0434]`，Brier 还退化
+`+0.0030`、CI `[-0.0068,+0.0168]`。morning exact-NO 点估略差，evening 仅点估略好，均不构成 gate。
+
+这些 label 是 observation-cache EOD minimum proxy，不是 settlement truth。中央 PIT Tmin books 只有
+Seoul/Tokyo 各 1 date、4 checkpoint rows 带 fresh direct NO ask，且与 completed proxy label 的 same-row
+交集为 0；因此 market baseline、fee、ROI 和 frozen artifact 均不可估。结论是保留 research、继续中央
+collector，不创建 candidate/intent，不部署这个模型。可复跑证据见
+`daily_minimum_next_colder_no/run_20260811_development_v2` 与
+[development report](analysis/2026-08/2026-08-11-tmin-next-colder-no-development-v1.md)。
+
 ## Probability 与资金晋级门
 
 ### Gate A：历史/开发概率门
