@@ -119,7 +119,21 @@ versus taker-only, not incremental value versus current execution. Amsterdam
 had no maker order because clock eligibility blocked it, making it a missing
 maker/re-arm case rather than deep-maker alpha. The next valid comparison is
 current v3 lifecycle versus a same-budget deeper replacement versus
-post-update thesis-revalidated re-arm. No live change.
+post-update thesis-revalidated re-arm.
+
+That paired re-arm replay is now complete on the eight selected city-days where
+the source clock skipped the maker and raw evidence confirms no accepted maker
+order. Seven are settled, seven have a first later source report, four retain a
+valid same-bracket/token post-only quote, and only Amsterdam obtains a
+conservative five-share full-depth fill. At the 11:42:35Z revalidation Core p
+was `0.8584`, the book was `0.74/0.79`, the resting limit was `0.741`, and the
+counterfactual adds `+$1.295`. This is one hypothesis-originating fill, not
+promotion evidence. The runner now records the first post-update decision as
+zero-notional telemetry and blocks any existing maker exposure or thesis/token
+drift; production live re-arm remains disabled. Canonical maker-fill lineage was
+also corrected for nine 1e6-unit undercounts (45 shares, 8 wins/1 loss,
+fee-adjusted settled PnL `-$0.45`); the fill coverage gate passes after bounded
+refresh. No live change.
 Full report:
 `2026-08/2026-08-11-current-yes-core-carry-pullback-add-maker-v1.md`.
 

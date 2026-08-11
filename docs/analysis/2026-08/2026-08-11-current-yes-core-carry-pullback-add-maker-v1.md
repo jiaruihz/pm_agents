@@ -1,6 +1,6 @@
 # Core Carry pullback add-maker v1
 
-Status: `gross maker opportunity only / incremental attribution invalid / no-live-change`
+Status: `paired re-arm replay complete / zero-notional forward only / no-live-change`
 
 ## 结论
 
@@ -34,6 +34,29 @@ reprice；正常一档 tick 下通常已经在 `entry ask-1c`。只要该订单�
 deeper-static replacement；C=current v3 + 在 source update 后 thesis 仍有效时
 revalidated re-arm。比较 actual queue/order lifecycle 后再决定；30m 以上的
 静态挂单已经明确不做。
+
+## Paired post-update re-arm 结果
+
+上述 C 已经完成开发与同分母历史 replay，但只升为 zero-notional telemetry，
+没有生成 TradeIntent、order 或额外仓位。固定分母是 **8 个原 maker 因
+source-clock blackout 缺席、且 raw 中确实没有 accepted maker venue order 的
+city-day**：7 个已结算，7 个能看到下一份 source report，4 个在同一 exact
+bracket/token 上重新计算后仍有正 retained-edge post-only 报价，只有 1 个达到
+“后续完整盘口至少 5 股 ask 穿过 resting limit”的保守成交。
+
+唯一成交仍是 Amsterdam 2026-08-10：11:25Z 新报文到 11:42:35Z 才进入本地
+state，届时 Core p=`0.8584`、盘口 `0.74/0.79`，同一 5-share sleeve 可在
+`0.741` re-arm；11:51:51Z 完整盘口满足 5 股穿价，最终 YES，增量成本
+`$3.705`、增量 PnL `+$1.295`。其余 3 个 eligible re-arm 没有保守 fill；另
+3 个 post-update state 已不可评分/不 eligible，1 个没有下一 checkpoint。
+
+这说明机制表达是对的：它补的是“原 maker 缺席后的同预算再验证”，不是
+另加一个深价 maker。但统计证据仍只有 1 个、而且 Amsterdam 是提出假设的
+case，不能升 live。生产 V3 保持 `post_update_live_rearm=false`；新增 runner
+只写 `maker_post_update_revalidations.jsonl`，每个 signal 首次新 source report
+最多一条，明确 `zero_notional=true/notional=0/trade_intent_created=false`，并在
+任何既有 maker venue exposure、rebracket、token 改变、模型输入越界或新
+source-clock 不安全时 fail closed。
 
 ## 固定分母与执行口径
 
@@ -112,10 +135,20 @@ settlement join 增加 canonical `city+target_date+bracket` 精确回退。
 对照，不用于结论。此前 `+3c` exit overlay 的 headline 从 `-$4.09` 变为约
 `-$4.53`，方向不变，仍然拒绝该 exit；本 bug 没有触碰生产下单。
 
+另修复了 canonical 对 Core maker 成交量的 1e6 单位低估：2026-08-07..09
+共 9 个 authenticated `matched_shares=5` 的 maker fill 曾被物化为
+`0.000005` 股。现以 append-only validity + corrected fill + exact
+`maker_zero` fee adjustment 补回 45 股；8 胜 1 负，成本 `$40.45`、已结算
+PnL `-$0.45`。修复器二次 dry-run 为 0，bounded canonical refresh 与 fill
+coverage gate 已通过：1,443 DB/cache fill ids 完全一致、missing/over-order
+均 0、unknown fee lineage 0。Shanghai 8/6 仍有一条 `0.000005` partial row，
+但同 order 有 `4.999995` companion、合计正好 5 股，不是 dust-only 漏记。
+
 ## 产物
 
 - runner：`scripts/analysis/reheat_risk/core_carry_pullback_add_maker.py`
 - conservative primary entry replay：artifact `primary_entry_replay.csv`
 - full grid/denominator/CI：artifact `result.json`
 - valid run：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/current_yes_core_carry_pullback_add_maker_v1/pullback_add_maker_20260811_v2`
+- paired re-arm run：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/current_yes_core_carry_pullback_add_maker_v1/core_carry_post_update_rearm_20260811_v3`
 - invalid archive-only comparison：同 family 下 `pullback_add_maker_20260811`

@@ -32,13 +32,23 @@ if str(ROOT) not in sys.path:
 from scripts.analysis.reheat_risk.research_core_carry_post_entry_capture_v1 import (
     BOOK_ROOTS,
     DB,
+    DEFAULT_ARTIFACT,
     RUNTIME,
     finite,
+    first_new_report_event,
+    iter_jsonl,
     load_books,
+    load_states,
+    match_book_after_event,
     parse_utc,
+    post_event_probability,
     selected_entries,
     settlement_map,
     top_of_book,
+)
+from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (
+    load_artifact,
+    maker_resting_price,
 )
 from scripts.analysis.versioned_artifact_output import (
     prepare_new_run_output,
@@ -54,6 +64,8 @@ DISCOUNTS = (0.02, 0.03, 0.05, 0.07, 0.10)
 TTLS_MIN = (15, 30, 60, 120)
 PRIMARY_DISCOUNT = 0.07
 PRIMARY_TTL_MIN = 15
+REARM_CANCEL_BUFFER_SEC = 90
+REARM_RETAINED_EDGE = 0.01
 
 
 def normalize_payoff(value: float) -> float:
@@ -111,6 +123,238 @@ def post_entry_books(
         if (parse_utc(book.get("available_at_utc") or book.get("snapshot_ts_utc")) or created)
         >= created
     ]
+
+
+def accepted_maker_city_days(runtime: Path) -> set[tuple[str, str]]:
+    accepted: set[tuple[str, str]] = set()
+    for row in iter_jsonl(runtime / "live_orders.jsonl"):
+        if not bool(row.get("maker_only")):
+            continue
+        response = row.get("exchange_response") if isinstance(
+            row.get("exchange_response"), Mapping
+        ) else {}
+        place = response.get("place") if isinstance(response.get("place"), Mapping) else {}
+        order_id = str(
+            row.get("order_id")
+            or row.get("venue_order_id")
+            or place.get("orderID")
+            or ""
+        )
+        if not order_id:
+            continue
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        if city and target_date:
+            accepted.add((city, target_date))
+    return accepted
+
+
+def source_clock_blackout(entry: Mapping[str, Any]) -> bool:
+    created = parse_utc(entry.get("created_at_utc"))
+    source = parse_utc(entry.get("source_report_ts_utc"))
+    cadence = finite(
+        entry.get("observation_cadence_min")
+        or entry.get("expected_report_cadence")
+    )
+    if created is None or source is None or cadence is None or cadence <= 0:
+        return False
+    deadline = source + timedelta(minutes=cadence, seconds=-REARM_CANCEL_BUFFER_SEC)
+    return created >= deadline
+
+
+def score_paths(runtime: Path) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    paths: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in iter_jsonl(runtime / "pre_live_scores.jsonl"):
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if all(key):
+            paths[key].append(row)
+    for rows in paths.values():
+        rows.sort(
+            key=lambda row: parse_utc(
+                row.get("decision_snapshot_ts_utc") or row.get("created_at_utc")
+            )
+            or datetime.max.replace(tzinfo=timezone.utc)
+        )
+    return paths
+
+
+def first_post_update_score(
+    entry: Mapping[str, Any],
+    scores: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    entry_ts = parse_utc(entry.get("created_at_utc"))
+    source = parse_utc(entry.get("source_report_ts_utc"))
+    if entry_ts is None or source is None:
+        return None
+    for row in scores:
+        decision = parse_utc(
+            row.get("decision_snapshot_ts_utc") or row.get("created_at_utc")
+        )
+        update = parse_utc(row.get("source_report_ts_utc"))
+        if decision is not None and update is not None and decision >= entry_ts and update > source:
+            return row
+    return None
+
+
+def score_post_update_state(
+    event: Mapping[str, Any] | None,
+    books: Mapping[str, Sequence[Mapping[str, Any]]],
+    artifact: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    if event is None:
+        return None
+    token = str(event.get("current_yes_token_id") or "")
+    book = match_book_after_event(event, books.get(token, []), 5.0)
+    if book is None:
+        return dict(event)
+    bid, ask = top_of_book(book)
+    probability = post_event_probability(event, book, artifact)
+    return {
+        **dict(event),
+        "decision_snapshot_ts_utc": event.get("as_of_ts_utc"),
+        "current_yes_bid": bid,
+        "current_yes_ask": ask,
+        "current_yes_tick_size": finite(book.get("tick_size"))
+        or finite(event.get("current_yes_tick_size"))
+        or 0.001,
+        "model_probability_hold": probability,
+        "model_input_support_status": (
+            "within_training_support" if probability is not None else "not_scorable"
+        ),
+        "checkpoint_eligible": bool(event.get("checkpoint_eligible", True)),
+    }
+
+
+def replay_post_update_rearm(
+    entry: Mapping[str, Any],
+    update: Mapping[str, Any] | None,
+    books: Mapping[str, Sequence[Mapping[str, Any]]],
+    payoff: float | None,
+    *,
+    maker_quantity: float,
+    ttl_min: int,
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    original_token = str(entry.get("current_yes_token_id") or "")
+    original_bracket = str(entry.get("current_bracket") or "")
+    if update is None:
+        reasons.append("first_post_update_score_missing")
+        update = {}
+    token = str(update.get("current_yes_token_id") or "")
+    bracket = str(update.get("current_bracket") or "")
+    decision = parse_utc(
+        update.get("decision_snapshot_ts_utc") or update.get("created_at_utc")
+    )
+    source = parse_utc(update.get("source_report_ts_utc"))
+    cadence = finite(
+        update.get("observation_cadence_min")
+        or update.get("expected_report_cadence")
+    )
+    bid = finite(update.get("current_yes_bid")) or 0.0
+    ask = finite(update.get("current_yes_ask")) or 0.0
+    tick = finite(update.get("current_yes_tick_size")) or 0.001
+    probability = finite(update.get("model_probability_hold"))
+    support = str(update.get("model_input_support_status") or "")
+    if token != original_token:
+        reasons.append("exact_bracket_token_changed")
+    if bracket != original_bracket:
+        reasons.append("exact_bracket_changed")
+    if not bool(update.get("checkpoint_eligible")):
+        reasons.append("checkpoint_not_eligible")
+    if support not in {"ok", "within_training_support"}:
+        reasons.append("model_input_support_not_ok")
+    if probability is None:
+        reasons.append("model_probability_unavailable")
+    if decision is None or source is None or cadence is None or cadence <= 0:
+        reasons.append("post_update_clock_missing")
+    if bid <= 0 or ask <= bid:
+        reasons.append("fresh_two_sided_book_unavailable")
+
+    deadline = None
+    if decision is not None and source is not None and cadence is not None:
+        deadline = min(
+            decision + timedelta(minutes=ttl_min),
+            source + timedelta(minutes=cadence, seconds=-REARM_CANCEL_BUFFER_SEC),
+        )
+        if deadline <= decision:
+            reasons.append("post_update_source_clock_not_eligible")
+    cap = 0.0
+    limit = 0.0
+    if probability is not None and ask > bid and tick > 0:
+        raw_cap = min(probability - REARM_RETAINED_EDGE, ask - tick)
+        cap = math.floor((raw_cap + 1e-12) / tick) * tick if raw_cap > 0 else 0.0
+        limit = maker_resting_price(
+            best_bid=bid,
+            best_ask=ask,
+            tick_size=tick,
+            price_cap=cap,
+        )
+    if limit <= 0:
+        reasons.append("positive_edge_post_only_price_unavailable")
+    reasons = sorted(set(reasons))
+    eligible = not reasons
+
+    fill = None
+    if eligible and decision is not None and deadline is not None:
+        for book in books.get(token, []):
+            book_ts = parse_utc(book.get("available_at_utc") or book.get("snapshot_ts_utc"))
+            if book_ts is None or book_ts < decision or book_ts > deadline:
+                continue
+            if visible_ask_depth_at_or_below(book, limit) + 1e-9 >= maker_quantity:
+                fill = book
+                break
+    fill_ts = None if fill is None else parse_utc(
+        fill.get("available_at_utc") or fill.get("snapshot_ts_utc")
+    )
+    incremental_pnl = (
+        maker_quantity * (float(payoff) - limit)
+        if payoff is not None and fill is not None
+        else (0.0 if payoff is not None else None)
+    )
+    return {
+        "city": entry.get("city"),
+        "target_date": entry.get("target_date"),
+        "bracket": original_bracket,
+        "entry_created_at_utc": entry.get("created_at_utc"),
+        "entry_source_report_ts_utc": entry.get("source_report_ts_utc"),
+        "post_update_decision_ts_utc": update.get("decision_snapshot_ts_utc"),
+        "post_update_source_report_ts_utc": update.get("source_report_ts_utc"),
+        "post_update_model_probability": probability,
+        "post_update_bid": bid,
+        "post_update_ask": ask,
+        "maker_limit": limit,
+        "maker_rearm_eligible": eligible,
+        "rearm_blockers": reasons,
+        "conservative_fill": fill is not None,
+        "fill_available_at_utc": None if fill_ts is None else fill_ts.isoformat(),
+        "settlement_payoff": payoff,
+        "incremental_maker_cost_usd": maker_quantity * limit if fill is not None else 0.0,
+        "incremental_maker_pnl_usd": incremental_pnl,
+    }
+
+
+def summarize_post_update_rearm(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    settled = [row for row in rows if row.get("settlement_payoff") is not None]
+    filled = [row for row in settled if row.get("conservative_fill")]
+    cost = sum(float(row.get("incremental_maker_cost_usd") or 0.0) for row in settled)
+    pnl = sum(float(row.get("incremental_maker_pnl_usd") or 0.0) for row in settled)
+    return {
+        "clock_blackout_missing_maker_entries": len(rows),
+        "settled_entries": len(settled),
+        "entries_with_first_post_update_score": sum(
+            row.get("post_update_source_report_ts_utc") is not None for row in rows
+        ),
+        "eligible_rearms": sum(bool(row.get("maker_rearm_eligible")) for row in rows),
+        "conservative_fills": len(filled),
+        "filled_final_winners": sum(float(row["settlement_payoff"]) == 1.0 for row in filled),
+        "filled_final_losses": sum(float(row["settlement_payoff"]) == 0.0 for row in filled),
+        "incremental_maker_cost_usd": cost,
+        "incremental_maker_pnl_usd": pnl,
+        "incremental_maker_roi": pnl / cost if cost else None,
+        "blocker_counts": dict(
+            Counter(reason for row in rows for reason in row.get("rearm_blockers") or [])
+        ),
+    }
 
 
 def replay_one(
@@ -312,6 +556,31 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         str(entry.get("current_condition_id") or ""): post_entry_books(entry, books)
         for entry in entries
     }
+    accepted_makers = accepted_maker_city_days(runtime)
+    states = load_states(runtime)
+    artifact = load_artifact(DEFAULT_ARTIFACT)
+    blackout_entries = [
+        entry
+        for entry in entries
+        if source_clock_blackout(entry)
+        and (str(entry.get("city") or ""), str(entry.get("target_date") or ""))
+        not in accepted_makers
+    ]
+    rearm_rows = [
+        replay_post_update_rearm(
+            entry,
+            score_post_update_state(
+                first_new_report_event(entry, states),
+                books,
+                artifact,
+            ),
+            books,
+            normalized.get(str(entry.get("current_condition_id") or "")),
+            maker_quantity=float(args.maker_quantity),
+            ttl_min=PRIMARY_TTL_MIN,
+        )
+        for entry in blackout_entries
+    ]
     grid: list[dict[str, Any]] = []
     primary_rows: list[dict[str, Any]] = []
     for ttl in TTLS_MIN:
@@ -384,6 +653,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "db_identity": db_identity,
         "book_coverage": book_coverage,
         "primary": primary,
+        "paired_post_update_rearm": {
+            "policy": {
+                "denominator": "selected city-days where current source-clock policy skipped the maker and no accepted maker venue order exists",
+                "event": "first later Core score carrying a strictly newer source report",
+                "risk_budget": f"same missing {args.maker_quantity:g}-share maker sleeve; no additional shares",
+                "price": "best bid plus one tick, post-only, capped by ask-minus-one-tick and model probability minus 1c retained edge",
+                "ttl": "min(15 minutes, 90 seconds before the following expected source report)",
+                "fill_contract": "later PIT-available full book with at least five visible ask shares at or below the resting limit; future touch alone is not a fill",
+            },
+            "summary": summarize_post_update_rearm(rearm_rows),
+        },
         "grid": grid,
         "limitations": [
             "This is a counterfactual quote replay, not actual maker order/fill PnL.",
@@ -399,7 +679,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "next_valid_comparison": "paired current-v3 maker lifecycle versus same-budget deeper-static replacement versus post-update thesis-revalidated re-arm",
         },
     }
-    return {"payload": payload, "primary_rows": primary_rows}
+    return {
+        "payload": payload,
+        "primary_rows": primary_rows,
+        "post_update_rearm_rows": rearm_rows,
+    }
 
 
 def parser() -> argparse.ArgumentParser:
@@ -427,11 +711,25 @@ def main() -> int:
         )
     )
     pd.DataFrame(result["primary_rows"]).to_csv(run_dir / "primary_entry_replay.csv", index=False)
+    pd.DataFrame(result["post_update_rearm_rows"]).to_csv(
+        run_dir / "post_update_rearm_replay.csv", index=False
+    )
     (run_dir / "result.json").write_text(
         json.dumps(result["payload"], ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(json.dumps(result["payload"]["primary"], ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "primary": result["payload"]["primary"],
+                "paired_post_update_rearm": result["payload"][
+                    "paired_post_update_rearm"
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

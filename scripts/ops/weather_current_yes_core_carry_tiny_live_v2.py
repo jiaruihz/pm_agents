@@ -475,7 +475,10 @@ def evaluate_post_update_maker_rearm(
         reasons.append("exact_bracket_changed")
     if not bool(latest.get("checkpoint_eligible")):
         reasons.append("checkpoint_not_eligible")
-    if str(latest.get("model_input_support_status") or "") != "ok":
+    if str(latest.get("model_input_support_status") or "") not in {
+        "ok",
+        "within_training_support",
+    }:
         reasons.append("model_input_support_not_ok")
     if probability is None:
         reasons.append("model_probability_unavailable")
