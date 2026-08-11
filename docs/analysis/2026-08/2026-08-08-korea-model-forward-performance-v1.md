@@ -2,6 +2,43 @@
 
 > Busan 与 Seoul 分开；research replay、WCIR coverage runtime 与 CrossNO 实盘互不混算。
 
+## 2026-08-12 追加：新增日期确实提供了正证据，但尚未确认 alpha
+
+本次从 current canonical raw 全量重放 Busan，模型仍固定为 `2026-08-03` 以前选出的
+`p_factorized_random_forest_full_weather`，没有用 8/4 以后日期重选模型或更新参数。当前共有
+`255` 个 pending states / `20` 个日期；锁模 forward 为 `106` states / `8` 个已结算日期，其中
+`65` states / `8` 日有同刻 PIT market 可比。
+
+- 全部 8 日：model logloss `0.2913`，market `0.2902`，model−market `+0.0011`，
+  95% CI `[-0.2181,+0.2618]`。两者基本打平，仍未战胜 market。
+- 同一固定模型在新增的 8/8–8/11 四日：35 个同盘口 states，model logloss `0.1125`，
+  market `0.3354`；delta `-0.2229`，95% CI `[-0.3933,-0.0775]`。四日逐日均胜 market。
+- 全 8 日正 edge replay：24 单 / 8 日、19 胜，PnL `+$8.8436`，ROI `+10.26%`，
+  95% CI `[-8.32%,+30.81%]`；新增四日单独为 11 单 / 4 日、9 胜，PnL `+$11.6267`，
+  ROI `+34.84%`，95% CI `[+16.76%,+54.55%]`。
+
+这批新增日期非常有帮助：它把 8/4–8/7 的明显负面点估拉回到“全窗与 market 打平”，并形成一个连续
+四日的正 cluster。但前四日与后四日方向相反、总窗 CI 仍跨 0，因此当前 gate 仍是
+`significance=FAIL; baseline=FAIL; forward=FAIL; conclusion=inconclusive`；不部署 Busan probability adapter。
+当前 raw 重建也把早期四日的同盘口 coverage 从旧快照的 26 行补到 30 行，因此旧四日 headline 作为历史
+快照保留，当前决策使用上述 8 日固定分母。
+
+Seoul 目前有 `36,152` 条 AMOS raw rows / 21 个 target dates，WCIR 当前累计 `6,828` 个 coverage blocker rows，
+但仍没有 Seoul 专属冻结 probability artifact；这些数据是可训练覆盖，不是模型成绩。
+
+### WS 对 Busan 的实际贡献边界
+
+Busan WS 自 `2026-08-09T07:59:19Z` 起覆盖 8/9–8/12 四个 target dates、40 个唯一 token、20 个
+`date×bracket`；Seoul 当前没有 WS subscription epoch。Busan 当前概率模型的固定 feature set 仍只含天气、
+AMOS/routine path、forecast ceiling/peak、云雨风湿度、physical prior 与 checkpoint REST quote，**没有 WS dynamics，
+也没有 Busan `feature_book_snapshot_id`**。所以新增四日的好结果不能归因给 WS。
+
+WS 已经对执行研究有价值：8/10 的 generic hot-strip `bid+1 native tick` negative control 中，Busan 有
+627 个反事实 posts、13 个 queue-conservative exit-scoreable fills，60 秒 fee-adjusted PnL `-$0.6111`、
+ROI `-1.24%`。这说明更细盘口能识别 passive fill 后的 adverse selection；但该分母不是天气模型信号，
+不能当作 Busan 概率 alpha。下一步应在同一 AMOS first-seen checkpoint 上固定比较
+`weather+level` 与 `weather+level+WS dynamics`，而不是把 raw frame/epoch 数当训练样本。
+
 ## 数据快照
 
 | 项目 | 值 |

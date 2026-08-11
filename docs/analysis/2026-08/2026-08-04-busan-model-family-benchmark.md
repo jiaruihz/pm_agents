@@ -8,6 +8,14 @@
 
 8/3 后不再重选模型或更新参数。8/4–8/7 已补齐 canonical settlement 后，同盘口 26 states/4天的固定冠军 logloss `0.6955`，market `0.3106`；model−market `+0.3849`，95% CI `[-0.0893,+1.0335]`。13 个正 edge date-rung replay PnL `-$3.4298`、ROI `-6.42%`，95% CI `[-23.02%,+12.85%]`。四天仅 8/7 胜 market，因此 `forward=FAIL`，继续 collector/research，不部署 Busan probability adapter。完整快照见 [8/8 forward performance](2026-08-08-korea-model-forward-performance-v1.md)。
 
+### 2026-08-12 追加日期更新
+
+固定同一 8/3 champion 重放到 8/11：同盘口 `65 states/8天`，model logloss `0.2913`、market
+`0.2902`，delta `+0.0011`，95% CI `[-0.2181,+0.2618]`；24 单 replay ROI `+10.26%`，
+CI `[-8.32%,+30.81%]`。新增 8/8–8/11 四日单独显著为正，但与前四日方向相反；因此新增数据有价值，
+模型从“明显落后 market”变成“全窗基本打平”，仍未达到全 forward significance。完整分母和 WS 边界见
+[8/12 追加结果](2026-08-08-korea-model-forward-performance-v1.md#2026-08-12-追加新增日期确实提供了正证据但尚未确认-alpha)。
+
 ## 固定研究设计
 
 - target：`P(final exact current routine rung NO | PIT source/path/weather state)`。
