@@ -1098,7 +1098,53 @@ def _checkout_start_preflight(
     return None
 
 
-def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dict[str, Any]:
+MARKET_PROXY_RUNTIME_ENV_KEYS = (
+    "WEATHER_DATA_FEED_MARKET_PROXY",
+    "WEATHER_PREDICT_MARKET_PROXY",
+    "WEATHER_PREDICT_PROXY",
+    "POLYMARKET_PROXY_URL",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
+
+
+def _runtime_launch_env(
+    spec: WeatherProductionSpec,
+    runtime: WeatherManagedRuntimeSpec,
+    *,
+    confirm_live: bool,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
+    env["WEATHER_PRODUCTION_CONFIG"] = str(
+        ROOT / "src/strategies/runtime/production.yaml"
+    )
+    if runtime.uses_market_proxy:
+        proxy_url = spec.market_proxy_default_url
+        for key in MARKET_PROXY_RUNTIME_ENV_KEYS:
+            env[key] = proxy_url
+            pinned = _tmux(spec, "set-environment", "-g", key, proxy_url)
+            if pinned.returncode != 0:
+                raise RuntimeError(
+                    f"failed to pin canonical tmux proxy environment: {key}: "
+                    f"{pinned.stdout[-500:].strip()}"
+                )
+    if confirm_live:
+        env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
+    return env
+
+
+def _run_start(
+    spec: WeatherProductionSpec,
+    runtime: WeatherManagedRuntimeSpec,
+    *,
+    confirm_live: bool,
+    launch_env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     script = runtime.resolved_start_script()
     if script is None:
         return {"instance_id": runtime.instance_id, "status": "blocked", "reason": "start_contract_missing"}
@@ -1111,11 +1157,16 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
     preflight_error = _checkout_start_preflight(runtime)
     if preflight_error is not None:
         return preflight_error
-    env = os.environ.copy()
-    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
-    env["WEATHER_PRODUCTION_CONFIG"] = str(ROOT / "src/strategies/runtime/production.yaml")
-    if confirm_live:
-        env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
+    try:
+        env = launch_env or _runtime_launch_env(
+            spec, runtime, confirm_live=confirm_live
+        )
+    except RuntimeError as exc:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": str(exc),
+        }
     result = subprocess.run(
         [str(script)],
         cwd=str(runtime.checkout_root or ROOT),
@@ -1157,6 +1208,16 @@ def _run_restart(
                 "status": "blocked",
                 "reason": "start_contract_missing",
             }
+        try:
+            launch_env = _runtime_launch_env(
+                spec, runtime, confirm_live=False
+            )
+        except RuntimeError as exc:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": str(exc),
+            }
         stopped = _tmux(
             spec, "kill-session", "-t", f"={runtime.tmux_session}"
         )
@@ -1172,7 +1233,12 @@ def _run_restart(
                 "returncode": stopped.returncode,
                 "output": stopped.stdout[-2000:].strip(),
             }
-        started = _run_start(runtime, confirm_live=False)
+        started = _run_start(
+            spec,
+            runtime,
+            confirm_live=False,
+            launch_env=launch_env,
+        )
         return {
             **started,
             "status": (
@@ -1196,15 +1262,20 @@ def _run_restart(
             "status": "error",
             "reason": f"restart_script_missing:{script}",
         }
-    env = os.environ.copy()
-    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
-    env["WEATHER_PRODUCTION_CONFIG"] = str(ROOT / "src/strategies/runtime/production.yaml")
-    if confirm_live:
-        env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
+    try:
+        launch_env = _runtime_launch_env(
+            spec, runtime, confirm_live=confirm_live
+        )
+    except RuntimeError as exc:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": str(exc),
+        }
     result = subprocess.run(
         [str(script)],
         cwd=str(runtime.checkout_root or ROOT),
-        env=env,
+        env=launch_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -1533,6 +1604,7 @@ def main() -> int:
         for item in _ordered_start_items(spec, health["plan"]):
             actions.append(
                 _run_start(
+                    spec,
                     specs[item["instance_id"]],
                     confirm_live=bool(args.confirm_live),
                 )

@@ -257,6 +257,13 @@ def test_active_entrypoints_do_not_hardcode_old_proxy_port():
         if path.is_file() and path.suffix in {".py", ".sh"}:
             assert "127.0.0.1:7890" not in path.read_text(encoding="utf-8"), path
 
+    fast_source = (
+        root / "scripts/ops/start_weather_fast_source_prev_no_trial.sh"
+    ).read_text(encoding="utf-8")
+    assert fast_source.index("source .env") < fast_source.index(
+        "weather_export_market_proxy_env %q"
+    )
+
 
 def test_chain_health_uses_artifact_freshness_only_for_live_and_primary_books(monkeypatch):
     payload = {

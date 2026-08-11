@@ -781,7 +781,9 @@ def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
         recovery_policy="guarded_live",
     )
 
-    result = ctl._run_start(runtime, confirm_live=False)
+    result = ctl._run_start(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=False
+    )
 
     assert result == {
         "instance_id": "live",
@@ -810,13 +812,57 @@ def test_controller_injects_tmux_mutation_authority_for_start(tmp_path):
         recovery_policy="safe",
     )
 
-    result = ctl._run_start(runtime, confirm_live=False)
+    result = ctl._run_start(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=False
+    )
 
     assert result["status"] == "started"
     assert marker.read_text(encoding="utf-8") == "controller"
     assert config_marker.read_text(encoding="utf-8") == str(
         ROOT / "src/strategies/runtime/production.yaml"
     )
+
+
+def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_path):
+    marker = tmp_path / "proxy.txt"
+    script = tmp_path / "start.sh"
+    script.write_text(
+        f"#!/bin/sh\nprintf '%s|%s' \"$WEATHER_DATA_FEED_MARKET_PROXY\" "
+        f"\"$HTTPS_PROXY\" > {marker}\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="market",
+        tmux_session="market",
+        role="collector",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+        uses_market_proxy=True,
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    calls = []
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: calls.append(args)
+        or subprocess.CompletedProcess(args, 0, "", ""),
+    )
+
+    result = ctl._run_start(spec, runtime, confirm_live=False)
+
+    assert result["status"] == "started"
+    assert marker.read_text(encoding="utf-8") == (
+        "http://127.0.0.1:7897|http://127.0.0.1:7897"
+    )
+    assert (
+        "set-environment",
+        "-g",
+        "HTTP_PROXY",
+        "http://127.0.0.1:7897",
+    ) in calls
 
 
 def test_restart_requires_explicit_contract(tmp_path):

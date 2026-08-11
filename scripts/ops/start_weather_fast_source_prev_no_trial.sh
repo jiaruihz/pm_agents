@@ -115,8 +115,8 @@ fi
 
 printf -v quoted_cmd '%q ' "${cmd[@]}"
 printf -v session_cmd \
-  'set -eu; mkdir -p %q %q; cd %q; set -a; [[ -f .env ]] && source .env || true; set +a; export PYTHONPATH=%q; exec %s >> %q 2>&1' \
-  "$RUNTIME_ROOT/loop" "$OUTPUT_DIR" "$PROJECT_DIR" "$PROJECT_DIR" "$quoted_cmd" "$LOG_FILE"
+  'set -eu; mkdir -p %q %q; cd %q; set -a; [[ -f .env ]] && source .env || true; set +a; source %q; weather_export_market_proxy_env %q; export PYTHONPATH=%q; exec %s >> %q 2>&1' \
+  "$RUNTIME_ROOT/loop" "$OUTPUT_DIR" "$PROJECT_DIR" "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh" "$MARKET_PROXY" "$PROJECT_DIR" "$quoted_cmd" "$LOG_FILE"
 weather_jrs_tmux_guarded_replace_session "$TMUX_SOCKET" "$TMUX_SESSION" "$session_cmd"
 printf -v marker_command \
   "printf 'tmux:%%s\\n' %q > %q" \
