@@ -792,7 +792,7 @@ def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
     }
 
 
-def test_controller_injects_tmux_mutation_authority_for_start(tmp_path):
+def test_controller_injects_tmux_mutation_authority_for_start(monkeypatch, tmp_path):
     marker = tmp_path / "authority.txt"
     config_marker = tmp_path / "production-config.txt"
     script = tmp_path / "start.sh"
@@ -810,6 +810,11 @@ def test_controller_injects_tmux_mutation_authority_for_start(tmp_path):
         checkout_root=tmp_path,
         start_script=Path("start.sh"),
         recovery_policy="safe",
+    )
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: subprocess.CompletedProcess(args, 0, "", ""),
     )
 
     result = ctl._run_start(
@@ -863,6 +868,12 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
         "HTTP_PROXY",
         "http://127.0.0.1:7897",
     ) in calls
+    assert (
+        "set-environment",
+        "-g",
+        "WEATHER_PRODUCTION_CONFIG",
+        str(ROOT / "src/strategies/runtime/production.yaml"),
+    ) in calls
 
 
 def test_restart_requires_explicit_contract(tmp_path):
@@ -884,7 +895,7 @@ def test_restart_requires_explicit_contract(tmp_path):
     }
 
 
-def test_restart_runs_registered_contract(tmp_path):
+def test_restart_runs_registered_contract(monkeypatch, tmp_path):
     marker = tmp_path / "authority.txt"
     script = tmp_path / "restart.sh"
     script.write_text(
@@ -900,6 +911,11 @@ def test_restart_runs_registered_contract(tmp_path):
         checkout_root=tmp_path,
         restart_script=Path("restart.sh"),
         recovery_policy="safe",
+    )
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: subprocess.CompletedProcess(args, 0, "", ""),
     )
 
     result = ctl._run_restart(
@@ -938,7 +954,15 @@ def test_controller_can_restart_safe_non_live_runtime_from_start_contract(
 
     result = ctl._run_restart(spec, runtime, confirm_live=False)
 
-    assert calls == [("kill-session", "-t", "=shadow")]
+    assert calls == [
+        (
+            "set-environment",
+            "-g",
+            "WEATHER_PRODUCTION_CONFIG",
+            str(ROOT / "src/strategies/runtime/production.yaml"),
+        ),
+        ("kill-session", "-t", "=shadow"),
+    ]
     assert result["status"] == "restarted"
     assert result["restart_mode"] == "controller_stop_then_registered_start"
     assert marker.read_text(encoding="utf-8") == "started"
@@ -989,13 +1013,14 @@ def test_controller_restart_starts_missing_safe_runtime(monkeypatch, tmp_path):
         recovery_policy="safe",
     )
     spec = production_spec(tmp_path, (runtime,))
-    monkeypatch.setattr(
-        ctl,
-        "_tmux",
-        lambda _spec, *args: subprocess.CompletedProcess(
+    def fake_tmux(_spec, *args):
+        if args[0] == "set-environment":
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return subprocess.CompletedProcess(
             args, 1, "can't find session: collector", ""
-        ),
-    )
+        )
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
 
     result = ctl._run_restart(spec, runtime, confirm_live=False)
 

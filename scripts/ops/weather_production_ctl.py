@@ -1120,9 +1120,22 @@ def _runtime_launch_env(
 ) -> dict[str, str]:
     env = os.environ.copy()
     env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
-    env["WEATHER_PRODUCTION_CONFIG"] = str(
+    production_config = str(
         ROOT / "src/strategies/runtime/production.yaml"
     )
+    env["WEATHER_PRODUCTION_CONFIG"] = production_config
+    pinned_config = _tmux(
+        spec,
+        "set-environment",
+        "-g",
+        "WEATHER_PRODUCTION_CONFIG",
+        production_config,
+    )
+    if pinned_config.returncode != 0:
+        raise RuntimeError(
+            "failed to pin canonical tmux production contract: "
+            f"{pinned_config.stdout[-500:].strip()}"
+        )
     if runtime.uses_market_proxy:
         proxy_url = spec.market_proxy_default_url
         for key in MARKET_PROXY_RUNTIME_ENV_KEYS:
