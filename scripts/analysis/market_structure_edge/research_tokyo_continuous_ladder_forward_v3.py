@@ -14,7 +14,7 @@ import argparse
 from bisect import bisect_right
 from collections import defaultdict
 import csv
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import gzip
 import hashlib
 import json
@@ -51,8 +51,11 @@ SHARES = 5.0
 FEE_RATE = 0.05
 MODEL_NAMES = (
     "direct_checkpoint_hgb_v3",
+    "direct_checkpoint_hgb_v3__episode_state",
     "coherent_checkpoint_hgb_v3",
+    "coherent_checkpoint_hgb_v3__episode_state",
     "coherent_multigrain_hgb_v3",
+    "coherent_multigrain_hgb_v3__episode_state",
 )
 CHAMPION = "direct_checkpoint_hgb_v3"
 OUTCOMES = ("delta_0", "delta_1", "delta_2", "delta_3plus")
@@ -65,8 +68,13 @@ FROZEN_PARAMS = {
 }
 FROZEN_TEMPERATURES = {
     "direct_checkpoint_hgb_v3": 1.15,
+    # Hold temperature fixed to the baseline so the paired experiment changes
+    # only the feature set; no forward labels are used for recalibration.
+    "direct_checkpoint_hgb_v3__episode_state": 1.15,
     "coherent_checkpoint_hgb_v3": 0.95,
+    "coherent_checkpoint_hgb_v3__episode_state": 0.95,
     "coherent_multigrain_hgb_v3": 0.90,
+    "coherent_multigrain_hgb_v3__episode_state": 0.90,
 }
 DEFAULT_OUT = (
     ROOT
@@ -74,6 +82,301 @@ DEFAULT_OUT = (
     / "tokyo_continuous_ladder_forward_v3"
 )
 EPS = 1e-8
+EPISODE_STATE_FEATURES = (
+    "jma_episode_peak_c",
+    "jma_episode_trough_c",
+    "jma_episode_giveback_c",
+    "jma_recovery_from_trough_c",
+    "jma_recovery_fraction",
+    "minutes_since_episode_trough",
+    "jma_heating_reacceleration_cph",
+    "jma_short_long_slope_reversal_cph",
+    "jma_cross_count_current_boundary",
+    "jma_has_pullback_then_recovery",
+    "jma_reheat_active",
+)
+BASELINE_FEATURES = tuple(v1.MODEL_FEATURES)
+EPISODE_FEATURE_SET = BASELINE_FEATURES + EPISODE_STATE_FEATURES
+EPISODE_FEATURE_SEMANTIC_VERSION = "tokyo_episode_state_prefix_v1"
+FEATURE_AB_PAIRS = {
+    "direct_checkpoint_hgb_v3__episode_state": "direct_checkpoint_hgb_v3",
+    "coherent_checkpoint_hgb_v3__episode_state": "coherent_checkpoint_hgb_v3",
+    "coherent_multigrain_hgb_v3__episode_state": (
+        "coherent_multigrain_hgb_v3"
+    ),
+}
+
+
+def add_episode_state_features(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Materialize prefix-only Tokyo path morphology at each JMA checkpoint.
+
+    Every value is computed from the current target-date prefix, including the
+    current observation.  Settlement labels and later observations never enter
+    the state calculation.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for raw in rows:
+        grouped[str(raw["target_date"])].append(dict(raw))
+
+    output: list[dict[str, Any]] = []
+    for target_date in sorted(grouped):
+        selected = sorted(
+            grouped[target_date], key=lambda row: str(row["decision_ts_utc"])
+        )
+        episode_peak: float | None = None
+        episode_trough: float | None = None
+        episode_trough_ts: datetime | None = None
+        relation_by_boundary: dict[float, int] = {}
+        cross_count_by_boundary: dict[float, int] = defaultdict(int)
+        for row in selected:
+            temperature = float(row["jma_temp_c"])
+            observed_at = v1.parse_ts(str(row["decision_ts_utc"]))
+            if episode_peak is None or temperature > episode_peak + 1e-9:
+                episode_peak = temperature
+                episode_trough = temperature
+                episode_trough_ts = observed_at
+            elif episode_trough is None or temperature < episode_trough - 1e-9:
+                episode_trough = temperature
+                episode_trough_ts = observed_at
+
+            boundary = float(int(row["current_bracket"]) + 0.5)
+            relation = int(temperature >= boundary)
+            previous_relation = relation_by_boundary.get(boundary)
+            if previous_relation is not None and relation != previous_relation:
+                cross_count_by_boundary[boundary] += 1
+            relation_by_boundary[boundary] = relation
+
+            giveback = max(0.0, float(episode_peak) - float(episode_trough))
+            recovery = max(0.0, temperature - float(episode_trough))
+            recovery_fraction = recovery / giveback if giveback > 0.05 else 0.0
+            delta_10m = v1.finite(row.get("jma_temp_delta_10m")) or 0.0
+            slope_30m = v1.finite(row.get("jma_temp_slope_30m_cph")) or 0.0
+            slope_60m = v1.finite(row.get("jma_temp_slope_60m_cph")) or 0.0
+            pulled_back_then_recovered = giveback >= 0.3 and recovery >= 0.2
+            row.update(
+                {
+                    "jma_episode_peak_c": episode_peak,
+                    "jma_episode_trough_c": episode_trough,
+                    "jma_episode_giveback_c": giveback,
+                    "jma_recovery_from_trough_c": recovery,
+                    "jma_recovery_fraction": min(recovery_fraction, 2.0),
+                    "minutes_since_episode_trough": (
+                        0.0
+                        if episode_trough_ts is None
+                        else max(
+                            0.0,
+                            (observed_at - episode_trough_ts).total_seconds()
+                            / 60.0,
+                        )
+                    ),
+                    "jma_heating_reacceleration_cph": slope_30m - slope_60m,
+                    "jma_short_long_slope_reversal_cph": (
+                        delta_10m * 6.0 - slope_60m
+                    ),
+                    "jma_cross_count_current_boundary": (
+                        cross_count_by_boundary[boundary]
+                    ),
+                    "jma_has_pullback_then_recovery": int(
+                        pulled_back_then_recovered
+                    ),
+                    "jma_reheat_active": int(
+                        pulled_back_then_recovered
+                        and delta_10m > 0.0
+                        and slope_30m > 0.0
+                    ),
+                }
+            )
+            output.append(row)
+    return output
+
+
+def load_winners_from_reference_rows(
+    path: Path,
+    *,
+    start: str = FORWARD_START,
+    end: str = FORWARD_END,
+) -> dict[str, str]:
+    """Recover evaluation labels from an immutable prior prediction table.
+
+    This is label-only evidence.  It is never joined into model features and
+    is useful after hot-layer pm_history retention has moved an old window.
+    """
+    if not path.exists():
+        raise FileNotFoundError(path)
+    by_date: dict[str, set[str]] = defaultdict(set)
+    for row in v1.read_rows(path):
+        target_date = str(row.get("target_date") or "")
+        winner = str(row.get("winning_bracket") or "")
+        if start <= target_date <= end and winner:
+            by_date[target_date].add(winner)
+    conflicts = {
+        target_date: sorted(values)
+        for target_date, values in by_date.items()
+        if len(values) != 1
+    }
+    if conflicts:
+        raise RuntimeError(f"conflicting settlement reference rows: {conflicts}")
+    return {
+        target_date: next(iter(values))
+        for target_date, values in by_date.items()
+    }
+
+
+def episode_slice_memberships(row: dict[str, Any]) -> tuple[str, ...]:
+    memberships = ["all_checkpoints"]
+    if str(row.get("path_phase")) == "pullback":
+        memberships.append("path_pullback")
+    if int(float(row.get("jma_has_pullback_then_recovery") or 0)):
+        memberships.append("pullback_then_recovery")
+    if int(float(row.get("jma_reheat_active") or 0)):
+        memberships.append("reheat_active")
+    if float(row.get("jma_cross_count_current_boundary") or 0) >= 2:
+        memberships.append("current_boundary_recross")
+    if float(row.get("local_hour") or 0) >= 13:
+        memberships.append("local_hour_ge_13")
+    return tuple(memberships)
+
+
+def episode_slice_probability_scores(
+    rows: list[dict[str, Any]],
+    predictions: dict[str, np.ndarray],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for slice_name in (
+        "all_checkpoints",
+        "path_pullback",
+        "pullback_then_recovery",
+        "reheat_active",
+        "current_boundary_recross",
+        "local_hour_ge_13",
+    ):
+        indexes = np.asarray(
+            [
+                index
+                for index, row in enumerate(rows)
+                if slice_name in episode_slice_memberships(row)
+            ],
+            dtype=int,
+        )
+        selected = [rows[index] for index in indexes]
+        if not selected:
+            continue
+        for candidate, baseline in FEATURE_AB_PAIRS.items():
+            candidate_probabilities = predictions[candidate][indexes]
+            baseline_probabilities = predictions[baseline][indexes]
+            brier_delta, brier_low, brier_high = v1.date_bootstrap_delta(
+                selected,
+                candidate_probabilities,
+                baseline_probabilities,
+                metric="brier",
+            )
+            logloss_delta, logloss_low, logloss_high = v1.date_bootstrap_delta(
+                selected,
+                candidate_probabilities,
+                baseline_probabilities,
+                metric="logloss",
+            )
+            output.append(
+                {
+                    "split": "frozen_forward_15d",
+                    "slice": slice_name,
+                    "grain": "checkpoint",
+                    "candidate": candidate,
+                    "baseline": baseline,
+                    "states": len(selected),
+                    "target_dates": len(
+                        {str(row["target_date"]) for row in selected}
+                    ),
+                    "candidate_brier": v1.date_equal_loss(
+                        selected, candidate_probabilities, metric="brier"
+                    ),
+                    "baseline_brier": v1.date_equal_loss(
+                        selected, baseline_probabilities, metric="brier"
+                    ),
+                    "brier_delta_candidate_minus_baseline": brier_delta,
+                    "brier_delta_ci_low": brier_low,
+                    "brier_delta_ci_high": brier_high,
+                    "logloss_delta_candidate_minus_baseline": logloss_delta,
+                    "logloss_delta_ci_low": logloss_low,
+                    "logloss_delta_ci_high": logloss_high,
+                }
+            )
+    return output
+
+
+def paired_trade_changes(
+    trades: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for candidate, baseline in FEATURE_AB_PAIRS.items():
+        baseline_rows = {
+            str(row["position_key"]): row
+            for row in trades
+            if row["model"] == baseline
+        }
+        candidate_rows = {
+            str(row["position_key"]): row
+            for row in trades
+            if row["model"] == candidate
+        }
+        for position_key in sorted(set(baseline_rows) | set(candidate_rows)):
+            old = baseline_rows.get(position_key)
+            new = candidate_rows.get(position_key)
+            same_action = bool(
+                old
+                and new
+                and old["side"] == new["side"]
+                and old["expression_bracket"] == new["expression_bracket"]
+                and old["snapshot_ts_utc"] == new["snapshot_ts_utc"]
+            )
+            output.append(
+                {
+                    "candidate": candidate,
+                    "baseline": baseline,
+                    "position_key": position_key,
+                    "change_class": (
+                        "same_action"
+                        if same_action
+                        else "candidate_only"
+                        if old is None
+                        else "baseline_only"
+                        if new is None
+                        else "changed_action"
+                    ),
+                    "target_date": str((new or old)["target_date"]),
+                    "baseline_side": old.get("side") if old else None,
+                    "candidate_side": new.get("side") if new else None,
+                    "baseline_snapshot_ts_utc": (
+                        old.get("snapshot_ts_utc") if old else None
+                    ),
+                    "candidate_snapshot_ts_utc": (
+                        new.get("snapshot_ts_utc") if new else None
+                    ),
+                    "baseline_pnl_usd": (
+                        (v1.finite(old.get("fee_adjusted_pnl_usd")) or 0.0)
+                        if old
+                        else 0.0
+                    ),
+                    "candidate_pnl_usd": (
+                        (v1.finite(new.get("fee_adjusted_pnl_usd")) or 0.0)
+                        if new
+                        else 0.0
+                    ),
+                    "pnl_delta_usd": (
+                        (v1.finite(new.get("fee_adjusted_pnl_usd")) or 0.0)
+                        if new
+                        else 0.0
+                    )
+                    - (
+                        (v1.finite(old.get("fee_adjusted_pnl_usd")) or 0.0)
+                        if old
+                        else 0.0
+                    ),
+                }
+            )
+    return output
 
 
 def split_train_forward(
@@ -104,33 +407,81 @@ def split_train_forward(
 def fit_frozen_models(
     train: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    direct = v1.fit_hgb(train, "remaining_rise_class")
+    direct = v1.fit_hgb(
+        train,
+        "remaining_rise_class",
+        feature_names=BASELINE_FEATURES,
+    )
+    episode_direct = v1.fit_hgb(
+        train,
+        "remaining_rise_class",
+        feature_names=EPISODE_FEATURE_SET,
+    )
     checkpoint = v2.fit_coherent_hurdle(
         train, date_weights(train), FROZEN_PARAMS
     )
+    episode_checkpoint = v2.fit_coherent_hurdle(
+        train,
+        date_weights(train),
+        FROZEN_PARAMS,
+        feature_names=EPISODE_FEATURE_SET,
+    )
     multigrain = v2.fit_coherent_hurdle(
         train, v2.multigrain_weights(train), FROZEN_PARAMS
+    )
+    episode_multigrain = v2.fit_coherent_hurdle(
+        train,
+        v2.multigrain_weights(train),
+        FROZEN_PARAMS,
+        feature_names=EPISODE_FEATURE_SET,
     )
     return {
         "direct_checkpoint_hgb_v3": {
             "kind": "direct",
             "model": direct,
+            "feature_names": BASELINE_FEATURES,
             "temperature": FROZEN_TEMPERATURES[
                 "direct_checkpoint_hgb_v3"
+            ],
+        },
+        "direct_checkpoint_hgb_v3__episode_state": {
+            "kind": "direct",
+            "model": episode_direct,
+            "feature_names": EPISODE_FEATURE_SET,
+            "temperature": FROZEN_TEMPERATURES[
+                "direct_checkpoint_hgb_v3__episode_state"
             ],
         },
         "coherent_checkpoint_hgb_v3": {
             "kind": "coherent_hurdle",
             "model": checkpoint,
+            "feature_names": BASELINE_FEATURES,
             "temperature": FROZEN_TEMPERATURES[
                 "coherent_checkpoint_hgb_v3"
+            ],
+        },
+        "coherent_checkpoint_hgb_v3__episode_state": {
+            "kind": "coherent_hurdle",
+            "model": episode_checkpoint,
+            "feature_names": EPISODE_FEATURE_SET,
+            "temperature": FROZEN_TEMPERATURES[
+                "coherent_checkpoint_hgb_v3__episode_state"
             ],
         },
         "coherent_multigrain_hgb_v3": {
             "kind": "coherent_hurdle",
             "model": multigrain,
+            "feature_names": BASELINE_FEATURES,
             "temperature": FROZEN_TEMPERATURES[
                 "coherent_multigrain_hgb_v3"
+            ],
+        },
+        "coherent_multigrain_hgb_v3__episode_state": {
+            "kind": "coherent_hurdle",
+            "model": episode_multigrain,
+            "feature_names": EPISODE_FEATURE_SET,
+            "temperature": FROZEN_TEMPERATURES[
+                "coherent_multigrain_hgb_v3__episode_state"
             ],
         },
     }
@@ -144,7 +495,11 @@ def predict_models(
     for name, artifact in artifacts.items():
         if artifact["kind"] == "direct":
             output[name] = v1.apply_temperature(
-                v1.aligned_probabilities(artifact["model"], rows),
+                v1.aligned_probabilities(
+                    artifact["model"],
+                    rows,
+                    feature_names=tuple(artifact["feature_names"]),
+                ),
                 float(artifact["temperature"]),
             )
         else:
@@ -152,6 +507,7 @@ def predict_models(
                 artifact["model"],
                 rows,
                 temperature=float(artifact["temperature"]),
+                feature_names=tuple(artifact["feature_names"]),
             )
     return output
 
@@ -403,17 +759,33 @@ def persist_models(
     model_dir.mkdir(parents=True, exist_ok=True)
     output = {}
     for name, artifact in artifacts.items():
+        feature_semantic_hash = feature_hash
+        if tuple(artifact["feature_names"]) == EPISODE_FEATURE_SET:
+            feature_semantic_hash = hashlib.sha256(
+                v2.canonical_json(
+                    {
+                        "base_feature_semantic_sha256": feature_hash,
+                        "derived_feature_semantic_version": (
+                            EPISODE_FEATURE_SEMANTIC_VERSION
+                        ),
+                        "derived_features": list(EPISODE_STATE_FEATURES),
+                    }
+                ).encode("utf-8")
+            ).hexdigest()
         spec = {
             "schema_version": "tokyo_continuous_ladder_forward_v3",
             "model": name,
-            "features": list(v1.MODEL_FEATURES),
-            "feature_semantic_sha256": feature_hash,
+            "features": list(artifact["feature_names"]),
+            "feature_semantic_sha256": feature_semantic_hash,
             "training_cutoff": TRAIN_CUTOFF,
             "forward_window": [FORWARD_START, FORWARD_END],
             "forward_labels_used_in_fit": False,
             "parameters": (
                 FROZEN_PARAMS
-                if name != "direct_checkpoint_hgb_v3"
+                if name not in {
+                    "direct_checkpoint_hgb_v3",
+                    "direct_checkpoint_hgb_v3__episode_state",
+                }
                 else {
                     "learning_rate": 0.035,
                     "max_iter": 220,
@@ -431,6 +803,7 @@ def persist_models(
         model_path = model_dir / f"{name}.joblib"
         joblib.dump(artifact, model_path, compress=3)
         output[name] = {
+            "feature_semantic_sha256": feature_semantic_hash,
             "model_spec_sha256": hashlib.sha256(spec_bytes).hexdigest(),
             "model_artifact_sha256": hashlib.sha256(
                 model_path.read_bytes()
@@ -444,7 +817,6 @@ def long_predictions(
     predictions: dict[str, np.ndarray],
     exact: dict[str, datetime],
     hashes: dict[str, dict[str, str]],
-    feature_hash: str,
 ) -> Iterable[dict[str, Any]]:
     for index, row in enumerate(rows):
         observed = v1.parse_ts(str(row["decision_ts_utc"]))
@@ -490,7 +862,9 @@ def long_predictions(
                     "training_cutoff": TRAIN_CUTOFF,
                     "frozen_forward": 1,
                     "forward_labels_used_in_fit": 0,
-                    "feature_semantic_sha256": feature_hash,
+                    "feature_semantic_sha256": hashes[model][
+                        "feature_semantic_sha256"
+                    ],
                     **hashes[model],
                     "pit_provenance": row["pit_provenance"],
                 }
@@ -1072,6 +1446,10 @@ def join_market_asof_books(
                 "path_phase": state["path_phase"],
                 "is_transition": state["is_transition"],
                 "is_state_entry": state["is_state_entry"],
+                **{
+                    feature: state.get(feature)
+                    for feature in EPISODE_STATE_FEATURES
+                },
             }
             for model in predictions:
                 probability = prediction_by_state[
@@ -1093,6 +1471,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--market-states", type=Path, default=v1.MARKET_STATES)
     parser.add_argument("--pm-history", type=Path, default=v1.PM_HISTORY)
+    parser.add_argument(
+        "--settlement-reference-rows",
+        type=Path,
+        help=(
+            "immutable prior evaluation rows carrying winning_bracket; "
+            "label-only supplement when hot pm_history no longer retains "
+            "the requested window"
+        ),
+    )
     parser.add_argument("--raw-books", type=Path, default=v1.RAW_BOOKS)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument(
@@ -1126,11 +1513,11 @@ def main(argv: list[str] | None = None) -> int:
 
     raw = v1.read_rows(args.features)
     continuous = v2.annotate_grains(
-        [
+        add_episode_state_features([
             row
             for row in v1.build_continuous_rows(raw)
             if row["remaining_rise_class"] is not None
-        ]
+        ])
     )
     train, forward = split_train_forward(continuous)
     train_dates = sorted({str(row["target_date"]) for row in train})
@@ -1149,16 +1536,23 @@ def main(argv: list[str] | None = None) -> int:
     model_scores = probability_scores(
         forward, predictions, split="frozen_forward_15d"
     )
+    episode_slice_scores = episode_slice_probability_scores(
+        forward, predictions
+    )
     daily_scores = daily_probability_scores(forward, predictions)
     calibration = outcome_calibration(forward, predictions)
     prediction_rows = list(
-        long_predictions(forward, predictions, exact, hashes, feature_hash)
+        long_predictions(forward, predictions, exact, hashes)
     )
 
     markets = v1.load_market_states(args.market_states)
     winners = v1.load_winners(
         args.pm_history, date(2026, 7, 16), date(2026, 7, 30)
     )
+    if args.settlement_reference_rows is not None:
+        winners.update(
+            load_winners_from_reference_rows(args.settlement_reference_rows)
+        )
     joined = join_market_asof_books(
         forward,
         predictions,
@@ -1256,6 +1650,30 @@ def main(argv: list[str] | None = None) -> int:
             exact_trades, split=strategy_exact_split
         )
     )
+    trade_changes = paired_trade_changes(trades)
+
+    market_episode_slice_scores: list[dict[str, Any]] = []
+    for slice_name in (
+        "all_checkpoints",
+        "path_pullback",
+        "pullback_then_recovery",
+        "reheat_active",
+        "current_boundary_recross",
+        "local_hour_ge_13",
+    ):
+        selected = [
+            row
+            for row in joined
+            if slice_name in episode_slice_memberships(row)
+        ]
+        if selected:
+            market_episode_slice_scores.extend(
+                v1.market_score_rows(
+                    selected,
+                    MODEL_NAMES,
+                    f"frozen_forward_market_{slice_name}",
+                )
+            )
 
     signal_funnel = [
         {
@@ -1334,17 +1752,23 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     write_rows(args.out / "model_scores.csv", model_scores)
+    write_rows(args.out / "episode_slice_scores.csv", episode_slice_scores)
     write_rows(args.out / "daily_model_scores.csv", daily_scores)
     write_rows(args.out / "model_outcome_calibration.csv", calibration)
     write_rows(args.out / "prediction_long.csv.gz", prediction_rows)
     write_rows(args.out / "market_join_rows.csv.gz", joined)
     write_rows(args.out / "market_scores.csv", market_scores)
     write_rows(
+        args.out / "market_episode_slice_scores.csv",
+        market_episode_slice_scores,
+    )
+    write_rows(
         args.out / "market_binary_scores.csv", market_binary_scores
     )
     write_rows(args.out / "current_next_candidates.csv.gz", candidates)
     write_rows(args.out / "selected_trades.csv", trades)
     write_rows(args.out / "selected_trades_exact.csv", exact_trades)
+    write_rows(args.out / "paired_trade_changes.csv", trade_changes)
     write_rows(args.out / "strategy_summary.csv", strategy_scores)
     write_rows(args.out / "strategy_side_summary.csv", side_scores)
     write_rows(args.out / "order_probability_distribution.csv", distributions)
@@ -1355,8 +1779,21 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = {
         "schema_version": args.analysis_version,
+        "observed_at_utc": datetime.now(timezone.utc).isoformat(),
         "research_only_zero_notional": True,
         "live_behavior_changed": False,
+        "denominator_scope": (
+            "Tokyo JMA/RJTT daylight 10-minute checkpoints with prior "
+            "METAR running maximum and terminal exact-bracket label; "
+            "training target_date<=2026-07-15, untouched probability "
+            "forward=2026-07-16..2026-07-30"
+        ),
+        "input_artifacts": {
+            "features": str(args.features),
+            "exact_first_seen": str(args.exact_first_seen),
+            "market_states": str(args.market_states),
+            "raw_books": str(args.raw_books),
+        },
         "training_cutoff": TRAIN_CUTOFF,
         "training_rows": len(train),
         "training_dates": len(train_dates),
@@ -1366,6 +1803,16 @@ def main(argv: list[str] | None = None) -> int:
         "forward_dates": len(forward_dates),
         "forward_labels_used_in_fit": False,
         "market_join_rows": len(joined),
+        "settlement_label_sources": {
+            "hot_pm_history": str(args.pm_history),
+            "immutable_reference_rows": (
+                str(args.settlement_reference_rows)
+                if args.settlement_reference_rows is not None
+                else None
+            ),
+            "winner_dates": sorted(winners),
+            "labels_used_as_features": False,
+        },
         "market_join_policy": (
             "book_snapshot_latest_available_weather_state"
         ),
@@ -1377,6 +1824,19 @@ def main(argv: list[str] | None = None) -> int:
         "collector_exact_rows": len(exact_joined),
         "collector_exact_dates": exact_dates,
         "champion_frozen_before_forward": CHAMPION,
+        "paired_feature_challenger": {
+            "models": [
+                name for name in MODEL_NAMES if name.endswith("__episode_state")
+            ],
+            "paired_baselines": {
+                name: name.removesuffix("__episode_state")
+                for name in MODEL_NAMES
+                if name.endswith("__episode_state")
+            },
+            "changed_factor": "episode_state_features_only",
+            "features_added": list(EPISODE_STATE_FEATURES),
+            "same_rows_labels_clocks_hyperparameters_temperature": True,
+        },
         "strategy_policy": {
             "evaluation_status": args.strategy_evaluation_status,
             "expressions": ["current_exact", "next_exact"],
@@ -1395,7 +1855,10 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "add_on_allowed": False,
         },
-        "feature_semantic_sha256": feature_hash,
+        "input_feature_semantic_sha256": feature_hash,
+        "episode_feature_semantic_version": (
+            EPISODE_FEATURE_SEMANTIC_VERSION
+        ),
         "model_hashes": hashes,
     }
     if args.strategy_evaluation_status == "frozen_before_forward":

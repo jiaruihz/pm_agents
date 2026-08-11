@@ -187,10 +187,12 @@ def fit_weighted_hgb(
     label: str,
     weights: np.ndarray,
     params: dict[str, Any],
+    *,
+    feature_names: tuple[str, ...] = v1.MODEL_FEATURES,
 ) -> Pipeline:
     model = hgb_pipeline(params)
     model.fit(
-        matrix(rows, v1.MODEL_FEATURES),
+        matrix(rows, feature_names),
         np.asarray([int(row[label]) for row in rows]),
         model__sample_weight=weights,
     )
@@ -198,9 +200,13 @@ def fit_weighted_hgb(
 
 
 def probability_for_class(
-    model: Pipeline, rows: list[dict[str, Any]], wanted: int
+    model: Pipeline,
+    rows: list[dict[str, Any]],
+    wanted: int,
+    *,
+    feature_names: tuple[str, ...] = v1.MODEL_FEATURES,
 ) -> np.ndarray:
-    raw = model.predict_proba(matrix(rows, v1.MODEL_FEATURES))
+    raw = model.predict_proba(matrix(rows, feature_names))
     classes = [
         int(value) for value in model.named_steps["model"].classes_
     ]
@@ -208,9 +214,12 @@ def probability_for_class(
 
 
 def aligned_tail_probabilities(
-    model: Pipeline, rows: list[dict[str, Any]]
+    model: Pipeline,
+    rows: list[dict[str, Any]],
+    *,
+    feature_names: tuple[str, ...] = v1.MODEL_FEATURES,
 ) -> np.ndarray:
-    raw = model.predict_proba(matrix(rows, v1.MODEL_FEATURES))
+    raw = model.predict_proba(matrix(rows, feature_names))
     classes = [
         int(value) for value in model.named_steps["model"].classes_
     ]
@@ -229,9 +238,15 @@ def fit_coherent_hurdle(
     rows: list[dict[str, Any]],
     weights: np.ndarray,
     params: dict[str, Any],
+    *,
+    feature_names: tuple[str, ...] = v1.MODEL_FEATURES,
 ) -> dict[str, Any]:
     leave = fit_weighted_hgb(
-        rows, "binary_leave_current", weights, params
+        rows,
+        "binary_leave_current",
+        weights,
+        params,
+        feature_names=feature_names,
     )
     positive_indexes = np.asarray(
         [
@@ -245,9 +260,18 @@ def fit_coherent_hurdle(
     positive_weights = weights[positive_indexes]
     positive_weights = positive_weights / np.mean(positive_weights)
     tail = fit_weighted_hgb(
-        positive_rows, "remaining_rise_class", positive_weights, params
+        positive_rows,
+        "remaining_rise_class",
+        positive_weights,
+        params,
+        feature_names=feature_names,
     )
-    return {"leave": leave, "tail": tail, "params": dict(params)}
+    return {
+        "leave": leave,
+        "tail": tail,
+        "params": dict(params),
+        "feature_names": tuple(feature_names),
+    }
 
 
 def coherent_probabilities(
@@ -255,9 +279,17 @@ def coherent_probabilities(
     rows: list[dict[str, Any]],
     *,
     temperature: float = 1.0,
+    feature_names: tuple[str, ...] | None = None,
 ) -> np.ndarray:
-    p_leave = probability_for_class(model["leave"], rows, 1)
-    conditional_tail = aligned_tail_probabilities(model["tail"], rows)
+    selected_features = tuple(
+        feature_names or model.get("feature_names") or v1.MODEL_FEATURES
+    )
+    p_leave = probability_for_class(
+        model["leave"], rows, 1, feature_names=selected_features
+    )
+    conditional_tail = aligned_tail_probabilities(
+        model["tail"], rows, feature_names=selected_features
+    )
     output = np.column_stack(
         [1.0 - p_leave, p_leave[:, None] * conditional_tail]
     )

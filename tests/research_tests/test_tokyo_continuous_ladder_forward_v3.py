@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from scripts.analysis.market_structure_edge import (
     research_tokyo_continuous_ladder_forward_v3 as forward,
@@ -119,6 +120,94 @@ def test_wilson_interval_keeps_zero_win_uncertainty_visible() -> None:
 
     assert low == 0
     assert 0.24 < high < 0.25
+
+
+def test_episode_state_features_are_prefix_only_and_detect_reheat() -> None:
+    base = {
+        "target_date": "2026-07-20",
+        "current_bracket": 30,
+        "jma_temp_slope_30m_cph": 0.6,
+        "jma_temp_slope_60m_cph": -0.2,
+    }
+    prefix = [
+        {
+            **base,
+            "decision_ts_utc": "2026-07-20T01:00:00+00:00",
+            "jma_temp_c": 30.4,
+            "jma_temp_delta_10m": 0.1,
+        },
+        {
+            **base,
+            "decision_ts_utc": "2026-07-20T01:10:00+00:00",
+            "jma_temp_c": 30.0,
+            "jma_temp_delta_10m": -0.4,
+        },
+        {
+            **base,
+            "decision_ts_utc": "2026-07-20T01:20:00+00:00",
+            "jma_temp_c": 30.3,
+            "jma_temp_delta_10m": 0.3,
+        },
+    ]
+    prefix_scored = forward.add_episode_state_features(prefix)
+    with_future = forward.add_episode_state_features(
+        prefix
+        + [
+            {
+                **base,
+                "decision_ts_utc": "2026-07-20T01:30:00+00:00",
+                "jma_temp_c": 31.0,
+                "jma_temp_delta_10m": 0.7,
+            }
+        ]
+    )
+
+    assert prefix_scored == with_future[: len(prefix)]
+    recovered = prefix_scored[-1]
+    assert recovered["jma_episode_giveback_c"] == pytest.approx(0.4)
+    assert recovered["jma_recovery_from_trough_c"] == pytest.approx(0.3)
+    assert recovered["jma_has_pullback_then_recovery"] == 1
+    assert recovered["jma_reheat_active"] == 1
+
+
+def test_episode_cross_count_tracks_recross_at_current_boundary() -> None:
+    rows = [
+        {
+            "target_date": "2026-07-20",
+            "decision_ts_utc": f"2026-07-20T01:{minute:02d}:00+00:00",
+            "current_bracket": 30,
+            "jma_temp_c": temperature,
+            "jma_temp_delta_10m": 0.0,
+            "jma_temp_slope_30m_cph": 0.0,
+            "jma_temp_slope_60m_cph": 0.0,
+        }
+        for minute, temperature in ((0, 30.4), (10, 30.6), (20, 30.4), (30, 30.7))
+    ]
+
+    scored = forward.add_episode_state_features(rows)
+
+    assert [row["jma_cross_count_current_boundary"] for row in scored] == [
+        0,
+        1,
+        2,
+        3,
+    ]
+
+
+def test_settlement_reference_is_label_only_and_requires_one_winner(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "reference.csv"
+    path.write_text(
+        "target_date,winning_bracket,p_model\n"
+        "2026-07-20,31,0.9\n"
+        "2026-07-20,31,0.1\n",
+        encoding="utf-8",
+    )
+
+    winners = forward.load_winners_from_reference_rows(path)
+
+    assert winners == {"2026-07-20": "31"}
 
 
 def test_book_join_uses_latest_state_available_at_book_time() -> None:

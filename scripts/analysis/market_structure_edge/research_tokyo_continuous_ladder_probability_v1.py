@@ -196,7 +196,12 @@ def fit_logit(
     return model
 
 
-def fit_hgb(rows: list[dict[str, Any]], label: str) -> Pipeline:
+def fit_hgb(
+    rows: list[dict[str, Any]],
+    label: str,
+    *,
+    feature_names: tuple[str, ...] = MODEL_FEATURES,
+) -> Pipeline:
     model = Pipeline(
         [
             ("impute", SimpleImputer(strategy="median")),
@@ -214,15 +219,20 @@ def fit_hgb(rows: list[dict[str, Any]], label: str) -> Pipeline:
         ]
     )
     model.fit(
-        matrix(rows, MODEL_FEATURES),
+        matrix(rows, feature_names),
         np.asarray([int(row[label]) for row in rows]),
         model__sample_weight=date_weights(rows),
     )
     return model
 
 
-def aligned_probabilities(model: Any, rows: list[dict[str, Any]]) -> np.ndarray:
-    raw = model.predict_proba(matrix(rows, MODEL_FEATURES))
+def aligned_probabilities(
+    model: Any,
+    rows: list[dict[str, Any]],
+    *,
+    feature_names: tuple[str, ...] = MODEL_FEATURES,
+) -> np.ndarray:
+    raw = model.predict_proba(matrix(rows, feature_names))
     classes = [int(value) for value in model.named_steps["model"].classes_]
     output = np.zeros((len(rows), 4), dtype=float)
     for index, value in enumerate(classes):
