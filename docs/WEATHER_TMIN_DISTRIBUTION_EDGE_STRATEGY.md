@@ -239,13 +239,17 @@ readiness verdict：`BLOCKED_FOR_FIT / KEEP_ZERO_NOTIONAL_COLLECTION`。
 
 2026-08-11 启动时固定 raw denominator 为 49 个 first-cross events / 16 target dates；49 个都回连到
 首个 quote checkpoint，29 个有 raw executable NO ask。全部写成 WCIR `ModelOutput +
-SignalCandidate`，但在 next-colder-NO probability artifact 冻结前统一标
-`next_colder_no_model_not_frozen`，因此 scored/selected/TradeIntent/order/fill 均为 0。价格不作为
-signal eligibility gate；source→settlement alignment、official fee 与 settlement label 分别留在
-evidence funnel。
+SignalCandidate`。机制 candidate 状态为 `observed`，不把尚未冻结的概率冒充 score；每条保留
+`cold_cross_margin_native`，但所有首次跨档均进入 signal funnel，不设 `.3/.4` hard gate。有 raw ask
+的行标为 zero-notional `shadow_would_enter_at_raw_ask`，仍不创建正式 TradeIntent/order/fill。
+
+2026-08-11 初版曾把这 49 条 previous-warmer-NO candidate 错绑到 `next_colder_no` model identity。
+表达 bracket/side 与 quote 均正确，但 model/blocker family 错误；影响半径为 49 candidates、0 selected、
+0 intent/order/fill。原 journal 保留为 superseded evidence，修正版改用
+`tmin_prev_warmer_no_given_cross_pending_v0`。next-colder exact-NO 是另一条表达，不参与本 runtime 评分。
 
 生产 runtime 使用 `fast_observation` release
-`f0b390b4004a7397d7cefb73e899463ca210d668`，实例 identity 为
+`f61a84b51640e670fe83a4c3e920eae55f3d934b`，实例 identity 为
 `weather_tmin_cross_prev_no_shadow_v1`。
 
 ### 首轮实现与真实 denominator
