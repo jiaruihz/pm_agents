@@ -58,6 +58,7 @@ weather_jrs_tmux() {
   local socket
   local tmux_bin
   local command_name="${2:-}"
+  local production_config="${WEATHER_PRODUCTION_CONFIG:-}"
 
   socket="$(weather_jrs_tmux_socket "${1:-}")" || return 1
   shift
@@ -77,6 +78,24 @@ weather_jrs_tmux() {
   # starting a new server if the canonical permission host is absent or dies
   # between the caller's health check and this command.  Only the production
   # controller may create/recreate the canonical server.
+  # Existing tmux servers do not inherit the environment of the client asking
+  # them to create a session. Pass the controller-owned contract explicitly.
+  if [[ "$command_name" == "new-session" || "$command_name" == "new-window" ]]; then
+    if [[ -n "$production_config" ]]; then
+      if [[ "$production_config" != /* || ! -r "$production_config" ]]; then
+        echo "invalid WEATHER_PRODUCTION_CONFIG for JRS tmux child: $production_config" >&2
+        return 1
+      fi
+      shift
+      "$tmux_bin" -N -L "$socket" "$command_name" \
+        -e "WEATHER_PRODUCTION_CONFIG=$production_config" "$@"
+      return
+    fi
+    if [[ "${WEATHER_JRS_TMUX_MUTATION_AUTHORITY:-}" == "controller" ]]; then
+      echo "production controller must inject WEATHER_PRODUCTION_CONFIG into JRS tmux children" >&2
+      return 1
+    fi
+  fi
   "$tmux_bin" -N -L "$socket" "$@"
 }
 
