@@ -6,7 +6,7 @@ operational_repo_root: /Users/deepsleep/projects/pm_agents
 production_releases:
   - release_id: control_plane
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
-    expected_repo_sha: fac1c14999bc0e34520584d95a3fcadda2403020
+    expected_repo_sha: bc44d9d62ada98bef4e483a386c7a9b403852660
   - release_id: fast_source_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_source_prod
     expected_repo_sha: 1cb1db431bc1a156f8e28dfb9e00dae7a4c72c2b
