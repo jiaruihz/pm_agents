@@ -8,9 +8,15 @@ queue+5 股才记保守成交：4,017 posts、44 possible fills、23 个 exit-sc
 （1/23 为正）。tight spread/light queue/supportive tape 仍为负；首次可保本动态退出为 `-6.93%`。
 盘口恶化前撤单只剩2 fills/1 date、ROI `+6.72%`，不足以冻结且不与 D-1 candidate 同分母。
 
+inside-spread v2 已区分固定 +1c 与 Polymarket native +1 tick（0.01/极端价0.001）。native +1 tick 把保守
+fill rate 从 `1.10%` 提到 `3.59%`（`3.28×`），但69个exit-scoreable fills的fixed60/dynamic ROI仍为
+`-3.69%/-3.62%`；adverse-cancel+tight/light也只有 `-1.22%/-1.25%`。因此 +1 tick 是更合理的
+signal-conditioned 报价 challenger，不是 generic maker alpha；要证明它能用于本 family，仍需 D-1 forecast
+candidate 同分母 WS + own order lifecycle，不能拿本次 hot-strip 1日样本替代。
+
 历史 D-1 已更新至 `2026-08-10`：5,973 events/62,173 rungs/66 dates。entry challenger 相对 M0 的 holdout
 MSE delta `-0.000000487`，CI `[-0.000001851,+0.000000939]`，仍跨0；新 holdout anti-toxic selector 选择0笔，
-full-ladder completion 仍未通过。single-leg passive expression 判 `rejected_for_expression`，completion runner
+full-ladder completion 仍未通过。generic single-leg passive expression 判 `rejected_for_expression`，completion runner
 继续 zero-notional abstain。完整证据见 [tape execution v1](2026-08/2026-08-11-forecast-repricing-tape-execution-v1.md)。
 
 ## Anti-toxic maker / full-ladder completion handoff（2026-08-10）

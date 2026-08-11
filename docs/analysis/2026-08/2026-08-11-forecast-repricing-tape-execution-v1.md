@@ -1,12 +1,12 @@
 # Forecast Repricing：真实 tape / queue-conservative maker 复核
 
-significance=FAIL（宽分母 passive maker 为负；唯一正切片仅 2 fills / 1 target date）
+significance=FAIL（best bid、bid+1 native tick 与固定 +1c 的 generic passive maker 均为负）
 
-baseline=best-bid touch proxy 已升级为 exchange trade print + visible queue ahead 的保守成交反事实
+baseline=best-bid touch proxy 已升级为 exchange trade print + visible queue ahead，并完成 native-tick 报价 A/B
 
 forward=FAIL_LOW_SAMPLE（WS execution slice 只有 1 个 exit-scoreable target date，且不覆盖 D-1 candidate universe）
 
-execution=single-leg passive expression rejected；full-ladder completion 继续 zero-notional abstain
+execution=generic single-leg passive expression rejected；bid+1 tick 只保留为 signal-conditioned 报价 challenger
 
 production: live_action=none; orders_changed=0
 
@@ -27,8 +27,28 @@ maker fills。它不能排除主动 SELL 直接打 bid，只能说明旧的五�
 - “盘口先恶化则撤单”只剩 2 fills，fixed60 ROI `+6.72%`；其中 Helsinki `+21.64%`、Amsterdam
   `-8.83%`。它只有 1 个 target date，且与 D-1 forecast candidates 不同分母，不能冻结为盈利策略。
 
-因此当前最合理的优化不是继续从这 23 笔追价格带/城市阈值，而是停止 single-leg passive expression；保留
-full-ladder completion 的 zero-notional runner，让它在没有正 completion margin 时明确 abstain。
+因此当前最合理的优化不是继续从这 23 笔追价格带/城市阈值，而是停止 generic single-leg passive expression；
+保留 full-ladder completion 的 zero-notional runner，让它在没有正 completion margin 时明确 abstain。
+
+### 报价 A/B：best bid、bid+1 tick、固定 +1c
+
+用户指出原位 best bid 排在整条 queue 后面，要求检验 inside-spread 报价。v2 已按 Polymarket 的动态 native
+tick 合同重放：通常为 `0.01`，盘口触及 `<0.04` 或 `>0.96` 时 WS 会发 `tick_size_change` 切为 `0.001`；
+未捕获 change 前用完整 book 的非整 cent 价位与边界规则恢复。post-only 报价若达到 ask 则记 non-postable，
+不偷换为 taker。官方动态 tick 语义见 [Polymarket market channel](https://docs.polymarket.com/market-data/websocket/market-channel)。
+
+| quote | posts | conservative fills | fill rate | exit-scoreable | fixed60 ROI | dynamic ROI |
+|---|---:|---:|---:|---:|---:|---:|
+| best bid | 4,017 | 44 | 1.10% | 23 | -6.57% | -6.93% |
+| best bid + 1 native tick | 2,955 | 106 | 3.59% | 69 | -3.69% | -3.62% |
+| best bid + fixed 1c | 1,795 | 81 | 4.51% | 48 | -5.89% | -5.76% |
+
+`bid+1 native tick` 的 conservative fill rate 是 best bid 的 `3.28×`，验证了改善报价能明显提高成交；但69个
+exit-scoreable fills 的平均入场改善成本为 `0.62c/share`，60秒 gross executable bid markout 为
+`-1.30c/share`，计退出 fee 后为 `-1.69c/share`。盘口恶化前撤单 + tight/light 仍为 `-1.22%` fixed60 /
+`-1.25%` dynamic（29 fills/1 date）。所以差的不是那一个 tick 本身，而是被 SELL flow 找到后的 adverse
+selection。该结论只拒绝无 signal 普挂；D-1 forecast/full-ladder signal-conditioned `bid+1 tick` 尚因当前 WS
+不覆盖 D-1 candidate universe 而未完成同分母检验。
 
 ## 更新到 T-1（2026-08-10）
 
@@ -69,6 +89,8 @@ development 33 quotes / 1 negative proxy fill（ROI `-11.45%`），holdout 2 quo
 - position：`forecast_repricing/full_ladder_position_20260811_tminus1/position_policy.joblib`
   - SHA-256 `c7074670a73eb26e461a94aa68e15cb502edbf8c60246515ca81067d12599c26`
 - tape：`forecast_repricing/tape_passive_execution_20260810/{passive_orders.csv,policy_summary.csv,summary.json,report.md}`
+- native tick A/B：`forecast_repricing/tape_passive_native_tick_20260810/{passive_orders.csv,policy_summary.csv,summary.json,report.md}`
+- fixed +1c A/B：`forecast_repricing/tape_passive_plus_cent_20260810/{passive_orders.csv,policy_summary.csv,summary.json,report.md}`
 - current smoke：`forecast_repricing/completion_probe_current_smoke_20260811`
   - 256 files、3,206 complete ladders、35,266 rungs、93 streams；left-censored baseline，orders=0。
 
@@ -76,7 +98,8 @@ development 33 quotes / 1 negative proxy fill（ROI `-11.45%`），holdout 2 quo
 .venv/bin/python -m weather_model_evaluation.cli forecast-repricing-tape \
   --ws-root /Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental \
   --start-utc 2026-08-10T00:00:00Z --end-utc 2026-08-10T18:24:00Z \
-  --output-dir /Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/tape_passive_execution_20260810
+  --output-dir /Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/tape_passive_native_tick_20260810 \
+  --quote-modes bid_plus_tick
 ```
 
 ## 当前动作

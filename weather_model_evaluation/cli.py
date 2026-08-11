@@ -159,6 +159,13 @@ def _add_forecast_repricing_tape_parser(subparsers: Any) -> None:
     parser.add_argument("--start-utc", required=True)
     parser.add_argument("--end-utc", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--quote-modes",
+        nargs="+",
+        choices=("best_bid", "bid_plus_tick", "bid_plus_cent", "midpoint"),
+        default=("best_bid", "bid_plus_tick", "midpoint"),
+    )
+    parser.add_argument("--tick-size", type=float, default=0.01)
     parser.set_defaults(handler=run_forecast_repricing_tape)
 
 
@@ -200,6 +207,8 @@ def run_forecast_repricing_tape(args: argparse.Namespace) -> int:
         start_utc=args.start_utc,
         end_utc=args.end_utc,
         output_dir=args.output_dir,
+        quote_modes=args.quote_modes,
+        tick_size=args.tick_size,
     )
     print(
         json.dumps(
