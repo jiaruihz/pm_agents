@@ -422,6 +422,227 @@ WHERE f.status IN ('filled', 'simulated')
   AND COALESCE(validity.effective_status, 'valid') <> 'excluded'
 """
 
+INCREMENTAL_WATERMARK_TABLE = "fact_materialization_watermarks"
+INCREMENTAL_ROWID_SOURCES = (
+    "fills",
+    "settlements",
+    "settlement_outcomes",
+    "fill_fee_adjustments",
+    "fill_price_adjustments",
+    "fill_timestamp_adjustments",
+    "fill_validity_adjustments",
+    "order_execution_aliases",
+)
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone() is not None
+
+
+def _max_rowid(conn: sqlite3.Connection, table_name: str) -> int:
+    if not _table_exists(conn, table_name):
+        return 0
+    row = conn.execute(f"SELECT MAX(rowid) FROM {table_name}").fetchone()
+    return int(row[0] or 0)
+
+
+def _ensure_incremental_watermark_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {INCREMENTAL_WATERMARK_TABLE} (
+          fact_name TEXT NOT NULL,
+          source_table TEXT NOT NULL,
+          last_rowid INTEGER NOT NULL,
+          updated_at_utc TEXT NOT NULL,
+          PRIMARY KEY (fact_name, source_table)
+        )
+        """
+    )
+    conn.commit()
+
+
+def _fill_ids_for_target_dates(
+    conn: sqlite3.Connection,
+    target_dates: set[str],
+) -> set[str]:
+    if not target_dates:
+        return set()
+    dates = sorted(target_dates)
+    placeholders = ",".join("?" for _ in dates)
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT f.fill_id "
+            "FROM signals s "
+            "JOIN plans p ON p.signal_id=s.signal_id "
+            "JOIN orders o ON o.plan_id=p.plan_id "
+            "JOIN fills f ON f.execution_id=o.execution_id "
+            f"WHERE s.target_date IN ({placeholders})",
+            dates,
+        ).fetchall()
+    }
+
+
+def _fill_ids_for_executions(
+    conn: sqlite3.Connection,
+    execution_ids: set[str],
+) -> set[str]:
+    if not execution_ids:
+        return set()
+    values = sorted(execution_ids)
+    placeholders = ",".join("?" for _ in values)
+    return {
+        str(row[0])
+        for row in conn.execute(
+            f"SELECT fill_id FROM fills WHERE execution_id IN ({placeholders})",
+            values,
+        ).fetchall()
+    }
+
+
+def _bootstrap_missing_fill_ids(
+    conn: sqlite3.Connection,
+    *,
+    excluded_fill_ids: set[str],
+    batch_size: int = 128,
+    max_scan_rows: int = 4096,
+) -> set[str]:
+    """Find an unmaterialized append-only tail on the first incremental run."""
+    if not _table_exists(conn, "fact_trades"):
+        raise RuntimeError("incremental fact build requires an existing fact_trades table")
+
+    cursor_rowid = _max_rowid(conn, "fills")
+    missing: set[str] = set()
+    scanned = 0
+    while cursor_rowid > 0 and scanned < max_scan_rows:
+        raw_rows = conn.execute(
+            "SELECT rowid, fill_id FROM fills "
+            "WHERE rowid <= ? ORDER BY rowid DESC LIMIT ?",
+            (cursor_rowid, batch_size),
+        ).fetchall()
+        if not raw_rows:
+            break
+        raw_ids = {str(row[1]) for row in raw_rows}
+        placeholders = ",".join("?" for _ in raw_ids)
+        materialized = {
+            str(row[0])
+            for row in conn.execute(
+                f"SELECT fill_id FROM fact_trades WHERE fill_id IN ({placeholders})",
+                sorted(raw_ids),
+            ).fetchall()
+        }
+        batch_missing = raw_ids - materialized - excluded_fill_ids
+        missing.update(batch_missing)
+        scanned += len(raw_rows)
+        if not batch_missing:
+            return missing
+        cursor_rowid = int(raw_rows[-1][0]) - 1
+
+    if cursor_rowid > 0:
+        raise RuntimeError(
+            "incremental bootstrap could not find an already-materialized fill tail "
+            f"within {max_scan_rows} rows; run the explicit full rebuild"
+        )
+    return missing
+
+
+def collect_incremental_scope(
+    conn: sqlite3.Connection,
+) -> tuple[set[str], dict[str, int]]:
+    """Collect fill rows invalidated since the last successful materialization.
+
+    Watermarks advance in the same transaction as fact publication. A failed
+    refresh therefore replays the same append-only source rows on the next run.
+    """
+    _ensure_incremental_watermark_table(conn)
+    current_watermarks = {
+        table_name: _max_rowid(conn, table_name)
+        for table_name in INCREMENTAL_ROWID_SOURCES
+    }
+    prior_watermarks = {
+        str(row[0]): int(row[1])
+        for row in conn.execute(
+            f"SELECT source_table, last_rowid FROM {INCREMENTAL_WATERMARK_TABLE} "
+            "WHERE fact_name='fact_trades'"
+        ).fetchall()
+    }
+
+    affected: set[str] = set()
+    excluded: set[str] = set()
+
+    if prior_watermarks:
+        new_fill_rows = conn.execute(
+            "SELECT fill_id, execution_id FROM fills WHERE rowid > ?",
+            (prior_watermarks.get("fills", 0),),
+        ).fetchall()
+        affected.update(str(row[0]) for row in new_fill_rows)
+        # order_status is derived from total filled shares, so a new partial fill
+        # invalidates its already-materialized sibling fills too.
+        affected.update(
+            _fill_ids_for_executions(
+                conn,
+                {str(row[1]) for row in new_fill_rows if row[1]},
+            )
+        )
+
+        changed_dates: set[str] = set()
+        for table_name in ("settlements", "settlement_outcomes"):
+            if not _table_exists(conn, table_name):
+                continue
+            changed_dates.update(
+                str(row[0])
+                for row in conn.execute(
+                    f"SELECT DISTINCT target_date FROM {table_name} WHERE rowid > ?",
+                    (prior_watermarks.get(table_name, 0),),
+                ).fetchall()
+                if row[0]
+            )
+        affected.update(_fill_ids_for_target_dates(conn, changed_dates))
+    for table_name in (
+        "fill_fee_adjustments",
+        "fill_price_adjustments",
+        "fill_timestamp_adjustments",
+        "fill_validity_adjustments",
+    ):
+        if not _table_exists(conn, table_name):
+            continue
+        affected.update(
+            str(row[0])
+            for row in conn.execute(
+                f"SELECT fill_id FROM {table_name} WHERE rowid > ?",
+                (prior_watermarks.get(table_name, 0),),
+            ).fetchall()
+        )
+
+    if _table_exists(conn, "order_execution_aliases"):
+        alias_rows = conn.execute(
+            "SELECT f.fill_id FROM order_execution_aliases a "
+            "JOIN fills f ON f.execution_id=a.alias_execution_id "
+            "WHERE a.rowid > ?",
+            (prior_watermarks.get("order_execution_aliases", 0),),
+        ).fetchall()
+        affected.update(str(row[0]) for row in alias_rows)
+        excluded.update(str(row[0]) for row in alias_rows)
+
+    if _table_exists(conn, "fill_validity_adjustments"):
+        excluded.update(
+            str(row[0])
+            for row in conn.execute(
+                "SELECT fill_id FROM fill_validity_adjustments "
+                "WHERE effective_status='excluded'"
+            ).fetchall()
+        )
+
+    if not prior_watermarks:
+        affected.update(
+            _bootstrap_missing_fill_ids(conn, excluded_fill_ids=excluded)
+        )
+
+    return affected, current_watermarks
+
 # ---------------------------------------------------------------------------
 # DDL for fact_trades
 # ---------------------------------------------------------------------------
@@ -925,6 +1146,93 @@ def write_db_incremental(conn: sqlite3.Connection, rows: list[dict]) -> None:
     )
 
 
+def write_db_watermarked_incremental(
+    conn: sqlite3.Connection,
+    rows: list[dict],
+    scope_fill_ids: set[str],
+    watermarks: dict[str, int],
+) -> None:
+    """Publish an invalidated fill scope and atomically advance watermarks."""
+    _ensure_incremental_watermark_table(conn)
+    existing_cols = [
+        str(info[1]) for info in conn.execute("PRAGMA table_info(fact_trades)").fetchall()
+    ]
+    ddl_conn = sqlite3.connect(":memory:")
+    try:
+        ddl_conn.execute(FACT_DDL)
+        fact_cols = [
+            str(info[1])
+            for info in ddl_conn.execute("PRAGMA table_info(fact_trades)").fetchall()
+        ]
+    finally:
+        ddl_conn.close()
+    if set(existing_cols) != set(fact_cols):
+        raise RuntimeError(
+            "incremental fact build cannot migrate a changed fact_trades schema; "
+            "run the explicit full rebuild"
+        )
+    if rows and set(rows[0]) != set(fact_cols):
+        raise RuntimeError("incremental fact rows do not match fact_trades schema")
+
+    desired = {str(row["fill_id"]): row for row in rows}
+    unexpected = set(desired) - scope_fill_ids
+    if unexpected:
+        raise RuntimeError(
+            "incremental fact build produced rows outside requested scope: "
+            + ",".join(sorted(unexpected))
+        )
+
+    existing: dict[str, dict] = {}
+    if scope_fill_ids:
+        placeholders = ",".join("?" for _ in scope_fill_ids)
+        select_cols = ",".join(fact_cols)
+        existing = {
+            str(row[0]): dict(zip(fact_cols, row))
+            for row in conn.execute(
+                f"SELECT {select_cols} FROM fact_trades "
+                f"WHERE fill_id IN ({placeholders})",
+                sorted(scope_fill_ids),
+            ).fetchall()
+        }
+    compare_cols = [col for col in fact_cols if col != "fact_built_at_utc"]
+    removed_ids = sorted(set(existing) - set(desired))
+    changed_rows = [
+        row
+        for fill_id, row in desired.items()
+        if fill_id not in existing
+        or any(existing[fill_id].get(col) != row.get(col) for col in compare_cols)
+    ]
+
+    now_utc = datetime.now(timezone.utc).isoformat()
+    conn.execute("BEGIN IMMEDIATE")
+    if removed_ids:
+        conn.executemany(
+            "DELETE FROM fact_trades WHERE fill_id=?",
+            [(fill_id,) for fill_id in removed_ids],
+        )
+    if changed_rows:
+        placeholders = ",".join("?" for _ in fact_cols)
+        conn.executemany(
+            f"INSERT OR REPLACE INTO fact_trades ({','.join(fact_cols)}) "
+            f"VALUES ({placeholders})",
+            [[row[col] for col in fact_cols] for row in changed_rows],
+        )
+    conn.executemany(
+        f"INSERT OR REPLACE INTO {INCREMENTAL_WATERMARK_TABLE} "
+        "(fact_name, source_table, last_rowid, updated_at_utc) VALUES (?,?,?,?)",
+        [
+            ("fact_trades", table_name, int(last_rowid), now_utc)
+            for table_name, last_rowid in sorted(watermarks.items())
+        ],
+    )
+    conn.commit()
+    print(
+        "fact_trades watermarked incremental: "
+        f"scope={len(scope_fill_ids)} inserted_or_changed={len(changed_rows)} "
+        f"removed={len(removed_ids)}"
+    )
+
+
 def write_parquet(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(rows)
@@ -980,7 +1288,13 @@ def main() -> None:
                     help="Write the DB table only; skip parquet export")
     ap.add_argument("--dry-run", action="store_true",
                     help="Compute rows but do not write to DB or parquet")
-    ap.add_argument(
+    selection = ap.add_mutually_exclusive_group()
+    selection.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Materialize only rows invalidated since the last successful refresh.",
+    )
+    selection.add_argument(
         "--fill-id",
         action="append",
         dest="fill_ids",
@@ -996,18 +1310,35 @@ def main() -> None:
 
     conn = sqlite3.connect(db_path)
     try:
-        rows, alerts = build(conn, fill_ids=args.fill_ids)
+        scope_fill_ids: set[str] | None = None
+        watermarks: dict[str, int] = {}
+        if args.incremental:
+            scope_fill_ids, watermarks = collect_incremental_scope(conn)
+            print(f"fact_trades incremental scope: {len(scope_fill_ids)} fill_ids")
+        rows, alerts = build(
+            conn,
+            fill_ids=(sorted(scope_fill_ids) if scope_fill_ids is not None else args.fill_ids),
+        )
         print_summary(rows, alerts)
         if args.dry_run:
             print("\n[dry-run] skipping write")
             return
-        if args.fill_ids:
+        if args.incremental:
+            write_db_watermarked_incremental(
+                conn,
+                rows,
+                scope_fill_ids or set(),
+                watermarks,
+            )
+        elif args.fill_ids:
             write_db_incremental(conn, rows)
         else:
             write_db(conn, rows)
         print(f"fact_trades written to DB: {db_path}")
         if args.no_parquet:
             print("fact_trades parquet export skipped (--no-parquet)")
+        elif args.incremental:
+            print("fact_trades parquet export skipped (incremental DB publish)")
         else:
             write_parquet(rows, parquet_path)
             print(f"fact_trades written to parquet: {parquet_path}")
