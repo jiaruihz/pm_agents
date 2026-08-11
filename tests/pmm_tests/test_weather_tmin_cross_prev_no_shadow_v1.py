@@ -23,6 +23,9 @@ def test_first_tmin_cross_emits_one_blocked_no_candidate(tmp_path: Path) -> None
         "source": "jma_amedas",
         "source_basis_class": "same_airport_alternate_sensor",
         "source_calibration_status": "alignment_and_repricing_pending",
+        "source_bracket_mode": "arithmetic_round",
+        "market_unit": "C",
+        "source_running_min_temp_c": 23.4,
         "source_live_eligible": False,
         "source_blocked_reason": "requires_source_to_settlement_alignment",
         "source_obs_ts_utc": "2026-08-11T11:50:00Z",
@@ -64,10 +67,16 @@ def test_first_tmin_cross_emits_one_blocked_no_candidate(tmp_path: Path) -> None
     assert candidate["side"] == "NO"
     assert candidate["bracket"] == "24"
     assert candidate["executable_cost"] == 0.74
-    assert candidate["candidate_status"] == "blocked"
-    assert candidate["blocker_reason"] == "next_colder_no_model_not_frozen"
+    assert candidate["candidate_status"] == "observed"
+    assert candidate["blocker_reason"] is None
+    assert candidate["model_id"] == "tmin_prev_warmer_no_given_cross_pending_v0"
+    assert candidate["metadata"]["model_blocker"] == "prev_warmer_no_given_cross_model_not_frozen"
+    assert round(candidate["metadata"]["cold_cross_margin_native"], 6) == 0.1
+    assert candidate["metadata"]["threshold_policy"] == "all_first_crosses_no_hard_margin_gate"
+    assert candidate["metadata"]["shadow_would_enter_at_raw_ask"] is True
     assert candidate["selected"] is False
     assert model["scorable_status"] == "not_scorable"
+    assert model["blocker_reason"] == "prev_warmer_no_given_cross_model_not_frozen"
 
     run_cycle(args, state)
     assert len((output / "signal_candidates.jsonl").read_text().splitlines()) == 1

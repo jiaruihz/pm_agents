@@ -29,8 +29,8 @@ from weather_city_runtime.contracts import ModelOutput, SignalCandidate
 SCHEMA_VERSION = "weather_tmin_cross_prev_no_shadow_v1"
 STRATEGY_KEY = "weather.tmin.cross_prev_no"
 POLICY_ID = "tmin_first_lower_cross_prev_warmer_no_zero_notional_v1"
-MODEL_ID = "tmin_next_colder_no_pending_v0"
-MODEL_ARTIFACT_ID = "unavailable_pending_frozen_training"
+MODEL_ID = "tmin_prev_warmer_no_given_cross_pending_v0"
+MODEL_ARTIFACT_ID = "unavailable_pending_prev_warmer_no_cross_training"
 FEATURE_SET_ID = "tmin_cross_prev_no_event_book_v1"
 
 
@@ -113,6 +113,48 @@ def _book_from_quote(quote: dict[str, Any]) -> dict[str, Any]:
     return dict((((quote.get("quotes") or {}).get("t_minus_1") or {}).get("no") or {}))
 
 
+def _cross_margin(event: dict[str, Any], bracket: str) -> dict[str, float | str | None]:
+    """Return signed distance beyond the colder boundary in native market units."""
+
+    source_temp_c = _float_unbounded(
+        event.get("source_running_min_temp_c")
+        if event.get("source_running_min_temp_c") is not None
+        else event.get("source_running_extreme_temp_c")
+    )
+    try:
+        previous_value = float(bracket)
+    except (TypeError, ValueError):
+        previous_value = None
+    market_unit = str(event.get("market_unit") or "C").upper()
+    source_native = (
+        None
+        if source_temp_c is None
+        else source_temp_c * 9.0 / 5.0 + 32.0
+        if market_unit == "F"
+        else source_temp_c
+    )
+    rounding = str(event.get("source_bracket_mode") or "")
+    boundary = None
+    if previous_value is not None:
+        boundary = previous_value if rounding == "floor" else previous_value - 0.5
+    margin = None if boundary is None or source_native is None else boundary - source_native
+    return {
+        "source_running_min_c": source_temp_c,
+        "source_running_min_native": source_native,
+        "previous_warmer_boundary_native": boundary,
+        "cold_cross_margin_native": margin,
+        "market_unit": market_unit,
+        "bracket_rounding": rounding,
+    }
+
+
+def _float_unbounded(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _candidate_bundle(
     event: dict[str, Any], quote: dict[str, Any], *, events_path: Path, quotes_path: Path
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -159,7 +201,8 @@ def _candidate_bundle(
     market_available = (
         book.get("fresh_status") == "ok" and condition_id is not None and token_id is not None
     )
-    blocker = "next_colder_no_model_not_frozen"
+    model_blocker = "prev_warmer_no_given_cross_model_not_frozen"
+    cross_margin = _cross_margin(event, bracket)
     target_id = f"{event['city']}:{event['target_date']}:tmin_exact_bracket:{bracket}:NO"
     refs = (
         {
@@ -191,7 +234,7 @@ def _candidate_bundle(
         feature_set_id=FEATURE_SET_ID,
         input_refs=refs,
         scorable_status="not_scorable",
-        blocker_reason=blocker,
+        blocker_reason=model_blocker,
         market_feature_role="evaluation_only",
         market_feature_clock="same_checkpoint_fresh_book",
         feature_book_snapshot_id=execution_snapshot_id,
@@ -201,6 +244,7 @@ def _candidate_bundle(
             "source": event.get("source"),
             "source_basis_class": event.get("source_basis_class"),
             "settlement_alignment_status": event.get("source_calibration_status"),
+            **cross_margin,
             "no_order_placed": True,
         },
     )
@@ -228,8 +272,8 @@ def _candidate_bundle(
         execution_book_snapshot_id=execution_snapshot_id,
         strategy_key=STRATEGY_KEY,
         policy_id=POLICY_ID,
-        candidate_status="blocked",
-        blocker_reason=blocker,
+        candidate_status="observed",
+        blocker_reason=None,
         selected=False,
         market_evidence_status="available" if market_available else "coverage_gap",
         input_refs=refs,
@@ -241,8 +285,12 @@ def _candidate_bundle(
             "raw_no_best_bid": bid,
             "raw_no_best_ask": ask,
             "official_fee_adjusted_cost_available": False,
+            "model_blocker": model_blocker,
+            "threshold_policy": "all_first_crosses_no_hard_margin_gate",
+            "shadow_would_enter_at_raw_ask": market_available and ask is not None,
             "source_live_eligible": bool(event.get("source_live_eligible")),
             "source_blocked_reason": event.get("source_blocked_reason"),
+            **cross_margin,
             "zero_notional": True,
             "trade_intent_created": False,
             "no_order_placed": True,
@@ -311,6 +359,10 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
     cities = sorted({str(row.get("city")) for row in all_candidates})
     market_covered = sum(row.get("market_evidence_status") == "available" for row in all_candidates)
     priced = sum(row.get("executable_cost") is not None for row in all_candidates)
+    shadow_entries = sum(
+        bool((row.get("metadata") or {}).get("shadow_would_enter_at_raw_ask"))
+        for row in all_candidates
+    )
     summary = {
         "schema_version": SCHEMA_VERSION,
         "status": "ok",
@@ -325,12 +377,16 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
             "raw_cross_events": len(events),
             "first_quote_joined_events": len(set(events) & set(first_quotes)),
             "canonical_signal_candidates": len(all_candidates),
+            "observed_mechanism_candidates": sum(
+                row.get("candidate_status") == "observed" for row in all_candidates
+            ),
             "scored_candidates": 0,
             "selected_candidates": 0,
         },
         "evidence_funnel": {
             "market_evidence_available": market_covered,
             "raw_executable_ask_available": priced,
+            "shadow_would_enter_at_raw_ask": shadow_entries,
             "official_fee_adjusted_cost_available": 0,
             "settled_labels_available": 0,
         },
@@ -338,7 +394,8 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
         "new_quote_rows": len(quote_rows),
         "new_candidates": len(new_candidates),
         "pending_quote_events": len(set(events) - set(first_quotes)),
-        "model_status": "blocked_pending_frozen_next_colder_no_model",
+        "model_status": "blocked_pending_prev_warmer_no_given_cross_model",
+        "threshold_policy": "all first lower crosses; cold_cross_margin_native retained as a continuous feature",
         "signal_candidates_path": str(all_candidates_path),
         "model_outputs_path": str(Path(args.output_dir) / "model_outputs.jsonl"),
         "source_events_path": str(events_path),
