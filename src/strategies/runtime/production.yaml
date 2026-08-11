@@ -18,7 +18,7 @@ production_releases:
     expected_repo_sha: 27d6f4bb788f0a1fe522b40bb0a5ef6de51de063
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
-    expected_repo_sha: 35c9d65bf16f285dec45fa08ba05b2202045b4c6
+    expected_repo_sha: e908f51029080a58893ccf3094480c8d359c6711
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     expected_repo_sha: 472e8871fe147a249505fc643163ad567ae4e0e4
@@ -39,7 +39,7 @@ production_releases:
     expected_repo_sha: 70dfc002d2ed3570053590442672b9d343db1903
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/projects/pm_agents_scheduled_informed_maker_prod
-    expected_repo_sha: b0132f556bf6955194ccd0c33910a6e1bcb72238
+    expected_repo_sha: 1779c22e73c7f505de4abf7abf32e0e0ac316f01
   - release_id: knmi
     checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
     expected_repo_sha: 2e8ba3be9aa6c2e3278fa78c7c1f8fe32753f976
