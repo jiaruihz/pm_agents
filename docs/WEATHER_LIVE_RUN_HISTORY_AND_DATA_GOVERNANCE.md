@@ -5,7 +5,7 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
 
-Last updated: 2026-07-14
+Last updated: 2026-08-12
 
 This document records the early weather live-trading rollout history, known mistakes, and data-model rules needed to keep future analysis reproducible. Read it with:
 
@@ -1624,7 +1624,39 @@ the active `7897` route and all current consumers are healthy, but persistent
 gateway failover convergence remains separate follow-up rather than a claimed
 root-cause elimination.
 
-## 24. Immediate Follow-Up Work
+## 24. 2026-08-12 TAG cutover and canonical incremental-refresh drift
+
+All registered weather market traffic moved from the old default `7897` route
+to `7896 / PM-STABLE`, whose selected upstream was `TAG-LOCAL`; `7897` remains
+the named Allblue route. The controller now pins both proxy variables and the
+control-repository `WEATHER_PRODUCTION_CONFIG` into every canonical tmux child.
+The shared tmux helper fix was backported to all 13 older production releases,
+so a release-local historical `production.yaml` can no longer become a second
+desired state after restart. System/Codex and crypto routing were not changed.
+
+The cutover verification exposed a pre-existing CLI drift: the registered
+canonical refresh passed `--incremental`, while the current fact builder had
+lost the watermarked incremental interface. The last pre-fix watermark was
+`2026-08-11T16:19:39.751613Z`; the first successful repair published at
+`16:48:12.671676Z`. Eight previously recovered raw fills (physical rowids
+5047..5054; fill prefixes `cdad7b45`, `fceadb19`, `f8ad7e2f`, `f6ae1ddc`,
+`9c7f420b`, `b4e60eb4`, `d50573b8`, `9db97531`) and eight existing sibling
+fills sharing their execution ids were stale in `fact_trades` during that
+28m33s window. The successful replay updated 16 facts, removed zero facts,
+reported zero alerts, and passed fill coverage with 1,455/1,455 `live_real`
+fill ids and zero cost delta.
+
+A second empty-scope defect caused later refreshes to build all 5,000 rows and
+then fail closed because the result was outside the requested zero-fill scope.
+No source watermark changed between `16:48:12Z` and the corrected no-op refresh
+at `17:10:45Z`, so this second window affected zero new fills. Neither defect
+fed strategy inputs or execution; counterfactual live order/fill/notional
+impact is zero. The affected surface was canonical analysis/API freshness.
+Final production evidence: manifest healthy with no findings, all 29 managed
+runtimes healthy, 13 proxy consumers with zero process mismatch, canonical
+refresh exit 0, and both live journals unchanged across the restart.
+
+## 25. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
