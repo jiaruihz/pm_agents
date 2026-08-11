@@ -51,6 +51,27 @@ def test_full_ladder_features_are_relative_and_neighbor_aware() -> None:
     assert frame["shock_x_mode_x_neighbor_propagation"].notna().sum() == 3
 
 
+def test_fixed_signal_replay_keeps_identity_and_reports_strict_pit_slice() -> None:
+    rows = _event_rows()
+    rows["h30_ask"] = rows["h30_bid"] + 0.02
+    rows["h60_ask"] = rows["h60_bid"] + 0.02
+    rows["h60_window_min_ask"] = rows["h60_ask"]
+    rows["h30_quote_event_time_pit_scorable"] = True
+    rows["h60_quote_event_time_pit_scorable"] = True
+    fixed = rows.loc[rows["condition_id"].eq("c1"), list(subject.IDENTITY_COLUMNS)]
+
+    replay, summary = subject.replay_fixed_signal_execution(
+        rows, fixed, _dummy_bundle(0.03, -0.01), draws=100
+    )
+
+    assert len(replay) == 1
+    assert replay.iloc[0]["condition_id"] == "c1"
+    assert replay.iloc[0]["position_action_at_30m"] == "EXIT"
+    assert summary["fixed_signal_rows"] == 1
+    assert summary["matched_signal_rows"] == 1
+    assert summary["strict_pit_dynamic_rows"] == 1
+
+
 def _dummy_bundle(entry_value: float, continuation_value: float) -> dict:
     entry = DummyRegressor(strategy="constant", constant=entry_value).fit(
         pd.DataFrame([[0.0] * len(subject.INTERACTION_FEATURES)]), [entry_value]

@@ -43,6 +43,7 @@ from weather_data_feed.production_paths import (  # noqa: E402
     historical_full_ladder_root,
     historical_targeted_root,
 )
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 DEFAULT_OUTPUT = ROOT / "docs/analysis/2026-08/generated/lmvm_forecast_innovation_v2"
@@ -87,7 +88,34 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="diagnostic negative control; do not join migrated book sources",
     )
+    parser.add_argument(
+        "--market-book-root",
+        type=Path,
+        action="append",
+        help="independent raw market-book root; repeatable (defaults to canonical current batches)",
+    )
     return parser.parse_args()
+
+
+def default_market_book_roots() -> tuple[Path, ...]:
+    return (
+        load_production_spec().resolved_market_books_root() / "batches",
+    )
+
+
+def discover_orderbook_inputs(roots: list[Path] | tuple[Path, ...]) -> list[str]:
+    selected: dict[str, Path] = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        for pattern in ("*/*.jsonl.gz", "*/*.jsonl", "*.jsonl.gz", "*.jsonl"):
+            for path in root.glob(pattern):
+                try:
+                    identity = str(path.resolve())
+                except OSError:
+                    identity = str(path)
+                selected.setdefault(identity, path)
+    return [str(path) for path in sorted(selected.values())]
 
 
 _STAMP = re.compile(r"snapshot_(\d{8})_(\d{4})\.json$")
@@ -731,7 +759,30 @@ def main() -> int:
     innovation = build_innovation_candidates(pairs)
     full_ladder = build_full_ladder_panel(pairs)
     candidates = pd.concat([static_candidates, innovation], ignore_index=True, sort=False)
-    quote_history = base.quote_history(states)
+    reconstructed_history = base.quote_history(states)
+    market_book_roots = list(args.market_book_root or default_market_book_roots())
+    raw_inputs = [] if args.legacy_snapshot_only else discover_orderbook_inputs(market_book_roots)
+    relevant_conditions = {
+        str(rung.get("condition_id") or "")
+        for state in states
+        for rung in state.get("rungs") or []
+    }
+    raw_history: dict[str, list[base.Quote]] = defaultdict(list)
+    raw_counts: Counter[str] = Counter(raw_book_input_files=len(raw_inputs))
+    if raw_inputs:
+        with ProcessPoolExecutor(max_workers=max(1, args.workers)) as executor:
+            for parsed, local_counts in executor.map(
+                base.parse_raw_orderbook_quote_file, raw_inputs, chunksize=8
+            ):
+                raw_counts.update(local_counts)
+                for condition, quotes in parsed.items():
+                    if condition in relevant_conditions:
+                        raw_history[condition].extend(quotes)
+                        raw_counts["raw_book_relevant_effective_quotes"] += len(quotes)
+    quote_history = base.merge_quote_histories(reconstructed_history, dict(raw_history))
+    raw_counts["conditions_in_reconstructed_history"] = len(reconstructed_history)
+    raw_counts["conditions_in_raw_history"] = len(raw_history)
+    raw_counts["conditions_in_merged_history"] = len(quote_history)
     candidates = base.attach_markouts(candidates, quote_history)
     full_ladder = base.attach_markouts(full_ladder, quote_history)
     full_ladder = base.attach_full_ladder_completion(full_ladder, quote_history)
@@ -760,11 +811,14 @@ def main() -> int:
             "historical_full_ladder_root": str(args.historical_full_ladder_root),
             "historical_targeted_root": str(args.historical_targeted_root),
             "legacy_snapshot_only": bool(args.legacy_snapshot_only),
+            "independent_market_book_roots": [str(path) for path in market_book_roots],
+            "markout_quote_rule": "latest available_at or observed clock at/before checkpoint; no future quote",
         },
         "state_target_date_min": min((str(row["target_date"]) for row in states), default=None),
         "state_target_date_max": max((str(row["target_date"]) for row in states), default=None),
         "state_clock_lineage": dict(Counter(str(row.get("clock_lineage_status")) for row in states)),
         "parse_counts": dict(parse_counts),
+        "raw_book_counts": dict(raw_counts),
         "update_counts": dict(update_counts),
         "full_ladder_event_rows": len(full_ladder),
         "full_ladder_events": int(full_ladder["forecast_event_id"].nunique()) if not full_ladder.empty else 0,

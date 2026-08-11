@@ -147,6 +147,11 @@ def _add_forecast_repricing_position_parser(subparsers: Any) -> None:
     parser.add_argument("--min-train-dates", type=int, default=15)
     parser.add_argument("--holdout-fraction", type=float, default=0.20)
     parser.add_argument("--bootstrap-draws", type=int, default=2000)
+    parser.add_argument(
+        "--fixed-signal-input",
+        type=Path,
+        help="optional frozen position list to replay on the repaired input panel",
+    )
     parser.set_defaults(handler=run_forecast_repricing_position)
 
 
@@ -188,6 +193,25 @@ def run_forecast_repricing_position(args: argparse.Namespace) -> int:
         draws=args.bootstrap_draws,
     )
     summary = write_position_policy_outputs(result, args.input, args.output_dir)
+    if args.fixed_signal_input:
+        from weather_model_evaluation.forecast_repricing_position import (
+            replay_fixed_signal_execution,
+        )
+
+        if str(result["status"]).startswith("blocked_"):
+            raise ValueError("cannot replay fixed signals without a trained position policy")
+        fixed = pd.read_csv(args.fixed_signal_input, low_memory=False)
+        replay, replay_summary = replay_fixed_signal_execution(
+            frame,
+            fixed,
+            result["bundle"],
+            draws=args.bootstrap_draws,
+        )
+        replay.to_csv(args.output_dir / "fixed_signal_execution_replay.csv", index=False)
+        (args.output_dir / "fixed_signal_execution_summary.json").write_text(
+            json.dumps(replay_summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     print(
         json.dumps(
             {

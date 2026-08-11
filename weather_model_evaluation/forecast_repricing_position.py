@@ -1159,6 +1159,137 @@ def add_mixed_execution_expressions(entries: pd.DataFrame) -> pd.DataFrame:
     return work
 
 
+def replay_fixed_signal_execution(
+    full_ladder_rows: pd.DataFrame,
+    fixed_signals: pd.DataFrame,
+    bundle: Mapping[str, Any],
+    *,
+    draws: int = 2000,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Replay a frozen signal list on repaired full-ladder book paths.
+
+    Signal identity remains fixed.  Entry/30m/60m features are rebuilt from
+    the supplied panel and the already-trained continuation head is applied;
+    no signal is added or removed based on the repaired future path.
+    """
+
+    frame = add_full_ladder_position_features(full_ladder_rows)
+    keys = list(IDENTITY_COLUMNS)
+    identities = fixed_signals[keys].drop_duplicates()
+    if len(identities) != len(fixed_signals):
+        raise ValueError("fixed signal input must be unique at position identity grain")
+    replay = frame.merge(identities, on=keys, how="inner", validate="one_to_one")
+    if len(replay) != len(identities):
+        missing = identities.merge(frame[keys], on=keys, how="left", indicator=True)
+        raise ValueError(
+            f"fixed signal identities missing from repaired panel: "
+            f"{int(missing['_merge'].eq('left_only').sum())}"
+        )
+    replay["entry_predicted_relative_markout"] = _predict(
+        bundle["entry_model"], replay, INTERACTION_FEATURES
+    )
+    replay = _add_dynamic_exit_policy(replay, bundle["continuation_model"])
+    replay = add_mixed_execution_expressions(replay)
+
+    strict_mask = (
+        replay["position_action_at_30m"].eq("EXIT")
+        & replay.get(
+            "h30_quote_event_time_pit_scorable",
+            pd.Series(False, index=replay.index),
+        ).eq(True)
+    ) | (
+        replay["position_action_at_30m"].eq("HOLD")
+        & replay.get(
+            "h60_quote_event_time_pit_scorable",
+            pd.Series(False, index=replay.index),
+        ).eq(True)
+    )
+    strict = replay.loc[strict_mask].copy()
+    proxy = replay.loc[pd.to_numeric(replay["mixed_fill_proxy"], errors="coerce").eq(1.0)]
+
+    def expressions(rows: pd.DataFrame, seed_offset: int) -> dict[str, Any]:
+        return {
+            "mixed_fill_conditional": _execution_expression_stats(
+                rows,
+                pnl_column="mixed_dynamic_pnl",
+                cost_column="mixed_entry_cost",
+                draws=draws,
+                seed=20260830 + seed_offset,
+            ),
+            "all_taker_one_share": _execution_expression_stats(
+                rows,
+                pnl_column="all_taker_dynamic_pnl",
+                cost_column="taker_entry_cost",
+                draws=draws,
+                seed=20260831 + seed_offset,
+            ),
+            "native_bid_plus_tick_fill_conditional": _execution_expression_stats(
+                rows.loc[rows["maker_plus_tick_postable"]],
+                pnl_column="plus_tick_conditional_dynamic_pnl",
+                cost_column="maker_plus_tick_price",
+                draws=draws,
+                seed=20260832 + seed_offset,
+            ),
+        }
+
+    summary = {
+        "schema_version": "forecast_repricing_fixed_signal_book_replay_v1",
+        "denominator_scope": "frozen input position identities; repaired independent raw book paths",
+        "fixed_signal_rows": int(len(fixed_signals)),
+        "matched_signal_rows": int(len(replay)),
+        "dynamic_exit_scoreable_rows": int(replay["dynamic_exit_bid"].notna().sum()),
+        "h30_scoreable_rows": int(replay["h30_bid"].notna().sum()),
+        "h60_scoreable_rows": int(replay["h60_bid"].notna().sum()),
+        "strict_pit_dynamic_rows": int(len(strict)),
+        "strict_pit_target_dates": int(strict["target_date"].nunique()),
+        "strict_pit_date_min": strict["target_date"].min() if not strict.empty else None,
+        "strict_pit_date_max": strict["target_date"].max() if not strict.empty else None,
+        "h30_clock_lineage_counts": {
+            str(key): int(value)
+            for key, value in replay.get(
+                "h30_quote_clock_lineage_status",
+                pd.Series("missing", index=replay.index),
+            )
+            .fillna("missing")
+            .value_counts()
+            .items()
+        },
+        "h60_clock_lineage_counts": {
+            str(key): int(value)
+            for key, value in replay.get(
+                "h60_quote_clock_lineage_status",
+                pd.Series("missing", index=replay.index),
+            )
+            .fillna("missing")
+            .value_counts()
+            .items()
+        },
+        "dynamic_exit_blockers": [
+            {
+                "city": str(row["city"]),
+                "target_date": str(row["target_date"]),
+                "bracket": str(row["bracket"]),
+                "position_action_at_30m": str(row["position_action_at_30m"]),
+                "h30_quote_staleness_min": _finite(row.get("h30_quote_gap_min")),
+                "h60_quote_staleness_min": _finite(row.get("h60_quote_gap_min")),
+            }
+            for row in replay.loc[replay["dynamic_exit_bid"].isna()].to_dict("records")
+        ],
+        "all_reconstructed_clocks": expressions(replay, 0),
+        "strict_pit_clocks": expressions(strict, 100),
+        "mixed_touch_proxy": _execution_expression_stats(
+            proxy,
+            pnl_column="mixed_dynamic_pnl",
+            cost_column="mixed_entry_cost",
+            draws=draws,
+            seed=20260940,
+        ),
+        "actual_fills": 0,
+        "production": {"live_action": "none", "orders_changed": 0},
+    }
+    return replay, summary
+
+
 def _execution_expression_stats(
     frame: pd.DataFrame,
     *,

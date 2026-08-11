@@ -1,5 +1,31 @@
 # Forecast Repricing
 
+## Independent raw book / PIT clock repair（2026-08-11）
+
+历史重建器原先只从 strategy snapshots 生成 quote history，独立 canonical
+`market_books/batches` 只在“同名 companion file”时参与 entry join；30/60m markout 又取 checkpoint
+之后第一笔 quote，存在未来信息。现已修为：独立扫描 raw books、按 YES/NO 两侧合成 executable YES
+top-of-book，并使用 `available_at_utc <= checkpoint` 的最后一份 book。8月7日起 v3
+`request/response/available_at` 标为 strict PIT；更早 `fetched_at` 只保留 legacy-observed 价格路径，明确
+`event_time_pit_scorable=false`。
+
+修复后全分母为132,416 rungs / 12,931 forecast events / 74 target dates（2026-05-20..08-10）；raw
+扫描2,144 files / 3,900,880 rows，接入766,081条 relevant effective quotes。原冻结的55个 holdout signals
+固定 identity 重放后：55/55匹配，30m可评分42、60m可评分54，dynamic exit可评分从46升至54；唯一
+CapeTown 8/3因60m as-of book已陈旧35.97分钟，超过预注册30分钟容忍，保持 blocker。
+
+- all reconstructed clocks：54个动态可评分；mixed bid+1/taker 条件ROI `+18.73%`，target-date CI
+  `[+0.33%,+35.99%]`；全部taker `-51.33%`，CI `[-60.41%,-39.44%]`。
+- strict PIT：只有7个动态可评分 / 4 dates（8/7..8/10）；mixed 条件ROI `+32.73%`，CI
+  `[-6.75%,+71.50%]`，仍不显著；同7笔全部taker `-44.86%`。
+- maker fill：50个 reconstructed maker routes 中仍为0个 ask-touch；mixed touch proxy只有4个自动taker，
+  ROI `-37.34%`。actual fills=0，因此正的 conditional maker 数字仍不能当可实现收益。
+
+这次修复将旧 `+27.92%` headline 标为 `superseded-for-decision-use`：方向仍是“spread很贵、maker条件价
+有空间”，但利润从 `+27.92%` 降到 `+18.73%`，且 strict-PIT 样本只有4天，尚不能升 live。
+可复跑 artifact：`forecast_repricing/full_ladder_base_20260811_raw_pit_v2` 与
+`forecast_repricing/full_ladder_mixed_execution_20260811_raw_pit_v2/{fixed_signal_execution_replay.csv,fixed_signal_execution_summary.json}`。
+
 ## Tape / queue-conservative execution update（2026-08-11）
 
 同日又在**完整 D-1 ladder signal 分母**上重跑 execution matrix，而不是沿用 generic 60s tape。T-1 base

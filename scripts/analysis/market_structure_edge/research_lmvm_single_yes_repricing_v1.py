@@ -43,6 +43,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed import city_timezone_name  # noqa: E402
+from weather_data_feed.market_book_contract import classify_orderbook_clock  # noqa: E402
 from weather_data_feed.production_paths import historical_strategy_snapshots  # noqa: E402
 
 
@@ -487,6 +488,11 @@ class Quote:
     ask: float
     bid_size: float | None
     ask_size: float | None
+    clock_lineage_status: str = "strategy_snapshot_reconstructed_clock"
+    event_time_pit_scorable: bool = False
+    available_at_utc: str | None = None
+    source_path: str | None = None
+    capture_id: str | None = None
 
 
 def quote_history(states: Iterable[dict[str, Any]]) -> dict[str, list[Quote]]:
@@ -503,27 +509,174 @@ def quote_history(states: Iterable[dict[str, Any]]) -> dict[str, list[Quote]]:
                 ask=float(rung["yes_ask"]),
                 bid_size=finite(rung.get("yes_bid_size")),
                 ask_size=finite(rung.get("yes_ask_size")),
+                clock_lineage_status=str(
+                    state.get("clock_lineage_status")
+                    or "strategy_snapshot_reconstructed_clock"
+                ),
+                event_time_pit_scorable=bool(
+                    state.get("event_time_pit_scorable", False)
+                ),
+                available_at_utc=state.get("book_available_at_utc"),
+                source_path=state.get("book_source_path") or state.get("source_path"),
+                capture_id=state.get("snapshot_id"),
             )
     return {key: [rows[epoch] for epoch in sorted(rows)] for key, rows in grouped.items()}
+
+
+def _effective_yes_quote(
+    rows: list[dict[str, Any]], *, source_path: str
+) -> Quote | None:
+    """Build one executable YES top-of-book from a raw two-outcome batch.
+
+    Historical rows retain their observed ``fetched_at_utc`` only as a
+    non-PIT clock.  Strict v3 rows use the collector response/available clock.
+    """
+
+    books = {str(row.get("outcome") or "").lower(): row for row in rows}
+    yes_row = books.get("yes") or {}
+    no_row = books.get("no") or {}
+    yes = dict(yes_row.get("summary") or {})
+    no = dict(no_row.get("summary") or {})
+    yes_bid, yes_ask = finite(yes.get("best_bid")), finite(yes.get("best_ask"))
+    no_bid, no_ask = finite(no.get("best_bid")), finite(no.get("best_ask"))
+    bid_candidates = [
+        item
+        for item in (
+            (yes_bid, finite(yes.get("bid_size"))) if yes_bid is not None else None,
+            (1.0 - no_ask, finite(no.get("ask_size"))) if no_ask is not None else None,
+        )
+        if item is not None
+    ]
+    ask_candidates = [
+        item
+        for item in (
+            (yes_ask, finite(yes.get("ask_size"))) if yes_ask is not None else None,
+            (1.0 - no_bid, finite(no.get("bid_size"))) if no_bid is not None else None,
+        )
+        if item is not None
+    ]
+    bid, bid_size = max(bid_candidates, default=(None, None), key=lambda item: item[0])
+    ask, ask_size = min(ask_candidates, default=(None, None), key=lambda item: item[0])
+    if bid is None or ask is None or not valid_price(bid) or not valid_price(ask) or ask < bid:
+        return None
+
+    classifications = [classify_orderbook_clock(row) for row in rows]
+    exact = bool(classifications) and all(
+        item["event_time_pit_scorable"] for item in classifications
+    )
+    if exact:
+        clocks = [
+            parse_utc(row.get("available_at_utc") or row.get("response_received_at_utc"))
+            for row in rows
+        ]
+        status = "collector_exact_response_clock"
+    else:
+        clocks = [parse_utc(row.get("fetched_at_utc")) for row in rows]
+        status = "legacy_missing_response_clock"
+    observed = [clock for clock in clocks if clock is not None]
+    if not observed:
+        return None
+    available = max(observed)
+    capture_id = next(
+        (
+            str(row.get("request_batch_capture_id") or row.get("book_capture_id"))
+            for row in rows
+            if row.get("request_batch_capture_id") or row.get("book_capture_id")
+        ),
+        Path(source_path).name,
+    )
+    return Quote(
+        epoch=available.timestamp(),
+        bid=float(bid),
+        ask=float(ask),
+        bid_size=bid_size,
+        ask_size=ask_size,
+        clock_lineage_status=status,
+        event_time_pit_scorable=exact,
+        available_at_utc=iso_utc(available),
+        source_path=source_path,
+        capture_id=capture_id,
+    )
+
+
+def parse_raw_orderbook_quote_file(
+    path_text: str,
+) -> tuple[dict[str, list[Quote]], dict[str, int]]:
+    """Parse an independent raw market-book batch into effective YES quotes."""
+
+    path = Path(path_text)
+    opener = gzip.open if path.suffix == ".gz" else open
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    counts: Counter[str] = Counter(raw_book_files=1)
+    try:
+        with opener(path, "rt", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                counts["raw_book_rows"] += 1
+                if row.get("status") != "ok":
+                    continue
+                condition = str(row.get("condition_id") or "").strip()
+                outcome = str(row.get("outcome") or "").lower()
+                if condition and outcome in {"yes", "no"}:
+                    grouped[condition].append(row)
+    except (OSError, json.JSONDecodeError):
+        counts["raw_book_files_invalid"] += 1
+        return {}, dict(counts)
+
+    output: dict[str, list[Quote]] = defaultdict(list)
+    for condition, rows in grouped.items():
+        quote = _effective_yes_quote(rows, source_path=str(path))
+        if quote is None:
+            counts["raw_book_conditions_without_two_sided_effective_quote"] += 1
+            continue
+        output[condition].append(quote)
+        counts["raw_book_effective_quotes"] += 1
+        counts[f"raw_book_clock_{quote.clock_lineage_status}"] += 1
+    return dict(output), dict(counts)
+
+
+def merge_quote_histories(
+    *histories: dict[str, list[Quote]],
+) -> dict[str, list[Quote]]:
+    """Merge raw and reconstructed histories with stable evidence-aware dedupe."""
+
+    grouped: dict[str, dict[tuple[float, float, float], Quote]] = defaultdict(dict)
+    for history in histories:
+        for condition, quotes in history.items():
+            for quote in quotes:
+                key = (round(quote.epoch, 3), quote.bid, quote.ask)
+                previous = grouped[condition].get(key)
+                if previous is None or (
+                    quote.event_time_pit_scorable and not previous.event_time_pit_scorable
+                ):
+                    grouped[condition][key] = quote
+    return {
+        condition: sorted(rows.values(), key=lambda quote: quote.epoch)
+        for condition, rows in grouped.items()
+    }
 
 
 def horizon_tolerance_min(horizon: int) -> float:
     return float(min(30, max(10, horizon / 2)))
 
 
-def first_quote_after(
+def last_quote_at_or_before(
     quotes: list[Quote], entry_epoch: float, horizon_min: int
 ) -> tuple[Quote | None, float | None]:
+    """Return the latest book known at the checkpoint without future leakage."""
+
     target = entry_epoch + horizon_min * 60.0
     epochs = [quote.epoch for quote in quotes]
-    index = bisect.bisect_left(epochs, target)
-    if index >= len(quotes):
+    index = bisect.bisect_right(epochs, target) - 1
+    if index < 0:
         return None, None
     quote = quotes[index]
-    gap_min = (quote.epoch - target) / 60.0
-    if gap_min > horizon_tolerance_min(horizon_min):
-        return None, gap_min
-    return quote, gap_min
+    staleness_min = (target - quote.epoch) / 60.0
+    if quote.epoch <= entry_epoch or staleness_min > horizon_tolerance_min(horizon_min):
+        return None, staleness_min
+    return quote, staleness_min
 
 
 def attach_markouts(candidates: pd.DataFrame, histories: dict[str, list[Quote]]) -> pd.DataFrame:
@@ -537,9 +690,10 @@ def attach_markouts(candidates: pd.DataFrame, histories: dict[str, list[Quote]])
         entry_epoch = float(candidate["snapshot_epoch"])
         entry_bid = finite(candidate.get("entry_bid"))
         for horizon in HORIZONS_MIN:
-            quote, gap = first_quote_after(history, entry_epoch, horizon)
+            quote, gap = last_quote_at_or_before(history, entry_epoch, horizon)
             prefix = f"h{horizon}"
             output[f"{prefix}_quote_gap_min"] = gap
+            output[f"{prefix}_quote_selection_rule"] = "latest_available_at_or_before_checkpoint"
             if quote is None:
                 for suffix in (
                     "bid", "ask", "bid_size", "ask_size", "exit_fee_per_share",
@@ -547,12 +701,14 @@ def attach_markouts(candidates: pd.DataFrame, histories: dict[str, list[Quote]])
                     "net_pnl_usd", "window_min_bid", "window_max_bid",
                     "window_min_ask", "window_max_ask", "window_quote_count",
                     "maker_bid_touch", "maker_bid_touch_after_min",
+                    "quote_available_at_utc", "quote_clock_lineage_status",
+                    "quote_event_time_pit_scorable", "quote_source_path",
                 ):
                     output[f"{prefix}_{suffix}"] = math.nan
                 continue
             window = [
                 item for item in history
-                if entry_epoch < item.epoch <= quote.epoch
+                if entry_epoch < item.epoch <= entry_epoch + horizon * 60.0
             ]
             touched = [] if entry_bid is None else [
                 item for item in window if item.ask <= entry_bid + 1e-12
@@ -569,6 +725,10 @@ def attach_markouts(candidates: pd.DataFrame, histories: dict[str, list[Quote]])
             output[f"{prefix}_ask"] = quote.ask
             output[f"{prefix}_bid_size"] = quote.bid_size
             output[f"{prefix}_ask_size"] = quote.ask_size
+            output[f"{prefix}_quote_available_at_utc"] = quote.available_at_utc
+            output[f"{prefix}_quote_clock_lineage_status"] = quote.clock_lineage_status
+            output[f"{prefix}_quote_event_time_pit_scorable"] = quote.event_time_pit_scorable
+            output[f"{prefix}_quote_source_path"] = quote.source_path
             output[f"{prefix}_exit_fee_per_share"] = exit_fee
             output[f"{prefix}_net_markout_per_share"] = net
             output[f"{prefix}_net_markout_roi"] = net / entry_cost if entry_cost else math.nan

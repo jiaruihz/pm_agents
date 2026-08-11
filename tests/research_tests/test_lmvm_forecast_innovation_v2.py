@@ -16,6 +16,17 @@ def test_cli_defaults_to_tminus1_cutoff(monkeypatch) -> None:
     assert args.end_target_date == "2026-08-09"
 
 
+def test_discover_orderbook_inputs_accepts_both_batch_names(tmp_path: Path) -> None:
+    day = tmp_path / "2026-08-10"
+    day.mkdir()
+    old = day / "orderbook_snapshot_20260810_1200.jsonl.gz"
+    new = day / "market_books_20260810_1205.jsonl.gz"
+    old.write_bytes(b"")
+    new.write_bytes(b"")
+
+    assert module.discover_orderbook_inputs([tmp_path]) == [str(new), str(old)]
+
+
 def rung(bracket: str, model: float, market: float) -> dict:
     return {
         "bracket": bracket,

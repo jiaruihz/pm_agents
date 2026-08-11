@@ -10,6 +10,25 @@ execution=generic single-leg passive expression rejected；bid+1 tick 只保留�
 
 production: live_action=none; orders_changed=0
 
+## 独立 raw book / PIT as-of 修复
+
+本报告下方原 T-1 表使用 strategy-snapshot quote history，并在 checkpoint 后取第一份 quote。后续审计发现
+canonical `market_books/batches` 未作为独立时间序列接入，而且该 first-after 规则会使用 checkpoint 后才
+收到的价格。修复版固定原55个 signal identity，改用 `available_at<=checkpoint` 的最后一份 book：
+
+| 固定55 signals | scoreable | maker | taker | ROI | target-date 95% CI |
+|---|---:|---:|---:|---:|---:|
+| mixed，全部 reconstructed clocks | 54 | 50 | 4 | +18.73% | [+0.33%,+35.99%] |
+| mixed，strict v3 PIT clocks | 7 | 6 | 1 | +32.73% | [-6.75%,+71.50%] |
+| all taker，reconstructed clocks | 54 | 0 | 54 | -51.33% | [-60.41%,-39.44%] |
+| all taker，strict v3 PIT clocks | 7 | 0 | 7 | -44.86% | [-69.38%,-12.99%] |
+| mixed ask-touch proxy | 4 | 0 | 4 | -37.34% | [-54.76%,-24.56%] |
+
+55/55 identities匹配；30m/60m coverage为42/54，dynamic coverage由46升到54。唯一缺口是CapeTown
+8/3：60m最后已知book陈旧35.97分钟，超过30分钟容忍，不用未来quote补齐。strict PIT只有8/7..8/10
+四天，CI跨0；50个 reconstructed maker routes 仍无 ask-touch，actual fills=0。所以下方旧 `+27.92%`
+保留为历史对照，但已 superseded-for-decision-use。
+
 ## 结论
 
 `0/48` 的准确含义是：旧 secondary holdout 的 48 个候选中，未来 60 分钟没有一次 observed ask 跌到原

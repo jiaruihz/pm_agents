@@ -65,7 +65,7 @@ def test_forecast_update_excludes_left_censored_initial_state() -> None:
     assert annotated[2]["forecast_state_seq"] == 2
 
 
-def test_markout_uses_future_bid_and_both_taker_fees() -> None:
+def test_markout_uses_latest_pit_bid_and_both_taker_fees() -> None:
     entry = 1_000.0
     histories = {
         "condition-30": [
@@ -98,14 +98,25 @@ def test_markout_uses_future_bid_and_both_taker_fees() -> None:
     assert math.isclose(result["h5_net_pnl_usd"], 5.0 * expected)
 
 
-def test_horizon_quote_outside_tolerance_is_coverage_gap() -> None:
-    quote, gap = module.first_quote_after(
-        [module.Quote(30 * 60, 0.4, 0.5, 10.0, 10.0)],
+def test_horizon_quote_after_checkpoint_is_never_used() -> None:
+    quote, gap = module.last_quote_at_or_before(
+        [module.Quote(4 * 60, 0.3, 0.4, 10.0, 10.0), module.Quote(6 * 60, 0.4, 0.5, 10.0, 10.0)],
         entry_epoch=0.0,
         horizon_min=5,
     )
+    assert quote is not None
+    assert quote.bid == 0.3
+    assert gap == 1.0
+
+
+def test_horizon_quote_outside_staleness_tolerance_is_coverage_gap() -> None:
+    quote, gap = module.last_quote_at_or_before(
+        [module.Quote(1 * 60, 0.4, 0.5, 10.0, 10.0)],
+        entry_epoch=0.0,
+        horizon_min=30,
+    )
     assert quote is None
-    assert gap == 25.0
+    assert gap == 29.0
 
 
 def test_markout_window_records_future_ask_touch_without_claiming_fill() -> None:
@@ -137,6 +148,70 @@ def test_markout_window_records_future_ask_touch_without_claiming_fill() -> None
     assert bool(result["h30_maker_bid_touch"])
     assert result["h30_maker_bid_touch_after_min"] == pytest.approx(10.0)
     assert result["h30_window_quote_count"] == 2
+
+
+def test_raw_v3_orderbook_uses_available_clock_and_complementary_no_book(
+    tmp_path: Path,
+) -> None:
+    import gzip
+    import json
+
+    path = tmp_path / "market_books_20260811_000000.jsonl.gz"
+    common = {
+        "status": "ok",
+        "condition_id": "condition-30",
+        "request_started_at_utc": "2026-08-10T23:59:59Z",
+        "response_received_at_utc": "2026-08-11T00:00:01Z",
+        "parsed_at_utc": "2026-08-11T00:00:01.010Z",
+        "available_at_utc": "2026-08-11T00:00:01Z",
+        "request_batch_capture_id": "batch-1",
+    }
+    rows = [
+        {**common, "outcome": "yes", "summary": {"best_bid": None, "best_ask": 0.35, "bid_size": None, "ask_size": 11}},
+        {**common, "outcome": "no", "summary": {"best_bid": 0.64, "best_ask": 0.72, "bid_size": 12, "ask_size": 13}},
+    ]
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row) + "\n")
+
+    parsed, counts = module.parse_raw_orderbook_quote_file(str(path))
+    quote = parsed["condition-30"][0]
+
+    assert quote.bid == pytest.approx(0.28)
+    assert quote.ask == pytest.approx(0.35)
+    assert quote.event_time_pit_scorable is True
+    assert quote.clock_lineage_status == "collector_exact_response_clock"
+    assert quote.available_at_utc == "2026-08-11T00:00:01Z"
+    assert counts["raw_book_clock_collector_exact_response_clock"] == 1
+
+
+def test_legacy_raw_clock_is_retained_but_not_pit_scorable(tmp_path: Path) -> None:
+    import gzip
+    import json
+
+    path = tmp_path / "orderbook_snapshot_20260801_0000.jsonl.gz"
+    rows = [
+        {
+            "status": "ok",
+            "condition_id": "condition-30",
+            "outcome": outcome,
+            "fetched_at_utc": "2026-08-01T00:00:03Z",
+            "summary": summary,
+        }
+        for outcome, summary in (
+            ("yes", {"best_bid": 0.30, "best_ask": 0.35, "bid_size": 10, "ask_size": 11}),
+            ("no", {"best_bid": 0.64, "best_ask": 0.69, "bid_size": 12, "ask_size": 13}),
+        )
+    ]
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row) + "\n")
+
+    parsed, _ = module.parse_raw_orderbook_quote_file(str(path))
+    quote = parsed["condition-30"][0]
+
+    assert quote.event_time_pit_scorable is False
+    assert quote.clock_lineage_status == "legacy_missing_response_clock"
 
 
 def test_full_ladder_completion_prices_other_rungs_at_touch_epoch() -> None:
