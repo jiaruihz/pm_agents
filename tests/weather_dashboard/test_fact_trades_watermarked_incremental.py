@@ -2,6 +2,7 @@ import sqlite3
 
 from scripts.etl.build_weather_fact_trades import (
     FACT_DDL,
+    build,
     collect_incremental_scope,
     write_db_watermarked_incremental,
 )
@@ -140,5 +141,15 @@ def test_watermarked_incremental_preserves_older_schema_and_extra_columns():
         assert conn.execute(
             "SELECT settled, legacy_note FROM fact_trades WHERE fill_id='fill-1'"
         ).fetchone() == (1, "keep-me")
+    finally:
+        conn.close()
+
+
+def test_empty_incremental_scope_does_not_fall_back_to_full_build():
+    conn = sqlite3.connect(":memory:")
+    try:
+        rows, alerts = build(conn, fill_ids=[])
+        assert rows == []
+        assert alerts == []
     finally:
         conn.close()

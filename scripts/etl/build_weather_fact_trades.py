@@ -813,7 +813,9 @@ def build(
     """Build all fact rows. Returns (rows, alerts)."""
     sql = BASE_SQL
     params: list[str] = []
-    if fill_ids:
+    if fill_ids is not None:
+        if not fill_ids:
+            return [], []
         unique_fill_ids = sorted(set(fill_ids))
         placeholders = ",".join("?" for _ in unique_fill_ids)
         sql += f" AND f.fill_id IN ({placeholders})"
