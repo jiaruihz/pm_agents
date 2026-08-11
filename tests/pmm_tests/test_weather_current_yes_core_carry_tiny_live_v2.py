@@ -151,6 +151,121 @@ def test_market_above_frozen_training_support_is_not_eligible() -> None:
     assert "outside_frozen_market_mid_support" in result["reasons"]
 
 
+def post_update_original() -> dict:
+    return {
+        "signal_id": "signal-amsterdam",
+        "city": "Amsterdam",
+        "target_date": "2026-08-10",
+        "checkpoint_key": "Amsterdam|2026-08-10|13",
+        "token_id": "yes-token",
+        "bracket": "23",
+        "original_source_report_ts_utc": "2026-08-10T10:55:00Z",
+        "maker_clock_status": "pre_source_report_blackout",
+        "maker_shadow_revalidation_shares": 5.0,
+    }
+
+
+def post_update_score() -> dict:
+    return {
+        **score_row(),
+        "city": "Amsterdam",
+        "target_date": "2026-08-10",
+        "checkpoint_key": "Amsterdam|2026-08-10|14",
+        "current_yes_token_id": "yes-token",
+        "current_bracket": "23",
+        "source_report_ts_utc": "2026-08-10T11:25:00Z",
+        "observation_cadence_min": 30.0,
+        "checkpoint_eligible": True,
+        "model_input_support_status": "ok",
+        "model_probability_hold": 0.88,
+        "current_yes_tick_size": 0.01,
+    }
+
+
+def test_post_update_rearm_is_same_five_share_zero_notional_sleeve() -> None:
+    result = runner.evaluate_post_update_maker_rearm(
+        post_update_original(),
+        post_update_score(),
+        {"book_status": "ok", "bid": 0.78, "ask": 0.80, "tick_size": 0.01},
+        now=datetime(2026, 8, 10, 11, 26, tzinfo=timezone.utc),
+        order_ttl_min=15,
+        maker_exposure_exists=False,
+    )
+
+    assert result["would_rearm"] is True
+    assert result["maker_rearm_shares"] == 5.0
+    assert result["maker_limit_price"] == pytest.approx(0.79)
+    assert result["zero_notional"] is True
+    assert result["notional"] == 0.0
+    assert result["trade_intent_created"] is False
+    assert result["order_created"] is False
+    assert result["revalidation_reasons"] == []
+
+
+def test_post_update_rearm_blocks_existing_maker_exposure() -> None:
+    result = runner.evaluate_post_update_maker_rearm(
+        post_update_original(),
+        post_update_score(),
+        {"book_status": "ok", "bid": 0.78, "ask": 0.80, "tick_size": 0.01},
+        now=datetime(2026, 8, 10, 11, 26, tzinfo=timezone.utc),
+        order_ttl_min=15,
+        maker_exposure_exists=True,
+    )
+
+    assert result["would_rearm"] is False
+    assert result["maker_rearm_shares"] == 0.0
+    assert "maker_sleeve_already_has_venue_exposure" in result["revalidation_reasons"]
+
+
+@pytest.mark.parametrize(
+    ("latest_patch", "expected_reason"),
+    [
+        (
+            {"source_report_ts_utc": "2026-08-10T10:55:00Z"},
+            "first_new_source_report_not_seen",
+        ),
+        ({"current_yes_token_id": "different-token"}, "exact_bracket_token_changed"),
+        ({"current_bracket": "24"}, "exact_bracket_changed"),
+        ({"model_input_support_status": "missing_model_inputs"}, "model_input_support_not_ok"),
+    ],
+)
+def test_post_update_rearm_fails_closed_on_thesis_drift(
+    latest_patch: dict, expected_reason: str
+) -> None:
+    result = runner.evaluate_post_update_maker_rearm(
+        post_update_original(),
+        {**post_update_score(), **latest_patch},
+        {"book_status": "ok", "bid": 0.78, "ask": 0.80, "tick_size": 0.01},
+        now=datetime(2026, 8, 10, 11, 26, tzinfo=timezone.utc),
+        order_ttl_min=15,
+        maker_exposure_exists=False,
+    )
+
+    assert result["would_rearm"] is False
+    assert expected_reason in result["revalidation_reasons"]
+
+
+def test_maker_exposure_detection_uses_authoritative_matched_shares(tmp_path) -> None:
+    orders = tmp_path / "live_orders.jsonl"
+    orders.write_text(
+        json.dumps(
+            {
+                "signal_id": "signal-amsterdam",
+                "maker_only": True,
+                "status": "cancelled",
+                "exchange_response": {
+                    "authoritative_order_state": {"matched_shares": 2.0}
+                },
+            }
+        )
+        + "\n"
+    )
+
+    assert runner.maker_signal_ids_with_venue_exposure(orders) == {
+        "signal-amsterdam"
+    }
+
+
 def test_missing_live_weather_input_is_explicit_and_not_eligible() -> None:
     artifact = runner.load_artifact(runner.ARTIFACT_PATH)
     result = runner.evaluate_entry(

@@ -375,6 +375,235 @@ def latest_weather_epochs(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
     return {key: row for key, (_stamp, row) in latest.items()}
 
 
+def latest_scores_by_city_day(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    latest: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+    for row in iter_jsonl(path):
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        stamp = parse_utc(
+            row.get("decision_snapshot_ts_utc") or row.get("created_at_utc")
+        )
+        if not city or not target_date or stamp is None:
+            continue
+        key = (city, target_date)
+        if key not in latest or stamp > latest[key][0]:
+            latest[key] = (stamp, row)
+    return {key: row for key, (_stamp, row) in latest.items()}
+
+
+def maker_signal_ids_with_venue_exposure(path: Path) -> set[str]:
+    """Conservatively identify signals whose five-share maker sleeve existed.
+
+    A submitted/filled maker or an authenticated positive matched quantity owns
+    some or all of the sleeve.  Post-update re-arm is therefore restricted to
+    entry-time clock skips; partial/cancelled maker reconciliation is a separate
+    lifecycle problem and cannot silently create extra exposure here.
+    """
+
+    exposed: set[str] = set()
+    for row in iter_jsonl(path):
+        if not bool(row.get("maker_only")):
+            continue
+        signal = str(row.get("signal_id") or "")
+        response = row.get("exchange_response") if isinstance(
+            row.get("exchange_response"), Mapping
+        ) else {}
+        authoritative = response.get("authoritative_order_state") if isinstance(
+            response.get("authoritative_order_state"), Mapping
+        ) else {}
+        matched = finite(authoritative.get("matched_shares")) or 0.0
+        status = str(row.get("status") or "").lower()
+        if signal and (live_order_id(row) or matched > 0 or status in {"submitted", "filled"}):
+            exposed.add(signal)
+    return exposed
+
+
+def post_update_shadow_attempts(path: Path) -> dict[str, dict[str, Any]]:
+    attempts: dict[str, dict[str, Any]] = {}
+    for row in iter_jsonl(path):
+        signal = str(row.get("signal_id") or "")
+        if (
+            signal
+            and str(row.get("status") or "") == "planned"
+            and (finite(row.get("maker_shadow_revalidation_shares")) or 0.0) > 0
+            and str(row.get("maker_clock_status") or "")
+            == "pre_source_report_blackout"
+        ):
+            attempts[signal] = row
+    return attempts
+
+
+def evaluate_post_update_maker_rearm(
+    original: Mapping[str, Any],
+    latest: Mapping[str, Any],
+    quote: Mapping[str, Any],
+    *,
+    now: datetime,
+    order_ttl_min: float,
+    maker_exposure_exists: bool,
+) -> dict[str, Any]:
+    """Evaluate one zero-notional, same-budget post-update maker re-arm."""
+
+    original_epoch = parse_utc(
+        original.get("original_source_report_ts_utc")
+        or original.get("data_epoch_ref")
+        or original.get("source_report_ts_utc")
+    )
+    latest_epoch = parse_utc(latest.get("source_report_ts_utc"))
+    original_token = str(original.get("token_id") or "")
+    latest_token = str(
+        latest.get("current_yes_token_id") or latest.get("token_id") or ""
+    )
+    original_bracket = str(original.get("bracket") or "")
+    latest_bracket = str(latest.get("current_bracket") or "")
+    probability = finite(latest.get("model_probability_hold"))
+    best_bid = finite(quote.get("bid")) or 0.0
+    best_ask = finite(quote.get("ask")) or 0.0
+    tick = finite(quote.get("tick_size")) or finite(
+        latest.get("current_yes_tick_size")
+    ) or 0.001
+    reasons: list[str] = []
+    if maker_exposure_exists:
+        reasons.append("maker_sleeve_already_has_venue_exposure")
+    if original_epoch is None or latest_epoch is None:
+        reasons.append("source_report_epoch_missing")
+    elif latest_epoch <= original_epoch:
+        reasons.append("first_new_source_report_not_seen")
+    if not original_token or latest_token != original_token:
+        reasons.append("exact_bracket_token_changed")
+    if not original_bracket or latest_bracket != original_bracket:
+        reasons.append("exact_bracket_changed")
+    if not bool(latest.get("checkpoint_eligible")):
+        reasons.append("checkpoint_not_eligible")
+    if str(latest.get("model_input_support_status") or "") != "ok":
+        reasons.append("model_input_support_not_ok")
+    if probability is None:
+        reasons.append("model_probability_unavailable")
+    if str(quote.get("book_status") or "") != "ok" or best_bid <= 0 or best_ask <= best_bid:
+        reasons.append("fresh_two_sided_book_unavailable")
+
+    clock = maker_clock_assessment(latest, now=now, order_ttl_min=order_ttl_min)
+    if not bool(clock.get("maker_live_eligible")):
+        reasons.append("post_update_source_clock_not_eligible")
+
+    cap = 0.0
+    limit = 0.0
+    if probability is not None and best_ask > best_bid and tick > 0:
+        cap = maker_edge_price_cap(
+            best_ask=best_ask,
+            tick_size=tick,
+            model_probability=probability,
+        )
+        limit = maker_resting_price(
+            best_bid=best_bid,
+            best_ask=best_ask,
+            tick_size=tick,
+            price_cap=cap,
+        )
+    if limit <= 0:
+        reasons.append("positive_edge_post_only_price_unavailable")
+
+    reasons = sorted(set(reasons))
+    would_rearm = not reasons
+    return {
+        "record_type": "current_yes_core_carry_post_update_maker_revalidation",
+        "policy_version": "same_budget_first_post_update_rearm_shadow_v1",
+        "created_at_utc": now.isoformat(timespec="seconds"),
+        "signal_id": str(original.get("signal_id") or ""),
+        "city": str(original.get("city") or latest.get("city") or ""),
+        "target_date": str(
+            original.get("target_date") or latest.get("target_date") or ""
+        ),
+        "original_checkpoint_key": str(original.get("checkpoint_key") or ""),
+        "revalidation_checkpoint_key": str(latest.get("checkpoint_key") or ""),
+        "original_source_report_ts_utc": (
+            original_epoch.isoformat(timespec="seconds") if original_epoch else ""
+        ),
+        "revalidation_source_report_ts_utc": (
+            latest_epoch.isoformat(timespec="seconds") if latest_epoch else ""
+        ),
+        "token_id": latest_token,
+        "bracket": latest_bracket,
+        "model_probability_hold": probability,
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "tick_size": tick,
+        "maker_price_cap": round(cap, 6),
+        "maker_limit_price": round(limit, 6),
+        "maker_rearm_shares": FROZEN_MAKER_SHARES if would_rearm else 0.0,
+        "maker_exposure_exists": maker_exposure_exists,
+        "would_rearm": would_rearm,
+        "revalidation_status": "positive_ev_rearm" if would_rearm else "blocked",
+        "revalidation_reasons": reasons,
+        "zero_notional": True,
+        "notional": 0.0,
+        "trade_intent_created": False,
+        "order_created": False,
+        **clock,
+    }
+
+
+def collect_post_update_maker_revalidations(
+    args: argparse.Namespace,
+    output_dir: Path,
+    *,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """Record the first observable post-update decision; never execute it."""
+
+    journal = output_dir / "maker_post_update_revalidations.jsonl"
+    completed_signals = {
+        str(row.get("signal_id") or "") for row in iter_jsonl(journal)
+    }
+    attempts = post_update_shadow_attempts(output_dir / "entry_attempts.jsonl")
+    latest_scores = latest_scores_by_city_day(output_dir / "pre_live_scores.jsonl")
+    exposed = maker_signal_ids_with_venue_exposure(output_dir / "live_orders.jsonl")
+    candidates: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for signal, original in attempts.items():
+        if signal in completed_signals:
+            continue
+        key = (str(original.get("city") or ""), str(original.get("target_date") or ""))
+        latest = latest_scores.get(key)
+        original_epoch = parse_utc(
+            original.get("original_source_report_ts_utc")
+            or original.get("data_epoch_ref")
+        )
+        latest_epoch = parse_utc((latest or {}).get("source_report_ts_utc"))
+        if (
+            latest is None
+            or original_epoch is None
+            or latest_epoch is None
+            or latest_epoch <= original_epoch
+        ):
+            continue
+        candidates.append((original, latest))
+
+    if not candidates:
+        return []
+    records: list[dict[str, Any]] = []
+    with market_httpx_client(args.book_proxy, timeout=float(args.book_timeout_sec)) as client:
+        for original, latest in candidates:
+            token = str(latest.get("current_yes_token_id") or latest.get("token_id") or "")
+            quote = weather_state._fetch_token_book(client, token) if token else {}  # noqa: SLF001
+            record = evaluate_post_update_maker_rearm(
+                original,
+                latest,
+                quote,
+                now=now,
+                order_ttl_min=float(args.order_ttl_min),
+                maker_exposure_exists=str(original.get("signal_id") or "") in exposed,
+            )
+            record["revalidation_id"] = "maker-rearm-shadow-" + stable_hash(
+                {
+                    "signal_id": record["signal_id"],
+                    "source_report_ts_utc": record["revalidation_source_report_ts_utc"],
+                }
+            )
+            append_jsonl(journal, record)
+            records.append(record)
+    return records
+
+
 def maker_lifecycle_root(row: Mapping[str, Any]) -> str:
     root_created = str(row.get("maker_lifecycle_root_created_at_utc") or "")
     signal = str(row.get("signal_id") or "")
@@ -1193,6 +1422,19 @@ def new_entry_plans(
                 "target_date": city_day[1],
                 "checkpoint_key": row.get("checkpoint_key"),
                 "model_probability_hold": row.get("model_probability_hold"),
+                "token_id": str(
+                    row.get("token_id") or row.get("current_yes_token_id") or ""
+                ),
+                "condition_id": str(
+                    row.get("condition_id") or row.get("current_condition_id") or ""
+                ),
+                "market_id": str(row.get("current_market_id") or ""),
+                "bracket": str(row.get("current_bracket") or ""),
+                "original_source_report_ts_utc": str(
+                    row.get("source_report_ts_utc") or ""
+                ),
+                "original_best_bid": finite(row.get("current_yes_bid")),
+                "original_best_ask": finite(row.get("current_yes_ask")),
                 "status": "blocked" if reason else "planned",
                 "reason": reason,
                 "live_enabled": bool(args.live and args.confirm_live),
@@ -1248,6 +1490,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
     entry_plans, attempts = new_entry_plans(args, output_dir, now=now)
+    post_update_revalidations = collect_post_update_maker_revalidations(
+        args,
+        output_dir,
+        now=now,
+    )
     lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(args, output_dir, now=now)
     for decision in lifecycle_decisions:
         append_jsonl(output_dir / "maker_lifecycle_decisions.jsonl", decision)
@@ -1273,6 +1520,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "entry_plans": len(entry_plans),
         "maker_lifecycle_plans": len(lifecycle_plans),
         "maker_lifecycle_decisions": len(lifecycle_decisions),
+        "maker_post_update_revalidations": len(post_update_revalidations),
+        "maker_post_update_would_rearm": sum(
+            1 for row in post_update_revalidations if row.get("would_rearm")
+        ),
+        "maker_post_update_zero_notional": True,
         "journal_terminal_recoveries": journal_terminal_recoveries,
         "taker_shares": float(args.taker_shares),
         "maker_shares": float(args.maker_shares),
