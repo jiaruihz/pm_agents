@@ -23,6 +23,7 @@ def _book(token_id: str) -> dict:
 def _events() -> list[dict]:
     return [
         {
+            "extreme_kind": "max",
             "city": "Amsterdam",
             "target_date": "2026-08-08",
             "event_slug": "weather-amsterdam",
@@ -107,6 +108,67 @@ def test_market_discovery_is_bounded_parallel_and_retries_transport_failure(
     assert failures == []
     assert [row["city"] for row in events] == ["CityA", "CityB"]
     assert [row["discovery_attempt_count"] for row in events] == [2, 2]
+
+
+def test_market_discovery_adds_only_registered_minimum_city_ladders(monkeypatch) -> None:
+    now = datetime(2026, 8, 10, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "CITIES",
+        {
+            "HongKong": {"slug": "hong-kong", "unit": "C"},
+            "Seoul": {"slug": "seoul", "unit": "C"},
+        },
+    )
+    monkeypatch.setattr(
+        market_books,
+        "city_scan_dates",
+        lambda *_args, **_kwargs: ["2026-08-10"],
+    )
+    monkeypatch.setattr(market_books, "local_settle_utc", lambda *_args: now)
+    monkeypatch.setattr(market_books, "city_local_datetime", lambda *_args: now)
+
+    seen_slugs: list[str] = []
+
+    def fake_curl(_url, *, params, **_kwargs):
+        seen_slugs.append(params["slug"])
+        return 200, {"id": params["slug"], "markets": [{}]}, ""
+
+    monkeypatch.setattr(market_books.legacy, "curl_json_get", fake_curl)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "gamma_market_ladder",
+        lambda _markets: (
+            None,
+            [
+                {
+                    "label": "20",
+                    "market_id": "m",
+                    "condition_id": "c",
+                    "yes_token_id": "y",
+                    "no_token_id": "n",
+                }
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        market_books.legacy, "orderbook_targets_for_strategy_live", lambda *_args: set()
+    )
+
+    events, failures = market_books.discover_market_ladders(
+        now_utc=now,
+        observation_index={},
+        minimum_cities={"HongKong"},
+    )
+
+    assert failures == []
+    assert {(row["city"], row["extreme_kind"]) for row in events} == {
+        ("HongKong", "max"),
+        ("HongKong", "min"),
+        ("Seoul", "max"),
+    }
+    assert any(slug.startswith("lowest-temperature-in-hong-kong-") for slug in seen_slugs)
+    assert not any(slug.startswith("lowest-temperature-in-seoul-") for slug in seen_slugs)
 
 
 def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
@@ -308,7 +370,32 @@ def test_market_books_reuses_event_contract_but_fetches_fresh_books(
     }
     assert latest["discovery_failures"][0]["recovered_by_event_contract"] is True
     cache = json.loads((ladders / "event_contract_cache.json").read_text())
-    assert cache["schema_version"] == "weather_market_event_contract_cache_v1"
+    assert cache["schema_version"] == "weather_market_event_contract_cache_v2"
+
+
+def test_event_contract_cache_keeps_maximum_and_minimum_for_same_city_date(tmp_path):
+    path = tmp_path / "event_contract_cache.json"
+    events = []
+    for extreme_kind in ("max", "min"):
+        event = _events()[0]
+        event = {
+            **event,
+            "extreme_kind": extreme_kind,
+            "event_slug": f"{extreme_kind}-weather-amsterdam",
+            "event_id": f"event-{extreme_kind}",
+        }
+        events.append(event)
+
+    market_books._publish_event_contracts(
+        path,
+        contracts={},
+        events=events,
+        available_at_utc="2026-08-07T12:00:00Z",
+    )
+
+    payload = json.loads(path.read_text())
+    assert len(payload["records"]) == 2
+    assert {row["extreme_kind"] for row in payload["records"]} == {"max", "min"}
 
 
 def test_strategy_view_reads_canonical_books_but_keeps_target_scope(tmp_path):

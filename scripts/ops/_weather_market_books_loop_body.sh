@@ -10,6 +10,7 @@ CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:?}"
 OBSERVATION_CACHE="${WEATHER_OBSERVATION_CACHE:?}"
 INTERVAL_SEC="${WEATHER_MARKET_BOOKS_INTERVAL_SEC:-300}"
 ORDERBOOK_BUDGET_SEC="${WEATHER_MARKET_BOOKS_BUDGET_SEC:-240}"
+MINIMUM_CITIES="${WEATHER_MARKET_BOOKS_MINIMUM_CITIES:-HongKong Seoul Tokyo}"
 LOG_FILE="${WEATHER_MARKET_BOOKS_LOG_FILE:?}"
 PY="$SERVICE_DIR/.venv/bin/python"
 [[ -x "$PY" ]] || PY="python3"
@@ -35,6 +36,7 @@ while true; do
     --output-root "$MARKET_BOOKS_ROOT" \
     --market-ladder-root "$MARKET_LADDER_ROOT" \
     --observation-cache "$OBSERVATION_CACHE" \
+    --minimum-cities $MINIMUM_CITIES \
     --orderbook-budget-sec "$ORDERBOOK_BUDGET_SEC" >> "$LOG_FILE" 2>&1
   raw_rc=$?
 

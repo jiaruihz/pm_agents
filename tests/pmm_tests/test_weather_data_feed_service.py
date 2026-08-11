@@ -1006,6 +1006,10 @@ def test_observations_cache_row_uses_data_feed_fetcher(monkeypatch) -> None:
     assert row["status"] == "ok"
     assert row["current_temp_c"] == 26.0
     assert row["running_max_c"] == 27.0
+    assert row["running_min_c"] == 25.0
+    assert row["running_min_obs_utc"] == "2026-06-17T09:30:00+00:00"
+    assert row["minutes_since_running_min"] == 61.0
+    assert row["rebound_c"] == 1.0
     assert row["last_obs_utc"] == "2026-06-17T10:30:00+00:00"
     assert row["cadence_min"] == 30.0
     assert row["first_running_max_obs_utc"] == "2026-06-17T10:00:00+00:00"
@@ -1339,6 +1343,65 @@ def test_observations_cache_keeps_running_max_after_error_reuse_then_fallback(mo
 
     assert row["running_max_c"] == 33.0
     assert row["history_continuity_status"] == "merged_previous_running_max"
+
+
+def test_observations_cache_keeps_running_min_monotone_across_truncated_fallback(
+    monkeypatch, tmp_path
+) -> None:
+    import argparse
+    from weather_data_feed import build_observation_cache, write_observation_cache
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Wuhan"})[0]
+    output = tmp_path / "latest.json"
+    previous = {
+        "city": "Wuhan",
+        "target_date": "2026-07-19",
+        "status": "ok",
+        "source": "aviationweather_metar",
+        "station": "ZHHH",
+        "running_max_c": 32.0,
+        "running_min_c": 24.0,
+        "running_min_obs_utc": "2026-07-19T00:00:00+00:00",
+    }
+    write_observation_cache(build_observation_cache([previous]), output)
+    monkeypatch.setattr(observations, "load_city_configs", lambda **_kwargs: [cfg])
+    monkeypatch.setattr(
+        observations,
+        "observation_cache_row",
+        lambda *_args, **_kwargs: {
+            "city": "Wuhan",
+            "target_date": "2026-07-19",
+            "status": "ok",
+            "source": "aviationweather_cache_csv",
+            "station": "ZHHH",
+            "fetched_at_utc": "2026-07-19T10:00:00+00:00",
+            "current_temp_c": 29.0,
+            "running_max_c": 32.0,
+            "running_min_c": 29.0,
+            "running_min_obs_utc": "2026-07-19T10:00:00+00:00",
+        },
+    )
+    args = argparse.Namespace(
+        output=str(output),
+        now_utc="2026-07-19T10:00:00+00:00",
+        include_station_diff=False,
+        cities=["Wuhan"],
+        additional_cities=None,
+        timeout_sec=3.0,
+        max_workers=1,
+        include_fallback_sources=True,
+    )
+
+    cache = observations.build_cache(args)
+    row = cache["records"][0]
+
+    assert row["running_min_c"] == 24.0
+    assert row["rebound_c"] == 5.0
+    assert row["minutes_since_running_min"] == 600.0
+    assert row["history_continuity_min_status"] == "merged_previous_running_min"
+    assert cache["summary"]["running_min_continuity_merges"] == 1
 
 
 def test_daily_parity_check_flags_missing_new_tree(tmp_path) -> None:

@@ -58,6 +58,31 @@ def test_default_microstructure_rollout_excludes_seoul() -> None:
     assert DEFAULT_CITIES == ("Amsterdam", "Tokyo", "Helsinki", "Busan")
 
 
+def test_tmax_ws_selector_ignores_tmin_rows() -> None:
+    payload = _market_payload()
+    for row in payload["records"]:
+        row["extreme_kind"] = "min"
+
+    selected = select_tokens(
+        market_payload=payload,
+        observations={
+            ("Busan", "2026-08-09"): {"status": "ok", "running_max_c": 32.0}
+        },
+        cities=["Busan"],
+        now_utc=NOW,
+        active_bracket_count=2,
+        research_bracket_count=3,
+        event_bracket_count=3,
+        post_invalidation_sec=300,
+        scheduled_keys={("Busan", "2026-08-09")},
+        research_keys=set(),
+        burst_keys=set(),
+        invalidation_state={},
+    )
+
+    assert selected.tokens == set()
+
+
 def _market_payload(city: str = "Busan") -> dict:
     rows = []
     for bracket in ("30", "31", "32", "33", "34", "35", "36"):

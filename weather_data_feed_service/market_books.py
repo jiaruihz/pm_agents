@@ -27,7 +27,7 @@ from weather_data_feed_service.legacy_weather_predict import paper_snapshot as l
 
 SCHEMA_VERSION = "weather_market_books_batch_v1"
 LADDER_SCHEMA_VERSION = "weather_market_ladder_snapshot_v1"
-EVENT_CONTRACT_CACHE_SCHEMA_VERSION = "weather_market_event_contract_cache_v1"
+EVENT_CONTRACT_CACHE_SCHEMA_VERSION = "weather_market_event_contract_cache_v2"
 PRODUCER = "weather_data_feed_service.market_books"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -102,19 +102,21 @@ def _strategy_targets_for_entries(
     *,
     unit: str,
     observation: dict[str, Any] | None,
+    extreme_kind: str = "max",
 ) -> set[tuple[str, str]]:
-    metar_max_f = _strategy_state_from_observation(observation).get(
-        "metar_current_max_f"
+    state = _strategy_state_from_observation(observation)
+    running_f = state.get(
+        "metar_current_min_f" if extreme_kind == "min" else "metar_current_max_f"
     )
-    if metar_max_f is None:
+    if running_f is None:
         return set()
     if unit == "C":
-        running_native = (float(metar_max_f) - 32.0) * 5.0 / 9.0
+        running_native = (float(running_f) - 32.0) * 5.0 / 9.0
         running_compare_f = (
             legacy.round_half_up_float(running_native) * 9.0 / 5.0 + 32.0
         )
     else:
-        running_compare_f = legacy.round_half_up_float(float(metar_max_f))
+        running_compare_f = legacy.round_half_up_float(float(running_f))
     parsed: list[tuple[str, float, float]] = []
     for entry in entries:
         label = str(entry.get("label") or "")
@@ -131,9 +133,21 @@ def _strategy_targets_for_entries(
         current_label, _ = sorted(current, key=lambda item: item[1])[0]
         targets.add((current_label, "yes"))
         targets.add((current_label, "no"))
-    higher = [(label, lo_f) for label, lo_f, _ in parsed if lo_f > running_compare_f]
-    for label, _ in sorted(higher, key=lambda item: item[1])[:2]:
-        targets.add((label, "no"))
+    if extreme_kind == "min":
+        # Warmer exact brackets are already impossible once the running low is
+        # below them.  The nearest colder brackets are the remaining cross
+        # frontier, so keep both outcomes hot for model/markout evidence.
+        warmer = [(label, lo_f) for label, lo_f, _ in parsed if lo_f > running_compare_f]
+        for label, _ in sorted(warmer, key=lambda item: item[1])[:2]:
+            targets.add((label, "no"))
+        colder = [(label, hi_f) for label, _, hi_f in parsed if hi_f < running_compare_f]
+        for label, _ in sorted(colder, key=lambda item: item[1], reverse=True)[:2]:
+            targets.add((label, "yes"))
+            targets.add((label, "no"))
+    else:
+        higher = [(label, lo_f) for label, lo_f, _ in parsed if lo_f > running_compare_f]
+        for label, _ in sorted(higher, key=lambda item: item[1])[:2]:
+            targets.add((label, "no"))
     return targets
 
 
@@ -164,6 +178,7 @@ def _contract_row_from_ladder(
     if not city or not target_date or not event_slug or not entries:
         return None
     return {
+        "extreme_kind": str(row.get("extreme_kind") or "max"),
         "city": city,
         "target_date": target_date,
         "event_slug": event_slug,
@@ -175,7 +190,7 @@ def _contract_row_from_ladder(
 
 def _load_event_contracts(
     ladder_root: Path, *, now_utc: datetime
-) -> dict[tuple[str, str], dict[str, Any]]:
+) -> dict[tuple[str, str, str], dict[str, Any]]:
     cache_path = ladder_root / "event_contract_cache.json"
     candidates: list[Path] = []
     if cache_path.exists():
@@ -186,7 +201,7 @@ def _load_event_contracts(
         reverse=True,
     )[: max(1, EVENT_CONTRACT_BOOTSTRAP_FILES)]
     candidates.extend(archived)
-    contracts: dict[tuple[str, str], dict[str, Any]] = {}
+    contracts: dict[tuple[str, str, str], dict[str, Any]] = {}
     for path in candidates:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -205,6 +220,7 @@ def _load_event_contracts(
             if not contract:
                 continue
             key = (
+                str(contract.get("extreme_kind") or "max"),
                 str(contract.get("city") or ""),
                 str(contract.get("target_date") or ""),
             )
@@ -225,29 +241,41 @@ def _recover_discovery_contracts(
     *,
     events: list[dict[str, Any]],
     discovery_failures: list[dict[str, Any]],
-    contracts: dict[tuple[str, str], dict[str, Any]],
+    contracts: dict[tuple[str, str, str], dict[str, Any]],
     observation_index: dict[tuple[str, str], dict[str, Any]],
     now_utc: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
     recovered = 0
-    event_keys = {(str(row["city"]), str(row["target_date"])) for row in events}
+    event_keys = {
+        (
+            str(row.get("extreme_kind") or "max"),
+            str(row["city"]),
+            str(row["target_date"]),
+        )
+        for row in events
+    }
     for failure in discovery_failures:
         if failure.get("discovery_failure_class") != "operational_failure":
             continue
-        key = (str(failure.get("city") or ""), str(failure.get("target_date") or ""))
+        key = (
+            str(failure.get("extreme_kind") or "max"),
+            str(failure.get("city") or ""),
+            str(failure.get("target_date") or ""),
+        )
         contract = contracts.get(key)
         if contract is None or key in event_keys:
             continue
         if str(contract.get("event_slug") or "") != str(failure.get("slug") or ""):
             continue
-        cfg = legacy.CITIES.get(key[0])
+        cfg = legacy.CITIES.get(key[1])
         entries = contract.get("entries") or []
         if not isinstance(cfg, dict) or not entries:
             continue
         events.append(
             {
-                "city": key[0],
-                "target_date": key[1],
+                "extreme_kind": key[0],
+                "city": key[1],
+                "target_date": key[2],
                 "event_slug": contract["event_slug"],
                 "event_id": contract.get("event_id", ""),
                 "condition_count": len(entries),
@@ -255,14 +283,15 @@ def _recover_discovery_contracts(
                 "strategy_targets": _strategy_targets_for_entries(
                     entries,
                     unit=str(cfg["unit"]),
-                    observation=observation_index.get(key),
+                    observation=observation_index.get((key[1], key[2])),
+                    extreme_kind=key[0],
                 ),
                 "discovery_attempt_count": failure.get("discovery_attempt_count", 1),
                 "market_discovery_source": "cached_event_contract",
                 "market_contract_last_discovered_at_utc": contract.get(
                     "last_discovered_at_utc"
                 ),
-                "city_local_date_at_capture": city_local_datetime(key[0], now_utc)
+                "city_local_date_at_capture": city_local_datetime(key[1], now_utc)
                 .date()
                 .isoformat(),
             }
@@ -273,26 +302,37 @@ def _recover_discovery_contracts(
             "last_discovered_at_utc"
         )
         recovered += 1
-    events.sort(key=lambda row: (str(row.get("city")), str(row.get("target_date"))))
+    events.sort(
+        key=lambda row: (
+            str(row.get("extreme_kind") or "max"),
+            str(row.get("city")),
+            str(row.get("target_date")),
+        )
+    )
     return events, discovery_failures, recovered
 
 
 def _publish_event_contracts(
     path: Path,
     *,
-    contracts: dict[tuple[str, str], dict[str, Any]],
+    contracts: dict[tuple[str, str, str], dict[str, Any]],
     events: list[dict[str, Any]],
     available_at_utc: str,
 ) -> None:
     for event in events:
         if event.get("market_discovery_source") == "cached_event_contract":
             continue
-        key = (str(event.get("city") or ""), str(event.get("target_date") or ""))
+        key = (
+            str(event.get("extreme_kind") or "max"),
+            str(event.get("city") or ""),
+            str(event.get("target_date") or ""),
+        )
         if not all(key):
             continue
         contracts[key] = {
-            "city": key[0],
-            "target_date": key[1],
+            "extreme_kind": key[0],
+            "city": key[1],
+            "target_date": key[2],
             "event_slug": str(event.get("event_slug") or ""),
             "event_id": str(event.get("event_id") or ""),
             "entries": list(event.get("entries") or []),
@@ -318,13 +358,29 @@ def _strategy_state_from_observation(row: dict[str, Any] | None) -> dict[str, An
             running_max_f = float(row["running_max_c"]) * 9.0 / 5.0 + 32.0
         except (TypeError, ValueError):
             running_max_f = None
-    return {"metar_current_max_f": running_max_f}
+    running_min_f = row.get("running_min_f")
+    if running_min_f is None and row.get("running_min_c") is not None:
+        try:
+            running_min_f = float(row["running_min_c"]) * 9.0 / 5.0 + 32.0
+        except (TypeError, ValueError):
+            running_min_f = None
+    return {
+        "metar_current_max_f": running_max_f,
+        "metar_current_min_f": running_min_f,
+    }
 
 
-def _event_slug(city: str, cfg: dict[str, Any], target_date: str) -> str:
+def _event_slug(
+    city: str,
+    cfg: dict[str, Any],
+    target_date: str,
+    *,
+    extreme_kind: str = "max",
+) -> str:
     city_slug = cfg.get("slug", city.lower())
     parsed = datetime.strptime(target_date, "%Y-%m-%d")
-    return f"highest-temperature-in-{city_slug}-on-{parsed.strftime('%B-%-d-%Y').lower()}"
+    adjective = "lowest" if extreme_kind == "min" else "highest"
+    return f"{adjective}-temperature-in-{city_slug}-on-{parsed.strftime('%B-%-d-%Y').lower()}"
 
 
 def discover_market_ladders(
@@ -332,12 +388,19 @@ def discover_market_ladders(
     now_utc: datetime,
     observation_index: dict[tuple[str, str], dict[str, Any]],
     target_date: str | None = None,
+    minimum_cities: set[str] | None = None,
     max_workers: int = DEFAULT_DISCOVERY_WORKERS,
     retries: int = DEFAULT_DISCOVERY_RETRIES,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Discover open weather ladders without touching any forecast provider."""
 
-    requests: list[tuple[str, dict[str, Any], str, str]] = []
+    minimum_cities = set(minimum_cities or ())
+    unknown_minimum_cities = minimum_cities.difference(legacy.CITIES)
+    if unknown_minimum_cities:
+        raise ValueError(
+            f"unknown minimum-temperature cities: {sorted(unknown_minimum_cities)}"
+        )
+    requests: list[tuple[str, str, dict[str, Any], str, str]] = []
     for city, cfg in legacy.CITIES.items():
         for event_date in city_scan_dates(
             city,
@@ -348,13 +411,17 @@ def discover_market_ladders(
             hours_to_settle = (approximate_settle - now_utc).total_seconds() / 3600.0
             if hours_to_settle < 0 or hours_to_settle > 50:
                 continue
-            slug = _event_slug(city, cfg, event_date)
-            requests.append((city, cfg, event_date, slug))
+            extreme_kinds = ("max", "min") if city in minimum_cities else ("max",)
+            for extreme_kind in extreme_kinds:
+                slug = _event_slug(
+                    city, cfg, event_date, extreme_kind=extreme_kind
+                )
+                requests.append((extreme_kind, city, cfg, event_date, slug))
 
     def discover_one(
-        request: tuple[str, dict[str, Any], str, str]
+        request: tuple[str, str, dict[str, Any], str, str]
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-        city, cfg, event_date, slug = request
+        extreme_kind, city, cfg, event_date, slug = request
         status_code = 0
         raw: Any = None
         error = "event_unavailable"
@@ -388,6 +455,7 @@ def discover_market_ladders(
                 else "operational_failure"
             )
             return None, {
+                "extreme_kind": extreme_kind,
                 "city": city,
                 "target_date": event_date,
                 "slug": slug,
@@ -399,6 +467,7 @@ def discover_market_ladders(
         _, entries = legacy.gamma_market_ladder(raw.get("markets") or [])
         if not entries:
             return None, {
+                "extreme_kind": extreme_kind,
                 "city": city,
                 "target_date": event_date,
                 "slug": slug,
@@ -407,12 +476,23 @@ def discover_market_ladders(
                 "discovery_failure_class": "expected_unavailable",
                 "discovery_attempt_count": attempt_count,
             }
-        strategy_targets = legacy.orderbook_targets_for_strategy_live(
-            raw.get("markets") or [],
-            cfg["unit"],
-            _strategy_state_from_observation(observation_index.get((city, event_date))),
-        )
+        if extreme_kind == "max":
+            strategy_targets = legacy.orderbook_targets_for_strategy_live(
+                raw.get("markets") or [],
+                cfg["unit"],
+                _strategy_state_from_observation(
+                    observation_index.get((city, event_date))
+                ),
+            )
+        else:
+            strategy_targets = _strategy_targets_for_entries(
+                entries,
+                unit=str(cfg["unit"]),
+                observation=observation_index.get((city, event_date)),
+                extreme_kind=extreme_kind,
+            )
         return {
+            "extreme_kind": extreme_kind,
             "city": city,
             "target_date": event_date,
             "event_slug": slug,
@@ -460,6 +540,7 @@ def _token_requests(
                     "capture_reason": "strategy_hot" if is_hot else "full_market_ladder",
                     "capture_priority": "hot" if is_hot else "cold",
                     "snapshot_ts_utc": capture_started_at_utc,
+                    "extreme_kind": str(event.get("extreme_kind") or "max"),
                     "city": event["city"],
                     "event_date": event["target_date"],
                     "market_local_date": event["target_date"],
@@ -558,6 +639,7 @@ def _ladder_payload(
         )
         ladder_records.append(
             {
+                "extreme_kind": str(event.get("extreme_kind") or "max"),
                 "city": event["city"],
                 "target_date": event["target_date"],
                 "event_slug": event["event_slug"],
@@ -598,6 +680,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         now_utc=now_utc,
         observation_index=observations,
         target_date=args.target_date,
+        minimum_cities=set(getattr(args, "minimum_cities", None) or ()),
         max_workers=getattr(args, "market_discovery_workers", DEFAULT_DISCOVERY_WORKERS),
         retries=getattr(args, "market_discovery_retries", DEFAULT_DISCOVERY_RETRIES),
     )
@@ -706,6 +789,12 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "records": records,
         "summary": {
             "events": len(events),
+            "maximum_events": sum(
+                str(row.get("extreme_kind") or "max") == "max" for row in events
+            ),
+            "minimum_events": sum(
+                str(row.get("extreme_kind") or "max") == "min" for row in events
+            ),
             "tokens": len(request_rows),
             "hot_tokens": len(hot_tokens),
             "cold_tokens": len(cold_tokens),
@@ -768,6 +857,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--market-ladder-root", required=True)
     parser.add_argument("--observation-cache", default="")
     parser.add_argument("--target-date", default=None)
+    parser.add_argument(
+        "--minimum-cities",
+        nargs="*",
+        default=(),
+        help="Registered city keys whose lowest-temperature full ladders are collected.",
+    )
     parser.add_argument("--now-utc", default=None)
     parser.add_argument("--orderbook-top-n", type=int, default=20)
     parser.add_argument("--orderbook-budget-sec", type=float, default=240.0)

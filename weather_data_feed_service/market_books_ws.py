@@ -324,6 +324,11 @@ def select_tokens(
     for row in market_payload.get("records") or []:
         if not isinstance(row, dict):
             continue
+        # The selector is currently a Tmax physical-state selector.  Tmin REST
+        # ladders share the canonical raw feed but must never be selected from
+        # running-max state until a dedicated Tmin WS policy is registered.
+        if str(row.get("extreme_kind") or "max") != "max":
+            continue
         city = str(row.get("city") or "")
         target_date = str(row.get("event_date") or "")
         if city not in city_set or not target_date:

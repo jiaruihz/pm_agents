@@ -1,7 +1,7 @@
 # Weather Daily Minimum Temperature Strategy
 
 Status: current-reference
-Updated: 2026-08-11 initial design and readiness audit
+Updated: 2026-08-11 initial implementation and readiness audit
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md;
 WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md
@@ -21,6 +21,8 @@ extreme_kind = min
 
 ```text
 design = frozen_v1
+collection_implementation = central market_books Tmin full ladder for HongKong/Seoul/Tokyo
+model_implementation = D-1 18:00 PIT panel + W0 weather residual development baseline
 probability_artifact = none
 forward = not_started
 runtime = partial zero-notional telemetry
@@ -32,8 +34,8 @@ promotion = no live
 清晨窗口，以及日落后至午夜的晚间窗口。上午已经打印出的 running minimum 只是暂时下界；
 当天晚间仍可能落入更低 exact bracket。
 
-本设计只冻结研究问题、PIT 分母、模型对照和晋级标准；不部署新 collector、不创建订单、
-不修改任何 live 实例。
+实现复用中央 `weather_market_books` 与共享 `weather_model_evaluation` CLI；不创建 Tmin 私有
+collector，不创建订单，也不修改任何 live strategy 实例。
 
 ## 唯一可证伪假设
 
@@ -228,6 +230,29 @@ source calibration 明确为 pending。7/29–8/9 的日期断层按 coverage ga
 
 readiness verdict：`BLOCKED_FOR_FIT / KEEP_ZERO_NOTIONAL_COLLECTION`。
 
+### 首轮实现与真实 denominator
+
+中央 collector 已实现 `extreme_kind=max|min` 三元 event contract identity，避免同城同日 Tmax/Tmin
+cache 冲突；Tmax selective WS 显式忽略 Tmin REST rows。首批 Tmin inventory 只登记
+HongKong/Seoul/Tokyo，真实 Gamma discovery 在 2026-08-11 找到当天与次日各 1 个 event：共 6 个
+Tmin events、每 event 11 rungs、132 YES/NO tokens，0 operational failures。运行时新增
+`running_min_c / running_min_obs_utc / minutes_since_running_min / rebound_c`，并在截断 source
+fallback 时保持 station-day running minimum 单调。
+
+共享命令 `python -m weather_model_evaluation.cli daily-minimum` 已产出 D-1 18:00 local 的首个
+model-ready panel，artifact 位于 production contract 登记的 research artifact store：
+
+```text
+daily_minimum_exact_bracket_v1/run_20260811_initial/
+```
+
+固定分母结果为 96 rows（3 城各 32 target dates）；proxy label coverage 为 Seoul 3 dates、Tokyo
+24 dates、HongKong 0 dates。W0 empirical weather-residual expanding walk-forward 有 20 scored rows / 17
+dates，proxy-label MAE `0.960°C`、multiclass actual-bin logloss `1.795`。这些数只验证 PIT panel 与
+walk-forward 代码可运行：label 是 observation-cache intraday-min proxy，不是 settlement truth，且
+当时中央 Tmin full ladder 为 0 dates，所以不能与 M0 同 rows 比较、不能冻结 artifact、不能据此
+产生 candidate/intent。
+
 ## Probability 与资金晋级门
 
 ### Gate A：历史/开发概率门
@@ -288,8 +313,7 @@ eligibility_status / blocker_reason / feature_ref / model_ref / book_ref
 
 ## 唯一下一动作
 
-先完成 `Hong Kong + Seoul + Tokyo` 的 min-specific contract census，并把当前 lowest observer 的
-四时钟、source basis 与完整 event ladder 映射为 WCIR coverage-only rows；同时由现有
-`weather_market_books` owner 补 min event inventory。完成前不拟合 M1/M2、不跑 ROI、不部署新
-strategy instance。完成后的第一次正式交付应是固定 denominator 的 coverage/readiness artifact，
-而不是选中交易清单。
+让中央 `weather_market_books` 连续采集三城 Tmin full ladder，并把新增 Tmin rows 与现有 forecast、
+official/proxy observation、settlement profile join 成固定 checkpoint WCIR coverage rows。累计至少
+30 个新的 settled target dates 且 settlement truth 完整后，才在同 rows 比较 M0/W0；完成前不拟合
+M1/M2、不跑 ROI、不创建 strategy instance 或 candidate/intent。

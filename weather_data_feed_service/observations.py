@@ -187,6 +187,7 @@ def observation_cache_row(
     latest_dt = parse_dt(latest.obs_ts_utc)
     temps = [record.temp_c for record in records if _float_or_none(record.temp_c) is not None]
     running_max_c = max(temps) if temps else None
+    running_min_c = min(temps) if temps else None
     running_hits = [
         parse_dt(record.obs_ts_utc)
         for record in records
@@ -194,6 +195,13 @@ def observation_cache_row(
     ]
     running_hits = [dt for dt in running_hits if dt is not None]
     running_max_obs_utc = max(running_hits) if running_hits else None
+    running_min_hits = [
+        parse_dt(record.obs_ts_utc)
+        for record in records
+        if running_min_c is not None and abs(float(record.temp_c) - running_min_c) < 1e-9
+    ]
+    running_min_hits = [dt for dt in running_min_hits if dt is not None]
+    running_min_obs_utc = max(running_min_hits) if running_min_hits else None
     current_temp_c = _float_or_none(latest.temp_c)
     age_min = None if latest_dt is None else round((fetched_at - latest_dt).total_seconds() / 60.0, 3)
     cadence_min = infer_cadence_min(records)
@@ -243,13 +251,17 @@ def observation_cache_row(
         # minutes_since_last_strict_new_high / minutes_since_first_running_max.
         "running_max_obs_utc": running_max_obs_utc.isoformat() if running_max_obs_utc else "",
         "minutes_since_running_max": None if running_max_obs_utc is None else round((fetched_at - running_max_obs_utc).total_seconds() / 60.0, 3),
+        "running_min_obs_utc": running_min_obs_utc.isoformat() if running_min_obs_utc else "",
+        "minutes_since_running_min": None if running_min_obs_utc is None else round((fetched_at - running_min_obs_utc).total_seconds() / 60.0, 3),
         "n_obs": len(records),
         "age_min": age_min,
         "cadence_min": cadence_min,
         "minutes_to_next_obs": None if age_min is None or cadence_min is None else round(cadence_min - age_min, 3),
         "current_temp_c": current_temp_c,
         "running_max_c": running_max_c,
+        "running_min_c": running_min_c,
         "decline_c": None if current_temp_c is None or running_max_c is None else running_max_c - current_temp_c,
+        "rebound_c": None if current_temp_c is None or running_min_c is None else current_temp_c - running_min_c,
         "tmpf_now": tmpf_now,
         "dwpf_now": _temp_f(dwpc_now),
         "dewpoint_depression_f": None if tmpf_now is None or dwpc_now is None else tmpf_now - _temp_f(dwpc_now),
@@ -294,7 +306,7 @@ def merge_previous_running_max(
     row: dict[str, Any],
     previous: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Keep one station-day's running maximum monotone across source failover.
+    """Keep one station-day's running extrema monotone across source failover.
 
     ``aviationweather_cache_csv`` can contain only the latest METAR.  It is
     valid for the current observation but cannot reconstruct the day-to-date
@@ -310,26 +322,52 @@ def merge_previous_running_max(
         return row
     current_max = _float_or_none(row.get("running_max_c"))
     previous_max = _float_or_none(previous.get("running_max_c"))
-    if current_max is None or previous_max is None or current_max >= previous_max:
+    current_min = _float_or_none(row.get("running_min_c"))
+    previous_min = _float_or_none(previous.get("running_min_c"))
+    merge_max = (
+        current_max is not None
+        and previous_max is not None
+        and current_max < previous_max
+    )
+    merge_min = (
+        current_min is not None
+        and previous_min is not None
+        and current_min > previous_min
+    )
+    if not merge_max and not merge_min:
         return row
 
     out = dict(row)
-    out["running_max_c"] = previous_max
     current_temp = _float_or_none(out.get("current_temp_c"))
-    out["decline_c"] = None if current_temp is None else previous_max - current_temp
-    for field in ("running_max_obs_utc",):
-        if previous.get(field) not in (None, ""):
-            out[field] = previous[field]
-
     fetched_at = parse_dt(str(out.get("fetched_at_utc") or ""))
-    running_max_at = parse_dt(str(out.get("running_max_obs_utc") or ""))
-    if fetched_at is not None and running_max_at is not None:
-        out["minutes_since_running_max"] = round((fetched_at - running_max_at).total_seconds() / 60.0, 3)
-
-    out["history_continuity_status"] = "merged_previous_running_max"
+    if merge_max:
+        out["running_max_c"] = previous_max
+        out["decline_c"] = None if current_temp is None else previous_max - current_temp
+        if previous.get("running_max_obs_utc") not in (None, ""):
+            out["running_max_obs_utc"] = previous["running_max_obs_utc"]
+        running_max_at = parse_dt(str(out.get("running_max_obs_utc") or ""))
+        if fetched_at is not None and running_max_at is not None:
+            out["minutes_since_running_max"] = round(
+                (fetched_at - running_max_at).total_seconds() / 60.0, 3
+            )
+        out["history_continuity_status"] = "merged_previous_running_max"
+        out["history_continuity_previous_running_max_c"] = previous_max
+        out["history_continuity_raw_running_max_c"] = current_max
+    if merge_min:
+        out["running_min_c"] = previous_min
+        out["rebound_c"] = None if current_temp is None else current_temp - previous_min
+        if previous.get("running_min_obs_utc") not in (None, ""):
+            out["running_min_obs_utc"] = previous["running_min_obs_utc"]
+        running_min_at = parse_dt(str(out.get("running_min_obs_utc") or ""))
+        if fetched_at is not None and running_min_at is not None:
+            out["minutes_since_running_min"] = round(
+                (fetched_at - running_min_at).total_seconds() / 60.0, 3
+            )
+        out["history_continuity_min_status"] = "merged_previous_running_min"
+        out["history_continuity_previous_running_min_c"] = previous_min
+        out["history_continuity_raw_running_min_c"] = current_min
+        out.setdefault("history_continuity_status", "merged_previous_running_min")
     out["history_continuity_previous_source"] = str(previous.get("source") or "")
-    out["history_continuity_previous_running_max_c"] = previous_max
-    out["history_continuity_raw_running_max_c"] = current_max
     return out
 
 
@@ -388,6 +426,7 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
                     reused["age_min"] = round((reused_at - last_obs).total_seconds() / 60.0, 3)
                 for field, timestamp_field in (
                     ("minutes_since_running_max", "running_max_obs_utc"),
+                    ("minutes_since_running_min", "running_min_obs_utc"),
                     ("minutes_since_first_running_max", "first_running_max_obs_utc"),
                     ("minutes_since_last_running_max", "last_running_max_obs_utc"),
                     ("minutes_since_last_strict_new_high", "first_running_max_obs_utc"),
@@ -411,6 +450,14 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
         "additional_cities": sorted(additional_cities),
         "running_max_continuity_merges": sum(
             1 for row in rows if row.get("history_continuity_status") == "merged_previous_running_max"
+        ),
+        "running_min_continuity_merges": sum(
+            1
+            for row in rows
+            if row.get("history_continuity_min_status")
+            == "merged_previous_running_min"
+            or row.get("history_continuity_status")
+            == "merged_previous_running_min"
         ),
     }
     return cache
