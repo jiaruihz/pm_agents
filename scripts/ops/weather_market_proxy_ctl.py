@@ -447,35 +447,23 @@ def validate_proxy_url(value: str) -> str:
 def read_state() -> dict:
     spec = load_production_spec()
     path = spec.market_proxy_state_path
+    default_route = next(
+        route for route in spec.market_proxy_routes if route.route_key == "default"
+    )
+    canonical_url = validate_proxy_url(default_route.proxy_url)
     if path.exists():
         payload = json.loads(path.read_text(encoding="utf-8"))
-        payload["proxy_url"] = validate_proxy_url(str(payload["proxy_url"]))
+        legacy_url = validate_proxy_url(str(payload["proxy_url"]))
+        payload["legacy_proxy_url"] = legacy_url
+        payload["legacy_state_drift"] = legacy_url != canonical_url
+        payload["proxy_url"] = canonical_url
+        payload["source"] = "production_named_default_route"
         return payload
-    return {"proxy_url": validate_proxy_url(spec.market_proxy_default_url), "source": "production_default"}
-
-
-def write_state(proxy_url: str, *, reason: str, previous_url: str) -> None:
-    spec = load_production_spec()
-    path = spec.market_proxy_state_path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "schema_version": "weather_market_proxy_state_v1",
-        "proxy_url": validate_proxy_url(proxy_url),
-        "previous_url": previous_url,
-        "reason": reason,
-        "updated_at_utc": utc_now(),
-        "updated_by": os.getenv("USER") or "unknown",
+    return {
+        "proxy_url": canonical_url,
+        "source": "production_named_default_route",
+        "legacy_state_drift": False,
     }
-    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
 
 
 def probe(proxy_url: str, timeout: float = 8.0) -> dict:
@@ -505,27 +493,6 @@ def consumers() -> list:
     spec = load_production_spec()
     rows = [item for item in spec.managed_runtimes if item.uses_market_proxy]
     return sorted(rows, key=lambda row: (row.instance_id != "weather_market_books", row.expected_live, row.instance_id))
-
-
-def restart_consumer(instance, *, proxy_url: str, reason: str, confirm_live: bool) -> dict:
-    command = [sys.executable, str(ROOT / "scripts/ops/weather_production_ctl.py"),
-               "restart", "--apply", "--json", "--instance", instance.instance_id, "--reason", reason]
-    if instance.expected_live:
-        if not confirm_live:
-            raise RuntimeError(f"--confirm-live required for {instance.instance_id}")
-        command.append("--confirm-live")
-    env = os.environ.copy()
-    env["WEATHER_DATA_FEED_MARKET_PROXY"] = proxy_url
-    result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
-    try:
-        controller = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        controller = {}
-    action = (controller.get("actions") or [{}])[0]
-    return {"instance_id": instance.instance_id, "returncode": result.returncode,
-            "action_status": action.get("status"),
-            "controller_global_status": controller.get("status"),
-            "stdout_tail": (result.stdout or "")[-1000:], "stderr_tail": (result.stderr or "")[-1000:]}
 
 
 def process_mismatches(proxy_url: str) -> list[str]:
@@ -591,23 +558,6 @@ def chain_health() -> dict:
             "full_runtime_count": len(full_runtime_health)}
 
 
-def wait_for_chain(proxy_url: str, *, not_before: float, timeout_sec: float = 360.0) -> dict:
-    spec = load_production_spec()
-    deadline = time.monotonic() + timeout_sec
-    latest = {}
-    while time.monotonic() < deadline:
-        books = spec.resolved_market_books_root() / "latest.json"
-        books_fresh = books.exists() and books.stat().st_mtime >= not_before
-        latest = {"probe": probe(proxy_url), "process_mismatches": process_mismatches(proxy_url),
-                  "chain_health": chain_health(), "market_books_post_switch": books_fresh}
-        if (latest["probe"]["ok"] and not latest["process_mismatches"] and books_fresh
-                and latest["chain_health"]["manifest_status"] == "healthy"
-                and not latest["chain_health"]["blocking_consumers"]):
-            return latest
-        time.sleep(5)
-    raise RuntimeError(f"full-chain verification timed out: {latest}")
-
-
 def status_payload() -> dict:
     state = read_state()
     url = state["proxy_url"]
@@ -649,16 +599,6 @@ def main() -> int:
     maintain.add_argument("--confirm-live", action="store_true")
     maintain.add_argument("--reason", required=True)
     maintain.add_argument("--trigger", default="manual")
-    switch = sub.add_parser("switch")
-    switch.add_argument("proxy_url")
-    switch.add_argument("--apply", action="store_true")
-    switch.add_argument("--confirm-live", action="store_true")
-    switch.add_argument("--reason", required=True)
-    auto = sub.add_parser("auto")
-    auto.add_argument("--candidates", nargs="+")
-    auto.add_argument("--apply", action="store_true")
-    auto.add_argument("--confirm-live", action="store_true")
-    auto.add_argument("--reason", required=True)
     args = parser.parse_args()
     if args.command == "gateway-overlay":
         if args.apply:
@@ -703,46 +643,7 @@ def main() -> int:
                      and chain["manifest_status"] == "healthy"
                      and not chain["blocking_consumers"]) else 1
 
-    if args.command == "auto":
-        candidate_urls = args.candidates or [read_state()["proxy_url"]]
-        tested = [(validate_proxy_url(url), probe(validate_proxy_url(url))) for url in candidate_urls]
-        target = next((url for url, result in tested if result["ok"]), "")
-        if not target:
-            raise SystemExit(f"no healthy proxy candidate: {tested}")
-    else:
-        target = validate_proxy_url(args.proxy_url)
-    target_probe = probe(target)
-    current = read_state()["proxy_url"]
-    preview = {"action": "switch", "from": current, "to": target,
-               "probe": target_probe, "consumers": [x.instance_id for x in consumers()]}
-    if not args.apply:
-        print(json.dumps(preview, ensure_ascii=False, indent=2))
-        return 0 if target_probe["ok"] else 1
-    if not target_probe["ok"]:
-        raise SystemExit(f"target proxy probe failed: {target_probe}")
-    if any(x.expected_live for x in consumers()) and not args.confirm_live:
-        raise SystemExit("switch affects live runtimes; --confirm-live is required")
-
-    switched_at = time.time()
-    write_state(target, reason=args.reason, previous_url=current)
-    restarted = []
-    try:
-        for instance in consumers():
-            restarted.append(restart_consumer(instance, proxy_url=target, reason=args.reason,
-                                                confirm_live=args.confirm_live))
-            time.sleep(1)
-        final = wait_for_chain(target, not_before=switched_at)
-    except Exception:
-        write_state(current, reason=f"rollback:{args.reason}", previous_url=target)
-        for instance in consumers():
-            restart_consumer(instance, proxy_url=current, reason=f"rollback:{args.reason}",
-                             confirm_live=args.confirm_live)
-        raise
-    result = {**preview, "status": "ok", "restarted": restarted,
-              "verification": final}
-    result["health_artifact"] = str(publish_health(status_payload()))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
+    raise AssertionError(f"unhandled command: {args.command}")
 
 
 if __name__ == "__main__":

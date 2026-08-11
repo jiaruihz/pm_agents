@@ -2,6 +2,7 @@ from pathlib import Path
 
 from scripts.ops import weather_production_manifest as manifest
 from src.strategies.runtime.production import (
+    WeatherManagedRuntimeSpec,
     WeatherProductionSpec,
     load_production_spec,
 )
@@ -234,6 +235,52 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     assert findings["tmux_sessions_missing_from_instance_registry"]["severity"] == "warning"
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
     assert findings["unregistered_persistent_worktrees"]["severity"] == "warning"
+
+
+def test_manifest_reports_managed_session_without_controller_contract(tmp_path, monkeypatch):
+    base = production_spec(tmp_path)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="collector",
+        tmux_session="weather_collector",
+        role="collector",
+        execution_mode="collector",
+        release_id="collector_release",
+    )
+    spec = WeatherProductionSpec(
+        **{**base.__dict__, "managed_runtimes": (runtime,)}
+    )
+    spec.canonical_db_path.parent.mkdir(parents=True)
+    spec.canonical_db_path.write_text("canonical", encoding="utf-8")
+    local = tmp_path / "repo/runtime/weather.db"
+    local.parent.mkdir(parents=True)
+    local.symlink_to(spec.canonical_db_path)
+    db_route = manifest.inspect_db_route(spec, repo_root=tmp_path / "repo")
+    monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(manifest, "inspect_persistent_worktrees", lambda _spec: [])
+
+    payload = manifest.build_manifest(
+        spec=spec,
+        processes=[],
+        tmux_rows=[
+            {
+                "session": "weather_collector",
+                "panes": [],
+                "process_pids": [],
+                "production_config_path": None,
+            }
+        ],
+        launchctl_rows=[],
+        db_route=db_route,
+        db_consumers={},
+    )
+
+    finding = next(
+        item
+        for item in payload["findings"]
+        if item["kind"] == "managed_session_production_config_not_injected"
+    )
+    assert finding["severity"] == "warning"
+    assert finding["detail"]["sessions"][0]["instance_id"] == "collector"
 
 
 def test_manifest_warns_when_declared_production_checkout_is_dirty(tmp_path, monkeypatch):

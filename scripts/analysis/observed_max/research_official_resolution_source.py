@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch Polymarket weather market rules and extract official resolution station per city.
 
-For each city in weather-predict city_pools, fetch recent daily-high-temperature
+For each city in the vendored canonical city registry, fetch recent daily-high-temperature
 events from Gamma API, parse the market description for the official resolution
 station (name + Wunderground history URL + ICAO), and compare against our
 pipeline's assumed ICAO.
@@ -23,12 +23,11 @@ from pathlib import Path
 import httpx
 
 REPO = Path(__file__).resolve().parents[3]
-WEATHER_PREDICT = Path("/Users/deepsleep/projects/weather-predict")
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(WEATHER_PREDICT))
 from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
-
-from city_pools import FULL_CITY_CONFIGS  # noqa: E402
+from weather_data_feed_service.legacy_weather_predict.city_pools import (  # noqa: E402
+    FULL_CITY_CONFIGS,
+)
 
 PROXIES = [production_market_proxy_url()]
 GAMMA = "https://gamma-api.polymarket.com"

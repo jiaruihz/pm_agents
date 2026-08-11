@@ -560,6 +560,24 @@ def inspect_tmux(
         session["process_pids"].extend(int(row["pid"]) for row in child_rows)
     for row in sessions.values():
         row["process_pids"] = sorted(set(row["process_pids"]))
+        environment = run_command(
+            [
+                str(tmux_bin),
+                "-L",
+                spec.canonical_tmux_socket,
+                "show-environment",
+                "-t",
+                f"={row['session']}",
+                "WEATHER_PRODUCTION_CONFIG",
+            ],
+            timeout=4.0,
+            stderr=None,
+        )
+        prefix = "WEATHER_PRODUCTION_CONFIG="
+        value = environment.stdout.strip()
+        row["production_config_path"] = (
+            value[len(prefix) :] if value.startswith(prefix) else None
+        )
     return sorted(sessions.values(), key=lambda row: row["session"])
 
 
@@ -871,8 +889,38 @@ def build_manifest(
     expected_sessions.update(
         item.tmux_session for item in spec.managed_runtimes
     )
+    managed_by_session = {
+        item.tmux_session: item for item in spec.managed_runtimes
+    }
+    expected_production_config = str(
+        spec.operational_repo_root / "src/strategies/runtime/production.yaml"
+    )
+    production_config_drift = []
     for row in tmux_rows:
         row["registered_strategy_session"] = row["session"] in expected_sessions
+        runtime = managed_by_session.get(str(row["session"]))
+        if runtime is not None and runtime.release_id:
+            observed = row.get("production_config_path")
+            if observed != expected_production_config:
+                production_config_drift.append(
+                    {
+                        "instance_id": runtime.instance_id,
+                        "session": runtime.tmux_session,
+                        "expected": expected_production_config,
+                        "observed": observed,
+                        "expected_live": runtime.expected_live,
+                    }
+                )
+
+    if production_config_drift:
+        findings.append(
+            finding(
+                "warning",
+                "managed_session_production_config_not_injected",
+                "managed tmux sessions can fall back to release-local desired state",
+                {"sessions": production_config_drift},
+            )
+        )
 
     unregistered_sessions = [
         row["session"]

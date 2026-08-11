@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -27,21 +26,11 @@ def production_market_proxy_url(route_key: str = "default") -> str:
     spec = load_production_spec()
     key = str(route_key or "default").strip()
     routes = {route.route_key: route for route in spec.market_proxy_routes}
-    if key != "default":
-        try:
-            return normalize_proxy(routes[key].proxy_url)
-        except KeyError as exc:
-            raise ValueError(f"unknown market proxy route_key: {key}") from exc
-    state_path = spec.market_proxy_state_path
-    if not state_path.exists():
-        default_route = routes.get("default")
-        return normalize_proxy(
-            default_route.proxy_url if default_route else spec.market_proxy_default_url
-        )
-    payload = json.loads(state_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or "proxy_url" not in payload:
-        raise ValueError(f"invalid market proxy state: {state_path}")
-    return normalize_proxy(str(payload["proxy_url"]))
+    try:
+        route = routes[key]
+    except KeyError as exc:
+        raise ValueError(f"unknown market proxy route_key: {key}") from exc
+    return normalize_proxy(route.proxy_url)
 
 
 def market_proxy_url(

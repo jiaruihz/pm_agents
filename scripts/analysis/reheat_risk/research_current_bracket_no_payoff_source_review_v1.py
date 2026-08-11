@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,7 +43,6 @@ OUT_SOURCE = OUT_DIR / "source_model_overlay_summary.csv"
 OUT_SELECTED = OUT_DIR / "selected_trade_rows.csv"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-23-current-bracket-no-payoff-source-review-v1.md"
 
-CALIBRATION_RESULTS = Path("/Users/deepsleep/projects/weather-predict/calibration_results_v5.json")
 SOURCE_PROFILES = ROOT / "weather_data_feed/source_profiles.json"
 
 SEED = 20260623
@@ -116,10 +116,20 @@ def source_bucket(cls: Any) -> str:
     return "other_or_unknown"
 
 
+def calibration_results_path() -> Path:
+    value = os.getenv("WEATHER_LEGACY_CALIBRATION_RESULTS", "").strip()
+    if not value:
+        raise FileNotFoundError(
+            "set WEATHER_LEGACY_CALIBRATION_RESULTS to the immutable calibration_results_v5.json input"
+        )
+    path = Path(value).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"legacy calibration input does not exist: {path}")
+    return path
+
+
 def load_calibration() -> pd.DataFrame:
-    if not CALIBRATION_RESULTS.exists():
-        return pd.DataFrame(columns=["city"])
-    data = json.loads(CALIBRATION_RESULTS.read_text(encoding="utf-8"))
+    data = json.loads(calibration_results_path().read_text(encoding="utf-8"))
     rows = []
     for city, row in data.items():
         gfs = row.get("gfs") or {}
@@ -618,7 +628,7 @@ def main() -> int:
             "selected_date_max": str(base_selected["target_date"].max()) if not base_selected.empty else None,
             "split_date": split_date,
             "pit_forecast_layer": pit_stats,
-            "calibration_results": str(CALIBRATION_RESULTS),
+            "calibration_results": str(calibration_results_path()),
             "source_profiles": str(SOURCE_PROFILES.relative_to(ROOT)),
         },
         "model_metrics": model_metrics,

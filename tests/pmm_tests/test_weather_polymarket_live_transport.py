@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from scripts.ops import weather_polymarket_live_transport as live_transport
 from scripts.ops.weather_polymarket_live_transport import LivePolymarketTransport
 
 
@@ -127,3 +128,18 @@ def test_cancel_normalizes_confirmed_order_id():
     result = transport.cancel_order("venue-1")
 
     assert result["status"] == "cancelled"
+
+
+def test_live_transport_defaults_to_named_stable_route(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        live_transport,
+        "production_market_proxy_url",
+        lambda *, route_key: calls.append(route_key) or "http://127.0.0.1:7896",
+    )
+
+    assert live_transport.resolve_live_market_proxy(None) == "http://127.0.0.1:7896"
+    assert calls == ["stable"]
+    assert live_transport.resolve_live_market_proxy("http://127.0.0.1:9999") == (
+        "http://127.0.0.1:9999"
+    )

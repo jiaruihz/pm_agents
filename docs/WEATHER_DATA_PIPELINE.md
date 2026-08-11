@@ -1,17 +1,20 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-08-10 shard-only enrichment journals
+Updated: 2026-08-11 production-contract and proxy-route ownership audit
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 > **2026-08-10 journal storage override**：forecast enrichment、forecast version、
 > observations、AMOS fast lane、source events 以及已停止的历史/probe journal 均已切为只写、只读
 > `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写并在逐项校验后删除。
 > `latest.json` 仍是当前 cache。source-events、KNMI 与 live-cross 的 reader 均已完成
 > rollover-aware 切换，当前只保留各自的 `YYYY-MM-DD/<dataset>.jsonl` 历史。
+> 2026-08-11 复扫 current JRS raw/runtime，未发现“根 aggregate 与同名 daily shard”重复候选。
+> 仍在增长的单文件策略 telemetry/raw journal 属于后续逐实例 shard cutover 范围，未经 producer、
+> consumer 与 cursor 校验不得直接删除。
 
 > **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
 > `src/strategies/runtime/production.yaml` 解析；物理 canonical 是

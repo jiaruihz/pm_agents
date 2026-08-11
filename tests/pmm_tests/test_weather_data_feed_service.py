@@ -909,7 +909,7 @@ def test_paper_snapshot_resolves_station_diff_official_metar_station(monkeypatch
     assert mexico_city["source_profile_registry_class"] == "legacy_city_pool"
 
 
-def test_systemd_units_are_versioned_for_data_feed_service() -> None:
+def test_retired_systemd_units_fail_closed() -> None:
     unit_dir = ROOT / "deploy" / "systemd" / "user"
     snapshot = (unit_dir / "weather-data-feed-snapshot.service").read_text()
     full_snapshot = (unit_dir / "weather-data-feed-full-snapshot.service").read_text()
@@ -923,17 +923,11 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
     installer = (ROOT / "scripts" / "ops" / "install_weather_data_feed_service_units.sh").read_text()
 
     for text in (snapshot, full_snapshot, observations, source_events, daily):
-        assert "weather_data_feed_service" in text
-        assert "python -u -m weather_data_feed_service" in text
-        assert "EnvironmentFile=-%h/projects/weather_data_feed_service/.env" in text
-        assert "WEATHER_DATA_FEED_OUTPUT_ROOT" in text
-        assert "WEATHER_DATA_FEED_CACHE_ROOT" in text
-        assert "weather-predict" not in text
+        assert "Retired weather data-feed systemd entrypoint" in text
+        assert "ExecStart=/usr/bin/false" in text
+        assert "weather_data_feed_service_runtime" not in text
+        assert "python -u -m weather_data_feed_service" not in text
 
-    assert "snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8" in full_snapshot
-    assert "snapshot-targeted -- --orderbook-budget-sec 60 --orderbook-workers 4" in snapshot
-    assert "source-events -- --output-dir" in source_events
-    assert "weather_data_feed_service_runtime/targeted_output" in snapshot
     assert "OnUnitInactiveSec=30min" in timer
     assert "OnUnitInactiveSec=30min" in full_snapshot_timer
     assert "OnUnitInactiveSec=5min" in observations_timer
@@ -943,6 +937,7 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
     assert "weather-data-feed-source-events.service" in installer
     assert "weather-data-feed-snapshot.service" in installer
     assert "weather-data-feed-daily.service" in installer
+    assert "retired entrypoint" in installer
 
 
 def test_observations_cache_row_uses_data_feed_fetcher(monkeypatch) -> None:

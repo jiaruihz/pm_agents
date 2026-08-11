@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -51,7 +52,6 @@ OUT_SELECTED = OUT_DIR / "selected_trade_rows.csv"
 OUT_FORWARD = OUT_DIR / "forward_validation_and_shadow.csv"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-24-current-bracket-no-preferred-model-payoff-v1.md"
 
-CALIBRATION_RESULTS = Path("/Users/deepsleep/projects/weather-predict/calibration_results_v5.json")
 OPEN_METEO_DIR = ROOT / "runtime/weather_edge_v1/market_data/cache/open_meteo_historical_forecast"
 GFS_DAILY_DIR = ROOT / "runtime/weather_edge_v1/market_data/cache/gfs_daily"
 FORWARD_FEATURE_ROWS = (
@@ -148,8 +148,20 @@ def money(value: Any) -> str:
     return f"${fval:+,.2f}"
 
 
+def calibration_results_path() -> Path:
+    value = os.getenv("WEATHER_LEGACY_CALIBRATION_RESULTS", "").strip()
+    if not value:
+        raise FileNotFoundError(
+            "set WEATHER_LEGACY_CALIBRATION_RESULTS to the immutable calibration_results_v5.json input"
+        )
+    path = Path(value).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"legacy calibration input does not exist: {path}")
+    return path
+
+
 def load_calibration() -> pd.DataFrame:
-    data = json.loads(CALIBRATION_RESULTS.read_text(encoding="utf-8"))
+    data = json.loads(calibration_results_path().read_text(encoding="utf-8"))
     rows = []
     for city, row in data.items():
         gfs = row.get("gfs") or {}

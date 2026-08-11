@@ -15,14 +15,12 @@ import csv
 import json
 import math
 import os
-import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 
-DEFAULT_WEATHER_PREDICT_DIR = Path("/Users/deepsleep/projects/weather-predict")
 DEFAULT_OUT_DIR = Path(
     "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1"
 )
@@ -53,11 +51,11 @@ FOCUS_CITIES = [
 
 
 def _read_city_configs(weather_predict_dir: Path) -> dict[str, dict[str, Any]]:
-    sys.path.insert(0, str(weather_predict_dir))
-    try:
-        from city_pools import FULL_CITY_CONFIGS, TRADING_T1_CITIES  # type: ignore
-    finally:
-        sys.path.pop(0)
+    del weather_predict_dir
+    from weather_data_feed_service.legacy_weather_predict.city_pools import (
+        FULL_CITY_CONFIGS,
+        TRADING_T1_CITIES,
+    )
 
     out: dict[str, dict[str, Any]] = {}
     for city, cfg in FULL_CITY_CONFIGS.items():
@@ -582,7 +580,11 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weather-predict-dir", default=str(DEFAULT_WEATHER_PREDICT_DIR))
+    parser.add_argument(
+        "--weather-predict-dir",
+        required=True,
+        help="explicit immutable legacy forecast-cache root; no active default is inferred",
+    )
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     args = parser.parse_args()

@@ -13,7 +13,7 @@ def test_proxy_url_validation():
         ctl.validate_proxy_url("http://127.0.0.1")
 
 
-def test_shared_proxy_resolves_controller_state_not_legacy_aliases(tmp_path, monkeypatch):
+def test_shared_proxy_resolves_named_default_route_not_legacy_endpoint_state(tmp_path, monkeypatch):
     state = tmp_path / "market_proxy.json"
     state.write_text('{"proxy_url":"http://127.0.0.1:17897"}\n', encoding="utf-8")
     spec = __import__("dataclasses").replace(
@@ -23,7 +23,7 @@ def test_shared_proxy_resolves_controller_state_not_legacy_aliases(tmp_path, mon
     )
     monkeypatch.setattr(shared, "load_production_spec", lambda: spec)
 
-    assert shared.market_proxy_url(None, env={"WEATHER_PREDICT_MARKET_PROXY": "http://127.0.0.1:9999"}) == "http://127.0.0.1:17897"
+    assert shared.market_proxy_url(None, env={"WEATHER_PREDICT_MARKET_PROXY": "http://127.0.0.1:9999"}) == "http://127.0.0.1:7897"
     assert shared.market_proxy_url(None, env={"WEATHER_DATA_FEED_MARKET_PROXY": "http://127.0.0.1:8888"}) == "http://127.0.0.1:8888"
     assert shared.market_proxy_url(
         None,
@@ -35,6 +35,21 @@ def test_shared_proxy_resolves_controller_state_not_legacy_aliases(tmp_path, mon
         "http://127.0.0.1:6666",
         route_key="stable",
     ) == "http://127.0.0.1:6666"
+
+
+def test_control_state_surfaces_legacy_endpoint_drift_without_using_it(tmp_path, monkeypatch):
+    state = tmp_path / "market_proxy.json"
+    state.write_text('{"proxy_url":"http://127.0.0.1:7896"}\n', encoding="utf-8")
+    spec = __import__("dataclasses").replace(
+        load_production_spec(), market_proxy_state_path=state
+    )
+    monkeypatch.setattr(ctl, "load_production_spec", lambda: spec)
+
+    result = ctl.read_state()
+
+    assert result["proxy_url"] == "http://127.0.0.1:7897"
+    assert result["legacy_proxy_url"] == "http://127.0.0.1:7896"
+    assert result["legacy_state_drift"] is True
 
 
 def test_proxy_probe_requires_gamma_and_clob(monkeypatch):

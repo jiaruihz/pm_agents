@@ -124,6 +124,7 @@ def test_shared_helper_pins_full_disk_access_tmux_binary():
     assert "command -v tmux" not in helper_text
     assert "WEATHER_JRS_TMUX_TEST_OVERRIDE" in helper_text
     assert '"$tmux_bin" -N -L "$socket" "$@"' in helper_text
+    assert '-e "WEATHER_PRODUCTION_CONFIG=$production_config"' in helper_text
     assert "weather_jrs_tmux_guarded_replace_session()" in helper_text
 
 
@@ -185,13 +186,51 @@ def test_shared_helper_rejects_persistent_mutation_without_controller(tmp_path):
         ],
         capture_output=True,
         text=True,
-        env=env,
+        env={
+            **env,
+            "WEATHER_PRODUCTION_CONFIG": str(ROOT / "src/strategies/runtime/production.yaml"),
+        },
     )
 
     assert accepted.returncode == 0
     assert fake_log.read_text(encoding="utf-8").startswith(
         "-N -L weather-data-feed-jrs new-session"
     )
+
+
+def test_shared_helper_injects_controller_production_contract_into_session(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_log = tmp_path / "tmux.log"
+    production_config = tmp_path / "production.yaml"
+    production_config.write_text("version: test\n", encoding="utf-8")
+    fake_tmux.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" > \"$WEATHER_JRS_FAKE_TMUX_LOG\"\n",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    helper = OPS / "weather_jrs_tmux_env.sh"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(helper))}; "
+            "weather_jrs_tmux weather-data-feed-jrs new-session -d -s managed true",
+        ],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+            "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+            "WEATHER_JRS_FAKE_TMUX_LOG": str(fake_log),
+            "WEATHER_JRS_TMUX_MUTATION_AUTHORITY": "controller",
+            "WEATHER_PRODUCTION_CONFIG": str(production_config),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = fake_log.read_text(encoding="utf-8")
+    assert f"-e WEATHER_PRODUCTION_CONFIG={production_config}" in invocation
 
 
 def test_mac_start_entries_do_not_default_to_legacy_jrs_symlink():

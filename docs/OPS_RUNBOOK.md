@@ -78,14 +78,6 @@ Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁
 # 默认 route 连续失败后，有界切换 Allblue selector；runtime monitor 每 60 秒执行
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py maintain --apply --confirm-live \
   --trigger manual --reason "default route recovery"
-
-# 只有本机 endpoint 本身迁移时才在候选 endpoint 中选择；会重载 consumer
-.venv/bin/python scripts/ops/weather_market_proxy_ctl.py auto --apply --confirm-live \
-  --reason "named endpoint failover"
-
-# 指定 endpoint
-.venv/bin/python scripts/ops/weather_market_proxy_ctl.py switch http://127.0.0.1:7897 \
-  --apply --confirm-live --reason "named proxy switch"
 ```
 
 业务只调用共享接口：默认 route 使用 `7897`；只有公共 CLOB live execution handoff 指定
@@ -97,10 +89,11 @@ Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit
 `7897/7896` 做 Gamma+CLOB probe；不启用 TCP external controller，不创建 API secret，所有上游
 失败时显式报错，不 fallback direct。
 
-endpoint 切换成功条件不是“端口能连”：目标 Gamma probe、切换后新 `market-books` batch、
-manifest、live strategy artifact freshness、全部 consumer 进程和 proxy binding 必须同时通过；
-失败自动写回旧 endpoint 并重载。稀疏 shadow 在无信号时按 process/dependency/proxy binding
-验收，不因业务 summary 未刷新产生假回滚。机器可读矩阵写到 production contract 解析出的
+旧 `market_proxy_state_path` 只用于暴露历史 endpoint drift，不再改变 named default route；
+`auto/switch` endpoint 重载入口已移除。普通采集固定解析 `default`，不可逆下单/撤单 transport
+在公共 execution handoff 内解析 `stable`，策略 launcher 不拥有 route 选择权。稀疏 shadow 在
+无信号时按 process/dependency/proxy binding 验收，不因业务 summary 未刷新产生假回滚。
+机器可读矩阵写到 production contract 解析出的
 `output/market_proxy_control/latest.json`，覆盖每个 managed runtime 的 role、health trigger、
 dependency、artifact age、issues 与 proxy-consumer 标记。
 
@@ -116,6 +109,13 @@ start/health/dependency contract；controller 不从正在运行的 pane 猜恢�
 canonical refresh 是唯一允许的 unmanaged bounded one-shot，但只能 attach，不能创建
 server。生产操作不得直接用 `tmux kill-server`、`tmux kill-session`、底层 start/stop
 脚本或手拼 live 命令绕过 controller。
+
+controller 启动 release checkout 时通过 `WEATHER_PRODUCTION_CONFIG` 指向控制仓库的
+`production.yaml`。已有 tmux server 不会继承 client 的环境，因此 shared helper 会在每个
+`new-session/new-window` 上显式注入该变量；controller 缺失该变量时 fail closed。
+manifest 同时读取 session environment；出现
+`managed_session_production_config_not_injected` 表示旧 session 仍可能读取 release-local
+historical config，需要按实例滚动重载，不能把 release checkout 自带配置当第二份 desired state。
 
 如果发现进程仍在其他 socket，只记录并按生产变更流程迁移；涉及 live 的 session
 不得在巡检中自动重启或跨 socket 搬迁。

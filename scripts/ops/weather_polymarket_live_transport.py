@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping
 
+from scripts.ops.weather_market_proxy import production_market_proxy_url
+
 
 PROXY_ENV_KEYS = (
     "HTTP_PROXY",
@@ -98,6 +100,14 @@ def configure_market_proxy_env(explicit_proxy: str | None) -> dict[str, Any]:
         "proxy": proxy,
         "http_proxy_set": bool(proxy),
     }
+
+
+def resolve_live_market_proxy(explicit_proxy: str | None) -> str:
+    """Resolve the route owned by the irreversible execution handoff."""
+
+    if explicit_proxy is not None:
+        return _clean_proxy(explicit_proxy)
+    return production_market_proxy_url(route_key="stable")
 
 
 def _order_id(payload: Mapping[str, Any]) -> str:
@@ -371,7 +381,7 @@ def build_live_transport(
     market_proxy: str | None,
     metadata_by_order_id: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> tuple[LivePolymarketTransport, dict[str, Any]]:
-    proxy = configure_market_proxy_env(market_proxy)
+    proxy = configure_market_proxy_env(resolve_live_market_proxy(market_proxy))
     from py_clob_client_v2.client import ClobClient
     from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderPayload, OrderType
     from py_clob_client_v2.constants import POLYGON
