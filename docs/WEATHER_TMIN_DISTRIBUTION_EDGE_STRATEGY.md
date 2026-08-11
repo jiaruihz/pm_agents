@@ -21,11 +21,11 @@ extreme_kind = min
 
 ```text
 design = frozen_v1
-collection_implementation = central market_books Tmin full ladder for HongKong/Seoul/Tokyo
+collection_runtime = active central market_books Tmin full ladder for HongKong/Seoul/Tokyo
 model_implementation = D-1 18:00 PIT panel + W0 weather residual development baseline
 probability_artifact = none
 forward = not_started
-runtime = partial zero-notional telemetry
+runtime = central full-ladder collection + partial source telemetry; zero orders
 promotion = no live
 ```
 
@@ -252,6 +252,15 @@ dates，proxy-label MAE `0.960°C`、multiclass actual-bin logloss `1.795`。这
 walk-forward 代码可运行：label 是 observation-cache intraday-min proxy，不是 settlement truth，且
 当时中央 Tmin full ladder 为 0 dates，所以不能与 M0 同 rows 比较、不能冻结 artifact、不能据此
 产生 candidate/intent。
+
+生产 rollout 后首个 canonical batch（2026-08-11 11:21:16Z）已写入 6 个 complete Tmin events、
+132/132 `weather_market_book` rows，全部 `status=ok`，cycle 11 秒；三城当天/次日各一套 11-rung
+ladder。data-feed 首个新 observation batch 为 41/41 rows 写入 running-min path；Seoul 样例为
+`running_min_c=26`、`rebound_c=2`。release identity 为 market-books
+`35c9d65bf16f285dec45fa08ba05b2202045b4c6`、data-feed
+`e3fa90be4bd372080be2b130dc5a99e3c02bd73c`。pre/post manifest sessions 无缺失、findings 为空，
+DB/storage identity healthy；Tmin raw 只有 book rows、没有 order 字段，现有 source telemetry mode
+仍为 `telemetry_only_no_orders`。
 
 ## Probability 与资金晋级门
 
