@@ -6,10 +6,10 @@ operational_repo_root: /Users/deepsleep/projects/pm_agents
 production_releases:
   - release_id: control_plane
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
-    expected_repo_sha: bc44d9d62ada98bef4e483a386c7a9b403852660
+    expected_repo_sha: 2d64a0a60c495499c6c7ab15db6415f306ac3feb
   - release_id: fast_source_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_source_prod
-    expected_repo_sha: 1cb1db431bc1a156f8e28dfb9e00dae7a4c72c2b
+    expected_repo_sha: ed11f561dca8711cef2cf3b5f376be4c3a9dc927
   - release_id: data_feed
     checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
     expected_repo_sha: e3fa90be4bd372080be2b130dc5a99e3c02bd73c
