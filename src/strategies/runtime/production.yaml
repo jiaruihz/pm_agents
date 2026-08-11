@@ -18,7 +18,7 @@ production_releases:
     expected_repo_sha: a12269265e46a891ddf3b42774d6bcc53500b6a4
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
-    expected_repo_sha: fd5f6d7b737604db065c5a71a42eb9a90a12b61a
+    expected_repo_sha: 8c25b752333a3771cb0255e6cb2cc7a0a1740ced
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
