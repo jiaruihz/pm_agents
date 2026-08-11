@@ -1,6 +1,6 @@
 # Polymarket Weather Proposal Reward
 
-状态：`historical audit complete / zero-notional hot-window shadow implemented / no private key / no live proposal`。
+状态：`historical audit complete / zero-notional hot-window shadow deployed / collecting / no private key / no live proposal`。
 
 这是独立的 oracle/proposal strategy family；复用 weather source、城市时区和
 EventEnvelope 血缘，但不与天气 CLOB alpha 合并 PnL，也不复用交易信号作为
@@ -107,3 +107,9 @@ proposal block time；另留本项目 proposal observed/ingested clock。block t
 时间，因此“早 1 秒”不视为已能赢。先积累 7–14 个 target-date blocks；若优化后仍有
 90% 以上 scorable city-days 在 winner block 后才 ready，停止该 expression。否则继续
 shadow 测 RPC/broadcast headroom、gas 和净 reward，不由少量领先样本直接升 live。
+
+2026-08-11 14:09 UTC 已由 production controller 启动首个 runtime，loaded build
+`68056035ec324305c3e60a88fb06dce1a63f2c11`；首轮 Gamma discovery 为 8 城、21 个
+station-date watches，health 明示 `actual_orders=0`、`actual_deposit_usdc=0`、
+`submission_enabled=false`。首个 forward 热窗口为 Seoul target 2026-08-11，
+`2026-08-11 15:00–15:06 UTC`。
