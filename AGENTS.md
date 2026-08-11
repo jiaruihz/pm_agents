@@ -209,7 +209,7 @@ weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚�
 
 # run_stack 无参数仅查状态；全量重建必须显式授权 --rebuild，且不启停服务
 scripts/weather_dashboard/run_stack.sh [--status|--rebuild]
-#   入口 http://localhost:5173/weather/runs · /weather/live · http://localhost:8000/docs
+#   入口 http://localhost:5174/weather/runs · /weather/live · http://localhost:8000/docs
 
 # 同步当前 Mac 临时生产 market_data（分析"最新/今天"前先跑）
 scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only [--dry-run]

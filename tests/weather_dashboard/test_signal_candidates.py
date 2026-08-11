@@ -420,6 +420,38 @@ def test_multiple_orders_and_fills_are_aggregated(tmp_path, canon_db):
     )
 
 
+def test_exit_fills_are_not_candidate_entry_fills(tmp_path, canon_db):
+    snap = tmp_path / "snaps"
+    _write_snapshot(
+        snap,
+        "s1.json",
+        "2026-05-08T02:00:00Z",
+        [_rec(hours_to_settle=23.0, entry_price=0.45)],
+    )
+    _seed_live_fill(
+        canon_db,
+        "0xCID1",
+        "SELL_NO",
+        "2026-05-09",
+        "exit-fill",
+        0.50,
+        5,
+        0.25,
+    )
+
+    rows, alerts, stats = build(
+        canon_db,
+        snapshot_dir=snap,
+        paper_orders_path=tmp_path / "none.jsonl",
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["live_filled"] == 0
+    assert stats["n_live_fill_rows"] == 0
+    assert stats["orphan_fills"] == 0
+    assert not any("ORPHAN_LIVE_FILL" in alert for alert in alerts)
+
+
 def test_missed_fill_and_counterfactual_win(tmp_path, canon_db):
     conn = canon_db
     snap = tmp_path / "snaps"

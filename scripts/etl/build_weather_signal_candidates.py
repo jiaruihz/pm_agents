@@ -885,6 +885,7 @@ def _load_live_fills(
           COUNT(*) AS fill_count
         FROM fact_trades
         WHERE trade_class='live_real'
+          AND side IN ('BUY_YES', 'BUY_NO')
     """
     params: tuple[str, ...] = ()
     if event_date_start is not None:

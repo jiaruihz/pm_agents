@@ -65,20 +65,36 @@ def get_live_summary(db: Db):
         """
     ).fetchone()
 
-    # Pending CLOB orders (submitted, no fill yet, target_date still recent)
-    # Exclude stale orders for past target_dates that were never cancelled/expired
-    # in our DB (happens when N100 sync is interrupted).
+    # Canonical unfilled submissions are only a candidate set, not authenticated
+    # exchange open orders.  Local order journals do not receive every later
+    # cancel/expiry transition, so they must never be reported as reserved cash.
+    # Resolved conditions are excluded here to keep historical submitted rows
+    # from appearing as current pending orders.
     pending = db.execute(
-        """
-        SELECT COUNT(*) AS n, SUM(o.cost_usd) AS reserved_usd
+        f"""
+        SELECT COUNT(*) AS n, SUM(o.cost_usd) AS submitted_notional_usd
         FROM orders o
         JOIN plans   p   ON p.plan_id   = o.plan_id
         JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN fills f ON f.execution_id = o.execution_id
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
+               ON sig.target_date = s.target_date
+              AND sig.condition_id = s.condition_id
+              AND sig.bracket = s.bracket
         WHERE o.venue = 'polymarket_clob'
           AND o.status = 'submitted'
           AND f.fill_id IS NULL
           AND sig.target_date >= date('now', '-1 day')
+          AND s.final_price IS NULL
+        """
+    ).fetchone()
+
+    fact_freshness = db.execute(
+        """
+        SELECT MAX(fill_ts_utc) AS last_fill_utc,
+               MAX(fact_built_at_utc) AS last_fact_build_utc
+        FROM fact_trades
+        WHERE trade_class = 'live_real'
         """
     ).fetchone()
 
@@ -103,6 +119,8 @@ def get_live_summary(db: Db):
 
     return {
         "last_cycle_utc": last_cycle,
+        "last_fact_fill_utc": fact_freshness["last_fill_utc"],
+        "last_fact_build_utc": fact_freshness["last_fact_build_utc"],
         "clob": {
             "total_positions": clob["total_fills"] or 0,
             "open_count": clob["open_count"] or 0,
@@ -118,7 +136,10 @@ def get_live_summary(db: Db):
         },
         "pending_orders": {
             "count": pending["n"] or 0,
-            "reserved_usd": round(pending["reserved_usd"] or 0.0, 4),
+            "reserved_usd": None,
+            "submitted_notional_usd": round(pending["submitted_notional_usd"] or 0.0, 4),
+            "source": "canonical_unfilled_submissions",
+            "authenticated": False,
         },
         "paper_baseline": {
             "run_id": paper_run["run_id"] if paper_run else None,

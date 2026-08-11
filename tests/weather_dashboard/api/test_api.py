@@ -66,6 +66,33 @@ def test_live_book_exposes_strategy_instance(client, api_db):
     assert response.json()["rows"][0]["instance_id"] == "fast_source_prev_no_trial_v1"
 
 
+def test_live_summary_does_not_treat_resolved_submission_as_reserved_cash(client, api_db):
+    config_id, run_id, signal, plan, order, _, settlement = _canonical_bundle()
+    order = {
+        **order,
+        "venue": "polymarket_clob",
+        "status": "submitted",
+        "cost_usd": 4.25,
+    }
+    _insert_metadata(api_db, config_id, run_id)
+    ingest_canonical_signals(api_db, [signal], "signals.jsonl")
+    ingest_canonical_plans(api_db, [plan], "plans.jsonl")
+    ingest_canonical_orders(api_db, [order], "orders.jsonl")
+    ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
+
+    response = client.get("/api/live/summary")
+
+    assert response.status_code == 200
+    pending = response.json()["pending_orders"]
+    assert pending == {
+        "count": 0,
+        "reserved_usd": None,
+        "submitted_notional_usd": 0.0,
+        "source": "canonical_unfilled_submissions",
+        "authenticated": False,
+    }
+
+
 # ── /api/runs ─────────────────────────────────────────────────────────────────
 
 def test_list_runs_empty(client):
