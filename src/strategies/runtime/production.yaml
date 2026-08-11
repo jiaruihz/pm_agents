@@ -78,12 +78,15 @@ research_artifact_root: /Volumes/jrs-archive/pm_agents/research/artifact_store
 canonical_tmux_socket: weather-data-feed-jrs
 canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
 market_proxy_state_path: /Volumes/jrs/weather_data_feed_service_runtime/config/market_proxy.json
-market_proxy_default_url: http://127.0.0.1:7897
+market_proxy_default_url: http://127.0.0.1:7896
 market_proxy_controller_unix_socket: /tmp/verge/verge-mihomo.sock
 market_proxy_gateway_config_root: /Users/deepsleep/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev
 market_proxy_stable_upstream_url: http://127.0.0.1:7890
 market_proxy_routes:
   default:
+    proxy_url: http://127.0.0.1:7896
+    clash_group: PM-STABLE
+  allblue:
     proxy_url: http://127.0.0.1:7897
     clash_group: Allblue 加速器
   stable:

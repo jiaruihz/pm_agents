@@ -75,23 +75,23 @@ Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁
 # 只读预览 Clash profile enhancement；apply 需在已确认的网络维护窗口
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py gateway-overlay
 
-# 默认 route 连续失败后，有界切换 Allblue selector；runtime monitor 每 60 秒执行
+# Allblue fallback route 连续失败后，有界切换 selector；runtime monitor 每 60 秒执行
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py maintain --apply --confirm-live \
   --trigger manual --reason "default route recovery"
 ```
 
-业务只调用共享接口：默认 route 使用 `7897`；只有公共 CLOB live execution handoff 指定
-`route_key=stable`，解析到同一 Clash 进程的 `7896` 命名 listener。`PM-STABLE` fallback 组按
+天气业务只调用共享接口：默认 route 与公共 CLOB live execution handoff 的
+`route_key=stable` 均解析到同一 Clash 进程的 `7896` 命名 listener。`PM-STABLE` fallback 组按
 TAG 本机 `7890` → Allblue 顺序自动探测切换，切换不修改业务参数、不重启 consumer。Allblue
-当前 selector 连续失败时，controller 从已有延迟证据中最多尝试 12 个候选，并对每个候选做
+命名备选入口为 `7897 / allblue`；当前 selector 连续失败时，controller 从已有延迟证据中最多尝试 12 个候选，并对每个候选做
 Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit。controller
 通过 Clash 既有 Unix socket `/tmp/verge/verge-mihomo.sock` 读取 group/current node，并分别对
-`7897/7896` 做 Gamma+CLOB probe；不启用 TCP external controller，不创建 API secret，所有上游
+`7896/7897` 做 Gamma+CLOB probe；不启用 TCP external controller，不创建 API secret，所有上游
 失败时显式报错，不 fallback direct。
 
 旧 `market_proxy_state_path` 只用于暴露历史 endpoint drift，不再改变 named default route；
 `auto/switch` endpoint 重载入口已移除。普通采集固定解析 `default`，不可逆下单/撤单 transport
-在公共 execution handoff 内解析 `stable`，策略 launcher 不拥有 route 选择权。稀疏 shadow 在
+在公共 execution handoff 内解析 `stable`，两者当前是同一 TAG-backed 入口；策略 launcher 不拥有 route 选择权。稀疏 shadow 在
 无信号时按 process/dependency/proxy binding 验收，不因业务 summary 未刷新产生假回滚。
 机器可读矩阵写到 production contract 解析出的
 `output/market_proxy_control/latest.json`，覆盖每个 managed runtime 的 role、health trigger、

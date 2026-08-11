@@ -23,7 +23,7 @@ def test_shared_proxy_resolves_named_default_route_not_legacy_endpoint_state(tmp
     )
     monkeypatch.setattr(shared, "load_production_spec", lambda: spec)
 
-    assert shared.market_proxy_url(None, env={"WEATHER_PREDICT_MARKET_PROXY": "http://127.0.0.1:9999"}) == "http://127.0.0.1:7897"
+    assert shared.market_proxy_url(None, env={"WEATHER_PREDICT_MARKET_PROXY": "http://127.0.0.1:9999"}) == "http://127.0.0.1:7896"
     assert shared.market_proxy_url(None, env={"WEATHER_DATA_FEED_MARKET_PROXY": "http://127.0.0.1:8888"}) == "http://127.0.0.1:8888"
     assert shared.market_proxy_url(
         None,
@@ -39,7 +39,7 @@ def test_shared_proxy_resolves_named_default_route_not_legacy_endpoint_state(tmp
 
 def test_control_state_surfaces_legacy_endpoint_drift_without_using_it(tmp_path, monkeypatch):
     state = tmp_path / "market_proxy.json"
-    state.write_text('{"proxy_url":"http://127.0.0.1:7896"}\n', encoding="utf-8")
+    state.write_text('{"proxy_url":"http://127.0.0.1:7897"}\n', encoding="utf-8")
     spec = __import__("dataclasses").replace(
         load_production_spec(), market_proxy_state_path=state
     )
@@ -47,8 +47,8 @@ def test_control_state_surfaces_legacy_endpoint_drift_without_using_it(tmp_path,
 
     result = ctl.read_state()
 
-    assert result["proxy_url"] == "http://127.0.0.1:7897"
-    assert result["legacy_proxy_url"] == "http://127.0.0.1:7896"
+    assert result["proxy_url"] == "http://127.0.0.1:7896"
+    assert result["legacy_proxy_url"] == "http://127.0.0.1:7897"
     assert result["legacy_state_drift"] is True
 
 
@@ -111,7 +111,7 @@ def test_route_status_reports_all_named_groups(monkeypatch):
 
     assert result["reachable"] is True
     assert result["healthy"] is True
-    assert {row["route_key"] for row in result["routes"]} == {"default", "stable"}
+    assert {row["route_key"] for row in result["routes"]} == {"default", "allblue", "stable"}
     stable = next(row for row in result["routes"] if row["route_key"] == "stable")
     assert stable["current_node"] == "TAG-LOCAL"
 

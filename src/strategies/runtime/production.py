@@ -492,6 +492,13 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     route_keys = {route.route_key for route in spec.market_proxy_routes}
     if "default" not in route_keys or len(route_keys) != len(spec.market_proxy_routes):
         raise ValueError("market proxy routes require unique keys including default")
+    default_route = next(
+        route for route in spec.market_proxy_routes if route.route_key == "default"
+    )
+    if spec.market_proxy_default_url != default_route.proxy_url:
+        raise ValueError(
+            "market_proxy_default_url must match market_proxy_routes.default.proxy_url"
+        )
     for route in spec.market_proxy_routes:
         parsed = urlparse(route.proxy_url)
         if (

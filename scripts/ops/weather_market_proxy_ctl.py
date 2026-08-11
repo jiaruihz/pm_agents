@@ -151,15 +151,15 @@ def gateway_overlay_files() -> tuple[dict[str, Any], list[tuple[Path, bytes]]]:
         for row in (groups.get("prepend") or [])
         if not isinstance(row, dict) or row.get("name") != stable_route.clash_group
     ]
-    default_group = next(
-        route.clash_group for route in spec.market_proxy_routes if route.route_key == "default"
+    fallback_group = next(
+        route.clash_group for route in spec.market_proxy_routes if route.route_key == "allblue"
     )
     group_prepend.insert(
         0,
         {
             "name": stable_route.clash_group,
             "type": "fallback",
-            "proxies": ["TAG-LOCAL", default_group],
+            "proxies": ["TAG-LOCAL", fallback_group],
             "url": "https://clob.polymarket.com/time",
             "interval": 60,
             "lazy": False,
@@ -290,11 +290,15 @@ def route_status() -> dict[str, Any]:
                     "probe": probe(route.proxy_url),
                 }
             )
+        default_row = next(row for row in routes if row["route_key"] == "default")
         return {
             **base,
             "reachable": True,
             "routes": routes,
-            "healthy": all(row["group_present"] and row["probe"]["ok"] for row in routes),
+            "healthy": bool(default_row["group_present"] and default_row["probe"]["ok"]),
+            "all_routes_healthy": all(
+                row["group_present"] and row["probe"]["ok"] for row in routes
+            ),
         }
     except Exception as exc:  # noqa: BLE001 - status must surface local controller failure.
         return {
@@ -305,16 +309,20 @@ def route_status() -> dict[str, Any]:
         }
 
 
-def _default_route_candidates(payload: dict[str, Any]) -> tuple[str, list[str]]:
+def _selector_route():
     spec = load_production_spec()
-    default_route = next(
-        route for route in spec.market_proxy_routes if route.route_key == "default"
+    return next(
+        route for route in spec.market_proxy_routes if route.route_key == "allblue"
     )
+
+
+def _default_route_candidates(payload: dict[str, Any]) -> tuple[str, list[str]]:
+    selector_route = _selector_route()
     proxies = payload.get("proxies") or {}
-    group = proxies.get(default_route.clash_group) or {}
+    group = proxies.get(selector_route.clash_group) or {}
     if str(group.get("type") or "").lower() != "selector":
         raise RuntimeError(
-            f"default Clash group is not a selector: {default_route.clash_group}"
+            f"fallback Clash group is not a selector: {selector_route.clash_group}"
         )
     original = str(group.get("now") or "")
 
@@ -335,24 +343,22 @@ def _default_route_candidates(payload: dict[str, Any]) -> tuple[str, list[str]]:
 
 def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[str, Any]:
     spec = load_production_spec()
-    default_route = next(
-        route for route in spec.market_proxy_routes if route.route_key == "default"
-    )
-    initial_probes = [probe(default_route.proxy_url, timeout=5.0)]
+    selector_route = _selector_route()
+    initial_probes = [probe(selector_route.proxy_url, timeout=5.0)]
     if initial_probes[-1]["ok"]:
         return {
             "status": "healthy",
             "switched": False,
-            "route_key": "default",
+            "route_key": selector_route.route_key,
             "initial_probes": initial_probes,
         }
     time.sleep(0.5)
-    initial_probes.append(probe(default_route.proxy_url, timeout=5.0))
+    initial_probes.append(probe(selector_route.proxy_url, timeout=5.0))
     if initial_probes[-1]["ok"]:
         return {
             "status": "recovered_before_switch",
             "switched": False,
-            "route_key": "default",
+            "route_key": selector_route.route_key,
             "initial_probes": initial_probes,
         }
 
@@ -361,8 +367,8 @@ def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[st
     preview = {
         "status": "switch_required",
         "switched": False,
-        "route_key": "default",
-        "group": default_route.clash_group,
+        "route_key": selector_route.route_key,
+        "group": selector_route.clash_group,
         "original_node": original,
         "candidate_count": len(candidates),
         "bounded_candidate_count": min(12, len(candidates)),
@@ -376,7 +382,7 @@ def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[st
     with exclusive_lock(lock_path) as acquired:
         if not acquired:
             return {**preview, "status": "already_running"}
-        locked_probe = probe(default_route.proxy_url, timeout=5.0)
+        locked_probe = probe(selector_route.proxy_url, timeout=5.0)
         if locked_probe["ok"]:
             return {
                 **preview,
@@ -387,9 +393,9 @@ def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[st
         selected = ""
         for node in candidates[:12]:
             try:
-                switch_group_node(default_route.clash_group, node)
+                switch_group_node(selector_route.clash_group, node)
                 time.sleep(0.4)
-                result = probe(default_route.proxy_url, timeout=5.0)
+                result = probe(selector_route.proxy_url, timeout=5.0)
                 attempts.append({"node": node, "probe": result})
                 if result["ok"]:
                     selected = node
@@ -401,7 +407,7 @@ def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[st
         restored = False
         if not selected and original:
             try:
-                switch_group_node(default_route.clash_group, original)
+                switch_group_node(selector_route.clash_group, original)
                 restored = True
             except Exception as exc:  # noqa: BLE001 - preserve failed rollback evidence.
                 attempts.append(
@@ -415,8 +421,8 @@ def maintain_default_route(*, apply: bool, reason: str, trigger: str) -> dict[st
             "ts_utc": utc_now(),
             "reason": reason,
             "trigger": trigger,
-            "route_key": "default",
-            "group": default_route.clash_group,
+            "route_key": selector_route.route_key,
+            "group": selector_route.clash_group,
             "before_node": original,
             "selected_node": selected,
             "restored_original": restored,
