@@ -12,40 +12,40 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
   - release_id: data_feed
     checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
-    expected_repo_sha: 124666b664ca746f76ff38f32d019e22abdfe6c5
+    expected_repo_sha: b3804f838128f2d2645a54802d92bdc86f9e39b7
   - release_id: forecast_collector
     checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
-    expected_repo_sha: 2269fefdd8a64cdfe2dc9fe0580bc7e09da04870
+    expected_repo_sha: a12269265e46a891ddf3b42774d6bcc53500b6a4
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
-    expected_repo_sha: 9662f44c4bfe086d207a2482bcae8d79ec19b68e
+    expected_repo_sha: fd5f6d7b737604db065c5a71a42eb9a90a12b61a
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
-    expected_repo_sha: f59069a1a0a72c2129e0ba9327423090e5bb2d5b
+    expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
   - release_id: wcir
     checkout_root: /Users/deepsleep/projects/pm_agents_wcir_prod
-    expected_repo_sha: bed1c41ea57c7fab5e7e0e49fe4b3a6cade98718
+    expected_repo_sha: 39c2b959c2be87b37f3f603d1cefad8137ff851d
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
-    expected_repo_sha: 928a2ba24677d9a5966b1b2ef200b9a396b42954
+    expected_repo_sha: e026aeec711ac5c6f1b344a7ff99873f765bd002
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
-    expected_repo_sha: 7f4b8ed5e892122510e0ff13ec2c810a7e9983b8
+    expected_repo_sha: ad02c3193fb84f352f4d4935b2416370ba4546b4
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_prod
-    expected_repo_sha: 83f6f5e587836ea4f893d3e2644941f29883c70e
+    expected_repo_sha: c88ee75419660a586af3e70b34a1e71d698caa88
   - release_id: core_carry_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_core_carry_prod
-    expected_repo_sha: cdc5b30fce2f007f4e1bb1ef5c124d3ababec178
+    expected_repo_sha: 986480213f6f7ead45b22fd5d8c53cde5f343d2e
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/projects/pm_agents_scheduled_informed_maker_prod
-    expected_repo_sha: 0641231f67a86c869bce1d26290e42d656b89694
+    expected_repo_sha: 93d6c0214a63a8807e802e42387c0a5509b70641
   - release_id: knmi
     checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
-    expected_repo_sha: 25e6f1921fab739546dcb62fbb5b3f1d4e942469
+    expected_repo_sha: ef64a2d0b14230d21e3544161dbf95a097eeca9c
   - release_id: market_tail
     checkout_root: /Users/deepsleep/projects/pm_agents_market_tail_prod
-    expected_repo_sha: 94c8197365ca4b2474a3f62c293f8cfc7cb6a31a
+    expected_repo_sha: b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/projects/pm_agents_proposal_reward_prod
     expected_repo_sha: 68056035ec324305c3e60a88fb06dce1a63f2c11
