@@ -54,6 +54,7 @@ PRODUCTION_SPEC = load_production_spec()
 RUNTIME = PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1/current_yes_core_carry_tiny_live_v2"
 DB = PRODUCTION_SPEC.canonical_db_path
 BOOK_ROOTS = (
+    PRODUCTION_SPEC.resolved_market_books_root() / "batches",
     *historical_orderbook_roots(),
 )
 OUT_DIR = ROOT / (
@@ -243,6 +244,7 @@ def settlement_map(db_path: Path, entries: Sequence[Mapping[str, Any]]) -> tuple
     connection.execute("PRAGMA query_only=ON")
     connection.execute("PRAGMA busy_timeout=1000")
     settled: dict[str, float] = {}
+    resolution_counts = {"condition_id": 0, "city_date_bracket": 0, "missing": 0}
     for entry in entries:
         condition_id = str(entry.get("current_condition_id") or "")
         row = connection.execute(
@@ -257,6 +259,33 @@ def settlement_map(db_path: Path, entries: Sequence[Mapping[str, Any]]) -> tuple
         ).fetchone()
         if row is not None and finite(row[0]) is not None:
             settled[condition_id] = float(row[0])
+            resolution_counts["condition_id"] += 1
+            continue
+        # Some historical/current snapshots carry a condition id that differs
+        # from pm_history lineage, while settlement_outcomes is canonical at
+        # source grain.  The analysis contract explicitly permits the exact
+        # city/date/bracket fallback; do not turn this join gap into an open
+        # position or infer a label from observations.
+        row = connection.execute(
+            """
+            SELECT final_price
+            FROM settlement_outcomes
+            WHERE city = ? AND target_date = ? AND bracket = ?
+              AND settlement_status = 'settled'
+            ORDER BY created_at_utc DESC
+            LIMIT 1
+            """,
+            (
+                str(entry.get("city") or ""),
+                str(entry.get("target_date") or ""),
+                str(entry.get("current_bracket") or ""),
+            ),
+        ).fetchone()
+        if row is not None and finite(row[0]) is not None:
+            settled[condition_id] = float(row[0])
+            resolution_counts["city_date_bracket"] += 1
+        else:
+            resolution_counts["missing"] += 1
     fact = connection.execute(
         "SELECT MAX(fact_built_at_utc), COUNT(*) FROM fact_trades"
     ).fetchone()
@@ -273,6 +302,7 @@ def settlement_map(db_path: Path, entries: Sequence[Mapping[str, Any]]) -> tuple
         "fact_trades_rows": fact[1],
         "fact_signal_candidates_built_at_utc": candidate[0],
         "fact_signal_candidates_rows": candidate[1],
+        "settlement_resolution_counts": resolution_counts,
     }
 
 
@@ -285,12 +315,21 @@ def book_files(roots: Sequence[Path], date_min: str, date_max: str) -> list[Path
         for day in root.iterdir():
             if not day.is_dir() or not date_min <= day.name <= date_max:
                 continue
-            for path in day.glob("orderbook_snapshot_*.jsonl*"):
-                stat = path.stat()
-                identity = (stat.st_dev, stat.st_ino)
-                if identity not in seen:
-                    seen.add(identity)
-                    files.append(path)
+            # The legacy collector used ``orderbook_snapshot_*`` while the
+            # canonical market-books producer writes ``market_books_*``.
+            # Both implement the same weather_orderbook_capture row contract.
+            # Keep inode de-duplication because production/archive roots may
+            # expose the same physical batch through compatibility aliases.
+            for pattern in (
+                "orderbook_snapshot_*.jsonl*",
+                "market_books_*.jsonl*",
+            ):
+                for path in day.glob(pattern):
+                    stat = path.stat()
+                    identity = (stat.st_dev, stat.st_ino)
+                    if identity not in seen:
+                        seen.add(identity)
+                        files.append(path)
     return sorted(files)
 
 
@@ -322,19 +361,37 @@ def load_books(
                     asks = summary.get("asks") or raw.get("asks") or []
                     candidate = {
                         "snapshot_ts_utc": timestamp,
+                        "available_at_utc": str(
+                            row.get("available_at_utc")
+                            or row.get("fetched_at_utc")
+                            or timestamp
+                        ),
                         "bids": bids,
                         "asks": asks,
                         "source_path": str(path),
                     }
                     prior = books[token].get(timestamp)
-                    prior_depth = sum(finite(x.get("size")) or 0.0 for x in (prior or {}).get("bids", []))
-                    depth = sum(finite(x.get("size")) or 0.0 for x in bids if isinstance(x, dict))
+                    prior_depth = sum(
+                        finite(x.get("size")) or 0.0
+                        for side in ("bids", "asks")
+                        for x in (prior or {}).get(side, [])
+                        if isinstance(x, dict)
+                    )
+                    depth = sum(
+                        finite(x.get("size")) or 0.0
+                        for levels in (bids, asks)
+                        for x in levels
+                        if isinstance(x, dict)
+                    )
                     if prior is None or depth > prior_depth:
                         books[token][timestamp] = candidate
         except (EOFError, OSError):
             continue
     ordered = {
-        token: sorted(rows.values(), key=lambda row: parse_utc(row["snapshot_ts_utc"]))
+        token: sorted(
+            rows.values(),
+            key=lambda row: parse_utc(row["available_at_utc"]),
+        )
         for token, rows in books.items()
     }
     return ordered, {
@@ -399,7 +456,9 @@ def match_book_after_event(
         return None
     limit = available + timedelta(minutes=max_lag_min)
     for book in books:
-        timestamp = parse_utc(book.get("snapshot_ts_utc"))
+        timestamp = parse_utc(
+            book.get("available_at_utc") or book.get("snapshot_ts_utc")
+        )
         if timestamp is not None and available <= timestamp <= limit:
             return book
     return None
@@ -445,7 +504,9 @@ def replay_entries(
                 continue
             probability = post_event_probability(event, book, artifact)
             available = parse_utc(event.get("as_of_ts_utc"))
-            book_ts = parse_utc(book.get("snapshot_ts_utc"))
+            book_ts = parse_utc(
+                book.get("available_at_utc") or book.get("snapshot_ts_utc")
+            )
             quotes.append(
                 {
                     "event_report_ts_utc": event.get("source_report_ts_utc"),

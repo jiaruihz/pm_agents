@@ -100,6 +100,29 @@ The direction remains eligible only for zero-notional event-ledger collection.
 Full report:
 `2026-08/2026-08-09-current-yes-core-carry-event-lifecycle-v2.md`.
 
+### 2026-08-11 Core Carry short pullback add-maker audit
+
+The current 62-entry live-era universe was replayed with a ten-share-taker-only
+baseline plus a static five-share pullback maker. Conservative maker
+fills require five visible ask shares crossing the resting limit within the
+PIT availability clock; future touch alone is not a fill. On 56 settled
+entries, `entry ask - 7c / 15m` fills only Amsterdam 2026-08-10 and adds
+`+$1.00`. The post-hoc best `-2c / 15m` point has 7/7 winning fills and adds
+`+$4.40`, but all fills are in the analyst-opened last-seven-date window and
+the first ten dates have zero fills. At 30m the same quote captures two final
+losses and turns to `-$3.65`; 60m reaches `-$7.65`.
+
+This does not establish a new maker sleeve: production v3 already rests the
+five-share maker near `ask-1 tick`, so any later `-2c/-3c/-7c` fall should cross
+the existing order first if it is active. The numbers are gross maker value
+versus taker-only, not incremental value versus current execution. Amsterdam
+had no maker order because clock eligibility blocked it, making it a missing
+maker/re-arm case rather than deep-maker alpha. The next valid comparison is
+current v3 lifecycle versus a same-budget deeper replacement versus
+post-update thesis-revalidated re-arm. No live change.
+Full report:
+`2026-08/2026-08-11-current-yes-core-carry-pullback-add-maker-v1.md`.
+
 ### Family synthesis after the July challenger sequence
 
 The durable conclusion from the 80 dated current-YES reports is shorter than

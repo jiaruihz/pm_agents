@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from scripts.analysis.reheat_risk.research_core_carry_post_entry_capture_v1 import (
     LIFECYCLE_FEATURES,
+    book_files,
     first_new_report_event,
     lifecycle_exit_pnl,
     lifecycle_sample_weights,
+    match_book_after_event,
     official_weather_fee_per_share,
     replay_one_report_confirmation,
+    settlement_map,
     top_of_book,
     walk_sell_ladder,
 )
@@ -17,6 +20,83 @@ from scripts.ops.weather_current_yes_core_carry_post_entry_capture_shadow_v1 imp
 from datetime import datetime, timezone
 import pandas as pd
 import pytest
+import sqlite3
+
+
+def test_book_files_reads_legacy_and_canonical_batch_names(tmp_path) -> None:
+    day = tmp_path / "2026-08-10"
+    day.mkdir()
+    legacy = day / "orderbook_snapshot_20260810_1200.jsonl.gz"
+    canonical = day / "market_books_20260810_1205.jsonl.gz"
+    unrelated = day / "latest.json"
+    legacy.touch()
+    canonical.touch()
+    unrelated.touch()
+
+    assert book_files([tmp_path], "2026-08-10", "2026-08-10") == [
+        canonical,
+        legacy,
+    ]
+
+
+def test_match_book_after_event_uses_pit_availability_clock() -> None:
+    event = {"as_of_ts_utc": "2026-08-10T12:00:00Z"}
+    leaked = {
+        "snapshot_ts_utc": "2026-08-10T12:00:01Z",
+        "available_at_utc": "2026-08-10T12:31:00Z",
+    }
+    valid = {
+        "snapshot_ts_utc": "2026-08-10T12:00:05Z",
+        "available_at_utc": "2026-08-10T12:02:00Z",
+    }
+
+    assert match_book_after_event(event, [valid, leaked], 5) == valid
+    assert match_book_after_event(event, [leaked], 5) is None
+
+
+def test_settlement_map_falls_back_to_exact_source_grain(tmp_path) -> None:
+    db_path = tmp_path / "weather.db"
+    connection = sqlite3.connect(db_path)
+    connection.executescript(
+        """
+        CREATE TABLE settlement_outcomes (
+            condition_id TEXT,
+            city TEXT,
+            target_date TEXT,
+            bracket TEXT,
+            final_price REAL,
+            settlement_status TEXT,
+            created_at_utc TEXT
+        );
+        CREATE TABLE fact_trades (fact_built_at_utc TEXT);
+        CREATE TABLE fact_signal_candidates (fact_built_at_utc TEXT);
+        INSERT INTO settlement_outcomes VALUES (
+            'canonical-condition', 'Amsterdam', '2026-08-10', '23',
+            1.0, 'settled', '2026-08-11T00:00:00Z'
+        );
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    settlements, identity = settlement_map(
+        db_path,
+        [
+            {
+                "current_condition_id": "runtime-condition",
+                "city": "Amsterdam",
+                "target_date": "2026-08-10",
+                "current_bracket": "23",
+            }
+        ],
+    )
+
+    assert settlements == {"runtime-condition": 1.0}
+    assert identity["settlement_resolution_counts"] == {
+        "condition_id": 0,
+        "city_date_bracket": 1,
+        "missing": 0,
+    }
 
 
 def test_walk_sell_ladder_uses_depth_and_exit_fee() -> None:
