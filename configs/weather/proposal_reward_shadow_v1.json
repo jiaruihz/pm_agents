@@ -1,0 +1,32 @@
+{
+  "schema_version": "polymarket_weather_proposal_shadow_config_v1",
+  "strategy_family": "polymarket.weather.proposal_reward",
+  "strategy_instance": "polymarket_weather_proposal_reward_shadow_v1",
+  "weather_tag_id": 84,
+  "discovery_interval_seconds": 300,
+  "proposal_reconcile_interval_seconds": 15,
+  "health_interval_seconds": 5,
+  "loop_interval_seconds": 0.2,
+  "gamma_timeout_seconds": 8,
+  "wu_timeout_seconds": 3,
+  "max_source_workers": 8,
+  "source_poll_budget_per_day": 6500,
+  "retention_days": 90,
+  "expected_contract": {
+    "bond_usdc": 250,
+    "final_fee_usdc": 250,
+    "total_deposit_usdc": 500,
+    "reward_usdc": 0.6,
+    "custom_liveness_seconds": 900
+  },
+  "city_windows": {
+    "Seoul": {"start_minute": 0, "end_minute": 6, "poll_seconds": 1},
+    "Beijing": {"start_minute": 3, "end_minute": 12, "poll_seconds": 2},
+    "Shanghai": {"start_minute": 3, "end_minute": 12, "poll_seconds": 2},
+    "Madrid": {"start_minute": 3, "end_minute": 12, "poll_seconds": 2},
+    "Wellington": {"start_minute": 2, "end_minute": 9, "poll_seconds": 2},
+    "NYC": {"start_minute": 40, "end_minute": 75, "poll_seconds": 2},
+    "LA": {"start_minute": 40, "end_minute": 75, "poll_seconds": 2},
+    "Denver": {"start_minute": 45, "end_minute": 170, "poll_seconds": 5}
+  }
+}

@@ -98,6 +98,7 @@ class FetchSettings:
     timeout_sec: float = 3.0
     proxy_candidates: tuple[str | None, ...] = (None,)
     user_agent: str = "pm-agent-weather-data-feed/1.0"
+    http_client: httpx.Client | None = None
 
 
 class ObservationFetchError(RuntimeError):
@@ -457,6 +458,15 @@ def _http_get(url: str, *, params: Any = None, settings: FetchSettings | None = 
     merged_headers = {"User-Agent": cfg.user_agent}
     if headers:
         merged_headers.update(headers)
+    if cfg.http_client is not None:
+        response = cfg.http_client.get(
+            url,
+            params=params,
+            headers=merged_headers,
+            timeout=cfg.timeout_sec,
+        )
+        response.raise_for_status()
+        return response
     for proxy in cfg.proxy_candidates or (None,):
         try:
             response = httpx.get(
@@ -930,12 +940,17 @@ def fetch_weather_com_current(request: ObservationSourceRequest, settings: Fetch
 def fetch_weather_com_history_hourly(request: ObservationSourceRequest, settings: FetchSettings | None = None) -> ObservationSourceResult:
     source_key = "weather_com_history_hourly"
     tz, local_date = _target(request)
-    country = weather_com_country_for_station(request.station_or_feed)
+    requested_native_unit = str(request.metadata.get("native_unit") or "F").strip().upper()
+    if requested_native_unit not in {"C", "F"}:
+        raise ValueError(f"unsupported weather.com native_unit={requested_native_unit!r}")
+    country = str(request.metadata.get("weather_com_country") or "").strip().upper()
+    if not country:
+        country = weather_com_country_for_station(request.station_or_feed)
     location = f"{request.station_or_feed}:9:{country}"
     date_key = local_date.strftime("%Y%m%d")
     params = {
         "apiKey": weather_com_api_key(),
-        "units": "e",
+        "units": "m" if requested_native_unit == "C" else "e",
         "startDate": date_key,
         "endDate": date_key,
     }
@@ -948,34 +963,50 @@ def fetch_weather_com_history_hourly(request: ObservationSourceRequest, settings
     ).json()
     fetch_end = datetime.now(timezone.utc)
     records = []
-    max_temp_f: float | None = None
+    max_native_temp: float | None = None
     for raw in payload.get("observations") or []:
         ts_raw = raw.get("valid_time_gmt")
-        temp_f = raw.get("temp")
-        if ts_raw is None or temp_f is None:
+        native_temp = raw.get("temp")
+        if ts_raw is None or native_temp is None:
             continue
         try:
             report_dt = datetime.fromtimestamp(int(ts_raw), tz=timezone.utc)
-            temp_f_float = float(temp_f)
+            native_temp_float = float(native_temp)
         except (TypeError, ValueError, OSError):
             continue
         if report_dt.astimezone(tz).date() != local_date:
             continue
-        max_temp_f = temp_f_float if max_temp_f is None else max(max_temp_f, temp_f_float)
+        max_native_temp = (
+            native_temp_float
+            if max_native_temp is None
+            else max(max_native_temp, native_temp_float)
+        )
+        temp_c = native_temp_float if requested_native_unit == "C" else f_to_c(native_temp_float)
         records.append(
             _record(
                 request,
                 source_key=source_key,
                 obs_dt=report_dt,
                 ingest_dt=fetch_end,
-                temp_c=f_to_c(temp_f_float),
+                temp_c=temp_c,
                 raw=raw,
                 latency_ms=round((fetch_end - fetch_start).total_seconds() * 1000.0, 3),
                 metadata={
-                    "temp_f": temp_f_float,
-                    "temp_round_f": arith_round(temp_f_float),
-                    "max_temp_f_observed": max_temp_f,
-                    "max_temp_round_f_observed": arith_round(max_temp_f),
+                    "native_temp": native_temp_float,
+                    "native_round": arith_round(native_temp_float),
+                    "native_unit": requested_native_unit,
+                    "max_native_temp_observed": max_native_temp,
+                    "max_native_round_observed": arith_round(max_native_temp),
+                    **(
+                        {
+                            "temp_f": native_temp_float,
+                            "temp_round_f": arith_round(native_temp_float),
+                            "max_temp_f_observed": max_native_temp,
+                            "max_temp_round_f_observed": arith_round(max_native_temp),
+                        }
+                        if requested_native_unit == "F"
+                        else {}
+                    ),
                     "obs_name": raw.get("obs_name"),
                     "icao_code": raw.get("icao"),
                     "weather_com_location": location,
@@ -989,7 +1020,12 @@ def fetch_weather_com_history_hourly(request: ObservationSourceRequest, settings
         records=records,
         fetch_start=fetch_start,
         fetch_end=fetch_end,
-        metadata={"raw_payload_hash": stable_hash(payload), "weather_com_location": location, "record_count_raw": len(payload.get("observations") or [])},
+        metadata={
+            "raw_payload_hash": stable_hash(payload),
+            "weather_com_location": location,
+            "native_unit": requested_native_unit,
+            "record_count_raw": len(payload.get("observations") or []),
+        },
     )
 
 
