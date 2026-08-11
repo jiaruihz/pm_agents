@@ -874,6 +874,11 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
         "WEATHER_PRODUCTION_CONFIG",
         str(ROOT / "src/strategies/runtime/production.yaml"),
     ) in calls
+    assert any(
+        call[:3] == ("set-option", "-g", "update-environment")
+        and "WEATHER_PRODUCTION_CONFIG" in call[3]
+        for call in calls
+    )
 
 
 def test_restart_requires_explicit_contract(tmp_path):
@@ -954,15 +959,13 @@ def test_controller_can_restart_safe_non_live_runtime_from_start_contract(
 
     result = ctl._run_restart(spec, runtime, confirm_live=False)
 
-    assert calls == [
-        (
-            "set-environment",
-            "-g",
-            "WEATHER_PRODUCTION_CONFIG",
-            str(ROOT / "src/strategies/runtime/production.yaml"),
-        ),
-        ("kill-session", "-t", "=shadow"),
-    ]
+    assert calls[-1] == ("kill-session", "-t", "=shadow")
+    assert (
+        "set-environment",
+        "-g",
+        "WEATHER_PRODUCTION_CONFIG",
+        str(ROOT / "src/strategies/runtime/production.yaml"),
+    ) in calls
     assert result["status"] == "restarted"
     assert result["restart_mode"] == "controller_stop_then_registered_start"
     assert marker.read_text(encoding="utf-8") == "started"
@@ -1014,7 +1017,11 @@ def test_controller_restart_starts_missing_safe_runtime(monkeypatch, tmp_path):
     )
     spec = production_spec(tmp_path, (runtime,))
     def fake_tmux(_spec, *args):
+        if args[0] == "show-options":
+            return subprocess.CompletedProcess(args, 0, "", "")
         if args[0] == "set-environment":
+            return subprocess.CompletedProcess(args, 0, "", "")
+        if args[0] == "set-option":
             return subprocess.CompletedProcess(args, 0, "", "")
         return subprocess.CompletedProcess(
             args, 1, "can't find session: collector", ""

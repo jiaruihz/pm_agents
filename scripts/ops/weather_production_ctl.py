@@ -1124,6 +1124,32 @@ def _runtime_launch_env(
         ROOT / "src/strategies/runtime/production.yaml"
     )
     env["WEATHER_PRODUCTION_CONFIG"] = production_config
+    update_environment = _tmux(
+        spec,
+        "show-options",
+        "-gv",
+        "update-environment",
+    )
+    if update_environment.returncode != 0:
+        raise RuntimeError(
+            "failed to inspect canonical tmux update-environment: "
+            f"{update_environment.stdout[-500:].strip()}"
+        )
+    update_keys = shlex.split(update_environment.stdout.strip())
+    if "WEATHER_PRODUCTION_CONFIG" not in update_keys:
+        update_keys.append("WEATHER_PRODUCTION_CONFIG")
+        update_result = _tmux(
+            spec,
+            "set-option",
+            "-g",
+            "update-environment",
+            " ".join(update_keys),
+        )
+        if update_result.returncode != 0:
+            raise RuntimeError(
+                "failed to register canonical tmux production contract environment: "
+                f"{update_result.stdout[-500:].strip()}"
+            )
     pinned_config = _tmux(
         spec,
         "set-environment",
