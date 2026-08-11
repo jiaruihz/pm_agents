@@ -119,6 +119,14 @@ def _add_market_prior_parser(subparsers: Any) -> None:
     parser.add_argument("--min-train-dates", type=int, default=3)
     parser.add_argument("--bootstrap-draws", type=int, default=4000)
     parser.add_argument(
+        "--freeze-after-min-train-dates",
+        action="store_true",
+        help=(
+            "Fit every OOF test date on the same first min-train-dates; use "
+            "when later dates form one untouched frozen-forward window."
+        ),
+    )
+    parser.add_argument(
         "--probability-event-source",
         choices=("fmi", "metar"),
         help="Optional explicit source scope for probability-head rows.",
@@ -428,6 +436,7 @@ def run_market_prior(args: argparse.Namespace) -> int:
         min_train_dates=args.min_train_dates,
         bootstrap_draws=args.bootstrap_draws,
         include_ladder_features=args.include_ladder_features,
+        freeze_after_min_train_dates=args.freeze_after_min_train_dates,
     )
     source_role_replay, source_role_summary = replay_fmi_entry_metar_correction(
         frame, bootstrap_draws=args.bootstrap_draws
@@ -481,6 +490,58 @@ def run_market_prior(args: argparse.Namespace) -> int:
     source_role_replay.to_csv(
         outputs["fmi_entry_metar_correction_replay"], index=False
     )
+    candidate_spec_path = args.output_dir / "strong_shrinkage_candidate_spec.json"
+    latest_fold = result.folds.sort_values("test_date").iloc[-1]
+    selection_mask = frame["target_date"].astype(str).between(
+        str(latest_fold["train_start"]),
+        str(latest_fold["train_end"]),
+    )
+    clock_classes = frame.get(
+        "availability_clock_class",
+        pd.Series(index=frame.index, dtype=object),
+    )
+    candidate_spec = {
+        "schema_version": "market_weather_strong_shrinkage_candidate_v1",
+        "model_id": "market_weather_strong_shrinkage_logit_blend_v1",
+        "city": args.city,
+        "target": "caller_expression_binary_probability",
+        "formula": (
+            "logit(p_post)=(1-weather_weight)*logit(p_market)+"
+            "weather_weight*logit(p_weather)"
+        ),
+        "weather_weight": float(
+            latest_fold["strong_shrinkage_weather_weight"]
+        ),
+        "weight_grid": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+        "selection_metric": "date-equal training Brier; ties choose lower weather weight",
+        "selected_without_test_date_labels": True,
+        "selection_train_start": str(latest_fold["train_start"]),
+        "selection_train_end": str(latest_fold["train_end"]),
+        "selection_train_dates": int(latest_fold["train_dates"]),
+        "selection_train_rows": int(latest_fold["train_rows"]),
+        "forward_test_start": str(result.folds["test_date"].min()),
+        "forward_test_end": str(result.folds["test_date"].max()),
+        "forward_test_dates": int(result.folds["test_date"].nunique()),
+        "weather_model_ids": sorted(
+            {
+                str(value)
+                for value in frame.get("weather_model_id", pd.Series(dtype=str)).dropna()
+                if str(value)
+            }
+        ),
+        "selection_clock_classes": sorted(
+            {
+                str(value)
+                for value in clock_classes.loc[selection_mask].dropna()
+                if str(value)
+            }
+        ),
+        "last_evaluated_test_date": str(latest_fold["test_date"]),
+        "research_only_zero_notional": True,
+        "live_eligible": False,
+    }
+    write_summary(candidate_spec_path, candidate_spec)
+    outputs["strong_shrinkage_candidate_spec"] = candidate_spec_path
     if research_slice_replay is not None:
         slice_path = (
             args.output_dir / "fmi_entry_metar_correction_research_price_slice.csv"
@@ -505,6 +566,7 @@ def run_market_prior(args: argparse.Namespace) -> int:
                 args.research_entry_cost_max_exclusive
             ),
             "include_ladder_features": args.include_ladder_features,
+            "freeze_after_min_train_dates": args.freeze_after_min_train_dates,
             "input_city_assertion": args.input_city_assertion,
         }
     )
@@ -527,10 +589,12 @@ def run_market_prior(args: argparse.Namespace) -> int:
         },
         "probability_event_source": args.probability_event_source or "all",
         "include_ladder_features": args.include_ladder_features,
+        "freeze_after_min_train_dates": args.freeze_after_min_train_dates,
         "denominator": result.denominator,
         "scores": result.scores.to_dict(orient="records"),
         "market_paired_bootstrap": result.bootstrap.to_dict(orient="records"),
         "trade_summary": result.trade_summary.to_dict(orient="records"),
+        "strong_shrinkage_candidate": candidate_spec,
         "fmi_entry_metar_correction": source_role_summary,
         "fmi_entry_metar_correction_research_price_slice": research_slice_summary,
         "outputs": {key: str(path) for key, path in outputs.items()},

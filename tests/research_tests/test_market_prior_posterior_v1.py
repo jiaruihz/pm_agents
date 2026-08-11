@@ -211,12 +211,27 @@ def test_market_prior_research_is_blocked_by_target_date() -> None:
         "raw_market",
         "raw_a8",
         "compact_logistic_market_offset",
+        "strong_shrinkage_logit_blend",
         "compact_logistic_model_only",
         "compact_logistic_market_prior",
         "shallow_hgb_market_prior",
     }
+    assert result.folds["strong_shrinkage_weather_weight"].between(0.0, 0.5).all()
     assert set(result.trade_summary["model"]) == set(result.scores["model"])
     assert "valid causal event/book clocks" in result.denominator["eligibility"]
+
+
+def test_frozen_forward_keeps_the_same_training_dates() -> None:
+    result = run_market_prior_posterior_research(
+        _fixture(),
+        timezone="Europe/Helsinki",
+        min_train_dates=3,
+        bootstrap_draws=20,
+        freeze_after_min_train_dates=True,
+    )
+    assert result.folds["train_dates"].tolist() == [3, 3, 3]
+    assert result.folds["train_end"].nunique() == 1
+    assert result.denominator["freeze_after_min_train_dates"] is True
 
 
 def test_ladder_features_keep_denominator_and_use_only_prior_checkpoint() -> None:

@@ -624,6 +624,37 @@ def _fit_market_offset_logistic(
     return expit(test["market_logit"].to_numpy(dtype=float) + test_design @ fitted.x)
 
 
+def _fit_strong_shrinkage_logit_blend(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    weights: np.ndarray,
+) -> tuple[np.ndarray, float]:
+    """Select a transparent market/weather blend using training dates only.
+
+    The weather head is capped at 50% of posterior log-odds so a short market
+    history cannot silently turn the prior into a weather-only model.  Ties go
+    to the smaller weather weight.
+    """
+
+    y = train["won_no"].to_numpy(dtype=float)
+    market = train["market_logit"].to_numpy(dtype=float)
+    weather = train["model_logit"].to_numpy(dtype=float)
+    candidates = np.linspace(0.0, 0.5, 6)
+    losses = []
+    for weather_weight in candidates:
+        probability = expit(
+            (1.0 - weather_weight) * market + weather_weight * weather
+        )
+        brier = np.average((probability - y) ** 2, weights=weights)
+        losses.append((float(brier), float(weather_weight)))
+    _, selected = min(losses, key=lambda item: (item[0], item[1]))
+    posterior = expit(
+        (1.0 - selected) * test["market_logit"].to_numpy(dtype=float)
+        + selected * test["model_logit"].to_numpy(dtype=float)
+    )
+    return posterior, selected
+
+
 def _pnl_bootstrap(
     trades: pd.DataFrame,
     *,
@@ -743,6 +774,7 @@ def run_market_prior_posterior_research(
     min_train_dates: int = 3,
     bootstrap_draws: int = 4000,
     include_ladder_features: bool = False,
+    freeze_after_min_train_dates: bool = False,
 ) -> PosteriorResearchResult:
     """Run expanding target-date OOF A/B on the supplied fixed denominator."""
 
@@ -762,7 +794,11 @@ def run_market_prior_posterior_research(
     fold_rows = []
     for fold_index in range(min_train_dates, len(dates)):
         test_date = dates[fold_index]
-        train_dates = dates[:fold_index]
+        train_dates = (
+            dates[:min_train_dates]
+            if freeze_after_min_train_dates
+            else dates[:fold_index]
+        )
         train = prepared.loc[prepared["target_date"].isin(train_dates)].copy()
         test = prepared.loc[prepared["target_date"] == test_date].copy()
         if train["won_no"].nunique() < 2:
@@ -774,6 +810,10 @@ def run_market_prior_posterior_research(
         output["p_compact_logistic_market_offset"] = _fit_market_offset_logistic(
             train, test, weights
         )
+        (
+            output["p_strong_shrinkage_logit_blend"],
+            blend_weather_weight,
+        ) = _fit_strong_shrinkage_logit_blend(train, test, weights)
         if include_ladder_features:
             output["p_compact_logistic_market_offset_ladder"] = (
                 _fit_market_offset_logistic(
@@ -801,6 +841,7 @@ def run_market_prior_posterior_research(
                 "train_rows": int(len(train)),
                 "test_date": test_date,
                 "test_rows": int(len(test)),
+                "strong_shrinkage_weather_weight": blend_weather_weight,
             }
         )
     predictions = pd.concat(prediction_rows, ignore_index=True)
@@ -808,6 +849,7 @@ def run_market_prior_posterior_research(
         "p_raw_market",
         "p_raw_a8",
         "p_compact_logistic_market_offset",
+        "p_strong_shrinkage_logit_blend",
     ]
     if include_ladder_features:
         probability_columns.append("p_compact_logistic_market_offset_ladder")
@@ -930,6 +972,9 @@ def run_market_prior_posterior_research(
             "min_train_dates": int(min_train_dates),
             "fit_weighting": "equal total sample weight per target_date",
             "include_ladder_features": bool(include_ladder_features),
+            "freeze_after_min_train_dates": bool(
+                freeze_after_min_train_dates
+            ),
             "eligibility": (
                 "valid causal event/book clocks, binary settlement, valid probabilities, "
                 "two-sided ordered quote; caller-supplied source scope; no internal "
