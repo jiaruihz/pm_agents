@@ -379,3 +379,59 @@ event 后 `0/15/30/60s` book，用来区分“market 已吸收后的高胜率 ca
 
 本轮没有创建 candidate/intent/order/fill，也没有修改任何 live runner 或生产行为。8 月 10 日因 market-books
 health 未通过且尚未 settlement，不进入任何准确率或 ROI 分母。
+
+## 2026-08-11 二次升温 / re-cross PIT 审计
+
+本节只回答一个问题：在 `31 NO` 经历首次 JMA `.7°C` cross、急跌、随后二次升温时，当前 Tokyo
+特征和两个 zero-notional probability head 能否在第二次 cross 前识别风险。`.7°C` 只是 JMA source
+diagnostic，不是 settlement truth；全程只用 collector-exact first-seen、当时已写入的 decision bundle 和 raw book。
+
+结论分两层：**特征层看见了，当前概率头没有在 8 月 11 日 pre-cross 阶段识别成可用的 `31 NO` 概率。**
+
+| JMA obs JST / first-seen JST | temp | 路径状态 | v7 P(31 NO) | overshoot v2 P(31 NO) | market NO mid | fee 后最大 edge |
+|---|---:|---|---:|---:|---:|---:|
+| 13:00 / 13:07:07 | 28.2 | 首次高点后 trough，距 32.3 低 4.1°C | 未评分 | 未评分 | 未评分 | 未评分 |
+| 13:10 / 13:17:10 | 30.5 | +2.3°C/10m，30m slope +3.6°C/h，回收跌幅 56.1% | 3.24% | 4.78% | 7.50% | -4.63c |
+| 13:20 / 13:27:05 | 30.7 | 连续第 2 个回升点，30m slope +3.8°C/h，回收 61.0% | 5.81% | 2.58% | 7.00% | -4.64c |
+| 13:30 / 13:37:04 | 32.0 | 第二次 `.7` cross 已发生 | 99.90% | 99.41% | 99.80% | 约 0 / 负 |
+
+因此 13:30 的高概率只是事后 confirmation，不是模型提前抓到二次升温。13:10 与 13:20 两个真正可提前行动的
+checkpoint，两个模型都低于同期 market，fee 后 edge 全为负，也没有 selected candidate。
+
+盘口时钟支持“外部参与者拿到更快真实报文”的推断，但尚不能锁定具体 feed：13:30:25 JST 时 `31 NO`
+仍约 `.07/.09`；13:31:26 bid 到 `.10`，13:34:07 bid 到 `.53`，13:35:12 已 one-sided `.99`。
+本地 JMA second-cross first-seen 是 13:37:04，比 `.99` 晚 112.3 秒；本地 routine METAR 更晚到 13:40。
+这说明市场在我们 first-seen 前已获得或推断出新信息，不能证明是哪家数据源。
+
+根因不是特征完全缺失，而是状态表达和 runtime anchor 不足：
+
+- v5 feature row 已有 `delta10`、30/60m slope、warming-run、pullback；但没有 episode trough、rise-from-trough、
+  recovery fraction、slope reversal、cross count 等“第二热波”状态。8 月 11 日的 +2.3°C/10m 已进入特征，
+  weather-only break probability仍只有约 13.9%，说明现有 head 没学会这种深 pullback 后快速恢复。
+- compact overshoot v2 只看 boundary distance、60m slope、距首次 strict high 时间和剩余时段；13:20 的
+  60m slope 仍为 -1.6°C/h、首次高点已过去 60 分钟，所以它把明显的短周期回升继续解释成 fade。
+- 13:00 trough 时 active ladder 只围绕 JMA rounded anchor `28` 抓书，没有保留 held/official bracket `31`，
+  因而没有 `31 NO` holding checkpoint。对持仓退出/反转研究，这是明确的 observability gap。
+
+对 2026-07-21..08-11 exact collector 全窗做相同 episode census，只有 **2 个**同时具备二次 cross 与
+pre-cross 模型证据的 episode：8 月 5 日 `29`（两个模型在 re-cross 前均高于 50%，但 market 已给 95%，
+fee 后仍无 edge）和 8 月 11 日 `31`（两个模型最高仅 5.81% / 4.78%）。即按最宽松的 50% 识别口径也只是
+1/2；两次都没有正 fee edge。样本太少，不能发布“二次升温准确率”，但足以否定“当前模型已经稳定识别该流程”。
+
+下一模型合同应是独立 conditional-reheat head：固定 held/official bracket，在每个 JMA first-seen 都评分
+`P(final official Tmax > bracket | first cross → pullback → current recovery)`；补 episode trough/recovery、
+短长 slope reversal、cross count、forecast peak/remaining heat，以及真实可用的 JMA rain/wind transition。
+market velocity 只作同分母 baseline/joint challenger，不能让 market anchor 吞掉 weather innovation。
+在拥有更多正 episode 前只记录 zero-notional telemetry，不改 live runner。
+
+可复现入口与耐久产物：
+
+- `scripts/analysis/market_structure_edge/audit_tokyo_second_reheat_pit_v1.py`
+- `generated/tokyo_second_reheat_pit_audit_v1/{summary.json,checkpoints.csv,exact_episode_census.csv}`
+
+```bash
+.venv/bin/python scripts/analysis/market_structure_edge/audit_tokyo_second_reheat_pit_v1.py \
+  --target-date 2026-08-11 --bracket 31 \
+  --scan-start 2026-07-21 --scan-end 2026-08-11 \
+  --output-dir docs/analysis/2026-08/generated/tokyo_second_reheat_pit_audit_v1
+```
