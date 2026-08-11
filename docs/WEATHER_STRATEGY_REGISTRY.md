@@ -1,7 +1,7 @@
 # Weather 策略总账（我们到底试过哪些 · 灵感/规则 · 是否可行 · 血缘归属）
 
 Status: `current-reference`
-Updated: 2026-08-10 pooled weather-ladder transport readiness
+Updated: 2026-08-11 daily minimum temperature strategy design
 Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入口
 
 这份是"我们一共研究过哪些策略"的单页总账。每条策略：**灵感/盈利规则 → 当前状态 → 是否可行 →
@@ -52,9 +52,10 @@ Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入�
 ## 血缘分支（白皮书口径）
 
 ```text
-pre_predict   赛前/早盘：没看到日内路径时，预测最终最高温分布（给 prior）
-reheat_risk   日内路径：已看到 running max 后，判断会不会再升温（给 conditional update）
-两支共享一个事实层 reheat_feature_factory_v1
+pre_predict   赛前/早盘：预测最终 daily extreme 分布（给 prior）
+reheat_risk   Tmax 日内路径：已看到 running max 后，判断会不会再升温
+daily_low_temperature   Tmin 日内路径：双冷却窗口内判断是否会再创新低
+三者共享天气事实、PIT、盘口和执行血缘；Tmin 复用 WCIR，不复制 collector/order/fill/PnL 链
 ```
 
 ---
@@ -67,6 +68,7 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 | model×market 融合 overlay | `0.3*model + 0.7*market`，承认市场吃掉大部分公开天气信息 | `research` | 提升太小，未确认 alpha；global model alpha 为负 | [1] model_vs_market |
 | forecast quality / reliability base | entropy/adjacent mass/city-model history 转可复用可靠性标签 | `shadow` | **只作共享可靠性层 / soft 标签**，非独立 live 策略 | [1] model_vs_market |
 | d1_weather_only_probability_challenger | D-1 固定 checkpoint 上，以多模型 consensus 定位最终 Tmax，并用部分分层 city/source bias、pooled empirical residual 与稳健尾部输出 settlement-native exact-bracket 全分布；first_seen 只作 PIT 时钟 | **`W0 legacy reference locked / collector v3 code-tested deploy-pending / W1 not frozen / no-live-change`** | legacy daily-error artifact 为42,705 rows/52城；经 best-model 过滤为16,916，再取May–Aug形成5,561-row/39城 training slice（不是项目全部历史）。该 slice + 18-date reconstructed development 选择 `87.5% ensemble mean + 12.5% assigned + full shrunk bias + 1.25× residual scale + 2% climatology tail`；已查看的 9-date secondary holdout logloss `1.9763→1.8506` 但仍输 market `1.5497`。legacy market offset `beta=.05` 的 M2/M3=`1.5546/1.5540` 均未优于 M0。同 243 city-date/26 dates 上，D-1 18–24h market logloss `1.5306` 优于12–18h `1.5743`，paired delta `-0.0436`、CI `[-0.0870,-0.0027]`；但两 clock 间 forecast 同时变化，不能把改善全归因于晚盘。迁移后 root audit 发现旧 journal 的3,420个多投递 provider runs 全部 first-seen 漂移，52,782条重复 delivery受影响，1,840条 same-run content revision 全为0°F伪修订；旧 hot-only snapshot路由漏2,175/2,243 checkpoints。v3 已分离 provider-run/content first-seen、改用稳定 forecast content hash，并以真实 one-shot 验证；revision 事件改为单 provider-run first-seen + rolling as-of consensus，旧 rows 只作 earliest-observed development。部署后新 `collector_exact` rows 才进入 formal forward；达到 horizon 各自30个 settled dates 后做 target-date blocked inner CV，W1与M2/M3结果评审后才freeze，再以新日期做 untouched forward；不跑ROI、不改live | [1] forecast quality · [robust-tail/checkpoint report](analysis/2026-08/2026-08-05-d1-weather-only-robust-tail-v1.md) · [revision/repricing audit](analysis/2026-08/2026-08-06-d1-nonlinear-residual-and-repricing-v1.md) · [W0 reference spec](analysis/2026-08/2026-08-05-d1-weather-only-clean-forward-freeze-v1.json) |
+| daily_low_temperature_exact_bracket_v1 | 估计当地日历日最终 Tmin exact-bracket 完整分布；以同刻 market ladder 为 prior，用凌晨与晚间双冷却窗口、running-min path、forecast revision 和 source→settlement basis 做强收缩 residual | **`design frozen / BLOCKED_FOR_FIT / partial zero-notional telemetry / no-live-change`** | 不是 Tmax 符号翻转：早晨 low 仍可能被当日晚间改写。2026-08-11 readiness audit 中，current Seoul/Tokyo lowest observer 有48个source events、3,371个quote snapshots、16个非连续target dates、0 orders；另5个legacy dates只作development，不能凑formal forward。Seoul AMOS/Tokyo AMeDAS均为proxy且basis pending；HKO official daily-min可作authority control，但需WCIR adapter和current full-ladder。当前没有probability artifact、同分母market score或clean forward；唯一动作是三城contract census + WCIR coverage-only/full-ladder接入，完成前不拟合、不跑ROI、不建candidate/intent | [0]-[3] pre_predict / WCIR · [family design](WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md) |
 | forecast-bounded Range RV | forecast 锁定档位区间内做相对价值 | `shadow` | 三统计门过、但 live-standard/forward 不过；零 notional shadow | [2] market_structure_edge |
 | adjacent / range basket | 相邻档/区间篮子的相对定价 | `research` | inconclusive，holdout/top5 不稳 | [2] market_structure_edge |
 | market_ladder_kink_v1 | 同一 PIT exact-bracket ladder 内检验 cold-side 局部凹陷：settlement candidate 只加连续 `kink × cold_distance`；失败后固定检验 15/30/60m 相邻档收敛与 ask→bid 退出 | **`BRANCH_EXHAUSTED / rejected_for_expression / no-shadow-deploy`** | broad v1 冻结不改。side-aware settlement 在 41,124 rungs / 4,135 snapshots / 9 dates / 47 cities上相对 baseline 的 Brier/logloss delta 为 `+0.000060/+0.000089`，CI 均跨0且AUC下降。dynamic 30/60m proper score 显著改善，但1-share current ask→future bid、双边fee replay ROI `-14.48%` CI `[-15.72%,-13.82%]` / `-18.01%` CI `[-19.15%,-16.88%]`，两档均9/9日期亏；15m direct三档exit覆盖为0。未生成 selector/candidate/intent，未部署。若重启只研究带真实prints/queue/order lifecycle的 passive convergence capture，不做future-touch maker假设 | [2] market_structure_edge · [frozen v1](analysis/2026-08/2026-08-09-market-ladder-kink-exact-bracket-mispricing-v1.md) · [challenger evaluator](../scripts/analysis/market_structure_edge/market_ladder_kink_challengers.py) |

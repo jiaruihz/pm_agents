@@ -6,16 +6,20 @@ Created: 2026-06-16
 `pre_predict` 是赛前/早盘预测分支。它回答的是：
 
 ```text
-在还没有充分看到当天真实升温路径时，最终最高温会落在哪一档？
+在还没有充分看到当天真实路径时，最终 daily maximum/minimum 会落在哪一档？
 ```
 
-它和 `reheat_risk` 是并列分支，不是上下级关系。`pre_predict` 给全天最高温分布 prior；`reheat_risk` 在看到当天 observed path 以后更新剩余升温风险。
+它和 `reheat_risk`、`daily_low_temperature` 是并列分支，不是上下级关系。`pre_predict`
+给全天 extreme distribution prior；`reheat_risk` 在看到 running max 后更新剩余升温风险，
+`daily_low_temperature` 在凌晨/晚间双冷却窗口内更新继续创新低的风险。最低温 family 的完整合同见
+[WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md](../WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md)。
 
 ## Scope
 
 包括：
 
 - forecast max + historical error distribution。
+- forecast min + historical error distribution。
 - GFS/ECMWF/Open-Meteo forecast quality。
 - city/model/source reliability。
 - model-vs-market calibration。
@@ -25,11 +29,13 @@ Created: 2026-06-16
 不包括：
 
 - 已经出现 running max 后的 no-reheat 判断。
+- 已经出现 running min 后的双冷却窗口更新。
 - current YES 是否守住。
 - higher bracket NO carry。
 - 日内 reheat reversal 条件模型。
 
-这些属于 [reheat_risk.md](reheat_risk.md)。
+除最低温日内更新外，其余项属于 [reheat_risk.md](reheat_risk.md)；最低温日内更新属于
+[WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md](../WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md)。
 
 ## Shared Inputs
 
