@@ -14,6 +14,12 @@ fill rate 从 `1.10%` 提到 `3.59%`（`3.28×`），但69个exit-scoreable fill
 signal-conditioned 报价 challenger，不是 generic maker alpha；要证明它能用于本 family，仍需 D-1 forecast
 candidate 同分母 WS + own order lifecycle，不能拿本次 hot-strip 1日样本替代。
 
+generic 60s 结果不得用于扣减旧 D-1 selected-position `+36.39%`：旧策略实际是30m continuation
+checkpoint / 60m hard exit。对旧49笔改成native bid+1 tick，3笔因达到ask不再post-only；余下46笔在冻结
+原dynamic exit path后，条件ROI仍为`+25.20%`（原同子集`+36.60%`），剔除最大赢家仍为`+13.69%`。
+所以1个native tick不会消灭条件edge；当前唯一关键未知是actual fills是否逆向集中于31笔亏单。generic tape
+只能证明无signal普挂逆选，不能回答D-1 selected fill distribution。
+
 历史 D-1 已更新至 `2026-08-10`：5,973 events/62,173 rungs/66 dates。entry challenger 相对 M0 的 holdout
 MSE delta `-0.000000487`，CI `[-0.000001851,+0.000000939]`，仍跨0；新 holdout anti-toxic selector 选择0笔，
 full-ladder completion 仍未通过。generic single-leg passive expression 判 `rejected_for_expression`，completion runner

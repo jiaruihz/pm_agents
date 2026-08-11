@@ -50,6 +50,22 @@ exit-scoreable fills 的平均入场改善成本为 `0.62c/share`，60秒 gross 
 selection。该结论只拒绝无 signal 普挂；D-1 forecast/full-ladder signal-conditioned `bid+1 tick` 尚因当前 WS
 不覆盖 D-1 candidate universe 而未完成同分母检验。
 
+### 与旧 `+36.39%` 的关系：不能混用 generic 60s 分母
+
+上表是没有 D-1 signal 的 hot-strip generic maker，并固定在成交后60秒检查退出；它只能作为 execution
+transport negative control，不能拿来扣减旧 selected D-1 position 的条件收益。旧 position policy 是30分钟
+full-ladder continuation checkpoint、60分钟 hard exit，不是60秒退出。
+
+对旧49笔 dynamic selected positions 直接施加 `best bid + 1 native tick`：43笔加0.001、6笔加0.01；其中3笔
+会达到 ask、不能保持 post-only，剩46笔。固定原 dynamic exit path 后，同一46笔的条件 ROI 从 `+36.60%`
+降为 `+25.20%`，15笔正、31笔负；即使剔除最大单一赢家，剩余调整后 ROI 仍为 `+13.69%`。因此 native
+一 tick 的价格成本不会消灭旧条件 edge。固定加1c则完全不同：低价仓位相当于追多个 native ticks，44笔
+postable 子集调整后 ROI 为 `-3.07%`，不能把“+1 tick”写成“+1 cent”。
+
+未解决的问题是 fill selection：如果46笔全部按同样概率成交，`+25.20%` 有较厚缓冲；但真实主动 SELL
+可能集中成交31笔亏损而跳过15笔赢家。旧 archive 没有这些 D-1 token 的同期 tape/queue/own-order lifecycle，
+所以当前正确状态是“signal-conditioned native bid+1 tick 值得采集验证”，不是“被 generic 60s 反证”。
+
 ## 更新到 T-1（2026-08-10）
 
 历史重建输入已从 `2026-05-21..2026-08-09` 增量到 `2026-05-21..2026-08-10`：
