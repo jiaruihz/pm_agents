@@ -190,6 +190,8 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
             "checkpoint_identity_status": "legacy_derived_from_city_score_lineage",
             "weather_probability_stay": lineage.get("weather_probability_stay"),
             "source_obs_ts_utc": score.source_obs_ts_utc,
+            "feature_coverage": score.feature_coverage,
+            "missing_features": list(score.missing_features),
         },
     )
 
@@ -276,6 +278,8 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
             "edge_after_fee": migrated.get("edge_after_fee"),
             "edge_threshold": migrated.get("edge_threshold"),
             "legacy_would_enter": bool(migrated.get("would_enter")),
+            "feature_coverage": score.feature_coverage,
+            "missing_features": list(score.missing_features),
         },
     )
     return DecisionBundle(

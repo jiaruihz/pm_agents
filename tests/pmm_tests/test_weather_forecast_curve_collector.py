@@ -62,6 +62,65 @@ def test_dedicated_collector_publishes_operational_curve(monkeypatch, tmp_path) 
     assert result["capture_path"]
 
 
+def test_dedicated_collector_publishes_amsterdam_fixed_day1_curve(
+    monkeypatch, tmp_path
+) -> None:
+    now = datetime(2026, 8, 7, 10, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        collector.snapshot, "CITIES", {"Amsterdam": {"lat": 52.31, "lon": 4.77}}
+    )
+    monkeypatch.setattr(collector.snapshot, "CITY_MODEL", {"Amsterdam": "ecmwf"})
+    monkeypatch.setattr(collector, "_selected_models", lambda: {"Amsterdam": "ecmwf"})
+    monkeypatch.setattr(
+        collector.snapshot, "city_scan_dates", lambda *_args: ["2026-08-07"]
+    )
+    monkeypatch.setattr(
+        collector.snapshot,
+        "local_settle_utc",
+        lambda *_args: now + timedelta(hours=10),
+    )
+    monkeypatch.setattr(
+        collector.snapshot,
+        "_refresh_live_forecast",
+        lambda *_args: {
+            "source_api": "open_meteo_live_ecmwf",
+            "source_model": "ecmwf",
+            "values_hash": "live",
+            "hourly_curve": [
+                {"time_local": "2026-08-07T15:00", "temperature_f": 80.0}
+            ],
+            "max_f": 80.0,
+            "peak_hour_local": 15,
+            "peak_time_local": "2026-08-07T15:00",
+            "peak_hour_utc": 13,
+            "peak_time_utc": "2026-08-07T13:00:00Z",
+            "timezone": "Europe/Amsterdam",
+            "timezone_abbreviation": "CEST",
+            "utc_offset_seconds": 7200,
+            "generationtime_ms": 1.0,
+            "detected_at_utc": None,
+            "cache_fallback": False,
+        },
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_amsterdam_ecmwf_day1",
+        lambda **kwargs: {
+            "status": "ok",
+            "requested_target_dates": kwargs["target_dates"],
+            "rows": 1,
+            "capture_path": str(tmp_path / "previous_day1.jsonl"),
+        },
+    )
+
+    result = collector.collect(output_root=tmp_path, now_utc=now)
+
+    assert result["amsterdam_previous_day1"]["status"] == "ok"
+    assert result["amsterdam_previous_day1"]["requested_target_dates"] == [
+        "2026-08-07"
+    ]
+
+
 def test_dedicated_collector_reports_missing_cache_or_source(monkeypatch, tmp_path) -> None:
     now = datetime(2026, 8, 7, 10, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(collector.snapshot, "CITIES", {"TestCity": {"lat": 1.0, "lon": 2.0}})

@@ -15,6 +15,10 @@ import pandas as pd
 
 from weather_modeling.knmi_10m_path import add_knmi_10m_path_features
 from weather_modeling.solar_geometry import add_solar_geometry_features
+from weather_modeling.forecast_path import (
+    FORECAST_PATH_FEATURES,
+    add_fixed_lead_forecast_path_features,
+)
 from weather_data_feed.input_catalog import JsonlInputCatalog
 
 from .core import CityScore, InputNotReady
@@ -186,6 +190,10 @@ def _market_quote(profile: dict[str, Any], source_event_id: str, target_date: st
     ask = record.get("no_best_ask")
     bid = None if bid is None else float(bid)
     ask = None if ask is None else float(ask)
+    yes_bid = record.get("yes_best_bid")
+    yes_ask = record.get("yes_best_ask")
+    yes_bid = None if yes_bid is None else float(yes_bid)
+    yes_ask = None if yes_ask is None else float(yes_ask)
     snapshot_id = str(
         payload.get("snapshot_id")
         or payload.get("capture_id")
@@ -198,10 +206,75 @@ def _market_quote(profile: dict[str, Any], source_event_id: str, target_date: st
         "best_bid": bid,
         "best_ask": ask,
         "mid": ((bid + ask) / 2 if bid is not None and ask is not None else None),
+        "yes_bid": yes_bid,
+        "yes_ask": yes_ask,
+        "yes_mid": (
+            (yes_bid + yes_ask) / 2
+            if yes_bid is not None and yes_ask is not None
+            else None
+        ),
+    }
+
+
+def _fixed_lead_forecast(
+    profile: dict[str, Any], target_date: str, decision: datetime
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    root = Path(profile["forecast_previous_day1_dir"])
+    candidates: list[tuple[datetime, str, int, dict[str, Any]]] = []
+    for path in root.glob("20??-??-??/forecast_hourly_curves_*.jsonl"):
+        for line, payload in _iter_jsonl(path):
+            if payload.get("city") != "Amsterdam" or payload.get("target_date") != target_date:
+                continue
+            if payload.get("forecast_source") != "open_meteo_previous_runs_ecmwf_day1":
+                continue
+            available = _parse(payload.get("available_at_utc"))
+            if available <= decision:
+                candidates.append((available, str(path), line, payload))
+    if not candidates:
+        raise InputNotReady(
+            "missing_fixed_lead_forecast_path",
+            city="Amsterdam",
+            target_date=target_date,
+            decision_ts_utc=decision.isoformat(),
+        )
+    _, path, line, payload = max(candidates, key=lambda item: item[0])
+    curve = pd.DataFrame(
+        {
+            "target_date": target_date,
+            "forecast_time_local": [row["time_local"] for row in payload["hourly_curve"]],
+            "forecast_temperature_c": [
+                (float(row["temperature_f"]) - 32.0) * 5.0 / 9.0
+                for row in payload["hourly_curve"]
+            ],
+        }
+    )
+    return curve, {
+        "physical_path": path,
+        "physical_line": line,
+        "forecast_values_hash": payload.get("forecast_values_hash"),
+        "available_at_utc": payload.get("available_at_utc"),
     }
 
 
 def _predict(artifact: dict[str, Any], frame: pd.DataFrame) -> dict[str, float]:
+    if artifact.get("schema_version") in {
+        "amsterdam_knmi_remaining_heat_model_v8",
+        "amsterdam_knmi_remaining_heat_model_v9",
+    }:
+        features = list(artifact["features"])
+        matrix = frame.loc[:, features].apply(pd.to_numeric, errors="coerce")
+        raw = float(artifact["estimator"].predict_proba(matrix)[0, 1])
+        calibrator = artifact.get("calibrator")
+        if calibrator is not None:
+            clipped = float(np.clip(raw, 1e-7, 1 - 1e-7))
+            logit = math.log(clipped / (1.0 - clipped))
+            selected = float(calibrator.predict_proba([[logit]])[0, 1])
+        else:
+            selected = raw
+        return {
+            "p_break_eod": selected,
+            "p_raw_eod": raw,
+        }
     models = artifact["models"]
     features = list(models["base_features"])
     matrix = frame.loc[:, features].apply(pd.to_numeric, errors="coerce")
@@ -254,6 +327,7 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
         row = frame.iloc[-1].copy()
         observed_local = _parse(source["observation_time_utc"]).astimezone(ZoneInfo("Europe/Amsterdam"))
         minute = observed_local.hour * 60 + observed_local.minute
+        row["decision_minute_local"] = float(minute)
         row["time_sin"] = math.sin(2 * math.pi * minute / 1440)
         row["time_cos"] = math.cos(2 * math.pi * minute / 1440)
         row["official_running_max_c"] = float(official["running_max_c"])
@@ -276,7 +350,34 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
 
         artifact_path = Path(profile["artifacts"]["weather"]["path"])
         artifact = joblib.load(artifact_path)
-        base_features = list(artifact["models"]["base_features"])
+        if artifact.get("schema_version") in {
+            "amsterdam_knmi_remaining_heat_model_v8",
+            "amsterdam_knmi_remaining_heat_model_v9",
+        }:
+            base_features = list(artifact["features"])
+        else:
+            base_features = list(artifact["models"]["base_features"])
+        forecast_lineage = None
+        if any(feature in base_features for feature in FORECAST_PATH_FEATURES):
+            forecast_curve, forecast_lineage = _fixed_lead_forecast(
+                profile, target_date, decision
+            )
+            row_frame = add_fixed_lead_forecast_path_features(
+                pd.DataFrame([row]), forecast_curve
+            )
+            row = row_frame.iloc[0].copy()
+        structurally_missing = sorted(set(base_features) - set(row.index))
+        if structurally_missing:
+            raise InputNotReady(
+                "model_feature_contract_incomplete",
+                city="Amsterdam",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "missing_feature_columns": structurally_missing,
+                    "model_id": artifact.get("model_id"),
+                },
+            )
         for feature in base_features:
             if feature not in row.index:
                 row[feature] = np.nan
@@ -285,52 +386,71 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
         quote = _market_quote(profile, str(source["information_event_id"]), target_date, current, now)
         present = sum(pd.notna(score_frame.iloc[0][name]) for name in base_features)
         missing = [name for name in base_features if pd.isna(score_frame.iloc[0][name])]
-        scorable = quote["mid"] is not None
-        return [CityScore(
-            city="Amsterdam",
-            target_date=target_date,
-            decision_ts_utc=decision.isoformat(),
-            source_obs_ts_utc=str(source["observation_time_utc"]),
-            current_bracket=current,
-            market_side="NO",
-            market_probability=quote["mid"],
-            market_entry_price=quote["best_ask"],
-            model_probability=probabilities["p_break_eod"],
-            model_id=str(artifact["model_id"]),
-            feature_coverage=present / len(base_features),
-            missing_features=missing,
-            features={key: float(value) for key, value in probabilities.items()},
-            market={
-                "condition_id": quote.get("condition_id"),
-                "market_id": quote.get("market_id"),
-                "token_id": quote.get("no_token_id"),
-                "outcome": "NO",
-                "book_snapshot_id": quote.get("book_snapshot_id"),
-                **{
-                    key: quote.get(key)
-                    for key in (
-                        "no_token_id",
-                        "best_bid",
-                        "best_ask",
-                        "mid",
-                        "snapshot_path",
-                        "scheduled_offset_seconds",
-                    )
+        shared_lineage = {
+            "profile_id": profile["profile_id"],
+            "probability_policy": str(artifact["model_id"]),
+            "model_artifact_sha256": profile["artifacts"]["weather"]["sha256"],
+            "book_snapshot_id": quote.get("book_snapshot_id"),
+            "market_feature_clock": "knmi_first_seen_ladder_t0",
+            "source_journal": profile["source_journal"],
+            "source_line": source_line,
+            "source_event_id": source["information_event_id"],
+            "official_journal": official_lineage["physical_path"],
+            "official_line": official_lineage["physical_line"],
+            "forecast_input_ref": forecast_lineage,
+            "feature_schema_coverage": 1.0,
+            "forecast_feature_semantics": (
+                "immutable_ecmwf_previous_day1_fixed_24h"
+                if forecast_lineage is not None
+                else "excluded_until_historical_live_source_semantics_match"
+            ),
+        }
+        scores: list[CityScore] = []
+        for side in profile.get("expression_sides", ["NO"]):
+            normalized_side = str(side).upper()
+            if normalized_side not in {"YES", "NO"}:
+                raise ValueError(f"unsupported Amsterdam expression side: {side}")
+            is_no = normalized_side == "NO"
+            market_probability = quote["mid"] if is_no else quote["yes_mid"]
+            market_entry = quote["best_ask"] if is_no else quote["yes_ask"]
+            p_leave = probabilities["p_break_eod"]
+            scorable = market_probability is not None
+            scores.append(CityScore(
+                city="Amsterdam",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                source_obs_ts_utc=str(source["observation_time_utc"]),
+                current_bracket=current,
+                market_side=normalized_side,
+                market_probability=market_probability,
+                market_entry_price=market_entry,
+                model_probability=p_leave if is_no else 1.0 - p_leave,
+                model_id=str(artifact["model_id"]),
+                feature_coverage=present / len(base_features),
+                missing_features=missing,
+                features={key: float(value) for key, value in probabilities.items()},
+                market={
+                    "condition_id": quote.get("condition_id"),
+                    "market_id": quote.get("market_id"),
+                    "token_id": quote.get("no_token_id" if is_no else "yes_token_id"),
+                    "outcome": normalized_side,
+                    "book_snapshot_id": quote.get("book_snapshot_id"),
+                    "best_bid": quote.get("best_bid" if is_no else "yes_bid"),
+                    "best_ask": market_entry,
+                    "mid": market_probability,
+                    "snapshot_path": quote.get("snapshot_path"),
+                    "scheduled_offset_seconds": quote.get("scheduled_offset_seconds"),
                 },
-            },
-            lineage={
-                "profile_id": profile["profile_id"],
-                "probability_policy": "amsterdam_knmi_remaining_heat_v7",
-                "model_artifact_sha256": profile["artifacts"]["weather"]["sha256"],
-                "book_snapshot_id": quote.get("book_snapshot_id"),
-                "market_feature_clock": "knmi_first_seen_ladder_t0",
-                "source_journal": profile["source_journal"],
-                "source_line": source_line,
-                "source_event_id": source["information_event_id"],
-                "official_journal": official_lineage["physical_path"],
-                "official_line": official_lineage["physical_line"],
-                "forecast_feature_semantics": "frozen_previous_day1_forcing_unavailable_live_explicit_nan",
-            },
-            evaluation_status="scored" if scorable else "not_scorable",
-            not_scorable_reason=None if scorable else "market_midpoint_interval_censored",
-        )]
+                lineage={
+                    **shared_lineage,
+                    "probability_target": (
+                        "leave_current_exact_bracket"
+                        if is_no else "stay_current_exact_bracket"
+                    ),
+                },
+                evaluation_status="scored" if scorable else "not_scorable",
+                not_scorable_reason=(
+                    None if scorable else "market_midpoint_interval_censored"
+                ),
+            ))
+        return scores

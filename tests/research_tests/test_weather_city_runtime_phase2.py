@@ -90,6 +90,9 @@ def test_legacy_adapter_emits_versioned_model_candidate_and_stable_identity() ->
     assert first.signal_candidate.condition_id == "condition-18"
     assert first.signal_candidate.execution_book_snapshot_id == "book-18"
     assert first.signal_candidate.candidate_id
+    assert first.model_output.metadata["feature_coverage"] == 1.0
+    assert first.model_output.metadata["missing_features"] == []
+    assert first.signal_candidate.metadata["feature_coverage"] == 1.0
     assert "pnl" not in json.dumps(first.signal_candidate.to_dict()).lower()
 
 

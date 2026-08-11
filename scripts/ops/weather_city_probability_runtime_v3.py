@@ -38,6 +38,7 @@ def main() -> None:
         config,
         {
             "amsterdam_knmi_remaining_heat_v7": AmsterdamKnmiRemainingHeatV7Adapter(),
+            "amsterdam_knmi_remaining_heat_v9": AmsterdamKnmiRemainingHeatV7Adapter(),
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
             "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),
             "tokyo_overshoot_market_residual_v2": TokyoMarketAnchorAdapter(),

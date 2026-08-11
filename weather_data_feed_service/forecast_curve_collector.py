@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from weather_data_feed.forecast_hourly_curves import build_curve_row, write_forecast_hourly_curve_capture
+from weather_data_feed.forecast_previous_day1 import collect_amsterdam_ecmwf_day1
 from weather_data_feed_service.legacy_weather_predict import paper_snapshot as snapshot
 
 
@@ -65,6 +66,7 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
     failed: list[dict[str, str]] = []
     request_failures: list[dict[str, Any]] = []
     expected = 0
+    amsterdam_target_dates: list[str] = []
 
     for city, cfg in snapshot.CITIES.items():
         model = models.get(city)
@@ -75,6 +77,8 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
             if hours_to_settle < 0 or hours_to_settle > 50:
                 continue
             expected += 1
+            if city == "Amsterdam":
+                amsterdam_target_dates.append(date_text)
             if model is None:
                 failed.append(
                     {
@@ -158,6 +162,19 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
         refresh_status = "cache_reused"
     else:
         refresh_status = "no_usable_forecast"
+    try:
+        previous_day1 = collect_amsterdam_ecmwf_day1(
+            output_root=output_root / "previous_day1",
+            target_dates=amsterdam_target_dates,
+            now_utc=captured_at,
+        )
+    except Exception as exc:  # surfaced in status; city adapter blocks on absence
+        previous_day1 = {
+            "status": "request_failed",
+            "rows": 0,
+            "capture_path": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
     return {
         "schema_version": "weather_forecast_curve_collector_status_v1",
         "status": status,
@@ -178,6 +195,7 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
         "open_meteo_disabled_reason": snapshot._FORECAST_LIVE_DISABLED_REASON,
         "refresh_status": refresh_status,
         "capture_path": str(archive) if archive else None,
+        "amsterdam_previous_day1": previous_day1,
     }
 
 
