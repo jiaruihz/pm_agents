@@ -726,7 +726,7 @@ def _slice_probability_scores(
     probability_columns: list[str],
 ) -> pd.DataFrame:
     rows = []
-    for dimension in ("event_source", "local_clock"):
+    for dimension in ("event_source", "local_clock", "target_date"):
         for value, subset in predictions.groupby(dimension, sort=True):
             for probability_column in probability_columns:
                 rows.append(
@@ -746,7 +746,7 @@ def _slice_probability_scores(
 
 def _slice_trade_summary(trades: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for dimension in ("event_source", "local_clock", "price_bucket"):
+    for dimension in ("event_source", "local_clock", "price_bucket", "target_date"):
         for (model, value), subset in trades.groupby(["model", dimension], sort=True):
             cash = float(subset["cash_cost_5"].sum())
             pnl = float(subset["pnl_5"].sum())

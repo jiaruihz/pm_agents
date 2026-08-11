@@ -21,6 +21,79 @@ from weather_model_evaluation.ladder_microstructure import (
     add_ladder_microstructure_features,
 )
 from weather_model_evaluation.cli import main as evaluation_cli_main
+from weather_model_evaluation.tokyo_market_prior_adapter import (
+    _exact_source_events,
+    _load_current_bracket_books,
+)
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+
+
+def test_tokyo_exact_census_uses_target_date_across_utc_shards(tmp_path) -> None:
+    root = tmp_path / "live_cross"
+    legacy = {
+        "city": "Tokyo",
+        "target_date": "2026-08-01",
+        "source": "jma_amedas",
+        "source_status": "ok",
+        "schema_version": "weather_high_frequency_observation_v1",
+        "observation_time_utc": "2026-07-31T21:00:00Z",
+        "source_first_seen_at_utc": "2026-07-31T21:07:00Z",
+        "fetched_at_utc": "2026-07-31T21:07:00Z",
+        "local_detect_ts_utc": "2026-07-31T21:07:00Z",
+        "payload_hash": "payload",
+        "raw_payload_hash": "raw",
+    }
+    explicit = {
+        **legacy,
+        "observation_time_utc": "2026-08-01T01:00:00Z",
+        "source_first_seen_at_utc": "2026-08-01T01:07:00Z",
+        "fetched_at_utc": "2026-08-01T01:07:00Z",
+        "local_detect_ts_utc": "2026-08-01T01:07:00Z",
+        "pit_lineage_class": "collector_exact",
+        "information_event_id": "explicit-event",
+    }
+    _write_jsonl(
+        root / "2026-07-31/high_frequency_observations.jsonl", [legacy]
+    )
+    _write_jsonl(
+        root / "2026-08-01/high_frequency_observations.jsonl", [explicit]
+    )
+    events, histories, coverage = _exact_source_events(
+        root, start_date="2026-08-01", end_date="2026-08-01"
+    )
+    assert len(histories["2026-08-01"]) == 2
+    assert len(events["2026-08-01"]) == 2
+    assert coverage["2026-08-01"]["legacy_hash_verified_exact_observations"] == 1
+    assert coverage["2026-08-01"]["explicit_collector_exact_observations"] == 1
+
+
+def test_tokyo_current_bracket_join_uses_reference_anchor(tmp_path) -> None:
+    books = tmp_path / "books"
+    base = {
+        "city": "Tokyo",
+        "target_date": "2026-08-01",
+        "source": "jma_amedas",
+        "outcome": "no",
+        "book_status": "ok",
+        "source_obs_ts_utc": "2026-08-01T01:00:00Z",
+        "book_fetched_at_utc": "2026-08-01T01:07:01Z",
+        "reference_market_value": 29,
+        "metar_running_max_market_value": 28,
+    }
+    _write_jsonl(
+        books / "2026-08-01.jsonl",
+        [{**base, "bracket": "29"}, {**base, "bracket": "28"}],
+    )
+    indexed, raw_counts = _load_current_bracket_books(books, ["2026-08-01"])
+    assert raw_counts["2026-08-01"] == 2
+    assert len(indexed) == 1
+    assert next(iter(indexed.values()))[0]["bracket"] == "29"
 
 
 def _fixture() -> pd.DataFrame:
