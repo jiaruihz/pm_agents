@@ -46,6 +46,9 @@ production_releases:
   - release_id: market_tail
     checkout_root: /Users/deepsleep/projects/pm_agents_market_tail_prod
     expected_repo_sha: 536807cd089ddbde90482347d8984b34a51c3750
+  - release_id: proposal_reward
+    checkout_root: /Users/deepsleep/projects/pm_agents_proposal_reward_prod
+    expected_repo_sha: 68056035ec324305c3e60a88fb06dce1a63f2c11
 
 canonical_refresh_release_id: control_plane
 # The mount name is a compatibility contract; UUID is the physical identity.
@@ -132,6 +135,20 @@ managed_runtimes:
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_curve_collector/latest.json
     health_format: json
     max_health_age_sec: 1800
+    accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+
+  - instance_id: polymarket_weather_proposal_reward_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_proposal_reward_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: proposal_reward
+    start_script: scripts/ops/start_weather_proposal_reward_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/proposal_reward_shadow_v1/latest.json
+    health_format: json
+    max_health_age_sec: 30
     accepted_health_statuses: [ok]
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
