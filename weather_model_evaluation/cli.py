@@ -32,6 +32,7 @@ from .market_prior_posterior import (
     select_city_rows,
 )
 from .daily_minimum import run_daily_minimum_development
+from .daily_minimum_next_colder import run_daily_minimum_next_colder_development
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -191,6 +192,31 @@ def _add_daily_minimum_parser(subparsers: Any) -> None:
     parser.set_defaults(handler=run_daily_minimum)
 
 
+def _add_daily_minimum_next_colder_parser(subparsers: Any) -> None:
+    parser = subparsers.add_parser(
+        "daily-minimum-next-colder-no",
+        help=(
+            "Build fixed intraday Tmin checkpoints and expanding-OOF "
+            "physical no-touch / exact next-colder NO development heads."
+        ),
+    )
+    parser.add_argument("--forecast-root", type=Path, required=True)
+    parser.add_argument("--observation-root", type=Path, required=True)
+    parser.add_argument("--ladder-root", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--cities", nargs="+", required=True)
+    parser.add_argument(
+        "--checkpoint-hours-local",
+        nargs="+",
+        type=int,
+        default=[6, 9, 12, 18, 21, 23],
+    )
+    parser.add_argument("--min-train-dates", type=int, default=7)
+    parser.add_argument("--promotion-min-dates", type=int, default=30)
+    parser.add_argument("--code-revision")
+    parser.set_defaults(handler=run_daily_minimum_next_colder)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="workflow", required=True)
@@ -199,6 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_forecast_repricing_position_parser(subparsers)
     _add_forecast_repricing_tape_parser(subparsers)
     _add_daily_minimum_parser(subparsers)
+    _add_daily_minimum_next_colder_parser(subparsers)
     return parser
 
 
@@ -212,6 +239,22 @@ def run_daily_minimum(args: argparse.Namespace) -> int:
         checkpoint_hour_local=args.checkpoint_hour_local,
         min_train_dates=args.min_train_dates,
         promotion_min_dates=args.promotion_min_dates,
+    )
+    print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def run_daily_minimum_next_colder(args: argparse.Namespace) -> int:
+    summary = run_daily_minimum_next_colder_development(
+        forecast_root=args.forecast_root,
+        observation_root=args.observation_root,
+        ladder_root=args.ladder_root,
+        output_dir=args.output_dir,
+        cities=args.cities,
+        checkpoint_hours_local=tuple(args.checkpoint_hours_local),
+        min_train_dates=args.min_train_dates,
+        promotion_min_dates=args.promotion_min_dates,
+        code_revision=args.code_revision,
     )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
