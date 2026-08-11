@@ -92,6 +92,17 @@ def test_production_path_cli_uses_the_shared_loader() -> None:
     assert result.stdout.strip() == "/Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json"
 
 
+def test_production_value_cli_exposes_the_default_market_proxy() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/ops/weather_production_path.py", "market_proxy_default_url"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == load_production_spec().market_proxy_default_url
+
+
 def test_pm_runtime_path_cli_uses_the_shared_loader() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/ops/weather_production_path.py", "pm_runtime_root"],

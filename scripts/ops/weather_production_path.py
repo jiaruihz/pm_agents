@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print one canonical weather production path from production.yaml."""
+"""Print one canonical weather production path or endpoint from production.yaml."""
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ def paths() -> dict[str, str]:
         "historical_full_ladder_root": str(spec.historical_full_ladder_root()),
         "historical_targeted_root": str(spec.historical_targeted_root()),
         "market_proxy_state_path": str(spec.market_proxy_state_path),
+        "market_proxy_default_url": spec.market_proxy_default_url,
     }
 
 
