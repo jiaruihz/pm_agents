@@ -97,6 +97,15 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_knmi_open_data_jrs"].max_health_age_sec == 900
     assert by_id["weather_city_probability_runtime_v3"].max_health_age_sec == 1200
     assert by_id["weather_city_probability_runtime_v3"].accepted_health_statuses == ("ok",)
+    proposal_shadow = by_id["polymarket_weather_proposal_reward_shadow_v1"]
+    assert proposal_shadow.release_id == "proposal_reward"
+    assert proposal_shadow.execution_mode == "shadow"
+    assert proposal_shadow.expected_live is False
+    assert proposal_shadow.health_path == Path(
+        "/Volumes/jrs/weather_data_feed_service_runtime/output/"
+        "proposal_reward_shadow_v1/latest.json"
+    )
+    assert proposal_shadow.dependencies == ("weather_jrs_context_keeper",)
     assert by_id[
         "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1"
     ].accepted_health_statuses == ("ok",)
