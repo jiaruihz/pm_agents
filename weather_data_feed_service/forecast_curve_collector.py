@@ -175,6 +175,8 @@ def collect(*, output_root: Path, target_date: str | None = None, now_utc: datet
             "capture_path": None,
             "error": f"{type(exc).__name__}: {exc}",
         }
+    if amsterdam_target_dates and previous_day1.get("status") != "ok":
+        status = "degraded"
     return {
         "schema_version": "weather_forecast_curve_collector_status_v1",
         "status": status,
