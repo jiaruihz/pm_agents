@@ -139,6 +139,9 @@ system contract 和 ops runbook。
   唯一差异只有日期、生成时间、覆盖计数以及 05/19..06/20 refresh 的 peak-clock lineage。上述差异已压入稳定
   `2026-06-16-reheat-feature-factory-v1.md` 的 shard inventory；CSV/JSON 事实产物原位保留，10 份模板化 Markdown
   删除。freshness producer 后续只生成被 Git 忽略的本地 run receipt，避免每个日期分片重新制造一篇“文档”。
+- 2026-08-12：lead-to-next-METAR/stale-book 的 7/08 首日 250-row 报告被 7/09 同合同 7,415-row 扩展重跑
+  完整覆盖。首日 denominator、precision/base-rate 和盘口覆盖缺口已压入扩展报告的 revision history；索引改指扩展
+  证据，删除旧报告，避免小样本旧数继续比后续证据更显眼。
 
 ## 仍有效的历史边界
 

@@ -18,6 +18,16 @@ Generated: `2026-07-09T14:11:24.545956+00:00`
 - high-frequency observation age max: `30.0` minutes
 - next-report window max: `90.0` minutes
 
+### Superseded first-day revision
+
+The same detector first ran on 2026-07-08 with only 2,326 high-frequency raw
+rows, 31,944 source-event rows and 250 causal lead rows.  Its 10 overshoot-head
+signals had 60% precision against a 12% base rate, but just one of 224
+stale-book rows had an executable current-YES ask.  The expanded run below
+keeps the same causal filter and output contract while increasing the lead
+denominator to 7,415 rows; the first-day point estimate is retained here only
+as revision history, not as an independent strategy result.
+
 ## Lead Signal
 
 - `next_report_up_prob_head`: rows `7415`, signal_rows `3231`, precision `0.4751`, base_rate `0.3173`, recall `0.6524`, lift `1.4971`
