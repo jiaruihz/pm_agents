@@ -97,6 +97,11 @@ daily_low_temperature   Tmin 日内路径：双冷却窗口内判断是否会再
 > 不构成新 alpha。另有 8/5–12 共 60 条 CrossNO fact rows 的 `instance_id=NULL` metadata lineage
 > 缺口，按 stable strategy_id 读取后不影响本结论。状态仍为 `running probe / rejected-as-main-strategy /
 > inconclusive / no-live-change`。证据：[recent accuracy attribution](analysis/2026-08/2026-08-12-performance-cross-no-recent-accuracy-attribution-v1.md)。
+> 分城市十日 follow-up 显示已有 live cities 的 fill 增量为 `+7`：约 `+5.4` 来自更多 weather/source
+> cross triggers、`+1.6` 来自 conversion；Busan `34/13→46/22`（signal/fill）是主体，Seoul
+> `25/2→39/3` 只增 trigger，Tokyo `28/7→22/7` 并未十日增量。另 Amsterdam 8/10 新接入后贡献
+> 1 个 settled fill。explicit execution failure 只影响零星 expression，多数未成交由 ask>cap 或 CLOB
+> 无 NO ask 解释；详见 [city trigger/order attribution](analysis/2026-08/2026-08-12-performance-cross-no-city-trigger-order-attribution-v1.md)。
 
 | 策略 / 家族 | 灵感 / 盈利规则 | 状态 | 是否可行（当前结论） | 血缘层 · 入口 doc |
 |---|---|---|---|---|

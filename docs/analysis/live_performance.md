@@ -22,6 +22,11 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
    spike is an inconclusive weather/short-window cluster, not a live promotion result. CrossNO rows from target date
    2026-08-05 onward currently require stable `strategy_id=live_weather_edge_v1_c16645cc1165` because 60 fact rows
    through 2026-08-12 have `instance_id=NULL`; instance-only reports silently omit them.
+7. **CrossNO's recent order-volume increase is city-concentrated, not a broad execution recovery.** On matched
+   ten-date windows, Busan triggers/fills rose `34/13 → 46/22` and Seoul `25/2 → 39/3`, while Tokyo was
+   `28/7 → 22/7` and Helsinki `21/8 → 20/5`. Existing live cities gained seven fills: a two-factor decomposition
+   attributes about `5.4` to more weather/source cross triggers and `1.6` to fill conversion. Explicit execution
+   failures explain only isolated expressions; ask above cap or an HTTP-200 book with no NO ask explains most misses.
 
 ## Evidence Map
 
@@ -33,6 +38,7 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 | `docs/analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | 2026-06 | three strategy instances after near-binary fix | snapshot |
 | `docs/analysis/2026-06/2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | 2026-06 | post-fix recent loss attribution by cohort/city/side/instance | snapshot |
 | `docs/analysis/2026-08/2026-08-12-performance-cross-no-recent-accuracy-attribution-v1.md` | 2026-07-09..08-11 | CrossNO signal/fill accuracy, engineering/data/weather attribution, and instance metadata gap | current snapshot |
+| `docs/analysis/2026-08/2026-08-12-performance-cross-no-city-trigger-order-attribution-v1.md` | 2026-07-23..08-12 | CrossNO per-city trigger, executable-book, order, fill, and weather-vs-engineering attribution | current snapshot |
 | `docs/archive/analysis/2026-05/2026-05-27-performance-live-full-research.md` | 2026-05 | early full live research | snapshot |
 
 ## Absorbed Historical Claims
