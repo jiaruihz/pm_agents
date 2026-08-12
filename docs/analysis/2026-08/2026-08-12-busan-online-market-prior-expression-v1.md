@@ -155,6 +155,15 @@ generic hot-strip 的 60s markout 当本模型收益。
 5. WS 等覆盖至少跨多个独立 settlement dates 后，只做增量 A/B：
    `weather+market level` vs `weather+market level+WS dynamics`。
 
+## 生产 zero-notional 状态
+
+已于 `2026-08-12T02:00:00Z` 开始 clean forward。生产加载
+SHA `87878e049bb5e2da7db5a4787ae280f31866e713`，Korea producer 与 city runtime
+均为 clean checkout；strict manifest 无 finding，JRS、market-books 与 proxy 后验均正常。
+首批 Busan checkpoint 已进入新 adapter；当时路径不属于 pending-confirmation state，
+因此按合同输出 `outside_pending_confirmation_state`，没有信号。运行模式保持
+`zero_notional_shadow`，`orders_submitted=0`，不存在真实 order 文件。
+
 ## 可复现入口与产物
 
 入口：
