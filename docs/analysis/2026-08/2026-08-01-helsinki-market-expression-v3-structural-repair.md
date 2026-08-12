@@ -107,5 +107,7 @@ ROI 26.86%；A2 为 21 笔、18胜3负，ROI 20.27%。真正 active 的 A2 只�
 Reproducible entrypoint:
 `scripts/analysis/reheat_risk/research_helsinki_market_expression_v3_structural_repair.py`
 
-Generated artifacts:
-`docs/analysis/2026-08/generated/helsinki_market_expression_v3_structural_repair/`
+Historical artifacts are recoverable through
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/cleanup-20260813-generated-unambiguous-batch1.json`.
+New runs require a stable `--run-id` and write an immutable directory beneath
+the configured JRS research artifact root.

@@ -8,6 +8,7 @@ regression and is never used to tune a candidate or an entry threshold.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -28,11 +29,16 @@ from scripts.analysis.reheat_risk import (  # noqa: E402
 from scripts.analysis.reheat_risk import (  # noqa: E402
     research_helsinki_market_offset_residual_v1 as base,
 )
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_content_addressed_artifact,
+    resolve_run_output,
+)
 
 
-OUTPUT = ROOT / "docs/analysis/2026-08/generated/helsinki_market_expression_v3_structural_repair"
-DIAGNOSTIC = ROOT / "docs/analysis/2026-08/generated/helsinki_shadow_full_day_exact_bracket_pit_replay_v1/evaluations.jsonl"
-V2_ARTIFACT = ROOT / "docs/analysis/2026-07/generated/helsinki_market_expression_v2/helsinki_market_expression_v2_research_challenger.joblib"
+ARTIFACT_FAMILY = "helsinki_market_expression_v3_structural_repair"
+DIAGNOSTIC_SHA256 = "14da606a7185b43a45aeddb217fb1d515c0e4a9c332cdb5c12f0092c782a8f7c"
+V2_ARTIFACT_SHA256 = "e5290f36ad033d1a526162c124a54106ecfb066e0b1538a3864ed0db1c841288"
 STATES = base.REPLAY / "checkpoint_market_states_v2_v7.csv.gz"
 
 RAW_SPLIT_FEATURES = {
@@ -99,10 +105,12 @@ def add_structural_features(rows: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def expanding_predictions(rows: pd.DataFrame) -> pd.DataFrame:
+def expanding_predictions(
+    rows: pd.DataFrame, v2_artifact_path: Path
+) -> pd.DataFrame:
     dates = sorted(rows["target_date"].astype(str).unique())
     outputs = []
-    v2_artifact = joblib.load(V2_ARTIFACT)
+    v2_artifact = joblib.load(v2_artifact_path)
     for index, target_date in enumerate(dates):
         if index < v2.MIN_TRAIN_DATES:
             continue
@@ -282,9 +290,11 @@ def slice_scores(predictions: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(outputs)
 
 
-def diagnostic_rows(artifacts: dict[str, dict[str, Any]]) -> pd.DataFrame:
+def diagnostic_rows(
+    artifacts: dict[str, dict[str, Any]], diagnostic_path: Path
+) -> pd.DataFrame:
     raw = []
-    with DIAGNOSTIC.open(encoding="utf-8") as handle:
+    with diagnostic_path.open(encoding="utf-8") as handle:
         for line in handle:
             row = json.loads(line)
             if (
@@ -341,12 +351,22 @@ def diagnostic_rows(artifacts: dict[str, dict[str, Any]]) -> pd.DataFrame:
     return frame
 
 
-def main() -> int:
-    OUTPUT.mkdir(parents=True, exist_ok=True)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args(argv)
+    resolved_output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.output_dir,
+    )
+    v2_artifact_path = resolve_content_addressed_artifact(V2_ARTIFACT_SHA256)
+    diagnostic_path = resolve_content_addressed_artifact(DIAGNOSTIC_SHA256)
     rows, coverage = base.prepare_rows()
     rows = add_structural_features(v2.add_v2_features(rows))
     rows["target_date"] = rows["target_date"].astype(str)
-    predictions = expanding_predictions(rows)
+    predictions = expanding_predictions(rows, v2_artifact_path)
     scores, bootstraps = score_tables(predictions)
     selection = selection_table(scores)
     calibration = calibration_table(predictions)
@@ -356,7 +376,7 @@ def main() -> int:
         name: v2.fit_candidate(rows, definition)
         for name, definition in CANDIDATES.items()
     }
-    diagnostic = diagnostic_rows(artifacts)
+    diagnostic = diagnostic_rows(artifacts, diagnostic_path)
     diagnostic_pass = {}
     for name in CANDIDATES:
         by_bracket = diagnostic.groupby("current_bracket").apply(
@@ -408,6 +428,7 @@ def main() -> int:
                 }
             )
 
+    output = prepare_new_run_output(resolved_output)
     artifact_manifest = []
     for name, artifact in artifacts.items():
         artifact.update(
@@ -429,31 +450,31 @@ def main() -> int:
                 ),
             }
         )
-        path = OUTPUT / f"{name}.joblib"
+        path = output / f"{name}.joblib"
         joblib.dump(artifact, path)
         artifact_manifest.append(
             {
                 "candidate": name,
-                "path": str(path.relative_to(ROOT)),
+                "path": str(path),
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             }
         )
 
-    scores.to_csv(OUTPUT / "probability_scores.csv", index=False)
-    bootstraps.to_csv(OUTPUT / "target_date_bootstrap.csv", index=False)
-    selection.to_csv(OUTPUT / "candidate_selection.csv", index=False)
-    calibration.to_csv(OUTPUT / "calibration.csv", index=False)
-    slices.to_csv(OUTPUT / "slice_scores.csv", index=False)
-    trades.to_csv(OUTPUT / "trade_replay_5share.csv", index=False)
+    scores.to_csv(output / "probability_scores.csv", index=False)
+    bootstraps.to_csv(output / "target_date_bootstrap.csv", index=False)
+    selection.to_csv(output / "candidate_selection.csv", index=False)
+    calibration.to_csv(output / "calibration.csv", index=False)
+    slices.to_csv(output / "slice_scores.csv", index=False)
+    trades.to_csv(output / "trade_replay_5share.csv", index=False)
     pd.DataFrame(trade_summaries).to_csv(
-        OUTPUT / "trade_summaries.csv", index=False
+        output / "trade_summaries.csv", index=False
     )
     predictions.to_csv(
-        OUTPUT / "oof_checkpoint_predictions.csv.gz",
+        output / "oof_checkpoint_predictions.csv.gz",
         index=False,
-        compression="gzip",
+        compression={"method": "gzip", "mtime": 0},
     )
-    diagnostic.to_csv(OUTPUT / "diagnostic_20260731.csv", index=False)
+    diagnostic.to_csv(output / "diagnostic_20260731.csv", index=False)
     summary = {
         "status": (
             "shadow_candidate_pass"
@@ -483,7 +504,7 @@ def main() -> int:
         "live_change": False,
         "orders_submitted": 0,
     }
-    (OUTPUT / "summary.json").write_text(
+    (output / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
     )
     print(json.dumps(summary, indent=2, sort_keys=True))

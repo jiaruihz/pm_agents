@@ -72,7 +72,9 @@ r16 相对 incumbent 的全分母 paired ROI delta 为 `+12.53pp`、CI `[+1.67,+
 | 7/22，18 NO | p 0.321 → 0.495，market=0.265、cost=0.300 | 赢；新版把 forecast remaining-heat 的有效信息保留并增强，属于合理赢家。 |
 | 7/24，20 NO | p 0.783 → 0.657，market=0.600、cost=0.622 | 赢；新版仍有小正 edge，但不再远离 market，符合“市场已吸收大部分天气信息”的直觉。 |
 
-完整逐 case 数据见 `generated/helsinki_market_expression_v2/selected_trade_case_atlas.csv` 和 `trade_case_comparison.csv`。
+完整逐 case 数据已迁出仓库，统一通过 archive manifest
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/cleanup-20260813-generated-unambiguous-batch1.json`
+恢复。新重跑必须使用稳定 `--run-id`，写入 JRS research artifact root。
 
 ## 双漏斗与覆盖缺口
 

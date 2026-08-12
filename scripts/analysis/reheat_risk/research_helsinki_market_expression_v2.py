@@ -46,12 +46,13 @@ from scripts.analysis.reheat_risk import (  # noqa: E402
 )
 from scripts.analysis.versioned_artifact_output import (  # noqa: E402
     prepare_new_run_output,
+    resolve_content_addressed_artifact,
     resolve_run_output,
 )
 
 
-INCUMBENT_DIR = ROOT / "docs/analysis/2026-07/generated/helsinki_market_offset_residual_v1"
-INCUMBENT_ARTIFACT = INCUMBENT_DIR / "helsinki_market_offset_fade_v1.joblib"
+INCUMBENT_ARTIFACT_SHA256 = "398b92b295f43e04c7b4deab26ccdd2b1f40354474e2d187f453092dfa3a3ed9"
+INCUMBENT_OOF_SHA256 = "e101bee0ad8e852c6f0b8f7d1b6ead57f35da7d0708091bf2f45c792ed5c3d21"
 SEED = 20260731
 EPS = 1e-6
 BOOTSTRAP_DRAWS = 5000
@@ -725,18 +726,20 @@ def main() -> int:
         help="Run-specific research output; deployed artifacts are never overwritten implicitly.",
     )
     args = parser.parse_args()
-    output = prepare_new_run_output(
-        resolve_run_output(
-            "helsinki_market_expression_v2",
-            run_id=args.run_id,
-            explicit_output=args.output_dir,
-        )
+    resolved_output = resolve_run_output(
+        "helsinki_market_expression_v2",
+        run_id=args.run_id,
+        explicit_output=args.output_dir,
     )
+    incumbent_artifact = resolve_content_addressed_artifact(
+        INCUMBENT_ARTIFACT_SHA256
+    )
+    incumbent_oof = resolve_content_addressed_artifact(INCUMBENT_OOF_SHA256)
     rows, coverage = base.prepare_rows()
     rows = add_v2_features(rows)
     rows["target_date"] = rows["target_date"].astype(str)
     predictions = expanding_predictions(rows)
-    incumbent = pd.read_csv(INCUMBENT_DIR / "oof_checkpoint_predictions.csv.gz")
+    incumbent = pd.read_csv(incumbent_oof)
     incumbent = incumbent.sort_values(
         ["target_date", "decision_ts_utc", "official_running_max_c"]
     ).reset_index(drop=True)
@@ -953,10 +956,11 @@ def main() -> int:
             "expression_sides": ["NO", "YES"],
             "expression_policy": "first_best_fee_adjusted_edge_per_date_bracket",
             "incumbent_artifact_sha256": hashlib.sha256(
-                INCUMBENT_ARTIFACT.read_bytes()
+                incumbent_artifact.read_bytes()
             ).hexdigest(),
         }
     )
+    output = prepare_new_run_output(resolved_output)
     artifact_path = output / "helsinki_market_expression_v2_research_challenger.joblib"
     joblib.dump(final_artifact, artifact_path)
     artifact_sha = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
@@ -995,7 +999,9 @@ def main() -> int:
         "actual_fills": 0,
     }
     predictions.to_csv(
-        output / "oof_checkpoint_predictions.csv.gz", index=False, compression="gzip"
+        output / "oof_checkpoint_predictions.csv.gz",
+        index=False,
+        compression={"method": "gzip", "mtime": 0},
     )
     grains["state_entry"].to_csv(output / "oof_state_entries.csv", index=False)
     grains["date_x_entry"].to_csv(output / "oof_date_x_entries.csv", index=False)
