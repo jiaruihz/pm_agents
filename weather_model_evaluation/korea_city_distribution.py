@@ -18,6 +18,7 @@ import io
 import json
 import math
 from pathlib import Path
+import re
 from typing import Any, Iterable, Mapping, Sequence
 
 import joblib
@@ -61,8 +62,12 @@ PHYSICAL_FEATURES = (
     "day_of_year_cos",
 )
 ALPHA_GRID = (0.0, 0.125, 0.25, 0.5, 1.0)
-OUTPUT_SCHEMA_VERSION = "korea_city_remaining_heat_distribution_research_v1"
-ARTIFACT_SCHEMA_VERSION = "korea_city_remaining_heat_distribution_artifact_v1"
+BETA_GRID = (0.75, 1.0, 1.25, 1.5)
+MINIMUM_NET_EDGE = 0.01
+TRADE_SHARES = 5.0
+WEATHER_TAKER_FEE_RATE = 0.05
+OUTPUT_SCHEMA_VERSION = "korea_city_remaining_heat_distribution_research_v2"
+ARTIFACT_SCHEMA_VERSION = "korea_city_remaining_heat_distribution_artifact_v2"
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,7 @@ class DistributionExperimentConfig:
     physical_holdout_start: str
     physical_holdout_end: str
     amos_start: str
+    residual_train_end: str
     development_end: str
     holdout_start: str
     end_date: str
@@ -85,7 +91,8 @@ class DistributionExperimentConfig:
         if not (
             self.physical_train_end < self.physical_holdout_start
             <= self.physical_holdout_end < self.amos_start
-            <= self.development_end < self.holdout_start <= self.end_date
+            <= self.residual_train_end < self.development_end
+            < self.holdout_start <= self.end_date
         ):
             raise ValueError("invalid chronological split")
         if self.bootstrap_draws < 100:
@@ -258,15 +265,46 @@ def _effective_yes_quote(books: Sequence[Mapping[str, Any]]) -> dict[str, Any] |
     # temporary lookup label and retain the native bracket in the result.
     normalized_books = [{**book, "bracket": str(rung)} for book in books]
     quote = effective_exact_quote(normalized_books, rung)
-    if quote["market_yes_mid"] is None:
+    yes_bid = finite(quote["market_yes_bid"])
+    yes_ask = finite(quote["market_yes_ask"])
+    reference = (
+        (yes_bid + yes_ask) / 2.0
+        if yes_bid is not None and yes_ask is not None
+        else yes_ask
+        if yes_ask is not None
+        else yes_bid
+    )
+    if reference is None:
         return None
+    yes_book = next(
+        (book for book in normalized_books if str(book.get("outcome") or "").casefold() == "yes"),
+        {},
+    )
+    no_book = next(
+        (book for book in normalized_books if str(book.get("outcome") or "").casefold() == "no"),
+        {},
+    )
+    yes_summary = yes_book.get("summary") or {}
+    no_summary = no_book.get("summary") or {}
     return {
         "bracket": bracket,
         "bracket_value": rung,
         "condition_id": condition,
-        "yes_mid": float(quote["market_yes_mid"]),
+        "yes_mid": finite(quote["market_yes_mid"]),
+        "yes_reference": float(reference),
+        "reference_kind": (
+            "two_sided_mid"
+            if yes_bid is not None and yes_ask is not None
+            else "one_sided_ask"
+            if yes_ask is not None
+            else "one_sided_bid"
+        ),
         "yes_ask": finite(quote["market_yes_ask"]),
         "yes_ask_size": finite(quote["yes_ask_size"]),
+        "direct_yes_ask": finite(yes_summary.get("best_ask")),
+        "direct_yes_ask_size": finite(yes_summary.get("ask_size")),
+        "direct_no_ask": finite(no_summary.get("best_ask")),
+        "direct_no_ask_size": finite(no_summary.get("ask_size")),
         "snapshot_id": quote["feature_book_snapshot_id"],
     }
 
@@ -287,7 +325,7 @@ def _snapshot_distribution(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] 
     if len(outcomes) < 5:
         return None
     outcomes.sort(key=lambda item: (int(item["bracket_value"]), item["bracket"]))
-    raw = np.asarray([item["yes_mid"] for item in outcomes], dtype=float)
+    raw = np.asarray([item["yes_reference"] for item in outcomes], dtype=float)
     raw_sum = float(raw.sum())
     if not 0.5 <= raw_sum <= 1.5:
         return None
@@ -307,6 +345,9 @@ def _snapshot_distribution(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] 
         "target_date": str(rows[0].get("event_date") or rows[0].get("market_local_date") or ""),
         "outcomes": outcomes,
         "raw_probability_sum": raw_sum,
+        "one_sided_outcomes": int(
+            sum(item["reference_kind"] != "two_sided_mid" for item in outcomes)
+        ),
         "base_snapshot_id": stable_hash(
             [
                 {
@@ -320,8 +361,21 @@ def _snapshot_distribution(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] 
     }
 
 
+def _batch_local_hour(path: Path) -> int | None:
+    match = re.search(
+        r"(?:market_books|orderbook_snapshot)_\d{8}_(\d{4,6})", path.name
+    )
+    return int(match.group(1)[:2]) if match else None
+
+
 def load_full_ladder_snapshots(
-    root: Path, *, city: str, start_date: str, end_date: str
+    root: Path,
+    *,
+    city: str,
+    start_date: str,
+    end_date: str,
+    local_hour_start: int = 8,
+    local_hour_end: int = 18,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     snapshots: list[dict[str, Any]] = []
     inventory: list[dict[str, Any]] = []
@@ -329,6 +383,9 @@ def load_full_ladder_snapshots(
         if not start_date <= day.name <= end_date:
             continue
         for path in sorted(day.glob("*.jsonl.gz")):
+            local_hour = _batch_local_hour(path)
+            if local_hour is not None and not local_hour_start <= local_hour <= local_hour_end:
+                continue
             stat = path.stat()
             inventory.append(
                 {
@@ -421,7 +478,10 @@ def aggregate_market_distribution(
     )
     if not ordered:
         return None, {"status": "missing_market_outcomes"}
-    raw = np.asarray([float(item["yes_mid"]) for item in ordered], dtype=float)
+    raw = np.asarray(
+        [float(item.get("yes_reference", item.get("yes_mid"))) for item in ordered],
+        dtype=float,
+    )
     if not np.isfinite(raw).all() or (raw < 0).any() or raw.sum() <= 0:
         return None, {"status": "invalid_market_probabilities"}
     raw /= raw.sum()
@@ -534,6 +594,150 @@ def join_market_prior(
     return output
 
 
+def join_market_decision_panel(
+    frame: pd.DataFrame,
+    snapshots: pd.DataFrame,
+    *,
+    max_source_age_minutes: int = 5,
+) -> pd.DataFrame:
+    """Use each full-ladder completion as the decision clock.
+
+    The weather state is the latest AMOS checkpoint that was available before
+    that ladder completed.  This avoids pairing an old source event with a
+    much later periodic ladder while retaining every unscorable ladder row as
+    an evidence blocker.
+    """
+
+    pieces: list[pd.DataFrame] = []
+    tolerance = pd.Timedelta(minutes=max_source_age_minutes)
+    for target_date, market_group in snapshots.groupby("target_date", sort=True):
+        weather_group = frame[frame["target_date"].eq(str(target_date))].copy()
+        market = market_group.rename(columns={"target_date": "market_target_date"})
+        if weather_group.empty:
+            market["market_join_status"] = "missing_recent_amos_state"
+            pieces.append(market)
+            continue
+        joined = pd.merge_asof(
+            market.sort_values("market_available_at_utc", kind="stable"),
+            weather_group.sort_values("source_available_at_utc", kind="stable"),
+            left_on="market_available_at_utc",
+            right_on="source_available_at_utc",
+            direction="backward",
+            tolerance=tolerance,
+        )
+        joined["market_join_status"] = np.where(
+            joined["checkpoint_id"].notna(), "joined_full_ladder_asof_amos", "missing_recent_amos_state"
+        )
+        pieces.append(joined)
+    output = pd.concat(pieces, ignore_index=True)
+    output["decision_ts_utc"] = output["market_available_at_utc"]
+    output["market_source_age_seconds"] = (
+        pd.to_datetime(output["market_available_at_utc"], utc=True)
+        - pd.to_datetime(output["source_available_at_utc"], utc=True)
+    ).dt.total_seconds()
+    output = output.sort_values(
+        ["market_target_date", "decision_ts_utc", "checkpoint_id"], kind="stable"
+    ).reset_index(drop=True)
+    valid_state = output["checkpoint_id"].notna()
+    output["is_raw_state_entry"] = False
+    output.loc[valid_state, "is_raw_state_entry"] = ~output.loc[valid_state].duplicated(
+        ["target_date", "routine_rung"], keep="first"
+    )
+    output["ten_minute_bin_utc"] = pd.to_datetime(
+        output["decision_ts_utc"], utc=True
+    ).dt.floor("10min")
+    output["is_raw_ten_minute_checkpoint"] = False
+    output.loc[valid_state, "is_raw_ten_minute_checkpoint"] = ~output.loc[
+        valid_state
+    ].duplicated(
+        ["target_date", "routine_rung", "ten_minute_bin_utc"], keep="first"
+    )
+
+    probabilities: list[np.ndarray | None] = []
+    statuses: list[str] = []
+    identities: list[str | None] = []
+    outcome_counts: list[int] = []
+    for _, row in output.iterrows():
+        if not isinstance(row.get("outcomes"), list) or finite(row.get("routine_rung")) is None:
+            probabilities.append(None)
+            statuses.append(str(row.get("market_join_status") or "missing_market_or_state"))
+            identities.append(None)
+            outcome_counts.append(0)
+            continue
+        probability, metadata = aggregate_market_distribution(
+            row["outcomes"], routine_rung=int(row["routine_rung"])
+        )
+        probabilities.append(probability)
+        statuses.append(str(metadata["status"]))
+        identities.append(metadata.get("feature_book_snapshot_id"))
+        outcome_counts.append(int(metadata.get("market_outcomes", 0)))
+    output["market_distribution"] = probabilities
+    output["market_join_status"] = statuses
+    output["feature_book_snapshot_id_distribution"] = identities
+    output["market_outcomes"] = outcome_counts
+    output["market_decision_id"] = [
+        stable_hash([checkpoint_id, snapshot_id, _json_value(decision_ts)])
+        if checkpoint_id and snapshot_id
+        else None
+        for checkpoint_id, snapshot_id, decision_ts in zip(
+            output["checkpoint_id"],
+            output["feature_book_snapshot_id_distribution"],
+            output["decision_ts_utc"],
+        )
+    ]
+    return output
+
+
+def attach_next_execution_ladder(
+    frame: pd.DataFrame,
+    snapshots: pd.DataFrame,
+    *,
+    max_lag_minutes: int = 45,
+) -> pd.DataFrame:
+    """Attach the next independently captured complete ladder for execution."""
+
+    output = frame.copy()
+    execution_available: list[pd.Timestamp | None] = []
+    execution_outcomes: list[list[dict[str, Any]] | None] = []
+    execution_ids: list[str | None] = []
+    execution_lags: list[float | None] = []
+    statuses: list[str] = []
+    for _, row in output.iterrows():
+        target_date = str(row.get("target_date") or row.get("market_target_date") or "")
+        candidates = snapshots[snapshots["target_date"].eq(target_date)].sort_values(
+            "market_available_at_utc", kind="stable"
+        )
+        decision = pd.Timestamp(row["decision_ts_utc"])
+        candidates = candidates[candidates["market_available_at_utc"].gt(decision)]
+        if candidates.empty:
+            execution_available.append(None)
+            execution_outcomes.append(None)
+            execution_ids.append(None)
+            execution_lags.append(None)
+            statuses.append("missing_next_full_ladder")
+            continue
+        selected = candidates.iloc[0]
+        lag = (pd.Timestamp(selected["market_available_at_utc"]) - decision).total_seconds()
+        if lag > max_lag_minutes * 60:
+            execution_available.append(None)
+            execution_outcomes.append(None)
+            execution_ids.append(None)
+            execution_lags.append(float(lag))
+            statuses.append("next_full_ladder_stale")
+            continue
+        execution_available.append(pd.Timestamp(selected["market_available_at_utc"]))
+        execution_outcomes.append(selected["outcomes"])
+        execution_ids.append(str(selected["base_snapshot_id"]))
+        execution_lags.append(float(lag))
+        statuses.append("executable_next_full_ladder")
+    output["execution_book_available_at_utc"] = execution_available
+    output["execution_outcomes"] = execution_outcomes
+    output["execution_book_snapshot_id"] = execution_ids
+    output["execution_lag_seconds"] = execution_lags
+    output["execution_quote_status"] = statuses
+    return output
+
+
 def geometric_market_posterior(
     market: np.ndarray,
     weather: np.ndarray,
@@ -549,6 +753,171 @@ def geometric_market_posterior(
     log_score -= log_score.max(axis=1, keepdims=True)
     output = np.exp(log_score)
     return output / output.sum(axis=1, keepdims=True)
+
+
+def calibrated_market_weather_posterior(
+    market: np.ndarray,
+    weather: np.ndarray,
+    climatology: np.ndarray,
+    *,
+    market_power: float,
+    weather_weight: float,
+) -> np.ndarray:
+    market_value = np.clip(np.asarray(market, dtype=float), 1e-8, None)
+    weather_value = np.clip(np.asarray(weather, dtype=float), 1e-8, None)
+    prior_value = np.clip(np.asarray(climatology, dtype=float), 1e-8, None)
+    log_score = float(market_power) * np.log(market_value) + float(weather_weight) * (
+        np.log(weather_value) - np.log(prior_value)[None, :]
+    )
+    log_score -= log_score.max(axis=1, keepdims=True)
+    output = np.exp(log_score)
+    return output / output.sum(axis=1, keepdims=True)
+
+
+def _weather_taker_fee(shares: float, price: float) -> float:
+    return round(shares * WEATHER_TAKER_FEE_RATE * price * (1.0 - price), 5)
+
+
+def replay_distribution_signals(
+    frame: pd.DataFrame,
+    probabilities: np.ndarray,
+    *,
+    minimum_net_edge: float = MINIMUM_NET_EDGE,
+) -> pd.DataFrame:
+    """Replay one best direct-ask expression per state entry.
+
+    Only exact ``stay/+1/+2`` classes are directly expressible as one token.
+    The lower and upper aggregate tails stay in the probability score but are
+    not silently converted into synthetic baskets.
+    """
+
+    if len(frame) != len(probabilities):
+        raise ValueError("frame/probability length mismatch")
+    candidates: list[dict[str, Any]] = []
+    for position, (_, row) in enumerate(frame.iterrows()):
+        outcomes = row.get("execution_outcomes")
+        if not isinstance(outcomes, list):
+            continue
+        by_value = {int(item["bracket_value"]): item for item in outcomes}
+        routine_rung = int(row["routine_rung"])
+        winner_value = _winner_value(row.get("winner_bracket"))
+        if winner_value is None:
+            continue
+        row_candidates: list[dict[str, Any]] = []
+        for class_index, offset in ((1, 0), (2, 1), (3, 2)):
+            bracket_value = routine_rung + offset
+            quote = by_value.get(bracket_value)
+            if quote is None:
+                continue
+            probability_yes = float(probabilities[position, class_index])
+            for side, p_win, ask_key, size_key in (
+                (
+                    "BUY_YES",
+                    probability_yes,
+                    "direct_yes_ask",
+                    "direct_yes_ask_size",
+                ),
+                (
+                    "BUY_NO",
+                    1.0 - probability_yes,
+                    "direct_no_ask",
+                    "direct_no_ask_size",
+                ),
+            ):
+                ask = finite(quote.get(ask_key))
+                visible_size = finite(quote.get(size_key))
+                if ask is None or visible_size is None or visible_size <= 0.0:
+                    continue
+                shares = min(TRADE_SHARES, visible_size)
+                fee = _weather_taker_fee(shares, ask)
+                effective_cost_per_share = ask + fee / shares
+                edge = p_win - effective_cost_per_share
+                won = winner_value == bracket_value
+                if side == "BUY_NO":
+                    won = not won
+                cost = shares * ask + fee
+                row_candidates.append(
+                    {
+                        "checkpoint_id": row["checkpoint_id"],
+                        "market_decision_id": row.get(
+                            "market_decision_id", row["checkpoint_id"]
+                        ),
+                        "target_date": row["target_date"],
+                        "decision_ts_utc": row["decision_ts_utc"],
+                        "execution_book_available_at_utc": row[
+                            "execution_book_available_at_utc"
+                        ],
+                        "feature_book_snapshot_id": row[
+                            "feature_book_snapshot_id_distribution"
+                        ],
+                        "execution_book_snapshot_id": row[
+                            "execution_book_snapshot_id"
+                        ],
+                        "condition_id": quote["condition_id"],
+                        "bracket": quote["bracket"],
+                        "bracket_value": bracket_value,
+                        "side": side,
+                        "p_win": p_win,
+                        "ask": ask,
+                        "shares": shares,
+                        "fee_usd": fee,
+                        "effective_cost_per_share": effective_cost_per_share,
+                        "edge": edge,
+                        "won": won,
+                        "cost_usd": cost,
+                        "pnl_usd": shares * float(won) - cost,
+                    }
+                )
+        if row_candidates:
+            candidates.append(max(row_candidates, key=lambda item: item["edge"]))
+    if not candidates:
+        return pd.DataFrame()
+    result = pd.DataFrame(candidates)
+    result = result[result["edge"].gt(minimum_net_edge)].copy()
+    result = result.sort_values(
+        ["target_date", "decision_ts_utc", "market_decision_id"], kind="stable"
+    ).drop_duplicates(["target_date", "condition_id"], keep="first")
+    return result.reset_index(drop=True)
+
+
+def summarize_distribution_trades(
+    trades: pd.DataFrame, *, draws: int, seed: int
+) -> dict[str, Any]:
+    if trades.empty:
+        return {
+            "signals": 0,
+            "target_dates": 0,
+            "wins": 0,
+            "by_side": {},
+            "cost_usd": 0.0,
+            "fees_usd": 0.0,
+            "pnl_usd": 0.0,
+            "roi": None,
+            "roi_ci95": None,
+        }
+    daily = trades.groupby("target_date", sort=True)[["pnl_usd", "cost_usd"]].sum()
+    values = daily.to_numpy(float)
+    rng = np.random.default_rng(seed)
+    sampled = values[rng.integers(0, len(values), size=(draws, len(values)))].sum(axis=1)
+    roi_draws = sampled[:, 0] / sampled[:, 1]
+    cost = float(trades["cost_usd"].sum())
+    pnl = float(trades["pnl_usd"].sum())
+    return {
+        "signals": int(len(trades)),
+        "target_dates": int(trades["target_date"].nunique()),
+        "wins": int(trades["won"].sum()),
+        "by_side": {
+            str(key): int(value) for key, value in trades["side"].value_counts().items()
+        },
+        "cost_usd": cost,
+        "fees_usd": float(trades["fee_usd"].sum()),
+        "pnl_usd": pnl,
+        "roi": pnl / cost,
+        "roi_ci95": [
+            float(np.quantile(roi_draws, 0.025)),
+            float(np.quantile(roi_draws, 0.975)),
+        ],
+    }
 
 
 def _score(frame: pd.DataFrame, probabilities: np.ndarray) -> dict[str, Any]:
@@ -618,6 +987,7 @@ def _json_value(value: Any) -> Any:
 
 def _write_predictions(frame: pd.DataFrame, path: Path) -> None:
     columns = [
+        "market_decision_id",
         "checkpoint_id",
         "city",
         "target_date",
@@ -638,9 +1008,29 @@ def _write_predictions(frame: pd.DataFrame, path: Path) -> None:
         "market_join_status",
         "market_available_at_utc",
         "market_tail_age_seconds",
+        "market_source_age_seconds",
         "active_overlay_conditions",
         "market_outcomes",
         "feature_book_snapshot_id_distribution",
+        "one_sided_outcomes",
+        "execution_quote_status",
+        "execution_book_available_at_utc",
+        "execution_lag_seconds",
+        "execution_book_snapshot_id",
+        "posterior_signal_selected",
+        "posterior_signal_side",
+        "posterior_signal_bracket",
+        "posterior_signal_edge",
+        "posterior_signal_cost_usd",
+        "posterior_signal_fee_usd",
+        "posterior_signal_pnl_usd",
+        "market_signal_selected",
+        "market_signal_side",
+        "market_signal_bracket",
+        "market_signal_edge",
+        "market_signal_cost_usd",
+        "market_signal_fee_usd",
+        "market_signal_pnl_usd",
         *PHYSICAL_FEATURES,
     ]
     available = [column for column in columns if column in frame]
@@ -709,14 +1099,6 @@ def run_distribution_experiment(
         winners=winners,
     )
     amos = _amos_feature_frame(checkpoint_frame)
-    amos["split"] = np.select(
-        [
-            amos["target_date"].le(config.development_end),
-            amos["target_date"].between(config.holdout_start, config.end_date),
-        ],
-        ["development", "frozen_holdout"],
-        default="outside_split",
-    )
     labeled = amos[amos["label_index"].notna()].copy()
     labeled["label_index"] = labeled["label_index"].astype(int)
     labeled["weather_distribution"] = list(_predict_aligned(physical_model, labeled))
@@ -727,22 +1109,34 @@ def run_distribution_experiment(
         start_date=config.amos_start,
         end_date=config.end_date,
     )
-    market_candidate = labeled[
-        labeled["is_raw_state_entry"] | labeled["is_raw_ten_minute_checkpoint"]
-    ].copy()
-    overlays = load_active_book_overlays(
-        checkpoint_root,
-        source_event_keys=set(market_candidate["source_event_key"].astype(str)),
-    )
-    joined = join_market_prior(
-        market_candidate,
-        market_snapshots,
-        overlays=overlays,
-        max_age_minutes=config.market_tail_max_age_minutes,
+    joined = join_market_decision_panel(
+        labeled, market_snapshots, max_source_age_minutes=5
     )
     market_scorable = joined[
         joined["market_join_status"].eq("scorable")
         & joined["market_distribution"].notna()
+    ].copy()
+    market_scorable["weather_distribution"] = list(
+        _predict_aligned(physical_model, market_scorable)
+    )
+    market_scorable["split"] = np.select(
+        [
+            market_scorable["target_date"].le(config.residual_train_end),
+            market_scorable["target_date"].between(
+                (
+                    pd.Timestamp(config.residual_train_end) + pd.Timedelta(days=1)
+                ).date().isoformat(),
+                config.development_end,
+            ),
+            market_scorable["target_date"].between(
+                config.holdout_start, config.end_date
+            ),
+        ],
+        ["residual_train", "development", "frozen_holdout"],
+        default="outside_split",
+    )
+    residual_train_market = market_scorable[
+        market_scorable["split"].eq("residual_train")
     ].copy()
     development_market = market_scorable[
         market_scorable["split"].eq("development")
@@ -750,55 +1144,82 @@ def run_distribution_experiment(
     holdout_market = market_scorable[
         market_scorable["split"].eq("frozen_holdout")
     ].copy()
-    if development_market["target_date"].nunique() < 3:
-        raise RuntimeError("market alpha development needs at least 3 dates")
+    if residual_train_market["target_date"].nunique() < 7:
+        raise RuntimeError("market residual training needs at least 7 dates")
+    if development_market["target_date"].nunique() < 4:
+        raise RuntimeError("market alpha development needs at least 4 dates")
     if holdout_market["target_date"].nunique() < 4:
         raise RuntimeError("market frozen holdout needs at least 4 dates")
 
-    development_weather = np.stack(development_market["weather_distribution"])
-    development_market_p = np.stack(development_market["market_distribution"])
-    alpha_search = []
-    state_mask = development_market["is_raw_state_entry"].to_numpy(bool)
-    if development_market.loc[state_mask, "target_date"].nunique() < 3:
-        raise RuntimeError("market alpha state-entry development needs at least 3 dates")
-    for alpha in ALPHA_GRID:
-        posterior = geometric_market_posterior(
-            development_market_p, development_weather, physical_prior, alpha
-        )
-        score = _score(development_market.loc[state_mask], posterior[state_mask])
-        alpha_search.append({"alpha": alpha, **score})
-    selected_alpha = float(
-        min(
-            alpha_search,
-            key=lambda row: (float(row["multiclass_logloss"]), float(row["alpha"])),
-        )["alpha"]
+    residual_market_p = np.stack(residual_train_market["market_distribution"])
+    residual_weather = np.stack(residual_train_market["weather_distribution"])
+    residual_mask = residual_train_market["is_raw_state_entry"].to_numpy(bool)
+    parameter_search: list[dict[str, Any]] = []
+    for beta in BETA_GRID:
+        for alpha in ALPHA_GRID:
+            posterior = calibrated_market_weather_posterior(
+                residual_market_p,
+                residual_weather,
+                physical_prior,
+                market_power=beta,
+                weather_weight=alpha,
+            )
+            score = _score(
+                residual_train_market.loc[residual_mask], posterior[residual_mask]
+            )
+            parameter_search.append({"market_power": beta, "alpha": alpha, **score})
+    selected = min(
+        parameter_search,
+        key=lambda row: (
+            float(row["multiclass_logloss"]),
+            abs(float(row["market_power"]) - 1.0),
+            float(row["alpha"]),
+        ),
     )
-    development_market["posterior_distribution"] = list(
-        geometric_market_posterior(
-            development_market_p, development_weather, physical_prior, selected_alpha
-        )
-    )
-    holdout_weather = np.stack(holdout_market["weather_distribution"])
-    holdout_market_p = np.stack(holdout_market["market_distribution"])
-    holdout_market["posterior_distribution"] = list(
-        geometric_market_posterior(
-            holdout_market_p, holdout_weather, physical_prior, selected_alpha
-        )
-    )
-    posterior_by_checkpoint = {
-        str(row["checkpoint_id"]): row["posterior_distribution"]
-        for _, row in pd.concat(
-            [development_market, holdout_market], ignore_index=True
-        ).iterrows()
+    selected_beta = float(selected["market_power"])
+    selected_alpha = float(selected["alpha"])
+    split_frames = {
+        "residual_train": residual_train_market,
+        "development": development_market,
+        "frozen_holdout": holdout_market,
     }
-    joined["posterior_distribution"] = [
-        posterior_by_checkpoint.get(str(checkpoint_id))
-        for checkpoint_id in joined["checkpoint_id"]
-    ]
+    for split_frame in split_frames.values():
+        market_value = np.stack(split_frame["market_distribution"])
+        weather_value = np.stack(split_frame["weather_distribution"])
+        split_frame["posterior_distribution"] = list(
+            calibrated_market_weather_posterior(
+                market_value,
+                weather_value,
+                physical_prior,
+                market_power=selected_beta,
+                weather_weight=selected_alpha,
+            )
+        )
+    market_scorable = pd.concat(split_frames.values(), ignore_index=True).sort_values(
+        ["target_date", "decision_ts_utc", "market_decision_id"], kind="stable"
+    )
+    market_scorable = attach_next_execution_ladder(
+        market_scorable, market_snapshots, max_lag_minutes=45
+    )
+    split_frames = {
+        split: market_scorable[market_scorable["split"].eq(split)].copy()
+        for split in ("residual_train", "development", "frozen_holdout")
+    }
+    residual_train_market = split_frames["residual_train"]
+    development_market = split_frames["development"]
+    holdout_market = split_frames["frozen_holdout"]
 
     amos_weather_scores = {}
-    for split, split_frame in labeled.groupby("split", sort=True):
-        if split not in {"development", "frozen_holdout"}:
+    for split, (start_date, end_date) in {
+        "residual_train": (config.amos_start, config.residual_train_end),
+        "development": (
+            (pd.Timestamp(config.residual_train_end) + pd.Timedelta(days=1)).date().isoformat(),
+            config.development_end,
+        ),
+        "frozen_holdout": (config.holdout_start, config.end_date),
+    }.items():
+        split_frame = labeled[labeled["target_date"].between(start_date, end_date)]
+        if split_frame.empty:
             continue
         prediction = np.stack(split_frame["weather_distribution"])
         prior = np.repeat(physical_prior[None, :], len(split_frame), axis=0)
@@ -809,30 +1230,81 @@ def run_distribution_experiment(
             seed=config.seed + (10 if split == "development" else 20),
             baseline_name="physical_climatology",
         )
-    market_scores = {
-        "development": _score_grains(
-            development_market,
-            {
-                "market": development_market_p,
-                "weather": development_weather,
-                "posterior": np.stack(development_market["posterior_distribution"]),
-            },
+    market_scores = {}
+    trade_replay = {}
+    for split_index, (split, split_frame) in enumerate(split_frames.items()):
+        market_value = np.stack(split_frame["market_distribution"])
+        weather_value = np.stack(split_frame["weather_distribution"])
+        posterior_value = np.stack(split_frame["posterior_distribution"])
+        market_scores[split] = _score_grains(
+            split_frame,
+            {"market": market_value, "weather": weather_value, "posterior": posterior_value},
             bootstrap_draws=config.bootstrap_draws,
-            seed=config.seed + 30,
+            seed=config.seed + 30 + split_index * 10,
             baseline_name="market",
-        ),
-        "frozen_holdout": _score_grains(
-            holdout_market,
-            {
-                "market": holdout_market_p,
-                "weather": holdout_weather,
-                "posterior": np.stack(holdout_market["posterior_distribution"]),
-            },
-            bootstrap_draws=config.bootstrap_draws,
-            seed=config.seed + 40,
-            baseline_name="market",
-        ),
-    }
+        )
+        state_rows = split_frame[split_frame["is_raw_state_entry"]].copy()
+        state_membership = split_frame["is_raw_state_entry"].to_numpy(bool)
+        posterior_trades = replay_distribution_signals(
+            state_rows,
+            posterior_value[state_membership],
+            minimum_net_edge=MINIMUM_NET_EDGE,
+        )
+        market_trades = replay_distribution_signals(
+            state_rows,
+            market_value[state_membership],
+            minimum_net_edge=MINIMUM_NET_EDGE,
+        )
+        trade_replay[split] = {
+            "posterior": summarize_distribution_trades(
+                posterior_trades, draws=config.bootstrap_draws, seed=config.seed + 60 + split_index
+            ),
+            "market_favorite": summarize_distribution_trades(
+                market_trades, draws=config.bootstrap_draws, seed=config.seed + 70 + split_index
+            ),
+        }
+        for prefix, trades in (("posterior", posterior_trades), ("market", market_trades)):
+            by_decision = trades.set_index("market_decision_id").to_dict("index") if not trades.empty else {}
+            for column in ("selected", "side", "bracket", "edge", "cost_usd", "fee_usd", "pnl_usd"):
+                name = f"{prefix}_signal_{column}"
+                split_frame[name] = [
+                    (True if column == "selected" else by_decision.get(str(decision_id), {}).get(column))
+                    if str(decision_id) in by_decision
+                    else (False if column == "selected" else None)
+                    for decision_id in split_frame["market_decision_id"]
+                ]
+    market_scorable = pd.concat(split_frames.values(), ignore_index=True).sort_values(
+        ["target_date", "decision_ts_utc", "market_decision_id"], kind="stable"
+    )
+    joined = joined.merge(
+        market_scorable[
+            [
+                "market_decision_id",
+                "posterior_distribution",
+                "execution_quote_status",
+                "execution_book_available_at_utc",
+                "execution_lag_seconds",
+                "execution_book_snapshot_id",
+                "split",
+                "posterior_signal_selected",
+                "posterior_signal_side",
+                "posterior_signal_bracket",
+                "posterior_signal_edge",
+                "posterior_signal_cost_usd",
+                "posterior_signal_fee_usd",
+                "posterior_signal_pnl_usd",
+                "market_signal_selected",
+                "market_signal_side",
+                "market_signal_bracket",
+                "market_signal_edge",
+                "market_signal_cost_usd",
+                "market_signal_fee_usd",
+                "market_signal_pnl_usd",
+            ]
+        ],
+        on="market_decision_id",
+        how="left",
+    )
 
     final_model = _fit_model(physical)
     parity_sample = physical.tail(min(256, len(physical)))
@@ -849,9 +1321,10 @@ def run_distribution_experiment(
         "features": list(PHYSICAL_FEATURES),
         "physical_model": final_model,
         "physical_climatology": physical_prior,
+        "selected_market_power": selected_beta,
         "selected_market_likelihood_ratio_weight": selected_alpha,
-        "market_feature_role": "coefficient_one_prior",
-        "market_feature_clock": "pre_event_full_ladder_plus_first_post_active_overlay",
+        "market_feature_role": "calibrated_complete_ladder_prior",
+        "market_feature_clock": "decision_current_complete_ladder",
         "physical_train_cutoff": str(physical["target_date"].max()),
         "historical_holdout_end": config.end_date,
         "clean_forward_boundary": (
@@ -869,33 +1342,11 @@ def run_distribution_experiment(
     parity_after = _predict_aligned(reloaded["physical_model"], parity_sample)
     parity_error = float(np.max(np.abs(parity_before - parity_after)))
 
-    output_predictions = labeled.copy()
-    output_predictions["market_distribution"] = None
-    output_predictions["posterior_distribution"] = None
-    output_predictions["market_join_status"] = "not_market_grain"
-    output_predictions["market_available_at_utc"] = pd.NaT
-    output_predictions["market_tail_age_seconds"] = np.nan
-    output_predictions["active_overlay_conditions"] = 0
-    output_predictions["market_outcomes"] = 0
-    output_predictions["feature_book_snapshot_id_distribution"] = None
-    joined_by_checkpoint = joined.set_index("checkpoint_id")
-    indexed = output_predictions.set_index("checkpoint_id")
-    for column in (
-        "market_distribution",
-        "posterior_distribution",
-        "market_join_status",
-        "market_available_at_utc",
-        "market_tail_age_seconds",
-        "active_overlay_conditions",
-        "market_outcomes",
-        "feature_book_snapshot_id_distribution",
-    ):
-        lookup = joined_by_checkpoint[column].to_dict()
-        indexed[column] = [
-            lookup.get(str(checkpoint_id), current)
-            for checkpoint_id, current in zip(indexed.index, indexed[column])
-        ]
-    output_predictions = indexed.reset_index()
+    output_predictions = joined.copy()
+    output_predictions["weather_distribution"] = [
+        value if isinstance(value, np.ndarray) else None
+        for value in output_predictions.get("weather_distribution", [None] * len(output_predictions))
+    ]
     predictions_path = output_dir / "predictions.jsonl.gz"
     _write_predictions(output_predictions, predictions_path)
 
@@ -908,14 +1359,15 @@ def run_distribution_experiment(
         "observed_at_utc": datetime.now(tz=UTC).isoformat(),
         "brief": {
             "hypothesis": (
-                "A Seoul-only long-history remaining-heat distribution transfers to "
-                "preferred-runway AMOS state and can add a strongly shrunk likelihood "
-                "ratio to a coefficient-one complete-ladder market prior."
+                "A Seoul-only long-history remaining-heat distribution plus a train-only "
+                "market-temperature calibration can improve a decision-current complete-"
+                "ladder market prior on untouched dates."
             ),
             "denominator_scope": (
                 f"Seoul IEM hourly physical states through {config.physical_holdout_end}; "
                 f"AMOS grouped first-seen checkpoints {config.amos_start}..{config.end_date}; "
-                "complete event-ladder pre-event prior with first-post active-rung overlay"
+                "each complete event ladder is the decision clock and uses the latest "
+                "strictly-prior AMOS state within five minutes"
             ),
             "classes": list(CLASSES),
             "physical_train_end": config.physical_train_end,
@@ -923,12 +1375,17 @@ def run_distribution_experiment(
                 config.physical_holdout_start,
                 config.physical_holdout_end,
             ],
-            "amos_development_window": [config.amos_start, config.development_end],
+            "market_residual_train_window": [config.amos_start, config.residual_train_end],
+            "amos_development_window": [
+                (pd.Timestamp(config.residual_train_end) + pd.Timedelta(days=1)).date().isoformat(),
+                config.development_end,
+            ],
             "amos_frozen_holdout_window": [config.holdout_start, config.end_date],
             "primary_grain": "first target_date x current routine rung state entry",
             "primary_metric": "target-date-equal multiclass logloss delta vs market",
+            "market_power_grid": list(BETA_GRID),
             "alpha_grid": list(ALPHA_GRID),
-            "multiple_testing_k": len(ALPHA_GRID),
+            "multiple_testing_k": len(BETA_GRID) * len(ALPHA_GRID),
         },
         "identity": {
             "model_id": artifact["model_id"],
@@ -944,8 +1401,8 @@ def run_distribution_experiment(
             "physical_history": "READY_NON_FIRST_SEEN_PHYSICAL_ONLY",
             "amos_four_clocks": "READY",
             "settlement_labels": "READY_THROUGH_" + max(winners),
-            "market_full_ladder": "READY_PRE_EVENT_TAIL_WITH_FIRST_POST_ACTIVE_OVERLAY",
-            "synchronized_full_post_event_ladder": "BLOCKED_NOT_CAPTURED_FOR_HISTORICAL_WINDOW",
+            "market_full_ladder": "READY_DECISION_CURRENT_COMPLETE_LADDER",
+            "execution_quote": "READY_NEXT_COMPLETE_LADDER_DIRECT_ASK_WITHIN_45M",
             "clean_frozen_forward": "BLOCKED_HISTORICAL_HOLDOUT_ONLY",
             "clean_forward_boundary": artifact["clean_forward_boundary"],
         },
@@ -967,7 +1424,12 @@ def run_distribution_experiment(
             "raw_ten_minute_checkpoints": int(
                 labeled["is_raw_ten_minute_checkpoint"].sum()
             ),
-            "expression_signals": 0,
+            "expression_signals": int(
+                sum(
+                    trade_replay[split]["posterior"]["signals"]
+                    for split in ("residual_train", "development", "frozen_holdout")
+                )
+            ),
         },
         "evidence_funnel": {
             "market_grain_rows": int(len(joined)),
@@ -981,34 +1443,60 @@ def run_distribution_experiment(
             "frozen_market_state_entries": int(
                 holdout_market["is_raw_state_entry"].sum()
             ),
+            "execution_quote_rows": int(
+                market_scorable["execution_quote_status"].eq(
+                    "executable_next_full_ladder"
+                ).sum()
+            ),
+            "execution_quote_dates": int(
+                market_scorable.loc[
+                    market_scorable["execution_quote_status"].eq(
+                        "executable_next_full_ladder"
+                    ),
+                    "target_date",
+                ].nunique()
+            ),
             "actual_fills": 0,
         },
         "market_coverage_by_status": coverage_status,
-        "market_tail_age_seconds": {
-            "p50": finite(market_scorable["market_tail_age_seconds"].quantile(0.50)),
-            "p95": finite(market_scorable["market_tail_age_seconds"].quantile(0.95)),
-            "max": finite(market_scorable["market_tail_age_seconds"].max()),
+        "market_source_age_seconds": {
+            "p50": finite(market_scorable["market_source_age_seconds"].quantile(0.50)),
+            "p95": finite(market_scorable["market_source_age_seconds"].quantile(0.95)),
+            "max": finite(market_scorable["market_source_age_seconds"].max()),
         },
-        "active_overlay_conditions": {
-            "p50": finite(market_scorable["active_overlay_conditions"].quantile(0.50)),
-            "p95": finite(market_scorable["active_overlay_conditions"].quantile(0.95)),
+        "one_sided_outcomes": {
+            "p50": finite(market_scorable["one_sided_outcomes"].quantile(0.50)),
+            "p95": finite(market_scorable["one_sided_outcomes"].quantile(0.95)),
+        },
+        "execution_quote_coverage_by_status": {
+            str(key): int(value)
+            for key, value in market_scorable["execution_quote_status"]
+            .value_counts()
+            .items()
+        },
+        "execution_lag_seconds": {
+            "p50": finite(market_scorable["execution_lag_seconds"].quantile(0.50)),
+            "p95": finite(market_scorable["execution_lag_seconds"].quantile(0.95)),
+            "max": finite(market_scorable["execution_lag_seconds"].max()),
         },
         "physical_climatology": {
             label: float(physical_prior[index]) for index, label in enumerate(CLASSES)
         },
         "physical_holdout_scores": physical_scores,
         "amos_weather_scores": amos_weather_scores,
-        "development_alpha_search": alpha_search,
+        "parameter_search": parameter_search,
+        "selected_market_power": selected_beta,
         "selected_weather_likelihood_ratio_weight": selected_alpha,
         "market_scores": market_scores,
         "expression": {
-            "status": "not_estimable",
-            "reason": (
-                "historical full ladder supplies a pre-event tail and only the active "
-                "five rungs have first-post-event asks; synchronized full-post-event "
-                "class-to-exact expression is unavailable"
-            ),
-            "signals": 0,
+            "status": "estimated_historical_replay",
+            "entry_clock": "next independently captured complete ladder after feature decision",
+            "price": "direct selected-side ask only",
+            "size": f"min({TRADE_SHARES}, direct ask size)",
+            "minimum_net_edge": MINIMUM_NET_EDGE,
+            "fee_rate": WEATHER_TAKER_FEE_RATE,
+            "fee_formula": "shares * fee_rate * price * (1-price)",
+            "by_split": trade_replay,
             "actual_fills": 0,
         },
         "artifact": {
@@ -1027,8 +1515,8 @@ def run_distribution_experiment(
             "forward": "FAIL",
             "conclusion": "inconclusive_research_artifact",
             "action": (
-                "keep Seoul coverage-only; accumulate synchronized full-post-event "
-                "ladder and at least 30 new settled clean-forward dates"
+                "keep Seoul coverage-only; the expanded same-clock historical replay "
+                "must beat market on all frozen proper scores before shadow"
             ),
         },
     }
@@ -1056,11 +1544,17 @@ def run_distribution_experiment(
 
 __all__ = [
     "ALPHA_GRID",
+    "BETA_GRID",
     "CLASSES",
     "DistributionExperimentConfig",
     "PHYSICAL_FEATURES",
     "aggregate_market_distribution",
+    "attach_next_execution_ladder",
+    "calibrated_market_weather_posterior",
     "geometric_market_posterior",
+    "join_market_decision_panel",
     "remaining_heat_class",
+    "replay_distribution_signals",
     "run_distribution_experiment",
+    "summarize_distribution_trades",
 ]

@@ -69,6 +69,7 @@ def main() -> None:
     parser.add_argument("--physical-train-end", default="2026-07-07")
     parser.add_argument("--physical-holdout-start", default="2026-07-08")
     parser.add_argument("--physical-holdout-end", default="2026-07-21")
+    parser.add_argument("--residual-train-end", default="2026-08-01")
     parser.add_argument("--start-date", required=True)
     parser.add_argument("--development-end", required=True)
     parser.add_argument("--holdout-start", required=True)
@@ -106,6 +107,7 @@ def main() -> None:
                 physical_holdout_start=args.physical_holdout_start,
                 physical_holdout_end=args.physical_holdout_end,
                 amos_start=args.start_date,
+                residual_train_end=args.residual_train_end,
                 development_end=args.development_end,
                 holdout_start=args.holdout_start,
                 end_date=args.end_date,

@@ -11,7 +11,9 @@ from weather_model_evaluation.korea_city_exact_no import (
 from weather_model_evaluation.korea_city_distribution import (
     _snapshot_distribution,
     aggregate_market_distribution,
+    calibrated_market_weather_posterior,
     geometric_market_posterior,
+    replay_distribution_signals,
     remaining_heat_class,
 )
 
@@ -187,6 +189,27 @@ def test_snapshot_distribution_retains_upper_tail_outcome() -> None:
     )
 
 
+def test_snapshot_distribution_keeps_one_sided_ladder_reference() -> None:
+    rows = []
+    for value, yes_ask in zip(range(30, 35), [0.05, 0.15, 0.45, 0.25, 0.10]):
+        rows.append(
+            {
+                "event_date": "2026-08-01",
+                "event_slug": "seoul",
+                "condition_id": f"c{value}",
+                "bracket": str(value),
+                "outcome": "yes",
+                "status": "ok",
+                "fetched_at_utc": "2026-08-01T01:00:00Z",
+                "summary": {"best_ask": yes_ask, "ask_size": 5.0},
+            }
+        )
+    snapshot = _snapshot_distribution(rows)
+    assert snapshot is not None
+    assert snapshot["one_sided_outcomes"] == 5
+    assert np.isclose(sum(row["normalized_yes_p"] for row in snapshot["outcomes"]), 1.0)
+
+
 def test_geometric_market_posterior_has_market_endpoint() -> None:
     market = np.asarray([[0.1, 0.2, 0.3, 0.25, 0.15]])
     weather = np.asarray([[0.2, 0.1, 0.2, 0.2, 0.3]])
@@ -199,3 +222,57 @@ def test_geometric_market_posterior_has_market_endpoint() -> None:
     )
     assert np.all(posterior > 0)
     assert np.allclose(posterior.sum(axis=1), 1.0)
+
+
+def test_calibrated_market_weather_posterior_has_raw_market_endpoint() -> None:
+    market = np.asarray([[0.1, 0.2, 0.3, 0.25, 0.15]])
+    weather = np.asarray([[0.2, 0.1, 0.2, 0.2, 0.3]])
+    climatology = np.full(5, 0.2)
+    assert np.allclose(
+        calibrated_market_weather_posterior(
+            market,
+            weather,
+            climatology,
+            market_power=1.0,
+            weather_weight=0.0,
+        ),
+        market,
+    )
+
+
+def test_distribution_signal_replay_uses_direct_ask_and_fee() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "checkpoint_id": "c",
+                "market_decision_id": "m",
+                "target_date": "2026-08-01",
+                "decision_ts_utc": pd.Timestamp("2026-08-01T01:00:00Z"),
+                "execution_book_available_at_utc": pd.Timestamp("2026-08-01T01:05:00Z"),
+                "feature_book_snapshot_id_distribution": "feature",
+                "execution_book_snapshot_id": "execution",
+                "routine_rung": 30,
+                "winner_bracket": "31",
+                "execution_outcomes": [
+                    {
+                        "condition_id": f"condition-{value}",
+                        "bracket": str(value),
+                        "bracket_value": value,
+                        "direct_yes_ask": 0.20 if value == 31 else 0.90,
+                        "direct_yes_ask_size": 10.0,
+                        "direct_no_ask": 0.85,
+                        "direct_no_ask_size": 10.0,
+                    }
+                    for value in (30, 31, 32)
+                ],
+            }
+        ]
+    )
+    trades = replay_distribution_signals(
+        frame, np.asarray([[0.01, 0.10, 0.80, 0.08, 0.01]])
+    )
+    assert len(trades) == 1
+    assert trades.iloc[0]["side"] == "BUY_YES"
+    assert trades.iloc[0]["bracket"] == "31"
+    assert trades.iloc[0]["won"]
+    assert trades.iloc[0]["fee_usd"] > 0.0
