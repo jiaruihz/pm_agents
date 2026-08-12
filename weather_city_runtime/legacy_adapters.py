@@ -180,7 +180,10 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
             lineage.get("market_feature_clock") or "decision_current"
         ),
         feature_book_snapshot_id=str(
-            lineage.get("book_snapshot_id") or market.get("book_snapshot_id") or ""
+            lineage.get("feature_book_snapshot_id")
+            or lineage.get("book_snapshot_id")
+            or market.get("book_snapshot_id")
+            or ""
         )
         or None,
         metadata={
@@ -200,7 +203,9 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
     market_outcome = str(market.get("outcome") or "").upper()
     token_id = raw_token_id if market_outcome == str(score.market_side).upper() else None
     book_snapshot_id = (
-        lineage.get("book_snapshot_id") or market.get("book_snapshot_id")
+        lineage.get("execution_book_snapshot_id")
+        or lineage.get("book_snapshot_id")
+        or market.get("book_snapshot_id")
     )
     blocker = score.not_scorable_reason
     if blocker:

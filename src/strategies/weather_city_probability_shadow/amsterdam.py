@@ -732,10 +732,20 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 if market_offset_mode
                 else "knmi_first_seen_ladder_t0"
             ),
+            "market_feature_role": (
+                "prior_offset" if market_offset_mode else "joint_feature"
+            ),
+            "feature_book_snapshot_id": (
+                prior_quote.get("book_snapshot_id")
+                if market_offset_mode
+                else quote.get("book_snapshot_id")
+            ),
             "market_prior_book_snapshot_id": (
                 prior_quote.get("book_snapshot_id") if market_offset_mode else None
             ),
             "market_execution_clock": "knmi_first_seen_ladder_t0",
+            "execution_book_snapshot_id": quote.get("book_snapshot_id"),
+            "source_first_seen_at_utc": decision.isoformat(),
             "source_journal": profile["source_journal"],
             "source_line": source_line,
             "source_event_id": source["information_event_id"],
@@ -756,11 +766,18 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 raise ValueError(f"unsupported Amsterdam expression side: {side}")
             is_no = normalized_side == "NO"
             if market_offset_mode:
-                market_probability = (
+                market_feature_probability = (
                     prior_quote["mid"] if is_no else prior_quote["yes_mid"]
                 )
             else:
-                market_probability = quote["mid"] if is_no else quote["yes_mid"]
+                market_feature_probability = (
+                    quote["mid"] if is_no else quote["yes_mid"]
+                )
+            # Probability scoring and execution must use the same first-seen t0
+            # book.  A market-offset profile may consume an earlier book as a
+            # feature prior, but that prior is not the contemporaneous market
+            # baseline and must never be exported as such.
+            market_probability = quote["mid"] if is_no else quote["yes_mid"]
             market_entry = quote["best_ask"] if is_no else quote["yes_ask"]
             p_leave = probabilities[
                 "p_cross_survives" if cross_survival_mode else "p_break_eod"
@@ -791,7 +808,9 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                     "mid": market_probability,
                     "snapshot_path": quote.get("snapshot_path"),
                     "scheduled_offset_seconds": quote.get("scheduled_offset_seconds"),
-                    "prior_mid": market_probability,
+                    "prior_mid": market_feature_probability,
+                    "market_feature_probability": market_feature_probability,
+                    "market_execution_probability": market_probability,
                     "prior_snapshot_path": (
                         prior_quote.get("snapshot_path")
                         if market_offset_mode

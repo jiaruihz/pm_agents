@@ -117,6 +117,7 @@
       "expression_sides": ["YES", "NO"],
       "material_state_change_only": true,
       "edge_threshold": 0.02,
+      "min_model_probability": 0.55,
       "selection_shares": 5.0,
       "position_scope": "city_date_bracket_model",
       "emit_paper_intents": true,

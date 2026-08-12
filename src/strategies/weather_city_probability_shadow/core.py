@@ -591,6 +591,11 @@ class ShadowRuntime:
                     else None
                 )
                 edge_threshold = float(profile.get("edge_threshold", 0.0))
+                min_model_probability = profile.get("min_model_probability")
+                if min_model_probability is not None:
+                    min_model_probability = float(min_model_probability)
+                    if not 0.0 <= min_model_probability <= 1.0:
+                        raise ValueError("min_model_probability must be in [0, 1]")
                 edge = (
                     score.model_probability - effective_cost
                     if score.evaluation_status == "scored"
@@ -621,6 +626,10 @@ class ShadowRuntime:
                 would_enter = (
                     net_entry_edge is not None
                     and net_entry_edge > edge_threshold
+                    and (
+                        min_model_probability is None
+                        or score.model_probability >= min_model_probability
+                    )
                 )
                 row = {
                     **self._contract_fields("evaluation"),
@@ -641,6 +650,7 @@ class ShadowRuntime:
                     "execution_uncertainty_reserve": execution_uncertainty_reserve,
                     "net_entry_edge": net_entry_edge,
                     "edge_threshold": edge_threshold,
+                    "min_model_probability": min_model_probability,
                     "would_enter": would_enter,
                 }
                 if not self.authoritative_decision_output:

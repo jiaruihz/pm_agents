@@ -73,6 +73,7 @@ def test_amsterdam_production_profile_uses_notification_journal() -> None:
     )
     assert offset["position_scope"] == "city_date_bracket_model"
     assert offset["selection_shares"] == 5.0
+    assert offset["min_model_probability"] == 0.55
     assert offset["pre_event_reference_journal"].endswith(
         "/knmi_first_seen_ladder_v1/pre_event_references.jsonl"
     )

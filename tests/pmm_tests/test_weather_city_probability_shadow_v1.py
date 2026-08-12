@@ -191,3 +191,31 @@ def test_profile_threshold_and_bracket_scope_allow_only_one_side(tmp_path):
     assert all(row["edge_threshold"] == .05 and row["would_enter"] for row in rows)
     intent = json.loads((tmp_path / "paper_intents.jsonl").read_text().splitlines()[0])
     assert intent["position_key"] == "Tokyo|2026-08-01|34|v6"
+
+
+def test_profile_minimum_model_probability_is_part_of_selection_contract(tmp_path):
+    class PositiveEdgeLowConfidence:
+        def score(self, profile, now):
+            return [CityScore(
+                city="Amsterdam", target_date="2026-08-12",
+                decision_ts_utc=now.isoformat(), source_obs_ts_utc=now.isoformat(),
+                current_bracket=20, market_side="NO", market_probability=.40,
+                market_entry_price=.40, model_probability=.54, model_id="v3",
+                feature_coverage=1.0, missing_features=[], features={},
+                market={}, lineage={},
+            )]
+
+    config = _config(tmp_path, [{
+        "adapter": "low-confidence", "city": "Amsterdam",
+        "edge_threshold": .02, "min_model_probability": .55,
+    }])
+    summary = ShadowRuntime(
+        config, {"low-confidence": PositiveEdgeLowConfidence()}
+    ).run_once(datetime(2026, 8, 12, 12, tzinfo=timezone.utc))
+
+    assert summary["new_evaluations"] == 1
+    assert summary["new_paper_intents"] == 0
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["edge_after_fee"] > .02
+    assert row["min_model_probability"] == .55
+    assert row["would_enter"] is False

@@ -463,6 +463,9 @@ def test_amsterdam_market_offset_uses_direct_no_mid_and_weather_correction(
 
     assert set(by_side) == {"YES", "NO"}
     assert by_side["NO"].features["p_market_prior"] == 0.41
+    assert by_side["NO"].market_probability == 0.41
+    assert by_side["NO"].market["market_feature_probability"] == 0.41
+    assert by_side["NO"].market["market_execution_probability"] == 0.41
     assert by_side["NO"].features["p_weather_eod"] == 0.70
     assert 0.41 < by_side["NO"].model_probability < 0.70
     assert by_side["YES"].model_probability == 1.0 - by_side["NO"].model_probability
@@ -476,3 +479,138 @@ def test_amsterdam_market_offset_uses_direct_no_mid_and_weather_correction(
     assert by_side["YES"].market["raw"]["asks"] == [
         {"price": 0.60, "size": 5.0}
     ]
+
+
+def test_amsterdam_market_offset_keeps_pre_event_prior_separate_from_t0_market(
+    tmp_path, monkeypatch
+):
+    """The model feature book must not become the same-row market baseline."""
+
+    source = {
+        "information_event_id": "offset-clock-event",
+        "observation_time_utc": "2026-08-12T12:10:00+00:00",
+        "source_first_seen_at_utc": "2026-08-12T12:11:00+00:00",
+    }
+    frame = pd.DataFrame([
+        {
+            "target_date": "2026-08-12",
+            "observed_at_utc": source["observation_time_utc"],
+            "ta_c": 20.2,
+            "tx_c": 20.3,
+        }
+    ])
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._source_frame",
+        lambda profile, target_date, decision: (frame, source, 1),
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._official_as_of",
+        lambda profile, target_date, decision, source_obs: (
+            {"physical_path": "official.jsonl", "physical_line": 1},
+            {
+                "running_max_c": 20.4,
+                "current_temp_c": 20.0,
+                "minutes_since_running_max": 20,
+                "last_obs_utc": "2026-08-12T11:55:00+00:00",
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._market_quote",
+        lambda *args, **kwargs: {
+            "condition_id": "condition-20",
+            "market_id": "market-20",
+            "no_token_id": "no-token-20",
+            "yes_token_id": "yes-token-20",
+            "book_snapshot_id": "t0-book",
+            "best_bid": 0.50,
+            "best_ask": 0.52,
+            "mid": 0.51,
+            "yes_bid": 0.48,
+            "yes_ask": 0.50,
+            "yes_mid": 0.49,
+            "no_asks": [{"price": 0.52, "size": 5.0}],
+            "yes_asks": [{"price": 0.50, "size": 5.0}],
+            "resolved_bracket": 20,
+            "bracket_anchor": "exact",
+            "snapshot_path": "t0.json",
+        },
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._pre_event_market_quote",
+        lambda *args, **kwargs: {
+            "book_snapshot_id": "pre-book",
+            "resolved_bracket": 20,
+            "bracket_anchor": "exact",
+            "mid": 0.41,
+            "yes_mid": 0.59,
+            "snapshot_path": "pre.json",
+        },
+    )
+    base_artifact = {
+        "schema_version": "amsterdam_knmi_remaining_heat_model_v9",
+        "model_id": "base-weather",
+        "features": ["ta_c", "tx_c"],
+        "estimator": _BinaryModel(0.70),
+        "calibrator": None,
+    }
+    offset_artifact = {
+        "schema_version": "fixed_market_logit_offset_v1",
+        "model_id": "amsterdam-offset",
+        "base_weather_model_id": "base-weather",
+        "base_weather_artifact_sha256": "base-sha",
+        "feature_columns": ["weather_market_logit_disagreement"],
+        "market_probability_column": "market_p",
+        "intercept": 0.0,
+        "coefficients": [0.5],
+        "medians": {"weather_market_logit_disagreement": 0.0},
+        "means": {"weather_market_logit_disagreement": 0.0},
+        "scales": {"weather_market_logit_disagreement": 1.0},
+    }
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam.joblib.load",
+        lambda path: base_artifact if str(path).endswith("base.pkl") else offset_artifact,
+    )
+    profile = {
+        "profile_id": "amsterdam-offset-clock-parity",
+        "forward_start_utc": "2026-08-12T07:45:13+00:00",
+        "source_journal": str(tmp_path / "source"),
+        "observation_journal_dir": str(tmp_path / "official"),
+        "ladder_snapshot_dir": str(tmp_path / "ladder"),
+        "pre_event_reference_journal": str(tmp_path / "pre.jsonl"),
+        "forecast_previous_day1_dir": str(tmp_path / "forecast"),
+        "max_source_age_seconds": 900,
+        "allowed_source_minutes": [10, 40],
+        "allowed_local_hours": [10, 16],
+        "expression_sides": ["YES", "NO"],
+        "artifacts": {
+            "weather": {"path": str(tmp_path / "offset.pkl"), "sha256": "offset-sha"},
+            "base_weather": {"path": str(tmp_path / "base.pkl"), "sha256": "base-sha"},
+        },
+    }
+
+    scores = AmsterdamKnmiRemainingHeatV7Adapter().score(
+        profile, datetime(2026, 8, 12, 12, 12, tzinfo=timezone.utc)
+    )
+    by_side = {score.market_side: score for score in scores}
+    assert by_side["NO"].features["p_market_prior"] == 0.41
+    assert by_side["NO"].market_probability == 0.51
+    assert by_side["NO"].market["market_feature_probability"] == 0.41
+    assert by_side["NO"].market["market_execution_probability"] == 0.51
+    assert by_side["YES"].market_probability == 0.49
+    assert by_side["YES"].market["market_feature_probability"] == 0.59
+
+    evaluation = {
+        **asdict(by_side["NO"]),
+        "schema_version": AUTHORITATIVE_OUTPUT_SCHEMA_VERSION,
+        "record_kind": "evaluation",
+        "evaluation_id": "offset-clock-evaluation",
+        "would_enter": False,
+        "effective_cost_per_share": 0.53,
+        "edge_after_fee": 0.01,
+        "edge_threshold": 0.02,
+    }
+    bundle = legacy_bundle_from_evaluation(evaluation)
+    assert bundle.model_output.market_feature_role == "prior_offset"
+    assert bundle.model_output.feature_book_snapshot_id == "pre-book"
+    assert bundle.signal_candidate.execution_book_snapshot_id == "t0-book"
