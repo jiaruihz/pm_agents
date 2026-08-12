@@ -21,13 +21,6 @@ from scripts.analysis.market_structure_edge import (
 )
 
 
-DEFAULT_OUT = (
-    ROOT
-    / "docs/analysis/2026-07/generated"
-    / "tokyo_checkpoint_first_bracket_v4"
-)
-
-
 def main(argv: list[str] | None = None) -> int:
     supplied = list(argv if argv is not None else sys.argv[1:])
     return v3.main(
@@ -38,8 +31,6 @@ def main(argv: list[str] | None = None) -> int:
             "tokyo_checkpoint_first_bracket_v4",
             "--strategy-evaluation-status",
             "post_forward_user_corrected_selector_diagnostic",
-            "--out",
-            str(DEFAULT_OUT),
             *supplied,
         ]
     )

@@ -1,5 +1,10 @@
 # Tokyo 每 10 分钟更新、每档首次建仓 v4
 
+Artifact routing: new replays require a stable `--run-id` (or an explicit
+temporary `--out`) and write immutable machine output beneath the configured
+JRS research artifact root. The wrapper no longer injects a dated repository
+output directory.
+
 > 2026-07-31 更新：v4 保留为 expression negative control。它虽然修正了“每档
 > 第一次”，但仍把 binary “还会升温”概率表达成 current/next exact。第一版已由
 > [Tokyo current-bracket stay/break binary v5](2026-07-31-tokyo-current-break-binary-v5.md)

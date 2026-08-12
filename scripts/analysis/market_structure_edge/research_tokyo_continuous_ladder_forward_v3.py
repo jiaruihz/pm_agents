@@ -42,6 +42,10 @@ from scripts.analysis.market_structure_edge.research_tokyo_jma_multivariate_path
     date_weights,
     write_rows,
 )
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
 FORWARD_START = "2026-07-16"
@@ -88,11 +92,7 @@ FROZEN_TEMPERATURES = {
     "coherent_multigrain_hgb_v3": 0.90,
     "coherent_multigrain_hgb_v3__episode_state": 0.90,
 }
-DEFAULT_OUT = (
-    ROOT
-    / "docs/analysis/2026-07/generated"
-    / "tokyo_continuous_ladder_forward_v3"
-)
+ARTIFACT_FAMILY = "tokyo_continuous_ladder_forward_v3"
 EPS = 1e-8
 EPISODE_STATE_FEATURES = (
     "jma_episode_peak_c",
@@ -2498,7 +2498,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--raw-books", type=Path, default=v1.RAW_BOOKS)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--run-id")
+    parser.add_argument("--out", type=Path)
     parser.add_argument(
         "--selection-policy",
         choices=(
@@ -2553,7 +2554,13 @@ def main(argv: list[str] | None = None) -> int:
         default=10.0,
     )
     args = parser.parse_args(argv)
-    args.out.mkdir(parents=True, exist_ok=True)
+    args.out = prepare_new_run_output(
+        resolve_run_output(
+            ARTIFACT_FAMILY,
+            run_id=args.run_id,
+            explicit_output=args.out,
+        )
+    )
     if args.frozen_full_probability_forward_expressions is not None:
         required = {
             "--frozen-forward-db": args.frozen_forward_db,
