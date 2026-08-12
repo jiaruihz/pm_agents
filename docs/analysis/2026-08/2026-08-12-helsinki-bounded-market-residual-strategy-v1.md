@@ -115,6 +115,26 @@ Evidence funnel（盘口和标签覆盖）：
 
 所以当前可以继续做生产级 zero-notional shadow 和 live execution wiring 的准备，但**不能切正式盈利实盘**。晋级前至少要让冻结 artifact 在新日期上形成足够的已结算、可执行表达，重新通过同 rows market proper-score、fee-adjusted ROI block-bootstrap 与真实执行价存活三项；现有 family 口径继续以至少30个新 settled target dates 为评审窗，期间不调 `c=0.15`、不追加价格/小时/坏案例阈值。
 
+## 模型稳健性、过拟合与校准审计
+
+本轮不以8月9笔ROI选模型。天气层固定比较2025 expanding OOF `51,451 checkpoints/365 dates`与冻结2026 rich-contract audit `29,604/210`；盘口层在7/20–29的`362 checkpoints/9 dates`上做8种训练/验证互换，并把8/2–11仅作已看过的外部压力测试。
+
+天气基座的结论是“有真实预测能力，但不同信息状态不能混着校准”：
+
+- 2025全OOF Brier/logloss/AUC为`0.04937/0.16654/0.98454`。冻结2026 no-forecast parity arm为`0.08277/0.28370/0.95610`；该arm故意把forecast字段保持缺失，只能检验rich FMI physical fallback，不能冒充完整live forecast路径。
+- 2026条件准确率并不均匀：`14–18`当地时间accuracy/Brier为`82.54%/0.12107`，plateau为`75.89%/0.14021`；fade为`92.14%/0.07092`。这确认主要完善对象是peak transition/plateau与下午剩余热量，不是晚间大量简单no-break rows。
+- 概率不是全局过度自信，而是呈压缩型S形：预测`10–20%`的rows实际发生率约`4.0%`，预测`70–80%`的rows实际约`83.0%`。2026中`>=95%/<=5%`仍有19个高置信错误rows、5个日期；`>=99%/<=1%`为0错，但2025同档有57错/6日，不能把99%当绝对确定。
+- 8种2025时间切分中，Platt calibration只在Brier `3/8`、logloss `4/8`胜raw；slope范围`1.118–1.304`。更重要的是，必须用matching no-forecast rows训练校准：该干净calibrator应用到2026反而把Brier/logloss变为`0.08586/0.28871`，delta CI跨0。因此不部署校准wrapper。此前把forecast-available与missing rows混训会得到虚假的显著改善，已从结论中剔除。
+
+盘口residual层存在更明显的小样本不稳定：
+
+- 9种日期互换里，训练折选出的cap分别为`0.05×2、0.10×1、0.50×4、1.50×2`，没有稳定落在当前`0.15`；当前`c=0.15`只在`5/9` validation splits胜market。
+- 固定cap的重复验证均值/minimax会选`c=1.0`，但这个更激进版本在未参与选择的8月回放为24笔10胜、ROI `-1.73%`；说明不能用开发折分数直接扩大天气修正。
+- 更复杂的`c015 + Platt market calibration`在开发日期互换中`8/9`胜raw和market，看似很强；但8月回放扩大到27笔23胜仍亏`-$5.32`、ROI `-4.42%`。原因是它把大量接近结算价的高成本赢家加入分母，胜率高却没有正EV，这是明确的过拟合反例。
+- 当前`c=0.15`在同一8月压力测试仍为9笔6胜、ROI `+30.31%`；但它的cap本身不稳定、proper-score与ROI CI跨0，所以保留incumbent只代表“小修正比复杂重训更稳”，不代表已证明盈利。
+
+因此本轮没有替换shadow artifact。下一版模型只沿两个结构方向推进：天气基座按`forecast availability × peak clock/path transition`分头校准，盘口residual使用更多新settled日期学习强收缩的连续修正；不按价格、小时或8/11坏例增加hard gate。目标顺序保持：先让冻结5-share taker在forward同分母为正，再用真实maker fill/queue/adverse-selection放大收益。
+
 ## 执行证据
 
 - OOF artifact：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_first_principles_v6/oof_model/`
@@ -124,4 +144,5 @@ Evidence funnel（盘口和标签覆盖）：
 - rich feature parity：`docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v1/runtime_feature_parity_v1.json`
 - rich-contract replay：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_rich_contract_replay_v1/`
 - live-readiness/case timeline：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_live_readiness_case_audit_v1/evaluation/`
+- model robustness：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_model_robustness_v1/`
 - production loaded identity：FMI `65fc4d8f933f…`、city runtime `ddecbbd6a26a…`、forecast `03691ebb3657…`、Helsinki ladder `f64728197135…`；post-deploy manifest exit `0`、controller `HEALTHY`、0 order。

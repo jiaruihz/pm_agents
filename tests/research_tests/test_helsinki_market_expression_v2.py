@@ -10,6 +10,11 @@ from scripts.analysis.reheat_risk.evaluate_helsinki_market_expression_strategy i
     sweep_asks,
     sweep_bids,
 )
+from scripts.analysis.reheat_risk.evaluate_helsinki_runtime_feature_parity import (
+    _apply_platt,
+    _fit_platt,
+    _retrospective_cap_trades,
+)
 
 
 def _rows() -> pd.DataFrame:
@@ -146,3 +151,42 @@ def test_trade_timeline_stops_inventing_probability_after_bracket_transition() -
     ]
     assert pd.isna(timeline.iloc[-1]["held_model_probability"])
     assert cases.iloc[0]["minutes_to_official_bracket_transition"] == pytest.approx(20)
+
+
+def test_platt_calibration_is_fit_with_target_date_equal_weight() -> None:
+    frame = pd.DataFrame(
+        {
+            "target_date": ["a", "a", "a", "b"],
+            "probability": [0.2, 0.2, 0.2, 0.8],
+            "label": [0, 0, 0, 1],
+        }
+    )
+    calibration = _fit_platt(frame)
+    calibrated = _apply_platt(frame.probability, calibration)
+    assert calibration["slope"] > 1
+    assert calibrated[:3].mean() < 0.2
+    assert calibrated[3] > 0.8
+
+
+def test_retrospective_cap_router_chooses_first_positive_side_per_date_bracket() -> None:
+    opportunities = pd.DataFrame(
+        {
+            "target_date": ["2026-08-01"] * 4,
+            "bracket": [20] * 4,
+            "decision_ts_utc": ["2026-08-01T08:00:00Z"] * 2
+            + ["2026-08-01T08:10:00Z"] * 2,
+            "side": ["no", "yes", "no", "yes"],
+            "market_probability": [0.5, 0.5, 0.5, 0.5],
+            "weather_no_probability": [0.9] * 4,
+            "effective_cost": [0.51, 0.51, 0.52, 0.52],
+            "cash_cost": [2.55, 2.55, 2.60, 2.60],
+        }
+    )
+    labels = pd.DataFrame(
+        {"target_date": ["2026-08-01"], "bracket": [20], "y_no": [1]}
+    )
+    trades = _retrospective_cap_trades(opportunities, labels, 0.15)
+    assert len(trades) == 1
+    assert trades.iloc[0].side == "no"
+    assert trades.iloc[0].decision_ts_utc == "2026-08-01T08:00:00Z"
+    assert bool(trades.iloc[0].won)
