@@ -17,7 +17,7 @@ production_releases:
     checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
     expected_repo_sha: 03691ebb36579f8a604936af19924c5123022439
   - release_id: market_books
-    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
+    checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v3_prod
     expected_repo_sha: 269c1072fe0c5a464d6ec681db4805a1815dca2d
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/projects/pm_agents_dispute_repricing_prod
