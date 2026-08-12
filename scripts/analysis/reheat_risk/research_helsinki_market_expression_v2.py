@@ -5,12 +5,13 @@ The incumbent artifact is never overwritten.  Every challenger uses expanding
 prior-target-date training and the same 2026-07-20..29 OOF market rows.  The
 clean forward beginning 2026-07-31 is deliberately not read.
 
-Challenger set (K=7, no multiple-testing adjustment):
+Challenger set (exploratory family, no multiple-testing adjustment):
 
 * balanced compact fixed-offset logistic ridge path (4/16/64) and full r4;
 * compact active-clock interaction model with stronger ridge shrinkage;
 * coherent four-class delta-max market-offset model;
 * shallow HGB nonlinear benchmark.
+* monotone bounded weather-vs-market residual and fitted reliability curves.
 
 Training objective gives checkpoint, state-entry and date-X-entry grains one
 third each, with target dates equal inside each grain.  Candidate selection is
@@ -20,6 +21,7 @@ rows; trade ROI is never used to select the probability model.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -30,6 +32,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
+from scipy.optimize import minimize_scalar
 from scipy.special import expit, softmax
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
@@ -41,9 +44,12 @@ sys.path.insert(0, str(ROOT))
 from scripts.analysis.reheat_risk import (  # noqa: E402
     research_helsinki_market_offset_residual_v1 as base,
 )
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
-OUTPUT = ROOT / "docs/analysis/2026-07/generated/helsinki_market_expression_v2"
 INCUMBENT_DIR = ROOT / "docs/analysis/2026-07/generated/helsinki_market_offset_residual_v1"
 INCUMBENT_ARTIFACT = INCUMBENT_DIR / "helsinki_market_offset_fade_v1.joblib"
 SEED = 20260731
@@ -77,6 +83,62 @@ CLOCK_FEATURES = COMPACT_FEATURES + (
 )
 
 CANDIDATES = {
+    "p_reliability_tanh_s010": {
+        "kind": "fitted_weather_reliability",
+        "gap_scale": 0.10,
+    },
+    "p_reliability_tanh_s025": {
+        "kind": "fitted_weather_reliability",
+        "gap_scale": 0.25,
+    },
+    "p_reliability_tanh_s050": {
+        "kind": "fitted_weather_reliability",
+        "gap_scale": 0.50,
+    },
+    "p_reliability_tanh_s100": {
+        "kind": "fitted_weather_reliability",
+        "gap_scale": 1.00,
+    },
+    "p_bounded_weather_market_c025": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.25,
+    },
+    "p_bounded_weather_market_c005": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.05,
+    },
+    "p_bounded_weather_market_c0075": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.075,
+    },
+    "p_bounded_weather_market_c010": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.10,
+    },
+    "p_bounded_weather_market_c015": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.15,
+    },
+    "p_bounded_weather_market_c020": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.20,
+    },
+    "p_bounded_weather_market_c050": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 0.50,
+    },
+    "p_bounded_weather_market_c100": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 1.00,
+    },
+    "p_bounded_weather_market_c150": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 1.50,
+    },
+    "p_bounded_weather_market_c200": {
+        "kind": "bounded_weather_market_residual",
+        "logit_cap": 2.00,
+    },
     "p_balanced_compact_r4": {
         "kind": "binary_offset",
         "features": COMPACT_FEATURES,
@@ -333,6 +395,29 @@ def predict_hgb(artifact: dict[str, Any], rows: pd.DataFrame) -> np.ndarray:
 def fit_candidate(
     unique_train: pd.DataFrame, definition: dict[str, Any]
 ) -> dict[str, Any]:
+    if definition["kind"] == "fitted_weather_reliability":
+        stacked = balanced_training_rows(unique_train)
+        scale = float(definition["gap_scale"])
+        offset = stacked["market_logit"].to_numpy(float)
+        correction = scale * np.tanh(
+            stacked["weather_market_logit_gap"].to_numpy(float) / scale
+        )
+        y = stacked["y_break"].to_numpy(float)
+        weights = stacked["objective_weight"].to_numpy(float)
+
+        def objective(alpha: float) -> float:
+            probability = np.clip(expit(offset + alpha * correction), EPS, 1 - EPS)
+            return float(np.average(
+                -y * np.log(probability) - (1 - y) * np.log(1 - probability),
+                weights=weights,
+            ))
+
+        fitted = minimize_scalar(objective, bounds=(0.0, 1.0), method="bounded")
+        if not fitted.success:
+            raise RuntimeError(f"weather reliability fit failed: {fitted.message}")
+        return {**definition, "weather_reliability": float(fitted.x)}
+    if definition["kind"] == "bounded_weather_market_residual":
+        return dict(definition)
     if definition["kind"] == "binary_offset":
         return fit_binary_offset(
             unique_train, definition["features"], definition["ridge"]
@@ -349,6 +434,24 @@ def fit_candidate(
 def predict_candidate(
     artifact: dict[str, Any], rows: pd.DataFrame
 ) -> tuple[np.ndarray, np.ndarray | None]:
+    if artifact["kind"] == "fitted_weather_reliability":
+        scale = float(artifact["gap_scale"])
+        correction = scale * np.tanh(
+            rows["weather_market_logit_gap"].to_numpy(float) / scale
+        )
+        probability = expit(
+            rows["market_logit"].to_numpy(float)
+            + float(artifact["weather_reliability"]) * correction
+        )
+        return probability, None
+    if artifact["kind"] == "bounded_weather_market_residual":
+        cap = float(artifact["logit_cap"])
+        market = np.clip(rows["market_probability"].to_numpy(float), EPS, 1 - EPS)
+        weather = np.clip(rows["p_break_v7"].to_numpy(float), EPS, 1 - EPS)
+        market_logit = np.log(market / (1 - market))
+        weather_logit = np.log(weather / (1 - weather))
+        correction = cap * np.tanh((weather_logit - market_logit) / cap)
+        return expit(market_logit + correction), None
     if artifact["kind"] == "binary_offset":
         return predict_binary_offset(artifact, rows), None
     if artifact["kind"] == "joint_offset":
@@ -614,7 +717,21 @@ def selection_table(scores: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> int:
-    OUTPUT.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Run-specific research output; deployed artifacts are never overwritten implicitly.",
+    )
+    args = parser.parse_args()
+    output = prepare_new_run_output(
+        resolve_run_output(
+            "helsinki_market_expression_v2",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     rows, coverage = base.prepare_rows()
     rows = add_v2_features(rows)
     rows["target_date"] = rows["target_date"].astype(str)
@@ -680,7 +797,32 @@ def main() -> int:
     bootstraps = pd.DataFrame(bootstrap_rows)
     selection = selection_table(scores)
     passing = selection.loc[selection["replacement_pass"]]
-    research_challenger = str(selection.iloc[0]["candidate"])
+    bounded_candidates = [
+        name
+        for name, definition in CANDIDATES.items()
+        if definition["kind"] == "bounded_weather_market_residual"
+    ]
+    robust_rows = []
+    for candidate in bounded_candidates:
+        probability = np.clip(predictions[candidate].to_numpy(float), EPS, 1 - EPS)
+        y = predictions["y_break"].to_numpy(float)
+        losses = pd.DataFrame(
+            {
+                "target_date": predictions["target_date"],
+                "logloss": -y * np.log(probability) - (1 - y) * np.log(1 - probability),
+            }
+        ).groupby("target_date")["logloss"].mean()
+        robust_rows.append(
+            {
+                "candidate": candidate,
+                "worst_target_date_logloss": float(losses.max()),
+                "mean_target_date_logloss": float(losses.mean()),
+            }
+        )
+    robust_selection = pd.DataFrame(robust_rows).sort_values(
+        ["worst_target_date_logloss", "mean_target_date_logloss"]
+    )
+    research_challenger = str(robust_selection.iloc[0]["candidate"])
     selected_replacement = (
         str(passing.iloc[0]["candidate"]) if not passing.empty else None
     )
@@ -798,9 +940,8 @@ def main() -> int:
             "candidate_count_k": len(CANDIDATES),
             "multiple_testing_adjustment": None,
             "selection_rule": (
-                "both Brier/logloss non-worse than frozen incumbent on integrated "
-                "and date-X grains, and non-worse than market on active post-source "
-                "date-X"
+                "within the monotone bounded market-plus-weather family, minimize "
+                "worst-target-date checkpoint logloss; ROI is not used"
             ),
             "train_rows_unique": int(len(rows)),
             "train_target_dates": int(rows["target_date"].nunique()),
@@ -809,12 +950,14 @@ def main() -> int:
             "clean_forward_start": "2026-07-31",
             "clean_forward_read": False,
             "replacement_selected": selected_replacement is not None,
+            "expression_sides": ["NO", "YES"],
+            "expression_policy": "first_best_fee_adjusted_edge_per_date_bracket",
             "incumbent_artifact_sha256": hashlib.sha256(
                 INCUMBENT_ARTIFACT.read_bytes()
             ).hexdigest(),
         }
     )
-    artifact_path = OUTPUT / "helsinki_market_expression_v2_research_challenger.joblib"
+    artifact_path = output / "helsinki_market_expression_v2_research_challenger.joblib"
     joblib.dump(final_artifact, artifact_path)
     artifact_sha = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
 
@@ -835,12 +978,16 @@ def main() -> int:
         "candidate_count_k": len(CANDIDATES),
         "multiple_testing_adjustment": None,
         "selection_rule": (
-            "both Brier/logloss non-worse than frozen incumbent on integrated and "
-            "date-X grains, and non-worse than market on active post-source date-X"
+            "within the monotone bounded market-plus-weather family, minimize "
+            "worst-target-date checkpoint logloss; ROI is not used"
         ),
         "selected_replacement": selected_replacement,
         "research_challenger": research_challenger,
-        "artifact": str(artifact_path.relative_to(ROOT)),
+        "artifact": (
+            str(artifact_path.relative_to(ROOT))
+            if artifact_path.is_relative_to(ROOT)
+            else str(artifact_path)
+        ),
         "artifact_sha256": artifact_sha,
         "incumbent_artifact_sha256": final_artifact["incumbent_artifact_sha256"],
         "forward": "2026-07-31+ labels not read; no retuning",
@@ -848,21 +995,22 @@ def main() -> int:
         "actual_fills": 0,
     }
     predictions.to_csv(
-        OUTPUT / "oof_checkpoint_predictions.csv.gz", index=False, compression="gzip"
+        output / "oof_checkpoint_predictions.csv.gz", index=False, compression="gzip"
     )
-    grains["state_entry"].to_csv(OUTPUT / "oof_state_entries.csv", index=False)
-    grains["date_x_entry"].to_csv(OUTPUT / "oof_date_x_entries.csv", index=False)
-    scores.to_csv(OUTPUT / "probability_scores.csv", index=False)
-    bootstraps.to_csv(OUTPUT / "target_date_bootstrap.csv", index=False)
-    multiclass.to_csv(OUTPUT / "multiclass_scores.csv", index=False)
-    selection.to_csv(OUTPUT / "candidate_selection.csv", index=False)
-    trades_5.to_csv(OUTPUT / "trade_replay_5share.csv", index=False)
-    trades_10.to_csv(OUTPUT / "trade_replay_10share.csv", index=False)
-    trade_summaries.to_csv(OUTPUT / "trade_summaries.csv", index=False)
-    trade_pairs.to_csv(OUTPUT / "trade_pair_bootstrap_vs_incumbent.csv", index=False)
-    case_comparison.to_csv(OUTPUT / "trade_case_comparison.csv", index=False)
-    selected_case_atlas.to_csv(OUTPUT / "selected_trade_case_atlas.csv", index=False)
-    (OUTPUT / "summary.json").write_text(
+    grains["state_entry"].to_csv(output / "oof_state_entries.csv", index=False)
+    grains["date_x_entry"].to_csv(output / "oof_date_x_entries.csv", index=False)
+    scores.to_csv(output / "probability_scores.csv", index=False)
+    bootstraps.to_csv(output / "target_date_bootstrap.csv", index=False)
+    multiclass.to_csv(output / "multiclass_scores.csv", index=False)
+    selection.to_csv(output / "candidate_selection.csv", index=False)
+    robust_selection.to_csv(output / "bounded_robust_loss_selection.csv", index=False)
+    trades_5.to_csv(output / "trade_replay_5share.csv", index=False)
+    trades_10.to_csv(output / "trade_replay_10share.csv", index=False)
+    trade_summaries.to_csv(output / "trade_summaries.csv", index=False)
+    trade_pairs.to_csv(output / "trade_pair_bootstrap_vs_incumbent.csv", index=False)
+    case_comparison.to_csv(output / "trade_case_comparison.csv", index=False)
+    selected_case_atlas.to_csv(output / "selected_trade_case_atlas.csv", index=False)
+    (output / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
     )
     print(json.dumps(summary, indent=2, sort_keys=True))

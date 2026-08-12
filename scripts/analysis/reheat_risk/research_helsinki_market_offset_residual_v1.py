@@ -555,8 +555,8 @@ def trade_summary(
         summary["target_date_bootstrap"] = {
             "target_dates": int(len(daily)),
             "draws": BOOTSTRAP_DRAWS,
-            "ci_low": float(np.quantile(valid, 0.025)),
-            "ci_high": float(np.quantile(valid, 0.975)),
+            "ci_low": float(np.quantile(valid, 0.025)) if len(valid) else None,
+            "ci_high": float(np.quantile(valid, 0.975)) if len(valid) else None,
         }
     return summary
 
@@ -705,13 +705,18 @@ def trade_pair_bootstrap(
     )
     delta = challenger_roi - baseline_roi
     delta = delta[np.isfinite(delta)]
+    challenger_cost = float(challenger["cost"].sum())
+    baseline_cost = float(baseline["cost"].sum())
+    roi_delta = (
+        float(challenger["pnl"].sum()) / challenger_cost
+        - float(baseline["pnl"].sum()) / baseline_cost
+        if challenger_cost > 0 and baseline_cost > 0
+        else None
+    )
     return {
-        "roi_delta": float(
-            challenger["pnl"].sum() / challenger["cost"].sum()
-            - baseline["pnl"].sum() / baseline["cost"].sum()
-        ),
-        "ci_low": float(np.quantile(delta, 0.025)),
-        "ci_high": float(np.quantile(delta, 0.975)),
+        "roi_delta": roi_delta,
+        "ci_low": float(np.quantile(delta, 0.025)) if len(delta) else None,
+        "ci_high": float(np.quantile(delta, 0.975)) if len(delta) else None,
         "target_dates": int(len(dates)),
     }
 
