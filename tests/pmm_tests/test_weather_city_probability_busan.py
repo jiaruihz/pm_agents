@@ -182,6 +182,18 @@ def test_busan_adapter_is_label_independent_and_blocks_stale_feature_book(
     assert stale_score.evaluation_status == "not_scorable"
     assert stale_score.not_scorable_reason == "feature_book_response_stale"
     assert stale_score.model_probability is None
+    stale_bundle = legacy_bundle_from_evaluation(
+        {
+            **asdict(stale_score),
+            "schema_version": "weather_city_probability_runtime_v3",
+            "record_kind": "evaluation",
+            "evaluation_id": "stale-busan-evaluation",
+            "would_enter": False,
+        }
+    )
+    assert stale_bundle.signal_candidate.blocker_reason == (
+        "feature_book_response_stale"
+    )
 
 
 def test_busan_production_profile_is_zero_notional_clean_forward() -> None:

@@ -203,14 +203,14 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
         lineage.get("book_snapshot_id") or market.get("book_snapshot_id")
     )
     blocker = score.not_scorable_reason
-    if raw_token_id and not market_outcome:
+    if blocker:
+        pass
+    elif raw_token_id and not market_outcome:
         blocker = "token_outcome_unknown"
     elif raw_token_id and market_outcome != str(score.market_side).upper():
         blocker = "token_outcome_mismatch"
     elif not condition_id or not token_id:
         blocker = "missing_market_expression_identity"
-    elif blocker:
-        pass
     elif score.market_entry_price is None:
         blocker = "missing_executable_quote"
     elif score.model_probability is None:
