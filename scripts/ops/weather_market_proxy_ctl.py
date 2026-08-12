@@ -88,8 +88,8 @@ def gateway_overlay_files() -> tuple[dict[str, Any], list[tuple[Path, bytes]]]:
         ),
         None,
     )
-    if not active or str(active.get("name") or "") != "Allblue 加速器":
-        raise RuntimeError("active Clash profile must be Allblue 加速器")
+    if not active:
+        raise RuntimeError("active Clash profile is missing from profiles.yaml")
     option = active.get("option") or {}
     required = {name: str(option.get(name) or "") for name in ("merge", "proxies", "groups")}
     if not all(required.values()):
@@ -151,9 +151,22 @@ def gateway_overlay_files() -> tuple[dict[str, Any], list[tuple[Path, bytes]]]:
         for row in (groups.get("prepend") or [])
         if not isinstance(row, dict) or row.get("name") != stable_route.clash_group
     ]
-    fallback_group = next(
-        route.clash_group for route in spec.market_proxy_routes if route.route_key == "allblue"
+    selected_groups = [
+        str(row.get("name") or "")
+        for row in (active.get("selected") or [])
+        if isinstance(row, dict) and str(row.get("name") or "")
+    ]
+    configured_groups = {route.clash_group for route in spec.market_proxy_routes}
+    active_name = str(active.get("name") or "")
+    fallback_group = (
+        selected_groups[0]
+        if selected_groups
+        else active_name
+        if active_name in configured_groups
+        else ""
     )
+    if not fallback_group or fallback_group == stable_route.clash_group:
+        raise RuntimeError("active Clash profile has no usable primary selector group")
     group_prepend.insert(
         0,
         {
@@ -187,6 +200,7 @@ def gateway_overlay_files() -> tuple[dict[str, Any], list[tuple[Path, bytes]]]:
         "stable_route": stable_route.route_key,
         "stable_proxy_url": stable_route.proxy_url,
         "stable_group": stable_route.clash_group,
+        "fallback_group": fallback_group,
         "files": [
             {
                 "path": str(path),
