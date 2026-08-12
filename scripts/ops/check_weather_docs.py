@@ -9,6 +9,7 @@ state as present truth.
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
 import re
 import subprocess
 from pathlib import Path
@@ -29,6 +30,18 @@ GENERATED_METADATA_MARKERS = (
     "audit",
     "readme",
 )
+ANALYSIS_MACHINE_SUFFIXES = {
+    ".csv",
+    ".html",
+    ".joblib",
+    ".json",
+    ".jsonl",
+    ".parquet",
+    ".pkl",
+    ".png",
+    ".svg",
+    ".tsv",
+}
 
 
 def read(path: str) -> str:
@@ -485,6 +498,80 @@ def check_generated_artifacts(errors: list[str], tracked: set[str]) -> None:
             fail(errors, f"stale large_generated_allowlist entry: {relative}")
 
 
+def check_analysis_history_debt(errors: list[str], tracked: set[str]) -> None:
+    """Prevent dated reports and repository machine data from growing again."""
+    config = hygiene_config()
+    dated_reports = sorted(
+        relative
+        for relative in tracked
+        if relative.startswith("docs/analysis/")
+        and Path(relative).suffix.lower() == ".md"
+        and re.match(r"20\d\d-\d\d-\d\d-", Path(relative).name)
+        and (ROOT / relative).is_file()
+    )
+    dated_ceiling = int(config["max_dated_analysis_reports"])
+    if len(dated_reports) > dated_ceiling:
+        fail(
+            errors,
+            f"dated analysis reports grew from ceiling {dated_ceiling} to "
+            f"{len(dated_reports)}; merge the result into its family living doc",
+        )
+
+    machine_artifacts = sorted(
+        relative
+        for relative in tracked
+        if relative.startswith("docs/analysis/")
+        and "/generated/" not in relative
+        and Path(relative).suffix.lower() in ANALYSIS_MACHINE_SUFFIXES
+        and (ROOT / relative).is_file()
+    )
+    count_ceiling = int(config["max_top_level_analysis_machine_artifacts"])
+    if len(machine_artifacts) > count_ceiling:
+        fail(
+            errors,
+            "top-level analysis machine artifacts grew from ceiling "
+            f"{count_ceiling} to {len(machine_artifacts)}; write machine rows to JRS",
+        )
+    total_bytes = sum((ROOT / relative).stat().st_size for relative in machine_artifacts)
+    bytes_ceiling = int(config["max_top_level_analysis_machine_bytes"])
+    if total_bytes > bytes_ceiling:
+        fail(
+            errors,
+            "top-level analysis machine bytes grew from ceiling "
+            f"{bytes_ceiling} to {total_bytes}; archive machine data to JRS",
+        )
+    per_file_ceiling = int(config["top_level_analysis_machine_artifact_max_bytes"])
+    for relative in machine_artifacts:
+        size = (ROOT / relative).stat().st_size
+        if size > per_file_ceiling:
+            fail(
+                errors,
+                f"top-level analysis machine artifact exceeds {per_file_ceiling} bytes: "
+                f"{relative}",
+            )
+
+    structured_suffixes = {".csv", ".json", ".jsonl", ".parquet", ".tsv"}
+    parallel_formats: dict[str, list[str]] = defaultdict(list)
+    for relative in tracked:
+        path = Path(relative)
+        if (
+            relative.startswith("docs/analysis/")
+            and path.suffix.lower() in structured_suffixes
+            and (ROOT / relative).is_file()
+        ):
+            parallel_formats[str(path.with_suffix(""))].append(relative)
+    duplicate_stems = {
+        stem: paths for stem, paths in parallel_formats.items() if len(paths) > 1
+    }
+    duplicate_ceiling = int(config["max_parallel_machine_format_stems"])
+    if len(duplicate_stems) > duplicate_ceiling:
+        fail(
+            errors,
+            "parallel CSV/JSON machine-result stems grew from ceiling "
+            f"{duplicate_ceiling} to {len(duplicate_stems)}; keep one canonical format",
+        )
+
+
 def check_runtime_artifacts_are_untracked(errors: list[str], tracked: set[str]) -> None:
     runtime_artifacts = sorted(
         relative for relative in tracked if relative.startswith("runtime/")
@@ -699,6 +786,7 @@ def main() -> int:
     check_index_links(errors, tracked)
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)
+    check_analysis_history_debt(errors, tracked)
     check_runtime_artifacts_are_untracked(errors, tracked)
     check_production_entrypoints(errors, tracked)
     check_research_script_debt(errors, tracked, untracked)

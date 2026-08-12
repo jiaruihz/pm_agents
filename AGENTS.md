@@ -40,6 +40,10 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 - 同一研究机制的不同日期、城市、训练窗和参数 → 复用一个 runner，以 config/run manifest 区分；不得复制成
   `research_<city>_*_vN.py`。只有算法或数据合同真正不同才新增入口，并优先抽公共 helper/adapter。
 - 不确定结构往哪挂 → 先读 `WEATHER_STRATEGY_QUANT_DESIGN.md`，别先写脚本。
+- **研究成果默认不增加文件数**：同机制的新日期、城市、窗口、参数优先追加 run manifest 并回写 family living doc；
+  只有独立、不可变且以后会被引用的证据才新增日期报告。一个实验只保留一种 canonical 机器结果格式，禁止同内容
+  同时落 CSV/JSON、把逐行明细塞在 `docs/analysis/YYYY-MM/` 或复制 runner。机器明细进 JRS artifact root，仓库保留
+  紧凑 metadata、结论和 manifest 指针；交付前运行 `scripts/ops/check_weather_docs.py`，债务预算只能持平或下降。
 
 完整设计 [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) ·
 字段契约 [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md)

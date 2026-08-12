@@ -61,3 +61,12 @@
 ```text
 significance={}; baseline={}; forward={}; conclusion={}
 ```
+
+## Output routing（交付前填）
+
+- family living doc / registry / index update：
+- canonical paired-result format（只能一种）：
+- JRS artifact manifest：
+- dated snapshot justification（或 `merged-into-living-doc`）：
+- superseded A/B outputs removed：
+- `check_weather_docs.py`：PASS / blocker

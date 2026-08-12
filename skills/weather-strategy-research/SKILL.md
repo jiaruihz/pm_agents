@@ -188,11 +188,15 @@ maker 假设必须建 fill/queue/adverse selection，不能把 future touch 当�
   精确一致、无下游代码消费者，并记录 producer/code revision、完整 replay args、archived input hashes 和任何
   mutable DB/runtime identity 或目录 inventory。
   semantic equivalence、只跑到中间阶段、raw/canonical 或无法冻结输入的结果一律保留。
+- 每个实验只选择一种 canonical 机器结果格式；禁止同一 records 同时写 CSV/JSON，禁止把完整 rows 或大表复制进
+  Markdown。仓库内 machine artifact 只允许紧凑 manifest/metadata 或活跃代码明确消费的最小证据。
 - 日期报告写 `docs/analysis/YYYY-MM/`，只作 snapshot。实验结束时必须同时回写
   `docs/WEATHER_DOCS_INDEX.md`、所属 family living doc 与 `docs/WEATHER_STRATEGY_REGISTRY.md`：写清耐久结论、
   被取代的旧判断、证据边界和当前动作。只新增日期报告、不更新家族入口，任务不算完成。
 - 新版本若只是同一模型的 feature/参数/训练窗 experiment，保留稳定 model identity，用 `run_id/artifact_id`
   区分；不要继续制造 `v9/v10/v11` 平行“当前模型”。
 - 结论保留 `inconclusive` / `shadow_candidate` / `rejected_for_expression` 边界；方向暂停不删除资产。
+- 交付前运行 `.venv/bin/python scripts/ops/check_weather_docs.py`；dated report、顶层 machine artifact、版本化 runner
+  任一预算增长都必须在同一变更中合并旧入口或改用既有 runner，不能通过抬高 ceiling 获取新债务额度。
 
 最终先给动作：继续 collector、启动 zero-notional shadow、保持 research、停止某 expression、或不改 live；再给证据和 blocker。

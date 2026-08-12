@@ -157,6 +157,9 @@ executable_cost = side ask + taker fee + declared friction
 报告是 snapshot，不自动成为新的当前入口。交付前把结论回写 `docs/WEATHER_DOCS_INDEX.md` 路由的 family living doc
 与 `docs/WEATHER_STRATEGY_REGISTRY.md`：保留最新可用判断、明确 superseded-for-decision-use 的旧数字，并链接本次证据。
 大型明细、模型和图片进入 `production.yaml.research_artifact_root`；仓库只保留结论、紧凑 metadata 与权威 case evidence。
+同一评测只保留一种 canonical 机器结果格式，不并行写 CSV/JSON 或在 Markdown 复制逐行结果；同机制复跑优先更新
+living doc 和 run manifest，不新增平行日期报告。交付前运行 `.venv/bin/python scripts/ops/check_weather_docs.py`，
+不得通过抬高 hygiene ceiling 为新报告、顶层 machine artifact 或 runner 副本腾额度。
 
 默认先报 fee-adjusted PnL，并拆 YES/NO；不要让一侧掩盖另一侧亏损。最终一句：
 

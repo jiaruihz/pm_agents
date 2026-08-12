@@ -5,6 +5,14 @@ version: pm_agents_repo_hygiene_v1
 generated_artifact_max_bytes: 5242880
 untracked_artifact_archive_min_bytes: 0
 
+# Historical debt budgets are monotone: cleanup batches lower these measured
+# ceilings; new research may not grow dated reports or top-level machine data.
+max_dated_analysis_reports: 651
+max_top_level_analysis_machine_artifacts: 148
+max_top_level_analysis_machine_bytes: 8942901
+top_level_analysis_machine_artifact_max_bytes: 1500000
+max_parallel_machine_format_stems: 0
+
 # Temporary migration ceiling.  Batch 4 removes or registers the historical
 # wrappers and lowers this number; CI prevents new wrappers in the meantime.
 max_entrypoints_outside_production_closure: 64

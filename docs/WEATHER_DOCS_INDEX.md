@@ -49,6 +49,17 @@ Status 口径：
 manifest/历史报告指针。需要重放历史研究时，用
 `weather_research_artifact_ctl.py` 先查看并恢复该脚本的归档依赖，不把整库重新复制回仓库。
 
+## 研究成果写入合同
+
+默认目标不是“每次研究生成一套文件”，而是让已有知识入口更准确：
+
+1. 同一机制只保留一个 family living doc 和一个可配置 runner；日期、城市、窗口、参数用 `run_id`/manifest 区分。
+2. 日期报告只用于独立、不可变、以后确实需要逐证据引用的 snapshot。普通复跑、修订和补城市直接合入 living doc；被完整覆盖的旧 snapshot 合并后删除。
+3. Markdown 只保留结论、`denominator_scope`、输入/build identity、双漏斗、关键数字、当前动作和 artifact manifest；逐行表、模型、图片与完整机器结果进入 JRS。
+4. 一个实验只选择一种 canonical 机器结果格式。不得把相同 records 同时写成 CSV 和 JSON，也不得在 Markdown 中复制完整机器表。
+5. 新 producer 不得把 CSV/JSON/JSONL/model/image 直接写到 `docs/analysis/YYYY-MM/`；历史顶层机器文件是待下降债务，不是模板。
+6. 完成标准是：回写 family living doc/registry/index，移除被覆盖入口，运行 `scripts/ops/check_weather_docs.py`；dated report、顶层机器文件和重复 runner 的预算只能持平或下降。
+
 ## 2026-06-06 口径勘误
 
 `pm_history` 已结算价格可能是 near-binary `0.9995 / 0.0005`，不是精确 `1.0 / 0.0`。2026-06-06 前旧 ingest/builder 会把这批已结算 bracket 误标为 `missing_bracket`；修复后 live fill 与 raw CLOB fills 对齐，`missing_bracket` 从 725 降到 0。
@@ -662,7 +673,6 @@ manifest/历史报告指针。需要重放历史研究时，用
 | [2026-06-14-station-basis-live-candidate-v1.md](analysis/2026-06/2026-06-14-station-basis-live-candidate-v1.md) | `snapshot` | yes | Station-basis live candidate v1：诊断 v0 forward YES early divergence；排除 Milan/Jakarta，收敛为 5 城 taker、16h official-bucket YES one-per-city-day + NO d1/d2 exhaustion；历史 YES h16 live5 ROI +120.7%、holdout +74.3%、prefix walk-forward +94.9%，NO d1 live5 holdout +19.8%；已接本机 v1 dry-run 风控审计 ledger，并将 live-core shadow/eval 收紧到 ask<=0.90；forward shadow 当前 1 笔 PanamaCity no_d1 pending，ask 0.825 所在 0.80-0.90 桶历史/holdout 为正，pending monitor 显示 thesis 仍 alive；新增 `station_basis_live_prep_gate_v1.py` 输出 live-prep gate，CLOB coverage gate 已修复为 true，当前 verdict=`NOT_READY_ACCUMULATE_SHADOW`，blockers=forward settled=0/核心规则 forward 门未过，仍不允许 live |
 | [2026-06-14-executability-reconcile-v0.md](analysis/2026-06/2026-06-14-executability-reconcile-v0.md) | `snapshot` | yes | 可成交性对账（回测 ask≤0.97 vs N100 v1 实时 0/41）：edge=真实但稀有，非回测假象。全集 executable 占比 YES 57%（per city-day 83%）/NO d1 24%（47%）/NO d2 8%；ask 可吃非 dust（中位 21-57 股）；executable 子集 ROI 复现 YES +11.7%/NO d1 +7.3%。v1 的 0/41 是采样偏差（只采最差的 PanamaCity/Chicago 且 15h 已收敛）——executable% 强依赖时点（NO d1 14h 66%→17h 3%）与城市；每周约 YES 30 + NO d1 10 机会。残余风险：实时 taker 能否真吃到 + 仅 3 周样本 |
 | [2026-06-15-station-basis-strategy-master-design.md](analysis/2026-06/2026-06-15-station-basis-strategy-master-design.md) | `snapshot` | yes | **Station-basis 策略主文档**：汇总市场机制、站点 basis edge、信号规则（YES官方档/NO衰竭）、可成交性、五重证负方向、本次只用 maker 的决策、风控边界、三层架构、path-to-live、$10/日预期。读这一篇看全貌；maker 挂价是开火前最后参数 |
-| [2026-06-10-adjacent3-quality-matched-baseline-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.md) | `snapshot` | yes | Adjacent3 medium_quality matched baseline：eligible 主口径下 same-cost random baseline 几乎无匹配，holdout 不支持 live |
 | [2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md](analysis/2026-06/2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md) | `snapshot` | yes | Opportunity fact 扩样覆盖审计：两年天气缓存不能直接当交易样本；关键缺口是历史 decision-time 市场行情/盘口进入 fact_signal_candidates |
 | [2026-06-10-april-historical-opportunity-mapping-audit-v0.md](analysis/2026-06/2026-06-10-april-historical-opportunity-mapping-audit-v0.md) | `snapshot` | yes | April historical opportunity mapping 审计：gamma/clob token 映射和 T-24 price proxy 可做原型，但缺 settlement/model probability/orderbook，不能直接算 ROI |
 | [2026-06-10-april-historical-opportunity-preview-v0.md](analysis/2026-06/2026-06-10-april-historical-opportunity-preview-v0.md) | `snapshot` | yes | April historical opportunity preview：生成 34,320 行 fact-like decision price preview，作为后续 forecast/settlement backfill 输入，不计算 ROI |

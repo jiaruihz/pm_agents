@@ -47,6 +47,48 @@ def test_repo_hygiene_accepts_runtime_files_outside_git():
     assert errors == []
 
 
+def test_analysis_history_debt_rejects_new_reports_and_parallel_machine_outputs(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    month = repo / "docs/analysis/2026-08"
+    month.mkdir(parents=True)
+    report = month / "2026-08-13-one-off-v1.md"
+    csv = month / "one-off.csv"
+    json_file = month / "one-off.json"
+    report.write_text("# one off\n", encoding="utf-8")
+    csv.write_text("x\n1\n", encoding="utf-8")
+    json_file.write_text('{"x": 1}\n', encoding="utf-8")
+    monkeypatch.setattr(check_weather_docs, "ROOT", repo)
+    monkeypatch.setattr(
+        check_weather_docs,
+        "hygiene_config",
+        lambda: {
+            "max_dated_analysis_reports": 0,
+            "max_top_level_analysis_machine_artifacts": 1,
+            "max_top_level_analysis_machine_bytes": 1,
+            "top_level_analysis_machine_artifact_max_bytes": 4,
+            "max_parallel_machine_format_stems": 0,
+        },
+    )
+
+    errors: list[str] = []
+    check_weather_docs.check_analysis_history_debt(
+        errors,
+        {
+            "docs/analysis/2026-08/2026-08-13-one-off-v1.md",
+            "docs/analysis/2026-08/one-off.csv",
+            "docs/analysis/2026-08/one-off.json",
+        },
+    )
+
+    assert any("dated analysis reports grew" in error for error in errors)
+    assert any("machine artifacts grew" in error for error in errors)
+    assert any("machine bytes grew" in error for error in errors)
+    assert any("artifact exceeds" in error for error in errors)
+    assert any("parallel CSV/JSON" in error for error in errors)
+
+
 def test_late_window_shared_helper_contract(tmp_path):
     observation = tmp_path / "latest.json"
     observation.write_text(

@@ -116,3 +116,13 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 - `fact_signal_candidates` fields：
 - shadow/collector runtime：
 - docs/index/registry update：
+
+## Output routing（交付前填）
+
+- family living doc（必须更新）：
+- registry/index update：
+- canonical machine format（只能选一种 CSV/JSON/JSONL/Parquet）：
+- JRS artifact manifest（完整 rows/model/image）：
+- dated snapshot justification（不新增则填 `merged-into-living-doc`）：
+- superseded files/runner removed：
+- `check_weather_docs.py`：PASS / blocker

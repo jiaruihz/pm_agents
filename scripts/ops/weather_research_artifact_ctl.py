@@ -854,18 +854,10 @@ def archive(
         rows, summary = select_worktree_artifacts(
             archive_source_root, selected_paths or set()
         )
-    elif selected_paths and not all("/generated/" in path for path in selected_paths):
-        rows, summary = select_repository_artifacts(selected_paths)
-    else:
+    elif selected_paths:
         rows, summary = select_artifacts()
-        if selected_paths:
-            eligible_paths = {row["path"] for row in rows}
-            unknown = sorted(selected_paths - eligible_paths)
-            if unknown:
-                raise ValueError(
-                    "archive paths are absent or not eligible for archival: "
-                    f"{unknown}"
-                )
+        eligible_paths = {row["path"] for row in rows}
+        if selected_paths.issubset(eligible_paths):
             rows = [row for row in rows if row["path"] in selected_paths]
             summary = {
                 "all_file_count": summary["all_file_count"],
@@ -885,6 +877,10 @@ def archive(
                     int(row["size_bytes"]) for row in rows if not row["git_tracked"]
                 ),
             }
+        else:
+            rows, summary = select_repository_artifacts(selected_paths)
+    else:
+        rows, summary = select_artifacts()
     spec = load_production_spec()
     artifact_root = spec.research_artifact_root
     payload: dict[str, Any] = {

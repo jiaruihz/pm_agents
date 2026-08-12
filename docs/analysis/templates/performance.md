@@ -97,3 +97,12 @@ YES 与 NO 必须分行；gross 可附录，不作主结论。未结算另列 `[
 | forward | | |
 
 列出 PIT、source basis、archive timing、fee、fill、样本量和 runtime 漂移风险。
+
+## Output routing（交付前填）
+
+- family living doc / registry / index update：
+- canonical machine format（只能一种）：
+- JRS artifact manifest：
+- dated snapshot justification（或 `merged-into-living-doc`）：
+- superseded files removed：
+- `check_weather_docs.py`：PASS / blocker
