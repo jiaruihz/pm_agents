@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-状态：`dispute-only adjudication-divergence architecture / clarification court worker ready and one-shot verified / zero-notional only / no persistent service or live change`。
+状态：`dispute-only adjudication-divergence architecture / production registration committed on deploy branch / zero-notional only / deployment not applied`。
 
 2026-08-12 实现更新：forward collector 已把 PM 官方补充说明纳入 PIT 合同层。它从 UMA CTF
 Adapter 读取 `getQuestion(questionID)` 与由该 question creator 发布的 `getUpdates`，并把
@@ -89,21 +89,21 @@ CLOB book；只接受 update→quote ≤300 秒、book age ≤15 秒、25-share 
 floor 后 edge ≥5¢，并对同一 update cluster 最多留一个候选。客观 P4、规则修订/退款、source metric
 重定义、quote 不完整和 corpus revision 全部 fail closed。worker 只写 append-only zero-notional
 signals，不具备下单路径。最新 one-shot 有 86 个 tracked corpus，均无 creator update，所以
-forward queue 为 0；这轮只验证了无 update 时不会误触发。当前没有 LaunchAgent/tmux 常驻进程，
-不能把 tracked state 或可运行脚本称为“正在持续监听”；上线持久 zero-notional collector 仍需独立
-受管部署和 freshness 监控。
+forward queue 为 0；这轮只验证了无 update 时不会误触发。collector 与 court 的独立受管 runtime、
+freshness health、依赖顺序和 exact model hash 已写入 deploy branch；当前控制仓库尚未应用该部署提交，
+所以仍不能把 tracked state 称为“正在持续监听”。
 
-组合入口已经收成一个 bounded loop；`--clarification-max-new-cards` 限制每轮最多新增的 Codex
-court 数量，剩余 packet 延后到下一轮，避免 sibling/update storm 造成无界调用：
+主 collector/scorer 与 packet-only court 已拆成两个受管 loop，避免最长 300 秒的 LLM batch 阻塞
+30 秒 dispute health。court 每轮最多新增 8 张 card，剩余 packet 延后处理，避免 sibling/update storm
+造成无界调用：
 
 ```bash
-.venv/bin/python scripts/ops/polymarket_dispute_forward.py \
-  --loop --skip-source-evidence --clarification-court \
-  --clarification-model gpt-5.4 --clarification-max-new-cards 8
+scripts/ops/start_polymarket_dispute_repricing_zero_notional_v1.sh
+scripts/ops/start_polymarket_dispute_clarification_court_v1.sh
 ```
 
-该命令仍然是 zero-notional，不会提交 CLOB order；本轮只做了 one-shot 验证，没有替用户安装
-常驻服务或开启持续 LLM 花费。
+两个入口都只生成 zero-notional paper records，不会提交 CLOB order；deploy branch 只完成注册，
+没有替用户启动服务、重载共享 market-books owner 或开启持续 LLM 花费。
 
 用户给出的三个例子已在链上历史复现：GALBOT robot dancer 的 guidance 明确认定“举臂并有节奏
 摇摆”属于 dancing，reverse 首笔 97.3¢，fee 后仅余约 2.57¢；Ronaldo guidance 明确认定赛后照片/
@@ -150,7 +150,7 @@ finality 与已经结束市场的全市场扫描不属于主策略。主策略�
 | `binance_verdict_reverse_taker_25share_v1` | 官方 Binance spot/futures 1h candle 的确定性 resolver | RuleVerdict 已验证反向赢家；fresh 25-share ask；实际 fee 后 edge ≥5¢ | 历史 resolver 44/44 与最终裁决一致；0 个当前 eligible |
 | `semantic_verified_reverse_shadow_v1` | 规则时区/截止点 + 官方时间线 + 独立报道的人工可审计裁决 | RuleVerdict confidence ≥95%；fresh 25-share ask；实际 fee 后 edge ≥5¢ | 1 个 open shadow position |
 | `sports_verified_outcome_taker_25share_v1` | 官方统计 + period/scope 拆分，选择 RuleVerdict 正确的一侧而非固定 reverse | confidence ≥95%；正确 outcome 有 fresh 25-share ask；edge ≥5¢ | 5 个当前 verified sports cases，0 eligible |
-| `official_clarification_court_taker_25share_shadow_v1` | creator update 是否闭合 binding predicate，并通过 fundamental-intent 审查 | packet-only Outcome0/1 court；update→quote ≤300s；fresh 25-share ask；0.95 payout floor 后 edge ≥5¢；update cluster cap | 历史 development non-P4 30/30；one-shot 86 tracked、0 update、0 signal；尚未常驻 |
+| `official_clarification_court_taker_25share_shadow_v1` | creator update 是否闭合 binding predicate，并通过 fundamental-intent 审查 | packet-only Outcome0/1 court；update→quote ≤300s；fresh 25-share ask；0.95 payout floor 后 edge ≥5¢；update cluster cap | 历史 development non-P4 30/30；one-shot 86 tracked、0 update、0 signal；受管部署已注册但未应用 |
 
 首个 Semantic shadow 是 market `3449325`：`Will Russia target Kyiv by August 10, 2026?`。
 规则截止为 Kyiv local time 的 8 月 10 日 23:59（20:59 UTC），官方信息在截止前只有被规则
@@ -866,9 +866,10 @@ corporate action/filing、speech/transcript、video/visual behavior。adapter �
   universe 仍只有自己的 scheduler，同一 token 只有一个 canonical writer。
 - **M2：dispute canonical materializer**。把现有 `events/snapshots/signals/shadow_*` 增量导入
   `dispute.db`，旧 JSONL 保留 append-only raw，建立 lineage/denominator 检查。
-- **M3：受管 zero-notional service（代码与运行合同完成，尚未部署）**。dispute listener、adaptive
+- **M3：受管 zero-notional service（代码、运行合同与 deploy branch 注册完成，尚未应用）**。dispute listener、adaptive
   bulletin watcher、capture-demand publisher、bounded court worker、统一 health 和 JRS tmux start contract
-  已完成；`instances.yaml` 登记为 candidate，但未写入 production desired state，因此仍无 live authority。
+  已完成；deploy branch 已登记两个 managed runtimes 并 pin immutable release SHA。当前 production
+  controller 未读取该 branch，因此没有新 session、没有持续 LLM 花费，也没有 live authority。
 - **M4：shared paper/shadow execution（完成）**。rule-lawyer 已通过公共 non-live contract 进入 append-only
   `TradeIntent -> paper plan -> paper order -> paper fill -> position -> markout -> settlement`；所有 paper
   order/fill 的 actual shares/cost/notional 强制为 0，canonical audit 检查 dedupe、孤儿血缘和 cashflow。
@@ -907,8 +908,8 @@ M0 与 M2 的第一版已经落地，未启动第二个行情进程：
   demand identity 不再包含重试时间，同一触发跨重试保持幂等。
 - 唯一 `weather_market_books` WS owner 的 cursor 已兼容多个 append-only demand stream，并验证
   `polymarket_capture_demand_v1` 的 canonical identity、TTL、strategy allowlist、transport 和全局 token budget；
-  dispute direct token 可进入同一个 subscription set，不需要 rule-lawyer 启动第二个 WS writer。新入口默认关闭，
-  尚未写入 production manifest 或重载现有 owner。同一 token 的重叠 dispute/update demand 使用一对多
+  dispute direct token 可进入同一个 subscription set，不需要 rule-lawyer 启动第二个 WS writer。deploy branch
+  已把 shared demand path 加入唯一 owner 的 launch environment，但当前生产尚未重载。同一 token 的重叠 dispute/update demand 使用一对多
   `capture_demand_ids` 映射，避免后一个 demand 覆盖前一个 receipt lineage。
 - 新增增量 `dispute.db` materializer，使用 byte-offset watermark 且检测 raw shrink/prefix replacement；
   对最初小于 hash window 的 JSONL 固定原始 prefix 长度，后续正常 append 不会被误判为 prefix replacement。
@@ -1066,14 +1067,15 @@ repricing 退出分别记账；不能把未成交 quote 或首笔 public print �
   `src/strategies/rule_lawyer/`；一次性脚本不得成为第二套 schema 或 verdict 真相；
 - 历史 builder 保留在 `scripts/analysis/dispute_repricing/`，受管 forward 入口保留在 `scripts/ops/`，
   两者都消费同一 typed contract；
-- 当前 one-shot artifact 仍是 `events.jsonl → snapshots.jsonl → signals.jsonl →
-  shadow_positions.jsonl → shadow_markouts.jsonl`；它们是 M2 materializer 的 raw 输入，不是最终数据库设计。
-  目前没有持久 collector，不能把这些文件的存在称为“正在监听”。
+- raw journal 现在是 `events/snapshots → signals + clarification_signals → trade_intents →
+  paper_plans/orders/fills → shadow_positions/markouts`，并增量进入 `dispute.db`；当前 deploy branch
+  尚未应用，因此本机旧 one-shot 文件的存在仍不能称为“正在监听”。
 - deterministic entry 与 review queue 的 120 秒 freshness 读取目标 token 的 CLOB book timestamp，
   不再用本地 capture time 代替；缺 exchange timestamp fail closed。人工 review 只有在
   `reviewed_at_utc <= snapshot_ts_utc` 时才能覆盖该 book，晚到 verdict 必须等下一份 fresh book，
   candidate identity 同时包含 verdict revision，禁止把研究完成时间倒灌成更早的 PIT signal。
-- collector 与 ledger 均为 read-only / zero-notional；未接 execution handoff、未改生产、未下单。
+- collector 与 ledger 均为 read-only / zero-notional；已接无 venue client 的公共 paper execution handoff，
+  actual shares/cost/notional 强制为 0。未改当前生产、未下单。
 
 ## 官方参考
 

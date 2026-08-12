@@ -18,7 +18,10 @@ production_releases:
     expected_repo_sha: 03691ebb36579f8a604936af19924c5123022439
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v2_prod
-    expected_repo_sha: 8a8dc05cb520b69d86dbc9da80065024b51395aa
+    expected_repo_sha: 269c1072fe0c5a464d6ec681db4805a1815dca2d
+  - release_id: dispute_repricing
+    checkout_root: /Users/deepsleep/projects/pm_agents_dispute_repricing_prod
+    expected_repo_sha: 269c1072fe0c5a464d6ec681db4805a1815dca2d
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
@@ -216,8 +219,49 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS: "6"
       WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES: "3000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "12"
+
+  - instance_id: polymarket_dispute_repricing_zero_notional_v1
+    uses_market_proxy: true
+    tmux_session: polymarket_dispute_repricing_zero_notional_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: dispute_repricing
+    start_script: scripts/ops/start_polymarket_dispute_repricing_zero_notional_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/health.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok, warming]
+    expected_health_fields:
+      strategy_key: rule_lawyer.dispute_repricing
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0.0
+      model_sha256: 0f5f06798c91451b76b897eb0e882fafd50b80b1a4a831a1781360ec09910252
+    dependencies: [weather_jrs_context_keeper, weather_market_books]
+    recovery_policy: safe
+
+  - instance_id: polymarket_dispute_clarification_court_v1
+    uses_market_proxy: true
+    tmux_session: polymarket_dispute_clarification_court_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: dispute_repricing
+    start_script: scripts/ops/start_polymarket_dispute_clarification_court_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/clarification_health.json
+    health_format: json
+    max_health_age_sec: 420
+    accepted_health_statuses: [ok, degraded, running]
+    expected_health_fields:
+      strategy_key: rule_lawyer.dispute_repricing
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0.0
+      worker: official_clarification_court
+    dependencies: [weather_jrs_context_keeper, polymarket_dispute_repricing_zero_notional_v1]
+    recovery_policy: safe
 
   - instance_id: weather_forecast_run_capture_v1
     tmux_session: weather_forecast_run_capture_v1

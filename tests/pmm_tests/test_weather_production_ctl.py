@@ -97,9 +97,35 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "/Volumes/jrs/weather_data_feed_service_runtime/output/"
             "forecast_run_capture/market_capture_demands.jsonl"
         ),
+        "WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS": (
+            "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/"
+            "capture_demands.jsonl"
+        ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "12",
     }
+    dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
+    assert dispute.execution_mode == "zero_notional_shadow"
+    assert dispute.expected_live is False
+    assert dispute.release_id == "dispute_repricing"
+    assert dispute.dependencies == (
+        "weather_jrs_context_keeper",
+        "weather_market_books",
+    )
+    assert dispute.expected_health_contract()["live_authority"] is False
+    assert dispute.expected_health_contract()["actual_notional"] == 0.0
+    assert spec.release("dispute_repricing").expected_repo_sha == (
+        "269c1072fe0c5a464d6ec681db4805a1815dca2d"
+    )
+    assert spec.release("market_books").expected_repo_sha == (
+        "269c1072fe0c5a464d6ec681db4805a1815dca2d"
+    )
+    court = by_id["polymarket_dispute_clarification_court_v1"]
+    assert court.dependencies == (
+        "weather_jrs_context_keeper",
+        "polymarket_dispute_repricing_zero_notional_v1",
+    )
+    assert court.expected_live is False
     assert by_id["fast_source_prev_no_trial_v1"].dependencies == (
         "weather_data_feed_jrs",
         "weather_live_cross_observations",

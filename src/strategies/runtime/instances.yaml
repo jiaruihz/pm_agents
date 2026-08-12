@@ -924,7 +924,7 @@
   display_name: Polymarket dispute repricing rule-lawyer
   family: rule_lawyer.dispute_repricing
   strategy_key: rule_lawyer.dispute_repricing
-  lifecycle_status: research
+  lifecycle_status: shadow
   execution_mode: zero_notional_shadow
   source_layer: runtime_local
   runtime_dir: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1
@@ -933,14 +933,13 @@
   live_order_file: null
   paper_order_file: paper_orders.jsonl
   telemetry_file: runs.jsonl
-  start_script: null
-  tmux_session: null
-  notes: Non-live research runtime with a deployment script held outside catalog authority.
-    Dispute/update triggers publish shared direct-token
+  start_script: scripts/ops/start_polymarket_dispute_repricing_zero_notional_v1.sh
+  tmux_session: polymarket_dispute_repricing_zero_notional_v1
+  notes: Managed zero-notional shadow runtime. Dispute/update triggers publish shared direct-token
     capture demand, the single market-books owner returns subscription receipts, and selected
     candidates traverse TradeIntent -> paper plan/order/fill -> position/markout/settlement.
-    This catalog row grants no production desired state and no live authority.
-  default_health: unknown
+    The runtime has no venue client and grants no live authority.
+  default_health: warming
   expected_live: false
   artifact_files:
   - - events
@@ -963,3 +962,34 @@
     - capture_receipts.jsonl
   - - health
     - health.json
+- strategy_instance: polymarket_dispute_clarification_court_v1
+  display_name: Polymarket official clarification court
+  family: rule_lawyer.dispute_repricing
+  strategy_key: rule_lawyer.dispute_repricing
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1
+  summary_file: clarification_health.json
+  primary_journal: clarification_signals.jsonl
+  live_order_file: null
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: clarification_runs.jsonl
+  start_script: scripts/ops/start_polymarket_dispute_clarification_court_v1.sh
+  tmux_session: polymarket_dispute_clarification_court_v1
+  notes: Packet-only LLM adjudication worker. It owns separate card, signal, and exact
+    quote journals; the main runtime consumes those candidates through the shared
+    zero-notional execution and canonical chain. No exchange client or live authority.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - cards
+    - clarification_cards.jsonl
+  - - quote_snapshots
+    - clarification_quote_snapshots.jsonl
+  - - candidates
+    - clarification_signals.jsonl
+  - - errors
+    - clarification_errors.jsonl
+  - - health
+    - clarification_health.json
