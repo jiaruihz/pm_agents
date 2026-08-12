@@ -23,6 +23,19 @@ def test_eligible_nodes_only_keep_preferred_1x_regions():
     ]
 
 
+def test_probe_summary_tolerates_one_intermittent_failure():
+    summary = ctl.probe_summary(
+        [
+            {"ok": True, "total_sec": 0.4},
+            {"ok": False, "total_sec": 5.0},
+            {"ok": True, "total_sec": 0.5},
+        ],
+        slow_seconds=1.5,
+    )
+    assert summary["degraded"] is False
+    assert summary["degraded_reasons"] == []
+
+
 def test_maintain_requires_two_degraded_cycles_before_switch(tmp_path, monkeypatch):
     class Controller:
         def proxies(self):
@@ -44,7 +57,7 @@ def test_maintain_requires_two_degraded_cycles_before_switch(tmp_path, monkeypat
         ctl,
         "probe_openai",
         lambda: [
-            {"ok": True, "total_sec": 0.5},
+            {"ok": False, "total_sec": 5.0},
             {"ok": False, "total_sec": 5.0},
             {"ok": True, "total_sec": 0.6},
         ],
@@ -87,7 +100,7 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
         if calls["count"] == 1:
             return [
                 {"ok": False, "total_sec": 5.0},
-                {"ok": True, "total_sec": 0.8},
+                {"ok": False, "total_sec": 5.0},
                 {"ok": True, "total_sec": 0.7},
             ]
         return [
@@ -104,7 +117,7 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
     assert result["status"] == "switched"
     assert result["selected_node"] == "🇯🇵 日本 01丨1x JP"
     assert result["attempted_nodes"] == ["🇯🇵 日本 01丨1x JP"]
-    assert (tmp_path / "switches.jsonl").exists()
+    assert len(list(tmp_path.glob("switches-*.jsonl"))) == 1
     assert json.loads((tmp_path / "latest.json").read_text())["failure_streak"] == 0
 
 

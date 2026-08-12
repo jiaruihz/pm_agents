@@ -204,16 +204,22 @@ def probe_summary(rows: list[dict[str, Any]], *, slow_seconds: float) -> dict[st
     successes = [float(row["total_sec"]) for row in rows if row["ok"]]
     failures = len(rows) - len(successes)
     maximum = max(successes) if successes else None
-    degraded = failures > 0 or maximum is None or maximum > slow_seconds
+    average = round(sum(successes) / len(successes), 4) if successes else None
+    majority_failures = failures >= (len(rows) // 2 + 1)
+    degraded_reasons = []
+    if majority_failures or not successes:
+        degraded_reasons.append("majority_probe_failure")
+    if average is not None and average > slow_seconds:
+        degraded_reasons.append("sustained_slow_response")
+    degraded = bool(degraded_reasons)
     return {
         "ok_count": len(successes),
         "failure_count": failures,
         "max_total_sec": maximum,
-        "avg_total_sec": (
-            round(sum(successes) / len(successes), 4) if successes else None
-        ),
+        "avg_total_sec": average,
         "slow_threshold_sec": slow_seconds,
         "degraded": degraded,
+        "degraded_reasons": degraded_reasons,
         "samples": rows,
     }
 
@@ -298,7 +304,6 @@ def maintain(
     required_degraded_cycles: int = 2,
 ) -> dict[str, Any]:
     state_path = state_root / "latest.json"
-    audit_path = state_root / "switches.jsonl"
     lock_path = state_root / "maintain.lock"
     with exclusive_lock(lock_path) as acquired:
         if not acquired:
@@ -313,6 +318,8 @@ def maintain(
             streak = 0
         streak = streak + 1 if probe["degraded"] else 0
         now_epoch = int(time.time())
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        audit_path = state_root / f"switches-{month}.jsonl"
         latest = {
             "schema_version": SCHEMA_VERSION,
             "generated_at_utc": utc_now(),
@@ -323,7 +330,6 @@ def maintain(
         }
         if apply:
             atomic_write_json(state_path, latest)
-            month = datetime.now(timezone.utc).strftime("%Y-%m")
             append_jsonl(
                 state_root / f"probes-{month}.jsonl",
                 {

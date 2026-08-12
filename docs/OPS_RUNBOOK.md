@@ -98,7 +98,8 @@ Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit
 `🙂 TAGSS` selector 内的 `1x` 节点，不改 macOS 代理端口、`7896 / PM-STABLE`、`7897` 或任何 consumer。
 它用 OpenAI 实际端点而不是只用 `generate_204` 验收，连续两个 degraded cycle 后才在 JP/HK/SG/DE 的
 `1x` 候选中有界测速；切后连续验证，失败尝试下一个候选，全部失败恢复原节点，成功后冷却 15 分钟。
-每次 bounded probe 追加到主机状态目录的月度 `probes-YYYY-MM.jsonl`，切换另写 `switches.jsonl`，
+每次 bounded probe 追加到主机状态目录的月度 `probes-YYYY-MM.jsonl`，切换另写月度
+`switches-YYYY-MM.jsonl`；单次三探测允许一次偶发超时，只有多数失败或整体持续变慢才累计 degraded cycle，
 后续机场评测以这份长期可用率/尾延迟证据为准，不用单次测速图代替稳定性。
 
 ```bash
