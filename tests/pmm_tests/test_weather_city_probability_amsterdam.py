@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 import numpy as np
+import pandas as pd
 
 from src.strategies.weather_city_probability_shadow.amsterdam import (
     AmsterdamKnmiRemainingHeatV7Adapter,
@@ -190,3 +191,105 @@ def test_amsterdam_v9_maps_fixed_lead_forecast_to_wcir_expression(
     intent = legacy_trade_intent_from_paper_intent(evaluation)
     assert intent.mode == "zero_notional"
     assert intent.requested_size == 0.0
+
+
+def test_amsterdam_cross_survival_scores_only_first_point_seven_cross(
+    tmp_path, monkeypatch
+):
+    source = {
+        "information_event_id": "cross-event",
+        "observation_time_utc": "2026-08-12T11:20:00+00:00",
+        "source_first_seen_at_utc": "2026-08-12T11:21:00+00:00",
+    }
+    frame = pd.DataFrame(
+        [
+            {
+                "target_date": "2026-08-12",
+                "observed_at_utc": "2026-08-12T11:10:00+00:00",
+                "ta_c": 20.4,
+                "tx_c": 20.5,
+            },
+            {
+                "target_date": "2026-08-12",
+                "observed_at_utc": source["observation_time_utc"],
+                "ta_c": 20.7,
+                "tx_c": 20.8,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._source_frame",
+        lambda profile, target_date, decision: (frame, source, 2),
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._official_as_of",
+        lambda profile, target_date, decision, source_obs: (
+            {"physical_path": "official.jsonl", "physical_line": 1},
+            {
+                "running_max_c": 20.2,
+                "current_temp_c": 20.1,
+                "minutes_since_running_max": 10,
+                "last_obs_utc": "2026-08-12T10:55:00+00:00",
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._market_quote",
+        lambda profile, source_event_id, target_date, bracket, decision: {
+            "condition_id": "condition-20",
+            "market_id": "market-20",
+            "no_token_id": "no-token-20",
+            "book_snapshot_id": "book-cross",
+            "best_bid": 0.94,
+            "best_ask": 0.95,
+            "mid": 0.945,
+            "snapshot_path": "cross.json",
+        },
+    )
+    artifact = {
+        "schema_version": "amsterdam_knmi_cross_survival_model_v1",
+        "model_id": "amsterdam_knmi_cross_survival",
+        "features": ["ta_c", "tx_c", "ta_cross_margin_c", "tx_cross_margin_c"],
+        "estimator": _BinaryModel(0.98),
+    }
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam.joblib.load",
+        lambda path: artifact,
+    )
+    profile = {
+        "profile_id": "amsterdam_knmi_cross07_survival_clean_forward_v1",
+        "forward_start_utc": "2026-08-12T03:00:00+00:00",
+        "source_journal": str(tmp_path / "source"),
+        "observation_journal_dir": str(tmp_path / "official"),
+        "ladder_snapshot_dir": str(tmp_path / "ladder"),
+        "forecast_previous_day1_dir": str(tmp_path / "forecast"),
+        "max_source_age_seconds": 900,
+        "required_cross_margin_c": 0.7,
+        "expression_sides": ["NO"],
+        "artifacts": {
+            "weather": {"path": str(tmp_path / "model.pkl"), "sha256": "sha"}
+        },
+    }
+
+    scores = AmsterdamKnmiRemainingHeatV7Adapter().score(
+        profile, datetime(2026, 8, 12, 11, 22, tzinfo=timezone.utc)
+    )
+
+    assert len(scores) == 1
+    assert scores[0].current_bracket == 20
+    assert scores[0].market_side == "NO"
+    assert scores[0].model_probability == 0.98
+    assert scores[0].lineage["probability_target"] == (
+        "previous_bracket_survives_first_cross"
+    )
+    assert scores[0].features == {"p_cross_survives": 0.98}
+
+    below_margin = frame.copy()
+    below_margin.loc[below_margin.index[-1], "ta_c"] = 20.6
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._source_frame",
+        lambda profile, target_date, decision: (below_margin, source, 2),
+    )
+    assert AmsterdamKnmiRemainingHeatV7Adapter().score(
+        profile, datetime(2026, 8, 12, 11, 22, tzinfo=timezone.utc)
+    ) == []

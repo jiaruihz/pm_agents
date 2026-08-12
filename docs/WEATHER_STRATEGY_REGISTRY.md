@@ -153,8 +153,10 @@ daily_low_temperature   Tmin 日内路径：双冷却窗口内判断是否会再
 
 ### Amsterdam KNMI previous-bracket NO（2026-07-28）
 
-2026-08-11 clean-forward 更新：`.7°C` first-seen 固定规则累计 23 个 signal/8日，其中 4 个具备
-t0 NO ask≤0.97 与至少5-share depth；3个已结算均胜，5-share官方fee后 ROI `+15.81%`，另1个open。
+2026-08-12 strategy selection 更新：Amsterdam 唯一主表达收敛为 `.7°C` first-seen CrossNO，买旧
+official exact bracket NO、t0 ask≤0.97、最多10 shares并持有至结算。raw scorecard累计23 signals/8日，
+4个具备可执行盘口且4/4已结算均胜，10-share counterfactual ROI `+12.69%`；真实 tiny-live 有1笔：
+2026-08-11 21-NO，8 shares @0.97，fee后PnL `+$0.22836`、ROI `+2.94%`。
 但4笔在入场时已经全部是market favorite，且taker买入后在+15/+30/+60/+120/+300秒卖回bid的组合ROI
 均为负，因此只保留为“持有至结算”的低样本forward cohort，不能称weather alpha或短线退出alpha。
 V7 production artifact 的145字段中65个forecast/path forcing长期NaN，8/3–11累计538个去重model outputs、
@@ -163,18 +165,22 @@ feature-contract polluted，不再作为standalone fair price。修复后的V9�
 100字段合同；2025 expanding OOF Brier/logloss=`0.04574/0.15819`。真正一次性8月frozen V8在同盘口仍显著输
 market；V9 post-freeze audit把date-equal ΔBrier收窄为`+0.01002`、95% CI `[-0.00473,+0.02503]`。
 `:10/:40`、2pp net-edge、双边5-share taker表达为7笔4胜、ROI `+2.40%`，但CI跨0且market favorite同窗
-ROI `+12.72%`，故V9只允许zero-notional clean forward，不升live。code/release已pin；city runtime因既有
-shared proxy/data-feed dependency故障被controller fail-closed，首个V9 decision尚未产生。详见
+ROI `+16.44%`，故V9 standalone退为dormant-for-now comparator，不再作为主交易表达。
+新 `amsterdam_knmi_cross_survival` 纯天气head用2024选择、2025 frozen：`.7°C`子集636 rows/238日，
+AUC `0.9452`，logloss `0.0650` 显著优于margin历史常数 `0.1031`；未来合同固定为
+`p_cross_survives - taker_fee_cost > 1pp`。该head的WCIR zero-notional adapter/config已完成并通过测试，
+尚未重载生产进程；真实资金gate未变。详见
 [V9 PIT parity/frozen strategy](analysis/2026-08/2026-08-12-amsterdam-knmi-v9-pit-parity-frozen-strategy-v1.md) 与
 [旧8/11 scorecard](analysis/2026-08/2026-08-04-amsterdam-crossno-v7-shadow-scorecard-v1.md)。
 
-`knmi_ta_prev_no_v1` 当前为 `shadow_candidate / zero-notional only`：10 个 PIT-book days
+`knmi_ta_prev_no_v1` 的 `.5/.6` 历史阈值分支仍为 `shadow_candidate / zero-notional only`；`.7` 后继规则
+已按上段 tiny-live trial 运行。早期10个 PIT-book days
 中 `ta +0.5°C / 1 confirmation` 有 4 笔可执行、4 胜，Weather taker fee 后 ROI
 `+6.61%`，但仅 4 个独立交易日；冻结 holdout 为 2 笔、2 胜、ROI `+4.48%`。
 按真实 `min(10, top ask size)` partial sizing 则为 6 笔/5 日、5 胜、组合 ROI `+4.87%`
 且日期 CI 跨 0。`.7` 虽消除已知 half-degree false cross，但仅剩 1 笔/1 日可执行；
 `.6` 的 3 笔全胜全部集中在 train 两日、holdout 0 笔，故 `.5/.6` 只作并行 frozen
-zero-notional shadow，`.7` 只作高置信标签。
+zero-notional shadow；早期 `.7` 的单笔证据已由上段新forward cohort supersede-for-decision-use。
 这里的 PIT executable universe 仅为 dense timing book 与 KNMI 重叠的 `2026-06-18..27`
 十日；`2026-07-22..26` 另有 23/23/18 个 `.5/.6/.7` signal，但无同频 archived book，
 不能解释成一个月无触发或纳入 ROI。

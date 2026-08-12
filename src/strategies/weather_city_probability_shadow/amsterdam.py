@@ -257,6 +257,14 @@ def _fixed_lead_forecast(
 
 
 def _predict(artifact: dict[str, Any], frame: pd.DataFrame) -> dict[str, float]:
+    if artifact.get("schema_version") == "amsterdam_knmi_cross_survival_model_v1":
+        features = list(artifact["features"])
+        matrix = frame.loc[:, features].apply(pd.to_numeric, errors="coerce")
+        return {
+            "p_cross_survives": float(
+                artifact["estimator"].predict_proba(matrix)[0, 1]
+            )
+        }
     if artifact.get("schema_version") in {
         "amsterdam_knmi_remaining_heat_model_v8",
         "amsterdam_knmi_remaining_heat_model_v9",
@@ -344,15 +352,37 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
         row["knmi_tx_minus_latest_official_c"] = float(row["tx_c"]) - float(official["current_temp_c"])
         row["knmi_ta_minus_official_running_max_c"] = float(row["ta_c"]) - float(official["running_max_c"])
         row["knmi_tx_minus_official_running_max_c"] = float(row["tx_c"]) - float(official["running_max_c"])
+        row["ta_cross_margin_c"] = float(row["ta_c"]) - float(current)
+        row["tx_cross_margin_c"] = float(row["tx_c"]) - float(current)
         row["source_above_official_d1"] = float(float(row["tx_c"]) >= current + 0.5)
         crossed = frame["tx_c"].astype(float).ge(current + 0.5)
         row["source_above_official_d1_persistence_rows"] = float(crossed.iloc[::-1].cumprod().sum())
 
+        if profile.get("required_cross_margin_c") is not None:
+            required_margin = float(profile["required_cross_margin_c"])
+            crossing_rows = frame[
+                pd.to_numeric(frame["ta_c"], errors="coerce").ge(
+                    float(current) + required_margin - 1e-9
+                )
+            ]
+            first_cross_obs = (
+                None
+                if crossing_rows.empty
+                else str(crossing_rows.iloc[0]["observed_at_utc"])
+            )
+            # A non-cross checkpoint is normal absence of this sparse signal,
+            # not a coverage blocker.  Returning no scores also prevents later
+            # events from re-emitting the same bracket opportunity.
+            if first_cross_obs != str(source["observation_time_utc"]):
+                return []
+
         artifact_path = Path(profile["artifacts"]["weather"]["path"])
         artifact = joblib.load(artifact_path)
-        if artifact.get("schema_version") in {
+        artifact_schema = artifact.get("schema_version")
+        if artifact_schema in {
             "amsterdam_knmi_remaining_heat_model_v8",
             "amsterdam_knmi_remaining_heat_model_v9",
+            "amsterdam_knmi_cross_survival_model_v1",
         }:
             base_features = list(artifact["features"])
         else:
@@ -383,6 +413,14 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 row[feature] = np.nan
         score_frame = pd.DataFrame([row], columns=base_features)
         probabilities = _predict(artifact, score_frame)
+        cross_survival_mode = (
+            artifact_schema == "amsterdam_knmi_cross_survival_model_v1"
+        )
+        if (
+            profile.get("required_cross_margin_c") is not None
+            and not cross_survival_mode
+        ):
+            raise ValueError("required_cross_margin_c requires cross-survival artifact")
         quote = _market_quote(profile, str(source["information_event_id"]), target_date, current, now)
         present = sum(pd.notna(score_frame.iloc[0][name]) for name in base_features)
         missing = [name for name in base_features if pd.isna(score_frame.iloc[0][name])]
@@ -413,7 +451,9 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             is_no = normalized_side == "NO"
             market_probability = quote["mid"] if is_no else quote["yes_mid"]
             market_entry = quote["best_ask"] if is_no else quote["yes_ask"]
-            p_leave = probabilities["p_break_eod"]
+            p_leave = probabilities[
+                "p_cross_survives" if cross_survival_mode else "p_break_eod"
+            ]
             scorable = market_probability is not None
             scores.append(CityScore(
                 city="Amsterdam",
@@ -444,7 +484,9 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 lineage={
                     **shared_lineage,
                     "probability_target": (
-                        "leave_current_exact_bracket"
+                        "previous_bracket_survives_first_cross"
+                        if cross_survival_mode
+                        else "leave_current_exact_bracket"
                         if is_no else "stay_current_exact_bracket"
                     ),
                 },

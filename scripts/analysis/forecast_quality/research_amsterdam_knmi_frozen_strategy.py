@@ -53,6 +53,26 @@ POLICIES = [
     {"id": "all10m_edge05_p55", "minutes": set(range(0, 60, 10)), "edge": 0.05, "p_min": 0.55},
 ]
 
+# These mechanisms were fixed by the prior KNMI threshold and market-prior
+# studies.  They are evaluated as a family; the August window is not used to
+# invent another temperature/price cut.
+CROSSNO_POLICIES = [
+    {"id": "cross05_rule", "margin": 0.5, "selector": "rule"},
+    {"id": "cross07_live_rule", "margin": 0.7, "selector": "rule"},
+    {"id": "cross05_v9_edge02", "margin": 0.5, "selector": "v9_edge02"},
+    {"id": "cross07_v9_edge02", "margin": 0.7, "selector": "v9_edge02"},
+    {"id": "cross05_market_prior_edge02", "margin": 0.5, "selector": "market_prior_edge02"},
+    {"id": "cross07_market_prior_edge02", "margin": 0.7, "selector": "market_prior_edge02"},
+    {"id": "cross05_survival_edge02", "margin": 0.5, "selector": "survival_edge02"},
+    {"id": "cross07_survival_edge02", "margin": 0.7, "selector": "survival_edge02"},
+    {"id": "cross05_survival_edge01", "margin": 0.5, "selector": "survival_edge01"},
+    {"id": "cross07_survival_edge01", "margin": 0.7, "selector": "survival_edge01"},
+    {"id": "cross05_survival_veto_p90", "margin": 0.5, "selector": "survival_veto_p90"},
+    {"id": "cross07_survival_veto_p90", "margin": 0.7, "selector": "survival_veto_p90"},
+]
+MARKET_PRIOR_INTERCEPT = -0.0170
+MARKET_PRIOR_WEATHER_WEIGHT = 0.0641
+
 
 def parse(value: Any) -> datetime:
     result = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
@@ -297,9 +317,239 @@ def trade_date_bootstrap(
         "target_dates_in_universe": len(universe_dates),
         "bootstrap_repetitions": 10000,
         "pnl_ci95": [float(value) for value in np.quantile(sampled[:, 1], [.025, .975])],
-        "roi_ci95": [float(value) for value in np.quantile(roi, [.025, .975])],
-        "probability_roi_gt_zero": float((roi > 0).mean()),
+        "roi_ci95": (
+            [float(value) for value in np.quantile(roi, [.025, .975])]
+            if len(roi) else [None, None]
+        ),
+        "probability_roi_gt_zero": float((roi > 0).mean()) if len(roi) else None,
     }
+
+
+def trade_stability(
+    records: list[dict[str, Any]], universe_dates: list[str]
+) -> dict[str, Any]:
+    daily_rows = []
+    for target_date in universe_dates:
+        selected = [row for row in records if row["target_date"] == target_date]
+        cost = sum(float(row["cost"]) for row in selected)
+        pnl = sum(float(row["pnl"]) for row in selected)
+        daily_rows.append({
+            "target_date": target_date,
+            "signals": len(selected),
+            "wins": sum(bool(row["won"]) for row in selected),
+            "cost": cost,
+            "pnl": pnl,
+            "roi": pnl / cost if cost else None,
+        })
+    ordered = sorted(records, key=lambda row: row["source_first_seen_at_utc"])
+    cumulative = np.cumsum([float(row["pnl"]) for row in ordered])
+    running_peak = np.maximum.accumulate(np.r_[0.0, cumulative])
+    drawdown = np.r_[0.0, cumulative] - running_peak
+    by_side = {}
+    for side in ("YES", "NO"):
+        selected = [row for row in records if row["selected_side"] == side]
+        cost = sum(float(row["cost"]) for row in selected)
+        pnl = sum(float(row["pnl"]) for row in selected)
+        by_side[side] = {
+            "signals": len(selected),
+            "wins": sum(bool(row["won"]) for row in selected),
+            "cost": cost,
+            "pnl": pnl,
+            "roi": pnl / cost if cost else None,
+        }
+    active = [row for row in daily_rows if row["signals"]]
+    leave_one_date_out = []
+    for held_out in sorted({row["target_date"] for row in records}):
+        selected = [row for row in records if row["target_date"] != held_out]
+        cost = sum(float(row["cost"]) for row in selected)
+        pnl = sum(float(row["pnl"]) for row in selected)
+        leave_one_date_out.append({
+            "held_out": held_out,
+            "signals": len(selected),
+            "pnl": pnl,
+            "roi": pnl / cost if cost else None,
+        })
+    return {
+        "daily": daily_rows,
+        "positive_active_dates": sum(row["pnl"] > 0 for row in active),
+        "negative_active_dates": sum(row["pnl"] < 0 for row in active),
+        "inactive_dates": sum(row["signals"] == 0 for row in daily_rows),
+        "by_side": by_side,
+        "max_sequential_drawdown_usd": float(drawdown.min()),
+        "leave_one_active_date_out": leave_one_date_out,
+    }
+
+
+def same_selected_rows_market_favorite(
+    model_records: list[dict[str, Any]], universe_dates: list[str]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    paired = []
+    gaps = []
+    for model_row in model_records:
+        no_favorite = float(model_row["market_p"]) >= 0.5
+        side = "NO" if no_favorite else "YES"
+        ask = model_row["no_best_ask"] if no_favorite else model_row["yes_best_ask"]
+        depth = model_row["no_ask_size"] if no_favorite else model_row["yes_ask_size"]
+        if pd.isna(ask) or pd.isna(depth) or float(depth) < 5 or float(ask) > 0.97:
+            gaps.append({
+                "target_date": model_row["target_date"],
+                "source_event_id": model_row["source_event_id"],
+                "side": side,
+                "reason": "market_favorite_not_5share_executable",
+            })
+            continue
+        shares = 5.0
+        price = float(ask)
+        cost = shares * price + fee(shares, price)
+        won = bool(model_row["label_leave"]) if side == "NO" else not bool(model_row["label_leave"])
+        paired.append({
+            **model_row,
+            "selected_side": side,
+            "selected_ask": price,
+            "selected_ask_size": float(depth),
+            "shares": shares,
+            "cost": cost,
+            "won": won,
+            "pnl": (shares if won else 0.0) - cost,
+            "model_selected_side": model_row["selected_side"],
+            "model_pnl": float(model_row["pnl"]),
+        })
+    cost = sum(float(row["cost"]) for row in paired)
+    pnl = sum(float(row["pnl"]) for row in paired)
+    model_pnl = sum(float(row["model_pnl"]) for row in paired)
+    daily_delta = []
+    for target_date in universe_dates:
+        selected = [row for row in paired if row["target_date"] == target_date]
+        daily_delta.append(sum(row["model_pnl"] - row["pnl"] for row in selected))
+    rng = np.random.default_rng(20260812)
+    values = np.asarray(daily_delta, dtype=float)
+    index = rng.integers(0, len(values), size=(10000, len(values)))
+    samples = values[index].sum(axis=1)
+    return {
+        "signals": len(paired),
+        "target_dates": len({row["target_date"] for row in paired}),
+        "wins": sum(bool(row["won"]) for row in paired),
+        "accuracy": sum(bool(row["won"]) for row in paired) / len(paired) if paired else None,
+        "cost": cost,
+        "pnl": pnl,
+        "roi": pnl / cost if cost else None,
+        "model_pnl_same_rows": model_pnl,
+        "model_minus_market_pnl": model_pnl - pnl,
+        "model_minus_market_pnl_ci95": [
+            float(value) for value in np.quantile(samples, [.025, .975])
+        ],
+        "execution_coverage_gaps": gaps,
+        "stability": trade_stability(paired, universe_dates),
+    }, paired
+
+
+def logit(values: pd.Series) -> pd.Series:
+    clipped = values.clip(1e-7, 1 - 1e-7)
+    return np.log(clipped / (1 - clipped))
+
+
+def expit(values: pd.Series) -> pd.Series:
+    return 1 / (1 + np.exp(-values))
+
+
+def replay_crossno_policy(
+    rows: pd.DataFrame,
+    policy: dict[str, Any],
+    universe_dates: list[str],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    working = rows.copy()
+    working["ta_cross_margin_c"] = (
+        working["ta_c"] - working["current_bracket_c"]
+    )
+    raw = working[working["ta_cross_margin_c"].ge(float(policy["margin"]) - 1e-9)].copy()
+    first = raw.sort_values("source_first_seen_at_utc").drop_duplicates(
+        ["target_date", "current_bracket_c"], keep="first"
+    )
+    book_covered = first[first["market_p"].notna()].copy()
+    ask_available = book_covered[book_covered["no_best_ask"].notna()].copy()
+    executable = ask_available[
+        ask_available["no_best_ask"].le(.97)
+        & ask_available["no_ask_size"].fillna(0).ge(5)
+    ].copy()
+    executable["market_prior_p"] = expit(
+        logit(executable["market_p"])
+        + MARKET_PRIOR_INTERCEPT
+        + MARKET_PRIOR_WEATHER_WEIGHT
+        * (logit(executable["p_model"]) - logit(executable["market_p"]))
+    )
+    selector = str(policy["selector"])
+    if selector == "v9_edge02":
+        selected = executable[
+            executable["p_model"].ge(.55)
+            & (executable["p_model"] - executable["effective_cost_per_share"]).ge(.02)
+        ].copy()
+    elif selector == "market_prior_edge02":
+        selected = executable[
+            executable["market_prior_p"].ge(.55)
+            & (executable["market_prior_p"] - executable["effective_cost_per_share"]).ge(.02)
+        ].copy()
+    elif selector == "survival_edge02":
+        selected = executable[
+            executable["p_cross_survives"].ge(.55)
+            & (
+                executable["p_cross_survives"]
+                - executable["effective_cost_per_share"]
+            ).ge(.02)
+        ].copy()
+    elif selector == "survival_edge01":
+        selected = executable[
+            (
+                executable["p_cross_survives"]
+                - executable["effective_cost_per_share"]
+            ).gt(.01)
+        ].copy()
+    elif selector == "survival_veto_p90":
+        # The dedicated weather head is a terminal-false safety screen.  It is
+        # deliberately not treated as a market fair-value estimate: the
+        # frozen 2025 evaluation fixed this 0.90 cutoff for future forward use.
+        selected = executable[executable["p_cross_survives"].ge(.90)].copy()
+    else:
+        selected = executable
+    records = []
+    for row in selected.to_dict("records"):
+        shares = min(10.0, float(row["no_ask_size"]))
+        price = float(row["no_best_ask"])
+        cost = shares * price + fee(shares, price)
+        won = bool(row["label_leave"])
+        records.append({
+            **row,
+            "selected_side": "NO",
+            "selected_ask": price,
+            "selected_ask_size": float(row["no_ask_size"]),
+            "shares": shares,
+            "cost": cost,
+            "won": won,
+            "pnl": (shares if won else 0.0) - cost,
+        })
+    cost = sum(float(row["cost"]) for row in records)
+    pnl = sum(float(row["pnl"]) for row in records)
+    summary = {
+        "signals": len(first),
+        "signal_target_dates": int(first["target_date"].nunique()),
+        "book_covered": len(book_covered),
+        "ask_available": len(ask_available),
+        "executable": len(executable),
+        "selected": len(records),
+        "selected_target_dates": len({row["target_date"] for row in records}),
+        "wins": sum(bool(row["won"]) for row in records),
+        "accuracy": (
+            sum(bool(row["won"]) for row in records) / len(records)
+            if records else None
+        ),
+        "cost": cost,
+        "pnl": pnl,
+        "roi": pnl / cost if cost else None,
+        "actual_fills": 0,
+        "mode": "counterfactual_taker_at_captured_t0_ask_hold_to_settlement",
+        "target_date_bootstrap": trade_date_bootstrap(records, universe_dates),
+        "stability": trade_stability(records, universe_dates),
+    }
+    return summary, records
 
 
 def replay_policy(rows: pd.DataFrame, policy: dict[str, Any], *, market_only: bool = False) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -356,6 +606,7 @@ def main() -> int:
     parser.add_argument("--end", default="2026-08-31")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--forecast-path", type=Path, default=None)
+    parser.add_argument("--cross-survival-artifact", type=Path, default=None)
     parser.add_argument(
         "--evaluation-role",
         choices=(
@@ -376,6 +627,8 @@ def main() -> int:
         frame = add_fixed_lead_forecast_path_features(
             frame, pd.read_csv(args.forecast_path)
         )
+    frame["ta_cross_margin_c"] = frame["ta_c"] - frame["current_bracket_c"]
+    frame["tx_cross_margin_c"] = frame["tx_c"] - frame["current_bracket_c"]
     missing = sorted(set(artifact["features"]) - set(frame.columns))
     if missing:
         raise ValueError(f"frozen frame missing artifact columns: {missing}")
@@ -385,6 +638,22 @@ def main() -> int:
         clipped = np.clip(raw, 1e-7, 1 - 1e-7)
         raw = artifact["calibrator"].predict_proba(np.log(clipped/(1-clipped)).reshape(-1, 1))[:, 1]
     frame["p_model"] = raw
+    if args.cross_survival_artifact is not None:
+        with args.cross_survival_artifact.open("rb") as handle:
+            cross_artifact = pickle.load(handle)
+        cross_missing = sorted(set(cross_artifact["features"]) - set(frame.columns))
+        if cross_missing:
+            raise ValueError(
+                f"cross-survival frame missing artifact columns: {cross_missing}"
+            )
+        cross_matrix = frame[cross_artifact["features"]].apply(
+            pd.to_numeric, errors="coerce"
+        )
+        frame["p_cross_survives"] = cross_artifact["estimator"].predict_proba(
+            cross_matrix
+        )[:, 1]
+    else:
+        frame["p_cross_survives"] = np.nan
     outcomes = settlements(args.db, args.start, args.end)
     frame = frame[frame["target_date"].isin(outcomes)].copy()
     frame["settlement_bracket"] = frame["target_date"].map(outcomes)
@@ -424,18 +693,35 @@ def main() -> int:
     common = frame[frame["market_p"].notna()].copy()
     universe_dates = sorted(set(frame["target_date"]))
     strategy = {}
+    records_by_policy = {}
     record_rows = []
     for policy in POLICIES:
         summary, records = replay_policy(common, policy)
         summary["target_date_bootstrap"] = trade_date_bootstrap(records, universe_dates)
+        summary["stability"] = trade_stability(records, universe_dates)
         strategy[policy["id"]] = summary
+        records_by_policy[policy["id"]] = records
         record_rows.extend({"policy_id": policy["id"], **row} for row in records)
     market_summary, market_records = replay_policy(common, POLICIES[0], market_only=True)
     market_summary["target_date_bootstrap"] = trade_date_bootstrap(
         market_records, universe_dates
     )
+    locked_policy_id = "preofficial10_edge02_p55"
+    same_set_market, same_set_market_records = same_selected_rows_market_favorite(
+        records_by_policy[locked_policy_id], universe_dates
+    )
+    crossno = {}
+    crossno_records = []
+    for policy in CROSSNO_POLICIES:
+        cross_summary, cross_records = replay_crossno_policy(
+            frame, policy, universe_dates
+        )
+        crossno[policy["id"]] = cross_summary
+        crossno_records.extend(
+            {"policy_id": policy["id"], **row} for row in cross_records
+        )
     summary = {
-        "schema_version": "amsterdam_knmi_v8_frozen_strategy_v1",
+        "schema_version": "amsterdam_knmi_frozen_strategy_replay_v2",
         "artifact": str(args.artifact), "model_id": artifact["model_id"],
         "frozen_window": [args.start, args.end],
         "source_rows": len(sources), "feature_rows": int(len(frame)),
@@ -446,6 +732,19 @@ def main() -> int:
         "market_common": probability_metrics(common, "market_p"),
         "weather_minus_market_common": paired_probability_delta(common),
         "policies": strategy, "market_favorite_primary_clock": market_summary,
+        "locked_policy_id": locked_policy_id,
+        "same_selected_rows_market_favorite": same_set_market,
+        "crossno_policies": crossno,
+        "crossno_policy_contract": CROSSNO_POLICIES,
+        "market_prior_contract": {
+            "intercept": MARKET_PRIOR_INTERCEPT,
+            "weather_logit_weight": MARKET_PRIOR_WEATHER_WEIGHT,
+            "source": "2026-04-03..06-30 train; 2026-07-01..29 historical holdout",
+        },
+        "cross_survival_artifact": (
+            str(args.cross_survival_artifact)
+            if args.cross_survival_artifact is not None else None
+        ),
         "policy_contract": [{**row, "minutes": sorted(row["minutes"])} for row in POLICIES],
         "evaluation_role": args.evaluation_role,
         "frozen_read_once": args.evaluation_role == "true_frozen_one_shot",
@@ -456,6 +755,12 @@ def main() -> int:
     frame.to_csv(args.output / "checkpoint_predictions.csv.gz", index=False, compression="gzip")
     pd.DataFrame(record_rows).to_csv(args.output / "policy_trades.csv", index=False)
     pd.DataFrame(market_records).to_csv(args.output / "market_favorite_trades.csv", index=False)
+    pd.DataFrame(same_set_market_records).to_csv(
+        args.output / "same_selected_rows_market_favorite_trades.csv", index=False
+    )
+    pd.DataFrame(crossno_records).to_csv(
+        args.output / "crossno_policy_trades.csv", index=False
+    )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 

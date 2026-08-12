@@ -71,6 +71,34 @@
     },
     {
       "enabled": true,
+      "city": "Amsterdam",
+      "adapter": "amsterdam_knmi_cross_survival_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "amsterdam_knmi_cross07_survival_clean_forward_v1",
+      "source": "knmi",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
+      "forecast_previous_day1_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/previous_day1/forecast_hourly_curves",
+      "forward_start_utc": "2026-08-12T03:00:00Z",
+      "max_source_age_seconds": 900,
+      "required_cross_margin_c": 0.7,
+      "expression_sides": ["NO"],
+      "material_state_change_only": true,
+      "edge_threshold": 0.01,
+      "selection_shares": 10.0,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": true,
+      "artifacts": {
+        "weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_cross_survival/run=53d49e6d7a4c075e/model.pkl",
+          "sha256": "b2d5ec1b06cd2c85e764182fbe65ac5a96a438c399016c6107dc80180bd854a2"
+        }
+      }
+    },
+    {
+      "enabled": true,
       "city": "Busan",
       "adapter": "busan_online_market_prior_v1",
       "framework_id": "weather_city_intraday_runtime_v1",
