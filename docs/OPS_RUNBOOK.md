@@ -93,6 +93,26 @@ Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit
 `auto/switch` endpoint 重载入口已移除。普通采集固定解析 `default`，不可逆下单/撤单 transport
 在公共 execution handoff 内解析 `stable`，两者当前是同一 TAG-backed 入口；策略 launcher 不拥有 route 选择权。稀疏 shadow 在
 无信号时按 process/dependency/proxy binding 验收，不因业务 summary 未刷新产生假回滚。
+
+系统/Codex 的 TAG 节点维护与上述 weather route 分开：`tag_proxy_route_ctl.py` 只切 TAG 已有
+`🙂 TAGSS` selector 内的 `1x` 节点，不改 macOS 代理端口、`7896 / PM-STABLE`、`7897` 或任何 consumer。
+它用 OpenAI 实际端点而不是只用 `generate_204` 验收，连续两个 degraded cycle 后才在 JP/HK/SG/DE 的
+`1x` 候选中有界测速；切后连续验证，失败尝试下一个候选，全部失败恢复原节点，成功后冷却 15 分钟。
+每次 bounded probe 追加到主机状态目录的月度 `probes-YYYY-MM.jsonl`，切换另写 `switches.jsonl`，
+后续机场评测以这份长期可用率/尾延迟证据为准，不用单次测速图代替稳定性。
+
+```bash
+# 当前节点与 OpenAI 端到端状态
+.venv/bin/python scripts/ops/tag_proxy_route_ctl.py status
+
+# 只读比较 1x 候选；不会改节点
+.venv/bin/python scripts/ops/tag_proxy_route_ctl.py benchmark
+
+# bounded one-shot；常驻调度只允许 com.pm-agents.tag-proxy-route-maintain
+.venv/bin/python scripts/ops/tag_proxy_route_ctl.py maintain --apply \
+  --reason "host TAG route maintenance"
+```
+
 机器可读矩阵写到 production contract 解析出的
 `output/market_proxy_control/latest.json`，覆盖每个 managed runtime 的 role、health trigger、
 dependency、artifact age、issues 与 proxy-consumer 标记。

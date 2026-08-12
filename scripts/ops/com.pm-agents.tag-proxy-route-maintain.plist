@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pm-agents.tag-proxy-route-maintain</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/deepsleep/projects/pm_agents/.venv/bin/python</string>
+    <string>/Users/deepsleep/projects/pm_agents/scripts/ops/tag_proxy_route_ctl.py</string>
+    <string>maintain</string>
+    <string>--apply</string>
+    <string>--reason</string>
+    <string>launchd bounded TAG route maintenance</string>
+    <string>--quiet</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>120</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/tmp/pm-agents-tag-proxy-route.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/pm-agents-tag-proxy-route.err.log</string>
+</dict>
+</plist>

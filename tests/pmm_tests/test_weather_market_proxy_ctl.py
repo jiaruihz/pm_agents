@@ -255,6 +255,10 @@ def test_active_entrypoints_do_not_hardcode_old_proxy_port():
 
     for path in (root / "scripts").glob("**/*"):
         if path.is_file() and path.suffix in {".py", ".sh"}:
+            if path.name == "tag_proxy_route_ctl.py":
+                # Host-level TAG node selection intentionally probes TAG's
+                # canonical local ingress; it is not a weather consumer.
+                continue
             assert "127.0.0.1:7890" not in path.read_text(encoding="utf-8"), path
 
     fast_source = (
