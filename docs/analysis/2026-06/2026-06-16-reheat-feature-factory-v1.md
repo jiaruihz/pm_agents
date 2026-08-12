@@ -129,6 +129,34 @@ Core state means current temp, running max, minutes since max, current YES quote
 - Date/city/hour coverage CSV: `docs/analysis/2026-06/generated/reheat_feature_factory_v1/coverage_by_date_city_hour.csv`
 - JSON manifest: `docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.json`
 
+## Historical Shard Inventory
+
+The atlas freshness job later reused this same factory contract for smaller date
+shards.  Its per-shard Markdown was almost entirely a copy of this report, so
+the durable revision facts are consolidated here; the referenced CSV and JSON
+artifacts remain in their original directories.
+
+| Revision generated at UTC | Target-date range | Feature rows | State rows | Complete core | Cities | Status |
+|---|---|---:|---:|---:|---:|---|
+| `2026-06-29T08:49:59+00:00` | 2026-05-19..06-20 | 109,415 | 10,792 | 8,144 | 36 | original shard |
+| `2026-07-04T16:05:23+00:00` | 2026-05-19..06-20 | 109,415 | 10,792 | 7,867 | 36 | refreshed canonical revision |
+| `2026-06-24T12:35:16+00:00` | 2026-06-21..06-23 | 9,344 | 945 | 621 | 36 | original shard |
+| `2026-07-22T07:07:36+00:00` | 2026-06-21..06-23 | 9,346 | 945 | 734 | 36 | refreshed canonical revision |
+| `2026-07-22T07:07:39+00:00` | 2026-06-25..06-28 | 11,621 | 1,138 | 891 | 36 | canonical shard |
+| `2026-07-22T07:07:27+00:00` | 2026-06-29..06-30 | 4,758 | 418 | 307 | 36 | canonical shard |
+| `2026-07-22T07:07:25+00:00` | 2026-07-01 | 2,490 | 229 | 168 | 32 | canonical shard |
+| `2026-07-22T07:08:03+00:00` | 2026-07-02 | 204 | 53 | 43 | 10 | partial-coverage shard |
+| `2026-07-22T07:08:13+00:00` | 2026-07-03..07-04 | 2,478 | 286 | 145 | 27 | canonical shard |
+| `2026-07-22T07:08:12+00:00` | 2026-07-04 | 1,316 | 135 | 34 | 15 | overlapping diagnostic shard |
+
+The 2026-07-04 refresh of the 2026-05-19..06-20 shard did not fully
+re-materialize raw rows.  It preserved stable quote/observation rows and
+rejoined forecast-peak columns from canonical PIT Single Runs, replacing the
+older `backfill_gfs_primary` lineage.  The changed complete-core count is
+therefore a revision boundary, not a larger denominator or a new strategy.
+All shard reports share the verdict and schema notes above; none implies live
+readiness, and backfilled peak-clock fields remain research-only.
+
 ## Date/City/Hour Missing-Field Summary
 
 The coverage CSV has one row per `target_date + city + decision_hour_local` with booleans and a `missing_fields` list. The largest state-level gaps are:

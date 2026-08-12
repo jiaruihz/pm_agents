@@ -135,6 +135,10 @@ system contract 和 ops runbook。
   snapshot 吸收；Helsinki single-margin 7/22 partial 被同合同、扩展日期的 7/25 refresh 吸收；
   source-quality v1 的 score 定义与 333-row historical slice 并入 v2 forward report。共删除 4 份
   平行 Markdown；相关 producer 默认输出改到 generated 或稳定 retained report，避免删后再生成。
+- 2026-08-12：全文核对 atlas feature-factory 的 10 份分片报告。它们共享同一 verdict、schema 和字段说明，
+  唯一差异只有日期、生成时间、覆盖计数以及 05/19..06/20 refresh 的 peak-clock lineage。上述差异已压入稳定
+  `2026-06-16-reheat-feature-factory-v1.md` 的 shard inventory；CSV/JSON 事实产物原位保留，10 份模板化 Markdown
+  删除。freshness producer 后续只生成被 Git 忽略的本地 run receipt，避免每个日期分片重新制造一篇“文档”。
 
 ## 仍有效的历史边界
 

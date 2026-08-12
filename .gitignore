@@ -104,6 +104,12 @@ docs/analysis/**/generated/**/*.npy
 docs/analysis/**/generated/**/*.npz
 docs/analysis/**/generated/**/*.png
 
+# Feature-factory shards share one contract.  Keep their CSV/JSON artifacts,
+# but consolidate revision facts in the stable factory report instead of
+# accumulating one near-identical Markdown file per date shard.
+docs/analysis/**/generated/intraday_weather_regime_atlas_v1/feature_factory_*.md
+docs/analysis/**/generated/intraday_weather_regime_atlas_v1/feature_factory_*/*.md
+
 # Local compatibility links into the external research stores.  These are
 # absolute, host-specific symlinks; commit the adjacent README/manifest locator
 # instead of the links themselves.

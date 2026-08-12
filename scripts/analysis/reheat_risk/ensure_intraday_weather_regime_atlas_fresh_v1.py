@@ -289,7 +289,10 @@ def build_feature_shard(start: str, end: str, db_path: Path, atlas_dir: Path, ac
         "--out-json",
         str(out_dir / "summary.json"),
         "--out-md",
-        str(out_dir / "README.md"),
+        # Useful local run receipt, but not a durable knowledge document.  Git
+        # ignores these repetitive shard reports; the stable factory report
+        # owns the consolidated revision inventory.
+        str(out_dir / "factory_run.md"),
     ]
     run_command(cmd, actions)
 
