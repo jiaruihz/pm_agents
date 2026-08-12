@@ -8,10 +8,19 @@ brackets? If yes -> station-mismatch mechanism. If edge is on same-settle days
 too -> mechanism is NOT station.
 """
 from __future__ import annotations
-import glob, json, math
+import glob, json, math, sys
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.observed_max.historical_artifacts import (  # noqa: E402
+    m3_orderbook_best_ask_quotes,
+    pm_history_winner_label,
+)
 
 def rhu(x): return math.floor(float(x) + 0.5)
 
@@ -48,21 +57,12 @@ for city, (oi, wi, unit, tz) in CFG.items():
     for day, g in d.groupby("ld"):
         wrong_final[(city, day)] = rhu(g[col].max())
 
-q = pd.concat([pd.read_csv(f) for f in glob.glob(
-    "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v2_h14_17/m3_orderbook_best_ask_quotes.csv")],
-    ignore_index=True)
+q = pd.read_csv(m3_orderbook_best_ask_quotes())
 q = q[(q.outcome == "yes") & q.city.isin(CFG) & q.decision_hour_local.between(14, 16)].copy()
 q["snap"] = pd.to_datetime(q["snapshot_ts_utc"], utc=True, errors="coerce")
 
-pmdir = Path("runtime/weather_edge_v1/market_data/cache/pm_history")
 def winner(city, day):
-    f = pmdir / f"{city}_{day}.json"
-    if not f.exists(): return None
-    d = json.loads(f.read_text())
-    if not isinstance(d, dict): return None
-    ws = [str(b.get("label", "")).strip() for b in (d.get("brackets") or [])
-          if (b.get("final_price") or 0) >= 0.99]
-    return ws[0] if len(ws) == 1 else None
+    return pm_history_winner_label(city, day)
 
 # official FINAL bracket per city-day (for divergence vs wrong)
 off_final = {}

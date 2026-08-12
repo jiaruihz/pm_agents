@@ -4,9 +4,18 @@ cities/days? Per-city breakdown + drop-top-day concentration + first/second
 half split. STRICT no-leak (obs <= snapshot_ts), IEM, pm_history settlement.
 """
 from __future__ import annotations
-import glob, json, math
+import glob, json, math, sys
 from pathlib import Path
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.observed_max.historical_artifacts import (  # noqa: E402
+    m3_orderbook_best_ask_quotes,
+    pm_history_winner_label,
+)
 
 def rhu(x): return math.floor(float(x) + 0.5)
 CFG = {"Paris": ("LFPB", "C"), "London": ("EGLC", "C"), "Milan": ("LIMC", "C"),
@@ -19,20 +28,11 @@ for city, (icao, unit) in CFG.items():
     df[col] = pd.to_numeric(df[col], errors="coerce")
     obs[city] = (df.dropna(subset=["valid", col]).sort_values("valid"), col, unit)
 
-q = pd.concat([pd.read_csv(f) for f in glob.glob(
-    "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v2_h14_17/m3_orderbook_best_ask_quotes.csv")],
-    ignore_index=True)
+q = pd.read_csv(m3_orderbook_best_ask_quotes())
 q = q[(q.outcome == "yes") & q.city.isin(CFG) & q.decision_hour_local.between(14, 16)].copy()
 q["snap"] = pd.to_datetime(q["snapshot_ts_utc"], utc=True, errors="coerce")
-pmdir = Path("runtime/weather_edge_v1/market_data/cache/pm_history")
 def winner(city, day):
-    f = pmdir / f"{city}_{day}.json"
-    if not f.exists(): return None
-    d = json.loads(f.read_text())
-    if not isinstance(d, dict): return None
-    ws = [str(b.get("label", "")).strip() for b in (d.get("brackets") or [])
-          if (b.get("final_price") or 0) >= 0.99]
-    return ws[0] if len(ws) == 1 else None
+    return pm_history_winner_label(city, day)
 
 rows = []
 for r in q.itertuples():
