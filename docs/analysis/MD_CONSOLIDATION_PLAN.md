@@ -150,6 +150,10 @@ system contract 和 ops runbook。
   包含；571-state 扩分母四臂重跑作为独立 denominator section 保留，连同 OOF 表、CI、null-fold、漏斗、输入 SHA、
   calibration 和 evidence boundary。删除两个平行 Markdown，raw coverage audit 改指合并章节；producer 默认报告迁到
   JRS run artifact，避免复跑覆盖人工收口后的稳定证据文档。
+- 2026-08-12：mid-price-core 同日 `raw-calibration-drift` 被更完整的 `raw-degradation` 吸收。保留了没有精确
+  code-version 断点、两个可疑历史提交、side-probability 非单调桶，以及 candidate-vs-fill 不同向这四项独有证据；
+  删除平行报告及其无消费者一次性 producer。city×model 与 forecast-timing 报告因 denominator/机制不同继续保留，
+  没有为减少文件数而把不同归因混成一篇。
 
 ## 仍有效的历史边界
 

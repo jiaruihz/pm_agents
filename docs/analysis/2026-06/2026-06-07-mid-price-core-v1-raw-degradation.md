@@ -59,6 +59,26 @@ market implied YES probability 口径：BUY_YES 用 `market_price`，BUY_NO 用 
 - 真实机制（中等）：GFS 不是主要拖累；6 月后 GFS PnL 为正，ECMWF 明显为负。timing 上 `>T-28` 和 `T-26-28` 拖累，`T-22-24` 仍为正。
 - 样本不足/字段不足：forecast_jump 和 side_flip 没有明确 fact 字段；candidate edge jump proxy 与 opposite-side eligible rate 在 6 月前后接近，当前不能把它们定性为主因。
 
+### Calibration/code-break audit（合并自同日平行报告）
+
+- fact 层没有找到 6/01 单点版本断裂：目标实例在前后窗口均记录
+  `code_version=live-cycle-migration`、相同 strategy ID 和 0.25–0.75 entry
+  window。但该 code version 不是 git SHA，所以只能说明“没有被 fact
+  记录的断点”，不能证明运行代码没有变化。
+- 当时最可疑的提交是 `127b1a0`（per-side entry band + min-edge default）和
+  `5dd7fc3`（explicit strategy instances）。它们可能改变候选集合或实例归属，
+  但现有证据不能把概率退化归因给其中任一提交；需要 raw signal → plan →
+  order → fact 的逐层 lineage 才能确认。
+- raw side-probability calibration 并不单调：6 月后 `<=0.45` bucket 为 43
+  fills / -59.9% ROI，`0.55–0.65` 为 21 / +86.6%，`0.65–0.75` 为 34 /
+  -15.3%，`0.75–0.85` 为 50 / +15.2%，`>0.85` 为 87 / -21.3%。这与
+  下方 raw-edge 结果一致：不能用单个 probability threshold 修复。
+- candidate universe 只部分复现 fill 退化。6 月后 raw-edge `0.10–0.15`
+  有 33 eligible / 32 fills、counterfactual PnL +25.75；`0.15–0.25` 有
+  37 / 33、-22.55；`>0.25` 有 35 / 28、-6.94。候选与真实成交不完全
+  同向，是 execution selection、timing 或实例归属仍需审计的证据，而不是
+  为边际 raw signal 洗白。
+
 ## 1. 6 月前后总览
 
 | period | fills | active_days | cost_usd | pnl_usd | roi | win_rate | avg_raw_edge | avg_abs_yes_divergence | avg_hours_to_settle | pnl_ex_top3_wins |
@@ -289,3 +309,5 @@ eligible candidate universe timing proxy：
 - `forecast_jump` / `side_flip` 没有被物化为 fact 字段；本报告只用 candidate proxy，不给强机制结论。
 - 城市少于 5 个 settled fills 或少于 3 个 active target days 的分类均降级为 `sample_insufficient`。
 - blended gate 的正 delta 是 recent drift filter 线索，不是稳定 alpha 证明。
+- 本报告已吸收同日 `raw-calibration-drift` 的独有 code-break 与 calibration
+  结论；详细历史表仍可由 git 历史恢复，不再作为第二份当前证据入口。

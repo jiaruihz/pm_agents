@@ -56,8 +56,7 @@ Consumer rule: Range RV, adjacent3, side-band, BUY_NO single-leg, and basket stu
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
 | `docs/analysis/2026-06/2026-06-05-probability-calibration.md` | through 2026-06-05 snapshot | Raw model vs market calibration and ensemble baseline | active-evidence |
-| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md` | 2026-06 degradation review | raw / mid-price v1 degradation after June 1 | active-evidence |
-| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | 2026-06 drift review | calibration drift and market divergence | active-evidence |
+| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md` | 2026-06 degradation review | consolidated raw/mid-price degradation, calibration and code-break audit after June 1 | active-evidence |
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | 2026-06 timing review | forecast timing, side flip, market adverse move lineage | active-evidence |
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md` | 2026-06 city/model review | weak city/model slices and downgrade candidates | active-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-05-12 to 2026-06-06 candidate rows | city x model train-selected pockets; gates failed | active-evidence |
