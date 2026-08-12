@@ -34,6 +34,9 @@ production_releases:
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     expected_repo_sha: 9bb6678b936464df94bdc7ab1de80d6ddf500ecd
+  - release_id: tmin_cross_prev_no_shadow
+    checkout_root: /Users/deepsleep/projects/pm_agents_tmin_cross_prev_no_prod
+    expected_repo_sha: d450aba34a84ceb1d8344177cefad55de322d41f
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/projects/pm_agents_tmin_no_further_prod
     expected_repo_sha: ac6d6ebc5d034511acf0681d32dd81b7fb7a4d17
@@ -484,7 +487,7 @@ managed_runtimes:
     tmux_session: weather_tmin_cross_prev_no_shadow_v1
     role: shadow
     execution_mode: shadow
-    release_id: fast_observation
+    release_id: tmin_cross_prev_no_shadow
     start_script: scripts/ops/start_weather_tmin_cross_prev_no_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tmin_cross_prev_no_shadow_v1/latest_summary.json
     health_format: json
