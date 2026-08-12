@@ -18,7 +18,7 @@ production_releases:
     expected_repo_sha: 03691ebb36579f8a604936af19924c5123022439
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v3_prod
-    expected_repo_sha: c049184472971d21c509ba275814eaef0abfef80
+    expected_repo_sha: 44ce534aee204ff843ef4352313b6832c7b627a0
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/projects/pm_agents_dispute_repricing_prod
     expected_repo_sha: 95fe0532413a6798287b4cb7d93b4655ea1967ba
@@ -69,7 +69,7 @@ production_releases:
     expected_repo_sha: 68056035ec324305c3e60a88fb06dce1a63f2c11
   - release_id: paired_bid_mm
     checkout_root: /Users/deepsleep/projects/pm_agents_paired_bid_mm_prod
-    expected_repo_sha: c049184472971d21c509ba275814eaef0abfef80
+    expected_repo_sha: 44ce534aee204ff843ef4352313b6832c7b627a0
 
 canonical_refresh_release_id: control_plane
 # The mount name is a compatibility contract; UUID is the physical identity.
