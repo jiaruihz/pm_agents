@@ -6,6 +6,7 @@ from pathlib import Path
 from scripts.ops import weather_production_ctl as ctl
 from src.strategies.runtime.production import (
     WeatherManagedRuntimeSpec,
+    WeatherProductionReleaseSpec,
     WeatherProductionSpec,
     load_production_spec,
 )
@@ -1068,7 +1069,88 @@ def test_controller_restart_preflights_git_checkout_before_stop(monkeypatch, tmp
 
     assert calls == []
     assert result["status"] == "error"
-    assert result["reason"].startswith("checkout_bootstrap_missing_venv:")
+    assert result["reason"] == "checkout_git_identity_unreadable"
+
+
+def _committed_checkout(tmp_path: Path) -> str:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Codex Test"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "codex-test@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+    )
+    script = tmp_path / "start.sh"
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(0o755)
+    python = tmp_path / ".venv/bin/python"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    subprocess.run(["git", "add", "start.sh"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "initial"], cwd=tmp_path, check=True)
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp_path, text=True).strip()
+
+
+def test_controller_restart_rejects_dirty_tracked_checkout(tmp_path):
+    _committed_checkout(tmp_path)
+    (tmp_path / "start.sh").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+
+    result = ctl._checkout_start_preflight(spec, runtime)
+
+    assert result == {
+        "instance_id": "shadow",
+        "status": "error",
+        "reason": "checkout_dirty_tracked",
+    }
+
+
+def test_controller_restart_rejects_release_sha_mismatch(tmp_path):
+    observed_sha = _committed_checkout(tmp_path)
+    expected_sha = "0" * 40
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        release_id="shadow_release",
+        recovery_policy="safe",
+    )
+    base = production_spec(tmp_path, (runtime,))
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "releases": (
+                WeatherProductionReleaseSpec(
+                    release_id="shadow_release",
+                    checkout_root=tmp_path,
+                    expected_repo_sha=expected_sha,
+                ),
+            ),
+        }
+    )
+
+    result = ctl._checkout_start_preflight(spec, runtime)
+
+    assert result == {
+        "instance_id": "shadow",
+        "status": "error",
+        "reason": (
+            "checkout_release_sha_mismatch:"
+            f"expected={expected_sha}:observed={observed_sha}"
+        ),
+    }
 
 
 def test_controller_restart_starts_missing_safe_runtime(monkeypatch, tmp_path):

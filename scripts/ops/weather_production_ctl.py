@@ -1076,6 +1076,7 @@ def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> N
 
 
 def _checkout_start_preflight(
+    spec: WeatherProductionSpec,
     runtime: WeatherManagedRuntimeSpec,
 ) -> dict[str, Any] | None:
     """Validate a git production checkout before an existing session is stopped."""
@@ -1083,6 +1084,52 @@ def _checkout_start_preflight(
     script = runtime.resolved_start_script()
     if checkout is None or not (checkout / ".git").exists():
         return None
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=checkout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if head.returncode != 0:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": "checkout_git_identity_unreadable",
+        }
+    observed_sha = head.stdout.strip()
+    if runtime.release_id:
+        expected_sha = spec.release(runtime.release_id).expected_repo_sha
+        if observed_sha != expected_sha:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": (
+                    "checkout_release_sha_mismatch:"
+                    f"expected={expected_sha}:observed={observed_sha}"
+                ),
+            }
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=checkout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if status.returncode != 0:
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": "checkout_cleanliness_unreadable",
+        }
+    if status.stdout.strip():
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": "checkout_dirty_tracked",
+        }
     python = checkout / ".venv/bin/python"
     if not python.exists():
         return {
@@ -1201,7 +1248,7 @@ def _run_start(
         return {"instance_id": runtime.instance_id, "status": "blocked", "reason": "confirm_live_required"}
     if not script.exists():
         return {"instance_id": runtime.instance_id, "status": "error", "reason": f"start_script_missing:{script}"}
-    preflight_error = _checkout_start_preflight(runtime)
+    preflight_error = _checkout_start_preflight(spec, runtime)
     if preflight_error is not None:
         return preflight_error
     try:
@@ -1238,7 +1285,7 @@ def _run_restart(
     *,
     confirm_live: bool,
 ) -> dict[str, Any]:
-    preflight_error = _checkout_start_preflight(runtime)
+    preflight_error = _checkout_start_preflight(spec, runtime)
     if preflight_error is not None:
         return preflight_error
     script = runtime.resolved_restart_script()
