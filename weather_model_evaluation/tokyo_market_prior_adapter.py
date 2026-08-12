@@ -24,10 +24,20 @@ from zoneinfo import ZoneInfo
 
 import joblib
 import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from src.strategies.weather_city_probability_shadow.tokyo import (
     _weather_features,
     _weather_stay_probability,
+)
+from weather_model_evaluation.probability import (
+    binary_loss_values,
+    binary_score,
+    date_block_bootstrap_delta,
 )
 
 
@@ -61,6 +71,28 @@ TOKYO = ZoneInfo("Asia/Tokyo")
 MODEL_ID = "tokyo_state_entry_routed_market_residual_v7"
 SHARES = 5.0
 FEE_RATE = 0.05
+WEATHER_FEATURE_PREFIX = "weather_feature__"
+PRE_CROSS_MODEL_ID = "weather.city_intraday_probability.tokyo_pre_cross_market_sharpening"
+PRE_CROSS_CANDIDATE_GRAIN_VERSION = "tokyo_first_pre_cross_proximity_per_bracket_v1"
+PRE_CROSS_MARGIN_MIN_C = 0.3
+PRE_CROSS_MARGIN_MAX_C = 0.5
+PRE_CROSS_MARKET_CONFIRMATION_FLOOR = 0.5
+PRE_CROSS_EXPONENTS = (1.0, 1.25, 1.5, 2.0)
+PRE_CROSS_PHYSICAL_FEATURES = (
+    "jma_current_minus_current_bracket",
+    "remaining_to_18h",
+    "jma_temp_delta_10m",
+    "jma_temp_slope_30m_cph",
+    "jma_temp_slope_60m_cph",
+    "minutes_since_jma_strict_high",
+    "jma_warming_run_count",
+    "jma_pullback_from_running_max_c",
+    "solar_elevation_deg",
+    "local_hour_sin",
+    "local_hour_cos",
+    "doy_sin",
+    "doy_cos",
+)
 
 
 def parse_ts(value: Any) -> datetime:
@@ -77,6 +109,17 @@ def finite(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if math.isfinite(parsed) else None
+
+
+def _attach_weather_features(
+    row: dict[str, Any],
+    features: dict[str, Any],
+    feature_names: Iterable[str],
+) -> None:
+    """Persist the PIT feature frame used by the frozen weather head."""
+
+    for name in feature_names:
+        row[f"{WEATHER_FEATURE_PREFIX}{name}"] = finite(features.get(name))
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -609,8 +652,7 @@ def materialize_raw_exact(
                 counts["settled_rows"] += 1
             if cash_cost is not None:
                 counts["five_share_depth_rows"] += 1
-            rows.append(
-                {
+            output_row = {
                     "city": "Tokyo",
                     "target_date": target_date,
                     "event_id": str(
@@ -661,7 +703,8 @@ def materialize_raw_exact(
                     "availability_clock_class": event["_exact_clock_class"],
                     "evaluation_role": "strict_pit_forward",
                 }
-            )
+            _attach_weather_features(output_row, features, metadata["features"])
+            rows.append(output_row)
     rows.sort(key=lambda row: (row["target_date"], row["quote_ts_utc"], row["bracket"]))
     summary = {
         "schema_version": "tokyo_raw_exact_market_prior_expression_v2",
@@ -850,7 +893,10 @@ def load_frozen_v5_no_probabilities(
     weather_artifact: Path,
     weather_spec: Path,
     wanted: set[tuple[str, str, int]],
-) -> dict[tuple[str, str, int], float]:
+) -> tuple[
+    dict[tuple[str, str, int], float],
+    dict[tuple[str, str, int], dict[str, Any]],
+]:
     """Score development rows with the exact weather artifact used by WCIR."""
 
     spec = json.loads(weather_spec.read_text(encoding="utf-8"))
@@ -892,10 +938,11 @@ def load_frozen_v5_no_probabilities(
     probabilities = model.predict_proba(matrix)
     classes = [int(value) for value in model.named_steps["model"].classes_]
     break_index = classes.index(1)
-    return {
+    probabilities_by_key = {
         key: _logit_probability(float(probabilities[index, break_index]), temperature)
         for index, key in enumerate(keys)
     }
+    return probabilities_by_key, matched
 
 
 def load_archive_development(
@@ -904,13 +951,16 @@ def load_archive_development(
     feature_rows: Path,
     weather_artifact: Path,
     weather_spec: Path,
+    clock_classes: tuple[str, ...] = ("archive_reconstructed_plus_15m",),
 ) -> list[dict[str, Any]]:
     """Adapt the frozen replay using the same frozen weather head as WCIR."""
+    feature_names = json.loads(weather_spec.read_text(encoding="utf-8"))["features"]
     opener = gzip.open if path.suffix == ".gz" else open
     source_rows: list[dict[str, Any]] = []
     with opener(path, "rt", encoding="utf-8", newline="") as handle:
         for raw in csv.DictReader(handle):
-            if raw.get("availability_clock_class") != "archive_reconstructed_plus_15m":
+            clock_class = str(raw.get("availability_clock_class") or "")
+            if clock_class not in clock_classes:
                 continue
             current = str(raw.get("current_bracket") or "")
             quotes = json.loads(str(raw.get("quotes_json") or "{}"))
@@ -939,7 +989,11 @@ def load_archive_development(
                     "event_id": (
                         f"archive:{raw['state_id']}:{raw['snapshot_ts_utc']}"
                     ),
-                    "event_source": "jma_archive_observation_clock",
+                    "event_source": (
+                        "jma_amedas"
+                        if clock_class.startswith("collector_exact")
+                        else "jma_archive_observation_clock"
+                    ),
                     "event_decision_ts_utc": decision.isoformat(),
                     "quote_ts_utc": quote.isoformat(),
                     "event_age_min": (quote - decision).total_seconds() / 60.0,
@@ -957,10 +1011,31 @@ def load_archive_development(
                     "effective_cost_5": None,
                     "displayed_ask_depth_5": 0,
                     "won_no": int(actual_delta != 0),
-                    "availability_clock_class": "archive_reconstructed_plus_15m",
+                    "availability_clock_class": clock_class,
                     "evaluation_role": "development_only",
                 }
             )
+    # Prefer the stronger exact collector clock when archive and exact rows
+    # describe the same physical checkpoint.  Keeping both would overweight a
+    # delivery-format duplicate rather than add an independent observation.
+    priority = {
+        "archive_reconstructed_plus_15m": 0,
+        "collector_exact_hash_verified": 1,
+        "collector_exact": 2,
+    }
+    deduplicated: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for row in source_rows:
+        key = (
+            str(row["target_date"]),
+            parse_ts(row["source_obs_ts_utc"]).isoformat(),
+            int(float(row["bracket"])),
+        )
+        incumbent = deduplicated.get(key)
+        if incumbent is None or priority.get(
+            str(row["availability_clock_class"]), -1
+        ) > priority.get(str(incumbent["availability_clock_class"]), -1):
+            deduplicated[key] = row
+    source_rows = list(deduplicated.values())
     wanted = {
         (
             str(row["target_date"]),
@@ -969,7 +1044,7 @@ def load_archive_development(
         )
         for row in source_rows
     }
-    probability_by_key = load_frozen_v5_no_probabilities(
+    probability_by_key, feature_by_key = load_frozen_v5_no_probabilities(
         feature_rows=feature_rows,
         weather_artifact=weather_artifact,
         weather_spec=weather_spec,
@@ -986,8 +1061,658 @@ def load_archive_development(
         row["model_no_probability"] = model_no
         row["weather_probability_stay"] = 1.0 - model_no
         row["weather_model_id"] = "binary_multigrain_hgb_v5"
+        _attach_weather_features(
+            row,
+            feature_by_key[key],
+            feature_names,
+        )
         output.append(row)
     return output
+
+
+def _date_equal_fit_weights(frame: pd.DataFrame) -> np.ndarray:
+    counts = frame["target_date"].astype(str).map(
+        frame["target_date"].astype(str).value_counts()
+    )
+    weights = 1.0 / counts.to_numpy(dtype=float)
+    return weights / weights.mean()
+
+
+def _date_equal_brier(frame: pd.DataFrame, probability: np.ndarray) -> float:
+    loss = (probability - frame["won_no"].to_numpy(dtype=float)) ** 2
+    daily = pd.DataFrame(
+        {"target_date": frame["target_date"].astype(str), "loss": loss}
+    ).groupby("target_date", sort=True)["loss"].mean()
+    return float(daily.mean())
+
+
+def _sharpen_probability(probability: pd.Series, exponent: float) -> np.ndarray:
+    clipped = np.clip(probability.to_numpy(dtype=float), 1e-6, 1.0 - 1e-6)
+    logit = np.log(clipped / (1.0 - clipped))
+    sharpened = 1.0 / (1.0 + np.exp(-float(exponent) * logit))
+    return np.where(
+        clipped >= PRE_CROSS_MARKET_CONFIRMATION_FLOOR,
+        sharpened,
+        clipped,
+    )
+
+
+def build_tokyo_pre_cross_candidates(
+    frame: pd.DataFrame,
+    *,
+    require_settled: bool = True,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Build the first source-proximity state per Tokyo date and bracket.
+
+    The source must still round to the official exact bracket.  This is a
+    pre-cross signal: JMA is within 0.2 C of its next native rounding boundary,
+    but has not printed the next integer bracket.  Selection is independent of
+    price, model probability, and settlement.
+    """
+
+    required = {
+        "target_date",
+        "event_id",
+        "event_decision_ts_utc",
+        "quote_ts_utc",
+        "bracket",
+        "market_no_probability",
+        "no_best_bid",
+        "no_best_ask",
+        "cash_cost_5",
+        "effective_cost_5",
+        "won_no",
+        "evaluation_role",
+        f"{WEATHER_FEATURE_PREFIX}jma_temp_c",
+    }
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(f"missing Tokyo pre-cross columns: {missing}")
+    work = frame.copy()
+    numeric = [
+        "bracket",
+        "market_no_probability",
+        "no_best_bid",
+        "no_best_ask",
+        "cash_cost_5",
+        "effective_cost_5",
+        "won_no",
+        f"{WEATHER_FEATURE_PREFIX}jma_temp_c",
+    ]
+    for column in numeric:
+        work[column] = pd.to_numeric(work[column], errors="coerce")
+    work["event_decision_ts_utc"] = pd.to_datetime(
+        work["event_decision_ts_utc"], utc=True, errors="coerce", format="mixed"
+    )
+    work["quote_ts_utc"] = pd.to_datetime(
+        work["quote_ts_utc"], utc=True, errors="coerce", format="mixed"
+    )
+    jma_temp = work[f"{WEATHER_FEATURE_PREFIX}jma_temp_c"]
+    work["source_rounded_bracket"] = np.floor(jma_temp + 0.5 + 1e-9)
+    work["pre_cross_margin_c"] = (jma_temp - work["bracket"]).round(3)
+    causal_two_sided = (
+        work["event_decision_ts_utc"].notna()
+        & work["quote_ts_utc"].notna()
+        & work["quote_ts_utc"].ge(work["event_decision_ts_utc"])
+        & work["market_no_probability"].between(0.0, 1.0, inclusive="both")
+        & work["no_best_bid"].between(0.0, 1.0, inclusive="both")
+        & work["no_best_ask"].between(0.0, 1.0, inclusive="both")
+        & work["no_best_bid"].le(work["no_best_ask"])
+    )
+    settled = work["won_no"].isin([0.0, 1.0])
+    complete = causal_two_sided & (settled if require_settled else True)
+    proximity = (
+        work["source_rounded_bracket"].eq(work["bracket"])
+        & work["pre_cross_margin_c"].ge(PRE_CROSS_MARGIN_MIN_C)
+        & work["pre_cross_margin_c"].lt(PRE_CROSS_MARGIN_MAX_C)
+    )
+    mechanism = work.loc[complete & proximity].copy()
+    mechanism = mechanism.sort_values(
+        [
+            "target_date",
+            "event_decision_ts_utc",
+            "quote_ts_utc",
+            "event_id",
+            "bracket",
+        ],
+        kind="stable",
+    )
+    candidates = mechanism.drop_duplicates(
+        ["target_date", "bracket"], keep="first"
+    ).reset_index(drop=True)
+    candidates["candidate_grain_version"] = PRE_CROSS_CANDIDATE_GRAIN_VERSION
+    candidates["model_id"] = PRE_CROSS_MODEL_ID
+    counts = {
+        "input_expression_rows": int(len(work)),
+        "causal_two_sided_rows": int(causal_two_sided.sum()),
+        "binary_settled_rows": int((causal_two_sided & settled).sum()),
+        "require_settled": int(require_settled),
+        "pre_cross_mechanism_rows": int((complete & proximity).sum()),
+        "first_date_bracket_candidates": int(len(candidates)),
+        "candidate_target_dates": int(candidates["target_date"].nunique()),
+    }
+    return candidates, counts
+
+
+def score_tokyo_pre_cross_forward(
+    expression_rows: list[dict[str, Any]],
+    *,
+    frozen_spec: dict[str, Any],
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Score frozen zero-notional candidates without using settlement labels."""
+
+    expected_model = str(frozen_spec.get("model_id") or "")
+    if expected_model != PRE_CROSS_MODEL_ID:
+        raise ValueError(f"unexpected Tokyo pre-cross model_id={expected_model!r}")
+    effective_from = str(frozen_spec["effective_from_target_date"])
+    exponent = float(frozen_spec["posterior"]["exponent"])
+    if exponent not in PRE_CROSS_EXPONENTS:
+        raise ValueError(f"unfrozen Tokyo pre-cross exponent={exponent}")
+    candidates, funnel = build_tokyo_pre_cross_candidates(
+        pd.DataFrame(expression_rows), require_settled=False
+    )
+    candidates = candidates.loc[
+        candidates["target_date"].astype(str).ge(effective_from)
+    ].copy()
+    candidates["p_pre_cross_posterior"] = _sharpen_probability(
+        candidates["market_no_probability"], exponent
+    )
+    candidates["entry_edge"] = (
+        candidates["p_pre_cross_posterior"] - candidates["effective_cost_5"]
+    )
+    executable = (
+        candidates["cash_cost_5"].gt(0.0)
+        & candidates["effective_cost_5"].gt(0.0)
+        & candidates["displayed_ask_depth_5"].eq(1)
+    )
+    candidates["zero_notional_signal"] = executable & candidates[
+        "entry_edge"
+    ].gt(0.0)
+    candidates["signal_notional"] = 0.0
+    candidates["side"] = "NO"
+    candidates["shares_if_replayed"] = SHARES
+    candidates["candidate_status"] = np.where(
+        candidates["zero_notional_signal"],
+        "eligible_zero_notional",
+        np.where(executable, "no_positive_edge", "execution_depth_blocked"),
+    )
+    summary = {
+        "schema_version": "tokyo_pre_cross_zero_notional_forward_v1",
+        "model_id": PRE_CROSS_MODEL_ID,
+        "candidate_grain_version": PRE_CROSS_CANDIDATE_GRAIN_VERSION,
+        "effective_from_target_date": effective_from,
+        "posterior_exponent": exponent,
+        "signal_funnel": funnel,
+        "forward_candidates": int(len(candidates)),
+        "forward_target_dates": int(candidates["target_date"].nunique()),
+        "zero_notional_signals": int(candidates["zero_notional_signal"].sum()),
+        "settlement_used_for_signal": False,
+        "signal_notional": 0.0,
+        "live_behavior_changed": False,
+    }
+    return candidates, summary
+
+
+def _historical_pre_cross_candidates(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
+    history = pd.read_csv(path)
+    required = {
+        "target_date",
+        "decision_ts_utc",
+        "current_bracket",
+        "jma_rounded_c",
+        "binary_leave_current",
+        *PRE_CROSS_PHYSICAL_FEATURES,
+    }
+    missing = sorted(required - set(history.columns))
+    if missing:
+        raise ValueError(f"missing historical pre-cross columns: {missing}")
+    history["target_date"] = history["target_date"].astype(str)
+    history["jma_current_minus_current_bracket"] = pd.to_numeric(
+        history["jma_current_minus_current_bracket"], errors="coerce"
+    ).round(3)
+    mechanism = history.loc[
+        pd.to_numeric(history["jma_rounded_c"], errors="coerce").eq(
+            pd.to_numeric(history["current_bracket"], errors="coerce")
+        )
+        & history["jma_current_minus_current_bracket"].ge(
+            PRE_CROSS_MARGIN_MIN_C
+        )
+        & history["jma_current_minus_current_bracket"].lt(
+            PRE_CROSS_MARGIN_MAX_C
+        )
+    ].copy()
+    mechanism = mechanism.sort_values(
+        ["target_date", "decision_ts_utc"], kind="stable"
+    )
+    candidates = mechanism.drop_duplicates(
+        ["target_date", "current_bracket"], keep="first"
+    ).reset_index(drop=True)
+    candidates["won_no"] = pd.to_numeric(
+        candidates["binary_leave_current"], errors="raise"
+    ).astype(int)
+    return candidates, {
+        "input_rows": int(len(history)),
+        "input_target_dates": int(history["target_date"].nunique()),
+        "input_start_date": str(history["target_date"].min()),
+        "input_end_date": str(history["target_date"].max()),
+        "mechanism_rows": int(len(mechanism)),
+        "first_date_bracket_candidates": int(len(candidates)),
+        "candidate_target_dates": int(candidates["target_date"].nunique()),
+    }
+
+
+def _fit_tokyo_pre_cross_physical_model(
+    history: pd.DataFrame,
+) -> tuple[Pipeline, pd.DataFrame, dict[str, Any]]:
+    train = history.loc[history["target_date"].le("2025-06-30")].copy()
+    calibration = history.loc[
+        history["target_date"].between("2025-07-01", "2025-12-31")
+    ].copy()
+    audit = history.loc[
+        history["target_date"].between("2026-01-01", "2026-07-15")
+    ].copy()
+    if min(train["won_no"].nunique(), calibration["won_no"].nunique()) < 2:
+        raise ValueError("Tokyo pre-cross physical split has a single label")
+    candidates = (0.03, 0.1, 0.3)
+    selection_rows: list[dict[str, Any]] = []
+    fitted: dict[float, Pipeline] = {}
+    for regularization in candidates:
+        model = Pipeline(
+            [
+                ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+                ("scale", StandardScaler()),
+                (
+                    "model",
+                    LogisticRegression(
+                        C=regularization,
+                        max_iter=1000,
+                        random_state=20260812,
+                    ),
+                ),
+            ]
+        )
+        model.fit(
+            train[list(PRE_CROSS_PHYSICAL_FEATURES)],
+            train["won_no"],
+            model__sample_weight=_date_equal_fit_weights(train),
+        )
+        probability = model.predict_proba(
+            calibration[list(PRE_CROSS_PHYSICAL_FEATURES)]
+        )[:, 1]
+        selection_rows.append(
+            {
+                "regularization_c": regularization,
+                "calibration_brier": _date_equal_brier(
+                    calibration, probability
+                ),
+            }
+        )
+        fitted[regularization] = model
+    selected = min(
+        selection_rows,
+        key=lambda row: (row["calibration_brier"], row["regularization_c"]),
+    )["regularization_c"]
+    selected_model = fitted[float(selected)]
+    split_scores = []
+    for name, split in (("calibration", calibration), ("physical_audit", audit)):
+        probability = selected_model.predict_proba(
+            split[list(PRE_CROSS_PHYSICAL_FEATURES)]
+        )[:, 1]
+        split_scores.append(
+            {
+                "split": name,
+                "model": "source_only_logistic",
+                **binary_score(split, probability, label_column="won_no"),
+            }
+        )
+    final_train = history.loc[history["target_date"].le("2026-07-15")].copy()
+    final_model = Pipeline(
+        [
+            ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+            ("scale", StandardScaler()),
+            (
+                "model",
+                LogisticRegression(
+                    C=float(selected), max_iter=1000, random_state=20260812
+                ),
+            ),
+        ]
+    )
+    final_model.fit(
+        final_train[list(PRE_CROSS_PHYSICAL_FEATURES)],
+        final_train["won_no"],
+        model__sample_weight=_date_equal_fit_weights(final_train),
+    )
+    summary = {
+        "target": "P(final official exact bracket leaves current bracket upward)",
+        "features": list(PRE_CROSS_PHYSICAL_FEATURES),
+        "excluded_runtime_features": {
+            "jma_wind_and_precip": "strict exact runtime coverage is zero",
+            "metar_join": (
+                "current exact prior-METAR age exceeds historical training support; "
+                "excluded until clock parity is rebuilt"
+            ),
+        },
+        "selection_metric": "target-date-equal Brier",
+        "selection_candidates": selection_rows,
+        "selected_regularization_c": float(selected),
+        "train": {
+            "end": "2025-06-30",
+            "rows": int(len(train)),
+            "target_dates": int(train["target_date"].nunique()),
+        },
+        "calibration": {
+            "start": "2025-07-01",
+            "end": "2025-12-31",
+            "rows": int(len(calibration)),
+            "target_dates": int(calibration["target_date"].nunique()),
+        },
+        "physical_audit": {
+            "start": "2026-01-01",
+            "end": "2026-07-15",
+            "rows": int(len(audit)),
+            "target_dates": int(audit["target_date"].nunique()),
+        },
+        "final_refit": {
+            "end": "2026-07-15",
+            "rows": int(len(final_train)),
+            "target_dates": int(final_train["target_date"].nunique()),
+        },
+    }
+    return final_model, pd.DataFrame(split_scores), summary
+
+
+def _roi_bootstrap(
+    trades: pd.DataFrame, *, draws: int, seed: int
+) -> dict[str, Any]:
+    if trades.empty:
+        return {
+            "trades": 0,
+            "target_dates": 0,
+            "wins": 0,
+            "cash_cost_5": 0.0,
+            "pnl_5": 0.0,
+            "roi": None,
+            "roi_ci_low": None,
+            "roi_ci_high": None,
+        }
+    daily = trades.groupby("target_date", sort=True).agg(
+        cash_cost_5=("cash_cost_5", "sum"), pnl_5=("pnl_5", "sum")
+    )
+    values = daily[["cash_cost_5", "pnl_5"]].to_numpy(dtype=float)
+    rng = np.random.default_rng(seed)
+    indexes = rng.integers(0, len(values), size=(draws, len(values)))
+    sampled = values[indexes].sum(axis=1)
+    roi = sampled[:, 1] / sampled[:, 0]
+    cash = float(values[:, 0].sum())
+    pnl = float(values[:, 1].sum())
+    return {
+        "trades": int(len(trades)),
+        "target_dates": int(trades["target_date"].nunique()),
+        "wins": int(trades["won_no"].sum()),
+        "cash_cost_5": cash,
+        "pnl_5": pnl,
+        "roi": pnl / cash,
+        "roi_ci_low": float(np.quantile(roi, 0.025)),
+        "roi_ci_high": float(np.quantile(roi, 0.975)),
+    }
+
+
+def run_tokyo_pre_cross_research(
+    expression_rows: list[dict[str, Any]],
+    *,
+    historical_feature_rows: Path,
+    clean_forward_start: str,
+    bootstrap_draws: int = 20_000,
+) -> tuple[dict[str, Any], dict[str, pd.DataFrame], Pipeline]:
+    """Fit and replay the bounded Tokyo pre-cross market posterior."""
+
+    if bootstrap_draws <= 0:
+        raise ValueError("bootstrap_draws must be positive")
+    expressions = pd.DataFrame(expression_rows)
+    candidates, signal_funnel = build_tokyo_pre_cross_candidates(expressions)
+    history, history_funnel = _historical_pre_cross_candidates(
+        historical_feature_rows
+    )
+    physical_model, physical_scores, physical_summary = (
+        _fit_tokyo_pre_cross_physical_model(history)
+    )
+    for feature in PRE_CROSS_PHYSICAL_FEATURES:
+        if feature == "jma_current_minus_current_bracket":
+            candidates[feature] = candidates["pre_cross_margin_c"]
+        else:
+            source = f"{WEATHER_FEATURE_PREFIX}{feature}"
+            candidates[feature] = pd.to_numeric(
+                candidates.get(source), errors="coerce"
+            )
+    candidates["p_physical_source_only"] = physical_model.predict_proba(
+        candidates[list(PRE_CROSS_PHYSICAL_FEATURES)]
+    )[:, 1]
+    development = candidates.loc[
+        candidates["evaluation_role"].eq("development_only")
+    ].copy()
+    if development.empty:
+        raise ValueError("Tokyo pre-cross research requires development_only rows")
+    selection_rows = []
+    for exponent in PRE_CROSS_EXPONENTS:
+        probability = _sharpen_probability(
+            development["market_no_probability"], exponent
+        )
+        selection_rows.append(
+            {
+                "exponent": exponent,
+                "development_brier": _date_equal_brier(
+                    development, probability
+                ),
+            }
+        )
+    selected_exponent = min(
+        selection_rows,
+        key=lambda row: (row["development_brier"], row["exponent"]),
+    )["exponent"]
+    candidates["p_raw_market"] = candidates["market_no_probability"]
+    candidates["p_pre_cross_posterior"] = _sharpen_probability(
+        candidates["market_no_probability"], float(selected_exponent)
+    )
+
+    sensitivity_rows = []
+    score_rows = []
+    bootstrap_rows = []
+    role_mapping = {
+        "development_only": "parameter_development",
+        "strict_pit_forward": "reused_audit_not_clean_forward",
+    }
+    for role, subset in candidates.groupby("evaluation_role", sort=True):
+        evaluation_slice = role_mapping.get(role, role)
+        for exponent in PRE_CROSS_EXPONENTS:
+            sensitivity_rows.append(
+                {
+                    "evaluation_slice": evaluation_slice,
+                    "exponent": exponent,
+                    "brier": _date_equal_brier(
+                        subset,
+                        _sharpen_probability(
+                            subset["market_no_probability"], exponent
+                        ),
+                    ),
+                    "rows": int(len(subset)),
+                    "target_dates": int(subset["target_date"].nunique()),
+                }
+            )
+        for model, column in (
+            ("raw_market", "p_raw_market"),
+            ("physical_source_only", "p_physical_source_only"),
+            ("pre_cross_market_posterior", "p_pre_cross_posterior"),
+        ):
+            score_rows.append(
+                {
+                    "evaluation_slice": evaluation_slice,
+                    "model": model,
+                    **binary_score(
+                        subset, subset[column], label_column="won_no"
+                    ),
+                }
+            )
+        for metric in ("brier", "logloss"):
+            bootstrap_rows.append(
+                {
+                    "evaluation_slice": evaluation_slice,
+                    "model": "pre_cross_market_posterior",
+                    "baseline": "raw_market",
+                    "metric": metric,
+                    **date_block_bootstrap_delta(
+                        subset,
+                        binary_loss_values(
+                            subset["won_no"],
+                            subset["p_pre_cross_posterior"],
+                            metric=metric,
+                        ),
+                        binary_loss_values(
+                            subset["won_no"],
+                            subset["p_raw_market"],
+                            metric=metric,
+                        ),
+                        draws=bootstrap_draws,
+                        seed=20260812,
+                    ),
+                }
+            )
+
+    candidates["proxy_effective_cost_5"] = (
+        candidates["no_best_ask"]
+        + candidates["no_best_ask"].map(weather_fee_per_share)
+    )
+    exact_cost = candidates["effective_cost_5"].where(
+        candidates["evaluation_role"].eq("strict_pit_forward")
+    )
+    candidates["replay_effective_cost_5"] = exact_cost.fillna(
+        candidates["proxy_effective_cost_5"]
+    )
+    exact_cash = candidates["cash_cost_5"].where(
+        candidates["evaluation_role"].eq("strict_pit_forward")
+    )
+    candidates["replay_cash_cost_5"] = exact_cash.fillna(
+        SHARES * candidates["proxy_effective_cost_5"]
+    )
+    candidates["entry_edge"] = (
+        candidates["p_pre_cross_posterior"]
+        - candidates["replay_effective_cost_5"]
+    )
+    candidates["selected_trade"] = candidates["entry_edge"].gt(0.0)
+    candidates["execution_evidence"] = np.where(
+        candidates["evaluation_role"].eq("strict_pit_forward"),
+        "exact_5_share_depth",
+        "top_of_book_proxy_no_depth",
+    )
+    trades = candidates.loc[candidates["selected_trade"]].copy()
+    trades["cash_cost_5"] = trades["replay_cash_cost_5"]
+    trades["effective_cost_5"] = trades["replay_effective_cost_5"]
+    trades["pnl_5"] = np.where(
+        trades["won_no"].eq(1),
+        SHARES - trades["cash_cost_5"],
+        -trades["cash_cost_5"],
+    )
+    trade_summary = {}
+    for role, subset in trades.groupby("evaluation_role", sort=True):
+        trade_summary[role_mapping.get(role, role)] = _roi_bootstrap(
+            subset, draws=bootstrap_draws, seed=20260812
+        )
+
+    score_table = pd.DataFrame(score_rows)
+    bootstrap_table = pd.DataFrame(bootstrap_rows)
+    audit_bootstrap = bootstrap_table.loc[
+        bootstrap_table["evaluation_slice"].eq(
+            "reused_audit_not_clean_forward"
+        )
+        & bootstrap_table["metric"].eq("brier")
+    ].iloc[0]
+    audit_trade = trade_summary.get("reused_audit_not_clean_forward", {})
+    development_trade = trade_summary.get("parameter_development", {})
+    point_profitable = bool(
+        (development_trade.get("pnl_5") or 0.0) > 0.0
+        and (audit_trade.get("pnl_5") or 0.0) > 0.0
+    )
+    summary = {
+        "schema_version": "tokyo_pre_cross_market_sharpening_research_v1",
+        "model_id": PRE_CROSS_MODEL_ID,
+        "candidate_grain_version": PRE_CROSS_CANDIDATE_GRAIN_VERSION,
+        "city": "Tokyo",
+        "target": "P(final official exact bracket leaves current bracket upward)",
+        "state_rule": {
+            "source": "JMA AMeDAS exact first-seen",
+            "source_rounded_bracket_equals_official_current": True,
+            "pre_cross_margin_c": [
+                PRE_CROSS_MARGIN_MIN_C,
+                PRE_CROSS_MARGIN_MAX_C,
+            ],
+            "interval": "left_closed_right_open",
+            "selection": "first state entry per target_date and exact bracket",
+        },
+        "posterior": {
+            "formula": (
+                "P_market_NO below 0.5 is unchanged; otherwise "
+                "sigmoid(exponent * logit(P_market_NO))"
+            ),
+            "market_confirmation_floor": PRE_CROSS_MARKET_CONFIRMATION_FLOOR,
+            "candidate_exponents": list(PRE_CROSS_EXPONENTS),
+            "selection_metric": "target-date-equal Brier on development_only",
+            "selection_trials_k": len(PRE_CROSS_EXPONENTS),
+            "selection_table": selection_rows,
+            "selected_exponent": float(selected_exponent),
+        },
+        "denominator_scope": (
+            "Tokyo rows in the supplied expression artifact with causal two-sided "
+            "PIT book, binary settlement, exact JMA feature frame, and first "
+            "pre-cross proximity state per target_date/bracket"
+        ),
+        "signal_funnel": signal_funnel,
+        "historical_physical_funnel": history_funnel,
+        "physical_negative_control": physical_summary,
+        "evaluation_roles": {
+            "development_only": (
+                "2026-07 archive-reconstructed or hash-verified exact rows; "
+                "parameter selection only"
+            ),
+            "strict_pit_forward": (
+                "2026-08-01..2026-08-11 raw exact rows; reused audit because the "
+                "research direction had already inspected this window"
+            ),
+            "clean_forward_start": clean_forward_start,
+        },
+        "trade_expression": (
+            "BUY 5 NO once at the first pre-cross state only when posterior exceeds "
+            "official-fee-adjusted five-share cost; never wait for a later cheaper quote"
+        ),
+        "trade_summary": trade_summary,
+        "live_gates": {
+            "absolute_fee_roi_significant": bool(
+                audit_trade.get("roi_ci_low") is not None
+                and audit_trade["roi_ci_low"] > 0.0
+            ),
+            "same_denominator_market_brier_significant": bool(
+                float(audit_bootstrap["ci_high"]) < 0.0
+            ),
+            "clean_frozen_forward": "NA",
+            "live_eligible": False,
+        },
+        "research_status": (
+            "shadow_candidate" if point_profitable else "inconclusive"
+        ),
+        "action": (
+            f"freeze zero-notional forward from {clean_forward_start}; no live change"
+        ),
+        "research_only_zero_notional": True,
+        "live_behavior_changed": False,
+    }
+    frames = {
+        "candidates": candidates,
+        "scores": score_table,
+        "bootstrap": bootstrap_table,
+        "sensitivity": pd.DataFrame(sensitivity_rows),
+        "physical_scores": physical_scores,
+        "trades": trades,
+    }
+    return summary, frames, physical_model
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -1034,9 +1759,44 @@ def main(argv: list[str] | None = None) -> int:
         "--development-feature-rows", type=Path, default=DEFAULT_FEATURE_ROWS
     )
     parser.add_argument(
+        "--development-clock-class",
+        action="append",
+        dest="development_clock_classes",
+        help=(
+            "Accepted development clock class; repeat to combine classes. "
+            "Defaults to archive_reconstructed_plus_15m for backward compatibility."
+        ),
+    )
+    parser.add_argument(
         "--weather-artifact", type=Path, default=DEFAULT_WEATHER_ARTIFACT
     )
     parser.add_argument("--weather-spec", type=Path, default=DEFAULT_WEATHER_SPEC)
+    parser.add_argument(
+        "--run-pre-cross-research",
+        action="store_true",
+        help=(
+            "Run the Tokyo first-pre-cross market-sharpening research on the "
+            "materialized fixed denominator. Research/zero-notional only."
+        ),
+    )
+    parser.add_argument(
+        "--pre-cross-history-rows", type=Path, default=DEFAULT_FEATURE_ROWS
+    )
+    parser.add_argument(
+        "--pre-cross-clean-forward-start",
+        help="Frozen zero-notional start date; defaults to the day after --end-date.",
+    )
+    parser.add_argument(
+        "--pre-cross-bootstrap-draws", type=int, default=20_000
+    )
+    parser.add_argument(
+        "--pre-cross-forward-spec",
+        type=Path,
+        help=(
+            "Score the materialized rows with a frozen Tokyo pre-cross spec. "
+            "Writes zero-notional telemetry only and does not deploy a runner."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.legacy_bundle_input:
@@ -1069,6 +1829,10 @@ def main(argv: list[str] | None = None) -> int:
             feature_rows=args.development_feature_rows,
             weather_artifact=args.weather_artifact,
             weather_spec=args.weather_spec,
+            clock_classes=tuple(
+                args.development_clock_classes
+                or ["archive_reconstructed_plus_15m"]
+            ),
         )
         if args.development_market_join is not None
         else []
@@ -1085,7 +1849,15 @@ def main(argv: list[str] | None = None) -> int:
             "sha256": sha256_file(args.development_market_join),
             "rows": len(development),
             "dates": len({row["target_date"] for row in development}),
-            "clock_class": "archive_reconstructed_plus_15m",
+            "clock_class_counts": {
+                clock_class: sum(
+                    row["availability_clock_class"] == clock_class
+                    for row in development
+                )
+                for clock_class in sorted(
+                    {row["availability_clock_class"] for row in development}
+                )
+            },
             "role": "development_only",
             "weather_model_id": "binary_multigrain_hgb_v5",
             "weather_artifact": str(args.weather_artifact),
@@ -1099,6 +1871,85 @@ def main(argv: list[str] | None = None) -> int:
     summary["combined_rows"] = len(rows)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write_csv(args.output_dir / "expressions.csv", rows)
+    if args.run_pre_cross_research:
+        clean_forward_start = args.pre_cross_clean_forward_start or (
+            datetime.fromisoformat(args.end_date) + timedelta(days=1)
+        ).date().isoformat()
+        research_summary, frames, physical_model = run_tokyo_pre_cross_research(
+            rows,
+            historical_feature_rows=args.pre_cross_history_rows,
+            clean_forward_start=clean_forward_start,
+            bootstrap_draws=args.pre_cross_bootstrap_draws,
+        )
+        research_dir = args.output_dir / "pre_cross_research"
+        research_dir.mkdir(parents=True, exist_ok=True)
+        for name, frame in frames.items():
+            frame.to_csv(research_dir / f"{name}.csv", index=False)
+        joblib.dump(physical_model, research_dir / "physical_negative_control.joblib")
+        frozen_candidate = {
+            "schema_version": "tokyo_pre_cross_zero_notional_candidate_v1",
+            "model_id": PRE_CROSS_MODEL_ID,
+            "candidate_grain_version": PRE_CROSS_CANDIDATE_GRAIN_VERSION,
+            "effective_from_target_date": clean_forward_start,
+            "source": "jma_amedas",
+            "clock_requirement": "collector_exact_first_seen",
+            "state_rule": research_summary["state_rule"],
+            "posterior": {
+                "formula": research_summary["posterior"]["formula"],
+                "exponent": research_summary["posterior"]["selected_exponent"],
+            },
+            "side": "NO",
+            "shares": SHARES,
+            "eligibility": (
+                "first state entry per target_date/bracket and posterior greater "
+                "than official-fee-adjusted five-share executable cost"
+            ),
+            "deployment_status": "not_deployed_offline_frozen_candidate",
+            "live_notional": 0.0,
+        }
+        (research_dir / "frozen_candidate_spec.json").write_text(
+            json.dumps(frozen_candidate, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        research_summary["inputs"] = {
+            "expressions": str(args.output_dir / "expressions.csv"),
+            "historical_feature_rows": str(args.pre_cross_history_rows),
+            "historical_feature_rows_sha256": sha256_file(
+                args.pre_cross_history_rows
+            ),
+        }
+        (research_dir / "summary.json").write_text(
+            json.dumps(research_summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        summary["pre_cross_research"] = {
+            "path": str(research_dir),
+            "status": research_summary["research_status"],
+            "selected_exponent": research_summary["posterior"][
+                "selected_exponent"
+            ],
+            "clean_forward_start": clean_forward_start,
+            "live_behavior_changed": False,
+        }
+    if args.pre_cross_forward_spec is not None:
+        frozen_spec = json.loads(
+            args.pre_cross_forward_spec.read_text(encoding="utf-8")
+        )
+        forward, forward_summary = score_tokyo_pre_cross_forward(
+            rows, frozen_spec=frozen_spec
+        )
+        forward_dir = args.output_dir / "pre_cross_forward"
+        forward_dir.mkdir(parents=True, exist_ok=True)
+        forward.to_csv(forward_dir / "candidates.csv", index=False)
+        (forward_dir / "summary.json").write_text(
+            json.dumps(forward_summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        summary["pre_cross_forward"] = {
+            "path": str(forward_dir),
+            "spec": str(args.pre_cross_forward_spec),
+            **forward_summary,
+        }
     if summary.get("coverage_by_target_date"):
         write_csv(
             args.output_dir / "coverage_by_target_date.csv",
