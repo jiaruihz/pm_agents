@@ -166,6 +166,16 @@ feature-contract polluted，不再作为standalone fair price。修复后的V9�
 market；V9 post-freeze audit把date-equal ΔBrier收窄为`+0.01002`、95% CI `[-0.00473,+0.02503]`。
 `:10/:40`、2pp net-edge、双边5-share taker表达为7笔4胜、ROI `+2.40%`，但CI跨0且market favorite同窗
 ROI `+16.44%`，故V9 standalone退为dormant-for-now comparator，不再作为主交易表达。
+
+2026-08-12新增一条与CrossNO完全分开的 probability expression candidate：
+`amsterdam_knmi_market_offset_probability_v2` 以当前 exact-bracket NO direct price为coefficient-one prior，
+只用KNMI/path/fixed-lead ECMWF学习settlement log-odds correction。修正full-ladder错分母与validation refit泄漏后，
+6–7月expanding OOF为6,136 checkpoints/57 dates；posterior Brier/logloss=`0.04056/0.13588`，market=
+`0.04718/0.15212`，delta CI仍轻微跨0。固定`:10/:40`、10–16点、2pp、5-share sampled-price合同为98笔/
+55 dates、78胜、fee proxy ROI `+11.85%` CI `[+0.61%,+23.05%]`；同rows market favorite ROI `-5.95%`，
+paired PnL uplift CI全正。由于历史价格不是可执行book，状态为`zero-notional shadow candidate / no-live-change`；
+artifact clean-forward boundary=`2026-08-12T07:45:13.999634Z`，WCIR code/config ready但尚未生产重启。adapter同时
+修复 physical current低于`or below`最低档时的hard-floor expression anchor，单边book midpoint缺失则fail-closed。
 新 `amsterdam_knmi_cross_survival` 纯天气head用2024选择、2025 frozen：`.7°C`子集636 rows/238日，
 AUC `0.9452`，logloss `0.0650` 显著优于margin历史常数 `0.1031`；未来合同固定为
 `p_cross_survives - taker_fee_cost > 1pp`。该head已于2026-08-12 03:02 UTC载入WCIR zero-notional，
