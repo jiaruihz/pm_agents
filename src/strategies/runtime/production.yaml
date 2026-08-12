@@ -61,6 +61,9 @@ production_releases:
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/projects/pm_agents_proposal_reward_prod
     expected_repo_sha: 68056035ec324305c3e60a88fb06dce1a63f2c11
+  - release_id: paired_bid_mm
+    checkout_root: /Users/deepsleep/projects/pm_agents_paired_bid_mm_prod
+    expected_repo_sha: d07f9e0a336a417a843700850f48cb4ff6f59184
 
 canonical_refresh_release_id: control_plane
 # The mount name is a compatibility contract; UUID is the physical identity.
@@ -165,6 +168,20 @@ managed_runtimes:
     health_format: json
     max_health_age_sec: 30
     accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+
+  - instance_id: paired_bid_mm_shadow_v1
+    uses_market_proxy: true
+    tmux_session: paired_bid_mm_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: paired_bid_mm
+    start_script: scripts/ops/start_paired_bid_mm_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/pmm/paired_bid_mm_shadow_v1/health.json
+    health_format: json
+    max_health_age_sec: 30
+    accepted_health_statuses: [healthy, warming]
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
 
