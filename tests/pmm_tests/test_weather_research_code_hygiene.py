@@ -70,6 +70,32 @@ def test_internal_analysis_import_check_rejects_pre_reorganization_path(
     ]
 
 
+def test_research_output_route_check_rejects_new_repo_writer(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    script = repo / "scripts/analysis/family/research_runner.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        'OUT = ROOT / "docs" / "analysis" / "result.json"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_weather_docs, "ROOT", repo)
+    monkeypatch.setattr(
+        check_weather_docs,
+        "hygiene_config",
+        lambda: {"max_research_scripts_writing_docs_analysis": 0},
+    )
+
+    errors: list[str] = []
+    check_weather_docs.check_research_output_routes(
+        errors, {"scripts/analysis/family/research_runner.py"}
+    )
+
+    assert errors == [
+        "research scripts writing docs/analysis grew from ceiling 0 to 1; "
+        "route machine output through JRS run manifests"
+    ]
+
+
 def test_analysis_history_debt_rejects_new_reports_and_parallel_machine_outputs(
     tmp_path, monkeypatch
 ):

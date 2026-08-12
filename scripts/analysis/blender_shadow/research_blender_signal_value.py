@@ -8,6 +8,7 @@ policies only scale the historical fill's cost and PnL.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
@@ -24,11 +25,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_dashboard.blend import blend_probability, load_default_config
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 DB_PATH = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-08-blender-signal-value-research.md"
-OUT_JSON = OUT_DIR / "2026-06-08-blender-signal-value-research.json"
 
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
 STRATEGY_LABEL = "mid_price_core_v1_25_75"
@@ -756,7 +758,18 @@ def build_markdown(
 
 
 def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "blender_signal_value",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    output_json = output_dir / "result.json"
     if not DB_PATH.exists():
         raise FileNotFoundError(DB_PATH)
     conn = connect()
@@ -801,22 +814,21 @@ def main() -> None:
         "daily_robustness": robustness,
         "walk_forward": walk_forward,
     }
-    OUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    OUT_MD.write_text(
-        build_markdown(
-            df=df,
-            op=op,
-            self_checks=self_checks,
-            clob_gate=clob_gate,
-            policy_results=policy_results,
-            group_details=group_details,
-            alpha_rows=alpha_rows,
-            robustness=robustness,
-            walk_forward=walk_forward,
-        ),
-        encoding="utf-8",
+    payload["living_doc"] = "docs/analysis/blender_shadow.md"
+    output_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(json.dumps({"md": str(OUT_MD), "json": str(OUT_JSON), "rows": len(df), "op_rows": len(op)}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "json": str(output_json),
+                "living_doc": payload["living_doc"],
+                "rows": len(df),
+                "op_rows": len(op),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":

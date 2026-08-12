@@ -2,7 +2,7 @@
 
 > Living doc for module [3]: city pool, city-day basket, and region/forecast-source selection.
 > Current status: `shadow_candidate` for research-only basket ideas; live city pool remains governed by `WEATHER_CITY_POOL_DECISIONS.md`.
-> Last updated: 2026-08-06 documentation consolidation.
+> Last updated: 2026-08-13 basket evidence consolidation.
 
 ## Current Conclusion
 
@@ -16,6 +16,19 @@ The current city-selection state is:
 2. **City x side first**: whole-city ROI is too coarse. New-city failures and NYC BUY_YES show that city x side x strategy_instance is the minimum review grain.
 3. **Basket remains shadow**: PR2b/combo/basket variants can improve headline ROI on some slices, but walk-forward and top5-removed stress reject canary promotion.
 4. **Distribution anchor**: market-normalized city-day distributions still dominate holdout/recent slices more often than raw/blend, so basket objectives should stay market-anchored until model distributions prove forward value.
+
+## Consolidated Quantitative Evidence
+
+| Check | Fixed denominator | Result | Decision |
+|---|---|---|---|
+| Initial PR2 replay | 1,737 settled candidate rows, 2026-05-06..06-01 | raw/blended/basket ROI `+6.84%/+15.33%/+1.24%`; basket top-5-removed ROI `-3.22%` | basket gate failed |
+| Same-entry refresh | settled T-22..24 representative decisions through 2026-06-06 | positive full-window variants became negative or top-winner-dependent on the post-06-01 slice | no canary |
+| Walk-forward | 5 folds, 14 train dates + 3 test dates | train-selected policy: 388 legs, ROI `+2.66%`, weighted top-5-removed ROI `-35.45%`, 40% positive folds | selector rejected |
+| Distribution quality | 535 full / 232 holdout city-days | holdout market-normalized logloss/Brier `0.7647/0.4707`, versus blend `0.7935/0.4850` and raw `1.3957/0.6525` | keep market anchor |
+
+Exact legacy machine results were content-address archived under manifest
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/basket_blender_legacy_cleanup_20260813.json`.
+The dated Markdown renderings were removed after the durable claims above were absorbed; git history remains the human-readable audit trail.
 
 ## Absorbed Historical Claims
 
@@ -36,9 +49,7 @@ The current city-selection state is:
 | `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md` | 2026-06 | baseline-vs-basket comparison on older window | superseded-evidence |
 | `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md` | 2026-06 | city-day basket walk-forward; train-selected folds not robust | superseded-evidence |
 | `docs/archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.md` | 2026-06 | distribution diagnostics before basket objective refresh | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md` | 2026-06 | basket vs legacy baseline refresh | snapshot-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-walkforward.md` | 2026-06 | walk-forward check, overfit risk | snapshot-evidence |
-| `docs/analysis/2026-06/2026-06-08-city-day-distribution-quality.md` | 2026-06 | distribution quality and normalized market distribution | snapshot-evidence |
+| JRS manifest `basket_blender_legacy_cleanup_20260813` | 2026-05-06..06-06 | exact basket baseline, walk-forward and distribution machine results | archived-machine-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-06 | city x model x side conditional edge | snapshot-evidence |
 | `docs/analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md` | 2026-06 | near-binary fixed city reanalysis | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md` | 2026-06 | no new real live test candidate; adjacent3 only shadow | active-evidence |

@@ -26,9 +26,10 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 ```text
 docs/analysis/blender_shadow.md
-docs/analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md
-docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md
 ```
+
+两份 dated overlay 已在 2026-08-13 合并进上述 living doc；精确 JSON 由 JRS manifest
+`basket_blender_legacy_cleanup_20260813` 保存，不再在仓库保留平行渲染。
 
 ---
 
@@ -244,8 +245,7 @@ tests/blend tests/basket: 28 passed
 ```text
 scripts/analysis/blender_shadow/recalibrate_blend.py
 scripts/analysis/city_selection/eval_city_day_basket.py
-docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md
-docs/analysis/2026-06/2026-06-05-recalibrate-blend.json
+docs/analysis/city_selection.md
 docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md
 ```
 

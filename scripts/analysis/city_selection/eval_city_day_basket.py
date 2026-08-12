@@ -44,10 +44,15 @@ from weather_dashboard.basket import (
     build_city_day_basket,
 )
 from weather_dashboard.blend import BlendConfig, blend_probability, load_default_config
+from src.strategies.runtime.production import load_production_spec
 
 ROOT = Path(__file__).resolve().parents[3]
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_DEFAULT = ROOT / "docs" / "analysis"
+OUT_DEFAULT = (
+    load_production_spec().research_artifact_root
+    / "active"
+    / "legacy_city_day_basket"
+)
 
 
 # ---------------------------------------------------------------------------

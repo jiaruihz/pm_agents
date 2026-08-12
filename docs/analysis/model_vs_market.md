@@ -60,7 +60,7 @@ Consumer rule: Range RV, adjacent3, side-band, BUY_NO single-leg, and basket stu
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | 2026-06 timing review | forecast timing, side flip, market adverse move lineage | active-evidence |
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md` | 2026-06 city/model review | weak city/model slices and downgrade candidates | active-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-05-12 to 2026-06-06 candidate rows | city x model train-selected pockets; gates failed | active-evidence |
-| `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 blender research | blender hard-gate and sizing signal value | cross-domain-reference |
+| `docs/analysis/blender_shadow.md` | 2026-06 blender evidence, consolidated 2026-08-13 | blender hard-gate and sizing signal value | cross-domain-living-doc |
 | `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06-09 local DB repair | backfilled 2,186 candidate decision windows from raw orderbook with 0.005 wear | active-evidence |
 | `docs/analysis/2026-06/2026-06-09-model-rank-ic.md` | 2026-05-12 to 2026-06-06 candidate rows | Ring3 rank/IC test after backfill; model edge ranking still inconclusive | active-evidence |
 | `docs/analysis/2026-06/2026-06-13-forecast-quality-base-v0.md` | 2026-05-06 to 2026-06-10 settled decision sets | reusable forecast reliability labels and cross-family overlays; research/shadow only | active-evidence |

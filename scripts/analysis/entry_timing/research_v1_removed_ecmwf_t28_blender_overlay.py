@@ -7,6 +7,7 @@ decide whether a historical v1_25_75 fill would have been kept.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
@@ -22,11 +23,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_dashboard.blend import blend_probability, load_default_config
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 DB_PATH = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md"
-OUT_JSON = OUT_DIR / "2026-06-08-v1-removed-ecmwf-t28-blender-overlay.json"
 
 RECENT_START = "2026-06-01"
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
@@ -48,7 +50,16 @@ def side_edge(side: str, p_yes: float, entry_price: float) -> float:
 
 def run_clob_gate() -> dict[str, Any]:
     proc = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "analysis" / "weather_clob_fill_coverage_gate.py")],
+        [
+            sys.executable,
+            str(
+                ROOT
+                / "scripts"
+                / "analysis"
+                / "execution_quality"
+                / "weather_clob_fill_coverage_gate.py"
+            ),
+        ],
         cwd=ROOT,
         check=True,
         text=True,
@@ -271,6 +282,18 @@ def result_rows(results: list[dict[str, Any]], period: str) -> list[dict[str, st
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "v1_removed_ecmwf_t28_blender_overlay",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    output_json = output_dir / "result.json"
     conn = sqlite3.connect(DB_PATH)
     clob_gate = run_clob_gate()
     if not clob_gate.get("gate_pass"):
@@ -342,8 +365,11 @@ def main() -> int:
         "gt_t28_contribution": by_group(df[~df["pass_t28"]].copy(), pd.Series(False, index=df[~df["pass_t28"]].index), "city"),
     }
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    report["living_doc"] = "docs/analysis/blender_shadow.md"
+    output_json.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
     lines = [
         "# v1_25_75 去除 6 个 ECMWF 城市 + T28 ban 后的 blender overlay",
@@ -444,9 +470,7 @@ def main() -> int:
             "这次新规则把 blender 的定位改变了：城市黑名单和 T28 ban 已经承担了大部分风险控制，blender 只剩二级确认作用。相对原始 v1，带 blender 的组合仍改善 6 月后结果；但相对“已剔除 6 城 + T<=28”的新 base，纯 blender 在 post 期也是负增量，所以不应把它解释为独立 alpha。",
         ]
     )
-    OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(OUT_MD)
-    print(OUT_JSON)
+    print(output_json)
     return 0
 
 

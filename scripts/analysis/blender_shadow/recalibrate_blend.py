@@ -25,6 +25,7 @@ import argparse
 import datetime as dt
 import json
 import sqlite3
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -34,8 +35,15 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-DEFAULT_OUT = ROOT / "docs" / "analysis"
 
 
 @dataclass
@@ -219,18 +227,24 @@ def main() -> None:
                     help="Currently deployed global alpha (default: 0.30).")
     ap.add_argument("--holdout-days", type=int, default=7,
                     help="Number of most-recent days to hold out (default: 7).")
-    ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT,
-                    help="Directory for JSON report (placed under YYYY-MM/).")
+    ap.add_argument("--run-id")
+    ap.add_argument("--output-dir", type=Path)
     args = ap.parse_args()
 
     report = recalibrate(args.db, args.deployed_alpha, args.holdout_days)
     _print_summary(report)
 
-    today = dt.date.today()
-    out_dir = args.out_dir / today.strftime("%Y-%m")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{today.isoformat()}-recalibrate-blend.json"
-    out_path.write_text(json.dumps(asdict(report), indent=2), encoding="utf-8")
+    out_dir = prepare_new_run_output(
+        resolve_run_output(
+            "blend_recalibration",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    out_path = out_dir / "result.json"
+    payload = asdict(report)
+    payload["living_doc"] = "docs/analysis/blender_shadow.md"
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"\nReport written to {out_path}")
 
 

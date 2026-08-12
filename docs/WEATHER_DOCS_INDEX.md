@@ -577,8 +577,6 @@ manifest/历史报告指针。需要重放历史研究时，用
 | [2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md](analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md) | `snapshot` | yes | v1_25_75 forecast timing 退化：`>T-28`、`T-26-28`、forecast run age、side flip、market adverse move 和 timing policy overlay |
 | [2026-06-07-mid-price-core-v1-city-model-downgrade.md](analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md) | `snapshot` | yes | v1_25_75 city×model 降级依据，识别 Ankara/Jeddah/Karachi/Moscow/Munich 等弱近期 ECMWF 城市 |
 | [2026-06-07-v1-ecmwf-blocked-side-band-overlay.md](analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md) | `snapshot` | yes | 被移出 v1_25_75 live allowlist 的弱城市若换 side-band 是否改善；结论是明显减亏但仍只适合 shadow |
-| [2026-06-08-blender-signal-value-research.md](analysis/2026-06/2026-06-08-blender-signal-value-research.md) | `snapshot` | yes | strict `22<=T<=28` 新 base 下研究 blender 本体：hard gate、size curve、alpha grid、walk-forward 均不支持 live gate |
-| [2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md](analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md) | `snapshot` | yes | 剔除 6 个弱 ECMWF 城市并 ban T>28 后，blender 相对新 base 的边际收益为负 |
 | [2026-06-08-market-structural-edge.md](analysis/2026-06/2026-06-08-market-structural-edge.md) | `snapshot` | yes | H_B model-free 市场结构检验第一版：按日期前瞻、cluster bootstrap、Bonferroni 风险；当前 verdict=inconclusive |
 | [2026-06-08-executable-edge.md](analysis/2026-06/2026-06-08-executable-edge.md) | `snapshot` | yes | Step2 执行现实检验：live_real fill 审计 + decision-entry proxy + time-aligned raw orderbook 2B；当前 verdict=inconclusive |
 | [2026-06-09-range-rv-scanner-v0.md](archive/analysis/2026-06/2026-06-09-range-rv-scanner-v0.md) | `snapshot` | yes | Range RV Scanner v0：city-day 区间/相邻 bracket relative value，train 显著和基准过但 holdout 前瞻失败，当前 verdict=inconclusive |
@@ -683,14 +681,10 @@ manifest/历史报告指针。需要重放历史研究时，用
 | [2026-06-08-HANDOFF-LANDING-VALIDATION.md](archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md) | `snapshot` | yes | 交接包文件落地、manifest 产物补齐、skill/contract/schema 假设和 git 状态校验 |
 | [2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md](analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md) | `design-draft` | yes | 交接包审阅和 P0-P3 改进计划 |
 | [2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md](analysis/2026-06/2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md) | `design-draft` | yes | 策略可靠性审计和 Step1/Step2/Step3 迁移执行顺序 |
-| [2026-06-08-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | 最新 fact 重建后 basket vs legacy baseline refresh；recent slice 仍不支持上线 |
-| [2026-06-08-city-day-basket-walkforward.md](analysis/2026-06/2026-06-08-city-day-basket-walkforward.md) | `snapshot` | yes | 最新 fact 重建后 city-day basket walk-forward refresh；用于拒绝过拟合候选 |
-| [2026-06-08-city-day-distribution-quality.md](analysis/2026-06/2026-06-08-city-day-distribution-quality.md) | `snapshot` | yes | 最新 fact 重建后 city-day 分布质量 refresh；market-normalized distribution 仍优先 |
 | [2026-06-08-side-band-entry-timing-impact.md](analysis/2026-06/2026-06-08-side-band-entry-timing-impact.md) | `snapshot` | yes | side-band live_real 的 entry timing 与日度 PnL 关系；`>T-28` 不适合对 side-band 简单套用 v1 规则 |
 | [2026-06-08-entry-timing-rigorous-research-plan.md](analysis/2026-06/2026-06-08-entry-timing-rigorous-research-plan.md) | `design-draft` | yes | 针对 `<T-22`、`T-24-26`、`>T-28` 与天气预报更新卡点的完整 timing 研究计划：分母、matched、机制、city-day、shadow/live gate |
 | [2026-06-08-entry-timing-effect-baseline.md](analysis/2026-06/2026-06-08-entry-timing-effect-baseline.md) | `snapshot` | yes | 最新 sync + fact rebuild + CLOB coverage gate 后的 entry timing 第一轮基线：L0 signals、L1 decision-window candidates、L2 submitted、L3 live_real、L4 city-day；forecast checkpoint 仍是 data gap |
 | [2026-06-08-city-x-entry-timing-research.md](analysis/2026-06/2026-06-08-city-x-entry-timing-research.md) | `snapshot` | yes | 最新 sync + fact rebuild + CLOB coverage gate 后的城市 x timing 切片：确认 `T-26-28` 先从 live 移除，`T-24-26` 需要城市和 forecast checkpoint 复核 |
-| [2026-06-07-blended-live-instance-overlay.md](analysis/2026-06/2026-06-07-blended-live-instance-overlay.md) | `snapshot` | yes | blender 叠加到真实 live instance fills 的控制变量 overlay；6 月后改善但 6 月前误杀盈利 |
 | [2026-06-07-v1-raw-regime-filter-walkforward.md](analysis/2026-06/2026-06-07-v1-raw-regime-filter-walkforward.md) | `snapshot` | yes | v1 raw 退化后的 gate walk-forward：城市层风控强于纯 blended edge gate |
 | [2026-06-06-city-alpha-framework.md](archive/analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
 | [2026-06-06-city-day-distribution-quality.md](archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.md) | `snapshot` | yes | raw/market/blend_norm 分布质量和 holdout 退化问题 |
@@ -701,7 +695,6 @@ manifest/历史报告指针。需要重放历史研究时，用
 | [2026-06-06-city-day-basket-optimizer-research.md](archive/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | `snapshot` | yes | city-day basket optimizer 的 headline ROI 与 tail 风险 |
 | [2026-06-06-city-day-basket-pr2b-robustness.md](archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md) | `snapshot` | yes | PR2b 全样本通过但 tail/overfit 风险的复核 |
 | [2026-06-06-city-day-basket-pr2b-sweep.md](archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md) | `snapshot` | yes | PR2b basket 参数 sweep 和候选 profile |
-| [2026-06-05-city-day-basket-eval.md](analysis/2026-06/2026-06-05-city-day-basket-eval.md) | `snapshot` | yes | PR2 离线 replay：raw vs blended-single vs basket，对应 Step 2->3 gate 不通过 |
 | [2026-06-05-probability-calibration.md](analysis/2026-06/2026-06-05-probability-calibration.md) | `snapshot` | yes | 概率校准实验和 blend/recalibration 背景 |
 | [2026-06-04-performance-side-band-entry-analysis.md](archive/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `snapshot` | yes | side-band 入场表现复盘 |
 | [2026-06-03-signal-side-flip-check.md](analysis/2026-06/2026-06-03-signal-side-flip-check.md) | `snapshot` | yes | 信号 side flip / snapshot bracket 演化排查 |

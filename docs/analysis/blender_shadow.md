@@ -2,7 +2,7 @@
 
 > Living doc for module [1]: whether blend / edge-engine fields are useful as shadow signals, sizing inputs, or future live gates.
 > Current status: `shadow_candidate`; not approved as a live hard gate.
-> Last updated: 2026-08-06 documentation consolidation.
+> Last updated: 2026-08-13 blender evidence consolidation.
 
 ## Current Conclusion
 
@@ -18,6 +18,18 @@ It should not be used as a standalone alpha claim. The strongest recent evidence
 
 Live behavior changes still require `weather-strategy-deploy` flow and the gates in this document.
 
+## Consolidated Quantitative Evidence
+
+| Check | Fixed denominator | Result | Decision |
+|---|---|---|---|
+| Live-fill overlay | 707 settled v1 fills, 2026-05-16..06-05 | gate delta full `+$18.93`, pre-06-01 `-$67.63`, post-06-01 `+$86.56` | unstable drift filter |
+| City/time controlled overlay | same 707 fills; remove six weak cities and require `T<=28` | post base improved from `-$89.06` to `+$39.53`; adding `blended_edge>=0.10` reduced it to `+$20.19` | city/time explains more than blender |
+| Strict operational-base signal value | 308 settled fills, `22<=T<=28` | base PnL `+$167.35`; hard gate delta `-$115.28`; gentle size curve delta `-$67.65`; walk-forward delta `-$16.40` | no hard gate or sizing promotion |
+
+Exact legacy JSON results were content-address archived under manifest
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/basket_blender_legacy_cleanup_20260813.json`.
+The dated Markdown renderings were removed after consolidation; git history preserves their narrative audit trail.
+
 ## Absorbed Historical Claims
 
 1. Early 2026-06-06 blended opportunity backtests are superseded because they predate the near-binary correction and current fact-table gate. They are useful only as search history.
@@ -31,9 +43,7 @@ Live behavior changes still require `weather-strategy-deploy` flow and the gates
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
 | `docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md` | current handoff | stable edge-engine handoff and split-track direction | current-source |
-| `docs/analysis/2026-06/2026-06-07-blended-live-instance-overlay.md` | 2026-05-16 to 2026-06-05 live fills | control-variable overlay; recent positive, pre-recent negative | snapshot-evidence |
-| `docs/analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | 2026-05-16 to 2026-06-05 live fills | city/time controls dominate; blender marginal negative on new base | snapshot-evidence |
-| `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 | hard-gate and sizing signal value | snapshot-evidence |
+| JRS manifest `basket_blender_legacy_cleanup_20260813` | 2026-05-16..06-06 | exact overlay, signal-value and walk-forward machine results | archived-machine-evidence |
 | `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.md` | 2026-06 | v2 shadow lineage | snapshot-evidence |
 | `docs/analysis/2026-06/2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | 2026-06 | filtered operational base research | snapshot-evidence |
 
@@ -55,4 +65,4 @@ Live behavior changes still require `weather-strategy-deploy` flow and the gates
 3. Standardize shadow output fields for `raw_p_yes`, `market_p_yes`, `blended_p_yes`, `blended_edge`, `raw_market_disagreement`, and `size_multiplier_candidate`.
 4. Re-run on future settled windows and evaluate daily median delta, top-winner dependence, avoided loss, missed profit, and actual order/fill feasibility.
 
-The former dated blender handoff was removed after its durable conclusions and evidence routing were absorbed here. Keep the three distinct producer reports above: they measure different denominators and are not duplicate files.
+The former dated blender reports were removed after their distinct denominators and durable conclusions were absorbed above. Future runs update this living doc and write one machine format to JRS; they do not recreate parallel dated JSON/Markdown reports.

@@ -26,6 +26,7 @@ import json
 import math
 import random
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,16 +34,22 @@ from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-08-city-model-conditional-edge.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-08-city-model-conditional-edge.md"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", default=str(DB_DEFAULT))
-    parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--train-frac", type=float, default=0.70)
     parser.add_argument("--min-train-rows", type=int, default=10)
     parser.add_argument("--min-train-days", type=int, default=4)
@@ -519,6 +526,13 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
 
 def main() -> None:
     args = parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "city_model_conditional_edge",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     conn = connect(args.db_path)
     data = load_candidates(conn, args.bucket_size)
     train, holdout, split = split_by_date(data, args.train_frac)
@@ -564,10 +578,10 @@ def main() -> None:
             seed=args.seed + 10000,
         ),
     }
-    write_json(Path(args.out_json), report)
-    write_md(Path(args.out_md), report)
-    print(f"wrote {args.out_json}")
-    print(f"wrote {args.out_md}")
+    report["living_doc"] = "docs/analysis/city_selection.md"
+    output_json = output_dir / "result.json"
+    write_json(output_json, report)
+    print(f"wrote {output_json}")
 
 
 if __name__ == "__main__":

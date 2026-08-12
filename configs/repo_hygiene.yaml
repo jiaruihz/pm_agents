@@ -39,6 +39,10 @@ max_research_version_families: 9
 max_research_version_family_copies: 18
 max_worktree_repeated_function_extra_copies: 414
 
+# Legacy research runners that still hard-code repository docs/analysis output.
+# Each migrated family lowers this ceiling; new producers must use JRS run output.
+max_research_scripts_writing_docs_analysis: 22
+
 # These are still consumed by active ops/source code.  They remain explicit
 # exceptions until their consumers use the JRS research artifact resolver.
 large_generated_allowlist:

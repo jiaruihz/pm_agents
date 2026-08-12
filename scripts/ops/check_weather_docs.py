@@ -648,6 +648,27 @@ def check_internal_analysis_imports(errors: list[str], tracked: set[str]) -> Non
             )
 
 
+def check_research_output_routes(errors: list[str], tracked: set[str]) -> None:
+    """Keep legacy repository-writing producers on a monotone migration budget."""
+    writers: list[str] = []
+    pattern = re.compile(
+        r"(?:ROOT|_ROOT)\s*/\s*['\"]docs['\"]\s*/\s*['\"]analysis['\"]"
+    )
+    for relative in sorted(tracked):
+        if not relative.startswith("scripts/analysis/") or not relative.endswith(".py"):
+            continue
+        path = ROOT / relative
+        if path.is_file() and pattern.search(path.read_text(encoding="utf-8")):
+            writers.append(relative)
+    ceiling = int(hygiene_config()["max_research_scripts_writing_docs_analysis"])
+    if len(writers) > ceiling:
+        fail(
+            errors,
+            "research scripts writing docs/analysis grew from ceiling "
+            f"{ceiling} to {len(writers)}; route machine output through JRS run manifests",
+        )
+
+
 def production_script_closure(tracked: set[str]) -> tuple[set[str], set[str]]:
     production = read("src/strategies/runtime/production.yaml")
     scripts = {
@@ -853,6 +874,7 @@ def main() -> int:
     check_analysis_history_debt(errors, tracked, untracked)
     check_runtime_artifacts_are_untracked(errors, tracked)
     check_internal_analysis_imports(errors, tracked)
+    check_research_output_routes(errors, tracked)
     check_production_entrypoints(errors, tracked)
     check_research_script_debt(errors, tracked, untracked)
     if errors:

@@ -8,6 +8,7 @@ the raw model probability were replaced by the configured blended probability.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
@@ -22,10 +23,12 @@ if str(ROOT) not in sys.path:
 import pandas as pd
 
 from weather_dashboard.blend import blend_probability, load_default_config
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_MD = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-07-blended-live-instance-overlay.md"
-OUT_JSON = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-07-blended-live-instance-overlay.json"
 RECENT_START = "2026-06-01"
 HOLDOUT_START = "2026-05-26"
 
@@ -298,6 +301,18 @@ def _edge_buckets(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "blended_live_instance_overlay",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    output_json = output_dir / "result.json"
     conn = sqlite3.connect(DB_DEFAULT)
     self_check = {
         "fact_trades_freshness": _fetchall(conn, "SELECT MAX(fact_built_at_utc) AS max_fact_built_at_utc FROM fact_trades"),
@@ -349,8 +364,11 @@ def main() -> int:
         "by_city_side": _group_filter_value(v1, ["city", "side"], limit=20),
     }
 
-    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    report["living_doc"] = "docs/analysis/blender_shadow.md"
+    output_json.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
     v1_full = report["slices"]["full"]["v1_25_75"]
     v1_pre_recent = report["slices"]["pre_recent_before_2026_06_01"]["v1_25_75"]
@@ -470,9 +488,7 @@ def main() -> int:
             "当前建议：只跑 paper/shadow；不要直接替换 live。下一步应把这份 overlay 与未来真实 paper fills 做前瞻对照，至少按 city、side、target_date 和 edge bucket 连续观察。",
         ]
     )
-    OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(OUT_MD)
-    print(OUT_JSON)
+    print(output_json)
     return 0
 
 

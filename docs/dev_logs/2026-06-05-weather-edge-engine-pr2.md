@@ -11,9 +11,9 @@
 新增文件：
 
 ```text
-scripts/analysis/eval_city_day_basket.py
-scripts/analysis/recalibrate_blend.py
-docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md
+scripts/analysis/city_selection/eval_city_day_basket.py
+scripts/analysis/blender_shadow/recalibrate_blend.py
+docs/analysis/city_selection.md
 docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md  ← 本文档
 ```
 
@@ -92,7 +92,7 @@ drift flag 阈值（与设计 §5、§9 一致）：
 4. ✅ 跑 recalibrate（drift flags 全部触发）
 5. ✅ 写 `eval_city_day_basket.py`
 6. ✅ 跑 eval（1737 settled rows，三规则对比 + 归因）
-7. ✅ 写评估文档 [2026-06-05-city-day-basket-eval.md](../analysis/2026-06/2026-06-05-city-day-basket-eval.md)
+7. ✅ 评估结论已在 2026-08-13 收口到 [city_selection living doc](../analysis/city_selection.md)
 8. ✅ 收尾 dev log
 
 ## 5. 偏离设计文档的地方
@@ -137,12 +137,13 @@ PR3（推荐并行）：
 ## 8. 文件变更清单（PR2）
 
 ```text
-A  scripts/analysis/recalibrate_blend.py
-A  scripts/analysis/eval_city_day_basket.py
-A  docs/analysis/2026-06/2026-06-05-recalibrate-blend.json   (生成产物)
-A  docs/analysis/2026-06/2026-06-05-city-day-basket-eval.json (生成产物)
-A  docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md
+A  scripts/analysis/blender_shadow/recalibrate_blend.py
+A  scripts/analysis/city_selection/eval_city_day_basket.py
+A  docs/analysis/city_selection.md（2026-08-13 吸收历史结论）
 A  docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md
 ```
+
+原三份机器/渲染产物已由 JRS manifest `basket_blender_legacy_cleanup_20260813`
+content-addressed 保存，并从工作树移除。
 
 不修改现有文件。生产、N100、CI 行为不变。
