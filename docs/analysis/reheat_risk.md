@@ -188,6 +188,50 @@ their version history:
   second reprice, while the known Amsterdam fill occurred exactly on reprice
   two. Production remains unchanged until a separate deployment.
 
+### 2026-08-12 Core Carry recent live performance review
+
+- On the fixed settled-signal denominator for target dates 2026-08-03..11,
+  Core Carry is 32-1 across 33 signals: fee-adjusted PnL `+$24.8047` and ROI
+  `+6.91%`. The earlier 7/25..8/02 slice was 26-3 and `-10.02%` ROI. Accuracy
+  improved by 7.31pp, but the target-date block difference CI
+  `[-4.76pp,+17.95pp]` still includes zero. Full live history remains 58-4,
+  `+$4.5565`, ROI `+0.81%`, with ROI CI crossing zero.
+- The sole recent loss is Manila 8/07: its taker errored while the 5-share maker
+  filled at 0.83 and lost. Thus actual strategy exposure is 32/33, while recent
+  settled signals with a real taker fill are 32/32.
+- Recent maker execution is 15/28 root intents. Settled maker legs add `+$1.80`
+  on 70 shares (ROI `+2.85%`, date-block CI `[-4.10%,+13.25%]`) and improve
+  paired fill price by 1.18c/share, but dilute combined ROI from taker-only
+  `7.77%` to `6.91%` because maker is additive exposure.
+- Deployed staged v3 has four actual maker intents and two fills. Karachi filled
+  through error-recovery repost; Shanghai filled after the first scheduled
+  reprice. Their paired price improvement is 2.65c/share, but only Karachi is
+  settled (`+$0.60`), so v3 proves lifecycle operation rather than return or
+  fill-rate uplift. Keep the current selector, sizing and 15-share cap.
+
+Full report:
+`2026-08/2026-08-12-current-yes-core-carry-recent-live-performance-v2.md`.
+
+### 2026-08-12 Core Carry event-rescore and maker forward
+
+- `current_yes_core_carry_event_rescore_shadow_v1` is deployed as an independent
+  zero-notional runtime. It tails the existing Core PIT state journal from the
+  deployment EOF and scores first-observed new METAR/observation epochs,
+  forecast-curve content changes and exact-bracket/token transitions with the
+  frozen Core v3 model and a ten-share executable ladder.
+- The research selector records `market_mid >= 0.50`; the `0.80` live
+  authorization boundary and fixed hourly live checkpoint remain unchanged.
+  Every transition, domain blocker and book coverage gap is retained; the
+  process has no TradeIntent or order path.
+- The maker experiment is already additive: production remains `10 taker + 5
+  maker`, max 15 shares. The five-share leg is allowed to enlarge exposure and
+  continues as the real fill/adverse-selection probe; no second maker sleeve is
+  added. Re-evaluate event scoring after 30 new settled target dates and maker
+  execution after at least 30 new eligible intents across 10 target dates.
+
+Design and deployed evidence contract:
+`2026-08/2026-08-12-core-carry-event-rescore-maker-forward-v1.md`.
+
 Current routing:
 
 - model/strategy state and production-independent verdict:

@@ -31,12 +31,12 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 
 | 城市 | 稳定模型/接入身份 | 已吸收结论 | 当前研究动作 |
 |---|---|---|---|
-| Amsterdam | WCIR Amsterdam adapter；V9 weather head + independent `amsterdam_knmi_market_offset_probability_v2`；coefficient-one direct current-NO market prior，YES/NO exact-bracket expression | standalone V9未胜market后改为只学习weather/path log-odds correction。修正`1-q_current`错分母与validation refit泄漏后，6–7月expanding OOF为6,136 rows/57日：posterior Brier/logloss `0.04056/0.13588`，market `0.04718/0.15212`，delta CI仍轻微跨0。固定`:10/:40`、10–16点、2pp、5-share sampled-price policy为98笔/55日、78胜、fee proxy ROI `+11.85%` CI `[+0.61%,+23.05%]`；同rows market favorite ROI `-5.95%`，paired PnL uplift CI全正。7/30–8/11 collector t0 narrow window为7/7、ROI `+31.49%`，但方向与market favorite相同，不能冒充额外alpha | 新head为zero-notional shadow candidate，artifact已冻结、WCIR adapter/config code-ready，未重启生产、不动live CrossNO。先积累clean-forward executable books/settlements；要求proper-score delta CI全负且fee PnL uplift CI为正再考虑升阶。adapter已修physical current低于`or below`档时的hard-floor expression anchor；单边book midpoint缺失时fail-closed · [V9 + market-offset update](analysis/2026-08/2026-08-12-amsterdam-knmi-v9-pit-parity-frozen-strategy-v1.md) |
-| Busan | `busan_intraday_exact_no` physical head + `busan_intraday_exact_no_online_market_prior_residual` expression candidate | AMOS cross persistence 不能替代 source→routine/WU basis；weather-only固定champion在8/4–11同盘口65 states/8日与market打平。新增online market-prior head每天只用此前settled dates选weather logit weight，OOF权重`0/0/0/0/0/.125/.25/.25`；posterior LL/Brier `0.2682/0.0835`胜market `0.2902/0.0932`，6单/3日fee后ROI `+28.96%`。但创新日仅3天，family又是看过该窗后确定，clean forward仍0天 | runnable zero-notional research candidate；下一完整日期state为`.25`、trained through 8/11；不部署live、不把WS硬塞进模型，盘口链恢复后用同一runner append frozen forward · [online market-prior expression](analysis/2026-08/2026-08-12-busan-online-market-prior-expression-v1.md) · [stable architecture](analysis/2026-08/2026-08-04-busan-stable-model-architecture-v1.md) |
+| Amsterdam | WCIR Amsterdam adapter；V9 weather head + `amsterdam_knmi_market_offset_probability_v3`；pre-first-seen direct current-NO prior，first-seen t0 YES/NO execution | 独立红队发现旧收益回放使用first-seen前约4–5分钟价格，故v2 `+11.85%`不再作为执行证据。v3改为nested expanding：6–7月6,136 rows/57日的posterior Brier/logloss=`0.04246/0.14154`，market=`0.04718/0.15212`，delta点估胜但CI仍跨0。七月`observation+240s` sampled-price压力测试42笔/27日、34胜、fee proxy ROI`+24.04%` CI`[+3.84%,+45.58%]`，同rows market favorite ROI`-6.33%`，但仍无ask/depth。collector clock-parity为443 checkpoints/9日，19次方向分歧中model 14对、market 5对；proper-score delta CI上界仍约`+0.0008`。锁定表达9笔/6日全胜、counterfactual ROI`+27.22%`，却与market方向全部相同，paired uplift=0、fills=0 | `shadow candidate / not live`。已修完整ask ladder透传、date×bracket去重、pre-prior/t0 execution双时钟与boundary fail-closed；v3 artifact冻结于`2026-08-12T08:24:21Z`，config code-ready但未改变live CrossNO。达到30个新settled executable signals、10 active dates且proper-score与fee-uplift双CI过门后再评tiny-live · [V9 + v3 red-team update](analysis/2026-08/2026-08-12-amsterdam-knmi-v9-pit-parity-frozen-strategy-v1.md) |
+| Busan | `busan_intraday_exact_no` physical head + `busan_intraday_exact_no_online_market_prior_residual` expression candidate | AMOS cross persistence 不能替代 source→routine/WU basis。exact pending-state 可比历史扩到79 rows/13 dates；用前3日作seed后的10日 expanding evaluation，posterior LL/Brier delta=`-0.01762/-0.00777`，CI上界均为0，仍只有6单/3个非零创新日、ROI`+28.96%`。更宽的periodic favorite-state压力测试覆盖7/08–8/11共936 rows/35 dates；固定7/08–20开发后，7/21–8/11的678 rows/22日holdout显著输market（LL delta`+0.08159`，CI`[+0.00412,+0.16541]`），22笔首单ROI`-12.76%`。说明近期正cluster不能外推成长期alpha；clean forward settled仍0日 | 保留runnable zero-notional candidate采集正式forward；不升live、不按6笔调gate。至少30个新settled clean-forward dates后，要求proper-score delta CI全负且fee uplift CI为正再admit · [online + expanded history](analysis/2026-08/2026-08-12-busan-online-market-prior-expression-v1.md) · [stable architecture](analysis/2026-08/2026-08-04-busan-stable-model-architecture-v1.md) |
 | Helsinki | `helsinki_regime_calibrated_bounded_residual_c015_v2`：FMI first-seen开仓、METAR仅校正/退出；5-share YES/NO symmetric taker | v2只用2025 OOF的51,451 rows/365日做四段expanding选择：按local clock、forecast future-peak clock/availability、path state与weather-logit交互统一校准；`L2=256`在三段Brier/logloss均胜raw，平均delta=`-0.000317/-0.002260`。接固定`c=.15`后，7/20–29同362 rows上Brier/logloss=`0.07388/0.24195`，旧版=`0.07430/0.24309`，paired CI全负；8/2–11仅作压力测试，新版=`0.05234/0.17027`，market=`0.05442/0.17542`，9笔6胜、ROI`+30.31%`且与旧版交易身份完全相同 | v2已于08:57:58Z加载zero-notional runtime：干净shared release `17425cdf…`、artifact `fd09be9c…`、0 errors/0 orders、最终定向测试29/29；首轮旧FMI→book超过120秒正确落clock blocker。untouched forward锁08:31:24Z+，先验证taker，maker仅放大已验证edge；不升live、不加坏例gate · [strategy + complete training/deploy](analysis/2026-08/2026-08-12-helsinki-bounded-market-residual-strategy-v1.md) |
 | Tokyo | first pre-cross source state + bounded market-anchored posterior；每档只在JMA首次到`current+0.3/+0.4°C`且尚未native cross时判断一次，market NO<0.5不反转，≥0.5时用开发窗冻结的`2×logit`强化 | scope不变：63,384历史feature rows/819日→2,244首次pre-cross candidates/737日；7月development 9 candidates/6日，8/1–11 strict raw-exact 34 candidates/11日。新增full-path相对clock+margin base的logit innovation，开发窗在alpha `0/.25/.5`中明确选择0，故不强塞无增量天气修正。v2执行表达扣`max(1 tick, half spread)`而非高价hard filter；reused audit从v1的29笔28胜、ROI`+2.30%`收敛到12笔12胜，cost`$53.4381`、PnL`+$6.5619`、ROI`+12.28%`，date CI`[+7.23%,+17.69%]`；ask均值/中位`88.61/94.35¢`，≥98¢仅2笔 | 状态`inconclusive / clean-forward accumulating / live gates FAIL`；8/1–11已用于发现执行问题，只算reused audit。8/12 exact 27 expressions→1 candidate→0 signal：28-NO在JMA 28.3时bid/ask `.44/.60`、posterior `.53994`，fee前后均无正edge；不是99¢定死。冻结offline zero-notional，不接intent/order/fill · [pre-cross v2 report](analysis/2026-08/2026-08-12-tokyo-pre-cross-market-sharpening-v1.md) · [superseded broad blend](analysis/2026-08/2026-08-12-tokyo-market-weather-posterior-v1.md) |
 | Tokyo V3 | `weather.city_intraday_probability.tokyo_continuous_full_probability`；完整conditional market ladder + `coherent_multigrain_hgb_v3` weather head，连续输出`P(stay/+1/+2/+3+)` | 第一版只锚current leave并丢弃market tail shape，8/1–11同分母输market。第二轮用7/16–23的122 states/6日选择完整四档geometric pool参数，7/24–29的126 states/6日temporal validation上V3/market multiclass Brier=`0.07328/0.09530`，delta CI=`[-0.04208,-0.00742]`；logloss、RPS delta CI也全负。固定current/next、每date×bracket首单、5-share回放13笔11胜，fee PnL`+$10.56855`、ROI`+23.79%`，两笔YES错误分别为undershoot与overshoot | `shadow_candidate / research-only / no-live-change`；上述窗口已经看过，不是clean forward。candidate冻结，clean-forward boundary为8/13；不替换Tokyo V2、不接intent/order/fill，等待新settled PIT full-ladder evidence · [V2/V3 report](analysis/2026-08/2026-08-12-tokyo-pre-cross-market-sharpening-v1.md) |
-| Seoul | Korea source-event adapter + research-only `seoul_intraday_exact_no` artifact；production仍是coverage-only | 首版按Seoul preferred-runway独立建模，19,020 unique PIT rows最终只有54个同盘口state entries/13日。开发窗在`alpha=0/.125/.25/.5`中选0；8/7–11的24 rows/5日holdout上weather-only logloss/Brier=`0.89034/0.19491`，显著差于market `0.17277/0.04448`。多跑道max ablation同样失败；大量5秒checkpoint不等于独立天气日 | artifact保留作冻结反例，`runtime/live eligible=false`；不接adapter。下一实验改为Seoul专属settlement-native `P(stay/+1/+2/+3+)`长历史physical head，再用近期AMOS/market做强收缩transfer；至少30个新settled clean-forward dates后评审 · 见下方首版训练账 |
+| Seoul | Korea source-event adapter + research-only `seoul_intraday_exact_no` / `seoul_intraday_remaining_heat_distribution` artifacts；production仍是coverage-only | 首版exact-NO在8/7–11显著输market。v2已改成守恒五档`P(negative/stay/+1/+2/+3+)`：57日长历史训练、14日physical holdout、21日AMOS transfer。physical holdout相对climatology的Brier/RPS点估改善但CI跨0，logloss略差；同步五档active overlay的market冻结分母仅6 rows/4日，`alpha=.25` posterior的Brier/logloss/RPS均差market且CI跨0 | v2结构正确但证据门仍FAIL；artifact `runtime/live eligible=false`，不接adapter、不做expression。补同步full-post ladder并累计至少30个新settled clean-forward dates后评审 · 见下方两版训练账 |
 
 跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
 
@@ -82,6 +82,39 @@ settled clean-forward dates 后，再检验同 rows multiclass Brier/logloss/RPS
 `summary.json` SHA-256=`71d82cb5…ecd3e`，`model.joblib` SHA-256=`e7b567d1…72a9`，
 prediction table SHA-256=`c2202f2d…33ff`，序列化 parity max abs error=`0.0`。三门为
 `significance=FAIL; baseline=FAIL; forward=FAIL; conclusion=inconclusive_research_artifact`。
+
+### Seoul WCIR remaining-heat distribution v2（2026-08-13）
+
+第二版已实际训练为 settlement-native 守恒分布，固定五类为
+`negative / stay / +1 / +2 / +3+`；`negative` 显式保留 AMOS/routine 与 WU settlement
+basis，不把快源跨档机械当成结算事实。长历史 physical 层只用 Seoul IEM routine states：
+5/12–7/07 共 `513 rows / 57 dates` 训练，7/08–21 为 `126 rows / 14 dates`
+historical holdout。v2 weather head 相对 train climatology 的 Brier/RPS delta 为
+`-0.00849/-0.02727`，但95% CI分别为 `[-0.03915,+0.02148]`、
+`[-0.05994,+0.00589]`；logloss delta `+0.00561`，因此 physical 独立门未通过。
+
+AMOS 层使用 preferred-runway pullback、距高点时间、1h slope、RH/露点差和当地时钟做
+PIT feature transfer，不用近期 settlement label 重训 physical model。7/22–8/06 development
+在 coefficient-one market prior 上只选择 likelihood-ratio 权重
+`alpha=0/.125/.25/.5/1`，按logloss选中 `.25`。完整 event ladder 的 tail 只能取 source
+前最近快照，source后仅五个 active conditions 有 exact book；为避免把旧盘口冒充同刻分母，
+market score 只保留五档全部刷新成功的 row。最终 funnel 为
+`1,059 market-grain rows → 17 scorable / 10 dates → frozen 6 state entries / 4 dates`；
+tail age p50/p95=`340s/1,877s`，所以这仍不是 synchronized full-post ladder。
+
+8/7–11 frozen historical market分母上，raw market multiclass
+Brier/logloss/RPS=`0.09898/0.86005/0.07206`，`.25` posterior 为
+`0.11340/0.91226/0.08121`；candidate−market delta=`+0.01442/+0.05222/+0.00916`，
+CI均跨0。weather-only在同rows三项显著更差。由于没有同步 full-post event ladder 的整条
+ask/depth，fee-adjusted expression=`not_estimable`，actual fills=`0`。
+
+机器产物位于
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/weather_city_intraday_probability/korea_city_remaining_heat_distribution/city=seoul/run=20260813_remaining_heat_distribution_v2/`；
+summary/model/prediction SHA-256分别为`4d51cf88…e45ab`、`f72ab90b…4e320`、
+`5ddf9606…f4146`；模型 serialization parity error=`0.0`，代码身份为`7ea49b58…2ef2`，
+`runtime/live eligible=false`。三门仍为
+`significance=FAIL; baseline=FAIL; forward=FAIL`。动作不是继续调这4个market日期，而是补同步
+full-post ladder，并从8/12之后累计至少30个新settled clean-forward dates。
 
 **Helsinki 2026-08-12 更新**：`helsinki_regime_calibrated_bounded_residual_c015_v2`已完成结构化重训并成为 zero-notional replacement candidate。模型选择只使用2025 OOF，不读取8月ROI；三段rolling proper score全胜后才冻结。7月market开发分母上相对旧模型的Brier/logloss paired CI全负；8月回放交易仍是原来的9笔6胜、PnL`+$6.98`、ROI`+30.31%`，没有靠改历史信号制造收益。artifact SHA=`fd09be9c…14e9`，runtime parity最大误差`1.11e-16`；v2 forward从`08:31:24Z`开始，不升live。详见 [strategy report](analysis/2026-08/2026-08-12-helsinki-bounded-market-residual-strategy-v1.md)。
 没有冻结 artifact 的城市输出 structured blocker；有 artifact 的城市也只有在同 checkpoint

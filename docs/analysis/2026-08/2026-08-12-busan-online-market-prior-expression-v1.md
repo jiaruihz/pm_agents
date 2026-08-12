@@ -5,6 +5,24 @@
 Busan 得到了第一套**点估为正、可重复离线评估、可运行 zero-notional shadow**的 market-prior
 候选：`busan_intraday_exact_no_online_market_prior_residual`。
 
+但把历史作用域扩到现有可恢复范围后，结论仍是**候选可继续 shadow，不能称为已经验证的正收益策略**：
+
+- exact pending-state 同盘口证据实际共有 `79 rows / 13 dates`（7/30–8/11）；以前 3 日作
+  seed 后，对 8/02–11 做 10 日 expanding-date evaluation，posterior 相对 market 的
+  logloss/Brier delta 为 `-0.01762/-0.00777`，date-block CI 上界均为 `0`，仍未严格显著。
+  交易仍只发生在 `3` 个天气权重非零日：`6` 单、PnL `+$5.6138`、ROI `+28.96%`。
+- 另用更宽但 target 不完全相同的 periodic favorite-state 机制作压力测试：7/08–8/11
+  `936 rows / 35 dates`，固定 7/08–20 开发、7/21–8/11 `678 rows / 22 dates`
+  historical holdout。开发 OOF 曾胜 market，但 holdout logloss 反而
+  `0.53160 > 0.45002`，delta `+0.08159`、CI95 `[+0.00412,+0.16541]`；
+  22 日每天首单的 fee-adjusted replay 为 `22` 单、`12` 胜、PnL `-$8.7786`、
+  ROI `-12.76%`、CI95 `[-45.57%,+18.65%]`。
+
+这两层不能硬拼成一个 headline：前者是当前策略的 exact-NO 同 target 证据，后者是更宽历史的
+机制压力测试。前者样本仍小且 post-selection；后者明确否定“多维天气 residual 在更大历史上自然
+稳定胜 market”。因此不根据 6 笔赢家加 gate 或重训，生产保持 zero-notional，只有 8/12 起新增
+settled clean-forward dates 才能用于正式 admission。
+
 它不再让 weather-only 模型直接和 ask 比较，而是把同一 PIT checkpoint 的盘口
 当作 prior，只允许天气模型在 logit 空间做受限修正：
 
@@ -55,6 +73,20 @@ first fee-positive date-rung expression              6
 - OOF 评估窗为 8/04–11，65 rows / 8 dates；所有日期已结算。
 - 8/12 当前 market proxy `127.0.0.1:7896` 拒绝连接，实时盘口链降级；因此
   8/12 残缺数据没有进入训练或评分。
+
+### 扩展历史作用域
+
+| 层 | 日期范围 | rows / dates | PIT 口径 | 用途 |
+|---|---|---:|---|---|
+| 长历史 physical | 5/12–7/28 | 1,404 / 78 | IEM observation-time proxy，first-seen unknown | 只验证 remaining-heat 物理信息，不验证 market alpha |
+| periodic favorite-state | 7/08–8/11 | 936 / 35 | 7/08–21 archive reconstruction；7/22+ collector checkpoint；均接 archived book | 更宽机制压力测试，target 为 favorite exact YES |
+| exact pending-state | 7/30–8/11 | 79 / 13 same-market | causal contemporaneous exact-rung book | 当前 online candidate 的同 target 证据 |
+| clean forward | 8/12 起 | 0 settled dates | live collector + zero-notional runtime | 唯一正式 admission 分母 |
+
+periodic 压力测试按时间分三段都没有稳定胜 market：7/21–27 的 logloss delta
+`+0.1131`、ROI `-31.39%`；7/28–8/03 为 `+0.1141/-16.98%`；8/04–11 虽回到
+ROI `+9.52%`，但 probability delta 仍为 `+0.0256`。这说明最近几天的正收益 cluster
+不能外推成长期稳定 alpha。
 
 ## 逐日因果权重
 
@@ -150,8 +182,9 @@ generic hot-strip 的 60s markout 当本模型收益。
    8/12 残缺数据不得补入。
 3. 已固化并 parity-lock composite artifact，也已实现不读 label 的 Busan WCIR adapter；
    clean forward 从 `2026-08-12T02:00:00Z` 起 append，部署前的当日数据不回填冒充 forward。
-4. 至少新增 5 个 `weight>0` 的独立日期并出现可执行信号后，再做一次固定分母
-   admission；当前只有 3 天，且 clean forward 为 0 天。
+4. 不再以“再来 5 个非零日”作为充分 admission 条件。正式门槛改为至少 `30` 个新 settled
+   clean-forward target dates，并同时要求同 rows proper-score delta CI 全负、fee-adjusted
+   uplift CI 为正；当前只有 3 个历史非零创新日，clean forward 为 0 个 settled dates。
 5. WS 等覆盖至少跨多个独立 settlement dates 后，只做增量 A/B：
    `weather+market level` vs `weather+market level+WS dynamics`。
 
@@ -189,3 +222,7 @@ python -m weather_model_evaluation.cli busan-market-prior \
 `/Volumes/jrs/weather_data_feed_service_runtime/model_artifacts/city_probability_runtime_v3/busan_online_market_prior_v1.joblib`。
 其中包含 prediction、逐单、daily weight history、weight-grid、robustness 和
 execution-buffer sensitivity 的完整路径与 SHA/build identity。
+
+扩展历史审计：
+`/Volumes/jrs-archive/weather_data_feed_service_runtime/research/model_runs/busan_market_prior_expanded_history/run=20260812_034500z/admission_summary.json`；
+其中分开保存 35 日 periodic 机制压力测试与 13 日 exact pending-state 评估，避免跨 target 合并统计。

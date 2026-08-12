@@ -2,6 +2,12 @@
 
 研究/审计用途的粗筛系统，使用 **Gamma** 与 **CLOB** 公共只读接口（无任何下单/签名/资金操作），落地 SQLite（PG-friendly），可选 LLM 规则抽取，计算流动性/摩擦指标，生成候选清单供人工复核。
 
+专题研究：[Polymarket Dispute Repricing](DISPUTE_REPRICING.md)（UMA dispute 状态机、
+历史反转 base rate、repricing 时钟与 zero-notional forward 方案）。
+
+专题研究：[Polymarket Weather Proposal Reward](WEATHER_PROPOSAL_REWARD.md)（当前规则、
+独立 bracket requests、链上 proposal 本地时钟、source first-seen 竞争与资金周转）。
+
 ## 安装
 - Python 3.11+
 - 使用 `uv`（推荐）或 `pip`：
