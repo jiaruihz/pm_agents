@@ -127,3 +127,51 @@ V9 的 `2pp` policy 是在 post-freeze development 后锁定，配置的最早 c
 
 后续主 scorecard 只看 `cross07_survival_edge01` 在 2026-08-12 03:00 UTC 后新增的 settled target dates；
 固定同时报告裸 `.7`、模型合同和同 checkpoint market favorite，不再用新增标签改 margin、edge 或退出方式。
+
+## 2026-08-12 独立红队与 market-offset v3（覆盖此前 v2 升级判断）
+
+独立红队确认 v2 的历史执行回放存在 market clock 错位：11,800 个 market reference 全部不晚于
+KNMI observation time，中位还早 55 秒；真实 collector 中 KNMI first-seen 相对 observation 的中位延迟为
+222 秒。因此旧 `+11.85%` 不能叫可执行 ROI，它实际混合了 first-seen 前市场价和之后才能得知的 KNMI 值。
+这不污染 probability fit 的因果性——pre-event market 本来就可以作为 prior——但污染了 entry cost。
+
+v3 把两个时钟拆开：模型输入固定为 strictly-pre-first-seen market prior，入场与 market baseline 固定为
+first-seen t0 ask/mid。历史 OOF 也改为 nested expanding：六月的超参数只用五月选择并训练至五月，七月的
+超参数只用六月选择并训练至六月。6–7月共6,136 checkpoints / 57 dates，posterior Brier/logloss
+`0.04246/0.14154`，market 为 `0.04718/0.15212`；delta 点估为 `-0.00472/-0.01057`，但95% CI
+`[-0.01091,+0.00162] / [-0.02733,+0.00780]`，仍未过显著性门。
+
+用 `observation+240s` 的 sampled prices-history 做 repricing 压力测试时，七月固定策略得到42笔/27日、
+34胜，fee proxy ROI `+24.04%`，date-bootstrap CI `[+3.84%,+45.58%]`；同42行 post-240 market
+favorite 为29胜、ROI `-6.33%`，model-minus-market PnL CI `[$6.55,$79.50]`。这是方向值得继续的最强
+历史证据，但该 API 没有 bid/ask/spread/depth，所以仍不是 executable evidence。
+
+collector-exact clock-parity replay 覆盖443个同分母 checkpoints / 9 dates：posterior Brier/logloss
+`0.02205/0.09975`，t0 market 为 `0.03403/0.13224`；delta 为 `-0.01198/-0.03250`，95% CI
+上界分别 `+0.00083/+0.00073`，都仍轻微跨0。19个方向分歧/4日中模型正确14次、market正确5次，
+说明存在可能的纠偏能力；但transition/state-entry只有21行/7日且0次方向分歧。固定`:10/:40`、2pp、
+5-share表达为9笔/6日、9胜、taker counterfactual ROI `+27.22%`，可这9笔与market favorite方向全部相同，
+paired uplift严格为0，actual fills也仍为0。
+
+红队同时发现并已修复两处 runtime parity bug：Amsterdam adapter 现在把YES/NO完整ask ladder传给公共
+5-share sweep，避免`execution_cost=None → would_enter=false`；position scope 改为每
+`target_date×bracket×model`只允许首个最佳方向，不能翻边重复发。未训练的hard floor/ceiling和
+`or higher`表达 fail closed；`or below`只有物理current与边界相等时才允许。checkpoint预测表现在保留
+pre-event prior、t0 execution book、transition/state-entry和完整posterior，便于逐行复核。
+
+最终 artifact 为 `amsterdam_knmi_market_offset_probability_v3`：11,800 rows / 112 dates，训练至
+2026-07-29，部署选择为`weather_path_mechanism + L2=0.01`，clean-forward start
+`2026-08-12T08:24:21.919654Z`。SHA-256
+`93b525fd752bc5bbb1068469c6d8e428de176c89114b3e3d2efc335e44534881`。
+
+结论不是放弃，而是 **shadow candidate / not live**。significance、selected-row market uplift、untouched
+forward、actual fill/capacity 四门仍未同时通过。继续冻结收集，至少达到30个新settled executable signals、
+10个active dates，并且proper-score delta CI全负、fee-adjusted paired uplift CI为正且包含足够真实方向分歧，
+才进入tiny-live评审；在此之前不碰真钱，也不影响既有CrossNO。
+
+新增证据：
+
+- v3 training/nested OOF：`/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_market_offset_probability/run=development_20260812_v5_post_firstseen_stress/market_offset_metrics.json`
+- v3 artifact：同目录 `market_offset.pkl`
+- final clock-parity collector replay：`/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_market_offset_probability/collector_replay_20260730_20260811_v8_final_review/metrics.json`
+- 逐checkpoint审计：同目录 `checkpoint_predictions.csv.gz`

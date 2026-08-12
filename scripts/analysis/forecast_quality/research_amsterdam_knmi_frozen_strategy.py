@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import csv
 import glob
 import gzip
@@ -95,6 +96,10 @@ DEFAULT_MARKET_REFERENCE_GIT_SPEC = (
     "2009d308:docs/analysis/2026-07/generated/"
     "amsterdam_polymarket_price_reference_v1/"
     "prediction_market_reference_table.csv.gz"
+)
+DEFAULT_MARKET_HISTORY_DIR = Path(
+    "/Volumes/jrs/weather_data_feed_service_runtime/research/"
+    "reference_market_history/amsterdam_polymarket_prices_history_v1/dates"
 )
 
 MARKET_OFFSET_FEATURE_SETS = {
@@ -303,6 +308,68 @@ def book_map(root: Path) -> dict[str, dict[str, Any]]:
     return result
 
 
+def pre_event_book_map(root: Path) -> dict[str, dict[int, dict[str, Any]]]:
+    """Load paired YES/NO books captured strictly before source first-seen."""
+
+    result: dict[str, dict[int, dict[str, Any]]] = {}
+    journal = root / "output/knmi_first_seen_ladder_v1/pre_event_references.jsonl"
+    for _, reference in read_jsonl(journal):
+        if reference.get("full_ladder_status") != "found":
+            continue
+        event_id = str(reference.get("source_event_id") or "")
+        path = Path(str(reference.get("full_ladder_snapshot_path") or ""))
+        if not event_id or not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        first_seen = parse(reference["source_event_first_seen_at_utc"])
+        grouped: dict[int, dict[str, dict[str, Any]]] = defaultdict(dict)
+        for row in payload.get("records", []):
+            if row.get("status") != "ok":
+                continue
+            try:
+                bracket = int(float(row.get("bracket")))
+                available = parse(
+                    row.get("available_at_utc") or row.get("fetched_at_utc")
+                )
+            except (TypeError, ValueError):
+                continue
+            if available >= first_seen:
+                continue
+            side = str(row.get("outcome") or "").upper()
+            if side in {"YES", "NO"}:
+                grouped[bracket][side] = row
+        paired: dict[int, dict[str, Any]] = {}
+        for bracket, sides in grouped.items():
+            if not {"YES", "NO"}.issubset(sides):
+                continue
+            yes, no = sides["YES"], sides["NO"]
+            yes_summary, no_summary = yes.get("summary") or {}, no.get("summary") or {}
+            no_bid, no_ask = no_summary.get("best_bid"), no_summary.get("best_ask")
+            yes_bid, yes_ask = yes_summary.get("best_bid"), yes_summary.get("best_ask")
+            paired[bracket] = {
+                "no_best_bid": no_bid,
+                "no_best_ask": no_ask,
+                "yes_best_bid": yes_bid,
+                "yes_best_ask": yes_ask,
+                "market_p": (
+                    (float(no_bid) + float(no_ask)) / 2
+                    if no_bid is not None and no_ask is not None
+                    else np.nan
+                ),
+                "yes_market_p": (
+                    (float(yes_bid) + float(yes_ask)) / 2
+                    if yes_bid is not None and yes_ask is not None
+                    else np.nan
+                ),
+                "snapshot_path": str(path),
+            }
+        result[event_id] = paired
+    return result
+
+
 def fee(shares: float, price: float) -> float:
     return round(shares * FEE_RATE * price * (1 - price), 5)
 
@@ -325,6 +392,26 @@ def probability_metrics(rows: pd.DataFrame, column: str) -> dict[str, Any]:
             "brier_date_equal": float(daily.brier.mean()),
             "logloss_date_equal": float(daily.logloss.mean()),
             "accuracy_0_5": float(((p >= .5) == y.astype(bool)).mean())}
+
+
+def directional_disagreement_summary(
+    rows: pd.DataFrame, probability_column: str
+) -> dict[str, Any]:
+    disagreement = rows[probability_column].ge(0.5).ne(rows["market_p"].ge(0.5))
+    selected = rows[disagreement]
+    labels = selected["label_leave"].astype(bool)
+    return {
+        "rows": int(len(rows)),
+        "target_dates": int(rows["target_date"].nunique()),
+        "direction_disagreements": int(disagreement.sum()),
+        "disagreement_target_dates": int(selected["target_date"].nunique()),
+        "model_correct_on_disagreements": int(
+            selected[probability_column].ge(0.5).eq(labels).sum()
+        ),
+        "market_correct_on_disagreements": int(
+            selected["market_p"].ge(0.5).eq(labels).sum()
+        ),
+    }
 
 
 def paired_probability_delta(
@@ -562,6 +649,12 @@ def replay_historical_price_reference(
     rows: pd.DataFrame,
     probability: np.ndarray,
     policy: dict[str, Any],
+    *,
+    yes_price_column: str = "market_current_yes_price_reference",
+    no_price_column: str = "market_current_no_price_reference",
+    baseline_no_probability_column: str = "market_p",
+    decision_time_column: str = "observed_at_utc",
+    mode: str = "sampled_pre_first_seen_price_reference_not_execution_evidence",
 ) -> dict[str, Any]:
     """Replay a policy on sampled PIT prices, explicitly not executable books."""
 
@@ -573,10 +666,10 @@ def replay_historical_price_reference(
     working["source_minute"] = observed.dt.minute
     working["local_hour"] = observed.dt.hour
     working["no_reference_price"] = pd.to_numeric(
-        working["market_current_no_price_reference"], errors="coerce"
+        working[no_price_column], errors="coerce"
     )
     working["yes_reference_price"] = pd.to_numeric(
-        working["market_current_yes_price_reference"], errors="coerce"
+        working[yes_price_column], errors="coerce"
     )
     working["no_effective_cost"] = (
         working["no_reference_price"]
@@ -628,7 +721,7 @@ def replay_historical_price_reference(
         ~eligible["label_leave"].astype(bool),
     )
     eligible["shares"] = 5.0
-    eligible["source_first_seen_at_utc"] = eligible["observed_at_utc"]
+    eligible["source_first_seen_at_utc"] = eligible[decision_time_column]
     eligible["cost"] = 5.0 * (
         eligible["selected_reference_price"]
         + FEE_RATE
@@ -665,7 +758,7 @@ def replay_historical_price_reference(
         }
     same_rows_market = eligible.copy()
     same_rows_market["selected_side"] = np.where(
-        same_rows_market["market_p"].ge(0.5), "NO", "YES"
+        same_rows_market[baseline_no_probability_column].ge(0.5), "NO", "YES"
     )
     same_no = same_rows_market["selected_side"].eq("NO")
     same_rows_market["selected_reference_price"] = np.where(
@@ -719,7 +812,7 @@ def replay_historical_price_reference(
         & working["local_hour"].between(10, 16)
     ].copy()
     all_market["selected_side"] = np.where(
-        all_market["market_p"].ge(0.5), "NO", "YES"
+        all_market[baseline_no_probability_column].ge(0.5), "NO", "YES"
     )
     all_no = all_market["selected_side"].eq("NO")
     all_market["selected_reference_price"] = np.where(
@@ -750,12 +843,93 @@ def replay_historical_price_reference(
     output = {
         **summarize(eligible),
         "by_side": by_side,
-        "mode": "sampled_price_reference_plus_fee_proxy_not_executable_book",
+        "mode": mode,
+        "live_evidence_eligible": False,
         "same_selected_rows_market_favorite": same_rows_summary,
         "all_market_favorite_primary_clock": summarize(all_market),
         "target_date_bootstrap": trade_date_bootstrap(records, universe_dates),
         "stability": trade_stability(records, universe_dates),
     }
+    return output
+
+
+def add_delayed_price_history_reference(
+    rows: pd.DataFrame,
+    history_dir: Path,
+    *,
+    delay_seconds: int = 240,
+    max_age_seconds: int = 300,
+) -> pd.DataFrame:
+    """Attach sampled prices available after an estimated KNMI first-seen.
+
+    These are provider-sampled prices, not order books.  They are useful only
+    as a repricing stress test for the pre-event prior strategy.
+    """
+
+    output = rows.copy()
+    output["post_first_seen_proxy_at_utc"] = pd.to_datetime(
+        output["observed_at_utc"], utc=True
+    ) + pd.to_timedelta(delay_seconds, unit="s")
+    yes_values: list[float] = []
+    no_values: list[float] = []
+    reference_times: list[str | None] = []
+    cache: dict[str, dict[tuple[int, str], tuple[list[int], list[float]]]] = {}
+    for row in output.itertuples(index=False):
+        target_date = str(row.target_date)
+        if target_date not in cache:
+            path = history_dir / f"{target_date}.json.gz"
+            series: dict[tuple[int, str], tuple[list[int], list[float]]] = {}
+            if path.exists():
+                with gzip.open(path, "rt", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+                for cell in payload.get("cells", []):
+                    kind = str(cell.get("cell_kind") or "")
+                    if kind == "exact" and cell.get("lower_c") == cell.get("upper_c"):
+                        anchor = cell.get("lower_c")
+                    elif kind == "or_below":
+                        anchor = cell.get("upper_c")
+                    else:
+                        continue
+                    if anchor is None:
+                        continue
+                    for side, token_key in (
+                        ("YES", "yes_token_id"),
+                        ("NO", "no_token_id"),
+                    ):
+                        history = payload.get("history", {}).get(
+                            str(cell.get(token_key)), []
+                        )
+                        if history:
+                            series[(int(anchor), side)] = (
+                                [int(point["t"]) for point in history],
+                                [float(point["p"]) for point in history],
+                            )
+            cache[target_date] = series
+        decision = int(pd.Timestamp(row.post_first_seen_proxy_at_utc).timestamp())
+        selected: dict[str, tuple[float, int]] = {}
+        for side in ("YES", "NO"):
+            series = cache[target_date].get((int(row.current_bracket_c), side))
+            if series is None:
+                continue
+            timestamps, values = series
+            index = bisect.bisect_right(timestamps, decision) - 1
+            if index >= 0 and decision - timestamps[index] <= max_age_seconds:
+                selected[side] = (values[index], timestamps[index])
+        if {"YES", "NO"}.issubset(selected):
+            yes_values.append(selected["YES"][0])
+            no_values.append(selected["NO"][0])
+            reference_times.append(
+                datetime.fromtimestamp(
+                    max(selected["YES"][1], selected["NO"][1]), UTC
+                ).isoformat()
+            )
+        else:
+            yes_values.append(np.nan)
+            no_values.append(np.nan)
+            reference_times.append(None)
+    output["post_first_seen_yes_price_reference"] = yes_values
+    output["post_first_seen_no_price_reference"] = no_values
+    output["post_first_seen_price_reference_ts_utc"] = reference_times
     return output
 
 
@@ -767,6 +941,7 @@ def fit_amsterdam_market_offset(
     forecast_path: Path,
     market_reference_path: Path | None,
     market_reference_git_spec: str | None,
+    market_history_dir: Path | None,
     output_path: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     history = pd.read_csv(historical_dataset)
@@ -804,7 +979,19 @@ def fit_amsterdam_market_offset(
         joined["label_d1_cross_eod"], errors="raise"
     ).astype(int)
     joined = add_amsterdam_market_offset_features(joined)
-    fitted, selection = select_market_offset_model(
+    if market_history_dir is not None:
+        joined = add_delayed_price_history_reference(joined, market_history_dir)
+    june_model, june_selection = select_market_offset_model(
+        joined,
+        feature_sets=MARKET_OFFSET_FEATURE_SETS,
+        l2_grid=MARKET_OFFSET_L2_GRID,
+        fit_window=("2026-04-03", "2026-04-30"),
+        validation_window=("2026-05-01", "2026-05-31"),
+        refit_window=("2026-04-03", "2026-05-31"),
+        market_probability_column="market_p",
+        label_column="label_leave",
+    )
+    july_model, july_selection = select_market_offset_model(
         joined,
         feature_sets=MARKET_OFFSET_FEATURE_SETS,
         l2_grid=MARKET_OFFSET_L2_GRID,
@@ -814,24 +1001,24 @@ def fit_amsterdam_market_offset(
         market_probability_column="market_p",
         label_column="label_leave",
     )
-    development_rows = joined[
-        joined["target_date"].between("2026-04-03", "2026-05-31")
-    ].copy()
-    development_model = fit_fixed_market_offset(
-        development_rows,
-        feature_columns=selection["selected"]["features"],
+    fitted, deployment_selection = select_market_offset_model(
+        joined,
+        feature_sets=MARKET_OFFSET_FEATURE_SETS,
+        l2_grid=MARKET_OFFSET_L2_GRID,
+        fit_window=("2026-04-03", "2026-06-30"),
+        validation_window=("2026-07-01", "2026-07-29"),
+        refit_window=("2026-04-03", "2026-07-29"),
         market_probability_column="market_p",
         label_column="label_leave",
-        date_column="target_date",
-        l2_strength=float(selection["selected"]["l2_strength"]),
     )
     fitted.update(
         {
-            "model_id": "amsterdam_knmi_market_offset_probability_v2",
+            "model_id": "amsterdam_knmi_market_offset_probability_v3",
             "city": "Amsterdam",
             "target": "P(final EHAM settlement leaves current exact bracket)",
             "market_feature_role": "prior_offset",
-            "market_feature_clock": "decision_current",
+            "market_feature_clock": "last_sample_strictly_before_knmi_observation",
+            "runtime_market_feature_clock": "last_book_strictly_before_knmi_first_seen",
             "base_weather_model_id": weather_artifact["model_id"],
             "base_weather_artifact": str(weather_artifact_path.resolve()),
             "base_weather_artifact_sha256": sha256(weather_artifact_path),
@@ -846,19 +1033,13 @@ def fit_amsterdam_market_offset(
         }
     )
     scores: dict[str, Any] = {}
-    for split, start, end in (
-        ("fit", "2026-04-03", "2026-05-31"),
-        ("validation", "2026-06-01", "2026-06-30"),
-        ("reused_holdout_early", "2026-07-01", "2026-07-14"),
-        ("reused_holdout_late", "2026-07-15", "2026-07-29"),
-        ("reused_holdout_all", "2026-07-01", "2026-07-29"),
+    for split, start, end, scoring_model, fit_through in (
+        ("causal_oof_june", "2026-06-01", "2026-06-30", june_model, "2026-05-31"),
+        ("causal_oof_july_early", "2026-07-01", "2026-07-14", july_model, "2026-06-30"),
+        ("causal_oof_july_late", "2026-07-15", "2026-07-29", july_model, "2026-06-30"),
+        ("causal_oof_july_all", "2026-07-01", "2026-07-29", july_model, "2026-06-30"),
     ):
         subset = joined[joined["target_date"].between(start, end)].copy()
-        scoring_model = (
-            development_model
-            if split in {"fit", "validation"}
-            else fitted
-        )
         posterior = predict_fixed_market_offset(scoring_model, subset)
         scores[split] = {
             "window": [start, end],
@@ -882,16 +1063,31 @@ def fit_amsterdam_market_offset(
                 posterior,
                 MARKET_POSTERIOR_POLICIES[0],
             ),
-            "scoring_model_fit_through": (
-                "2026-05-31"
-                if split in {"fit", "validation"}
-                else "2026-06-30"
+            "post_first_seen_240s_price_proxy_policy": (
+                replay_historical_price_reference(
+                    subset,
+                    posterior,
+                    MARKET_POSTERIOR_POLICIES[0],
+                    yes_price_column="post_first_seen_yes_price_reference",
+                    no_price_column="post_first_seen_no_price_reference",
+                    baseline_no_probability_column=(
+                        "post_first_seen_no_price_reference"
+                    ),
+                    decision_time_column="post_first_seen_proxy_at_utc",
+                    mode=(
+                        "sampled_price_at_observation_plus_240s_plus_fee_proxy_"
+                        "not_executable_book"
+                    ),
+                )
+                if "post_first_seen_no_price_reference" in subset
+                else None
             ),
+            "scoring_model_fit_through": fit_through,
         }
     expanding_parts = []
     for start, end, scoring_model in (
-        ("2026-06-01", "2026-06-30", development_model),
-        ("2026-07-01", "2026-07-29", fitted),
+        ("2026-06-01", "2026-06-30", june_model),
+        ("2026-07-01", "2026-07-29", july_model),
     ):
         part = joined[joined["target_date"].between(start, end)].copy()
         part["p_expanding_oof"] = predict_fixed_market_offset(
@@ -924,12 +1120,30 @@ def fit_amsterdam_market_offset(
             expanding_oof["p_expanding_oof"].to_numpy(float),
             MARKET_POSTERIOR_POLICIES[0],
         ),
+        "post_first_seen_240s_price_proxy_policy": (
+            replay_historical_price_reference(
+                expanding_oof,
+                expanding_oof["p_expanding_oof"].to_numpy(float),
+                MARKET_POSTERIOR_POLICIES[0],
+                yes_price_column="post_first_seen_yes_price_reference",
+                no_price_column="post_first_seen_no_price_reference",
+                baseline_no_probability_column="post_first_seen_no_price_reference",
+                decision_time_column="post_first_seen_proxy_at_utc",
+                mode=(
+                    "sampled_price_at_observation_plus_240s_plus_fee_proxy_"
+                    "not_executable_book"
+                ),
+            )
+            if "post_first_seen_no_price_reference" in expanding_oof
+            else None
+        ),
         "clock": (
-            "June scored by model fit through May; July scored by refit through June"
+            "June hyperparameters selected on May and fit through May; July "
+            "hyperparameters selected on June and fit through June"
         ),
     }
     summary = {
-        "schema_version": "amsterdam_knmi_market_offset_training_v2",
+        "schema_version": "amsterdam_knmi_market_offset_training_v3",
         "model_id": fitted["model_id"],
         "denominator_scope": (
             "Amsterdam 10-minute archive-reconstructed weather checkpoints joined "
@@ -939,8 +1153,16 @@ def fit_amsterdam_market_offset(
         "joined_rows": int(len(joined)),
         "target_dates": int(joined["target_date"].nunique()),
         "target_date_range": [joined["target_date"].min(), joined["target_date"].max()],
-        "selection": selection,
-        "multiple_test_candidates": int(selection["selected"] and len(selection["candidates"])),
+        "nested_selections": {
+            "june_oof": june_selection,
+            "july_oof": july_selection,
+            "deployment_clean_forward": deployment_selection,
+        },
+        "selection": deployment_selection,
+        "multiple_test_candidates": int(
+            deployment_selection["selected"]
+            and len(deployment_selection["candidates"])
+        ),
         "multiple_test_adjustment": "none_development_selection_only",
         "market_probability_contract": (
             "direct current-bracket NO price; q_market_0 full-ladder normalization "
@@ -1157,6 +1379,9 @@ def main() -> int:
     parser.add_argument("--historical-dataset", type=Path, default=DEFAULT_HISTORICAL_DATASET)
     parser.add_argument("--market-reference-path", type=Path, default=None)
     parser.add_argument(
+        "--market-history-dir", type=Path, default=DEFAULT_MARKET_HISTORY_DIR
+    )
+    parser.add_argument(
         "--market-reference-git-spec",
         default=DEFAULT_MARKET_REFERENCE_GIT_SPEC,
     )
@@ -1185,6 +1410,7 @@ def main() -> int:
             forecast_path=args.forecast_path,
             market_reference_path=args.market_reference_path,
             market_reference_git_spec=args.market_reference_git_spec,
+            market_history_dir=args.market_history_dir,
             output_path=args.fit_market_prior_output,
         )
         args.market_prior_artifact = args.fit_market_prior_output
@@ -1222,19 +1448,41 @@ def main() -> int:
     frame = frame[frame["target_date"].isin(outcomes)].copy()
     frame["settlement_bracket"] = frame["target_date"].map(outcomes)
     frame["label_leave"] = frame["settlement_bracket"].ne(frame["current_bracket_c"]).astype(int)
+    frame["is_transition"] = frame.groupby("target_date")[
+        "current_bracket_c"
+    ].transform(lambda values: values.ne(values.shift()).astype(int))
+    frame["is_state_entry"] = (~frame.duplicated(
+        ["target_date", "current_bracket_c"], keep="first"
+    )).astype(int)
     books = book_map(args.runtime_root)
+    pre_event_books = pre_event_book_map(args.runtime_root)
     quote_rows = []
     for row in frame.to_dict("records"):
         book = books.get(str(row["source_event_id"]))
+        pre_event = pre_event_books.get(str(row["source_event_id"]), {}).get(
+            int(row["current_bracket_c"])
+        )
         record = None if book is None else next(
             (item for item in book.get("records", []) if exact_bracket(item, int(row["current_bracket_c"]))), None
         )
         if record is None:
-            row.update({"market_p": np.nan, "no_best_ask": np.nan, "no_ask_size": np.nan,
+            row.update({"market_p": np.nan, "market_prior_p": np.nan,
+                        "market_prior_snapshot_path": None,
+                        "no_best_ask": np.nan, "no_ask_size": np.nan,
                         "yes_best_ask": np.nan, "yes_ask_size": np.nan, "snapshot_path": None})
         else:
             bid, ask = record.get("no_best_bid"), record.get("no_best_ask")
             row.update({"market_p": (float(bid)+float(ask))/2 if bid is not None and ask is not None else np.nan,
+                        "market_prior_p": (
+                            float(pre_event["market_p"])
+                            if pre_event is not None
+                            and pd.notna(pre_event.get("market_p"))
+                            else np.nan
+                        ),
+                        "market_prior_snapshot_path": (
+                            pre_event.get("snapshot_path")
+                            if pre_event is not None else None
+                        ),
                         "no_best_ask": float(ask) if ask is not None else np.nan,
                         "no_ask_size": float(record.get("no_ask_size") or 0),
                         "yes_best_ask": float(record["yes_best_ask"]) if record.get("yes_best_ask") is not None else np.nan,
@@ -1274,8 +1522,10 @@ def main() -> int:
     same_set_market, same_set_market_records = same_selected_rows_market_favorite(
         records_by_policy[locked_policy_id], universe_dates
     )
+    posterior_frame: pd.DataFrame | None = None
     market_posterior_probability = None
     market_posterior_delta = None
+    market_posterior_by_grain = None
     market_posterior_policies: dict[str, Any] = {}
     market_posterior_records: list[dict[str, Any]] = []
     market_posterior_same_rows_market = None
@@ -1284,17 +1534,23 @@ def main() -> int:
     if args.market_prior_artifact is not None:
         with args.market_prior_artifact.open("rb") as handle:
             market_prior_artifact = pickle.load(handle)
-        posterior_frame = add_amsterdam_market_offset_features(frame)
+        posterior_frame = frame.copy()
+        posterior_frame["market_execution_p"] = posterior_frame["market_p"]
+        posterior_frame["market_p"] = posterior_frame["market_prior_p"]
+        posterior_frame = add_amsterdam_market_offset_features(posterior_frame)
         posterior_frame["p_market_posterior"] = predict_fixed_market_offset(
             market_prior_artifact,
             posterior_frame,
             market_probability=posterior_frame["market_p"],
         )
+        posterior_frame["market_p"] = posterior_frame["market_execution_p"]
         posterior_frame = apply_probability_expression(
             posterior_frame, "p_market_posterior"
         )
         posterior_common = posterior_frame[
             posterior_frame["market_p"].notna()
+            & posterior_frame["market_prior_p"].notna()
+            & posterior_frame["p_market_posterior"].notna()
         ].copy()
         market_posterior_probability = probability_metrics(
             posterior_common, "p_market_posterior"
@@ -1302,6 +1558,26 @@ def main() -> int:
         market_posterior_delta = paired_probability_delta(
             posterior_common, "p_market_posterior"
         )
+        grain_masks = {
+            "checkpoint": pd.Series(True, index=posterior_common.index),
+            "transition": posterior_common["is_transition"].astype(bool),
+            "state_entry": posterior_common["is_state_entry"].astype(bool),
+        }
+        market_posterior_by_grain = {}
+        for grain, mask in grain_masks.items():
+            grain_rows = posterior_common[mask].copy()
+            market_posterior_by_grain[grain] = {
+                "market": probability_metrics(grain_rows, "market_p"),
+                "posterior": probability_metrics(
+                    grain_rows, "p_market_posterior"
+                ),
+                "posterior_minus_market": paired_probability_delta(
+                    grain_rows, "p_market_posterior"
+                ),
+                "directional_disagreement": directional_disagreement_summary(
+                    grain_rows, "p_market_posterior"
+                ),
+            }
         posterior_records_by_policy: dict[str, list[dict[str, Any]]] = {}
         for policy in MARKET_POSTERIOR_POLICIES:
             posterior_summary, posterior_records = replay_policy(
@@ -1361,6 +1637,7 @@ def main() -> int:
         "same_selected_rows_market_favorite": same_set_market,
         "market_posterior_probability_common": market_posterior_probability,
         "market_posterior_minus_market_common": market_posterior_delta,
+        "market_posterior_by_grain": market_posterior_by_grain,
         "market_posterior_policies": market_posterior_policies,
         "market_posterior_same_selected_rows_market_favorite": (
             market_posterior_same_rows_market
@@ -1389,7 +1666,12 @@ def main() -> int:
     }
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "metrics.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    frame.to_csv(args.output / "checkpoint_predictions.csv.gz", index=False, compression="gzip")
+    checkpoint_output = posterior_frame if posterior_frame is not None else frame
+    checkpoint_output.to_csv(
+        args.output / "checkpoint_predictions.csv.gz",
+        index=False,
+        compression="gzip",
+    )
     pd.DataFrame(record_rows).to_csv(args.output / "policy_trades.csv", index=False)
     pd.DataFrame(market_records).to_csv(args.output / "market_favorite_trades.csv", index=False)
     pd.DataFrame(same_set_market_records).to_csv(

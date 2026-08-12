@@ -390,7 +390,22 @@ def test_amsterdam_market_offset_uses_direct_no_mid_and_weather_correction(
             "yes_bid": 0.58,
             "yes_ask": 0.60,
             "yes_mid": 0.59,
+            "no_asks": [{"price": 0.42, "size": 5.0}],
+            "yes_asks": [{"price": 0.60, "size": 5.0}],
+            "resolved_bracket": 20,
+            "bracket_anchor": "exact",
             "snapshot_path": "offset.json",
+        },
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.amsterdam._pre_event_market_quote",
+        lambda profile, source_event_id, target_date, bracket, decision: {
+            "book_snapshot_id": "pre-offset",
+            "resolved_bracket": 20,
+            "bracket_anchor": "exact",
+            "mid": 0.41,
+            "yes_mid": 0.59,
+            "snapshot_path": "pre-offset.json",
         },
     )
     base_artifact = {
@@ -423,6 +438,7 @@ def test_amsterdam_market_offset_uses_direct_no_mid_and_weather_correction(
         "source_journal": str(tmp_path / "source"),
         "observation_journal_dir": str(tmp_path / "official"),
         "ladder_snapshot_dir": str(tmp_path / "ladder"),
+        "pre_event_reference_journal": str(tmp_path / "pre.jsonl"),
         "forecast_previous_day1_dir": str(tmp_path / "forecast"),
         "max_source_age_seconds": 900,
         "allowed_source_minutes": [10, 40],
@@ -451,3 +467,12 @@ def test_amsterdam_market_offset_uses_direct_no_mid_and_weather_correction(
     assert 0.41 < by_side["NO"].model_probability < 0.70
     assert by_side["YES"].model_probability == 1.0 - by_side["NO"].model_probability
     assert by_side["NO"].lineage["base_weather_artifact_sha256"] == "base-sha"
+    assert by_side["NO"].lineage["market_feature_clock"] == (
+        "strictly_pre_knmi_first_seen"
+    )
+    assert by_side["NO"].market["raw"]["asks"] == [
+        {"price": 0.42, "size": 5.0}
+    ]
+    assert by_side["YES"].market["raw"]["asks"] == [
+        {"price": 0.60, "size": 5.0}
+    ]

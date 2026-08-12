@@ -42,6 +42,7 @@ def main() -> None:
             "amsterdam_knmi_remaining_heat_v9": AmsterdamKnmiRemainingHeatV7Adapter(),
             "amsterdam_knmi_cross_survival_v1": AmsterdamKnmiRemainingHeatV7Adapter(),
             "amsterdam_knmi_market_offset_probability_v2": AmsterdamKnmiRemainingHeatV7Adapter(),
+            "amsterdam_knmi_market_offset_probability_v3": AmsterdamKnmiRemainingHeatV7Adapter(),
             "busan_online_market_prior_v1": BusanOnlineMarketPriorAdapter(),
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
             "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),

@@ -66,6 +66,16 @@ def test_amsterdam_production_profile_uses_notification_journal() -> None:
     assert contract["schema_fingerprint"] == (
         "401ae97fea4cd0f75399a50944949e658b5b17df80a06ac6d6056531b254c883"
     )
+    offset = next(
+        row
+        for row in config["profiles"]
+        if row["adapter"] == "amsterdam_knmi_market_offset_probability_v3"
+    )
+    assert offset["position_scope"] == "city_date_bracket_model"
+    assert offset["selection_shares"] == 5.0
+    assert offset["pre_event_reference_journal"].endswith(
+        "/knmi_first_seen_ladder_v1/pre_event_references.jsonl"
+    )
 
 
 def test_amsterdam_revision_is_typed_and_never_becomes_candidate(tmp_path: Path) -> None:

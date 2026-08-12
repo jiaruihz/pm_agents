@@ -217,6 +217,14 @@ def _market_quote(profile: dict[str, Any], source_event_id: str, target_date: st
             decision_ts_utc=decision.isoformat(),
             details={"snapshot": filename, "bracket": bracket},
         )
+    resolved_bracket = int(
+        re.search(r"-?\d+", str(record.get("bracket"))).group()
+    )
+    question = str(record.get("question") or "").lower()
+    if bracket == resolved_bracket and "or below" in question:
+        bracket_anchor = "or_below_current"
+    elif bracket == resolved_bracket and "or higher" in question:
+        bracket_anchor = "or_higher_current"
     bid = record.get("no_best_bid")
     ask = record.get("no_best_ask")
     bid = None if bid is None else float(bid)
@@ -233,15 +241,152 @@ def _market_quote(profile: dict[str, Any], source_event_id: str, target_date: st
     return {
         **record,
         "physical_current_bracket": bracket,
-        "resolved_bracket": int(
-            re.search(r"-?\d+", str(record.get("bracket"))).group()
-        ),
+        "resolved_bracket": resolved_bracket,
         "bracket_anchor": bracket_anchor,
         "snapshot_path": filename,
         "book_snapshot_id": snapshot_id,
         "best_bid": bid,
         "best_ask": ask,
         "mid": ((bid + ask) / 2 if bid is not None and ask is not None else None),
+        "yes_bid": yes_bid,
+        "yes_ask": yes_ask,
+        "yes_mid": (
+            (yes_bid + yes_ask) / 2
+            if yes_bid is not None and yes_ask is not None
+            else None
+        ),
+        "no_asks": list(record.get("no_book_asks") or []),
+        "yes_asks": list(record.get("yes_book_asks") or []),
+    }
+
+
+def _pre_event_market_quote(
+    profile: dict[str, Any],
+    source_event_id: str,
+    target_date: str,
+    bracket: int,
+    decision: datetime,
+) -> dict[str, Any]:
+    """Return the last captured market state that predates KNMI first-seen.
+
+    The market-offset artifact was trained with a market sample available before
+    the weather checkpoint became observable.  Its prior must therefore not be
+    substituted with the post-event execution book.
+    """
+
+    journal = Path(profile["pre_event_reference_journal"])
+    references = [
+        payload
+        for _, payload in _iter_jsonl(journal)
+        if payload.get("source_event_id") == source_event_id
+        and payload.get("full_ladder_status") == "found"
+    ]
+    if not references:
+        raise InputNotReady(
+            "missing_pre_event_market_reference",
+            city="Amsterdam",
+            target_date=target_date,
+            decision_ts_utc=decision.isoformat(),
+            details={"source_event_id": source_event_id},
+        )
+    reference = references[-1]
+    snapshot_path = Path(reference["full_ladder_snapshot_path"])
+    payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    if payload.get("source_event_id") != source_event_id:
+        raise ValueError("pre-event reference source event mismatch")
+    records = [
+        row
+        for row in payload.get("records", [])
+        if row.get("status") == "ok"
+        and str(row.get("event_date")) == target_date
+    ]
+    available = [
+        _parse(row.get("available_at_utc") or row.get("fetched_at_utc"))
+        for row in records
+    ]
+    if not records or max(available) >= decision:
+        raise InputNotReady(
+            "pre_event_market_reference_not_strictly_prior",
+            city="Amsterdam",
+            target_date=target_date,
+            decision_ts_utc=decision.isoformat(),
+            details={
+                "source_event_id": source_event_id,
+                "snapshot_path": str(snapshot_path),
+            },
+        )
+
+    by_bracket: dict[str, list[dict[str, Any]]] = {}
+    for row in records:
+        by_bracket.setdefault(str(row.get("bracket")), []).append(row)
+    selected_bracket = str(bracket)
+    bracket_anchor = "exact"
+    if selected_bracket not in by_bracket:
+        numeric: list[tuple[int, str]] = []
+        for value in by_bracket:
+            match = re.search(r"-?\d+", value)
+            if match:
+                numeric.append((int(match.group()), value))
+        if numeric:
+            floor_value, floor_key = min(numeric)
+            ceiling_value, ceiling_key = max(numeric)
+            floor_question = " ".join(
+                str(row.get("question") or "") for row in by_bracket[floor_key]
+            ).lower()
+            ceiling_question = " ".join(
+                str(row.get("question") or "") for row in by_bracket[ceiling_key]
+            ).lower()
+            if bracket < floor_value and "or below" in floor_question:
+                selected_bracket = floor_key
+                bracket_anchor = "hard_floor"
+            elif bracket > ceiling_value and "or higher" in ceiling_question:
+                selected_bracket = ceiling_key
+                bracket_anchor = "hard_ceiling"
+    side_rows = {
+        str(row.get("outcome") or "").upper(): row
+        for row in by_bracket.get(selected_bracket, [])
+    }
+    if not {"YES", "NO"}.issubset(side_rows):
+        raise InputNotReady(
+            "missing_pre_event_current_bracket_market",
+            city="Amsterdam",
+            target_date=target_date,
+            decision_ts_utc=decision.isoformat(),
+            details={
+                "source_event_id": source_event_id,
+                "snapshot_path": str(snapshot_path),
+                "bracket": bracket,
+            },
+        )
+    yes_record, no_record = side_rows["YES"], side_rows["NO"]
+    question = " ".join(
+        str(row.get("question") or "") for row in (yes_record, no_record)
+    ).lower()
+    resolved_bracket = int(re.search(r"-?\d+", selected_bracket).group())
+    if bracket == resolved_bracket and "or below" in question:
+        bracket_anchor = "or_below_current"
+    elif bracket == resolved_bracket and "or higher" in question:
+        bracket_anchor = "or_higher_current"
+
+    def top(row: dict[str, Any], field: str) -> float | None:
+        value = (row.get("summary") or {}).get(field)
+        return None if value is None else float(value)
+
+    no_bid, no_ask = top(no_record, "best_bid"), top(no_record, "best_ask")
+    yes_bid, yes_ask = top(yes_record, "best_bid"), top(yes_record, "best_ask")
+    return {
+        "resolved_bracket": resolved_bracket,
+        "bracket_anchor": bracket_anchor,
+        "book_snapshot_id": str(reference.get("full_ladder_snapshot_path")),
+        "snapshot_path": str(snapshot_path),
+        "latest_available_at_utc": max(available).isoformat(),
+        "best_bid": no_bid,
+        "best_ask": no_ask,
+        "mid": (
+            (no_bid + no_ask) / 2
+            if no_bid is not None and no_ask is not None
+            else None
+        ),
         "yes_bid": yes_bid,
         "yes_ask": yes_ask,
         "yes_mid": (
@@ -483,7 +628,39 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 row[feature] = np.nan
         score_frame = pd.DataFrame([row], columns=base_features)
         if market_offset_mode:
-            if quote["mid"] is None:
+            prior_quote = _pre_event_market_quote(
+                profile,
+                str(source["information_event_id"]),
+                target_date,
+                current,
+                decision,
+            )
+            if int(prior_quote["resolved_bracket"]) != current:
+                raise InputNotReady(
+                    "pre_event_execution_bracket_mismatch",
+                    city="Amsterdam",
+                    target_date=target_date,
+                    decision_ts_utc=decision.isoformat(),
+                    details={
+                        "pre_event_bracket": prior_quote["resolved_bracket"],
+                        "execution_bracket": current,
+                    },
+                )
+            supported_anchors = {"exact", "or_below_current"}
+            if quote.get("bracket_anchor") not in supported_anchors or prior_quote.get(
+                "bracket_anchor"
+            ) not in supported_anchors:
+                raise InputNotReady(
+                    "unsupported_market_offset_bracket_anchor",
+                    city="Amsterdam",
+                    target_date=target_date,
+                    decision_ts_utc=decision.isoformat(),
+                    details={
+                        "prior_anchor": prior_quote.get("bracket_anchor"),
+                        "execution_anchor": quote.get("bracket_anchor"),
+                    },
+                )
+            if prior_quote["mid"] is None:
                 raise InputNotReady(
                     "market_prior_midpoint_interval_censored",
                     city="Amsterdam",
@@ -491,13 +668,13 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                     decision_ts_utc=decision.isoformat(),
                     details={
                         "source_event_id": source["information_event_id"],
-                        "book_snapshot_id": quote.get("book_snapshot_id"),
+                        "book_snapshot_id": prior_quote.get("book_snapshot_id"),
                     },
                 )
             base_probabilities = _predict(base_artifact, score_frame)
             residual_frame = pd.DataFrame([row])
             residual_frame["p_model"] = base_probabilities["p_break_eod"]
-            residual_frame["market_p"] = float(quote["mid"])
+            residual_frame["market_p"] = float(prior_quote["mid"])
             residual_frame = add_amsterdam_market_offset_features(
                 residual_frame,
                 required_features=list(artifact["feature_columns"]),
@@ -512,7 +689,7 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             probabilities = {
                 "p_break_eod": posterior,
                 "p_weather_eod": float(base_probabilities["p_break_eod"]),
-                "p_market_prior": float(quote["mid"]),
+                "p_market_prior": float(prior_quote["mid"]),
             }
             score_feature_names = [
                 *base_features,
@@ -550,7 +727,15 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             "physical_current_bracket": physical_current,
             "expression_current_bracket": current,
             "bracket_anchor": quote.get("bracket_anchor", "exact"),
-            "market_feature_clock": "knmi_first_seen_ladder_t0",
+            "market_feature_clock": (
+                "strictly_pre_knmi_first_seen"
+                if market_offset_mode
+                else "knmi_first_seen_ladder_t0"
+            ),
+            "market_prior_book_snapshot_id": (
+                prior_quote.get("book_snapshot_id") if market_offset_mode else None
+            ),
+            "market_execution_clock": "knmi_first_seen_ladder_t0",
             "source_journal": profile["source_journal"],
             "source_line": source_line,
             "source_event_id": source["information_event_id"],
@@ -570,7 +755,12 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             if normalized_side not in {"YES", "NO"}:
                 raise ValueError(f"unsupported Amsterdam expression side: {side}")
             is_no = normalized_side == "NO"
-            market_probability = quote["mid"] if is_no else quote["yes_mid"]
+            if market_offset_mode:
+                market_probability = (
+                    prior_quote["mid"] if is_no else prior_quote["yes_mid"]
+                )
+            else:
+                market_probability = quote["mid"] if is_no else quote["yes_mid"]
             market_entry = quote["best_ask"] if is_no else quote["yes_ask"]
             p_leave = probabilities[
                 "p_cross_survives" if cross_survival_mode else "p_break_eod"
@@ -601,6 +791,15 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                     "mid": market_probability,
                     "snapshot_path": quote.get("snapshot_path"),
                     "scheduled_offset_seconds": quote.get("scheduled_offset_seconds"),
+                    "prior_mid": market_probability,
+                    "prior_snapshot_path": (
+                        prior_quote.get("snapshot_path")
+                        if market_offset_mode
+                        else None
+                    ),
+                    "raw": {
+                        "asks": quote.get("no_asks" if is_no else "yes_asks") or []
+                    },
                 },
                 lineage={
                     **shared_lineage,
