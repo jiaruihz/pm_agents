@@ -7,17 +7,25 @@ import argparse
 import csv
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DEFAULT_DB = ROOT / "runtime/weather.db"
 DEFAULT_ORDERS = Path(
     "/Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/orders.jsonl"
 )
-DEFAULT_OUTPUT = ROOT / "docs/analysis/2026-07/generated/fast_source_share_cap_incident_v1"
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-07/2026-07-14-fast-source-share-cap-incident-v1.md"
+ARTIFACT_FAMILY = "fast_source_share_cap_incident_v1"
 TOLERANCE = 1e-5
 
 
@@ -194,7 +202,7 @@ def render_report(summary: dict[str, Any], rows: list[dict[str, Any]], csv_path:
         f"- 已结算 affected 实际 PnL ${summary['settled_affected_actual_pnl_usd']:.6f}；按同 VWAP/同每股 fee 缩回 cap 的 size-only counterfactual 为 ${summary['settled_affected_counterfactual_pnl_usd']:.6f}，bug 净放大 PnL ${summary['settled_pnl_amplification_usd']:.6f}。负数表示 bug 让 PnL 更差。",
         f"- 全策略 11 笔已结算：实际 ${summary['strategy_settled_actual_pnl_usd']:.6f} / ROI {summary['strategy_settled_actual_roi_pct']:.3f}%；share-capped size-only counterfactual ${summary['strategy_settled_share_capped_counterfactual_pnl_usd']:.6f} / ROI {summary['strategy_settled_share_capped_counterfactual_roi_pct']:.3f}%。",
         f"- 2 笔未结算 affected 额外占用 cash+fee ${summary['open_excess_cash_plus_fee_usd']:.6f}；不把 open cost 写成亏损。",
-        f"- 完整 order_id 与原始数值：`{csv_path.relative_to(ROOT)}`。",
+        f"- 完整 order_id 与原始数值：`{csv_path}`。",
         "",
         "这个 counterfactual 只回答 size 放大造成多少，不声称 maker GTD 会得到相同 fill/VWAP。",
         "",
@@ -245,31 +253,43 @@ def render_report(summary: dict[str, Any], rows: list[dict[str, Any]], csv_path:
     return "\n".join(lines)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--orders", type=Path, default=DEFAULT_ORDERS)
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
-    args = parser.parse_args()
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="optional explicit durable report path; omitted by default",
+    )
+    args = parser.parse_args(argv)
 
     all_fills = canonical_fills(args.db)
     rows = affected_rows(args.db, args.orders)
     if not rows:
         raise RuntimeError("no share-cap-affected fast-source fills found")
     summary = summarize(rows, all_fills)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = args.output_dir / "affected_orders.csv"
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            ARTIFACT_FAMILY,
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    csv_path = output_dir / "affected_orders.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
-    (args.output_dir / "summary.json").write_text(
+    (output_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_report(summary, rows, csv_path), encoding="utf-8")
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(render_report(summary, rows, csv_path), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
 

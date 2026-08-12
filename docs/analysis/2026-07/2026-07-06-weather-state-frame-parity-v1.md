@@ -30,13 +30,15 @@ Inputs:
 - `runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots/snapshot_20260701_1556.json`
 - `runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/observations/latest.json`
 
-Generated artifacts:
+Evidence artifacts:
 
-- `docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/summary.json`
-- `docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/field_diff.csv`
-- `docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/mismatch_examples.csv`
-- `docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/feature_state_rows.csv`
-- `docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/legacy_tmax_state_rows.csv`
+- The compact historical summary remains at
+  `docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/summary.json`.
+- The four row-level CSVs were moved out of the repository under archive
+  manifest `/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/pm_agents_generated_cleanup_20260805.json`.
+- New runs require a stable `--run-id` and write an immutable run beneath the
+  configured JRS research artifact root; they no longer recreate this dated
+  repository directory.
 
 The harness imports the current tmax live-candidate `build_state_rows()` but
 does not run `main()`, does not place orders, and does not write runtime state.

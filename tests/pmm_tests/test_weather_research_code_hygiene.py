@@ -70,19 +70,26 @@ def test_internal_analysis_import_check_rejects_pre_reorganization_path(
     ]
 
 
-def test_research_output_route_check_rejects_new_repo_writer(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "route",
+    [
+        'OUT = ROOT / "docs" / "analysis" / "result.json"\n',
+        'OUT = ROOT / "docs/analysis/generated/result.json"\n',
+        'OUT = Path("docs/analysis/generated/result.json")\n',
+    ],
+)
+def test_research_output_route_check_rejects_new_repo_route(
+    tmp_path, monkeypatch, route
+):
     repo = tmp_path / "repo"
     script = repo / "scripts/analysis/family/research_runner.py"
     script.parent.mkdir(parents=True)
-    script.write_text(
-        'OUT = ROOT / "docs" / "analysis" / "result.json"\n',
-        encoding="utf-8",
-    )
+    script.write_text(route, encoding="utf-8")
     monkeypatch.setattr(check_weather_docs, "ROOT", repo)
     monkeypatch.setattr(
         check_weather_docs,
         "hygiene_config",
-        lambda: {"max_research_scripts_writing_docs_analysis": 0},
+        lambda: {"max_research_scripts_referencing_docs_analysis": 0},
     )
 
     errors: list[str] = []
@@ -91,8 +98,8 @@ def test_research_output_route_check_rejects_new_repo_writer(tmp_path, monkeypat
     )
 
     assert errors == [
-        "research scripts writing docs/analysis grew from ceiling 0 to 1; "
-        "route machine output through JRS run manifests"
+        "research scripts hard-coding docs/analysis grew from ceiling 0 to 1; "
+        "route machine output and durable historical inputs through JRS run manifests"
     ]
 
 

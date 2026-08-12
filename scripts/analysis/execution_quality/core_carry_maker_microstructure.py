@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from collections import Counter
@@ -16,14 +17,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 from weather_data_feed.production_paths import current_strategy_snapshots  # noqa: E402
 
 
 RUNTIME = load_production_spec().pm_runtime_root / "weather_edge_v1/current_yes_core_carry_tiny_live_v2"
 SNAPSHOTS = current_strategy_snapshots()
 PROFILE = "split_taker_maker_edge_capped_no_fallback_v2"
-OUT_DIR = ROOT / "docs/analysis/2026-08/generated/core_carry_maker_microstructure_v1"
-REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-core-carry-maker-microstructure-v1.md"
+ARTIFACT_FAMILY = "core_carry_maker_microstructure_v1"
 
 
 def rows(path: Path) -> list[dict[str, Any]]:
@@ -75,7 +79,16 @@ def summarize(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args(argv)
+    resolved_output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.output_dir,
+    )
     orders = rows(RUNTIME / "live_orders.jsonl")
     decisions = rows(RUNTIME / "maker_lifecycle_decisions.jsonl")
     roots = [r for r in orders if r.get("child_order_role") == "maker" and r.get("execution_profile") == PROFILE]
@@ -113,30 +126,9 @@ def main() -> int:
     frame = pd.DataFrame(out).sort_values(["created_at_utc", "city"])
     recent = frame[frame.created_at_utc.ge("2026-08-03")]
     result = {"profile": PROFILE, "full_profile_window": summarize(frame), "current_10_plus_5_window": summarize(recent)}
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(OUT_DIR / "maker_intents.csv", index=False)
-    (OUT_DIR / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
-    full, cur = result["full_profile_window"], result["current_10_plus_5_window"]
-    REPORT.write_text(f"""# Core Carry maker 盘口与生命周期审计 v1
-
-结论：maker 不是完全成交不了，但当前 5 股 maker 仍不能当作可靠容量。`{PROFILE}` 全窗口 {full['fills']}/{full['intents']} intents 成交（{full['fill_rate']:.1%}）；当前 10 taker + 5 maker 窗口为 {cur['fills']}/{cur['intents']}（{cur['fill_rate']:.1%}，15 shares）。
-
-## 盘口结构
-
-- {full['initial_cap_bound']}/{full['intents']} 个初始报价已经到 retained-edge cap。此时即使 ask 仍高 1–2 tick，策略也不能再追；这是未成交的主要结构性约束，不是 refresh 频率不足。
-- filled intents 的初始 top-bid size 中位数为 {full['median_initial_bid_size_filled']:.2f} shares，unfilled 为 {full['median_initial_bid_size_unfilled']:.2f} shares。它只能近似公开队列，不能证明真实 queue position；CLOB snapshot 没有账户级 queue-ahead 字段。
-- 三笔当前配置成交中，Miami/NYC 在初始报价成交，Amsterdam 在第 2 次 reprice 后以 0.95 成交。说明保留队列有价值，但 wide-spread 场景的阶段提价也确实能补成交。
-
-## 生命周期问题
-
-- profile 合同当前写的是 `max_reprices=None`，不是“max 2 reprices”。全窗口共有 {full['total_reprices']} 次 reprice，{full['intents_over_two_reprices']} 个 intent 超过 2 次；Lucknow 单笔达到 21 次。
-- 这会在宽 spread / best-bid 连续抬升时反复 cancel/repost，重置时间优先级。当前窗口大部分单能保持原队列，但实现仍没有硬性两次上限。
-- 当前 maker lifecycle 日志只有 best bid/ask，没有逐档 queue-ahead、成交量和 5/15/30 分钟 markout，因此还不能严谨比较“排队太深”和“市场根本没有 sell flow”。这是 evidence gap，不应变成 eligibility gate。
-
-## 推荐 challenger
-
-保留现有 retained-edge cap 与 pre-data-update cancel，改为三个明确阶段：initial queue → 最早 5 分钟后一次 midpoint reprice → 最早 10 分钟后一次 near-ask reprice，`max_reprices=2`；只有新 observation/TTL/thesis 失效才提前撤。并在每次 quote 记录 top-level size、5c depth、public trades since post、estimated queue-ahead 与 5/15/30m markout。先做同 signal shadow A/B，不改 taker leg，也不做 maker→taker fallback。
-""")
+    output_dir = prepare_new_run_output(resolved_output)
+    frame.to_csv(output_dir / "maker_intents.csv", index=False)
+    (output_dir / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

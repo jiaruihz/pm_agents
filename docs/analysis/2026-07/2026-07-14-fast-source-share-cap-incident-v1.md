@@ -9,7 +9,11 @@
 - 已结算 affected 实际 PnL $2.243526；按同 VWAP/同每股 fee 缩回 cap 的 size-only counterfactual 为 $3.813940，bug 净放大 PnL $-1.570414。负数表示 bug 让 PnL 更差。
 - 全策略 11 笔已结算：实际 $2.625126 / ROI 3.789%；share-capped size-only counterfactual $4.195540 / ROI 6.900%。
 - 2 笔未结算 affected 额外占用 cash+fee $0.337209；不把 open cost 写成亏损。
-- 完整 order_id 与原始数值：`docs/analysis/2026-07/generated/fast_source_share_cap_incident_v1/affected_orders.csv`。
+- 完整 order_id 与原始数值已迁出仓库，恢复索引为
+  `/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/pm_agents_generated_cleanup_small_20260805.json`；
+  summary 的恢复索引为
+  `/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/pm_agents_generated_cleanup_final_20260805.json`。
+  新重跑必须用稳定 `--run-id` 写入 JRS research artifact root，不再覆盖本报告。
 
 这个 counterfactual 只回答 size 放大造成多少，不声称 maker GTD 会得到相同 fill/VWAP。
 

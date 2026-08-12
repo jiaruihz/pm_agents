@@ -649,23 +649,32 @@ def check_internal_analysis_imports(errors: list[str], tracked: set[str]) -> Non
 
 
 def check_research_output_routes(errors: list[str], tracked: set[str]) -> None:
-    """Keep legacy repository-writing producers on a monotone migration budget."""
-    writers: list[str] = []
+    """Keep all hard-coded repository analysis routes on a monotone budget.
+
+    This intentionally counts both producers and consumers.  A historical input
+    hidden under ``docs/analysis`` is still a repository coupling that a new
+    runner must not copy.  The previous expression only matched the uncommon
+    ``ROOT / "docs" / "analysis"`` spelling and therefore reported zero while
+    hundreds of combined ``"docs/analysis/..."`` literals remained.
+    """
+    routed_scripts: list[str] = []
     pattern = re.compile(
-        r"(?:ROOT|_ROOT)\s*/\s*['\"]docs['\"]\s*/\s*['\"]analysis['\"]"
+        r"(?:['\"]docs/analysis(?:/|['\"])|"
+        r"['\"]docs['\"]\s*/\s*['\"]analysis['\"])"
     )
     for relative in sorted(tracked):
         if not relative.startswith("scripts/analysis/") or not relative.endswith(".py"):
             continue
         path = ROOT / relative
         if path.is_file() and pattern.search(path.read_text(encoding="utf-8")):
-            writers.append(relative)
-    ceiling = int(hygiene_config()["max_research_scripts_writing_docs_analysis"])
-    if len(writers) > ceiling:
+            routed_scripts.append(relative)
+    ceiling = int(hygiene_config()["max_research_scripts_referencing_docs_analysis"])
+    if len(routed_scripts) > ceiling:
         fail(
             errors,
-            "research scripts writing docs/analysis grew from ceiling "
-            f"{ceiling} to {len(writers)}; route machine output through JRS run manifests",
+            "research scripts hard-coding docs/analysis grew from ceiling "
+            f"{ceiling} to {len(routed_scripts)}; route machine output and durable "
+            "historical inputs through JRS run manifests",
         )
 
 

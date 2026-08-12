@@ -23,13 +23,17 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.ops import tmax_distribution_edge_live_candidate_v1 as tmax_live
+from scripts.analysis.versioned_artifact_output import (
+    prepare_new_run_output,
+    resolve_run_output,
+)
 from weather_data_feed.observation_cache import index_observation_cache
 from weather_data_feed.observation_cache import parse_utc
 from weather_feature_layer.builders import build_weather_state_frame_with_audits
 from weather_feature_layer.contracts import PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION
 
 
-DEFAULT_OUT_DIR = Path("docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1")
+ARTIFACT_FAMILY = "weather_feature_layer_state_parity_v1"
 
 KEY_FIELDS = ["city", "target_date"]
 NUMERIC_FIELDS = {
@@ -166,7 +170,11 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 def run(args: argparse.Namespace) -> dict[str, Any]:
     snapshot_path = Path(args.snapshot)
     observations_path = Path(args.observation_cache)
-    out_dir = Path(args.out_dir)
+    resolved_output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.out_dir,
+    )
     snapshot = load_json(snapshot_path)
     observations = load_json(observations_path)
     records = [row for row in snapshot.get("records", []) if isinstance(row, dict)]
@@ -188,7 +196,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     feature_keys = {tuple(row[field] for field in KEY_FIELDS) for row in feature_df[KEY_FIELDS].to_dict("records")}
     legacy_keys = {tuple(row[field] for field in KEY_FIELDS) for row in legacy_df[KEY_FIELDS].to_dict("records")} if not legacy_df.empty else set()
 
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = prepare_new_run_output(resolved_output)
     feature_df.to_csv(out_dir / "feature_state_rows.csv", index=False)
     legacy_df.to_csv(out_dir / "legacy_tmax_state_rows.csv", index=False)
     diff_df.to_csv(out_dir / "field_diff.csv", index=False)
@@ -227,7 +235,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", required=True)
     parser.add_argument("--observation-cache", required=True)
-    parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
+    parser.add_argument("--run-id")
+    parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--atol", type=float, default=1e-6)
     parser.add_argument("--max-examples", type=int, default=50)
     return parser.parse_args()
