@@ -232,7 +232,7 @@ readiness verdict：`BLOCKED_FOR_FIT / KEEP_ZERO_NOTIONAL_COLLECTION`。
 
 ### Cross previous-NO forward shadow
 
-`weather_tmin_cross_prev_no_shadow_v1` 把 Seoul AMOS 与 Tokyo JMA AMeDAS 的第一次向下跨档
+`weather_tmin_cross_prev_no_shadow_v1` 把 Seoul AMOS 与 Tokyo JMA AMeDAS 明确连续观测到的第一次向下跨档
 映射为“观察刚离开的上一档（更暖 exact bracket）的 NO”。它只消费现有
 `source_event_ladder_repricing_shadow/lowest_10m` event 与 fresh quote journal，不请求盘口、不读取
 私有 collector，也不创建订单。
@@ -249,8 +249,19 @@ SignalCandidate`。机制 candidate 状态为 `observed`，不把尚未冻结的
 `tmin_prev_warmer_no_given_cross_pending_v0`。next-colder exact-NO 是另一条表达，不参与本 runtime 评分。
 
 生产 runtime 使用 `fast_observation` release
-`f61a84b51640e670fe83a4c3e920eae55f3d934b`，实例 identity 为
+`9bb6678b936464df94bdc7ab1de80d6ddf500ecd`，实例 identity 为
 `weather_tmin_cross_prev_no_shadow_v1`。
+
+2026-08-12 事件合同审计推翻了“旧 51 条都是严格 first-cross”的分母解释。可用高频 raw
+重放的 10 个 target dates 中，21 条 legacy candidate 只有 6 条能证明为 strict cross，15 条是
+initial-state/非 strict，另有 5 个 raw strict cross 被旧链路漏掉；更早 7 个日期的 30 条缺对应
+高频 raw，不能重分类。旧 51 条整体保留为 `legacy mixed semantics`，不得再支持 alpha 或 forward
+promotion。主 journal 在 `2026-08-12T02:46Z` 清零，并只接收显式
+`source_transition_kind=strict_cross`；盘口统一读取中央 `market_books/latest.json`，事件落盘不再等待
+盘口。版本化 event dedupe 已把与旧 key 重名的 Tokyo `24→23` v3 strict event 正确补入 clean journal，
+consumer 同步输出 WCIR `DecisionBundle`；增量 canonical materialization 得到 raw/canonical `1/1`、
+delta=0，第二次 apply inserted=0，证明幂等。当前为 1 candidate、0 selected/intent/order/fill。完整清单见
+[event contract correction](analysis/2026-08/2026-08-12-tmin-cross-event-contract-correction-v1.md)。
 
 ### 首轮实现与真实 denominator
 

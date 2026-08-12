@@ -32,6 +32,9 @@ used to promote `tmin_cross_prev_no_shadow_v1`.
   candidates were preserved under
   `output/tmin_cross_prev_no_shadow_v1/legacy_mixed_semantics_20260812T0246Z/`;
   the active journal restarted at zero candidates.
+- The consumer now emits a WCIR `DecisionBundle` beside its ModelOutput and
+  SignalCandidate so the shared incremental canonical bridge can persist the
+  same event/checkpoint/candidate grain without a strategy-specific fact path.
 
 ## Quantified impact
 
@@ -74,18 +77,22 @@ one excluded initial state (`Seoul 22`).
 
 There were zero selected candidates, TradeIntents, orders, fills, venue writes,
 or notional impact in the affected runtime. `fact_signal_candidates` contained
-zero rows for this strategy at correction time, so canonical facts were not
-polluted.
+zero rows for this strategy at correction time, so legacy canonical facts were
+not polluted. The corrected Tokyo candidate was subsequently materialized as
+one `v2_event_checkpoint` fact; raw/canonical reconciliation is `1/1`, delta 0.
 
 ## Production evidence
 
-- code commits: `b8376888`, `0754a36c`, `1d2a1bda`
-- loaded `fast_observation` SHA: `1d2a1bda1c8b7ce1d25679d9e2cb451f136672cd`
-- focused tests: 21 passed
+- code commits: `b8376888`, `0754a36c`, `1d2a1bda`, `3d31ca8c`, `9bb6678b`
+- loaded `fast_observation` SHA: `9bb6678b936464df94bdc7ab1de80d6ddf500ecd`
+- focused tests: 21 original contract tests plus 15 WCIR bundle/canonical bridge tests passed
 - production manifest: healthy, no findings, no pre-existing session lost
 - source-event state after correction: one active Tokyo strict event, Seoul
   initial state removed; market context source is `canonical_market_books`
-- active Tmin consumer after clean reset: 0 candidates, 0 intents/orders/fills
+- active Tmin consumer after clean reset and versioned-dedupe migration: one
+  Tokyo strict-cross candidate, 0 intents/orders/fills
+- canonical incremental apply: inserted event/checkpoint/candidate `1/1/1`;
+  second apply inserted `0/0/0`, existing candidate 1, delta 0
 
 The next decision point is based only on new strict-contract target dates. The
 legacy cap90 and settlement slices remain historical exploratory evidence and
