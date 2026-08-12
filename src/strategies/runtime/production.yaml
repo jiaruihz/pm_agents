@@ -30,7 +30,7 @@ production_releases:
     expected_repo_sha: ddecbbd6a26a88ebe5b62b997f2bf9c50f160119
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
-    expected_repo_sha: 0754a36cab5c332d1752f2db92ffe712842283b1
+    expected_repo_sha: 1d2a1bda1c8b7ce1d25679d9e2cb451f136672cd
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/projects/pm_agents_tmin_no_further_prod
     expected_repo_sha: 9c2fa40f05b8f8d29454544cb65c1329483b677a
