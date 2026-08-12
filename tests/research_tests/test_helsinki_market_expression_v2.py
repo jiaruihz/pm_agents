@@ -6,7 +6,9 @@ import pytest
 
 from scripts.analysis.reheat_risk import research_helsinki_market_expression_v2 as v2
 from scripts.analysis.reheat_risk.evaluate_helsinki_market_expression_strategy import (
+    build_trade_timelines,
     sweep_asks,
+    sweep_bids,
 )
 
 
@@ -80,3 +82,67 @@ def test_strategy_sweeps_five_share_depth_and_fee_per_level() -> None:
     assert result is not None
     assert result["entry_vwap"] == pytest.approx(0.46)
     assert result["cash_cost"] > 5 * result["entry_vwap"]
+    exit_value = sweep_bids(
+        [{"price": 0.50, "size": 2.0}, {"price": 0.40, "size": 5.0}],
+        shares=5.0,
+    )
+    assert exit_value is not None
+    assert exit_value["exit_vwap"] == pytest.approx(0.44)
+    assert exit_value["exit_cash_proceeds"] < 5 * exit_value["exit_vwap"]
+
+
+def test_trade_timeline_stops_inventing_probability_after_bracket_transition() -> None:
+    opportunities = pd.DataFrame(
+        {
+            "target_date": ["2026-08-01"] * 3,
+            "decision_ts_utc": [
+                "2026-08-01T08:00:00Z",
+                "2026-08-01T08:10:00Z",
+                "2026-08-01T08:20:00Z",
+            ],
+            "bracket": [20, 20, 21],
+            "side": ["yes", "yes", "yes"],
+            "model_probability": [0.6, 0.55, 0.7],
+            "market_probability": [0.5, 0.52, 0.65],
+            "effective_cost": [0.51, 0.53, 0.66],
+            "edge_after_fee": [0.09, 0.02, 0.04],
+            "exit_vwap": [0.49, 0.54, 0.64],
+            "exit_net_per_share": [0.48, 0.53, 0.63],
+            "exit_cash_proceeds": [2.4, 2.65, 3.15],
+            "weather_no_probability": [0.7, 0.65, 0.75],
+            "path_state": ["fresh_runway"] * 3,
+            "source_lattice_anchor": [20, 20, 21],
+            "official_lattice_anchor": [20, 20, 21],
+            "source_obs_ts_utc": [None] * 3,
+            "source_first_seen_at_utc": [None] * 3,
+            "source_to_book_lag_seconds": [1.0] * 3,
+            "temp_delta_10m": [0.2] * 3,
+            "temp_slope_30m_cph": [0.4] * 3,
+            "plateau_duration_min": [0.0] * 3,
+            "pullback_depth_c": [0.0] * 3,
+            "forecast_future_peak_margin_vs_running_c": [1.0] * 3,
+            "forecast_minutes_to_future_peak": [60.0, 50.0, 40.0],
+        }
+    )
+    trades = pd.DataFrame(
+        {
+            "target_date": ["2026-08-01"],
+            "decision_ts_utc": ["2026-08-01T08:00:00Z"],
+            "bracket": [20],
+            "side": ["yes"],
+            "effective_cost": [0.51],
+            "edge_after_fee": [0.09],
+            "cash_cost": [2.55],
+            "winner_bracket": [21],
+            "won": [False],
+            "pnl": [-2.55],
+        }
+    )
+    timeline, cases = build_trade_timelines(opportunities, trades)
+    assert timeline["physical_position_state"].tolist() == [
+        "still_open_same_bracket",
+        "still_open_same_bracket",
+        "terminal_lost",
+    ]
+    assert pd.isna(timeline.iloc[-1]["held_model_probability"])
+    assert cases.iloc[0]["minutes_to_official_bracket_transition"] == pytest.approx(20)

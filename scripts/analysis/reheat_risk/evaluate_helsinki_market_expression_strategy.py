@@ -44,6 +44,28 @@ def sweep_asks(levels: list[dict[str, Any]], shares: float = SHARES) -> dict[str
     return None
 
 
+def sweep_bids(levels: list[dict[str, Any]], shares: float = SHARES) -> dict[str, float] | None:
+    remaining = shares
+    notional = fee = 0.0
+    for level in sorted(levels, key=lambda row: float(row.get("price", 0.0)), reverse=True):
+        price = float(level.get("price", 0.0))
+        size = float(level.get("size", 0.0))
+        if not 0 < price < 1 or size <= 0:
+            continue
+        take = min(remaining, size)
+        notional += take * price
+        fee += take * fee_per_share(price)
+        remaining -= take
+        if remaining <= 1e-9:
+            return {
+                "exit_vwap": notional / shares,
+                "exit_fee_per_share": fee / shares,
+                "exit_net_per_share": (notional - fee) / shares,
+                "exit_cash_proceeds": notional - fee,
+            }
+    return None
+
+
 def load_winners(db_path: Path, dates: list[str]) -> dict[str, str]:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
     conn.execute("PRAGMA query_only=ON")
@@ -114,6 +136,148 @@ def probability_delta_bootstrap(
     }
 
 
+def build_trade_timelines(
+    opportunities: pd.DataFrame,
+    trades: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Attach every later FMI checkpoint to each selected exact-bracket entry.
+
+    The model only scores the *current* official bracket.  Once the running
+    maximum leaves an entry bracket, the old expression is no longer scored;
+    the timeline therefore records the physical terminal state instead of
+    inventing a held-position probability.
+    """
+    timeline_rows: list[dict[str, Any]] = []
+    case_rows: list[dict[str, Any]] = []
+    if trades.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    frame = opportunities.copy()
+    frame["decision_dt"] = pd.to_datetime(frame["decision_ts_utc"], utc=True)
+    checkpoint_state = (
+        frame.sort_values(["target_date", "decision_dt", "side"])
+        .drop_duplicates(["target_date", "decision_ts_utc"])
+    )
+    for trade_number, trade in enumerate(trades.itertuples(index=False), start=1):
+        entry_dt = pd.Timestamp(trade.decision_ts_utc)
+        if entry_dt.tzinfo is None:
+            entry_dt = entry_dt.tz_localize("UTC")
+        else:
+            entry_dt = entry_dt.tz_convert("UTC")
+        entry_bracket = int(trade.bracket)
+        side = str(trade.side)
+        date_rows = checkpoint_state.loc[
+            checkpoint_state["target_date"].eq(str(trade.target_date))
+            & checkpoint_state["decision_dt"].ge(entry_dt)
+        ].copy()
+        held_rows = frame.loc[
+            frame["target_date"].eq(str(trade.target_date))
+            & frame["bracket"].astype(str).eq(str(trade.bracket))
+            & frame["side"].eq(side)
+            & frame["decision_dt"].ge(entry_dt)
+        ].set_index("decision_ts_utc")
+        first_transition_ts: str | None = None
+        for state in date_rows.itertuples(index=False):
+            current_bracket = int(state.bracket)
+            if current_bracket > entry_bracket:
+                physical_state = "terminal_won" if side == "no" else "terminal_lost"
+                if first_transition_ts is None:
+                    first_transition_ts = str(state.decision_ts_utc)
+            else:
+                physical_state = "still_open_same_bracket"
+            held = None
+            if str(state.decision_ts_utc) in held_rows.index:
+                held = held_rows.loc[str(state.decision_ts_utc)]
+                if isinstance(held, pd.DataFrame):
+                    held = held.iloc[0]
+            timeline_rows.append(
+                {
+                    "trade_number": trade_number,
+                    "target_date": trade.target_date,
+                    "entry_bracket": trade.bracket,
+                    "entry_side": side,
+                    "entry_decision_ts_utc": trade.decision_ts_utc,
+                    "checkpoint_ts_utc": state.decision_ts_utc,
+                    "minutes_since_entry": (
+                        pd.Timestamp(state.decision_dt) - entry_dt
+                    ).total_seconds()
+                    / 60.0,
+                    "current_official_bracket": current_bracket,
+                    "physical_position_state": physical_state,
+                    "held_model_probability": None if held is None else held["model_probability"],
+                    "held_market_probability": None if held is None else held["market_probability"],
+                    "held_effective_cost": None if held is None else held["effective_cost"],
+                    "held_edge_after_fee": None if held is None else held["edge_after_fee"],
+                    "exit_vwap": None if held is None else held["exit_vwap"],
+                    "exit_net_per_share": None if held is None else held["exit_net_per_share"],
+                    "counterfactual_exit_pnl": (
+                        None
+                        if held is None or pd.isna(held["exit_cash_proceeds"])
+                        else held["exit_cash_proceeds"] - trade.cash_cost
+                    ),
+                    "value_exit": (
+                        False
+                        if held is None or pd.isna(held["exit_net_per_share"])
+                        else held["exit_net_per_share"] > held["model_probability"]
+                    ),
+                    "weather_no_probability": state.weather_no_probability,
+                    "path_state": state.path_state,
+                    "source_lattice_anchor": state.source_lattice_anchor,
+                    "official_lattice_anchor": state.official_lattice_anchor,
+                    "source_obs_ts_utc": state.source_obs_ts_utc,
+                    "source_first_seen_at_utc": state.source_first_seen_at_utc,
+                    "source_to_book_lag_seconds": state.source_to_book_lag_seconds,
+                    "temp_delta_10m": state.temp_delta_10m,
+                    "temp_slope_30m_cph": state.temp_slope_30m_cph,
+                    "plateau_duration_min": state.plateau_duration_min,
+                    "pullback_depth_c": state.pullback_depth_c,
+                    "forecast_future_peak_margin_vs_running_c": state.forecast_future_peak_margin_vs_running_c,
+                    "forecast_minutes_to_future_peak": state.forecast_minutes_to_future_peak,
+                }
+            )
+        same_bracket = frame.loc[
+            frame["target_date"].eq(str(trade.target_date))
+            & frame["bracket"].astype(str).eq(str(trade.bracket))
+            & frame["side"].eq(side)
+            & frame["decision_dt"].ge(entry_dt)
+        ].sort_values("decision_dt")
+        transition_minutes = None
+        if first_transition_ts is not None:
+            transition_minutes = (
+                pd.Timestamp(first_transition_ts) - entry_dt
+            ).total_seconds() / 60.0
+        case_rows.append(
+            {
+                "trade_number": trade_number,
+                "target_date": trade.target_date,
+                "bracket": trade.bracket,
+                "side": side,
+                "entry_decision_ts_utc": trade.decision_ts_utc,
+                "entry_effective_cost": trade.effective_cost,
+                "entry_edge_after_fee": trade.edge_after_fee,
+                "winner_bracket": trade.winner_bracket,
+                "won": trade.won,
+                "pnl": trade.pnl,
+                "later_checkpoints": max(0, len(date_rows) - 1),
+                "first_official_bracket_transition_ts_utc": first_transition_ts,
+                "minutes_to_official_bracket_transition": transition_minutes,
+                "last_same_bracket_ts_utc": (
+                    same_bracket.iloc[-1]["decision_ts_utc"] if len(same_bracket) else None
+                ),
+                "last_same_bracket_model_probability": (
+                    same_bracket.iloc[-1]["model_probability"] if len(same_bracket) else None
+                ),
+                "last_same_bracket_market_probability": (
+                    same_bracket.iloc[-1]["market_probability"] if len(same_bracket) else None
+                ),
+                "last_same_bracket_edge_after_fee": (
+                    same_bracket.iloc[-1]["edge_after_fee"] if len(same_bracket) else None
+                ),
+            }
+        )
+    return pd.DataFrame(timeline_rows), pd.DataFrame(case_rows)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--replay-root", required=True)
@@ -160,9 +324,11 @@ def main() -> int:
         side = str(row["market_side"]).lower()
         decision = str(row["decision_ts_utc"])
         asks = ((row.get("market") or {}).get("raw") or {}).get("asks") or []
+        bids = ((row.get("market") or {}).get("raw") or {}).get("bids") or []
         cost = sweep_asks(asks)
         if cost is None:
             continue
+        exit_value = sweep_bids(bids)
         probability = float(row["model_probability"])
         opportunity_rows.append(
             {
@@ -171,10 +337,55 @@ def main() -> int:
                 "decision_ts_utc": decision,
                 "side": side,
                 "model_probability": probability,
+                "market_probability": float(row["market_probability"]),
                 **cost,
+                **(
+                    exit_value
+                    if exit_value is not None
+                    else {
+                        "exit_vwap": None,
+                        "exit_fee_per_share": None,
+                        "exit_net_per_share": None,
+                        "exit_cash_proceeds": None,
+                    }
+                ),
                 "edge_after_fee": probability - cost["effective_cost"],
                 "quote_state": (row.get("market") or {}).get("quote_state"),
                 "condition_id": (row.get("market") or {}).get("condition_id"),
+                "source_obs_ts_utc": row.get("source_obs_ts_utc"),
+                "source_first_seen_at_utc": (row.get("lineage") or {}).get(
+                    "source_first_seen_at_utc"
+                ),
+                "source_to_book_lag_seconds": (row.get("lineage") or {}).get(
+                    "source_to_book_lag_seconds"
+                ),
+                "weather_no_probability": (row.get("lineage") or {}).get(
+                    "weather_probability"
+                ),
+                "path_state": (row.get("lineage") or {}).get("path_state"),
+                "source_lattice_anchor": (row.get("lineage") or {}).get(
+                    "source_lattice_anchor"
+                ),
+                "official_lattice_anchor": (row.get("lineage") or {}).get(
+                    "official_lattice_anchor"
+                ),
+                "feature_coverage": row.get("feature_coverage"),
+                "temp_delta_10m": (row.get("features") or {}).get("temp_delta_10m"),
+                "temp_slope_30m_cph": (row.get("features") or {}).get(
+                    "temp_slope_30m_cph"
+                ),
+                "plateau_duration_min": (row.get("features") or {}).get(
+                    "plateau_duration_min"
+                ),
+                "pullback_depth_c": (row.get("features") or {}).get(
+                    "pullback_depth_c"
+                ),
+                "forecast_future_peak_margin_vs_running_c": (
+                    row.get("features") or {}
+                ).get("forecast_future_peak_margin_vs_running_c"),
+                "forecast_minutes_to_future_peak": (row.get("features") or {}).get(
+                    "forecast_minutes_to_future_peak"
+                ),
             }
         )
         if side == "no" and row["evaluation_id"] not in no_seen and date in winners:
@@ -227,6 +438,55 @@ def main() -> int:
         labels=["<=1%", "1-20%", "20-40%", "40-60%", "60-80%", "80-99%", ">=99%"],
     )
     settled = trades.loc[trades["settled"]].copy()
+    timelines, case_summary = build_trade_timelines(opportunities, trades)
+
+    exit_rows: list[dict[str, Any]] = []
+    for trade in settled.itertuples(index=False):
+        rows = timelines.loc[
+            timelines["target_date"].eq(trade.target_date)
+            & timelines["entry_bracket"].astype(str).eq(str(trade.bracket))
+            & timelines["entry_side"].eq(trade.side)
+            & timelines["minutes_since_entry"].gt(0)
+            & timelines["value_exit"].eq(True)
+        ].sort_values("checkpoint_ts_utc")
+        if len(rows):
+            chosen = rows.iloc[0]
+            pnl = float(chosen["counterfactual_exit_pnl"])
+            exit_rows.append(
+                {
+                    "trade_number": int(chosen["trade_number"]),
+                    "target_date": trade.target_date,
+                    "bracket": trade.bracket,
+                    "side": trade.side,
+                    "action": "exit",
+                    "action_ts_utc": chosen["checkpoint_ts_utc"],
+                    "pnl": pnl,
+                    "hold_pnl": float(trade.pnl),
+                    "pnl_delta_vs_hold": pnl - float(trade.pnl),
+                }
+            )
+        else:
+            exit_rows.append(
+                {
+                    "trade_number": int(
+                        case_summary.loc[
+                            case_summary["target_date"].eq(trade.target_date)
+                            & case_summary["bracket"].astype(str).eq(str(trade.bracket))
+                            & case_summary["side"].eq(trade.side),
+                            "trade_number",
+                        ].iloc[0]
+                    ),
+                    "target_date": trade.target_date,
+                    "bracket": trade.bracket,
+                    "side": trade.side,
+                    "action": "hold_to_settlement",
+                    "action_ts_utc": None,
+                    "pnl": float(trade.pnl),
+                    "hold_pnl": float(trade.pnl),
+                    "pnl_delta_vs_hold": 0.0,
+                }
+            )
+    exit_diagnostic = pd.DataFrame(exit_rows).sort_values("trade_number")
 
     def trade_summary(frame: pd.DataFrame) -> dict[str, Any]:
         cash = float(frame["cash_cost"].sum())
@@ -295,6 +555,17 @@ def main() -> int:
             "median": float(np.quantile(bootstrap, 0.5)),
             "ci_high": float(np.quantile(bootstrap, 0.975)),
         },
+        "generic_fmi_value_exit_diagnostic": {
+            "policy": "at first later FMI checkpoint, exit 5 shares at actual bids minus official fee when net bid exceeds updated model holding value",
+            "research_status": "retrospective_diagnostic_not_frozen",
+            "trades": int(len(exit_diagnostic)),
+            "exits": int(exit_diagnostic["action"].eq("exit").sum()),
+            "pnl": float(exit_diagnostic["pnl"].sum()),
+            "pnl_delta_vs_hold": float(exit_diagnostic["pnl_delta_vs_hold"].sum()),
+            "roi_on_original_entry_cost": float(
+                exit_diagnostic["pnl"].sum() / settled["cash_cost"].sum()
+            ),
+        },
     }
     result["by_side"] = {
         str(key): trade_summary(group) for key, group in settled.groupby("side")
@@ -307,6 +578,9 @@ def main() -> int:
     opportunities.to_csv(output / "signal_opportunities_5share.csv", index=False)
     probabilities.to_csv(output / "probability_same_rows.csv", index=False)
     trades.to_csv(output / "strategy_trades_5share.csv", index=False)
+    timelines.to_csv(output / "strategy_trade_timelines.csv", index=False)
+    case_summary.to_csv(output / "strategy_trade_case_summary.csv", index=False)
+    exit_diagnostic.to_csv(output / "strategy_value_exit_diagnostic.csv", index=False)
     (output / "summary.json").write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

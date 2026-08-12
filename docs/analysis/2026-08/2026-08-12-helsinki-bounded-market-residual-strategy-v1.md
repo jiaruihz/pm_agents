@@ -1,5 +1,12 @@
 # Helsinki bounded market-residual exact-bracket strategy v1
 
+## 数据快照
+
+- 数据源：Helsinki rich-contract PIT replay、FMI/forecast/official/active-book raw，以及只读 canonical `/Volumes/jrs/pm_agents/runtime/weather.db`；仓库兼容入口为同一 device/inode `16777247/54444`。
+- 观测时间：canonical `MAX(fact_built_at_utc)=2026-08-12T03:59:21Z`；本次 clean-forward raw 检查截止 `2026-08-12T05:01:25Z`。
+- 研究分母：282 probability rows/8 settled target dates；9 retrospective expressions/6 active dates。unsettled `0/9`，missing bracket `0/9`，actual order/fill `0/0`。
+- canonical 自检：`fact_trades=5,004`（settled 4,982、missing bracket 4、状态空18）；`fact_signal_candidates=184,465`；strict manifest、DB route 与 production controller 均 healthy。本报告收益是 research replay，不是 `fact_trades` actual fills。
+
 ## 结论
 
 交付策略为 `helsinki_bounded_market_residual_c015_symmetric_v1`。它不是天气模型单独猜最终温度，也不是跟着盘口复制：盘口是 prior，FMI remaining-heat 概率只允许在 logit 上有限修正；每个 `target_date × current bracket` 比较真实 5-share YES/NO ask 与官方 taker fee，只在净 EV 为正时选择较优一边，首次入场后不重复开同档。METAR 不开仓，当前版本持有到 settlement。
@@ -10,7 +17,7 @@
 p_no = sigmoid(logit(market_no) + 0.15 * tanh((logit(weather_no)-logit(market_no))/0.15))
 ```
 
-`0.15` 不是按交易 ROI 挑选。固定旧 OOF 的 bounded family 中，它最小化 worst-target-date checkpoint logloss；没有增加价格、小时、天气形态或事后坏日期阈值。研究 joblib SHA-256 为 `3d57f1ce9eadeb11d3699df9617d44c0d2b55814fb0250847708f4bfb2ec2cd0`。它不是可直接部署的 artifact；git 内准备的 JSON artifact 使用唯一 `model_id`，并明确标为 `blocked_preflight_audit`。
+`0.15` 不是按交易 ROI 挑选。固定旧 OOF 的 bounded family 中，它最小化 worst-target-date checkpoint logloss；没有增加价格、小时、天气形态或事后坏日期阈值。研究 joblib SHA-256 为 `3d57f1ce9eadeb11d3699df9617d44c0d2b55814fb0250847708f4bfb2ec2cd0`。研究 joblib 不直接部署；git 内 JSON artifact 使用唯一 `model_id`，preflight 修复后已作为 zero-notional shadow artifact 加载。
 
 ## Independent shadow preflight audit（已修复并通过）
 
@@ -47,7 +54,7 @@ p_no = sigmoid(logit(market_no) + 0.15 * tanh((logit(weather_no)-logit(market_no
 - YES：5笔4胜，PnL `+$6.92`、ROI `+52.93%`；NO：4笔2胜，PnL `+$0.06`、ROI `+0.56%`。两边仍属于一个预注册的竞争表达，不据此关闭 NO。
 - 价格档：1–20% 为2笔0胜；40–60% 为3笔2胜、ROI `+22.91%`；60–80% 为3笔3胜、ROI `+53.50%`；80–99% 为1笔1胜。主结果没有过滤任何价格档，且没有 ≤1% / ≥99% 成交。
 
-这 8 天已经在模型设计过程中被查看，因此是 retrospective PIT replay，不冒充下一版 untouched forward。下一份结算日开始才是 artifact freeze 后的真正 forward。
+这 8 天已经在模型设计过程中被查看，因此是 retrospective PIT replay，不冒充下一版 untouched forward。真正 forward 已从 `2026-08-12 03:30 UTC` 开始；尚无已结算 forward 日。
 
 ## 漏斗
 
@@ -79,6 +86,35 @@ Evidence funnel（盘口和标签覆盖）：
 - 已于 `2026-08-12 02:36 UTC` 完成 git-first zero-notional 部署，untouched forward 起点锁为 `2026-08-12 03:30 UTC`（Helsinki 06:30）。FMI producer release `65fc4d8f`、city runtime `ddecbbd6`、forecast collector `03691ebb`；Helsinki ladder 使用隔离 release `f6472819`，没有扰动共享 `strategy_runtime`。post-deploy strict manifest 与 controller health 均为 healthy。
 - city runtime 已实际加载 bounded artifact SHA `9f63dea0…c40f7`，`execution_mode=zero_notional_shadow`、`orders_submitted=0`。部署时 Helsinki 尚在配置的当地 06:00 active-window 之前，因此首个正式 rich FMI forward checkpoint 按正常 collector 时钟生成，不伪造早晨前事件。
 
+## Live-readiness 与完整持仓时间线审计
+
+当前用于决策的唯一 retrospective 结果是 `run=20260812_rich_contract_replay_v1/replay` 和从它确定性生成的 `run=20260812_live_readiness_case_audit_v1/evaluation`。早期 `first_principles_v4/v5`、旧 preflight 分数均标为 superseded-for-decision-use；中断且 artifact hash 错误的 8/7 partial run 只保留在 `quarantine/`，没有进入 runner 输入、282-row 概率分母或9笔交易。原始证据不删除。
+
+8/12 clean forward 已收到10个 rich FMI new-content observations（当地06:32–08:01 first seen，`9.5→11.6°C`，全部 `fmi_rich_feature_status=complete`）。当天市场最低可表达档是14，official current maximum仍低于14，因此0 active-book、0 model decision 是 `outside current exact-bracket expression`，不是 source/book 缺失，也不是漏单。这个策略本身不覆盖清晨基于 forecast path 提前买低档 NO；该方向如研究，必须另建固定 expression，不能算作当前策略的历史收益。
+
+全部9笔的 entry edge 只有 `0.052c–1.950c/share`，中位 `0.467c/share`；FMI first-seen→可用5-share book lag 中位 `27.8s`、p95 `53.3s`。现有 replay 已用 response clock 和真实深度，但还没有 signal 后的真实 order ack/fill/slippage，所以历史正 ROI 对正式实盘最薄弱的环节不是手续费，而是这些很小的 edge 能否存活到真正成交。
+
+代表性完整时间线：
+
+| 日期/表达 | 入场（Helsinki local） | 当时依据 | 后续路径 | 结算与判断 |
+|---|---|---|---|---|
+| 8/4 `21 YES` | 14:42，成本49.25%，model 49.71%，edge 0.47c | fade、已回落2°C、forecast future peak低于running max 1°C | 10分钟后盘口YES升到62%，整日未越过21 | 赢 `+$2.54`；方向和时机符合“峰值已成形”直觉 |
+| 8/5 `20 YES` | 12:51，成本6.28%，model 6.33%，edge仅0.052c | fresh runway；weather把YES由market 5.5%只上修到6.33% | 11分钟后edge转负，30分钟后official maximum进入21，20 YES不可逆失败 | 输`-$0.31`；不是大概率误判，而是极薄尾部edge被路径延续击穿 |
+| 8/7 `21 NO` | 13:01，成本70.07%，model 70.70%，edge 0.63c | pullback/plateau，但forecast仍留约0.22°C overshoot margin | 140分钟后进入22，21 NO锁定胜利 | 赢`+$1.50`；remaining-heat/overshoot机制合理 |
+| 8/10 `23 NO` | 13:32，成本9.41%，model 9.74%，edge 0.33c | fade且forecast peak已低于running max，但模型仍给小概率“不停23” | 9分钟后edge转负，最终一直停23 | 输`-$0.47`；典型低价、小优势估计误差，不应被高ROI摘要掩盖 |
+| 8/11 `18 NO` | 11:02，成本56.24%，model 58.19%，edge 1.95c | fresh runway、forecast尚有0.5°C margin且距future peak约178分钟 | 10分钟后已失去新增买入edge；之后模型与市场共同持续下修，最终仍停18 | 输`-$2.81`；这是主要结构性坏例：模型高估了上午剩余热量转化为跨档的概率 |
+
+统一的持仓反事实不是“edge一转负就卖”。按每次后续 FMI checkpoint 的更新模型价值，与同刻真实5-share bid减官方fee比较，只有 `net bid > updated hold value` 才退出；9笔中该条件触发 `0/9`。因此当前数据不支持声称 FMI 反转退出能救亏损：模型下修时市场通常已同步或更早下修，可卖价格不足。METAR exit 仍是独立 held-position A/B，不属于本策略已验证能力。
+
+正式实盘三门：
+
+- `significance=FAIL`：9笔/6个交易日，ROI CI `[-14.99%,+67.14%]` 跨0。
+- `baseline=FAIL`：model 对 market 的 Brier/logloss 点估更好，但 paired target-date CI 均跨0。
+- `forward=FAIL`：已有 clean rich-feature raw，但已结算 forward target dates、forward intents、orders、fills 均为0。
+- execution/capacity 也未闭环：没有 signal→execution quote survival、authenticated fill、slippage 或真实5-share成交证据。
+
+所以当前可以继续做生产级 zero-notional shadow 和 live execution wiring 的准备，但**不能切正式盈利实盘**。晋级前至少要让冻结 artifact 在新日期上形成足够的已结算、可执行表达，重新通过同 rows market proper-score、fee-adjusted ROI block-bootstrap 与真实执行价存活三项；现有 family 口径继续以至少30个新 settled target dates 为评审窗，期间不调 `c=0.15`、不追加价格/小时/坏案例阈值。
+
 ## 执行证据
 
 - OOF artifact：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_first_principles_v6/oof_model/`
@@ -87,4 +123,5 @@ Evidence funnel（盘口和标签覆盖）：
 - corrected preflight replay：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_preflight_audit_v1/`
 - rich feature parity：`docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v1/runtime_feature_parity_v1.json`
 - rich-contract replay：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_rich_contract_replay_v1/`
+- live-readiness/case timeline：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_live_readiness_case_audit_v1/evaluation/`
 - production loaded identity：FMI `65fc4d8f933f…`、city runtime `ddecbbd6a26a…`、forecast `03691ebb3657…`、Helsinki ladder `f64728197135…`；post-deploy manifest exit `0`、controller `HEALTHY`、0 order。
