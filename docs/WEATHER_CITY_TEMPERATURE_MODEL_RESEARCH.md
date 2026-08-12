@@ -79,7 +79,7 @@ settled clean-forward dates 后，再检验同 rows multiclass Brier/logloss/RPS
 
 机器产物位于
 `/Volumes/jrs-archive/pm_agents/research/artifact_store/weather_city_intraday_probability/korea_city_exact_no/city=seoul/run=20260813_preferred_runway_v1/`：
-`summary.json` SHA-256=`00880520…b7c2`，`model.joblib` SHA-256=`e7b567d1…72a9`，
+`summary.json` SHA-256=`71d82cb5…ecd3e`，`model.joblib` SHA-256=`e7b567d1…72a9`，
 prediction table SHA-256=`c2202f2d…33ff`，序列化 parity max abs error=`0.0`。三门为
 `significance=FAIL; baseline=FAIL; forward=FAIL; conclusion=inconclusive_research_artifact`。
 
