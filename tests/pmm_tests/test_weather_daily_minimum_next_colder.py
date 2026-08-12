@@ -93,6 +93,8 @@ def test_next_colder_panel_separates_touch_from_exact_no_semantics(tmp_path):
     assert first["final_min_proxy_native"] == 18
     assert first["label_no_next_colder_touch"] == 0
     assert first["label_next_colder_exact_no_proxy"] == 1
+    assert first["remaining_cooling_ticks_proxy"] == 2
+    assert first["remaining_cooling_depth_class_proxy"] == 2
     assert first["first_seen_ts_utc"].endswith("20:05:00+00:00")
 
 
@@ -113,6 +115,12 @@ def test_next_colder_runner_emits_oof_and_blocks_production(tmp_path):
     assert summary["status"] == "research_only_blocked_for_settlement_and_market_forward"
     assert summary["development_model"]["status"] == "development_proxy_only"
     assert summary["development_model"]["target_dates"] == 8
+    assert "remaining_cooling_depth_head" in summary["development_model"]
+    depth = summary["development_model"]["remaining_cooling_depth_head"]
+    assert depth["exact_no_expression"]["identity"] == (
+        "P(exact_next_colder_NO)=1-P(remaining_cooling_depth=1)"
+    )
+    assert sum(depth["class_counts"].values()) == summary["development_model"]["rows"]
     assert summary["same_row_market_baseline"]["status"].startswith("blocked_")
     assert summary["production"] == {
         "probability_artifact_emitted": False,
@@ -123,7 +131,11 @@ def test_next_colder_runner_emits_oof_and_blocks_production(tmp_path):
         "execution_mode": "research_only",
     }
     prediction = pd.read_csv(output / "prediction_table.csv")
-    assert set(prediction["target_kind"]) == {"physical_path", "market_expression"}
+    assert set(prediction["target_kind"]) == {
+        "physical_path",
+        "market_expression",
+        "settlement_outcome_proxy",
+    }
     assert prediction["market_p"].isna().all()
     assert (output / "next_colder_checkpoint_panel.csv").exists()
     assert (output / "next_colder_oof.csv").exists()

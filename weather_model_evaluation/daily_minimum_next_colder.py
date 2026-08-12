@@ -44,15 +44,21 @@ from .probability import (
     binary_loss_values,
     binary_score,
     date_block_bootstrap_delta,
+    ordinal_loss_values,
+    ordinal_score,
 )
 
 
-SCHEMA_VERSION = "weather_daily_minimum_next_colder_no_development_v1"
+SCHEMA_VERSION = "weather_daily_minimum_next_colder_no_development_v2"
 MECHANISM_ID = "daily_low_temperature_next_colder_no_v1"
 FEATURE_SET_ID = "tmin_next_colder_dual_window_features_v1"
 MODEL_ID = "tmin_next_colder_regularized_logit_v1"
+DEPTH_MODEL_ID = "tmin_remaining_cooling_depth_hurdle_v1"
+DEPTH_CLASSES = (0, 1, 2, 3)
 LABEL_BASIS = "observation_cache_intraday_min_proxy_not_settlement"
 DEFAULT_CHECKPOINT_HOURS = (6, 9, 12, 18, 21, 23)
+WEATHER_TAKER_FEE_RATE = 0.05
+WEATHER_FEE_SOURCE = "https://docs.polymarket.com/trading/fees"
 
 
 def _sha256_json(value: Any) -> str:
@@ -336,6 +342,8 @@ def build_next_colder_panel(
                         "scorable_status": "not_scorable_missing_pit_observation",
                         "label_no_next_colder_touch": None,
                         "label_next_colder_exact_no_proxy": None,
+                        "remaining_cooling_ticks_proxy": None,
+                        "remaining_cooling_depth_class_proxy": None,
                     }
                 )
                 continue
@@ -369,6 +377,14 @@ def build_next_colder_panel(
             )
             label_exact_no = (
                 None if final_tick is None else int(final_tick != next_colder)
+            )
+            remaining_cooling_ticks = (
+                None if final_tick is None else max(0, running_tick - final_tick)
+            )
+            remaining_cooling_depth_class = (
+                None
+                if remaining_cooling_ticks is None
+                else min(remaining_cooling_ticks, DEPTH_CLASSES[-1])
             )
             rows.append(
                 {
@@ -409,6 +425,8 @@ def build_next_colder_panel(
                     "final_min_proxy_native": final_tick,
                     "label_no_next_colder_touch": label_no_touch,
                     "label_next_colder_exact_no_proxy": label_exact_no,
+                    "remaining_cooling_ticks_proxy": remaining_cooling_ticks,
+                    "remaining_cooling_depth_class_proxy": remaining_cooling_depth_class,
                     **forecast_features,
                 }
             )
@@ -633,6 +651,46 @@ def _clock_baseline(train: pd.DataFrame, test: pd.DataFrame, label: str) -> np.n
     )
 
 
+def _conditional_depth_baseline(
+    train: pd.DataFrame, test: pd.DataFrame
+) -> np.ndarray:
+    """P(depth=1/2/3+ | any colder), using prior-date rows only."""
+
+    conditional = train[train["remaining_cooling_depth_class_proxy"].astype(int) > 0]
+    pooled_counts = np.asarray(
+        [
+            int((conditional["remaining_cooling_depth_class_proxy"].astype(int) == depth).sum())
+            for depth in DEPTH_CLASSES[1:]
+        ],
+        dtype=float,
+    )
+    pooled = (pooled_counts + 1.0) / (pooled_counts.sum() + len(pooled_counts))
+    values: dict[str, np.ndarray] = {}
+    for window, subset in conditional.groupby("cooling_window_family"):
+        counts = np.asarray(
+            [
+                int((subset["remaining_cooling_depth_class_proxy"].astype(int) == depth).sum())
+                for depth in DEPTH_CLASSES[1:]
+            ],
+            dtype=float,
+        )
+        values[str(window)] = (counts + 2.0 * pooled) / (counts.sum() + 2.0)
+    return np.vstack(
+        [values.get(str(window), pooled) for window in test["cooling_window_family"]]
+    )
+
+
+def _combine_depth_hurdle(
+    p_no_touch: np.ndarray, conditional_depth: np.ndarray
+) -> np.ndarray:
+    p_zero = np.clip(np.asarray(p_no_touch, dtype=float), 0.0, 1.0)
+    conditional = np.asarray(conditional_depth, dtype=float)
+    conditional /= conditional.sum(axis=1, keepdims=True)
+    output = np.column_stack([p_zero, (1.0 - p_zero)[:, None] * conditional])
+    output /= output.sum(axis=1, keepdims=True)
+    return output
+
+
 def walk_forward_next_colder(
     panel: pd.DataFrame, *, min_train_dates: int
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -670,6 +728,55 @@ def walk_forward_next_colder(
                 test[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
             )[:, 1]
             result[f"model_status_{name}"] = "regularized_logit"
+
+        conditional_train = train[
+            train["remaining_cooling_depth_class_proxy"].astype(int) > 0
+        ].copy()
+        conditional_clock = _conditional_depth_baseline(train, test)
+        conditional_model = conditional_clock.copy()
+        severity_status = "baseline_only_insufficient_conditional_classes"
+        severity_classes = sorted(
+            conditional_train["remaining_cooling_depth_class_proxy"]
+            .astype(int)
+            .unique()
+            .tolist()
+        )
+        if len(severity_classes) >= 2:
+            severity = _pipeline()
+            severity.fit(
+                conditional_train[NUMERIC_FEATURES + CATEGORICAL_FEATURES],
+                conditional_train["remaining_cooling_depth_class_proxy"].astype(int),
+                classifier__sample_weight=_date_weights(conditional_train),
+            )
+            predicted = severity.predict_proba(
+                test[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
+            )
+            conditional_model = np.zeros((len(test), 3), dtype=float)
+            for index, depth in enumerate(severity.named_steps["classifier"].classes_):
+                conditional_model[:, int(depth) - 1] = predicted[:, index]
+            # A three-class Dirichlet prior gives unseen severity classes
+            # non-zero mass without introducing a tuned mixing coefficient.
+            effective_dates = float(conditional_train["target_date"].nunique())
+            prior_strength = float(len(DEPTH_CLASSES) - 1)
+            conditional_model = (
+                effective_dates * conditional_model
+                + prior_strength * conditional_clock
+            ) / (effective_dates + prior_strength)
+            conditional_model /= conditional_model.sum(axis=1, keepdims=True)
+            severity_status = "regularized_multinomial_logit_with_clock_shrinkage"
+
+        clock_depth = _combine_depth_hurdle(
+            result["p_clock_no_touch"].astype(float).to_numpy(), conditional_clock
+        )
+        model_depth = _combine_depth_hurdle(
+            result["p_model_no_touch"].astype(float).to_numpy(), conditional_model
+        )
+        for index, depth in enumerate(DEPTH_CLASSES):
+            result[f"p_clock_depth_{depth}"] = clock_depth[:, index]
+            result[f"p_model_depth_{depth}"] = model_depth[:, index]
+        result["p_clock_exact_no_structured"] = 1.0 - clock_depth[:, 1]
+        result["p_model_exact_no_structured"] = 1.0 - model_depth[:, 1]
+        result["model_status_depth_severity"] = severity_status
         predictions.append(result)
     scored = pd.concat(predictions, ignore_index=True) if predictions else pd.DataFrame()
     summary: dict[str, Any] = {
@@ -724,6 +831,67 @@ def walk_forward_next_colder(
             "model_minus_clock_brier": brier_bootstrap,
             "by_cooling_window": by_window,
         }
+
+    depth_label = "remaining_cooling_depth_class_proxy"
+    model_depth = scored[[f"p_model_depth_{depth}" for depth in DEPTH_CLASSES]].to_numpy(float)
+    clock_depth = scored[[f"p_clock_depth_{depth}" for depth in DEPTH_CLASSES]].to_numpy(float)
+    depth_y = scored[depth_label].astype(int).to_numpy()
+    depth_summary = {
+        "target_id": "remaining_cooling_depth_proxy_0_1_2_3plus",
+        "target_kind": "settlement_outcome_proxy",
+        "class_counts": {
+            str(depth): int((depth_y == depth).sum()) for depth in DEPTH_CLASSES
+        },
+        "class_target_dates": {
+            str(depth): int(scored.loc[depth_y == depth, "target_date"].nunique())
+            for depth in DEPTH_CLASSES
+        },
+        "model": ordinal_score(scored, model_depth, label_column=depth_label),
+        "clock_baseline": ordinal_score(scored, clock_depth, label_column=depth_label),
+        "model_minus_clock_logloss": date_block_bootstrap_delta(
+            scored,
+            ordinal_loss_values(depth_y, model_depth, metric="logloss"),
+            ordinal_loss_values(depth_y, clock_depth, metric="logloss"),
+        ),
+        "model_minus_clock_rps": date_block_bootstrap_delta(
+            scored,
+            ordinal_loss_values(depth_y, model_depth, metric="rps"),
+            ordinal_loss_values(depth_y, clock_depth, metric="rps"),
+        ),
+    }
+    structured_probability = scored["p_model_exact_no_structured"].to_numpy(float)
+    direct_probability = scored["p_model_exact_no"].to_numpy(float)
+    clock_probability = scored["p_clock_exact_no_structured"].to_numpy(float)
+    exact_y = scored["label_next_colder_exact_no_proxy"].astype(int).to_numpy()
+    depth_summary["exact_no_expression"] = {
+        "identity": "P(exact_next_colder_NO)=1-P(remaining_cooling_depth=1)",
+        "structured": binary_score(
+            scored,
+            structured_probability,
+            label_column="label_next_colder_exact_no_proxy",
+        ),
+        "direct_binary": binary_score(
+            scored,
+            direct_probability,
+            label_column="label_next_colder_exact_no_proxy",
+        ),
+        "structured_minus_direct_logloss": date_block_bootstrap_delta(
+            scored,
+            binary_loss_values(exact_y, structured_probability, metric="logloss"),
+            binary_loss_values(exact_y, direct_probability, metric="logloss"),
+        ),
+        "structured_minus_direct_brier": date_block_bootstrap_delta(
+            scored,
+            binary_loss_values(exact_y, structured_probability, metric="brier"),
+            binary_loss_values(exact_y, direct_probability, metric="brier"),
+        ),
+        "structured_minus_clock_logloss": date_block_bootstrap_delta(
+            scored,
+            binary_loss_values(exact_y, structured_probability, metric="logloss"),
+            binary_loss_values(exact_y, clock_probability, metric="logloss"),
+        ),
+    }
+    summary["remaining_cooling_depth_head"] = depth_summary
     return scored, summary
 
 
@@ -743,6 +911,12 @@ def _prediction_table(scored: pd.DataFrame) -> pd.DataFrame:
                 "next_colder_exact_no_proxy",
                 "market_expression",
             ),
+            (
+                "exact_no_structured",
+                "label_next_colder_exact_no_proxy",
+                "next_colder_exact_no_proxy_structured_depth",
+                "market_expression",
+            ),
         ):
             rows.append(
                 {
@@ -756,22 +930,60 @@ def _prediction_table(scored: pd.DataFrame) -> pd.DataFrame:
                     "p_simple_baseline": row[f"p_clock_{name}"],
                     "label": row[label],
                     "split": row["split"],
-                    "model_id": MODEL_ID,
+                    "model_id": DEPTH_MODEL_ID if name == "exact_no_structured" else MODEL_ID,
                     "feature_set_id": FEATURE_SET_ID,
                     "pit_provenance": row["pit_provenance"],
                     "scorable_status": "scorable_proxy_label_not_settlement",
                     "market_p": (
                         row.get("market_p_next_colder_exact_no")
-                        if name == "exact_no"
+                        if name in {"exact_no", "exact_no_structured"}
                         else None
                     ),
                     "market_feature_role": "none",
-                    "market_feature_clock": "decision_current" if name == "exact_no" else "none",
+                    "market_feature_clock": "decision_current" if name in {"exact_no", "exact_no_structured"} else "none",
                     "feature_book_snapshot_id": row.get("feature_book_snapshot_id"),
                     "execution_book_snapshot_id": row.get("execution_book_snapshot_id"),
-                    "expression_side": "NO" if name == "exact_no" else None,
-                    "executable_cost": row.get("market_next_colder_no_best_ask") if name == "exact_no" else None,
-                    "market_snapshot_ts_utc": row.get("market_snapshot_ts_utc") if name == "exact_no" else None,
+                    "expression_side": "NO" if name in {"exact_no", "exact_no_structured"} else None,
+                    "executable_cost": row.get("market_next_colder_no_best_ask") if name in {"exact_no", "exact_no_structured"} else None,
+                    "taker_fee_per_share": row.get("weather_taker_fee_per_share") if name in {"exact_no", "exact_no_structured"} else None,
+                    "model_net_edge_at_ask": (
+                        row.get("structured_net_edge_at_no_ask")
+                        if name == "exact_no_structured"
+                        else row.get("direct_net_edge_at_no_ask")
+                        if name == "exact_no"
+                        else None
+                    ),
+                    "market_snapshot_ts_utc": row.get("market_snapshot_ts_utc") if name in {"exact_no", "exact_no_structured"} else None,
+                    "label_basis": LABEL_BASIS,
+                }
+            )
+        for depth in DEPTH_CLASSES:
+            rows.append(
+                {
+                    "city": row["city"],
+                    "target_date": row["target_date"],
+                    "decision_ts_utc": row["decision_ts_utc"],
+                    "checkpoint_id": row["checkpoint_id"],
+                    "target_id": f"remaining_cooling_depth_proxy_{depth if depth < 3 else '3plus'}",
+                    "target_kind": "settlement_outcome_proxy",
+                    "p_model": row[f"p_model_depth_{depth}"],
+                    "p_simple_baseline": row[f"p_clock_depth_{depth}"],
+                    "label": int(row["remaining_cooling_depth_class_proxy"] == depth),
+                    "split": row["split"],
+                    "model_id": DEPTH_MODEL_ID,
+                    "feature_set_id": FEATURE_SET_ID,
+                    "pit_provenance": row["pit_provenance"],
+                    "scorable_status": "scorable_proxy_label_not_settlement",
+                    "market_p": None,
+                    "market_feature_role": "none",
+                    "market_feature_clock": "none",
+                    "feature_book_snapshot_id": row.get("feature_book_snapshot_id"),
+                    "execution_book_snapshot_id": row.get("execution_book_snapshot_id"),
+                    "expression_side": None,
+                    "executable_cost": None,
+                    "taker_fee_per_share": None,
+                    "model_net_edge_at_ask": None,
+                    "market_snapshot_ts_utc": None,
                     "label_basis": LABEL_BASIS,
                 }
             )
@@ -810,6 +1022,23 @@ def run_daily_minimum_next_colder_development(
     scored, model_summary = walk_forward_next_colder(
         panel, min_train_dates=min_train_dates
     )
+    if not scored.empty:
+        ask = pd.to_numeric(
+            scored["market_next_colder_no_best_ask"], errors="coerce"
+        )
+        scored["weather_taker_fee_per_share"] = (
+            WEATHER_TAKER_FEE_RATE * ask * (1.0 - ask)
+        )
+        scored["structured_net_edge_at_no_ask"] = (
+            scored["p_model_exact_no_structured"]
+            - ask
+            - scored["weather_taker_fee_per_share"]
+        )
+        scored["direct_net_edge_at_no_ask"] = (
+            scored["p_model_exact_no"]
+            - ask
+            - scored["weather_taker_fee_per_share"]
+        )
     prediction = _prediction_table(scored) if not scored.empty else pd.DataFrame()
     source_rows = panel[panel["running_min_native"].notna()] if not panel.empty else panel
     labeled = panel[panel["scorable_status"].eq("scorable_proxy_label")] if not panel.empty else panel
@@ -830,14 +1059,65 @@ def run_daily_minimum_next_colder_development(
             "target_dates": 0,
         }
     else:
-        probability = same_row_market["market_p_next_colder_exact_no"].astype(float).to_numpy()
+        market_probability = same_row_market["market_p_next_colder_exact_no"].astype(float).to_numpy()
+        structured_probability = same_row_market["p_model_exact_no_structured"].astype(float).to_numpy()
+        direct_probability = same_row_market["p_model_exact_no"].astype(float).to_numpy()
+        market_score = binary_score(
+            same_row_market,
+            market_probability,
+            label_column="label_next_colder_exact_no_proxy",
+        )
+        structured_score = binary_score(
+            same_row_market,
+            structured_probability,
+            label_column="label_next_colder_exact_no_proxy",
+        )
+        direct_score = binary_score(
+            same_row_market,
+            direct_probability,
+            label_column="label_next_colder_exact_no_proxy",
+        )
+        selected = same_row_market[
+            same_row_market["structured_net_edge_at_no_ask"] > 0
+        ].copy()
+        if not selected.empty:
+            selected["unit_payoff_proxy"] = (
+                selected["label_next_colder_exact_no_proxy"].astype(float)
+                - selected["market_next_colder_no_best_ask"].astype(float)
+                - selected["weather_taker_fee_per_share"].astype(float)
+            )
         market_baseline = {
             "status": "proxy_label_only_not_settlement",
-            **binary_score(
-                same_row_market,
-                probability,
-                label_column="label_next_colder_exact_no_proxy",
+            "inference_status": (
+                "blocked_less_than_5_target_dates"
+                if same_row_market["target_date"].nunique() < 5
+                else "date_block_inference_available"
             ),
+            "market": market_score,
+            "structured_depth": structured_score,
+            "direct_binary": direct_score,
+            "structured_minus_market_logloss_point": (
+                structured_score["logloss"] - market_score["logloss"]
+            ),
+            "structured_minus_market_brier_point": (
+                structured_score["brier"] - market_score["brier"]
+            ),
+            "quote_level_expression_diagnostic": {
+                "fee_rate": WEATHER_TAKER_FEE_RATE,
+                "fee_formula": "shares * fee_rate * price * (1-price)",
+                "fee_source": WEATHER_FEE_SOURCE,
+                "positive_structured_net_edge_rows": int(len(selected)),
+                "positive_structured_net_edge_target_dates": int(
+                    selected["target_date"].nunique()
+                ),
+                "proxy_wins": int(
+                    selected["label_next_colder_exact_no_proxy"].sum()
+                ) if not selected.empty else 0,
+                "unit_payoff_proxy_sum": float(selected["unit_payoff_proxy"].sum())
+                if not selected.empty
+                else 0.0,
+                "capacity_status": "blocked_best_ask_without_verified_target_size_depth",
+            },
         }
     summary = {
         "schema_version": SCHEMA_VERSION,
@@ -846,13 +1126,14 @@ def run_daily_minimum_next_colder_development(
         "mechanism_id": MECHANISM_ID,
         "status": "research_only_blocked_for_settlement_and_market_forward",
         "hypothesis": (
-            "PIT dual-window weather/path state improves the probability of the "
-            "Tmin next-colder exact NO expression over a date-equal clock baseline; "
+            "A hurdle model for remaining cooling depth (0/1/2/3+ native ticks) "
+            "improves the Tmin next-colder exact NO probability over a direct binary head; "
             "promotion additionally requires beating same-row market on settlement truth."
         ),
         "target_ontology": {
             "physical_path": "no_next_colder_touch_to_eod",
             "market_expression": "next_colder_exact_no",
+            "settlement_outcome_proxy": "remaining_cooling_depth_0_1_2_3plus",
             "semantic_warning": (
                 "a two-or-more rung overshoot makes physical no-touch false but exact-bracket NO true"
             ),
@@ -868,6 +1149,11 @@ def run_daily_minimum_next_colder_development(
         "expression_anchor": "Polymarket minimum exact bracket, immediately colder numeric native-C rung",
         "market_feature_role": "none_development_weather_head",
         "market_baseline_role": "same-checkpoint exact-NO baseline when both PIT book and label exist",
+        "official_fee": {
+            "weather_taker_fee_rate": WEATHER_TAKER_FEE_RATE,
+            "formula": "shares * fee_rate * price * (1-price)",
+            "source": WEATHER_FEE_SOURCE,
+        },
         "inputs": {
             "forecast": _input_inventory(forecast_root, "????-??-??/*.jsonl"),
             "observation": _input_inventory(observation_root, "????-??-??/observations.jsonl"),
@@ -923,6 +1209,7 @@ def run_daily_minimum_next_colder_development(
             "same_row_tmin_market_history_started_after_2026_08_11_rollout",
             "source_to_settlement_basis_pending_for_seoul_tokyo",
             "minimum_30_new_settled_target_dates_not_met",
+            "remaining_cooling_depth_classes_2_and_3plus_sparse_in_development_proxy",
         ],
         "production": {
             "probability_artifact_emitted": False,

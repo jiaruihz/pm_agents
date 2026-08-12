@@ -220,7 +220,7 @@ def _add_daily_minimum_next_colder_parser(subparsers: Any) -> None:
         "daily-minimum-next-colder-no",
         help=(
             "Build fixed intraday Tmin checkpoints and expanding-OOF "
-            "physical no-touch / exact next-colder NO development heads."
+            "physical no-touch / remaining-cooling-depth / exact next-colder NO development heads."
         ),
     )
     parser.add_argument("--forecast-root", type=Path, required=True)
