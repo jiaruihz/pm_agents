@@ -24,9 +24,17 @@ class TestClobOrderbookSorting(unittest.IsolatedAsyncioTestCase):
         )
         mock_client.aclose = AsyncMock()
 
-        price_row, levels, archive_path = await fetch_price_and_book("token-1", top_n=2, archive_books=False)
+        price_row, levels, archive_path = await fetch_price_and_book(
+            "token-1",
+            top_n=2,
+            archive_books=False,
+            base_url="http://clob.test/",
+        )
 
         self.assertIsNone(archive_path)
+        mock_client.get_json.assert_awaited_once_with(
+            "http://clob.test/book", params={"token_id": "token-1"}
+        )
         self.assertEqual(price_row["best_bid"], 0.20)
         self.assertEqual(price_row["best_ask"], 0.82)
         self.assertEqual(levels[0]["side"], "bid")

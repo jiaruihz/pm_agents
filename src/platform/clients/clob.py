@@ -3,14 +3,26 @@
 import asyncio
 import gzip
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 
-from src.strategies.rule_lawyer.config import get_settings
 from src.platform.clients.research_http_client import HttpClient
+
+
+DEFAULT_CLOB_BASE_URL = "https://clob.polymarket.com"
+DEFAULT_ARCHIVE_DIR = "archive/books"
+
+
+def _clob_base_url(explicit: str | None = None) -> str:
+    return str(explicit or os.getenv("CLOB_BASE_URL") or DEFAULT_CLOB_BASE_URL).rstrip("/")
+
+
+def _archive_dir(explicit: str | Path | None = None) -> Path:
+    return Path(explicit or os.getenv("RESEARCH_ARCHIVE_DIR") or DEFAULT_ARCHIVE_DIR)
 
 
 def _now_utc_iso() -> str:
@@ -42,10 +54,11 @@ def _parse_mid(data: Any) -> Optional[float]:
         return None
 
 
-async def fetch_midprice(token_id: str) -> Optional[Dict[str, Any]]:
-    settings = get_settings()
+async def fetch_midprice(
+    token_id: str, *, base_url: str | None = None
+) -> Optional[Dict[str, Any]]:
     client = HttpClient()
-    base = settings.clob_base_url
+    base = _clob_base_url(base_url)
     fetched_at = _now_utc_iso()
     try:
         mid_json = await client.get_json(f"{base}/midprice", params={"token_id": token_id})
@@ -77,10 +90,11 @@ async def fetch_price_and_book(
     top_n: int,
     archive_books: bool,
     depth: Optional[int] = None,
+    base_url: str | None = None,
+    archive_dir: str | Path | None = None,
 ) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], Optional[str]]:
-    settings = get_settings()
     client = HttpClient()
-    base = settings.clob_base_url
+    base = _clob_base_url(base_url)
     fetched_at = _now_utc_iso()
     archive_path: Optional[str] = None
     params = {"token_id": token_id}
@@ -171,15 +185,22 @@ async def fetch_price_and_book(
     levels.extend(_normalize_side("ask", asks))
 
     if archive_books:
-        archive_path = archive_book(token_id, book_json, fetched_at)
+        archive_path = archive_book(
+            token_id, book_json, fetched_at, archive_dir=archive_dir
+        )
 
     return price_row, levels, archive_path
 
 
-def archive_book(token_id: str, book_json: Any, fetched_at_utc: str) -> str:
-    settings = get_settings()
+def archive_book(
+    token_id: str,
+    book_json: Any,
+    fetched_at_utc: str,
+    *,
+    archive_dir: str | Path | None = None,
+) -> str:
     date_str = fetched_at_utc.split("T")[0]
-    dir_path = Path(settings.archive_dir) / token_id
+    dir_path = _archive_dir(archive_dir) / token_id
     dir_path.mkdir(parents=True, exist_ok=True)
     file_path = dir_path / f"{date_str}.json.gz"
     with gzip.open(file_path, "wt", encoding="utf-8") as f:
@@ -187,8 +208,10 @@ def archive_book(token_id: str, book_json: Any, fetched_at_utc: str) -> str:
     return str(file_path)
 
 
-async def fetch_midprice_batch(token_ids: List[str]) -> List[Optional[Dict[str, Any]]]:
-    tasks = [fetch_midprice(tid) for tid in token_ids]
+async def fetch_midprice_batch(
+    token_ids: List[str], *, base_url: str | None = None
+) -> List[Optional[Dict[str, Any]]]:
+    tasks = [fetch_midprice(tid, base_url=base_url) for tid in token_ids]
     return await asyncio.gather(*tasks)
 
 
@@ -197,6 +220,18 @@ async def enrich_token_batch(
     top_n: int,
     archive_books: bool,
     depth: Optional[int] = None,
+    base_url: str | None = None,
+    archive_dir: str | Path | None = None,
 ) -> List[Tuple[Dict[str, Any], List[Dict[str, Any]], Optional[str]]]:
-    tasks = [fetch_price_and_book(tid, top_n=top_n, archive_books=archive_books, depth=depth) for tid in token_ids]
+    tasks = [
+        fetch_price_and_book(
+            tid,
+            top_n=top_n,
+            archive_books=archive_books,
+            depth=depth,
+            base_url=base_url,
+            archive_dir=archive_dir,
+        )
+        for tid in token_ids
+    ]
     return await asyncio.gather(*tasks)
