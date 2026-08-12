@@ -20,6 +20,7 @@ import math
 from pathlib import Path
 import re
 import sqlite3
+import sys
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
@@ -32,23 +33,15 @@ from sklearn.preprocessing import StandardScaler
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DEFAULT_RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
 DEFAULT_DB = ROOT / "runtime" / "weather.db"
-DEFAULT_OUT_DIR = (
-    ROOT
-    / "docs"
-    / "analysis"
-    / "2026-07"
-    / "generated"
-    / "three_city_first_seen_path_v1"
-)
-DEFAULT_REPORT = (
-    ROOT
-    / "docs"
-    / "analysis"
-    / "2026-07"
-    / "2026-07-29-three-city-first-seen-path-probability-v1.md"
-)
 
 CITY_CONFIG = {
     "Helsinki": {
@@ -1168,8 +1161,9 @@ def main() -> int:
     parser.add_argument("--start-date", default="2026-07-08")
     parser.add_argument("--end-date", default="2026-07-27")
     parser.add_argument("--min-prior-dates", type=int, default=5)
-    parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
-    parser.add_argument("--report", default=str(DEFAULT_REPORT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir", type=Path)
+    parser.add_argument("--report", type=Path, help="Optional explicit human-readable export.")
     args = parser.parse_args()
 
     start = date.fromisoformat(args.start_date)
@@ -1186,7 +1180,13 @@ def main() -> int:
     basis = source_basis_audit(states, winners)
     canonical_counts = canonical_fast_event_counts(db_path)
 
-    out_dir = Path(args.out_dir)
+    out_dir = prepare_new_run_output(
+        resolve_run_output(
+            "three_city_first_seen_path_v1",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     write_csv(out_dir / "source_coverage.csv", source_audit)
     write_csv(out_dir / "pit_path_states.csv", states)
     write_csv(out_dir / "oof_predictions.csv", predictions)
@@ -1206,24 +1206,26 @@ def main() -> int:
         "market_baseline_rows": 0,
         "policy_selected": 0,
         "scope": "research_zero_notional_no_execution",
+        "living_doc": "docs/analysis/market_structure_edge.md",
     }
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "summary.json").write_text(
+    (out_dir / "result.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    render_report(
-        Path(args.report),
-        start=start,
-        end=end,
-        source_audit=source_audit,
-        states=states,
-        predictions=predictions,
-        scores=scores,
-        basis=basis,
-        canonical_counts=canonical_counts,
-        current_capture=current_capture,
-    )
+    if args.report is not None:
+        render_report(
+            args.report,
+            start=start,
+            end=end,
+            source_audit=source_audit,
+            states=states,
+            predictions=predictions,
+            scores=scores,
+            basis=basis,
+            canonical_counts=canonical_counts,
+            current_capture=current_capture,
+        )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
 

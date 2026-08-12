@@ -28,6 +28,10 @@ if str(ROOT) not in sys.path:
 
 from weather_model_evaluation import pooled_ladder_transport  # noqa: E402
 from weather_model_evaluation import source_event_ws_linkage  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
 DEFAULT_CANDIDATES = Path(
@@ -35,21 +39,6 @@ DEFAULT_CANDIDATES = Path(
     "first_seen_zero_notional/candidates.jsonl"
 )
 DEFAULT_SETTLEMENT_DB = ROOT / "runtime" / "weather.db"
-DEFAULT_OUT_DIR = (
-    ROOT
-    / "docs"
-    / "analysis"
-    / "2026-07"
-    / "generated"
-    / "full_ladder_first_seen_residual_v1"
-)
-DEFAULT_REPORT = (
-    ROOT
-    / "docs"
-    / "analysis"
-    / "2026-07"
-    / "2026-07-29-full-ladder-first-seen-residual-v1.md"
-)
 FEE_RATE = 0.05
 PROPER_SCORE_COLUMNS = [
     "state_checkpoint_id",
@@ -543,8 +532,9 @@ def main() -> int:
     )
     parser.add_argument("--candidates", type=Path, default=DEFAULT_CANDIDATES)
     parser.add_argument("--settlement-db", type=Path, default=DEFAULT_SETTLEMENT_DB)
-    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir", type=Path)
+    parser.add_argument("--report", type=Path, help="Optional explicit human-readable export.")
     ws_defaults = source_event_ws_linkage.default_input_paths()
     parser.add_argument("--ws-target-date")
     parser.add_argument("--ws-root", type=Path, default=ws_defaults["ws_root"])
@@ -599,16 +589,24 @@ def main() -> int:
         settlement_db=args.settlement_db,
     )
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    checkpoints.to_csv(args.out_dir / "checkpoint_audit.csv", index=False)
-    executable.to_csv(args.out_dir / "executable_expression_diagnostics.csv", index=False)
-    scores.to_csv(args.out_dir / "proper_scores.csv", index=False)
-    (args.out_dir / "summary.json").write_text(
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "full_ladder_first_seen_residual_v1",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    checkpoints.to_csv(output_dir / "checkpoint_audit.csv", index=False)
+    executable.to_csv(output_dir / "executable_expression_diagnostics.csv", index=False)
+    scores.to_csv(output_dir / "proper_scores.csv", index=False)
+    summary["living_doc"] = "docs/analysis/market_structure_edge.md"
+    (output_dir / "result.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_report(summary), encoding="utf-8")
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(render_report(summary), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
 
