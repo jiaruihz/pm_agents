@@ -82,6 +82,59 @@ def test_weather_fee_formula():
     assert ShadowRuntime.fee_per_share(.5) == pytest.approx(.0125)
 
 
+def test_five_share_depth_cost_controls_entry_instead_of_best_ask(tmp_path):
+    class ThinBestAsk:
+        def score(self, profile, now):
+            return [CityScore(
+                city="Helsinki", target_date="2026-08-04",
+                decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-08-04T11:20:00+00:00",
+                current_bracket=21, market_side="NO", market_probability=.55,
+                market_entry_price=.55, model_probability=.59, model_id="bounded",
+                feature_coverage=1.0, missing_features=[], features={},
+                market={"raw": {"asks": [
+                    {"price": .55, "size": 1.0},
+                    {"price": .60, "size": 4.0},
+                ]}},
+                lineage={},
+            )]
+
+    config = _config(tmp_path, [{
+        "adapter": "thin", "city": "Helsinki", "edge_threshold": 0.0,
+        "selection_shares": 5.0,
+    }])
+    ShadowRuntime(config, {"thin": ThinBestAsk()}).run_once(
+        datetime(2026, 8, 4, 11, 21, tzinfo=timezone.utc)
+    )
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["entry_vwap"] == pytest.approx(.59)
+    assert row["effective_cost_per_share"] > .59
+    assert row["would_enter"] is False
+
+
+def test_zero_edge_is_not_a_positive_ev_entry(tmp_path):
+    class ZeroEdge:
+        def score(self, profile, now):
+            price = .5
+            effective = price + ShadowRuntime.fee_per_share(price)
+            return [CityScore(
+                city="Test", target_date="2026-08-04",
+                decision_ts_utc=now.isoformat(), source_obs_ts_utc=now.isoformat(),
+                current_bracket=20, market_side="NO", market_probability=.5,
+                market_entry_price=price, model_probability=effective,
+                model_id="zero", feature_coverage=1.0, missing_features=[],
+                features={}, market={}, lineage={},
+            )]
+
+    ShadowRuntime(
+        _config(tmp_path, [{"adapter": "zero", "city": "Test"}]),
+        {"zero": ZeroEdge()},
+    ).run_once(datetime(2026, 8, 4, 12, tzinfo=timezone.utc))
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["edge_after_fee"] == pytest.approx(0.0)
+    assert row["would_enter"] is False
+
+
 def test_not_scorable_checkpoint_is_journaled_without_intent_or_error(tmp_path):
     class OneSided:
         def score(self, profile, now):

@@ -37,6 +37,14 @@ COWIN_BASE_URL = "https://cowin.hku.hk"
 MGM_BASE_URL = "https://servis.mgm.gov.tr/web"
 IMS_OBSERVATIONS_URL = "https://ims.gov.il/en/hourly_observations_full"
 FMI_BASE_URL = "https://opendata.fmi.fi/wfs"
+FMI_WEATHER_PARAMETERS = (
+    "t2m", "ws_10min", "wg_10min", "wd_10min", "rh", "td", "r_1h",
+    "ri_10min", "snow_aws", "p_sea", "vis", "n_man", "wawa",
+)
+FMI_RADIATION_PARAMETERS = (
+    "GLOB_1MIN", "DIFF_1MIN", "LWIN_1MIN", "LWOUT_1MIN", "REFL_1MIN",
+    "SUND_1MIN",
+)
 KNMI_API_BASE = "https://api.dataplatform.knmi.nl/open-data/v1"
 KNMI_DATASET = "10-minute-in-situ-meteorological-observations"
 KNMI_VERSION = "1.0"
@@ -748,28 +756,58 @@ def fetch_ims_lod(city: str, *, settings: HighFrequencyFetchSettings | None = No
     return _result("ims_lod", city, "ok" if records else "empty", records, start, end, metadata={"raw_payload_hash": stable_hash(payload)})
 
 
-def parse_fmi_xml(xml_text: str, *, city: str = "Helsinki", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
-    meta = HIGH_FREQUENCY_CITY_SOURCES["fmi"][city]
-    fetched = fetched_at or datetime.now(timezone.utc)
-    latest_values: dict[str, float] = {}
-    obs_dt: datetime | None = None
+def _parse_fmi_parameter_series(xml_text: str) -> dict[str, dict[datetime, float]]:
+    output: dict[str, dict[datetime, float]] = {}
     for block in re.split(r"<om:observedProperty\s", xml_text):
-        param_match = re.search(r"param=(\w+)", block)
+        param_match = re.search(r"param=([A-Za-z0-9_]+)", block[:1200])
         if not param_match:
             continue
+        values = output.setdefault(param_match.group(1), {})
         pairs = re.findall(r"<wml2:MeasurementTVP>.*?<wml2:time>(.*?)</wml2:time>\s*<wml2:value>(.*?)</wml2:value>", block, re.DOTALL)
-        if not pairs:
-            continue
-        latest_time, latest_val = pairs[-1]
-        value = safe_float(latest_val)
-        if value is None:
-            continue
-        latest_values[param_match.group(1)] = value
-        obs_dt = parse_dt(latest_time) or obs_dt
-    temp = latest_values.get("t2m")
-    if temp is None or obs_dt is None:
+        for time_text, value_text in pairs:
+            try:
+                candidate = float(value_text)
+            except (TypeError, ValueError):
+                candidate = math.nan
+            value = candidate if math.isfinite(candidate) else None
+            timestamp = parse_dt(time_text)
+            if value is not None and timestamp is not None:
+                values[timestamp] = value
+    return output
+
+
+def parse_fmi_xml(
+    xml_text: str,
+    *,
+    radiation_xml_text: str | None = None,
+    city: str = "Helsinki",
+    target_date: str = "",
+    fetched_at: datetime | None = None,
+) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["fmi"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    weather = _parse_fmi_parameter_series(xml_text)
+    temperature_series = weather.get("t2m") or {}
+    if not temperature_series:
         return []
+    obs_dt = max(temperature_series)
+    latest_values = {
+        parameter: values[obs_dt]
+        for parameter, values in weather.items()
+        if obs_dt in values
+    }
+    radiation = (
+        _parse_fmi_parameter_series(radiation_xml_text)
+        if radiation_xml_text
+        else {}
+    )
+    for parameter, values in radiation.items():
+        if obs_dt in values:
+            latest_values[parameter] = values[obs_dt]
+    temp = latest_values["t2m"]
     wind_ms = latest_values.get("ws_10min")
+    wind_gust_ms = latest_values.get("wg_10min")
+    dewpoint = latest_values.get("td")
     return [
         _base_record(
             source="fmi",
@@ -779,12 +817,38 @@ def parse_fmi_xml(xml_text: str, *, city: str = "Helsinki", target_date: str = "
             obs_dt=obs_dt,
             fetched_at=fetched,
             temp_c=temp,
-            raw={"latest_values": latest_values},
+            raw={
+                "latest_values": latest_values,
+                "weather_payload_hash": stable_hash(xml_text),
+                "radiation_payload_hash": stable_hash(radiation_xml_text) if radiation_xml_text else None,
+            },
             source_kind="official_airport_station",
             source_note="FMI Helsinki-Vantaa 10-minute airport observation; not runway sensor",
             extra={
+                "rich_feature_contract_version": "helsinki_fmi_rich_v1",
+                "fmi_rich_feature_status": "complete" if radiation_xml_text else "weather_only",
+                "fmi_parameters_available": sorted(latest_values),
+                "wind_speed_ms": wind_ms,
                 "wind_speed_kt": round(wind_ms * 1.94384, 3) if wind_ms is not None else None,
+                "wind_gust_ms": wind_gust_ms,
+                "wind_gust_kt": round(wind_gust_ms * 1.94384, 3) if wind_gust_ms is not None else None,
+                "wind_dir_deg": latest_values.get("wd_10min"),
+                "relative_humidity_pct": latest_values.get("rh"),
+                "dewpoint_c": dewpoint,
+                "dewpoint_depression_c": None if dewpoint is None else temp - dewpoint,
                 "pressure_hpa": latest_values.get("p_sea"),
+                "precipitation_10m_mm": latest_values.get("ri_10min"),
+                "precipitation_1h_mm": latest_values.get("r_1h"),
+                "snow_depth_cm": latest_values.get("snow_aws"),
+                "visibility_m": latest_values.get("vis"),
+                "cloud_cover_okta": latest_values.get("n_man"),
+                "present_weather_code": latest_values.get("wawa"),
+                "global_radiation_wm2": latest_values.get("GLOB_1MIN"),
+                "diffuse_radiation_wm2": latest_values.get("DIFF_1MIN"),
+                "longwave_in_wm2": latest_values.get("LWIN_1MIN"),
+                "longwave_out_wm2": latest_values.get("LWOUT_1MIN"),
+                "reflected_radiation_wm2": latest_values.get("REFL_1MIN"),
+                "sunshine_seconds": latest_values.get("SUND_1MIN"),
             },
         )
     ]
@@ -793,22 +857,32 @@ def parse_fmi_xml(xml_text: str, *, city: str = "Helsinki", target_date: str = "
 def fetch_fmi(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
     meta = HIGH_FREQUENCY_CITY_SOURCES["fmi"][city]
     end_time = datetime.now(timezone.utc)
-    start_time = end_time.replace(minute=end_time.minute // 10 * 10, second=0, microsecond=0) - timedelta(minutes=20)
-    params = {
+    start_time = end_time.replace(minute=end_time.minute // 10 * 10, second=0, microsecond=0) - timedelta(minutes=80)
+    base_params = {
         "service": "WFS",
         "version": "2.0.0",
         "request": "getFeature",
-        "storedquery_id": "fmi::observations::weather::timevaluepair",
-        "place": "helsinki-vantaa_airport",
-        "parameters": "t2m,ws_10min,p_sea",
+        "fmisid": meta["station"],
+        "timestep": "10",
         "starttime": start_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "endtime": end_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     start = datetime.now(timezone.utc)
-    text = _http_get(FMI_BASE_URL, params=params, settings=settings).text
+    weather_params = {
+        **base_params,
+        "storedquery_id": "fmi::observations::weather::timevaluepair",
+        "parameters": ",".join(FMI_WEATHER_PARAMETERS),
+    }
+    radiation_params = {
+        **base_params,
+        "storedquery_id": "fmi::observations::radiation::timevaluepair",
+        "parameters": ",".join(FMI_RADIATION_PARAMETERS),
+    }
+    text = _http_get(FMI_BASE_URL, params=weather_params, settings=settings).text
+    radiation_text = _http_get(FMI_BASE_URL, params=radiation_params, settings=settings).text
     end = datetime.now(timezone.utc)
-    records = parse_fmi_xml(text, city=city, target_date=target_date, fetched_at=end)
-    return _result("fmi", city, "ok" if records else "empty", records, start, end, metadata={"station": meta["station"], "raw_payload_hash": stable_hash(text)})
+    records = parse_fmi_xml(text, radiation_xml_text=radiation_text, city=city, target_date=target_date, fetched_at=end)
+    return _result("fmi", city, "ok" if records else "empty", records, start, end, metadata={"station": meta["station"], "weather_payload_hash": stable_hash(text), "radiation_payload_hash": stable_hash(radiation_text), "rich_feature_contract_version": "helsinki_fmi_rich_v1"})
 
 
 def fetch_cwa(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:

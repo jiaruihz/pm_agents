@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from weather_data_feed.high_frequency_observation_sources import (
     fetch_aemet_10m,
     fetch_cwa,
+    fetch_fmi,
     fetch_ims_1m,
     fetch_knmi,
     fetch_meteofrance_6m,
@@ -17,6 +18,7 @@ from weather_data_feed.high_frequency_observation_sources import (
     parse_bom_aws_payload,
     parse_dwd_10m_zip,
     parse_eccc_swob_xml,
+    parse_fmi_xml,
     parse_hko_csv,
     parse_ims_1m_payload,
     parse_jma_amedas_payload,
@@ -25,6 +27,80 @@ from weather_data_feed.high_frequency_observation_sources import (
     parse_singapore_mss_payload,
     supported_high_frequency_sources,
 )
+
+
+def _fmi_xml(values: dict[str, float], timestamp: str = "2026-08-12T09:50:00Z") -> str:
+    return "<root>" + "".join(
+        f'<om:observedProperty href="x?param={name}"/>'
+        f'<wml2:MeasurementTVP><wml2:time>{timestamp}</wml2:time>'
+        f'<wml2:value>{value}</wml2:value></wml2:MeasurementTVP>'
+        for name, value in values.items()
+    ) + "</root>"
+
+
+def test_fmi_parser_exposes_weather_and_radiation_training_fields() -> None:
+    weather = _fmi_xml(
+        {
+            "t2m": 19.2, "ws_10min": 3.0, "wg_10min": 5.0,
+            "wd_10min": 270.0, "rh": 54.0, "td": 9.7, "r_1h": 0.1,
+            "ri_10min": 0.0, "p_sea": 1012.3, "vis": 40000,
+            "n_man": 3, "wawa": 0,
+        }
+    )
+    radiation = _fmi_xml(
+        {
+            "GLOB_1MIN": 510.0, "DIFF_1MIN": 120.0,
+            "LWIN_1MIN": 330.0, "LWOUT_1MIN": 420.0,
+            "REFL_1MIN": 80.0, "SUND_1MIN": 60.0,
+        }
+    )
+
+    rows = parse_fmi_xml(
+        weather,
+        radiation_xml_text=radiation,
+        target_date="2026-08-12",
+        fetched_at=datetime(2026, 8, 12, 10, 1, tzinfo=timezone.utc),
+    )
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["rich_feature_contract_version"] == "helsinki_fmi_rich_v1"
+    assert row["fmi_rich_feature_status"] == "complete"
+    assert row["wind_speed_ms"] == 3.0
+    assert row["wind_gust_ms"] == 5.0
+    assert row["relative_humidity_pct"] == 54.0
+    assert row["dewpoint_depression_c"] == 9.5
+    assert row["pressure_hpa"] == 1012.3
+    assert row["cloud_cover_okta"] == 3.0
+    assert row["global_radiation_wm2"] == 510.0
+    assert row["sunshine_seconds"] == 60.0
+
+
+def test_fmi_fetch_requests_exact_station_weather_and_radiation(monkeypatch) -> None:
+    from weather_data_feed import high_frequency_observation_sources as sources
+
+    calls: list[dict[str, object]] = []
+
+    class Response:
+        def __init__(self, text: str):
+            self.text = text
+
+    def fake_get(url, *, params=None, settings=None):
+        calls.append({"url": url, "params": params, "settings": settings})
+        if "radiation" in str(params.get("storedquery_id")):
+            return Response(_fmi_xml({"GLOB_1MIN": 200.0}))
+        return Response(_fmi_xml({"t2m": 15.0, "rh": 70.0}))
+
+    monkeypatch.setattr(sources, "_http_get", fake_get)
+    result = fetch_fmi("Helsinki", target_date="2026-08-12")
+
+    assert result.status == "ok"
+    assert len(calls) == 2
+    assert calls[0]["params"]["fmisid"] == "100968"
+    assert calls[0]["params"]["timestep"] == "10"
+    assert "rh" in calls[0]["params"]["parameters"]
+    assert calls[1]["params"]["storedquery_id"] == "fmi::observations::radiation::timevaluepair"
+    assert result.records[0]["global_radiation_wm2"] == 200.0
 
 
 def test_singapore_mss_parser_extracts_s24_changi_reference_station() -> None:

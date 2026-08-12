@@ -1,0 +1,51 @@
+{
+  "feature_formula_parity": {
+    "fields": 37,
+    "finite_comparisons": 122950,
+    "mismatch_fields": {},
+    "parity_pass": true,
+    "sample_rows": 3456,
+    "sample_target_dates": 24
+  },
+  "frozen_contract_ablation": {
+    "delta_rich_minus_sparse": {
+      "auc_rows": 0.007462197195560183,
+      "brier_target_date_balanced": -0.006411880949162493,
+      "logloss_target_date_balanced": -0.02386589514974541
+    },
+    "denominator_scope": "frozen 2026 final audit rows, 2026-01-01..2026-07-29; same rows/model; forecast fields held missing in both arms to isolate FMI rich-feature effect",
+    "model_feature_count": 85,
+    "rich_fmi_contract_frozen_probability": {
+      "auc_rows": 0.9561023086307341,
+      "brier_target_date_balanced": 0.08277141174735815,
+      "logloss_target_date_balanced": 0.2837022856405591
+    },
+    "rows": 29604,
+    "sparse_declared_feature_count": 41,
+    "sparse_pre_fix_runtime_contract": {
+      "auc_rows": 0.9486401114351739,
+      "brier_target_date_balanced": 0.08918329269652064,
+      "logloss_target_date_balanced": 0.3075681807903045
+    },
+    "target_date_block_bootstrap": {
+      "brier_delta_rich_minus_sparse_ci95": [
+        -0.009386472709974595,
+        -0.0034388997762197864
+      ],
+      "iterations": 1000,
+      "logloss_delta_rich_minus_sparse_ci95": [
+        -0.03176334611622046,
+        -0.016045785305866738
+      ],
+      "target_dates": 210
+    },
+    "target_dates": 210,
+    "tuning_status": "artifact-frozen; final-audit rows used once for deployment parity, not threshold/model selection"
+  },
+  "inputs": {
+    "audit": "/Volumes/jrs/pm_agents/research/artifact_store/objects/fd/fd36db931b3077e921df426fee74187f389b9f38aafce2e5531701b121ebf614",
+    "fmi": "/Volumes/jrs/pm_agents/research/artifact_store/objects/a3/a3f4ff2f205b6804179f9889757398ac374ad8f09b5336ca391924b1a9cf98cf",
+    "model": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/helsinki_remaining_heat_probability_v5/helsinki_remaining_heat_v5_composite_hazard_challenger.joblib"
+  },
+  "schema_version": "helsinki_runtime_feature_parity_v1"
+}

@@ -34,14 +34,18 @@
       "enabled": true,
       "city": "Helsinki",
       "adapter": "helsinki_remaining_heat_v1",
-      "profile_id": "helsinki_remaining_heat_frozen_20260731_v1",
-      "forward_start_utc": "2026-07-31T12:43:00Z",
+      "profile_id": "helsinki_bounded_market_residual_c015_symmetric_v1",
+      "forward_start_utc": "2026-08-12T03:30:00Z",
       "max_book_age_seconds": 900,
+      "max_source_to_book_lag_seconds": 120,
+      "selection_shares": 5.0,
+      "edge_threshold": 0.0,
+      "position_scope": "city_date_bracket_model",
       "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
       "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
       "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books",
       "forecast_curve_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves",
-      "expression_models": ["incumbent", "challenger"],
+      "expression_models": ["bounded"],
       "artifacts": {
         "weather": {
           "path": "docs/analysis/2026-07/generated/helsinki_remaining_heat_probability_v5/helsinki_remaining_heat_v5_composite_hazard_challenger.joblib",
@@ -51,13 +55,9 @@
           "path": "docs/analysis/2026-07/generated/helsinki_fade_morphology_v1/helsinki_fade_morphology_v1.joblib",
           "sha256": "4a34089bab953c4e1e7ae95560222b812f553138409b57e301b779721942f7e2"
         },
-        "incumbent": {
-          "path": "docs/analysis/2026-07/generated/helsinki_market_offset_residual_v1/helsinki_market_offset_fade_v1.joblib",
-          "sha256": "398b92b295f43e04c7b4deab26ccdd2b1f40354474e2d187f453092dfa3a3ed9"
-        },
-        "challenger": {
-          "path": "docs/analysis/2026-07/generated/helsinki_market_expression_v2/helsinki_market_expression_v2_research_challenger.joblib",
-          "sha256": "e5290f36ad033d1a526162c124a54106ecfb066e0b1538a3864ed0db1c841288"
+        "bounded": {
+          "path": "docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v1/helsinki_bounded_market_residual_c015_symmetric_v1.json",
+          "sha256": "9f63dea09ce1a80d69d3f1c156704e4d199dafce1ea172168823e165b93c40f7"
         }
       }
     },

@@ -1,0 +1,24 @@
+{
+  "candidate_count_k": 21,
+  "candidate_name": "p_bounded_weather_market_c015",
+  "deployment_status": "zero_notional_shadow_approved",
+  "retrospective_evidence_seen_through": "2026-08-11",
+  "untouched_forward_start": "2026-08-12T03:30:00Z",
+  "expression_policy": "first_best_fee_adjusted_edge_per_date_bracket",
+  "expression_sides": [
+    "NO",
+    "YES"
+  ],
+  "incumbent_artifact_sha256": "398b92b295f43e04c7b4deab26ccdd2b1f40354474e2d187f453092dfa3a3ed9",
+  "kind": "bounded_weather_market_residual",
+  "logit_cap": 0.15,
+  "model_id": "helsinki_bounded_market_residual_c015_symmetric_v1",
+  "multiple_testing_adjustment": null,
+  "replacement_selected": false,
+  "research_artifact_sha256": "3d57f1ce9eadeb11d3699df9617d44c0d2b55814fb0250847708f4bfb2ec2cd0",
+  "selection_rule": "within the monotone bounded market-plus-weather family, minimize worst-target-date checkpoint logloss; ROI is not used",
+  "train_end": "2026-07-29",
+  "train_rows_unique": 598,
+  "train_start": "2026-07-15",
+  "train_target_dates": 14
+}

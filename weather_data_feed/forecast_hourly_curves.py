@@ -43,6 +43,7 @@ def build_hourly_curve(
     temperatures_f: Iterable[Any],
     *,
     precipitation_probability_pct: Iterable[Any] | None = None,
+    shortwave_radiation_wm2: Iterable[Any] | None = None,
     cloud_cover_pct: Iterable[Any] | None = None,
     wind_speed_10m_kt: Iterable[Any] | None = None,
     wind_direction_10m_deg: Iterable[Any] | None = None,
@@ -52,6 +53,7 @@ def build_hourly_curve(
     temp_values = list(temperatures_f)
     optional = {
         "precipitation_probability_pct": list(precipitation_probability_pct or []),
+        "shortwave_radiation_wm2": list(shortwave_radiation_wm2 or []),
         "cloud_cover_pct": list(cloud_cover_pct or []),
         "wind_speed_10m_kt": list(wind_speed_10m_kt or []),
         "wind_direction_10m_deg": list(wind_direction_10m_deg or []),

@@ -427,6 +427,8 @@ def test_active_bracket_archive_keeps_previous_no_covered_across_cross(monkeypat
     official_center = next(row for row in after if row["bracket"] == "34")
     assert official_center["schema_version"] == "fast_source_active_bracket_book_v2"
     assert official_center["capture_anchor_values"] == {"source": 35, "official": 34}
+    assert official_center["yes_token_id"] == "yes-34"
+    assert official_center["no_token_id"] == "no-34"
     assert {reason["anchor_kind"] for reason in official_center["capture_reasons"]} == {
         "source",
         "official",

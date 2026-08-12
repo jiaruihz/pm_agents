@@ -1,11 +1,14 @@
 import json
+import math
 from datetime import datetime, timezone
 
 import pytest
 
 from src.strategies.weather_city_probability_shadow.core import InputNotReady
 from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
+from src.strategies.weather_city_probability_shadow.helsinki import _offset_probability
 from src.strategies.weather_city_probability_shadow.helsinki import _quote
+from src.strategies.weather_city_probability_shadow.helsinki import _yes_quote_from_no_quote
 
 
 def test_one_sided_near_binary_quote_is_valid_market_state(tmp_path):
@@ -56,15 +59,93 @@ def test_one_sided_near_binary_bid_is_valid_but_not_executable(tmp_path):
     assert quote["best_ask"] is None
 
 
+def test_yes_quote_is_the_executable_complement_of_no_book():
+    quote = {
+        "outcome": "no",
+        "condition_id": "condition",
+        "token_id": "no-token",
+        "no_token_id": "no-token",
+        "yes_token_id": "yes-token",
+        "book_snapshot_id": "parent-book",
+        "best_bid": 0.72,
+        "best_ask": 0.76,
+        "raw": {
+            "bids": [{"price": 0.72, "size": 8.0}, {"price": 0.70, "size": 4.0}],
+            "asks": [{"price": 0.76, "size": 6.0}],
+        },
+    }
+
+    yes = _yes_quote_from_no_quote(quote)
+
+    assert yes["outcome"] == "yes"
+    assert yes["token_id"] == "yes-token"
+    assert yes["complement_parent_book_snapshot_id"] == "parent-book"
+    assert yes["book_snapshot_id"] != "parent-book"
+    assert yes["best_ask"] == pytest.approx(0.28)
+    assert yes["best_bid"] == pytest.approx(0.24)
+    assert yes["raw"]["asks"][0] == {"price": pytest.approx(0.28), "size": 8.0}
+
+
+def test_bounded_residual_cannot_move_market_by_more_than_cap_in_logit_space():
+    artifact = {"kind": "bounded_weather_market_residual", "logit_cap": 0.25}
+    probability = _offset_probability(
+        artifact, {"weather_probability": 0.01}, market_p=0.8
+    )
+
+    market_logit = math.log(0.8 / 0.2)
+    model_logit = math.log(probability / (1 - probability))
+    assert 0 < market_logit - model_logit <= 0.25
+
+
+def test_quote_uses_response_availability_and_exact_fmi_checkpoint(tmp_path):
+    book_dir = tmp_path / "books"
+    book_dir.mkdir()
+    common = {
+        "target_date": "2026-08-11",
+        "bracket": "18",
+        "outcome": "no",
+        "book_status": "ok",
+        "condition_id": "condition",
+        "token_id": "no-token",
+        "market_unit": "C",
+        "summary": {"best_bid": 0.50, "best_ask": 0.55},
+        "raw": {"bids": [{"price": 0.50, "size": 10}], "asks": [{"price": 0.55, "size": 10}]},
+    }
+    response_after_decision = {
+        **common,
+        "book_fetched_at_utc": "2026-08-11T08:01:59Z",
+        "ts_utc": "2026-08-11T08:03:00Z",
+        "source_obs_ts_utc": "2026-08-11T08:00:00Z",
+        "capture_reasons": [{"anchor_kind": "official", "anchor_value": 18, "relative_offset": 0}],
+    }
+    response_before_decision = {
+        **common,
+        "book_fetched_at_utc": "2026-08-11T08:01:00Z",
+        "ts_utc": "2026-08-11T08:02:00Z",
+        "source_obs_ts_utc": "2026-08-11T08:00:00Z",
+        "capture_reasons": [{"anchor_kind": "official", "anchor_value": 18, "relative_offset": 0}],
+    }
+    (book_dir / "2026-08-11.jsonl").write_text(
+        json.dumps(response_before_decision) + "\n" + json.dumps(response_after_decision) + "\n"
+    )
+
+    quote = _quote(
+        {"book_dir": str(book_dir)},
+        "2026-08-11",
+        18,
+        as_of=datetime(2026, 8, 11, 8, 2, 30, tzinfo=timezone.utc),
+        source_obs_ts_utc="2026-08-11T08:00:00Z",
+    )
+
+    assert quote["book_fetched_at_utc"] == "2026-08-11T08:01:00Z"
+    assert quote["book_available_at_utc"] == "2026-08-11T08:02:00Z"
+
+
 def test_insufficient_fmi_history_is_coverage_blocker(monkeypatch, tmp_path):
     decision = datetime(2026, 8, 2, 7, 10, tzinfo=timezone.utc)
     monkeypatch.setattr(
-        "src.strategies.weather_city_probability_shadow.helsinki._verify_artifact",
-        lambda _spec: tmp_path / "artifact.joblib",
-    )
-    monkeypatch.setattr(
-        "src.strategies.weather_city_probability_shadow.helsinki.joblib.load",
-        lambda _path: {},
+        "src.strategies.weather_city_probability_shadow.helsinki._load_artifact",
+        lambda _spec: {},
     )
     monkeypatch.setattr(
         "src.strategies.weather_city_probability_shadow.helsinki._official_helsinki_as_of",
@@ -72,15 +153,6 @@ def test_insufficient_fmi_history_is_coverage_blocker(monkeypatch, tmp_path):
             "running_max_c": 20.0,
             "current_temp_c": 19.5,
             "_input_ref": {"physical_path": "official.jsonl", "physical_line": 1},
-        },
-    )
-    monkeypatch.setattr(
-        "src.strategies.weather_city_probability_shadow.helsinki._quote",
-        lambda *_args, **_kwargs: {
-            "book_fetched_at_utc": decision.isoformat(),
-            "source_obs_ts_utc": decision.isoformat(),
-            "book_snapshot_id": "book",
-            "_input_ref": {"physical_path": "book.jsonl", "physical_line": 1},
         },
     )
     monkeypatch.setattr(

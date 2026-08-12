@@ -465,9 +465,15 @@ def summarize_book(raw: dict[str, Any], top_n: int = 20) -> dict[str, Any]:
 
 
 def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0, top_n: int = 20) -> dict[str, Any]:
-    fetched_at = iso()
+    request_started_at = iso()
     if not token_id:
-        return {"status": "missing_token", "fetched_at_utc": fetched_at, "summary": {}, "raw": {}}
+        return {
+            "status": "missing_token",
+            "request_started_at_utc": request_started_at,
+            "fetched_at_utc": iso(),
+            "summary": {},
+            "raw": {},
+        }
     proxy_url = market_proxy_url(proxy or None)
     url = f"{PM_CLOB_URL.rstrip('/')}/book"
     try:
@@ -480,7 +486,8 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
         if response.status_code != 200:
             return {
                 "status": "fetch_failed",
-                "fetched_at_utc": fetched_at,
+                "request_started_at_utc": request_started_at,
+                "fetched_at_utc": iso(),
                 "http_status": response.status_code,
                 "error": response.text[:240],
                 "proxy_used": proxy_url,
@@ -491,7 +498,8 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
         summary = summarize_book(raw, top_n=top_n)
         return {
             "status": "ok",
-            "fetched_at_utc": fetched_at,
+            "request_started_at_utc": request_started_at,
+            "fetched_at_utc": iso(),
             "http_status": response.status_code,
             "proxy_used": proxy_url,
             "summary": summary,
@@ -500,7 +508,8 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
     except Exception as exc:  # noqa: BLE001
         return {
             "status": "fetch_failed",
-            "fetched_at_utc": fetched_at,
+            "request_started_at_utc": request_started_at,
+            "fetched_at_utc": iso(),
             "error": f"{type(exc).__name__}: {exc}",
             "proxy_used": proxy_url,
             "summary": {},
@@ -939,6 +948,8 @@ def build_active_bracket_book_rows(
                     "market_id": token.market_id,
                     "condition_id": token.condition_id,
                     "token_id": token.no_token_id,
+                    "yes_token_id": token.yes_token_id,
+                    "no_token_id": token.no_token_id,
                     "outcome": "no",
                     "book_status": book.get("status"),
                     "book_fetched_at_utc": book.get("fetched_at_utc"),

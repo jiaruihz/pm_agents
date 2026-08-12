@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from scripts.analysis.reheat_risk import research_helsinki_market_expression_v2 as v2
+from scripts.analysis.reheat_risk.evaluate_helsinki_market_expression_strategy import (
+    sweep_asks,
+)
 
 
 def _rows() -> pd.DataFrame:
@@ -53,3 +57,26 @@ def test_date_x_entries_keeps_first_decision_per_date_and_x() -> None:
         "decision_ts_utc",
     ].iloc[0]
     assert first == pd.Timestamp("2026-01-01T00:00Z")
+
+
+def test_bounded_weather_residual_respects_logit_cap() -> None:
+    rows = pd.DataFrame(
+        {"market_probability": [0.8], "p_break_v7": [0.01]}
+    )
+    probability, joint = v2.predict_candidate(
+        {"kind": "bounded_weather_market_residual", "logit_cap": 0.15}, rows
+    )
+    market_logit = np.log(0.8 / 0.2)
+    model_logit = np.log(probability[0] / (1 - probability[0]))
+    assert joint is None
+    assert 0 < market_logit - model_logit <= 0.15
+
+
+def test_strategy_sweeps_five_share_depth_and_fee_per_level() -> None:
+    result = sweep_asks(
+        [{"price": 0.40, "size": 2.0}, {"price": 0.50, "size": 5.0}],
+        shares=5.0,
+    )
+    assert result is not None
+    assert result["entry_vwap"] == pytest.approx(0.46)
+    assert result["cash_cost"] > 5 * result["entry_vwap"]

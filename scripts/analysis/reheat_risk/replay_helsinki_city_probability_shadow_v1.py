@@ -39,12 +39,50 @@ def _utc(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _historical_token_identity(
+    runtime_root: Path, target_date: str
+) -> dict[tuple[str, str], dict]:
+    """Load static YES/NO token identity from archived paper snapshots."""
+
+    date_stamp = target_date.replace("-", "")
+    roots = [
+        runtime_root / "strategy_snapshots/paper_snapshots",
+        runtime_root / "strategy_snapshots/paper_snapshots_partial",
+    ]
+    output: dict[tuple[str, str], dict] = {}
+    for root in roots:
+        for path in sorted(root.glob(f"*{date_stamp}*.json")):
+            try:
+                records = json.loads(path.read_text(encoding="utf-8")).get(
+                    "records", []
+                )
+            except (OSError, json.JSONDecodeError):
+                continue
+            for row in records:
+                if (
+                    row.get("city") == "Helsinki"
+                    and row.get("target_date") == target_date
+                    and row.get("yes_token_id")
+                    and row.get("no_token_id")
+                ):
+                    output[(target_date, str(row.get("bracket")))] = row
+            if output:
+                break
+        if output:
+            break
+    return output
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-date", default="2026-07-31")
     parser.add_argument("--config", default="configs/weather/city_probability_shadow_v2.json")
     parser.add_argument(
         "--runtime-root", default="/Volumes/jrs/weather_data_feed_service_runtime"
+    )
+    parser.add_argument(
+        "--market-index",
+        help="Static token-identity cache; defaults to the Helsinki collector cache.",
     )
     parser.add_argument(
         "--start-utc",
@@ -59,6 +97,10 @@ def main() -> None:
     config = json.loads((ROOT / args.config).read_text(encoding="utf-8"))
     profile = copy.deepcopy(next(p for p in config["profiles"] if p["city"] == "Helsinki"))
     runtime_root = Path(args.runtime_root)
+    market_index_path = Path(args.market_index) if args.market_index else (
+        runtime_root
+        / "output/helsinki_pre_cross_active_ladder_shadow/market_index.json"
+    )
     book_path = (
         runtime_root / "output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books"
         / f"{args.target_date}.jsonl"
@@ -75,7 +117,7 @@ def main() -> None:
         if row.get("target_date") == args.target_date
         and row.get("outcome") == "no"
         and row.get("book_status") == "ok"
-        and _utc(row["book_fetched_at_utc"]) >= forward_start
+        and _utc(row["ts_utc"]) >= forward_start
     ]
     books_by_source: dict[str, list[dict]] = {}
     for row in books:
@@ -86,13 +128,24 @@ def main() -> None:
         row for row in _rows(official_path)
         if row.get("city") == "Helsinki" and row.get("target_date") == args.target_date
     ]
+    market_index = json.loads(market_index_path.read_text(encoding="utf-8"))
+    token_identity = {
+        (str(row.get("target_date")), str(row.get("bracket"))): row
+        for row in market_index.get("markets") or []
+        if row.get("yes_token_id") and row.get("no_token_id")
+    }
+    token_identity.update(_historical_token_identity(runtime_root, args.target_date))
     adapter = HelsinkiRemainingHeatAdapter()
     replay_config = {
+        "schema_version": config["schema_version"],
+        "output_schema_version": config["output_schema_version"],
+        "output_schema_fingerprint": config["output_schema_fingerprint"],
         "execution_mode": "zero_notional_shadow",
         "orders_submitted": 0,
         "output_dir": str(output_dir),
         "profiles": [profile],
     }
+    checkpoint_blockers: list[dict[str, str]] = []
 
     with tempfile.TemporaryDirectory() as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -104,8 +157,14 @@ def main() -> None:
 
         for source_ts, source_books in sorted(books_by_source.items()):
             selected = None
-            for book in sorted(source_books, key=lambda row: _utc(row["book_fetched_at_utc"])):
-                decision = _utc(book["book_fetched_at_utc"])
+            for book in sorted(source_books, key=lambda row: _utc(row["ts_utc"])):
+                decision = _utc(book["ts_utc"])
+                source_detect = _utc(book["source_detect_ts_utc"])
+                source_to_book_lag = (decision - source_detect).total_seconds()
+                if not 0 <= source_to_book_lag <= float(
+                    profile.get("max_source_to_book_lag_seconds", 120.0)
+                ):
+                    continue
                 official = [
                     row for row in official_rows
                     if _utc(row["fetched_at_utc"]) <= decision
@@ -114,12 +173,24 @@ def main() -> None:
                 if not official:
                     continue
                 selected_official = max(official, key=lambda row: _utc(row["fetched_at_utc"]))
-                expected_bracket = int(round(float(selected_official["running_max_c"])))
-                if str(book.get("bracket")) == str(expected_bracket):
-                    selected = (book, decision, selected_official)
+                expected_bracket = str(int(round(float(selected_official["running_max_c"]))))
+                identity = token_identity.get((args.target_date, expected_bracket))
+                if str(book.get("bracket")) == expected_bracket and identity:
+                    enriched_book = {
+                        **book,
+                        "yes_token_id": identity["yes_token_id"],
+                        "no_token_id": identity["no_token_id"],
+                    }
+                    selected = (enriched_book, decision, selected_official)
                     break
             if selected is None:
-                raise RuntimeError(f"no PIT current-bracket book for source checkpoint {source_ts}")
+                checkpoint_blockers.append(
+                    {
+                        "source_obs_ts_utc": source_ts,
+                        "reason": "no_pit_official_anchor_book_or_token_identity",
+                    }
+                )
+                continue
             book, decision, selected_official = selected
             temp_cache.write_text(
                 json.dumps({"records": [selected_official]}) + "\n", encoding="utf-8"
@@ -142,6 +213,8 @@ def main() -> None:
         "forward_start_utc": profile["forward_start_utc"],
         "raw_book_rows": len(books),
         "source_checkpoints": len(books_by_source),
+        "blocked_source_checkpoints": len(checkpoint_blockers),
+        "checkpoint_blockers": checkpoint_blockers,
         "replayed_checkpoints": len(checkpoint_status),
         "evaluation_rows": len(evaluations),
         "scored_rows": sum(r["evaluation_status"] == "scored" for r in evaluations),

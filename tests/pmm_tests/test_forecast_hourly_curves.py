@@ -45,6 +45,17 @@ def _row(
     )
 
 
+def test_hourly_curve_preserves_shortwave_radiation() -> None:
+    curve = build_hourly_curve(
+        ["2026-08-12T10:00", "2026-08-12T11:00"],
+        [65.0, 67.0],
+        shortwave_radiation_wm2=[125.0, 250.0],
+    )
+
+    assert curve[0]["shortwave_radiation_wm2"] == 125.0
+    assert curve[1]["shortwave_radiation_wm2"] == 250.0
+
+
 def test_curve_capture_is_immutable_and_preserves_exact_hash_first_seen(tmp_path) -> None:
     first = write_forecast_hourly_curve_capture(
         tmp_path,

@@ -1015,6 +1015,7 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
     times = hourly.get("time", []) or []
     temps = hourly.get("temperature_2m", []) or []
     precip = hourly.get("precipitation_probability", []) or []
+    radiation = hourly.get("shortwave_radiation", []) or []
     cloud = hourly.get("cloud_cover", []) or []
     wind_speed = hourly.get("wind_speed_10m", []) or []
     wind_dir = hourly.get("wind_direction_10m", []) or []
@@ -1047,6 +1048,7 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
         times,
         temps,
         precipitation_probability_pct=precip,
+        shortwave_radiation_wm2=radiation,
         cloud_cover_pct=cloud,
         wind_speed_10m_kt=wind_speed,
         wind_direction_10m_deg=wind_dir,
@@ -1251,7 +1253,7 @@ def _refresh_live_forecast(client, model, city, cfg, target_date):
     url = f"https://api.open-meteo.com/v1/{model}"
     params = {
         "latitude": cfg["lat"], "longitude": cfg["lon"],
-        "hourly": "temperature_2m,precipitation_probability,cloud_cover,wind_speed_10m,wind_direction_10m",
+        "hourly": "temperature_2m,shortwave_radiation,precipitation_probability,cloud_cover,wind_speed_10m,wind_direction_10m",
         "temperature_unit": "fahrenheit", "wind_speed_unit": "kn",
         "timezone": "auto",
         "start_date": target_date, "end_date": target_date,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -13,6 +13,10 @@ import numpy as np
 import pandas as pd
 
 from weather_data_feed.input_catalog import JsonlInputCatalog
+from weather_data_feed.helsinki_remaining_heat_features import (
+    build_fmi_remaining_heat_features,
+    build_forecast_remaining_heat_features,
+)
 
 from .core import CityScore, InputNotReady
 
@@ -52,11 +56,51 @@ def _verify_artifact(spec: dict[str, Any]) -> Path:
     return path
 
 
+def _load_artifact(spec: dict[str, Any]) -> dict[str, Any]:
+    path = _verify_artifact(spec)
+    if path.suffix.lower() == ".json":
+        payload = _read_json(path)
+    else:
+        payload = joblib.load(path)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"unsupported Helsinki artifact payload: {path}")
+    return payload
+
+
 def _sigmoid(value: float) -> float:
     return 1.0 / (1.0 + math.exp(-max(-35.0, min(35.0, value))))
 
 
 def _offset_probability(artifact: dict[str, Any], features: dict[str, Any], market_p: float) -> float:
+    if artifact.get("kind") == "fitted_weather_reliability":
+        scale = float(artifact["gap_scale"])
+        reliability = float(artifact["weather_reliability"])
+        weather_p = float(features["weather_probability"])
+        market_logit = math.log(
+            np.clip(market_p, 1e-6, 1 - 1e-6)
+            / np.clip(1 - market_p, 1e-6, 1)
+        )
+        weather_logit = math.log(
+            np.clip(weather_p, 1e-6, 1 - 1e-6)
+            / np.clip(1 - weather_p, 1e-6, 1)
+        )
+        correction = reliability * scale * math.tanh(
+            (weather_logit - market_logit) / scale
+        )
+        return _sigmoid(market_logit + correction)
+    if artifact.get("kind") == "bounded_weather_market_residual":
+        cap = float(artifact["logit_cap"])
+        weather_p = float(features["weather_probability"])
+        market_logit = math.log(
+            np.clip(market_p, 1e-6, 1 - 1e-6)
+            / np.clip(1 - market_p, 1e-6, 1)
+        )
+        weather_logit = math.log(
+            np.clip(weather_p, 1e-6, 1 - 1e-6)
+            / np.clip(1 - weather_p, 1e-6, 1)
+        )
+        correction = cap * math.tanh((weather_logit - market_logit) / cap)
+        return _sigmoid(market_logit + correction)
     names = artifact["features"]
     raw = np.asarray([features.get(name, np.nan) for name in names], dtype=float)
     median = np.asarray([artifact["median"][name] for name in names], dtype=float)
@@ -159,67 +203,32 @@ def _latest_forecast(root: Path, target_date: str, decision: datetime) -> dict[s
     }
 
 
-def _forecast_features(row: dict[str, Any], decision: datetime, boundary: float, current_temp: float) -> dict[str, Any]:
-    tz = ZoneInfo("Europe/Helsinki")
-    local_now = decision.astimezone(tz).replace(tzinfo=None)
-    curve = row["hourly_curve"]
-    times = [datetime.fromisoformat(x["time_local"]) for x in curve]
-    temps = np.asarray([(float(x["temperature_f"]) - 32) * 5 / 9 for x in curve])
-    hours = np.asarray([(t - local_now).total_seconds() / 3600 for t in times])
-    current = float(np.interp(0.0, hours, temps))
-    future_mask = hours >= 0
-    if not future_mask.any():
-        raise RuntimeError("forecast curve has no future hours")
-    future_temps = temps[future_mask]
-    future_hours = hours[future_mask]
-    peak_idx = int(np.argmax(future_temps))
-    peak = float(future_temps[peak_idx])
-    peak_h = float(future_hours[peak_idx])
-    cloud = np.asarray([float(x.get("cloud_cover_pct") or 0) for x in curve])[future_mask]
-    wind = np.asarray([float(x.get("wind_speed_10m_kt") or 0) * 1.852 for x in curve])[future_mask]
-    above = np.maximum(future_temps - boundary, 0)
-    return {
-        "forecast_available": 1.0,
-        "forecast_peak_h": peak_h,
-        "forecast_run_age_h": (decision - pd.Timestamp(row["available_at_utc"]).to_pydatetime()).total_seconds() / 3600,
-        "forecast_current_innovation_c": current_temp - current,
-        "forecast_day_peak_margin_vs_running_c": peak - (boundary - 0.5),
-        "forecast_future_peak_margin_vs_running_c": peak - (boundary - 0.5),
-        "forecast_future_peak_margin_vs_boundary_c": peak - boundary,
-        "forecast_signed_minutes_to_day_peak": peak_h * 60,
-        "forecast_minutes_to_future_peak": max(0.0, peak_h * 60),
-        "forecast_future_heat_area_above_boundary": float(np.trapezoid(above, future_hours)) if len(above) > 1 else 0.0,
-        "forecast_future_hours_above_boundary": float(np.sum(above > 0)),
-        "forecast_future_cloud_mean_pct": float(np.mean(cloud)),
-        "forecast_future_wind_mean_kmh": float(np.mean(wind)),
-        "forecast_day_peak_passed": float(peak_h < 0),
-        "forecast_minutes_since_day_peak": max(0.0, -peak_h * 60),
-        "forecast_minutes_until_day_peak": max(0.0, peak_h * 60),
-        "forecast_future_peak_discount_from_day_peak_c": 0.0,
-        "forecast_future_reheat_strength_c": peak - current,
-        "forecast_future_peak_drop_to_eod_c": peak - float(future_temps[-1]),
-        "forecast_future_heat_integral_c_h": float(np.trapezoid(np.maximum(future_temps-current, 0), future_hours)) if len(future_temps)>1 else 0.0,
-        "forecast_future_above_boundary_duration_h": float(np.sum(above > 0)),
-    }
-
-
 def _quote(
     profile: dict[str, Any],
     target_date: str,
     bracket: int,
     as_of: datetime | None = None,
+    source_obs_ts_utc: str | None = None,
 ) -> dict[str, Any]:
     catalog = JsonlInputCatalog()
     selected = catalog.latest_from_discovered_journals(
         Path(profile["book_dir"]),
         pattern="*.jsonl",
         as_of=as_of or datetime.now(tz=ZoneInfo("UTC")),
-        available_field="book_fetched_at_utc",
+        # `ts_utc` is written only after the HTTP response has been received and
+        # the active-ladder row has been assembled.  The historical
+        # `book_fetched_at_utc` field was request-start time and is not a valid
+        # PIT availability clock.
+        available_field="ts_utc",
         predicate=lambda x: (
             x.get("target_date") == target_date
             and str(x.get("bracket")) == str(bracket)
             and x.get("outcome") == "no"
             and x.get("book_status") == "ok"
+            and (
+                source_obs_ts_utc is None
+                or str(x.get("source_obs_ts_utc")) == source_obs_ts_utc
+            )
         ),
     )
     if selected is None:
@@ -249,9 +258,16 @@ def _quote(
         else "one_sided_ask_only" if ask_value is not None
         else "one_sided_bid_only"
     )
+    market_unit = str(row.get("market_unit") or "").upper()
+    if market_unit and market_unit != "C":
+        raise RuntimeError(
+            f"Helsinki market lattice must be Celsius, got {market_unit}"
+        )
     snapshot_payload = {
         "condition_id": row.get("condition_id"),
         "token_id": row.get("token_id"),
+        "yes_token_id": row.get("yes_token_id"),
+        "no_token_id": row.get("no_token_id") or row.get("token_id"),
         "ts_utc": row.get("ts_utc"),
         "source_obs_ts_utc": row.get("source_obs_ts_utc"),
         "raw": row.get("raw"),
@@ -273,7 +289,68 @@ def _quote(
         "market_probability_upper": ask_value if ask_value is not None else 1.0,
         "execution_status": "executable_ask" if ask_value is not None else "not_executable_no_ask",
         "book_snapshot_id": snapshot_id,
+        "book_available_at_utc": row.get("ts_utc"),
         "quote_row_ts_utc": row.get("ts_utc"),
+        "yes_token_id": row.get("yes_token_id"),
+        "no_token_id": row.get("no_token_id") or row.get("token_id"),
+    }
+
+
+def _yes_quote_from_no_quote(quote: dict[str, Any]) -> dict[str, Any]:
+    """Return the executable complementary YES view of one binary CLOB book."""
+
+    raw = quote.get("raw") or {}
+    yes_asks = [
+        {"price": 1.0 - float(row["price"]), "size": float(row["size"])}
+        for row in raw.get("bids") or []
+    ]
+    yes_bids = [
+        {"price": 1.0 - float(row["price"]), "size": float(row["size"])}
+        for row in raw.get("asks") or []
+    ]
+    yes_asks.sort(key=lambda row: row["price"])
+    yes_bids.sort(key=lambda row: row["price"], reverse=True)
+    best_ask = yes_asks[0]["price"] if yes_asks else None
+    best_bid = yes_bids[0]["price"] if yes_bids else None
+    yes_token_id = str(quote.get("yes_token_id") or "") or None
+    parent_snapshot_id = quote.get("book_snapshot_id")
+    yes_snapshot_id = hashlib.sha256(
+        json.dumps(
+            {
+                "parent_book_snapshot_id": parent_snapshot_id,
+                "condition_id": quote.get("condition_id"),
+                "token_id": yes_token_id,
+                "outcome": "yes",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return {
+        **quote,
+        "outcome": "yes",
+        "token_id": yes_token_id,
+        "best_ask": best_ask,
+        "best_bid": best_bid,
+        "raw": {**raw, "asks": yes_asks, "bids": yes_bids},
+        "book_snapshot_id": yes_snapshot_id,
+        "complement_parent_book_snapshot_id": parent_snapshot_id,
+        "execution_status": (
+            "executable_ask" if best_ask is not None else "not_executable_yes_ask"
+        ),
+        "market_probability_lower": 1.0
+        - float(quote.get("market_probability_upper", quote.get("best_ask", 1.0))),
+        "market_probability_upper": 1.0
+        - float(quote.get("market_probability_lower", quote.get("best_bid", 0.0))),
+        "quote_state": (
+            "two_sided"
+            if best_ask is not None and best_bid is not None
+            else "one_sided_ask_only"
+            if best_ask is not None
+            else "one_sided_bid_only"
+            if best_bid is not None
+            else "empty"
+        ),
     }
 
 
@@ -315,22 +392,53 @@ class HelsinkiRemainingHeatAdapter:
         forward_start = pd.Timestamp(profile["forward_start_utc"]).to_pydatetime()
         if now < forward_start:
             return []
-        artifacts = {key: joblib.load(_verify_artifact(value)) for key, value in profile["artifacts"].items()}
+        artifacts = {
+            key: _load_artifact(value)
+            for key, value in profile["artifacts"].items()
+        }
         target_date = now.astimezone(ZoneInfo("Europe/Helsinki")).date().isoformat()
-        official = _official_helsinki_as_of(
+        source_history_now = _fmi_history(
+            Path(profile["source_journal"]), target_date, now
+        )
+        if len(source_history_now) < 4:
+            raise InputNotReady(
+                "insufficient_pit_source_history",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=now.isoformat(),
+                details={
+                    "source": "fmi",
+                    "available_unique_observations": len(source_history_now),
+                    "required_unique_observations": 4,
+                    "source_journal": profile["source_journal"],
+                },
+            )
+        trigger_source = source_history_now[-1]
+        source_obs_ts = str(trigger_source["observation_time_utc"])
+        official_now = _official_helsinki_as_of(
             Path(profile["observation_journal_dir"]), target_date, now
         )
-        if official is None:
+        if official_now is None:
             raise InputNotReady(
                 "awaiting_official_observation",
                 city="Helsinki",
                 target_date=target_date,
                 decision_ts_utc=now.isoformat(),
-                details={"observation_journal_dir": profile["observation_journal_dir"]},
+                details={
+                    "observation_journal_dir": profile["observation_journal_dir"]
+                },
             )
-        current_x = int(round(float(official["running_max_c"])))
-        quote = _quote(profile, target_date, current_x, now)
-        decision = pd.Timestamp(quote["book_fetched_at_utc"]).to_pydatetime()
+        # FMI first-seen decides *when* to recompute.  The exact-bracket
+        # expression remains anchored to the PIT official running maximum.
+        current_x = int(round(float(official_now["running_max_c"])))
+        quote = _quote(
+            profile,
+            target_date,
+            current_x,
+            now,
+            source_obs_ts_utc=source_obs_ts,
+        )
+        decision = pd.Timestamp(quote["book_available_at_utc"]).to_pydatetime()
         if decision < forward_start:
             return []
         book_age = (now - decision).total_seconds()
@@ -360,20 +468,24 @@ class HelsinkiRemainingHeatAdapter:
         official_bracket = int(round(float(official["running_max_c"])))
         if official_bracket != current_x:
             raise InputNotReady(
-                "anchor_capture_gap",
+                "anchor_clock_mismatch",
                 city="Helsinki",
                 target_date=target_date,
                 decision_ts_utc=decision.isoformat(),
                 details={
                     "book_expression_anchor": current_x,
-                    "official_anchor": official_bracket,
+                    "official_anchor_at_book_availability": official_bracket,
                     "book_input_ref": quote.get("_input_ref"),
                     "official_input_ref": official.get("_input_ref"),
                 },
             )
-        source_obs_ts = str(quote["source_obs_ts_utc"])
-        history = [row for row in _fmi_history(Path(profile["source_journal"]), target_date, decision)
-                   if str(row["observation_time_utc"]) <= source_obs_ts]
+        history = [
+            row
+            for row in _fmi_history(
+                Path(profile["source_journal"]), target_date, decision
+            )
+            if str(row["observation_time_utc"]) <= source_obs_ts
+        ]
         if len(history) < 4:
             raise InputNotReady(
                 "insufficient_pit_source_history",
@@ -389,47 +501,60 @@ class HelsinkiRemainingHeatAdapter:
                 },
             )
         source = history[-1]
+        if str(source["observation_time_utc"]) != source_obs_ts:
+            raise InputNotReady(
+                "source_book_clock_mismatch",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "book_source_obs_ts_utc": source_obs_ts,
+                    "latest_pit_source_obs_ts_utc": source.get("observation_time_utc"),
+                    "book_input_ref": quote.get("_input_ref"),
+                },
+            )
+        source_first_seen = pd.Timestamp(
+            source["source_first_seen_at_utc"]
+        ).to_pydatetime()
+        source_to_book_lag = (decision - source_first_seen).total_seconds()
+        max_source_to_book_lag = float(
+            profile.get("max_source_to_book_lag_seconds", 120.0)
+        )
+        if source_to_book_lag < 0 or source_to_book_lag > max_source_to_book_lag:
+            raise InputNotReady(
+                "source_book_clock_gap",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "source_first_seen_at_utc": source["source_first_seen_at_utc"],
+                    "book_available_at_utc": quote["book_available_at_utc"],
+                    "source_to_book_lag_seconds": source_to_book_lag,
+                    "max_source_to_book_lag_seconds": max_source_to_book_lag,
+                },
+            )
         market_p = (
             (quote["best_ask"] + quote["best_bid"]) / 2
             if quote["best_bid"] is not None and quote["best_ask"] is not None
             else None
         )
         temps = np.asarray([float(row["temp_c"]) for row in history])
-        local = decision.astimezone(ZoneInfo("Europe/Helsinki"))
-        features: dict[str, Any] = {
-            "official_running_max_c": float(official["running_max_c"]),
-            "fmi_running_max_c": float(np.max(temps)),
-            "pullback_depth_c": float(np.max(temps) - temps[-1]),
-            "distance_to_next_official_boundary_c": current_x + 0.5 - temps[-1],
-            "fmi_official_lattice_basis_c": math.floor(temps[-1] + 0.5) - current_x,
-            "source_to_official_level_basis_c": temps[-1] - float(official["current_temp_c"]),
-            "source_cadence_gap_min": 10.0,
-            "temp_delta_10m": temps[-1] - temps[-2],
-            "temp_delta_20m": temps[-1] - temps[-3],
-            "temp_slope_30m_cph": (temps[-1] - temps[-4]) * 2.0,
-            "temp_slope_60m_cph": temps[-1] - temps[max(0, len(temps)-7)],
-            "temp_acceleration_20m": (temps[-1]-temps[-2])-(temps[-2]-temps[-3]),
-            "minutes_since_strict_high": float(official.get("minutes_since_last_strict_new_high") or 0),
-            "plateau_duration_min": float(official.get("minutes_since_last_running_max") or 0),
-            "relative_humidity_pct": official.get("relative_humidity_pct"),
-            "dewpoint_depression_c": float(official.get("dewpoint_depression_f") or 0) * 5/9,
-            "wind_speed_ms": float(source.get("wind_speed_kt") or 0) * 0.514444,
-            "pressure_hpa": source.get("pressure_hpa"),
-            "cloud_cover_okta": {"CLR":0,"FEW":2,"SCT":4,"BKN":6,"OVC":8}.get(official.get("sky_cover_code")),
-            "precipitation_10m_mm": None,
-            "present_weather_code": float(bool(official.get("present_weather_codes"))),
-            "official_latest_pullback_c": float(official["running_max_c"])-float(official["current_temp_c"]),
-            "official_report_age_min": max(0.0, (decision-pd.Timestamp(official["last_obs_utc"]).to_pydatetime()).total_seconds()/60),
-            "fmi_minus_official_latest_temp_c": temps[-1]-float(official["current_temp_c"]),
-            "local_hour_sin": math.sin(2*math.pi*(local.hour+local.minute/60)/24),
-            "local_hour_cos": math.cos(2*math.pi*(local.hour+local.minute/60)/24),
-            "doy_sin": math.sin(2*math.pi*local.timetuple().tm_yday/365.25),
-            "doy_cos": math.cos(2*math.pi*local.timetuple().tm_yday/365.25),
-        }
+        features: dict[str, Any] = build_fmi_remaining_heat_features(
+            history,
+            official_running_max_c=float(official["running_max_c"]),
+        )
         forecast = _latest_forecast(Path(profile["forecast_curve_dir"]), target_date, decision)
-        features.update(_forecast_features(forecast, decision, current_x+0.5, temps[-1]))
+        features.update(
+            build_forecast_remaining_heat_features(
+                forecast,
+                decision=decision,
+                official_running_max_c=float(official["running_max_c"]),
+                current_temp_c=float(temps[-1]),
+            )
+        )
         features["path_state"] = _path_state(features)
         weather_p = _hgb_probability(artifacts["weather"], features)
+        features["weather_probability"] = weather_p
         features["weather_market_logit_gap"] = (
             math.log(np.clip(weather_p,1e-6,1-1e-6)/(1-np.clip(weather_p,1e-6,1-1e-6)))
             - math.log(market_p/(1-market_p))
@@ -443,20 +568,80 @@ class HelsinkiRemainingHeatAdapter:
         outputs = []
         for artifact_key in profile["expression_models"]:
             artifact = artifacts[artifact_key]
-            missing = [name for name in artifact["features"] if features.get(name) is None or not np.isfinite(features.get(name, np.nan))]
+            artifact_features = artifact.get("features") or []
+            weather_features = artifacts["weather"].get("features") or []
+            declared_features = list(dict.fromkeys([*weather_features, *artifact_features]))
+            missing = [
+                name
+                for name in declared_features
+                if features.get(name) is None
+                or not np.isfinite(features.get(name, np.nan))
+            ]
             probability = _offset_probability(artifact, features, market_p) if market_p is not None else None
-            outputs.append(CityScore(
-                city="Helsinki", target_date=target_date, decision_ts_utc=decision.isoformat(),
-                source_obs_ts_utc=source_obs_ts, current_bracket=current_x,
-                market_side="NO", market_probability=market_p, market_entry_price=quote["best_ask"],
-                model_probability=probability, model_id=str(artifact.get("model_id") or artifact.get("candidate_name")),
-                feature_coverage=1-len(missing)/len(artifact["features"]), missing_features=missing,
-                features={name: features.get(name) for name in artifact["features"]}, market=quote,
-                lineage={"source":"fmi","source_first_seen_at_utc":source["source_first_seen_at_utc"],
+            expression_sides = artifact.get("expression_sides") or ["NO"]
+            for market_side in expression_sides:
+                side_quote = (
+                    quote
+                    if market_side == "NO"
+                    else _yes_quote_from_no_quote(quote)
+                )
+                if market_side == "YES" and not side_quote.get("token_id"):
+                    raise InputNotReady(
+                        "missing_yes_token_identity",
+                        city="Helsinki",
+                        target_date=target_date,
+                        decision_ts_utc=decision.isoformat(),
+                        details={
+                            "condition_id": side_quote.get("condition_id"),
+                            "book_snapshot_id": side_quote.get("book_snapshot_id"),
+                            "book_input_ref": quote.get("_input_ref"),
+                        },
+                    )
+                side_market_p = (
+                    market_p
+                    if market_side == "NO" or market_p is None
+                    else 1 - market_p
+                )
+                side_probability = (
+                    probability
+                    if market_side == "NO" or probability is None
+                    else 1 - probability
+                )
+                outputs.append(
+                    CityScore(
+                        city="Helsinki",
+                        target_date=target_date,
+                        decision_ts_utc=decision.isoformat(),
+                        source_obs_ts_utc=source_obs_ts,
+                        current_bracket=current_x,
+                        market_side=market_side,
+                        market_probability=side_market_p,
+                        market_entry_price=side_quote["best_ask"],
+                        model_probability=side_probability,
+                        model_id=str(
+                            artifact.get("model_id")
+                            or artifact.get("candidate_name")
+                        ),
+                        feature_coverage=(
+                            1 - len(missing) / len(declared_features)
+                            if declared_features
+                            else 1.0
+                        ),
+                        missing_features=missing,
+                        features={
+                            name: features.get(name) for name in declared_features
+                        },
+                        market=side_quote,
+                        lineage={"source":"fmi","source_first_seen_at_utc":source["source_first_seen_at_utc"],
                          "source_payload_hash":source.get("payload_hash"),
                          "source_raw_payload_hash":source.get("raw_payload_hash"),
-                         "book_fetched_at_utc":quote["book_fetched_at_utc"],
-                         "book_snapshot_id":quote["book_snapshot_id"],
+                         "book_request_started_at_utc":quote.get("request_started_at_utc"),
+                         "book_fetched_at_utc":quote.get("book_fetched_at_utc"),
+                         "book_available_at_utc":quote["book_available_at_utc"],
+                         "source_to_book_lag_seconds":source_to_book_lag,
+                         "book_snapshot_id":side_quote["book_snapshot_id"],
+                         "feature_book_snapshot_id":quote["book_snapshot_id"],
+                         "execution_book_snapshot_id":side_quote["book_snapshot_id"],
                          "book_input_ref":quote.get("_input_ref"),
                          "official_source":official["source"],"official_last_obs_utc":official["last_obs_utc"],
                          "official_input_ref":official.get("_input_ref"),
@@ -466,13 +651,21 @@ class HelsinkiRemainingHeatAdapter:
                          "forecast_input_ref":forecast.get("_input_ref"),
                          "model_artifact_sha256":profile["artifacts"][artifact_key]["sha256"],
                          "source_lattice_anchor":int(math.floor(temps[-1] + 0.5)),
-                         "official_lattice_anchor":current_x,
+                         "official_lattice_anchor":int(round(float(official["running_max_c"]))),
                          "market_expression_anchor":current_x,
+                         "market_feature_role":"prior",
+                         "market_feature_clock":"decision_current",
+                         "trigger_role":"fmi_source_first_seen",
                          "profile_id":profile.get("profile_id", "helsinki_remaining_heat_v1"),
                          "weather_probability":weather_p,"path_state":features["path_state"]},
-                evaluation_status="scored" if market_p is not None else "not_scorable",
-                not_scorable_reason=(
-                    None if market_p is not None else "one_sided_market_probability_interval"
-                ),
-            ))
+                        evaluation_status=(
+                            "scored" if market_p is not None else "not_scorable"
+                        ),
+                        not_scorable_reason=(
+                            None
+                            if market_p is not None
+                            else "one_sided_market_probability_interval"
+                        ),
+                    )
+                )
         return outputs

@@ -413,7 +413,38 @@ class ShadowRuntime:
 
     @staticmethod
     def fee_per_share(price: float) -> float:
-        return 0.05 * price * (1.0 - price)
+        return round(0.05 * price * (1.0 - price), 5)
+
+    @classmethod
+    def sweep_ask_cost(
+        cls, levels: list[dict[str, Any]], shares: float
+    ) -> dict[str, float] | None:
+        """Compute the executable weather-market cost across real ask levels."""
+
+        if shares <= 0:
+            raise ValueError("selection_shares must be positive")
+        remaining = shares
+        notional = 0.0
+        fee = 0.0
+        for level in sorted(
+            levels or [], key=lambda row: float(row.get("price", 2.0))
+        ):
+            price = float(level.get("price", 0.0))
+            size = float(level.get("size", 0.0))
+            if not 0 < price < 1 or size <= 0:
+                continue
+            take = min(remaining, size)
+            notional += take * price
+            fee += take * cls.fee_per_share(price)
+            remaining -= take
+            if remaining <= 1e-9:
+                return {
+                    "entry_vwap": notional / shares,
+                    "fee_per_share": fee / shares,
+                    "effective_cost_per_share": (notional + fee) / shares,
+                    "cash_cost": notional + fee,
+                }
+        return None
 
     @property
     def output_schema_version(self) -> str:
@@ -535,14 +566,28 @@ class ShadowRuntime:
                 evaluation_id = hashlib.sha256(key.encode()).hexdigest()
                 if evaluation_id in seen:
                     continue
+                selection_shares = profile.get("selection_shares")
+                execution_cost = None
+                if selection_shares is not None:
+                    execution_cost = self.sweep_ask_cost(
+                        ((score.market.get("raw") or {}).get("asks") or []),
+                        float(selection_shares),
+                    )
+                elif score.market_entry_price is not None:
+                    fee_at_best = self.fee_per_share(score.market_entry_price)
+                    execution_cost = {
+                        "entry_vwap": score.market_entry_price,
+                        "fee_per_share": fee_at_best,
+                        "effective_cost_per_share": score.market_entry_price
+                        + fee_at_best,
+                        "cash_cost": None,
+                    }
                 fee = (
-                    self.fee_per_share(score.market_entry_price)
-                    if score.market_entry_price is not None
-                    else None
+                    execution_cost["fee_per_share"] if execution_cost else None
                 )
                 effective_cost = (
-                    score.market_entry_price + fee
-                    if score.market_entry_price is not None and fee is not None
+                    execution_cost["effective_cost_per_share"]
+                    if execution_cost
                     else None
                 )
                 edge_threshold = float(profile.get("edge_threshold", 0.0))
@@ -553,7 +598,7 @@ class ShadowRuntime:
                     and effective_cost is not None
                     else None
                 )
-                would_enter = edge is not None and edge >= edge_threshold
+                would_enter = edge is not None and edge > edge_threshold
                 row = {
                     **self._contract_fields("evaluation"),
                     "execution_mode": "zero_notional_shadow",
@@ -561,6 +606,13 @@ class ShadowRuntime:
                     "evaluation_id": evaluation_id,
                     **asdict(score),
                     "fee_per_share": fee,
+                    "selection_shares": selection_shares,
+                    "entry_vwap": (
+                        execution_cost["entry_vwap"] if execution_cost else None
+                    ),
+                    "cash_cost": (
+                        execution_cost["cash_cost"] if execution_cost else None
+                    ),
                     "effective_cost_per_share": effective_cost,
                     "edge_after_fee": edge,
                     "edge_threshold": edge_threshold,
