@@ -2,7 +2,7 @@
 
 > Living doc for modules [5][6]: live strategy realized performance, unsettled exposure, quasi-settlement, and strategy-instance attribution.
 > Current status: `current-reference` only after CLOB coverage gate passes for the reported window.
-> Last updated: 2026-06-09 Phase 4D pilot.
+> Last updated: 2026-08-12 CrossNO recent-accuracy attribution.
 
 ## Current Conclusion
 
@@ -17,6 +17,11 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 3. **`target_date` and `fill_date_bj` answer different questions.** Use `target_date` for strategy/weather attribution and `fill_date_bj` for wallet cashflow timing. Do not compare either directly to UI account equity.
 4. **Recent loss attribution is slice evidence, not broad model proof.** The 2026-06-07 loss report supports cohort/city/side triage and V2/YES caution, but not global claims like "all cities failed" or "BUY_YES must be permanently banned".
 5. **Instance attribution is mandatory.** `mid_price_core_v1_25_75`, `mid_price_core_v2_25_75`, `mid_price_core_v1_side_band`, and legacy maker_queue rows must not be blended into one action number.
+6. **CrossNO recent accuracy did not improve on the full 10-day denominator.** `2026-08-02..11` live expressions were
+   `32/39=82.05%`, below `2026-07-23..08-01` at `27/32=84.38%`. The last-five-date `19/21=90.48%`
+   spike is an inconclusive weather/short-window cluster, not a live promotion result. CrossNO rows from target date
+   2026-08-05 onward currently require stable `strategy_id=live_weather_edge_v1_c16645cc1165` because 60 fact rows
+   through 2026-08-12 have `instance_id=NULL`; instance-only reports silently omit them.
 
 ## Evidence Map
 
@@ -27,6 +32,7 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 | `docs/analysis/2026-06/2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | 2026-06 | 15d curve after history rebuild | snapshot |
 | `docs/analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | 2026-06 | three strategy instances after near-binary fix | snapshot |
 | `docs/analysis/2026-06/2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | 2026-06 | post-fix recent loss attribution by cohort/city/side/instance | snapshot |
+| `docs/analysis/2026-08/2026-08-12-performance-cross-no-recent-accuracy-attribution-v1.md` | 2026-07-09..08-11 | CrossNO signal/fill accuracy, engineering/data/weather attribution, and instance metadata gap | current snapshot |
 | `docs/archive/analysis/2026-05/2026-05-27-performance-live-full-research.md` | 2026-05 | early full live research | snapshot |
 
 ## Absorbed Historical Claims

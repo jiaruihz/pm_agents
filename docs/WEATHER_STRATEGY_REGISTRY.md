@@ -89,6 +89,15 @@ daily_low_temperature   Tmin 日内路径：双冷却窗口内判断是否会再
 
 ## 分支二：reheat_risk（[0] 事实 / [1]-[2] 模型与表达）
 
+> **CrossNO 2026-08-12 当前判断（supersedes 本节旧短窗数字）：** 最后 5 个 settled target dates
+> 的 live fill accuracy 为 `19/21=90.48%`，但 8/2–11 十日为 `32/39=82.05%`，低于前十日
+> `27/32=84.38%`；全 first-expression signal 的十日 delta 为 `-0.49pp`，5 日 delta `+4.55pp`
+> 且 CI 跨 0。启动期→当前约 4pp 的基线改善与 persistence/source/first-seen 工程 hardening 一致，
+> 最近 5 日额外抬升主要是 terminal false city-days 从 `5/21` 降到 `2/26` 的天气/小样本波动，
+> 不构成新 alpha。另有 8/5–12 共 60 条 CrossNO fact rows 的 `instance_id=NULL` metadata lineage
+> 缺口，按 stable strategy_id 读取后不影响本结论。状态仍为 `running probe / rejected-as-main-strategy /
+> inconclusive / no-live-change`。证据：[recent accuracy attribution](analysis/2026-08/2026-08-12-performance-cross-no-recent-accuracy-attribution-v1.md)。
+
 | 策略 / 家族 | 灵感 / 盈利规则 | 状态 | 是否可行（当前结论） | 血缘层 · 入口 doc |
 |---|---|---|---|---|
 | current_yes_fade_confirmed | 日内已回落后更稳健地买 current YES | **`historical tiny-live / current runtime verify`** | 2026-06 曾在 N100 tiny-live；2026-07-15 Mac 盘点未观察到对应 theta live process。保留策略与遥测，不从旧状态推断当前 live | [1]-[2] reheat_risk |
