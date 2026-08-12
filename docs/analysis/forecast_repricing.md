@@ -1,5 +1,18 @@
 # Forecast Repricing
 
+## Quote-level EV 目标修复（2026-08-12）
+
+旧55信号的低价尾档偏置已定位为模型目标错位：entry head预测`h60_relative_bid_move`，selector却把它
+当绝对现金markout；阈值又用假设best-bid全成交的selected ROI选择。现已重构为
+`forecast event × rung × legal post-only quote action`，直接训练30分钟ask-touch proxy下的每股美元EV，
+date→event→rung→action等权，并加入market-only/static-microstructure同分母基线与`NO_QUOTE`。
+
+Development expanding OOF为173,279 quote rows/5,117 events/42 dates，secondary reconstructed holdout为
+46,375/1,228/15；两者均0 admitted quotes。holdout touch head AUC/Brier=`0.8123/0.06601`，但成交后
+value head所有报价均为负。weather相对market-only仅development显著，holdout CI跨0；actual fills=0。
+结论：旧单腿maker expression判`rejected_for_expression`，新artifact可在zero-notional runner安全输出
+`NO_QUOTE`，不改live。详见 [quote-level EV retrain](2026-08/2026-08-12-forecast-repricing-quote-ev-retrain-v1.md)。
+
 ## Independent raw book / PIT clock repair（2026-08-11）
 
 历史重建器原先只从 strategy snapshots 生成 quote history，独立 canonical

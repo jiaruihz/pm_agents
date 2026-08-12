@@ -4,9 +4,12 @@ from argparse import Namespace
 import gzip
 import json
 from pathlib import Path
+import pandas as pd
 import pytest
+from sklearn.dummy import DummyClassifier, DummyRegressor
 
 from scripts.ops import weather_lmvm_forecast_repricing_shadow_v1 as shadow
+from weather_model_evaluation import forecast_repricing_quote_ev as quote_ev
 
 
 def test_default_forward_input_is_current_strategy_snapshot_root() -> None:
@@ -244,6 +247,94 @@ def test_completion_policy_builds_zero_notional_maker_trigger() -> None:
     assert intent["metadata"]["completion_hedge_after_actual_fill"] is True
     assert open_candidate is not None
     assert open_candidate["maker_limit_price"] == 0.10
+
+
+def test_quote_ev_policy_runs_in_zero_notional_runner() -> None:
+    def model(width: int, value: float) -> DummyRegressor:
+        return DummyRegressor(strategy="constant", constant=value).fit(
+            pd.DataFrame([[0.0] * width]), [value]
+        )
+
+    touch_features = pd.DataFrame(
+        [[0.0] * len(quote_ev.QUOTE_FEATURES), [1.0] * len(quote_ev.QUOTE_FEATURES)]
+    )
+    bundle = {
+        "schema_version": quote_ev.SCHEMA_VERSION,
+        "model_id": quote_ev.MODEL_ID,
+        "quote_actions": list(quote_ev.QUOTE_ACTIONS),
+        "quote_features": list(quote_ev.QUOTE_FEATURES),
+        "signal_ttl_min": 30,
+        "direct_model": model(len(quote_ev.QUOTE_FEATURES), 0.01),
+        "market_direct_model": model(len(quote_ev.MARKET_QUOTE_FEATURES), 0.0),
+        "market_static_direct_model": model(
+            len(quote_ev.MARKET_STATIC_QUOTE_FEATURES), 0.0
+        ),
+        "touch_model": DummyClassifier(strategy="constant", constant=1).fit(
+            touch_features, [0, 1]
+        ),
+        "value_model": model(len(quote_ev.QUOTE_FEATURES), 0.02),
+    }
+
+    def state(key: str, epoch: float, model_probs: tuple[float, float, float]) -> dict:
+        rungs = []
+        for index in range(3):
+            rungs.append(
+                {
+                    "condition_id": f"c{index}",
+                    "bracket": str(20 + index),
+                    "question": str(20 + index),
+                    "yes_token_id": f"token-{index}",
+                    "model_prob": model_probs[index],
+                    "market_prob": (0.2, 0.4, 0.4)[index],
+                    "yes_bid": (0.10, 0.28, 0.28)[index],
+                    "yes_ask": (0.15, 0.32, 0.32)[index],
+                    "yes_bid_size": 10.0,
+                    "yes_ask_size": 10.0,
+                    "tick_size": 0.01,
+                }
+            )
+        return {
+            "snapshot_id": f"snapshot-{key}",
+            "snapshot_ts_utc": "2026-08-10T10:00:00Z",
+            "decision_ts_utc": "2026-08-10T10:00:00Z",
+            "decision_epoch": epoch,
+            "clock_lineage_status": "collector_exact_joined_full_ladder_v1",
+            "source_path": f"/fixture/{key}.json",
+            "city": "London",
+            "target_date": "2026-08-11",
+            "event_slug": "london-aug-11",
+            "market_timezone": "Europe/London",
+            "forecast_source": "fixture",
+            "forecast_model": "fixture",
+            "model_version": "fixture-v1",
+            "forecast_state_key": key,
+            "lead_days": 1,
+            "rung_count": 3,
+            "rungs": rungs,
+        }
+
+    built = shadow.build_update(
+        state("before", 1_000.0, (0.2, 0.5, 0.3)),
+        state("after", 1_600.0, (0.4, 0.4, 0.2)),
+        bundle,
+    )
+    assert built is not None
+    update, bundles, intent, open_candidate = built
+    assert update["decision"] == "POST_MAKER"
+    assert update["policy_id"] == shadow.QUOTE_EV_POLICY_ID
+    assert len(bundles) == 3
+    assert intent is not None and intent["requested_size"] == 0.0
+    assert intent["execution_profile"] == "quote_ev_post_only_v1"
+    assert open_candidate is not None
+    assert open_candidate["quote_ev_policy_enabled"] is True
+    assert open_candidate["maker_limit_price"] < open_candidate["entry_ask"]
+    selected_bundle = next(
+        row for row in bundles if row["signal_candidate"]["selected"]
+    )
+    assert (
+        selected_bundle["signal_candidate"]["metadata"]["maker_limit_price"]
+        == open_candidate["maker_limit_price"]
+    )
 
 
 def test_current_snapshot_adapter_joins_canonical_full_ladder(

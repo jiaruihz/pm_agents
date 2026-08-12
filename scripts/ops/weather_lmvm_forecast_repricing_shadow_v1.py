@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 import gzip
 import hashlib
 import json
+import joblib
 import math
 from pathlib import Path
 import sys
@@ -54,6 +55,12 @@ from weather_model_evaluation.forecast_repricing_position import (  # noqa: E402
     score_runtime_pending_order,
     score_runtime_position,
 )
+from weather_model_evaluation.forecast_repricing_quote_ev import (  # noqa: E402
+    MODEL_ID as QUOTE_EV_MODEL_ID,
+    SCHEMA_VERSION as QUOTE_EV_SCHEMA_VERSION,
+    score_runtime_pending_quote,
+    score_runtime_quote_ev,
+)
 from weather_model_evaluation.first_seen_event_ladder_panel import (  # noqa: E402
     _book_clock_exact,
     _effective_yes_quote,
@@ -66,6 +73,7 @@ CLOCK_CONTRACT_VERSION = "weather_orderbook_capture_v3_available_clock"
 STRATEGY_KEY = "lmvm_forecast_innovation_single_yes_v1"
 POLICY_ID = "delta_model_minus_delta_market_argmax_v1"
 POSITION_POLICY_ID = "full_ladder_antitoxic_maker_position_v1"
+QUOTE_EV_POLICY_ID = "full_ladder_quote_ev_no_trade_capable_v1"
 FEATURE_SET_ID = canonical_json_hash(
     [
         "model_probability_before_after",
@@ -476,13 +484,18 @@ def build_update(
     paired = paired_rungs(previous, current)
     if len(paired) != len(current.get("rungs") or []):
         return None
-    policy_id = POSITION_POLICY_ID if position_policy is not None else POLICY_ID
+    quote_ev_policy = bool(
+        position_policy is not None
+        and position_policy.get("schema_version") == QUOTE_EV_SCHEMA_VERSION
+    )
+    policy_id = (
+        QUOTE_EV_POLICY_ID
+        if quote_ev_policy
+        else POSITION_POLICY_ID if position_policy is not None else POLICY_ID
+    )
     policy_rows: dict[str, dict[str, Any]] = {}
     if position_policy is not None:
-        scored_rows, selected = score_runtime_entry(
-            paired,
-            position_policy,
-            event_identity={
+        event_identity = {
                 "forecast_event_id": canonical_json_hash(
                     {
                         "stream": stream_key(current),
@@ -494,9 +507,25 @@ def build_update(
                 "target_date": current["target_date"],
                 "lead_days": current["lead_days"],
                 "snapshot_epoch": current["decision_epoch"],
-            },
-        )
-        policy_rows = {str(row["condition_id"]): row for row in scored_rows}
+                "feature_book_snapshot_id": current["snapshot_id"],
+            }
+        if quote_ev_policy:
+            scored_rows, selected = score_runtime_quote_ev(
+                paired, position_policy, event_identity=event_identity
+            )
+        else:
+            scored_rows, selected = score_runtime_entry(
+                paired, position_policy, event_identity=event_identity
+            )
+        for row in scored_rows:
+            condition = str(row["condition_id"])
+            incumbent = policy_rows.get(condition)
+            score = finite(row.get("predicted_agreement_proxy_ev"))
+            incumbent_score = finite(
+                None if incumbent is None else incumbent.get("predicted_agreement_proxy_ev")
+            )
+            if incumbent is None or (score is not None and (incumbent_score is None or score > incumbent_score)):
+                policy_rows[condition] = row
         paired = [
             {**rung, **policy_rows.get(str(rung["condition_id"]), {})}
             for rung in paired
@@ -570,7 +599,15 @@ def build_update(
     if position_policy is not None:
         model_id = str(position_policy["model_id"])
         artifact_id = str(position_policy.get("_artifact_sha256") or model_id)
-        if position_policy.get("primary_policy") == "full_ladder_completion_v1":
+        if quote_ev_policy:
+            feature_set_id = canonical_json_hash(
+                {
+                    "policy": QUOTE_EV_POLICY_ID,
+                    "features": position_policy["quote_features"],
+                    "quote_actions": position_policy["quote_actions"],
+                }
+            )
+        elif position_policy.get("primary_policy") == "full_ladder_completion_v1":
             feature_set_id = canonical_json_hash(
                 {
                     "primary_policy": "full_ladder_completion_v1",
@@ -622,7 +659,26 @@ def build_update(
                 "market_probability_before": rung["market_probability_before"],
             },
         )
-        quote = maker_quote(rung)
+        quote = (
+            {
+                "maker_limit_price": float(rung["quote_price"]),
+                "tick_size": float(rung["native_entry_tick"]),
+                "tick_size_source": str(rung["tick_lineage"]),
+                "visible_queue_ahead_shares": (
+                    finite(rung.get("yes_bid_size"))
+                    if math.isclose(
+                        float(rung["quote_price"]),
+                        float(rung["entry_bid"]),
+                        abs_tol=float(rung["native_entry_tick"]) / 10.0,
+                    )
+                    else 0.0
+                ),
+                "queue_evidence_status": "top_of_book_visible_only",
+                "maker_fill_status": "not_observable_without_order_or_trade_prints",
+            }
+            if quote_ev_policy
+            else maker_quote(rung)
+        )
         ask = float(rung["yes_ask"])
         entry_fee = weather_fee_per_share(ask)
         candidate = SignalCandidate.create(
@@ -677,6 +733,9 @@ def build_update(
                 "predicted_fill_adjusted_pnl": finite(
                     rung.get("predicted_fill_adjusted_pnl")
                 ),
+                "predicted_quote_ev": finite(rung.get("predicted_agreement_proxy_ev")),
+                "quote_action": rung.get("quote_action"),
+                "quote_price": finite(rung.get("quote_price")),
                 "entry_completion_cost_1tick_per_hedge_leg": finite(
                     rung.get("entry_completion_cost_1tick_per_hedge_leg")
                 ),
@@ -737,7 +796,26 @@ def build_update(
     }
     if selected_candidate is None or not selected_candidate.token_id or selected is None:
         return update, bundles, None, None
-    selected_quote = maker_quote(selected)
+    selected_quote = (
+        {
+            "maker_limit_price": float(selected["maker_limit_price"]),
+            "tick_size": float(selected["native_entry_tick"]),
+            "tick_size_source": str(selected["tick_lineage"]),
+            "visible_queue_ahead_shares": (
+                finite(selected.get("yes_bid_size"))
+                if math.isclose(
+                    float(selected["maker_limit_price"]),
+                    float(selected["entry_bid"]),
+                    abs_tol=float(selected["native_entry_tick"]) / 10.0,
+                )
+                else 0.0
+            ),
+            "queue_evidence_status": "top_of_book_visible_only",
+            "maker_fill_status": "not_observable_without_order_or_trade_prints",
+        }
+        if quote_ev_policy
+        else maker_quote(selected)
+    )
     completion_primary = (
         position_policy is not None
         and position_policy.get("primary_policy") == "full_ladder_completion_v1"
@@ -752,13 +830,15 @@ def build_update(
         execution_profile=(
             "full_ladder_completion_maker_trigger_v1"
             if completion_primary
+            else "quote_ev_post_only_v1"
+            if quote_ev_policy
             else "single_yes_antitoxic_best_bid_v1"
         ),
         max_cost=float(selected_quote["maker_limit_price"]),
         ttl_seconds=int(
             60
             * float(
-                position_policy.get("maker_quote_ttl_min", 60)
+                position_policy.get("signal_ttl_min", position_policy.get("maker_quote_ttl_min", 60))
                 if position_policy is not None
                 else 60
             )
@@ -787,6 +867,8 @@ def build_update(
             "predicted_touch_conditional_pnl"
         ),
         "predicted_fill_adjusted_pnl": selected.get("predicted_fill_adjusted_pnl"),
+        "predicted_quote_ev": selected.get("predicted_agreement_proxy_ev"),
+        "quote_action": selected.get("quote_action"),
     })
     open_candidate = {
         "candidate_id": selected_candidate.candidate_id,
@@ -795,13 +877,16 @@ def build_update(
         "bracket": selected_candidate.bracket,
         "decision_ts_utc": current["decision_ts_utc"],
         "decision_epoch": current["decision_epoch"],
-        "entry_bid": selected["yes_bid"],
-        "entry_ask": selected["yes_ask"],
-        "entry_ask_size": selected.get("yes_ask_size"),
-        "entry_fee_per_share": weather_fee_per_share(float(selected["yes_ask"])),
+        "entry_bid": selected["yes_bid"] if "yes_bid" in selected else selected["entry_bid"],
+        "entry_ask": selected["yes_ask"] if "yes_ask" in selected else selected["entry_ask"],
+        "entry_ask_size": selected.get("yes_ask_size", selected.get("entry_ask_size")),
+        "entry_fee_per_share": weather_fee_per_share(
+            float(selected["yes_ask"] if "yes_ask" in selected else selected["entry_ask"])
+        ),
         "token_id": selected_candidate.token_id,
         "position_policy_enabled": position_policy is not None,
-        "conditional_fill_assumption": position_policy is not None,
+        "conditional_fill_assumption": position_policy is not None and not quote_ev_policy,
+        "quote_ev_policy_enabled": quote_ev_policy,
         "entry_ladder": json_clean(paired) if position_policy is not None else [],
         **selected_quote,
     }
@@ -849,37 +934,52 @@ def markouts_for_state(
         rescored_touch_conditional_pnl = None
         rescored_fill_adjusted_pnl = None
         if position_policy is not None and candidate.get("position_policy_enabled"):
-            pending_decision = score_runtime_pending_order(
-                candidate,
-                list(rungs.values()),
-                position_policy,
-                elapsed_minutes=elapsed,
-            )
-            pending_order_action = pending_decision.action
-            pending_order_reason = pending_decision.reason
-            rescored_touch_probability = pending_decision.predicted_touch_probability
-            rescored_touch_conditional_pnl = (
-                pending_decision.predicted_touch_conditional_pnl
-            )
-            rescored_fill_adjusted_pnl = pending_decision.predicted_fill_adjusted_pnl
-            decision = score_runtime_position(
-                candidate,
-                list(rungs.values()),
-                position_policy,
-                elapsed_minutes=elapsed,
-            )
-            position_action = decision.action
-            position_reason = decision.reason
-            continuation_value = decision.predicted_incremental_exit_value
-            observed_relative = decision.observed_relative_markout
-            neighbor_propagation = decision.neighbor_propagation
-            if decision.action == "EXIT":
-                expired.append(candidate_id)
-            elif (
-                pending_decision.action == "CANCEL_MAKER"
-                and ask > maker_price
-            ):
-                expired.append(candidate_id)
+            if candidate.get("quote_ev_policy_enabled"):
+                pending = score_runtime_pending_quote(
+                    candidate,
+                    list(rungs.values()),
+                    position_policy,
+                    elapsed_signal_minutes=elapsed,
+                )
+                pending_order_action = str(pending["action"])
+                pending_order_reason = str(pending["reason"])
+                rescored_fill_adjusted_pnl = finite(pending.get("predicted_quote_ev"))
+                position_action = "AWAIT_ACTUAL_FILL"
+                position_reason = "position_clock_not_started_without_fill"
+                if pending_order_action == "CANCEL_MAKER":
+                    expired.append(candidate_id)
+            else:
+                pending_decision = score_runtime_pending_order(
+                    candidate,
+                    list(rungs.values()),
+                    position_policy,
+                    elapsed_minutes=elapsed,
+                )
+                pending_order_action = pending_decision.action
+                pending_order_reason = pending_decision.reason
+                rescored_touch_probability = pending_decision.predicted_touch_probability
+                rescored_touch_conditional_pnl = (
+                    pending_decision.predicted_touch_conditional_pnl
+                )
+                rescored_fill_adjusted_pnl = pending_decision.predicted_fill_adjusted_pnl
+                decision = score_runtime_position(
+                    candidate,
+                    list(rungs.values()),
+                    position_policy,
+                    elapsed_minutes=elapsed,
+                )
+                position_action = decision.action
+                position_reason = decision.reason
+                continuation_value = decision.predicted_incremental_exit_value
+                observed_relative = decision.observed_relative_markout
+                neighbor_propagation = decision.neighbor_propagation
+                if decision.action == "EXIT":
+                    expired.append(candidate_id)
+                elif (
+                    pending_decision.action == "CANCEL_MAKER"
+                    and ask > maker_price
+                ):
+                    expired.append(candidate_id)
         output.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -1159,15 +1259,21 @@ def main(argv: list[str] | None = None) -> int:
     args.position_policy = None
     if args.position_policy_model is not None:
         model_path = args.position_policy_model.resolve()
-        args.position_policy = load_position_policy(
-            model_path,
-            expected_sha256=args.position_policy_sha256,
-        )
         digest = hashlib.sha256()
         with model_path.open("rb") as handle:
             for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                 digest.update(chunk)
-        args.position_policy["_artifact_sha256"] = digest.hexdigest()
+        actual_sha256 = digest.hexdigest()
+        if args.position_policy_sha256 and actual_sha256 != args.position_policy_sha256:
+            raise ValueError("position policy SHA-256 mismatch")
+        candidate_bundle = joblib.load(model_path)
+        if candidate_bundle.get("schema_version") == QUOTE_EV_SCHEMA_VERSION:
+            if candidate_bundle.get("model_id") != QUOTE_EV_MODEL_ID:
+                raise ValueError("quote EV policy identity mismatch")
+            args.position_policy = candidate_bundle
+        else:
+            args.position_policy = load_position_policy(model_path)
+        args.position_policy["_artifact_sha256"] = actual_sha256
     state = load_state(args.state)
     while True:
         result = run_cycle(args, state)
