@@ -106,7 +106,8 @@ Evidence funnel（盘口和标签覆盖）：
 - 当前资格：`deployable zero-notional shadow candidate / not live-eligible`。feature/runtime parity blocker 已消除；新模型相对旧模型在开发日期上稳定改善，但相对 market 的 proper-score CI 与 8 月 ROI CI 仍跨零，所以不能真实下单。
 - production preflight 已重新检查；部署只允许在 strict manifest 无 critical、controller health 健康时执行。METAR 仍不开仓，只可作为持仓退出 A/B。
 - v1 已于 `2026-08-12 02:36 UTC` 完成 git-first zero-notional 部署，当时的 forward 起点为 `03:30 UTC`。FMI producer release `65fc4d8f`、city runtime `ddecbbd6`、forecast collector `03691ebb`；Helsinki ladder 使用隔离 release `f6472819`，没有扰动共享 `strategy_runtime`。这些是 v1 的生产证据，不延伸为 v2 已加载证明。
-- 截至本次训练开始前，city runtime 实际加载的是 v1 bounded artifact SHA `9f63dea0…c40f7`，`execution_mode=zero_notional_shadow`、`orders_submitted=0`。v2 artifact、runtime scorer 与 active config 已在 git worktree 完成并通过 parity/test，但本报告不把“code-ready”冒充“已重启加载”；生产 reload 必须在提交后按 controller/release pin 执行并重新核对 loaded SHA。
+- v2 已于 `2026-08-12T08:38:35Z` 按 controller/release-pin 合同重载到 `weather_city_probability_runtime_v3`。新 PID `23137`，production checkout/loaded repo SHA=`7517d52f11d1…`，artifact SHA=`fd09be9c39e5…`，config SHA=`14e777e5f5f5…`；runtime summary 为 `execution_mode=zero_notional_shadow`、`errors=0`、`orders_submitted=0`。第一轮 Helsinki 只产生 `source_book_clock_gap` blocker：08:31 FMI first-seen 对 08:36–08:40 books 已超过120秒，不强行用陈旧盘口评分；等待下一份新FMI事件属于正确时钟行为。
+- pre/post session compare 唯一差异是部署前已在运行的 bounded `weather_canonical_refresh` one-shot 在窗口内自然结束；其 `last_exit_status=0`、日志 `gate_pass=true`。当前 strict manifest 为 healthy、findings=0、DB route healthy，目标 city runtime healthy。全局 controller 仍因无关 `polymarket_weather_proposal_reward_shadow_v1` 缺 tmux/stale health 报 CRITICAL；未在本次 Helsinki 部署中启动或修改它。
 
 ## Live-readiness 与完整持仓时间线审计
 
