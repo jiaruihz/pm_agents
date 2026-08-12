@@ -24,12 +24,12 @@ notification wake、fresh-book/depth execution 提高了抓住这些机会的能
 
 | 项目 | 固定值 |
 |---|---|
-| observed at | `2026-08-12 22:20` 北京时间 / `2026-08-12 14:20 UTC` |
+| observed at | `2026-08-12 23:34` 北京时间 / `2026-08-12 15:34 UTC` |
 | canonical DB | `/Volumes/jrs/pm_agents/runtime/weather.db`；repo 入口同 device/inode `16777247/54444` |
-| canonical build | `MAX(fact_built_at_utc)=2026-08-12T13:46:29.407702Z`；settlement 到 `2026-08-11` |
+| canonical build | `MAX(fact_built_at_utc)=2026-08-12T14:43:27.930263Z`；settlement 到 `2026-08-11` |
 | raw runner | `events.jsonl` 到 `2026-08-12T14:05:04Z`；`orders.jsonl` 到 `2026-08-12T13:43:53Z` |
 | identity | raw `fast_source_prev_no_trial_v1`；canonical `strategy_id=live_weather_edge_v1_c16645cc1165` |
-| rows | 2026-07-09..08-12 共 545 个 first expressions；104 个 settled live fill expressions；53,212 个去重 high-frequency observations |
+| rows | 2026-07-09..08-12 共 545 个 first expressions；104 个 settled live fill expressions；45,794 个按 source observation-time 去重的 observations |
 | integrity | manifest `healthy`、0 findings；storage audit 0 critical/0 warning；CLOB fill gate `gate_pass=true`、1,463 DB/cache fills、0 missing/over-order |
 
 统计 grain：
@@ -39,6 +39,45 @@ notification wake、fresh-book/depth execution 提高了抓住这些机会的能
 - order：raw entry order record 与 unique CLOB order id；exit 独立排除；
 - fill/PnL：canonical `fact_trades` 的 live-real BUY_NO expression，realized 只含 settled；
 - 主窗口：`2026-07-23..08-01` 对 `2026-08-02..08-11`，各 10 个 target dates。
+
+## Amsterdam / Seoul 为什么看着少
+
+先分清 dashboard 上看到的是 raw trigger 还是最后的 order/fill：
+
+- **Amsterdam 不是单位时间触发少，而是上线暴露只有两天。** KNMI 数据在最近十日 `10/10` 天都有，
+  但 CrossNO 8/10 才接 live，第一批 live signal 是 8/11。8/11 有 3 个 raw first expressions、1 个 fill；
+  8/12 也是 3 个 raw expressions、1 个 fill。按 active day 是 `3.0 trigger/day`，不低于 Tokyo/Helsinki。
+- **Seoul 的 raw signal 实际不少。** 最近十日有 39 个，即 `3.9/day`，在 live cities 里仅次于 Busan
+  的 `4.6/day`。看着“单少”是因为 39 个里 24 个 NO ask 始终高于 `0.94` cap，12 个没有 NO ask，
+  最终只有 3 个成交。8/11 当天是 4 trigger / 0 order，8/12 是 4 trigger / 1 fill，最能说明这个差异。
+
+数据源诊断也不支持“这两个城市采集坏了”：
+
+| city | trigger / active day | source cadence p50 | observation→first seen p50 | source-missing runner cycles | source 日内温差 p50 |
+|---|---:|---:|---:|---:|---:|
+| Amsterdam | 3.00 | 10 min | 222.3 sec | 0.2% | 11.2°C |
+| Busan | 4.60 | 1 min | 81.5 sec | 11.8% | 9.0°C |
+| Seoul | 3.90 | 1 min | 25.5 sec | 8.1% | 6.5°C |
+| Helsinki | 2.50 | 10 min | 113.7 sec | 25.5% | 7.6°C |
+| Tokyo | 2.44 | 10 min | 426.7 sec | 20.5% | 6.7°C |
+
+`source-missing runner cycles` 是重复轮询诊断，不是独立机会分母；它会受 source TTL/非活跃时段影响。
+Seoul 的该指标反而低于 Busan、Tokyo、Helsinki，同时 `10/10` 日期覆盖、collector-exact 100%、
+1 分钟 cadence 和 25.5 秒 first-seen lag 都正常，所以它不是首要解释。Amsterdam 的 10 分钟 KNMI 路径此前
+单独落在 `knmi_open_data`，旧 runner 只统计通用 observation 目录会把它误记为 0；本次已合并两条 source root，
+确认是分析路由遗漏，不是生产采集缺失。
+
+城市间 raw trigger 数的物理解释也不是简单看“今天升了几度”。CrossNO 只有在快源**领先 routine official
+running max**、越过 previous exact bracket 的 margin、并且该 exact bracket 有 market 时才形成一个 first expression：
+
+- Amsterdam 是 KNMI 10-minute、单次 `+0.7°C` 即确认；
+- Seoul 是 AMOS 1-minute，但要求 2 个不同 observation，其中至少达到 `+0.5°C`，并出现一次 `+0.7°C`；
+- 因而持续阶梯式升温、快源相对 official 的领先窗口、exact market ladder 是否存在，共同决定 raw trigger 数；
+  盘口 NO ask 与 city cap 再决定是否真的出单。
+
+所以本轮结论是：**Amsterdam 的低累计数主要是 rollout 时间短；Seoul 的低成交数主要是盘口/0.94 cap，
+不是信号源少。** Seoul 近期日内温差中位数确实小于 Busan（6.5°C vs 9.0°C），能解释 raw trigger 比
+Busan 少一截，但解释不了 39→3 的大落差；后者几乎全部发生在执行前的可买 ask 层。
 
 ## 分城市结果
 
@@ -60,7 +99,8 @@ notification wake、fresh-book/depth execution 提高了抓住这些机会的能
   `13 → 21`。但正确率下降且最近十日 ROI 近 0，说明多单不等于更优 regime。
 - **Seoul 是“信号多、成交没有同比变多”。** trigger `25 → 39`，但 fill 只 `2 → 3`，conversion
   `8.0% → 7.7%`。最近十日 39 个信号里，24 个始终 ask>0.94，12 个没有 NO ask，只有 3 个成交。
-  观测 rows `17,006 → 8,543`，覆盖仍是 10/10 日，因此 signal 增量更像天气跨档而不是数据量增长。
+  按 observation-time 去重后的观测 rows `8,566 → 8,543`，两窗覆盖都是 10/10 日、cadence 都是 1 分钟，
+  因此 signal 增量更像天气跨档而不是数据量增长。
 - **Tokyo 十日层面没有变多。** trigger `28 → 22`、fill `7 → 7`；只是最后五日从 `3` 个 fill
   到 `4` 个、8/12 又有 1 个未结算 fill，造成最近体感更密集。detect p50 `0.195s → 0.103s`、book
   coverage `71.4% → 81.8%`，说明工程变快，但没有创造更多十日 trigger。

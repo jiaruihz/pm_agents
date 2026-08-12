@@ -6,7 +6,9 @@ import pytest
 
 from scripts.analysis.live_performance.weather_cross_no_city_trigger_attribution_v1 import (
     load_event_sequences,
+    load_observation_rows,
     load_order_sequences,
+    observation_summary,
     volume_conversion_decomposition,
 )
 
@@ -119,3 +121,79 @@ def test_fill_decomposition_sums_to_observed_delta():
     result = volume_conversion_decomposition(earlier, later)
     assert result["fill_expression_delta"] == 9
     assert result["trigger_volume_component"] + result["fill_conversion_component"] == pytest.approx(9)
+
+
+def test_observations_merge_generic_and_knmi_roots(tmp_path):
+    generic_root = tmp_path / "generic"
+    knmi_root = tmp_path / "knmi"
+    generic_day = generic_root / "2026-08-11"
+    knmi_day = knmi_root / "2026-08-11"
+    generic_day.mkdir(parents=True)
+    knmi_day.mkdir(parents=True)
+    common = {
+        "target_date": "2026-08-11",
+        "pit_lineage_class": "collector_exact",
+        "source_status": "ok",
+    }
+    write_jsonl(
+        generic_day / "high_frequency_observations.jsonl",
+        [
+            {
+                **common,
+                "city": "Seoul",
+                "source": "amos_runway",
+                "content_key": "seoul-1",
+                "temp_c": 30.0,
+                "observation_time_utc": "2026-08-11T01:00:00Z",
+                "source_first_seen_at_utc": "2026-08-11T01:00:20Z",
+            }
+        ],
+    )
+    write_jsonl(
+        knmi_day / "knmi_observations.jsonl",
+        [
+            {
+                **common,
+                "city": "Amsterdam",
+                "source": "knmi",
+                "content_key": "ams-1",
+                "temp_c": 20.0,
+                "observation_time_utc": "2026-08-11T01:00:00Z",
+                "source_first_seen_at_utc": "2026-08-11T01:03:40Z",
+            },
+            {
+                **common,
+                "city": "Amsterdam",
+                "source": "knmi",
+                "content_key": "ams-2",
+                "temp_c": 21.0,
+                "observation_time_utc": "2026-08-11T01:10:00Z",
+                "source_first_seen_at_utc": "2026-08-11T01:13:40Z",
+            },
+            {
+                **common,
+                "city": "Amsterdam",
+                "source": "knmi",
+                "content_key": "ams-2-revision",
+                "temp_c": 21.1,
+                "observation_time_utc": "2026-08-11T01:10:00Z",
+                "source_first_seen_at_utc": "2026-08-11T01:14:40Z",
+            },
+        ],
+    )
+
+    rows = load_observation_rows(
+        generic_root,
+        "2026-08-11",
+        "2026-08-11",
+        additional_sources=[(knmi_root, "knmi_observations.jsonl")],
+    )
+    amsterdam = observation_summary(rows, "Amsterdam", "2026-08-11", "2026-08-11")
+    seoul = observation_summary(rows, "Seoul", "2026-08-11", "2026-08-11")
+    assert amsterdam["observation_rows"] == 2
+    assert amsterdam["observation_cadence_sec_p50"] == pytest.approx(600)
+    assert amsterdam["observation_first_seen_lag_sec_p50"] == pytest.approx(220)
+    assert amsterdam["daily_temperature_range_c_p50"] == pytest.approx(1)
+    assert amsterdam["sources"] == {"knmi": 2}
+    assert seoul["observation_rows"] == 1
+    assert seoul["sources"] == {"amos_runway": 1}

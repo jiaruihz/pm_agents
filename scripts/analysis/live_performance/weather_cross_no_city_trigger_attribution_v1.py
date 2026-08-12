@@ -53,6 +53,9 @@ DEFAULT_RUNTIME_SUMMARY = RUNTIME_DIR / "latest_summary.json"
 DEFAULT_OBSERVATION_ROOT = Path(
     "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations"
 )
+DEFAULT_KNMI_OBSERVATION_ROOT = Path(
+    "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data"
+)
 DEFAULT_OUTPUT = (
     ROOT
     / "docs/analysis/2026-08/generated/cross_no_city_trigger_attribution_20260812_v1"
@@ -277,56 +280,119 @@ def load_order_sequences(
     return sequences
 
 
-def observation_paths(root: Path, start_date: str, end_date: str) -> list[Path]:
+def observation_paths(
+    root: Path, start_date: str, end_date: str, filename: str
+) -> list[Path]:
     start = date.fromisoformat(start_date) - timedelta(days=1)
     end = date.fromisoformat(end_date) + timedelta(days=1)
     paths: list[Path] = []
     current = start
     while current <= end:
-        candidate = root / current.isoformat() / "high_frequency_observations.jsonl"
+        candidate = root / current.isoformat() / filename
         if candidate.exists():
             paths.append(candidate)
         current += timedelta(days=1)
     return paths
 
 
-def load_observation_rows(
+def load_opportunity_rows(
     root: Path, start_date: str, end_date: str
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    current = date.fromisoformat(start_date)
+    final = date.fromisoformat(end_date)
+    while current <= final:
+        path = root / current.isoformat() / "opportunities.jsonl"
+        if path.exists():
+            for row in iter_jsonl(path):
+                city = str(row.get("city") or "")
+                target_date = str(row.get("target_date") or "")
+                if city and start_date <= target_date <= end_date:
+                    rows.append(
+                        {
+                            "city": city,
+                            "target_date": target_date,
+                            "status": str(row.get("status") or "unknown"),
+                        }
+                    )
+        current += timedelta(days=1)
+    return rows
+
+
+def load_observation_rows(
+    root: Path,
+    start_date: str,
+    end_date: str,
+    additional_sources: Iterable[tuple[Path, str]] = (),
 ) -> list[dict[str, Any]]:
-    deduped: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for path in observation_paths(root, start_date, end_date):
-        for row in iter_jsonl(path):
-            target_date = str(row.get("target_date") or "")
-            city = str(row.get("city") or "")
-            if not city or not (start_date <= target_date <= end_date):
-                continue
-            content_key = str(
-                row.get("content_key")
-                or row.get("information_event_id")
-                or row.get("raw_row_hash")
-                or row.get("payload_hash")
-                or ""
-            )
-            if not content_key:
-                continue
-            key = (city, target_date, content_key)
-            candidate = {
-                "city": city,
-                "target_date": target_date,
-                "source": str(row.get("source") or ""),
-                "content_key": content_key,
-                "source_fetch_latency_sec": number(row.get("source_fetch_latency_sec")),
-                "source_observation_ts_utc": str(
-                    row.get("observation_time_utc") or row.get("source_event_ts_utc") or ""
-                ),
-                "source_first_seen_at_utc": str(
-                    row.get("source_first_seen_at_utc") or row.get("first_seen_at_utc") or ""
-                ),
-                "collector_exact": int(row.get("pit_lineage_class") == "collector_exact"),
-            }
-            existing = deduped.get(key)
-            if existing is None or candidate["source_first_seen_at_utc"] < existing["source_first_seen_at_utc"]:
-                deduped[key] = candidate
+    deduped: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    sources = [(root, "high_frequency_observations.jsonl"), *additional_sources]
+    for source_root, filename in sources:
+        for path in observation_paths(source_root, start_date, end_date, filename):
+            for row in iter_jsonl(path):
+                target_date = str(row.get("target_date") or "")
+                city = str(row.get("city") or "")
+                if not city or not (start_date <= target_date <= end_date):
+                    continue
+                source = str(row.get("source") or "")
+                station = str(
+                    row.get("station_id")
+                    or row.get("station")
+                    or row.get("icao")
+                    or row.get("runway")
+                    or ""
+                )
+                observation_ts = str(
+                    row.get("observation_time_utc")
+                    or row.get("source_event_ts_utc")
+                    or ""
+                )
+                content_key = str(
+                    row.get("content_key")
+                    or row.get("information_event_id")
+                    or row.get("raw_row_hash")
+                    or row.get("payload_hash")
+                    or ""
+                )
+                if not observation_ts and not content_key:
+                    continue
+                # Old archives did not always carry a stable content_key, and their
+                # per-fetch event ids would otherwise inflate observation counts.
+                # Source coverage is an observation-time grain, not a fetch grain.
+                key = (city, target_date, source, station, observation_ts or content_key)
+                candidate = {
+                    "city": city,
+                    "target_date": target_date,
+                    "source": source,
+                    "station": station,
+                    "content_key": content_key,
+                    "source_fetch_latency_sec": number(row.get("source_fetch_latency_sec")),
+                    "temp_c": number(row.get("temp_c")),
+                    "source_observation_ts_utc": observation_ts,
+                    "source_first_seen_at_utc": str(
+                        row.get("source_first_seen_at_utc")
+                        or row.get("first_seen_at_utc")
+                        or ""
+                    ),
+                    "collector_exact": int(
+                        row.get("pit_lineage_class") == "collector_exact"
+                    ),
+                    "source_status": str(row.get("source_status") or "unknown"),
+                }
+                observed_at = parse_dt(candidate["source_observation_ts_utc"])
+                first_seen_at = parse_dt(candidate["source_first_seen_at_utc"])
+                candidate["observation_first_seen_lag_sec"] = (
+                    (first_seen_at - observed_at).total_seconds()
+                    if observed_at is not None and first_seen_at is not None
+                    else None
+                )
+                existing = deduped.get(key)
+                if (
+                    existing is None
+                    or candidate["source_first_seen_at_utc"]
+                    < existing["source_first_seen_at_utc"]
+                ):
+                    deduped[key] = candidate
     return sorted(
         deduped.values(),
         key=lambda row: (row["target_date"], row["city"], row["source_first_seen_at_utc"]),
@@ -416,21 +482,71 @@ def observation_summary(
         for row in observation_rows
         if row["city"] == city and start <= row["target_date"] <= end
     ]
+    observations_by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        observations_by_day[row["target_date"]].append(row)
+    daily_temp_ranges: list[float] = []
+    cadence_sec: list[float] = []
+    for day_rows in observations_by_day.values():
+        temps = [float(row["temp_c"]) for row in day_rows if row["temp_c"] is not None]
+        if temps:
+            daily_temp_ranges.append(max(temps) - min(temps))
+        timestamps = sorted(
+            {
+                timestamp
+                for row in day_rows
+                if (timestamp := parse_dt(row["source_observation_ts_utc"])) is not None
+            }
+        )
+        cadence_sec.extend(
+            (later - earlier).total_seconds()
+            for earlier, later in zip(timestamps, timestamps[1:])
+            if later > earlier
+        )
     return {
         "observation_rows": len(rows),
         "coverage_dates": len({row["target_date"] for row in rows}),
         "observations_per_calendar_date": len(rows) / date_count(start, end),
         "source_fetch_latency_sec_p50": median(row["source_fetch_latency_sec"] for row in rows),
+        "observation_first_seen_lag_sec_p50": median(
+            row["observation_first_seen_lag_sec"] for row in rows
+        ),
+        "observation_cadence_sec_p50": median(cadence_sec),
+        "daily_temperature_range_c_p50": median(daily_temp_ranges),
+        "daily_temperature_range_c_min": min(daily_temp_ranges) if daily_temp_ranges else None,
+        "daily_temperature_range_c_max": max(daily_temp_ranges) if daily_temp_ranges else None,
         "collector_exact_share": (
             sum(row["collector_exact"] for row in rows) / len(rows) if rows else None
         ),
+        "source_statuses": dict(
+            sorted(Counter(row["source_status"] for row in rows).items())
+        ),
         "sources": dict(sorted(Counter(row["source"] for row in rows).items())),
+    }
+
+
+def opportunity_summary(
+    opportunity_rows: list[dict[str, str]], city: str, start: str, end: str
+) -> dict[str, Any]:
+    statuses = Counter(
+        row["status"]
+        for row in opportunity_rows
+        if row["city"] == city and start <= row["target_date"] <= end
+    )
+    cycles = sum(statuses.values())
+    return {
+        "diagnostic_opportunity_cycles": cycles,
+        "diagnostic_opportunity_statuses": dict(sorted(statuses.items())),
+        "diagnostic_source_missing_cycle_share": (
+            statuses["source_missing"] / cycles if cycles else None
+        ),
     }
 
 
 def city_summary(
     rows: list[dict[str, Any]],
     observation_rows: list[dict[str, Any]],
+    opportunity_rows: list[dict[str, str]],
     city: str,
     start: str,
     end: str,
@@ -532,6 +648,7 @@ def city_summary(
         ),
     }
     output.update(observation_summary(observation_rows, city, start, end))
+    output.update(opportunity_summary(opportunity_rows, city, start, end))
     return output
 
 
@@ -585,7 +702,11 @@ def main() -> int:
     parser.add_argument("--events", type=Path, default=DEFAULT_EVENTS)
     parser.add_argument("--orders", type=Path, default=DEFAULT_ORDERS)
     parser.add_argument("--runtime-summary", type=Path, default=DEFAULT_RUNTIME_SUMMARY)
+    parser.add_argument("--opportunity-root", type=Path, default=RUNTIME_DIR)
     parser.add_argument("--observation-root", type=Path, default=DEFAULT_OBSERVATION_ROOT)
+    parser.add_argument(
+        "--knmi-observation-root", type=Path, default=DEFAULT_KNMI_OBSERVATION_ROOT
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--start-date", default="2026-07-09")
     parser.add_argument("--end-date", default="2026-08-12")
@@ -622,7 +743,13 @@ def main() -> int:
     order_sequences = load_order_sequences(args.orders, args.start_date, args.end_date)
     detail = attach_sequences(detail, event_sequences, order_sequences, any_fill_conditions)
     observation_rows = load_observation_rows(
-        args.observation_root, args.start_date, args.end_date
+        args.observation_root,
+        args.start_date,
+        args.end_date,
+        additional_sources=[(args.knmi_observation_root, "knmi_observations.jsonl")],
+    )
+    opportunity_rows = load_opportunity_rows(
+        args.opportunity_root, args.start_date, args.end_date
     )
 
     all_cities = sorted(configured_cities | {str(row["city"]) for row in detail})
@@ -631,7 +758,9 @@ def main() -> int:
         window_summaries[name] = {
             "window": [start, end],
             "cities": {
-                city: city_summary(detail, observation_rows, city, start, end)
+                city: city_summary(
+                    detail, observation_rows, opportunity_rows, city, start, end
+                )
                 for city in all_cities
             },
         }
@@ -673,7 +802,9 @@ def main() -> int:
         if day_rows:
             day_cities = sorted({str(row["city"]) for row in day_rows})
             daily_city[day] = {
-                city: city_summary(detail, observation_rows, city, day, day)
+                city: city_summary(
+                    detail, observation_rows, opportunity_rows, city, day, day
+                )
                 for city in day_cities
             }
         current_date += timedelta(days=1)
@@ -697,7 +828,9 @@ def main() -> int:
             "events": str(args.events),
             "orders": str(args.orders),
             "observation_root": str(args.observation_root),
+            "knmi_observation_root": str(args.knmi_observation_root),
             "runtime_summary": str(args.runtime_summary),
+            "opportunity_root": str(args.opportunity_root),
         },
         "source_mtimes_utc": {
             "events": datetime.fromtimestamp(args.events.stat().st_mtime, timezone.utc).isoformat(),
@@ -709,7 +842,8 @@ def main() -> int:
         "rows": {
             "first_expressions": len(detail),
             "canonical_settled_fill_expressions": len(fills),
-            "deduped_high_frequency_observations": len(observation_rows),
+            "deduped_source_observations": len(observation_rows),
+            "diagnostic_opportunity_cycles": len(opportunity_rows),
         },
         "rollout": {city: rollout_summary(detail, city) for city in all_cities},
         "windows": window_summaries,
