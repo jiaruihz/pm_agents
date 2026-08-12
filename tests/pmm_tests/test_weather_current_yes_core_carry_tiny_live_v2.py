@@ -32,7 +32,12 @@ def score_row() -> dict:
         "checkpoint_key": "Busan|2026-07-24|13",
         "decision_snapshot_ts_utc": "2026-07-24T04:30:00Z",
         "source_report_ts_utc": "2026-07-24T04:20:00Z",
+        "obs_source": "aviationweather_metar",
         "observation_cadence_min": 30.0,
+        "forecast_source": "open_meteo_live_ecmwf",
+        "hourly_curve": [
+            {"time_local": "2026-07-24T14:00", "temperature_f": 86.0}
+        ],
         "artifact_hash": "hash",
     }
 
@@ -43,7 +48,7 @@ def test_runtime_contract_proves_pit_clock_and_clean_deployment() -> None:
     assert runner.DEPLOYMENT_METADATA["critical_source_dirty"] is False
     assert (
         runner.DEPLOYMENT_METADATA["deployment_contract_version"]
-        == "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v3"
+        == "core_carry_v3_shared_order_runtime_10t5m_integrated_maker_v4"
     )
 
 
@@ -113,7 +118,7 @@ def test_entry_is_exactly_ten_taker_plus_five_maker() -> None:
     assert plans[1]["post_update_reprice_required"] is False
     assert all(
         plan["resolved_execution_profile"]
-        == "split_taker_maker_edge_capped_no_fallback_v3"
+        == "split_taker_maker_event_validated_staged_no_fallback_v4"
         for plan in plans
     )
     assert plans[0]["execution_config_id"] == plans[1]["execution_config_id"]
@@ -128,7 +133,7 @@ def test_live_parser_defaults_match_frozen_ten_plus_five_contract() -> None:
     assert args.maker_shares == runner.FROZEN_MAKER_SHARES == 5
     assert args.summary_filename == "signal_latest_summary.json"
     assert args.summary_history_filename == "signal_summary_history.jsonl"
-    assert runner.CONFIG_ID.endswith("split_10_taker_5_maker_edge_cap_v3")
+    assert runner.CONFIG_ID.endswith("split_10_taker_5_maker_integrated_v4")
 
 
 def test_market_above_frozen_training_support_is_not_eligible() -> None:
@@ -288,6 +293,7 @@ def _write_lifecycle_state(
     *,
     source_epoch: str,
     token_id: str = "yes-token",
+    forecast_temp_f: float = 86.0,
 ) -> None:
     runner.write_jsonl(
         tmp_path / "state_decisions.jsonl",
@@ -297,6 +303,7 @@ def _write_lifecycle_state(
                 "target_date": "2026-07-24",
                 "decision_snapshot_ts_utc": "2026-07-24T04:31:00Z",
                 "source_report_ts_utc": source_epoch,
+                "obs_source": "aviationweather_metar",
                 "current_yes_token_id": token_id,
                 "current_bracket": "30",
                 "current_question": "Will the highest temperature be 30°C?",
@@ -304,6 +311,13 @@ def _write_lifecycle_state(
                 "station_gap_state": "within_expected_cadence",
                 "obs_age_min": 1.0,
                 "observation_cadence_min": 30.0,
+                "forecast_source": "open_meteo_live_ecmwf",
+                "hourly_curve": [
+                    {
+                        "time_local": "2026-07-24T14:00",
+                        "temperature_f": forecast_temp_f,
+                    }
+                ],
             }
         ],
     )
@@ -386,12 +400,90 @@ def test_true_new_observation_cancels_even_when_same_bracket(
         now=now,
     )
 
-    assert decisions[0]["action"] == "core_carry_maker_cancel_new_observation"
-    assert decisions[0]["blocker"] == "new_observation_requires_fresh_entry"
+    assert decisions[0]["action"] == "core_carry_maker_cancel_weather_state"
+    assert decisions[0]["blocker"] == "weather_state_changed_requires_fresh_score"
     assert plans[0]["cancel_only"] is True
     assert plans[0]["cancel_before_order_id"] == "maker-order-1"
     assert plans[0]["replacement_requires_order_state"] is False
     assert plans[0]["source_report_ts_utc"] == "2026-07-24T04:20:00Z"
+
+
+def test_forecast_revision_cancels_before_any_reprice(
+    tmp_path,
+) -> None:
+    now = datetime(2026, 7, 24, 4, 32, tzinfo=timezone.utc)
+    order = _live_maker_order(created=now - timedelta(minutes=1))
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
+    _write_lifecycle_state(
+        tmp_path,
+        source_epoch="2026-07-24T04:20:00Z",
+        forecast_temp_f=87.0,
+    )
+
+    plans, decisions = runner.maker_lifecycle_plans(
+        _lifecycle_args(tmp_path),
+        tmp_path,
+        now=now,
+    )
+
+    assert decisions[0]["action"] == "core_carry_maker_cancel_weather_state"
+    assert decisions[0]["weather_state_transition_types"] == [
+        "forecast_revision"
+    ]
+    assert plans[0]["cancel_only"] is True
+
+
+def test_live_order_projection_persists_reprice_stage() -> None:
+    created = datetime(2026, 7, 24, 4, 38, tzinfo=timezone.utc)
+    order = _live_maker_order(created=created - timedelta(minutes=6))
+    plan = runner.build_maker_lifecycle_plan(
+        order,
+        action="core_carry_maker_reprice",
+        limit_price=0.82,
+        cancel_only=False,
+        cancel_source_order=True,
+        reprice_stage="midpoint",
+        now=created,
+        live_enabled=True,
+    )
+    projected = build_live_order_record(
+        plan,
+        {
+            "posted_price": 0.82,
+            "maker_only": True,
+            "place": {"orderID": "maker-order-2", "status": "live"},
+        },
+        status="submitted",
+    )
+
+    assert projected["maker_lifecycle_reprice_count"] == 1
+    assert projected["maker_last_reprice_stage"] == "midpoint"
+
+
+def test_lifecycle_plan_preserves_existing_profile_policy_during_rollout() -> None:
+    now = datetime(2026, 7, 24, 4, 38, tzinfo=timezone.utc)
+    order = _live_maker_order(created=now - timedelta(minutes=6))
+    order["execution_profile"] = "split_taker_maker_edge_capped_no_fallback_v3"
+    order["resolved_execution_profile"] = (
+        "split_taker_maker_edge_capped_no_fallback_v3"
+    )
+    order["order_lifecycle_policy"] = (
+        "maker_staged_chase_until_pre_data_update_or_ttl_v2"
+    )
+
+    plan = runner.build_maker_lifecycle_plan(
+        order,
+        action="core_carry_maker_cancel_ttl",
+        limit_price=0.0,
+        cancel_only=True,
+        cancel_source_order=True,
+        now=now,
+        live_enabled=True,
+    )
+
+    assert plan["order_lifecycle_policy"] == (
+        "maker_staged_chase_until_pre_data_update_or_ttl_v2"
+    )
 
 
 def test_true_new_observation_cancels_when_current_bracket_changed(tmp_path) -> None:
@@ -410,8 +502,8 @@ def test_true_new_observation_cancels_when_current_bracket_changed(tmp_path) -> 
         now=now,
     )
 
-    assert decisions[0]["action"] == "core_carry_maker_cancel_new_observation"
-    assert decisions[0]["blocker"] == "new_observation_requires_fresh_entry"
+    assert decisions[0]["action"] == "core_carry_maker_cancel_weather_state"
+    assert decisions[0]["blocker"] == "weather_state_changed_requires_fresh_score"
     assert plans[0]["cancel_only"] is True
     assert plans[0]["cancel_before_order_id"] == "maker-order-1"
 
@@ -428,11 +520,20 @@ def test_true_new_observation_cancels_when_freshness_is_invalid(tmp_path) -> Non
                 "target_date": "2026-07-24",
                 "decision_snapshot_ts_utc": "2026-07-24T04:31:00Z",
                 "source_report_ts_utc": "2026-07-24T04:30:00Z",
+                "obs_source": "aviationweather_metar",
                 "current_yes_token_id": "yes-token",
+                "current_bracket": "30",
                 "obs_status": "ok",
                 "station_gap_state": "beyond_expected_cadence",
                 "obs_age_min": 121.0,
                 "observation_cadence_min": 30.0,
+                "forecast_source": "open_meteo_live_ecmwf",
+                "hourly_curve": [
+                    {
+                        "time_local": "2026-07-24T14:00",
+                        "temperature_f": 86.0,
+                    }
+                ],
             }
         ],
     )
@@ -443,8 +544,8 @@ def test_true_new_observation_cancels_when_freshness_is_invalid(tmp_path) -> Non
         now=now,
     )
 
-    assert decisions[0]["action"] == "core_carry_maker_cancel_new_observation"
-    assert decisions[0]["blocker"] == "new_observation_requires_fresh_entry"
+    assert decisions[0]["action"] == "core_carry_maker_cancel_weather_state"
+    assert decisions[0]["blocker"] == "weather_state_changed_requires_fresh_score"
     assert plans[0]["cancel_only"] is True
 
 

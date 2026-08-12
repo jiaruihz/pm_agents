@@ -34,7 +34,7 @@ Status 口径：
 
 | 研究家族 | 当前结论入口 | 历史报告如何使用 |
 |---|---|---|
-| current-YES / reheat / carry / overshoot | [reheat_risk.md](analysis/reheat_risk.md) + [STRATEGY_REGISTRY](WEATHER_STRATEGY_REGISTRY.md) | 6 月模型地图和 v9/hazard 是历史谱系；7 月 challenger 已在 family synthesis 收口，不从单份正 ROI 恢复 selector |
+| current-YES / reheat / carry / overshoot | [reheat_risk.md](analysis/reheat_risk.md) + [STRATEGY_REGISTRY](WEATHER_STRATEGY_REGISTRY.md) | 6 月模型地图和 v9/hazard 是历史谱系；7 月 challenger 已在 family synthesis 收口，不从单份正 ROI 恢复 selector。当前 maker 合并设计与 v3 bug 影响读 [integrated maker v4](analysis/2026-08/2026-08-12-core-carry-integrated-maker-v4.md) |
 | Tmax distribution / full ladder / target book | [WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md](WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md) | P0–P6、lineage repair、v3 报告用于复核演进；当前结论是概率/会计框架保留、alpha 未 confirmed |
 | Amsterdam / Busan / Helsinki / Seoul / Tokyo 城市模型 | [WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md](WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md) + [WCIR runtime design](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md) | 先读“五城知识账”；数字版本是 experiment/run，不自动成为新模型身份或新 collector |
 | 外部钱包 | [WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md](WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md) | 先读全钱包结论矩阵；逐钱包报告只支持机制与历史 selected-fill 证据，不支持地址跟单或 live eligibility |

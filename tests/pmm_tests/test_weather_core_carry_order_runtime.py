@@ -1,9 +1,16 @@
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
+
+import pytest
 
 from scripts.ops import weather_core_carry_order_runtime as shared
 from scripts.ops import weather_current_yes_core_carry_tiny_live_v2 as runner
-from src.strategies.weather_edge_v1.execution.contracts import RestingOrderState
+from src.strategies.weather_edge_v1.execution.contracts import (
+    BookLevel,
+    MarketBook,
+    RestingOrderState,
+)
 
 
 class FakeTransport:
@@ -94,9 +101,111 @@ def _score():
         "checkpoint_key": "Busan|2026-07-28|13",
         "decision_snapshot_ts_utc": "2026-07-28T04:30:00Z",
         "source_report_ts_utc": "2026-07-28T04:20:00Z",
+        "obs_source": "aviationweather_metar",
         "observation_cadence_min": 30.0,
+        "forecast_source": "open_meteo_live_ecmwf",
+        "hourly_curve": [
+            {"time_local": "2026-07-28T14:00", "temperature_f": 86.0}
+        ],
         "artifact_hash": "hash",
     }
+
+
+def _replacement_state(*, posted_price: str = "0.78") -> RestingOrderState:
+    return RestingOrderState(
+        order_id="source-order",
+        client_order_id="source-client",
+        expected_venue_order_id=None,
+        root_order_id="source-order",
+        source_order_id="source-order",
+        plan_id="source-plan",
+        token_id="token-1",
+        venue_side="BUY",
+        outcome_side="YES",
+        requested_shares="5",
+        matched_shares="0",
+        remaining_shares="5",
+        posted_price=posted_price,
+        status="cancelled",
+        created_at_utc="2026-07-28T08:00:00Z",
+        maker_only=True,
+        execution_profile=runner.EXECUTION_PROFILE,
+        execution_policy="current_yes_residual_carry_maker_v2",
+        order_lifecycle_policy=(
+            "maker_event_validated_staged_until_update_or_ttl_v3"
+        ),
+        reprice_count=1,
+        data_epoch_ref="state-1",
+        authoritative_state_version="cancelled",
+        lifecycle_owner=shared.RUNTIME_OWNER,
+        cancel_confirmed=True,
+    )
+
+
+def _book(*, bid: str, ask: str) -> MarketBook:
+    return MarketBook(
+        token_id="token-1",
+        status="ok",
+        fetched_at_utc="2026-07-28T08:01:00Z",
+        venue_timestamp_utc=None,
+        book_epoch_ref=f"book-{bid}-{ask}",
+        tick_size="0.01",
+        tick_size_source="test",
+        minimum_order_shares="5",
+        bids=(BookLevel(price=bid, size="20"),),
+        asks=(BookLevel(price=ask, size="20"),),
+    )
+
+
+def _replacement_request(*, bid: str, ask: str):
+    original = runner.build_entry_plans(
+        _score(),
+        live_enabled=True,
+        now=datetime(2026, 7, 28, 4, 31, tzinfo=timezone.utc),
+        taker_shares=5,
+        maker_shares=5,
+        order_ttl_min=15,
+    )[1]
+    lifecycle = runner.build_maker_lifecycle_plan(
+        {**original, "posted_price": 0.78, "venue_order_id": "source-order"},
+        action="core_carry_maker_reprice",
+        limit_price=0.83,
+        cancel_only=False,
+        cancel_source_order=True,
+        reprice_stage="midpoint",
+        decision_best_bid=0.80,
+        decision_best_ask=0.86,
+        decision_tick_size=0.01,
+        now=datetime(2026, 7, 28, 4, 37, tzinfo=timezone.utc),
+        live_enabled=True,
+    )
+    entry_like = shared._entry_like_lifecycle_plan(lifecycle)
+    compatibility = shared.build_core_carry_legacy_plan_compatibility(
+        legacy_plans=[entry_like]
+    )
+    builder = shared.CoreCarryRequestBuilder([lifecycle])
+    return builder(
+        compatibility.intents[0],
+        compatibility.children[0],
+        _book(bid=bid, ask=ask),
+        None,
+        None,
+        _replacement_state(),
+    )
+
+
+def test_lifecycle_replacement_uses_exact_stage_target_not_fresh_bid_plus_tick():
+    request = _replacement_request(bid="0.80", ask="0.86")
+
+    assert request.price == Decimal("0.83")
+
+
+def test_lifecycle_replacement_never_reposts_lower_after_book_drops():
+    with pytest.raises(
+        ValueError,
+        match="book drifted beyond replacement decision",
+    ):
+        _replacement_request(bid="0.63", ask="0.86")
 
 
 def test_core_carry_live_submits_each_child_once_through_shared_runtime(

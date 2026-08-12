@@ -83,6 +83,26 @@ their version history:
   second reprice, while the known Amsterdam fill occurred exactly on reprice
   two. Production remains unchanged until a separate deployment.
 
+### 2026-08-12 Core Carry integrated maker v4
+
+The evidence-backed execution candidate is one five-share state machine, not a
+second pullback sleeve: initial queue, one midpoint reprice after five minutes,
+one near-ask reprice after ten minutes, and cancellation on observation,
+forecast-curve or exact-bracket/token change. The 15-minute pullback evidence
+describes prices already traversed by an active maker; 30-minute exposure is
+adversely selected, and post-update re-arm remains zero-notional.
+
+A live v3 audit found one of four replacement orders was posted below its
+source: Jeddah planned `0.83`, cancelled `0.78`, then posted `0.64`. It did not
+fill, so realized cost/PnL impact is zero, but it lost queue and consumed the
+second reprice. Root causes were a dropped `maker_last_reprice_stage` field and
+request-time reinterpretation of the planned stage target. V4 persists the
+stage, uses the staged target only while the decision book remains within one
+tick, forbids non-improving replacement and makes weather state part of the
+data epoch. Implementation is verified; production remains unchanged pending
+deployment authorization. Full evidence:
+`2026-08/2026-08-12-core-carry-integrated-maker-v4.md`.
+
 Current routing:
 
 - model/strategy state and production-independent verdict:

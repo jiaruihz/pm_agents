@@ -68,9 +68,9 @@ from weather_data_feed.observation_cache import index_observation_cache  # noqa:
 
 STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
-CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_edge_cap_v3"
-EXECUTION_PROFILE = "split_taker_maker_edge_capped_no_fallback_v3"
-DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v3"
+CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_integrated_v4"
+EXECUTION_PROFILE = "split_taker_maker_event_validated_staged_no_fallback_v4"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_integrated_maker_v4"
 MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
 FROZEN_TAKER_SHARES = 10.0
 FROZEN_MAKER_SHARES = 5.0
@@ -211,6 +211,76 @@ def parse_utc(value: Any) -> datetime | None:
 def stable_hash(payload: Mapping[str, Any]) -> str:
     raw = json.dumps(dict(payload), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+MAKER_STATE_SCHEMA_VERSION = "core_carry_maker_weather_state_v1"
+MAKER_STATE_EPOCH_PREFIX = "core-weather-state-v1:"
+
+
+def forecast_curve_hash(row: Mapping[str, Any]) -> str:
+    explicit = str(row.get("forecast_values_hash") or "").strip()
+    if explicit:
+        return explicit
+    curve = row.get("hourly_curve")
+    if not isinstance(curve, list) or not curve:
+        return ""
+    return stable_hash({"hourly_curve": curve})
+
+
+def weather_state_signature(row: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        "observation_epoch": str(row.get("source_report_ts_utc") or ""),
+        "observation_source": str(row.get("obs_source") or ""),
+        "forecast_curve_hash": forecast_curve_hash(row),
+        "forecast_source": str(row.get("forecast_source") or ""),
+        "bracket": str(row.get("current_bracket") or row.get("bracket") or ""),
+        "token_id": str(
+            row.get("current_yes_token_id") or row.get("token_id") or ""
+        ),
+    }
+
+
+def weather_state_epoch_ref(row: Mapping[str, Any]) -> str:
+    signature = weather_state_signature(row)
+    if not signature["observation_epoch"] or not signature["forecast_curve_hash"]:
+        return ""
+    return MAKER_STATE_EPOCH_PREFIX + stable_hash(signature)
+
+
+def weather_state_transition_types(
+    order: Mapping[str, Any], latest: Mapping[str, Any]
+) -> list[str]:
+    previous = {
+        "observation_epoch": str(order.get("source_report_ts_utc") or ""),
+        "observation_source": str(order.get("maker_observation_source") or ""),
+        "forecast_curve_hash": str(order.get("maker_forecast_curve_hash") or ""),
+        "forecast_source": str(order.get("maker_forecast_source") or ""),
+        "bracket": str(order.get("bracket") or ""),
+        "token_id": str(order.get("token_id") or ""),
+    }
+    current = weather_state_signature(latest)
+    transitions: list[str] = []
+    if (
+        current["observation_epoch"] != previous["observation_epoch"]
+        or current["observation_source"] != previous["observation_source"]
+    ):
+        source = current["observation_source"].lower()
+        transitions.append(
+            "new_metar"
+            if "metar" in source or "aviation" in source
+            else "new_observation"
+        )
+    if (
+        current["forecast_curve_hash"] != previous["forecast_curve_hash"]
+        or current["forecast_source"] != previous["forecast_source"]
+    ):
+        transitions.append("forecast_revision")
+    if (current["bracket"], current["token_id"]) != (
+        previous["bracket"],
+        previous["token_id"],
+    ):
+        transitions.append("exact_bracket_transition")
+    return transitions
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -654,6 +724,8 @@ def maker_clock_assessment(
     profile = get_execution_profile(EXECUTION_PROFILE)
     source_epoch = parse_utc(row.get("source_report_ts_utc"))
     cadence_min = finite(row.get("observation_cadence_min"))
+    state_signature = weather_state_signature(row)
+    state_epoch_ref = weather_state_epoch_ref(row)
     common = {
         "maker_clock_basis": str(profile.fixed_parameters.get("clock_basis") or ""),
         "maker_post_update_live_rearm": bool(
@@ -663,13 +735,32 @@ def maker_clock_assessment(
             profile.fixed_parameters.get("post_update_shadow_revalidation")
         ),
         "post_update_reprice_required": False,
+        "maker_state_schema_version": MAKER_STATE_SCHEMA_VERSION,
+        "maker_observation_source": state_signature["observation_source"],
+        "maker_forecast_curve_hash": state_signature["forecast_curve_hash"],
+        "maker_forecast_source": state_signature["forecast_source"],
+        "maker_state_epoch_components": str(
+            profile.fixed_parameters.get("state_epoch_components") or ""
+        ),
+        "maker_replacement_price_policy": str(
+            profile.fixed_parameters.get("replacement_price_policy") or ""
+        ),
     }
-    if source_epoch is None or cadence_min is None or cadence_min <= 0:
+    if (
+        source_epoch is None
+        or cadence_min is None
+        or cadence_min <= 0
+        or not state_epoch_ref
+    ):
         return {
             **common,
             "maker_clock_status": "invalid_source_clock",
             "maker_live_eligible": False,
-            "maker_live_skip_reason": "missing_source_epoch_or_cadence",
+            "maker_live_skip_reason": (
+                "missing_event_state_signature"
+                if not state_epoch_ref
+                else "missing_source_epoch_or_cadence"
+            ),
             "maker_shadow_policy": "not_scorable_missing_source_clock",
             "seconds_to_next_source_report": None,
         }
@@ -682,7 +773,7 @@ def maker_clock_assessment(
     clock_fields = {
         **common,
         "data_update_source": str(row.get("obs_source") or "weather_observation"),
-        "data_epoch_ref": str(row.get("source_report_ts_utc") or ""),
+        "data_epoch_ref": state_epoch_ref,
         "data_epoch_ts_utc": source_epoch.isoformat(timespec="seconds"),
         "next_data_update_due_utc": next_update.isoformat(timespec="seconds"),
         "next_source_report_due_utc": next_update.isoformat(timespec="seconds"),
@@ -826,7 +917,7 @@ def base_plan_fields(
             else "current_yes_residual_carry_taker_v1"
         ),
         "order_lifecycle_policy": (
-            "maker_staged_chase_until_pre_data_update_or_ttl_v2"
+            "maker_event_validated_staged_until_update_or_ttl_v3"
             if maker
             else "taker_now"
         ),
@@ -888,6 +979,7 @@ def base_plan_fields(
             else ""
         ),
         "maker_lifecycle_reprice_count": 0,
+        "maker_last_reprice_stage": "",
         **maker_clock,
     }
 
@@ -981,6 +1073,9 @@ def build_maker_lifecycle_plan(
     now: datetime,
     live_enabled: bool,
     reprice_stage: str = "",
+    decision_best_bid: float = 0.0,
+    decision_best_ask: float = 0.0,
+    decision_tick_size: float = 0.0,
 ) -> dict[str, Any]:
     live_source_id = live_order_id(order)
     lineage_source_id = live_source_id or str(order.get("source_order_id") or "")
@@ -992,7 +1087,10 @@ def build_maker_lifecycle_plan(
         "child_order_role": action,
         "execution_action": action,
         "execution_policy": "current_yes_residual_carry_maker_v2",
-        "order_lifecycle_policy": "maker_staged_chase_until_pre_data_update_or_ttl_v2",
+        "order_lifecycle_policy": str(
+            order.get("order_lifecycle_policy")
+            or "maker_event_validated_staged_until_update_or_ttl_v3"
+        ),
         "limit_price": round(limit_price, 6),
         "notional": round(shares * limit_price, 6),
         "order_notional_cap": round(shares * limit_price, 6),
@@ -1016,6 +1114,12 @@ def build_maker_lifecycle_plan(
             reprice_stage
             if action == "core_carry_maker_reprice"
             else str(order.get("maker_last_reprice_stage") or "")
+        ),
+        "maker_reprice_decision_best_bid": round(decision_best_bid, 6),
+        "maker_reprice_decision_best_ask": round(decision_best_ask, 6),
+        "maker_reprice_decision_tick_size": round(decision_tick_size, 6),
+        "maker_replacement_max_quote_drift_ticks": (
+            maker_profile_parameter("replacement_max_quote_drift_ticks")
         ),
     }
     fields["plan_id"] = "plan-" + stable_hash(
@@ -1059,12 +1163,27 @@ def maker_lifecycle_plans(
             latest = epochs.get(city_day)
             source_epoch = str(order.get("source_report_ts_utc") or "")
             latest_epoch = str((latest or {}).get("source_report_ts_utc") or "")
+            source_state_ref = str(
+                order.get("data_epoch_ref") or order.get("source_report_ts_utc") or ""
+            )
+            latest_state_ref = weather_state_epoch_ref(latest or {})
+            event_state_managed = (
+                str(order.get("maker_state_schema_version") or "")
+                == MAKER_STATE_SCHEMA_VERSION
+                and source_state_ref.startswith(MAKER_STATE_EPOCH_PREFIX)
+            )
+            state_transitions = (
+                weather_state_transition_types(order, latest)
+                if event_state_managed and latest
+                else []
+            )
             deadline = parse_utc(order.get("maker_lifecycle_deadline_utc") or order.get("expires_at_utc"))
             action = ""
             blocker = ""
             next_price = 0.0
             best_bid = 0.0
             best_ask = 0.0
+            tick = 0.0
             cancel_only = False
             reprice_stage = ""
             reprice_count = int(
@@ -1086,7 +1205,20 @@ def maker_lifecycle_plans(
                     cancel_only = True
                 else:
                     blocker = "detached_maker_retry_ttl_expired"
-            elif not latest or not latest_epoch or latest_epoch != source_epoch:
+            elif event_state_managed and (
+                not latest_state_ref or latest_state_ref != source_state_ref
+            ):
+                blocker = (
+                    "latest_weather_state_unavailable"
+                    if not latest_state_ref
+                    else "weather_state_changed_requires_fresh_score"
+                )
+                if active_order:
+                    action = "core_carry_maker_cancel_weather_state"
+                    cancel_only = True
+            elif not event_state_managed and (
+                not latest or not latest_epoch or latest_epoch != source_epoch
+            ):
                 if not latest or not latest_epoch:
                     blocker = "latest_observation_state_unavailable"
                 else:
@@ -1137,6 +1269,10 @@ def maker_lifecycle_plans(
                 "target_date": city_day[1],
                 "source_report_ts_utc": source_epoch,
                 "latest_source_report_ts_utc": latest_epoch,
+                "source_weather_state_ref": source_state_ref,
+                "latest_weather_state_ref": latest_state_ref,
+                "weather_state_transition_types": state_transitions,
+                "event_state_managed": event_state_managed,
                 "posted_price": finite(order.get("posted_price")) or 0.0,
                 "maker_price_cap": finite(order.get("maker_price_cap")) or 0.0,
                 "best_bid": best_bid,
@@ -1161,6 +1297,9 @@ def maker_lifecycle_plans(
                     cancel_only=cancel_only,
                     cancel_source_order=active_order,
                     reprice_stage=reprice_stage,
+                    decision_best_bid=best_bid,
+                    decision_best_ask=best_ask,
+                    decision_tick_size=tick,
                     now=now,
                     live_enabled=bool(args.live and args.confirm_live),
                 )

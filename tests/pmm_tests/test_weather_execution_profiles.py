@@ -21,6 +21,7 @@ def test_legacy_profile_names_and_behavior_are_preserved_and_json_safe():
         "split_taker_maker_chase_capped_no_fallback_v1": ("explicit_leg_shares", 0, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v1", "maker_chase_until_observation_or_ttl_v1", True, 1.0))),
         "split_taker_maker_edge_capped_no_fallback_v2": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
         "split_taker_maker_edge_capped_no_fallback_v3": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
+        "split_taker_maker_event_validated_staged_no_fallback_v4": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_event_validated_staged_until_update_or_ttl_v3", True, 1.0))),
     }
 
     assert tuple(profiles._PROFILES) == tuple(expected)
@@ -162,3 +163,24 @@ def test_core_carry_edge_capped_v3_owns_profit_safe_clock_and_reprices():
     )
     assert maker.max_reprices == 2
     assert "taker_fallback" not in maker.order_lifecycle_policy
+
+
+def test_core_carry_integrated_v4_owns_event_state_and_exact_replacement():
+    profile = profiles.get_execution_profile(
+        "split_taker_maker_event_validated_staged_no_fallback_v4"
+    )
+    maker = next(leg for leg in profile.legs if leg.role == "maker")
+
+    assert profile.data_epoch_policy == "cancel"
+    assert profile.cancel_buffer_sec == 90
+    assert maker.max_reprices == 2
+    assert maker.reprice_policy == "deadline_staged_exact_target"
+    assert "taker_fallback" not in maker.order_lifecycle_policy
+    assert profile.fixed_parameters["state_epoch_components"] == (
+        "observation+forecast_curve+exact_bracket_token"
+    )
+    assert (
+        profile.fixed_parameters["replacement_price_policy"]
+        == "exact_stage_target_never_down"
+    )
+    assert profile.fixed_parameters["replacement_max_quote_drift_ticks"] == 1

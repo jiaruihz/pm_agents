@@ -20,6 +20,9 @@ from src.strategies.weather_edge_v1.execution.contracts import (
 from src.strategies.weather_edge_v1.execution.engine import (
     build_core_carry_legacy_plan_compatibility,
 )
+from src.strategies.weather_edge_v1.execution.quote_engine import (
+    round_price_to_tick,
+)
 from src.strategies.weather_edge_v1.execution.venue.polymarket import (
     PolymarketOrderRequest,
     PolymarketVenueAdapter,
@@ -181,7 +184,7 @@ class CoreCarryRequestBuilder:
         book: MarketBook,
         _capabilities,
         _fees,
-        _replacement,
+        replacement,
     ) -> PolymarketOrderRequest:
         plan_id = str(intent.metadata.get("legacy_plan_id") or "")
         plan = self.plans.get(plan_id)
@@ -191,21 +194,68 @@ class CoreCarryRequestBuilder:
             raise ValueError("fresh two-sided book unavailable")
         if child.maker_only:
             planned_limit = Decimal(str(plan.get("limit_price") or "0"))
-            cap = min(
+            strategy_cap = min(
                 Decimal(str(plan.get("maker_price_cap") or "0")),
                 intent.model_token_probability or Decimal("0"),
-                planned_limit,
             )
-            price = Decimal(
-                str(
-                    maker_resting_price(
-                        best_bid=float(book.bids[0].price),
-                        best_ask=float(book.asks[0].price),
-                        tick_size=float(book.tick_size),
-                        price_cap=float(cap),
+            if replacement is not None:
+                decision_bid = Decimal(
+                    str(plan.get("maker_reprice_decision_best_bid") or "0")
+                )
+                decision_ask = Decimal(
+                    str(plan.get("maker_reprice_decision_best_ask") or "0")
+                )
+                max_drift_ticks = Decimal(
+                    str(plan.get("maker_replacement_max_quote_drift_ticks") or "1")
+                )
+                max_drift = max_drift_ticks * book.tick_size
+                if decision_bid > 0 and decision_ask > 0 and (
+                    abs(book.bids[0].price - decision_bid) > max_drift
+                    or abs(book.asks[0].price - decision_ask) > max_drift
+                ):
+                    raise ValueError(
+                        "fresh maker book drifted beyond replacement decision"
+                    )
+                fresh_competitive = Decimal(
+                    str(
+                        maker_resting_price(
+                            best_bid=float(book.bids[0].price),
+                            best_ask=float(book.asks[0].price),
+                            tick_size=float(book.tick_size),
+                            price_cap=float(strategy_cap),
+                        )
                     )
                 )
-            )
+                source_price = replacement.posted_price
+                if fresh_competitive <= source_price:
+                    raise ValueError(
+                        "fresh maker book no longer supports an improving replacement"
+                    )
+                fresh_ceiling = min(
+                    strategy_cap,
+                    book.asks[0].price - book.tick_size,
+                )
+                price = round_price_to_tick(
+                    min(planned_limit, fresh_ceiling),
+                    book.tick_size,
+                    venue_side="BUY",
+                )
+                if price <= source_price:
+                    raise ValueError(
+                        "replacement maker price does not improve source order"
+                    )
+            else:
+                cap = min(strategy_cap, planned_limit)
+                price = Decimal(
+                    str(
+                        maker_resting_price(
+                            best_bid=float(book.bids[0].price),
+                            best_ask=float(book.asks[0].price),
+                            tick_size=float(book.tick_size),
+                            price_cap=float(cap),
+                        )
+                    )
+                )
             if price <= 0:
                 raise ValueError("no fresh non-crossing maker price")
             if price > planned_limit:
@@ -691,7 +741,10 @@ def execute_core_carry_plans(
             live_errors += 1
             continue
         stub = _stub_order_state(plan, source)
-        invalidate = action_name == "core_carry_maker_cancel_new_observation"
+        invalidate = action_name in {
+            "core_carry_maker_cancel_new_observation",
+            "core_carry_maker_cancel_weather_state",
+        }
         deadline = (
             datetime.now(timezone.utc).isoformat()
             if action_name == "core_carry_maker_cancel_ttl"
@@ -702,7 +755,12 @@ def execute_core_carry_plans(
             data_epoch_ref=(
                 f"{stub.data_epoch_ref}:invalidated"
                 if invalidate
-                else str(plan.get("source_report_ts_utc") or stub.data_epoch_ref or "")
+                else str(
+                    plan.get("data_epoch_ref")
+                    or plan.get("source_report_ts_utc")
+                    or stub.data_epoch_ref
+                    or ""
+                )
             ),
             deadline_utc=deadline or None,
             lifecycle_owner=RUNTIME_OWNER,
@@ -710,7 +768,18 @@ def execute_core_carry_plans(
             token_unchanged=not invalidate,
             book_fresh=True,
             price_cap_valid=True,
-            maker_price_cap=str(plan.get("maker_price_cap") or "0"),
+            maker_price_cap=str(
+                min(
+                    Decimal(str(plan.get("maker_price_cap") or "0")),
+                    Decimal(
+                        str(
+                            plan.get("limit_price")
+                            if action_name == "core_carry_maker_reprice"
+                            else plan.get("maker_price_cap") or "0"
+                        )
+                    ),
+                )
+            ),
         )
 
         def replacement_planner(final_order, decision, remaining, selected_plan=plan):
