@@ -118,7 +118,11 @@ The live 2026-07-03 miss is not impossible under the historical distribution: fi
 
 ## Artifacts
 
-- Script: `scripts/analysis/forecast_quality/research_low_price_yes_sizing_stop_v1.py`
+- Runner lifecycle: `superseded-for-now`; the one-off v1 producer was removed
+  from the active script tree on 2026-08-12. Its exact source remains recoverable
+  as git blob `57c5c4b2428d549be13fbe105d99efc4040a104f`.
+- Current owner: `scripts/analysis/forecast_quality/research_low_price_yes_sizing_fee_stop_v2.py`
+  keeps the same 476-row entry denominator and corrects official fee/execution math.
 - Replay rows: `docs/analysis/2026-07/generated/low_price_yes_sizing_stop_v1/replay_rows.csv`
 - Summary: `docs/analysis/2026-07/generated/low_price_yes_sizing_stop_v1/summary.csv`
 - JSON: `docs/analysis/2026-07/2026-07-03-low-price-yes-sizing-stop-v1.json`

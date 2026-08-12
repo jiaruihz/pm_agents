@@ -1,6 +1,6 @@
 # Weather Feature Layering Plan Review v1
 
-Status: current-reference
+Status: snapshot
 Updated: 2026-07-05
 Source of truth: no; review evidence for `WEATHER_FEATURE_LAYERING_PLAN.md`
 Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_FEATURE_LAYERING_PLAN.md; WEATHER_DOCS_INDEX.md

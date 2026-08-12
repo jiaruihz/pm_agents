@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import sqlite3
 import statistics
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +20,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.jsonl_partitions import dated_jsonl_paths  # noqa: E402
+from scripts.analysis.forecast_quality.source_alignment_common import (  # noqa: E402
+    parse_dt,
+    write_csv,
+)
 
 DEFAULT_RUNTIME_ROOTS = [
     Path("/Volumes/jrs/weather_data_feed_service_runtime"),
@@ -38,16 +41,6 @@ METAR_LIKE_SOURCES = {
     "synopticdata_timeseries",
 }
 WU_LIKE_SOURCES = {"weather_com_current", "weather_com_history_hourly"}
-
-
-def parse_dt(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def safe_float(value: Any) -> float | None:
@@ -290,17 +283,6 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return summary
-
-
-def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
-        path.write_text("", encoding="utf-8")
-        return
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def main() -> int:

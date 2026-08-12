@@ -1,7 +1,7 @@
 # Weather 分析脚本归属与退场账本
 
 Status: current-reference
-Updated: 2026-08-06
+Updated: 2026-08-12
 Source of truth: no
 Used by: `WEATHER_REPO_BOUNDARY.md`; `WEATHER_ARCHITECTURE_SPINE.md`; analysis living docs
 
@@ -31,6 +31,10 @@ manifest；新增入口要说明它在 `EventEnvelope → ... → fill → settl
 - copy-trade 工具已与 weather 主线分离。
 - 2026-06-16 后的 maintained observed-path 研究进入 `reheat_risk`；`observed_max/` 不是新工作的默认入口。
 - 2026-08-06 起，producer 只有在输出已精确重放 tombstone、无代码/测试消费者、复现 revision 已记录时才允许退场。
+- 2026-08-12 收口两个无代码/测试/生产消费者的 one-off producer：late-window
+  per-poll v3 由 heating-done v1 接管，low-price sizing-stop v1 由 fee-stop v2
+  接管；日期报告保留结论和原 source blob。观测对齐 family 的公共时间解析与
+  CSV 输出已抽到 `source_alignment_common.py`，不再复制到两个 runner。
 
 ## 当前脚本债务
 

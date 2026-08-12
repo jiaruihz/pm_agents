@@ -3,6 +3,13 @@
 Status: `snapshot`
 Evidence: `paper_snapshots/snapshot_YYYYMMDD_HHMM.json` per polling cycle; settlement joined only after PIT candidate generation.
 
+Runner lifecycle: `superseded-for-now`. The one-off producer was removed from the
+active script tree on 2026-08-12 after its tracked `summary.json` and this report
+were retained. Its exact source remains recoverable as git blob
+`e520302adf8b011f9920114ad8084fff587d7db1`; new work uses
+`research_late_window_residual_heating_done_v1.py`, which owns the same per-poll
+denominator and adds the physical heating-done contract.
+
 ## Verdict
 Per-poll replay confirms the Chengdu-style 39 NO opportunity exists in the snapshot layer, and a separate late-confirmed d1 NO policy captures the Chengdu 17:10-style 38 NO setup. Broad current YES / d1 NO / d2 NO first-cross remains mixed, while the plug-in late policies are positive but still low-sample after 2026-07-05..2026-07-06 label completion. Conclusion: `inconclusive_research_shadow_only`; do not change live. Positive forward point estimates exist for: d3_no.
 
