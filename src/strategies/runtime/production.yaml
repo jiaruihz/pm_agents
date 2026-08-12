@@ -28,6 +28,9 @@ production_releases:
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
     expected_repo_sha: ddecbbd6a26a88ebe5b62b997f2bf9c50f160119
+  - release_id: city_probability_runtime
+    checkout_root: /Users/deepsleep/projects/pm_agents_city_probability_prod
+    expected_repo_sha: 70aa30f7ee6712731161823c1dfe1f7f28bf8c7e
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
     expected_repo_sha: 1d2a1bda1c8b7ce1d25679d9e2cb451f136672cd
@@ -204,7 +207,7 @@ managed_runtimes:
     tmux_session: weather_city_probability_runtime_v3
     role: probability_runtime
     execution_mode: shadow
-    release_id: city_runtime
+    release_id: city_probability_runtime
     start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
     max_health_age_sec: 1200
