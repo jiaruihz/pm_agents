@@ -24,14 +24,17 @@ from weather_data_feed.production_paths import (  # noqa: E402
     historical_targeted_root,
 )
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
 RUNTIME = load_production_spec().data_feed_runtime_root
 DEFAULT_VERSIONS = RUNTIME / "output/forecast_enrichment"
 DEFAULT_CURVES = historical_targeted_root() / "forecast_hourly_curves"
 DEFAULT_LADDERS = historical_full_ladder_root() / "paper_snapshots"
-DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_d2_forecast_lineage_audit_v1"
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-05-d1-d2-forecast-lineage-audit-v1.md"
+ARTIFACT_FAMILY = "d1_d2_forecast_lineage_audit_v1"
 
 
 def parse_utc(value: Any) -> datetime | None:
@@ -321,16 +324,26 @@ def render_report(summary: dict[str, Any]) -> str:
 """
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start", default="2026-07-27")
     parser.add_argument("--end", default="2026-08-05")
     parser.add_argument("--versions", type=Path, default=DEFAULT_VERSIONS)
     parser.add_argument("--curves", type=Path, default=DEFAULT_CURVES)
     parser.add_argument("--ladders", type=Path, default=DEFAULT_LADDERS)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
-    args = parser.parse_args()
+    parser.add_argument("--run-id")
+    parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="optional explicit durable report path; omitted by default",
+    )
+    args = parser.parse_args(argv)
+    output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.out,
+    )
     start = date.fromisoformat(args.start)
     end = date.fromisoformat(args.end)
     summary = {
@@ -343,10 +356,11 @@ def main() -> int:
         "forecast_hourly_curves": audit_curves(args.curves, start, end),
         "full_ladders": audit_ladders(args.ladders, start, end),
     }
-    args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_report(summary), encoding="utf-8")
+    output = prepare_new_run_output(output)
+    (output / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(render_report(summary), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False))
     return 0
 

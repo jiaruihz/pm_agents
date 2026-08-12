@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 from weather_data_feed.forecast_run_contract import (  # noqa: E402
     EXACT_SINGLE_RUN_ENDPOINT,
     build_forecast_row,
@@ -29,7 +33,7 @@ from weather_data_feed.historical_forecast_runs import (  # noqa: E402
 )
 
 
-DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_d2_forecast_run_probe_v1"
+ARTIFACT_FAMILY = "d1_d2_forecast_run_probe_v1"
 
 
 def _daily_max(response: dict[str, Any], target_date: str) -> float:
@@ -198,7 +202,8 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--city", default="Tokyo")
     parser.add_argument("--latitude", type=float, default=35.6762)
     parser.add_argument("--longitude", type=float, default=139.6503)
@@ -213,7 +218,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    args.output_dir = prepare_new_run_output(
+        resolve_run_output(
+            ARTIFACT_FAMILY,
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     result = run_probe(args)
     output = args.output_dir / "summary.json"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

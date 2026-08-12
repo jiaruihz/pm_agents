@@ -1,5 +1,10 @@
 # D-1 / D-2 forecast lineage 与完整 ladder 审计 v1
 
+Artifact routing: this is the durable snapshot. New audit runs require a
+stable `--run-id` and write immutable machine output beneath the configured
+JRS research artifact root; the runner does not overwrite this report unless
+an explicit `--report` path is supplied.
+
 ## 数据快照
 
 - raw runtime：`/Volumes/jrs/weather_data_feed_service_runtime`；窗口 `2026-07-27..2026-08-05`。
