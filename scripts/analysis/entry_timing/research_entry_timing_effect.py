@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,9 +22,15 @@ from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-DEFAULT_STEM = "2026-06-08-entry-timing-effect-baseline"
 
 
 TIMING_BINS = [
@@ -872,12 +879,20 @@ def load_gate() -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-stem", default=DEFAULT_STEM)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument(
         "--run-stack-note",
         default="sync_weather_remote.sh succeeded; run_stack.sh rebuilt DB/facts but API start returned non-zero because port 8000 was already in use.",
     )
     args = parser.parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "entry_timing_effect",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
 
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
@@ -896,12 +911,10 @@ def main() -> None:
     }
     result["summary"] = build_summary(result)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    json_path = OUT_DIR / f"{args.output_stem}.json"
-    md_path = OUT_DIR / f"{args.output_stem}.md"
+    result["living_doc"] = "docs/analysis/entry_timing.md"
+    json_path = output_dir / "result.json"
     json_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
-    md_path.write_text(make_markdown(result), encoding="utf-8")
-    print(json.dumps({"json": str(json_path), "markdown": str(md_path)}, indent=2))
+    print(json.dumps({"json": str(json_path)}, indent=2))
 
 
 if __name__ == "__main__":

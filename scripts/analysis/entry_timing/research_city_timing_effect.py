@@ -8,8 +8,10 @@ This script intentionally uses only authorized fact tables:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,9 +19,15 @@ from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-STEM = "2026-06-08-city-x-entry-timing-research"
 
 TIMING_BINS = [
     ("<T-18", lambda h: h < 18),
@@ -400,6 +408,17 @@ def make_markdown(data: dict[str, Any]) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "city_entry_timing",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     data: dict[str, Any] = {
@@ -409,12 +428,10 @@ def main() -> None:
         "city_timing": build_city_timing(conn),
     }
     data["summary"] = make_summary(data)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    json_path = OUT_DIR / f"{STEM}.json"
-    md_path = OUT_DIR / f"{STEM}.md"
+    data["living_doc"] = "docs/analysis/entry_timing.md"
+    json_path = output_dir / "result.json"
     json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    md_path.write_text(make_markdown(data), encoding="utf-8")
-    print(json.dumps({"json": str(json_path), "markdown": str(md_path)}, indent=2))
+    print(json.dumps({"json": str(json_path)}, indent=2))
 
 
 if __name__ == "__main__":

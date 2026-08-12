@@ -3,19 +3,26 @@
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_PATH = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-07-v1-ecmwf-blocked-side-band-overlay.md"
-OUT_JSON = OUT_DIR / "2026-06-07-v1-ecmwf-blocked-side-band-overlay.json"
 
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
 RECENT_START = "2026-06-01"
@@ -297,7 +304,18 @@ def render(data: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "v1_ecmwf_blocked_side_band_overlay",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    output_json = output_dir / "result.json"
     conn = connect()
     trades = load_trades(conn)
     if trades.empty:
@@ -333,10 +351,12 @@ def main() -> int:
         "conclusion": conclusion,
         "actions": actions,
     }
-    OUT_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-    OUT_MD.write_text(render(data), encoding="utf-8")
-    print(f"wrote {OUT_MD}")
-    print(f"wrote {OUT_JSON}")
+    data["living_doc"] = "docs/analysis/entry_timing.md"
+    output_json.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {output_json}")
     return 0
 
 
