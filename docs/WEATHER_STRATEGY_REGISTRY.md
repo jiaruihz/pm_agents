@@ -168,8 +168,8 @@ market；V9 post-freeze audit把date-equal ΔBrier收窄为`+0.01002`、95% CI `
 ROI `+16.44%`，故V9 standalone退为dormant-for-now comparator，不再作为主交易表达。
 新 `amsterdam_knmi_cross_survival` 纯天气head用2024选择、2025 frozen：`.7°C`子集636 rows/238日，
 AUC `0.9452`，logloss `0.0650` 显著优于margin历史常数 `0.1031`；未来合同固定为
-`p_cross_survives - taker_fee_cost > 1pp`。该head的WCIR zero-notional adapter/config已完成并通过测试，
-尚未重载生产进程；真实资金gate未变。详见
+`p_cross_survives - taker_fee_cost > 1pp`。该head已于2026-08-12 03:02 UTC载入WCIR zero-notional，
+production SHA `70aa30f7…f28bf8c7e`，首轮`errors=0 / orders=0`；真实资金gate未变。详见
 [V9 PIT parity/frozen strategy](analysis/2026-08/2026-08-12-amsterdam-knmi-v9-pit-parity-frozen-strategy-v1.md) 与
 [旧8/11 scorecard](analysis/2026-08/2026-08-04-amsterdam-crossno-v7-shadow-scorecard-v1.md)。
 

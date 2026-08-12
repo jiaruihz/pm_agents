@@ -25,8 +25,9 @@ fee后 ROI `+7.79%`；新 survival 合同选择其中2笔/2日、2胜、ROI `+5.
 
 实际资金证据只有一笔：2026-08-11 Amsterdam 21-NO，8 shares @0.97，cost `$7.76`、fee `$0.01164`，
 已结算盈利 `$0.22836`，ROI `+2.94%`。这说明链路能成交且语义正确，不说明稳定收益。当前 live runner
-仍是用户此前批准的裸 `.7` 小仓规则；本次新增 survival head 已完成 WCIR zero-notional adapter/config 与
-测试，但尚未重载生产进程。任何生产重载，以及未来把它改成真实资金 gate 的动作，都需要单独生产授权。
+仍是用户此前批准的裸 `.7` 小仓规则；本次新增 survival head 已于2026-08-12 03:02 UTC重载进 WCIR
+zero-notional。production SHA `70aa30f7…f28bf8c7e`、artifact SHA `b2d5ec1b…854a2`，首轮
+`status=ok / errors=0 / orders_submitted=0`。未来把它改成真实资金 gate 仍需要单独生产授权。
 
 ## 结论
 
