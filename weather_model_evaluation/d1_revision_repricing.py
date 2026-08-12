@@ -1140,17 +1140,22 @@ def attach_market_evidence(
     checkpoints: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
+    checkpoints_by_city_date: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in checkpoints:
+        if item.get("event_time_pit_scorable") is False:
+            continue
+        checkpoints_by_city_date.setdefault(
+            (str(item.get("city") or ""), str(item.get("target_date") or "")),
+            [],
+        ).append(item)
+    for values in checkpoints_by_city_date.values():
+        values.sort(key=lambda item: str(item.get("checkpoint_ts_utc") or ""))
     for source in events:
         event = dict(source)
         event_time = parse_utc(event["event_available_at_utc"], field="event_available_at_utc")
-        eligible = [
-            item
-            for item in checkpoints
-            if item.get("city") == event["city"] and item.get("target_date") == event["target_date"]
-            # In-memory callers predating v3 may omit the flag; disk loaders
-            # always materialize it explicitly for both new and legacy rows.
-            and item.get("event_time_pit_scorable") is not False
-        ]
+        eligible = checkpoints_by_city_date.get(
+            (str(event["city"]), str(event["target_date"])), []
+        )
         pre_candidates = [
             item
             for item in eligible
