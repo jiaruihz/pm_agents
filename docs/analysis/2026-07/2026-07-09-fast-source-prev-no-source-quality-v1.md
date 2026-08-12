@@ -18,6 +18,17 @@ Generated: `2026-07-09T14:11:32.011891+00:00`
 - sources: `6`
 - median next-report lead time: `17.809` minutes
 
+### Superseded first-day revision
+
+The 2026-07-08 run used the same contract but only 250 lead rows across the
+same 15 cities and six sources.  It tentatively labelled NOAA MADIS HFMETAR
+`usable_with_city_bias` from 102 rows (MAE 0.709, within-one 81.37%); the
+expanded 2,777-row source slice changed that verdict to `basis_risky` (MAE
+1.093, within-one 68.71%).  The small-run FMI/JMA/Singapore/AMOS and MGM
+directions remained qualitatively consistent.  The early snapshot is retained
+here as revision history precisely because the larger denominator overturned
+one operationally relevant source assessment.
+
 ## Overall Signal
 
 - `next_report_up_prob_head`: rows `7415`, signal `3231`, precision `0.4751`, base `0.3173`, lift `1.4973`
@@ -70,9 +81,11 @@ Generated: `2026-07-09T14:11:32.011891+00:00`
 - `report_md`: `docs/analysis/2026-07/2026-07-09-fast-source-prev-no-source-quality-v1.md`
 - `json`: `docs/analysis/2026-07/2026-07-09-fast-source-prev-no-source-quality-v1.json`
 
-## Operational Use
+## Historical Operational Note
 
-Current live action is deliberately narrow:
+The following was the operator posture recorded when this snapshot was written;
+it is not current production authority.  Current live/shadow state must be read
+from the production manifest, runtime process arguments and exchange evidence.
 
 - Keep `Helsinki / fmi` live, now at `10` shares per trade and `10` shares per market, per operator instruction after the first matched live trial.
 - Keep `Tokyo / jma_amedas`, `Singapore / singapore_mss`, and `Busan / amos_runway` in shadow as clean basis candidates.
@@ -83,4 +96,6 @@ Current live action is deliberately narrow:
 
 significance=NA; baseline=NA; forward=NA; conclusion=shadow_candidate
 
-This validates a source-basis research layer. The Helsinki 10-share setting is an operator-directed live trial adjustment after a matched live order; this report does not independently promote additional cities to live.
+This validates a source-basis research layer. The historical Helsinki 10-share
+setting was an operator-directed live trial adjustment after a matched live
+order; this report does not independently promote any city to current live.

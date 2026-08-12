@@ -142,6 +142,10 @@ system contract 和 ops runbook。
 - 2026-08-12：lead-to-next-METAR/stale-book 的 7/08 首日 250-row 报告被 7/09 同合同 7,415-row 扩展重跑
   完整覆盖。首日 denominator、precision/base-rate 和盘口覆盖缺口已压入扩展报告的 revision history；索引改指扩展
   证据，删除旧报告，避免小样本旧数继续比后续证据更显眼。
+- 2026-08-12：lead-to-next-METAR source-basis 的 7/08 首日 250-row 报告同样并入 7/09 的 7,415-row
+  扩展报告。合并明确保留了关键反转：NOAA MADIS 从 102-row 的 `usable_with_city_bias` 变成 2,777-row 的
+  `basis_risky`。扩展报告内“keep Helsinki live”改为历史操作记录，并明确当前生产状态只能由 manifest/process/raw/
+  exchange 判断，避免旧 snapshot 继续充当部署指令。
 
 ## 仍有效的历史边界
 
