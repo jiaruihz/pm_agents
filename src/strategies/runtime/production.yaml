@@ -196,9 +196,22 @@ managed_runtimes:
     health_format: json
     max_health_age_sec: 420
     accepted_health_statuses: [ok, ok_with_discovery_reuse]
+    expected_health_fields:
+      configured_cities: [Amsterdam, Tokyo, Helsinki, Busan]
+      active_bracket_count: 2
+      research_bracket_count: 3
+      event_bracket_count: 3
+      research_sample_modulus: 6
+      daily_payload_budget_bytes: 3000000000
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
     launch_environment:
+      WEATHER_MARKET_BOOKS_WS_CITIES: "Amsterdam Tokyo Helsinki Busan"
+      WEATHER_MARKET_BOOKS_WS_ACTIVE_BRACKETS: "2"
+      WEATHER_MARKET_BOOKS_WS_RESEARCH_BRACKETS: "3"
+      WEATHER_MARKET_BOOKS_WS_EVENT_BRACKETS: "3"
+      WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS: "6"
+      WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES: "3000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "12"

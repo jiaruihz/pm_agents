@@ -237,6 +237,8 @@ export interface ExecutionGapRow {
 /** /api/live/summary response */
 export interface LiveSummary {
   last_cycle_utc: string | null;
+  last_fact_fill_utc: string | null;
+  last_fact_build_utc: string | null;
   clob: {
     total_positions: number;
     open_count: number;
@@ -252,7 +254,10 @@ export interface LiveSummary {
   };
   pending_orders: {
     count: number;
-    reserved_usd: number;
+    reserved_usd: number | null;
+    submitted_notional_usd: number;
+    source: "canonical_unfilled_submissions";
+    authenticated: boolean;
   };
   paper_baseline: {
     run_id: string | null;

@@ -77,6 +77,28 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert by_id["weather_dashboard_api"].health_format == "http_json"
     assert by_id["weather_dashboard_api"].health_url == "http://127.0.0.1:8000/health"
+    assert by_id["weather_market_books"].expected_health_contract() == {
+        "configured_cities": ["Amsterdam", "Tokyo", "Helsinki", "Busan"],
+        "active_bracket_count": 2,
+        "research_bracket_count": 3,
+        "event_bracket_count": 3,
+        "research_sample_modulus": 6,
+        "daily_payload_budget_bytes": 3_000_000_000,
+    }
+    assert dict(by_id["weather_market_books"].launch_environment) == {
+        "WEATHER_MARKET_BOOKS_WS_CITIES": "Amsterdam Tokyo Helsinki Busan",
+        "WEATHER_MARKET_BOOKS_WS_ACTIVE_BRACKETS": "2",
+        "WEATHER_MARKET_BOOKS_WS_RESEARCH_BRACKETS": "3",
+        "WEATHER_MARKET_BOOKS_WS_EVENT_BRACKETS": "3",
+        "WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS": "6",
+        "WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES": "3000000000",
+        "WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS": (
+            "/Volumes/jrs/weather_data_feed_service_runtime/output/"
+            "forecast_run_capture/market_capture_demands.jsonl"
+        ),
+        "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
+        "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "12",
+    }
     assert by_id["fast_source_prev_no_trial_v1"].dependencies == (
         "weather_data_feed_jrs",
         "weather_live_cross_observations",
@@ -232,6 +254,42 @@ def test_health_checks_session_freshness_status_and_live_flags(tmp_path):
     assert report["status"] == "healthy"
     assert report["runtimes"][0]["health_age_sec"] == 30.0
     assert report["runtimes"][0]["issues"] == []
+
+
+def test_health_rejects_runtime_contract_drift(tmp_path):
+    health_path = tmp_path / "latest.json"
+    health_path.write_text(
+        json.dumps({"status": "ok", "daily_payload_budget_bytes": 2_000_000_000}),
+        encoding="utf-8",
+    )
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="collector",
+        tmux_session="collector",
+        role="collector",
+        execution_mode="collector",
+        health_path=health_path,
+        accepted_health_statuses=("ok",),
+        expected_health_fields=(("daily_payload_budget_bytes", 3_000_000_000),),
+        recovery_policy="safe",
+    )
+
+    report = ctl.evaluate_production_health(
+        production_spec(tmp_path, (runtime,)),
+        observed("collector"),
+        now_epoch=health_path.stat().st_mtime,
+    )
+
+    row = report["runtimes"][0]
+    assert report["status"] == "critical"
+    assert row["issues"] == ["health_contract_mismatch"]
+    assert row["health_contract_mismatches"] == [
+        {
+            "field": "daily_payload_budget_bytes",
+            "expected": 3_000_000_000,
+            "observed": 2_000_000_000,
+            "missing": False,
+        }
+    ]
 
 
 def test_health_supports_explicit_mtime_heartbeat(tmp_path):

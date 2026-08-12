@@ -195,10 +195,13 @@ function SummaryBar({ summary }: { summary: LiveSummary }) {
       gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
       gap: 10, marginBottom: 20,
     }}>
-      <SummaryCard label="Last Cycle" value={
-        summary.last_cycle_utc
-          ? new Date(summary.last_cycle_utc).toLocaleString()
+      <SummaryCard label="Last Fact Fill" value={
+        summary.last_fact_fill_utc
+          ? new Date(summary.last_fact_fill_utc).toLocaleString()
           : "—"
+      } sub={summary.last_fact_build_utc
+        ? `fact built: ${new Date(summary.last_fact_build_utc).toLocaleString()}`
+        : undefined
       } />
       <SummaryCard label="CLOB Positions" value={String(clob.total_positions)} />
       <SummaryCard
@@ -215,8 +218,15 @@ function SummaryBar({ summary }: { summary: LiveSummary }) {
         valueColor={pnlColor(clob.realized_pnl_usd)}
       />
       <SummaryCard
-        label="Pending Orders"
-        value={`${pending_orders.count} (${usd(pending_orders.reserved_usd)})`}
+        label={pending_orders.authenticated ? "Open Orders" : "Unfilled Submissions"}
+        value={pending_orders.authenticated
+          ? `${pending_orders.count} (${usd(pending_orders.reserved_usd)})`
+          : String(pending_orders.count)
+        }
+        sub={pending_orders.authenticated
+          ? undefined
+          : "canonical only; not exchange reserved"
+        }
       />
       <SummaryCard
         label="Paper Baseline ROI"

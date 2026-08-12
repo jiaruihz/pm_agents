@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Mapping
 from urllib.parse import urlparse
 
 import yaml
@@ -44,6 +45,10 @@ class WeatherManagedRuntimeSpec:
     uses_market_proxy: bool = False
     release_id: str | None = None
     launch_environment: tuple[tuple[str, str], ...] = ()
+    expected_health_fields: tuple[tuple[str, Any], ...] = ()
+
+    def expected_health_contract(self) -> dict[str, Any]:
+        return dict(self.expected_health_fields)
 
     def resolved_start_script(self) -> Path | None:
         if self.start_script is None:
@@ -260,6 +265,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"managed runtime launch_environment must be a mapping: {instance_id}"
             )
+        expected_health_raw = item.get("expected_health_fields") or {}
+        if not isinstance(expected_health_raw, dict):
+            raise ValueError(
+                f"managed runtime expected_health_fields must be a mapping: {instance_id}"
+            )
         checkout_root = (
             release_by_id[release_id].checkout_root
             if release_id
@@ -317,6 +327,10 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                         (str(key), str(value))
                         for key, value in launch_environment_raw.items()
                     )
+                ),
+                expected_health_fields=tuple(
+                    (str(key), value)
+                    for key, value in expected_health_raw.items()
                 ),
             )
         )
@@ -568,10 +582,16 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"{item.health_format}"
             )
         if item.health_format == "mtime" and (
-            item.accepted_health_statuses or item.expected_live
+            item.accepted_health_statuses
+            or item.expected_live
+            or item.expected_health_fields
         ):
             raise ValueError(
                 f"mtime health cannot validate status/live fields: {item.instance_id}"
+            )
+        if item.expected_health_fields and not (item.health_path or item.health_url):
+            raise ValueError(
+                f"expected_health_fields require a health source: {item.instance_id}"
             )
         if item.health_format == "http_json" and not item.health_url:
             raise ValueError(
@@ -631,3 +651,31 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"{sorted(missing_dependencies)}"
             )
     return spec
+
+
+def health_contract_mismatches(
+    runtime: WeatherManagedRuntimeSpec,
+    payload: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Compare declared production behavior with the runtime health artifact."""
+
+    mismatches: list[dict[str, Any]] = []
+    for field_name, expected in runtime.expected_health_fields:
+        observed: Any = payload
+        found = True
+        for part in field_name.split("."):
+            if not isinstance(observed, Mapping) or part not in observed:
+                found = False
+                observed = None
+                break
+            observed = observed[part]
+        if not found or observed != expected:
+            mismatches.append(
+                {
+                    "field": field_name,
+                    "expected": expected,
+                    "observed": observed,
+                    "missing": not found,
+                }
+            )
+    return mismatches

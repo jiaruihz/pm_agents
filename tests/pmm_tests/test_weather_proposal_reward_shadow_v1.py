@@ -23,6 +23,16 @@ This market can not resolve until the first data point for the following date ha
 """
 
 
+def test_cli_defaults_follow_shared_production_contract() -> None:
+    args = MODULE.build_parser().parse_args([])
+
+    assert args.output_dir == (
+        "/Volumes/jrs/weather_data_feed_service_runtime/output/"
+        "proposal_reward_shadow_v1"
+    )
+    assert args.market_proxy == "http://127.0.0.1:7896"
+
+
 def test_rule_and_market_question_parsing() -> None:
     assert MODULE.parse_wu_contract(DESCRIPTION) == ("LEMD", "ES", "C")
     assert MODULE.parse_market_question(

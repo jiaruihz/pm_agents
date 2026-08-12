@@ -42,6 +42,7 @@ from scripts.ops import weather_production_manifest as manifest_tool  # noqa: E4
 from src.strategies.runtime.production import (  # noqa: E402
     WeatherManagedRuntimeSpec,
     WeatherProductionSpec,
+    health_contract_mismatches,
     load_production_spec,
 )
 
@@ -130,6 +131,7 @@ def evaluate_production_health(
         issues: list[str] = []
         health_age_sec: float | None = None
         health_payload: dict[str, Any] | None = None
+        contract_mismatches: list[dict[str, Any]] = []
         if session_row is None:
             issues.append("tmux_session_missing")
         pane_text = _pane_text(session_row)
@@ -182,6 +184,10 @@ def evaluate_production_health(
                         issues.append("health_status_unaccepted")
                 if runtime.health_format == "json" and runtime.expected_live and health_payload.get("live_enabled") is not True:
                     issues.append("health_live_not_enabled")
+        if health_payload is not None and runtime.expected_health_fields:
+            contract_mismatches = health_contract_mismatches(runtime, health_payload)
+            if contract_mismatches:
+                issues.append("health_contract_mismatch")
         row = {
             "instance_id": runtime.instance_id,
             "tmux_session": runtime.tmux_session,
@@ -200,6 +206,7 @@ def evaluate_production_health(
             "health_generated_at_utc": (
                 health_payload.get("generated_at_utc") if health_payload else None
             ),
+            "health_contract_mismatches": contract_mismatches,
             "checkout_root": str(runtime.checkout_root) if runtime.checkout_root else None,
             "start_script": (
                 str(runtime.resolved_start_script())

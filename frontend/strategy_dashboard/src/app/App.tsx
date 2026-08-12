@@ -1,43 +1,44 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./AppShell";
-// v2 pages
-import { TodayOverviewPage } from "../pages/v2/TodayOverviewPage";
-import { ProbesPage } from "../pages/v2/ProbesPage";
-import { ProbeDetailPage } from "../pages/v2/ProbeDetailPage";
-import { ResearchLinesPage } from "../pages/v2/ResearchLinesPage";
-import { ResearchLineDetailPage } from "../pages/v2/ResearchLineDetailPage";
-import { PerformancePage } from "../pages/v2/PerformancePage";
-import { DailyLineagePage } from "../pages/v2/DailyLineagePage";
-import { GlossaryPage } from "../pages/v2/GlossaryPage";
-import { DataSourcesPage } from "../pages/v2/DataSourcesPage";
-import { ArchivePage } from "../pages/v2/ArchivePage";
-// legacy pages (kept reachable from /archive)
-import { AccountsPage } from "../pages/AccountsPage";
-import { BacktestsPage } from "../pages/BacktestsPage";
-import { DashboardPage } from "../pages/DashboardPage";
-import { InstanceDetailPage } from "../pages/InstanceDetailPage";
-import { StrategiesPage } from "../pages/StrategiesPage";
-import { StrategyDetailPage } from "../pages/StrategyDetailPage";
-import { WeatherRunsPage } from "../pages/weather/WeatherRunsPage";
-import { WeatherComparePage } from "../pages/weather/WeatherComparePage";
-import { WeatherHistoryPage } from "../pages/weather/WeatherHistoryPage";
-import { WeatherLivePage } from "../pages/weather/WeatherLivePage";
-import { WeatherOrderBlotterPage } from "../pages/weather/WeatherOrderBlotterPage";
-import { WeatherResearchPage } from "../pages/weather/WeatherResearchPage";
-import { WeatherStrategyRuntimePage } from "../pages/weather/WeatherStrategyRuntimePage";
-import { WeatherTradeDrilldownPage } from "../pages/weather/WeatherTradeDrilldownPage";
-import { WeatherConfigsPage } from "../pages/weather/WeatherStrategiesPage";
-import { WeatherConfigDetailPage } from "../pages/weather/WeatherStrategyDetailPage";
-import { WeatherStrategyManagementPage } from "../pages/weather/WeatherStrategyManagementPage";
-import { WeatherStrategyDefinitionDetailPage } from "../pages/weather/WeatherStrategyDefinitionDetailPage";
-import { WeatherStrategyInstancesPage } from "../pages/weather/WeatherStrategyInstancesPage";
-import { WeatherStrategyInstanceDetailPage } from "../pages/weather/WeatherStrategyInstanceDetailPage";
-import { CopyTradeWalletsPage } from "../pages/weather/CopyTradeWalletsPage";
-import { CopyTradeWalletDetailPage } from "../pages/weather/CopyTradeWalletDetailPage";
+
+const TodayOverviewPage = lazy(() => import("../pages/v2/TodayOverviewPage").then((m) => ({ default: m.TodayOverviewPage })));
+const ProbesPage = lazy(() => import("../pages/v2/ProbesPage").then((m) => ({ default: m.ProbesPage })));
+const ProbeDetailPage = lazy(() => import("../pages/v2/ProbeDetailPage").then((m) => ({ default: m.ProbeDetailPage })));
+const ResearchLinesPage = lazy(() => import("../pages/v2/ResearchLinesPage").then((m) => ({ default: m.ResearchLinesPage })));
+const ResearchLineDetailPage = lazy(() => import("../pages/v2/ResearchLineDetailPage").then((m) => ({ default: m.ResearchLineDetailPage })));
+const PerformancePage = lazy(() => import("../pages/v2/PerformancePage").then((m) => ({ default: m.PerformancePage })));
+const DailyLineagePage = lazy(() => import("../pages/v2/DailyLineagePage").then((m) => ({ default: m.DailyLineagePage })));
+const GlossaryPage = lazy(() => import("../pages/v2/GlossaryPage").then((m) => ({ default: m.GlossaryPage })));
+const DataSourcesPage = lazy(() => import("../pages/v2/DataSourcesPage").then((m) => ({ default: m.DataSourcesPage })));
+const ArchivePage = lazy(() => import("../pages/v2/ArchivePage").then((m) => ({ default: m.ArchivePage })));
+const AccountsPage = lazy(() => import("../pages/AccountsPage").then((m) => ({ default: m.AccountsPage })));
+const BacktestsPage = lazy(() => import("../pages/BacktestsPage").then((m) => ({ default: m.BacktestsPage })));
+const DashboardPage = lazy(() => import("../pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const InstanceDetailPage = lazy(() => import("../pages/InstanceDetailPage").then((m) => ({ default: m.InstanceDetailPage })));
+const StrategiesPage = lazy(() => import("../pages/StrategiesPage").then((m) => ({ default: m.StrategiesPage })));
+const StrategyDetailPage = lazy(() => import("../pages/StrategyDetailPage").then((m) => ({ default: m.StrategyDetailPage })));
+const WeatherRunsPage = lazy(() => import("../pages/weather/WeatherRunsPage").then((m) => ({ default: m.WeatherRunsPage })));
+const WeatherComparePage = lazy(() => import("../pages/weather/WeatherComparePage").then((m) => ({ default: m.WeatherComparePage })));
+const WeatherHistoryPage = lazy(() => import("../pages/weather/WeatherHistoryPage").then((m) => ({ default: m.WeatherHistoryPage })));
+const WeatherLivePage = lazy(() => import("../pages/weather/WeatherLivePage").then((m) => ({ default: m.WeatherLivePage })));
+const WeatherOrderBlotterPage = lazy(() => import("../pages/weather/WeatherOrderBlotterPage").then((m) => ({ default: m.WeatherOrderBlotterPage })));
+const WeatherResearchPage = lazy(() => import("../pages/weather/WeatherResearchPage").then((m) => ({ default: m.WeatherResearchPage })));
+const WeatherStrategyRuntimePage = lazy(() => import("../pages/weather/WeatherStrategyRuntimePage").then((m) => ({ default: m.WeatherStrategyRuntimePage })));
+const WeatherTradeDrilldownPage = lazy(() => import("../pages/weather/WeatherTradeDrilldownPage").then((m) => ({ default: m.WeatherTradeDrilldownPage })));
+const WeatherConfigsPage = lazy(() => import("../pages/weather/WeatherStrategiesPage").then((m) => ({ default: m.WeatherConfigsPage })));
+const WeatherConfigDetailPage = lazy(() => import("../pages/weather/WeatherStrategyDetailPage").then((m) => ({ default: m.WeatherConfigDetailPage })));
+const WeatherStrategyManagementPage = lazy(() => import("../pages/weather/WeatherStrategyManagementPage").then((m) => ({ default: m.WeatherStrategyManagementPage })));
+const WeatherStrategyDefinitionDetailPage = lazy(() => import("../pages/weather/WeatherStrategyDefinitionDetailPage").then((m) => ({ default: m.WeatherStrategyDefinitionDetailPage })));
+const WeatherStrategyInstancesPage = lazy(() => import("../pages/weather/WeatherStrategyInstancesPage").then((m) => ({ default: m.WeatherStrategyInstancesPage })));
+const WeatherStrategyInstanceDetailPage = lazy(() => import("../pages/weather/WeatherStrategyInstanceDetailPage").then((m) => ({ default: m.WeatherStrategyInstanceDetailPage })));
+const CopyTradeWalletsPage = lazy(() => import("../pages/weather/CopyTradeWalletsPage").then((m) => ({ default: m.CopyTradeWalletsPage })));
+const CopyTradeWalletDetailPage = lazy(() => import("../pages/weather/CopyTradeWalletDetailPage").then((m) => ({ default: m.CopyTradeWalletDetailPage })));
 
 export function App(): JSX.Element {
   return (
-    <Routes>
+    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+      <Routes>
       {/* v2 redesign (default) */}
       <Route element={<AppShell />}>
         <Route path="/" element={<TodayOverviewPage />} />
@@ -80,6 +81,7 @@ export function App(): JSX.Element {
       <Route path="/legacy/backtests" element={<BacktestsPage />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

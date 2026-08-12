@@ -18,6 +18,7 @@ import shlex
 import socket
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -29,6 +30,7 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.runtime.production import (  # noqa: E402
     WeatherProductionSpec,
+    health_contract_mismatches,
     load_production_spec,
 )
 from src.strategies.runtime.specs import load_instance_specs  # noqa: E402
@@ -409,7 +411,7 @@ def git_metadata(root: Path, cache: dict[str, dict[str, Any]]) -> dict[str, Any]
 
 
 def inspect_persistent_worktrees(spec: WeatherProductionSpec) -> list[dict[str, Any]]:
-    """Find top-level pm_agents worktrees not owned by the production contract."""
+    """Find durable project worktrees not owned by the production contract."""
     proc = run_command(
         [
             "git",
@@ -439,7 +441,9 @@ def inspect_persistent_worktrees(spec: WeatherProductionSpec) -> list[dict[str, 
         if not line.startswith("worktree "):
             continue
         root = Path(line.removeprefix("worktree ")).resolve()
-        if root.parent != parent or not root.name.startswith(prefix):
+        top_level_project = root.parent == parent and root.name.startswith(prefix)
+        nested_project = root.is_relative_to(spec.operational_repo_root.resolve())
+        if not top_level_project and not nested_project:
             continue
         rows.append(
             {
@@ -449,6 +453,53 @@ def inspect_persistent_worktrees(spec: WeatherProductionSpec) -> list[dict[str, 
             }
         )
     return sorted(rows, key=lambda row: str(row["root"]))
+
+
+def inspect_runtime_health_contracts(
+    spec: WeatherProductionSpec,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for runtime in spec.managed_runtimes:
+        if not runtime.expected_health_fields:
+            continue
+        try:
+            if runtime.health_url:
+                with urllib.request.urlopen(runtime.health_url, timeout=2.0) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+            elif runtime.health_path:
+                payload = json.loads(runtime.health_path.read_text(encoding="utf-8"))
+            else:
+                payload = None
+        except (OSError, json.JSONDecodeError) as exc:
+            rows.append(
+                {
+                    "instance_id": runtime.instance_id,
+                    "status": "unreadable",
+                    "error": type(exc).__name__,
+                    "mismatches": [],
+                }
+            )
+            continue
+        if not isinstance(payload, Mapping):
+            rows.append(
+                {
+                    "instance_id": runtime.instance_id,
+                    "status": "invalid",
+                    "error": "health_payload_not_object",
+                    "mismatches": [],
+                }
+            )
+            continue
+        mismatches = health_contract_mismatches(runtime, payload)
+        rows.append(
+            {
+                "instance_id": runtime.instance_id,
+                "status": "mismatch" if mismatches else "healthy",
+                "error": None,
+                "mismatches": mismatches,
+            }
+        )
+    return rows
 
 
 def runtime_summary(tokens: Sequence[str]) -> dict[str, Any]:
@@ -636,6 +687,7 @@ def build_manifest(
     observed_processes: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
     persistent_worktrees = inspect_persistent_worktrees(spec)
+    runtime_health_contracts = inspect_runtime_health_contracts(spec)
     unregistered_worktrees = [
         row for row in persistent_worktrees if not bool(row["registered"])
     ]
@@ -644,8 +696,20 @@ def build_manifest(
             finding(
                 "warning",
                 "unregistered_persistent_worktrees",
-                "top-level pm_agents worktrees exist outside the production contract",
+                "project worktrees exist outside the production contract",
                 {"worktrees": unregistered_worktrees},
+            )
+        )
+    unhealthy_contracts = [
+        row for row in runtime_health_contracts if row["status"] != "healthy"
+    ]
+    if unhealthy_contracts:
+        findings.append(
+            finding(
+                "critical",
+                "runtime_health_contract_mismatch",
+                "runtime health fields differ from the git-authored production contract",
+                {"runtimes": unhealthy_contracts},
             )
         )
 
@@ -1005,6 +1069,7 @@ def build_manifest(
         "db_consumers": sorted(db_consumers.values(), key=lambda row: int(row["pid"])),
         "checkouts": checkouts,
         "persistent_worktrees": persistent_worktrees,
+        "runtime_health_contracts": runtime_health_contracts,
         "processes": sorted(observed_processes, key=lambda row: int(row["pid"])),
         "tmux_sessions": list(tmux_rows),
         "launch_agents": list(launchctl_rows),

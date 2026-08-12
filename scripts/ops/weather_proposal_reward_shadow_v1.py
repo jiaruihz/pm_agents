@@ -42,6 +42,8 @@ from weather_data_feed.observation_sources import (  # noqa: E402
 from weather_data_feed.city_calendar import CITY_TIMEZONE  # noqa: E402
 from weather_data_feed.source_policy import canonical_city_name  # noqa: E402
 from weather_data_feed_service.io_utils import append_jsonl, read_json, write_json  # noqa: E402
+from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 UTC = timezone.utc
@@ -1038,6 +1040,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    production = load_production_spec()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("cycle", "loop"), nargs="?", default="cycle")
     parser.add_argument(
@@ -1045,9 +1048,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output-dir",
-        default="/Volumes/jrs/weather_data_feed_service_runtime/output/proposal_reward_shadow_v1",
+        default=str(production.data_feed_output_root() / "proposal_reward_shadow_v1"),
     )
-    parser.add_argument("--market-proxy", default="http://127.0.0.1:7897")
+    parser.add_argument("--market-proxy", default=production_market_proxy_url())
     parser.add_argument("--cities", nargs="*", default=None)
     parser.add_argument("--run-seconds", type=float, default=0)
     return parser

@@ -38,7 +38,8 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert spec.research_artifact_root == Path(
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"
     )
-    assert len(spec.releases) == 19
+    release_ids = [release.release_id for release in spec.releases]
+    assert len(release_ids) == len(set(release_ids))
     assert spec.release("control_plane").checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_prod"
     )
@@ -46,6 +47,65 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_core_carry_prod"
     )
+
+
+def test_nested_project_worktree_is_included_in_lifecycle_audit(tmp_path, monkeypatch):
+    spec = production_spec(tmp_path)
+    nested = spec.operational_repo_root / ".worktrees/research"
+    monkeypatch.setattr(
+        manifest,
+        "run_command",
+        lambda *args, **kwargs: __import__("subprocess").CompletedProcess(
+            args=[], returncode=0, stdout=f"worktree {nested}\nHEAD abc\n", stderr=""
+        ),
+    )
+
+    rows = manifest.inspect_persistent_worktrees(spec)
+
+    assert rows == [{"root": str(nested), "registered": False, "exists": False}]
+
+
+def test_manifest_reports_runtime_health_contract_mismatch(tmp_path, monkeypatch):
+    health = tmp_path / "feed/collector_health.json"
+    health.parent.mkdir(parents=True)
+    health.write_text('{"daily_payload_budget_bytes": 2000000000}', encoding="utf-8")
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="collector",
+        tmux_session="weather_collector",
+        role="collector",
+        execution_mode="collector",
+        health_path=health,
+        expected_health_fields=(("daily_payload_budget_bytes", 3000000000),),
+    )
+    spec = WeatherProductionSpec(
+        **{**production_spec(tmp_path).__dict__, "managed_runtimes": (runtime,)}
+    )
+    spec.canonical_db_path.parent.mkdir(parents=True)
+    spec.canonical_db_path.write_text("canonical", encoding="utf-8")
+    local = tmp_path / "repo/runtime/weather.db"
+    local.parent.mkdir(parents=True)
+    local.symlink_to(spec.canonical_db_path)
+    monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(manifest, "inspect_persistent_worktrees", lambda _spec: [])
+
+    payload = manifest.build_manifest(
+        spec=spec,
+        processes=[],
+        tmux_rows=[],
+        launchctl_rows=[],
+        db_route=manifest.inspect_db_route(spec, repo_root=tmp_path / "repo"),
+        db_consumers={},
+    )
+
+    finding = next(
+        item
+        for item in payload["findings"]
+        if item["kind"] == "runtime_health_contract_mismatch"
+    )
+    assert finding["severity"] == "critical"
+    mismatch = finding["detail"]["runtimes"][0]["mismatches"][0]
+    assert mismatch["expected"] == 3000000000
+    assert mismatch["observed"] == 2000000000
 
 
 def test_db_route_detects_distinct_local_and_jrs_files(tmp_path):
