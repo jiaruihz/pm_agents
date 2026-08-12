@@ -358,7 +358,12 @@ def apply_market_capture_demands(
     market_payload: dict[str, Any],
     demands: Sequence[Mapping[str, Any]],
 ) -> Selection:
-    """Union complete D-1 event ladders into the selective subscription set."""
+    """Union a revision-centered local strip into the selective WS set.
+
+    Complete five-minute ladder context remains in canonical REST.  WS owns
+    only queue/tape evidence for the brackets traversed by the forecast
+    revision plus one neighbor on each side.
+    """
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for source in market_payload.get("records") or []:
@@ -370,7 +375,50 @@ def apply_market_capture_demands(
     for source in demands:
         demand = dict(source)
         key = (str(demand.get("city") or ""), str(demand.get("target_date") or ""))
-        rows = [row for row in grouped.get(key, ()) if row.get("token_id")]
+        event_rows = [row for row in grouped.get(key, ()) if row.get("token_id")]
+        by_label: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        parsed_by_label: dict[str, MarketBracket] = {}
+        for row in event_rows:
+            label = str(row.get("bracket") or "")
+            parsed = parse_market_bracket(label)
+            if label and parsed is not None:
+                by_label[label].append(row)
+                parsed_by_label[label] = parsed
+        ordered_labels = sorted(
+            parsed_by_label,
+            key=lambda label: _bracket_sort_key(parsed_by_label[label]),
+        )
+        rows: list[dict[str, Any]] = []
+        if ordered_labels and demand.get("ladder_scope") == "revision_path_plus_one_neighbor_yes_no":
+            centers = []
+            for label in ordered_labels:
+                bracket = parsed_by_label[label]
+                center = (
+                    bracket.high
+                    if bracket.low is None
+                    else bracket.low
+                    if bracket.high is None
+                    else (bracket.low + bracket.high) / 2.0
+                )
+                centers.append(float(center))
+            requested_centers = [
+                float(demand[field])
+                for field in ("consensus_before_native", "consensus_after_native")
+                if demand.get(field) is not None
+            ]
+            if requested_centers:
+                indexes = [
+                    min(range(len(centers)), key=lambda index: abs(centers[index] - value))
+                    for value in requested_centers
+                ]
+                start = max(0, min(indexes) - 1)
+                end = min(len(ordered_labels), max(indexes) + 2)
+                selected_labels = ordered_labels[start:end]
+                rows = [row for label in selected_labels for row in by_label[label]]
+                demand["resolved_brackets"] = selected_labels
+        elif demand.get("ladder_scope") == "complete_event_yes_no":
+            # Explicit compatibility for already-written pre-v2 demand rows.
+            rows = event_rows
         token_ids = sorted({str(row["token_id"]) for row in rows})
         max_tokens = int(demand.get("max_token_count") or 0)
         if not rows:
@@ -378,7 +426,7 @@ def apply_market_capture_demands(
         elif max_tokens <= 0 or len(token_ids) > max_tokens:
             demand["resolution_status"] = "token_budget_exceeded"
         else:
-            demand["resolution_status"] = "resolved_complete_event"
+            demand["resolution_status"] = "resolved_revision_strip"
             demand["resolved_token_ids"] = token_ids
             for row in rows:
                 token_id = str(row["token_id"])

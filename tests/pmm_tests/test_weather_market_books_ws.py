@@ -339,7 +339,7 @@ def test_hourly_writer_uses_restart_safe_stream_file(tmp_path) -> None:
     assert path.read_text(encoding="utf-8").strip() == '{"message":"one"}'
 
 
-def test_d1_capture_demand_adds_complete_future_event_ladder(tmp_path) -> None:
+def test_d1_capture_demand_adds_revision_path_and_neighbors(tmp_path) -> None:
     path = tmp_path / "capture_demands.jsonl"
     path.write_text(
         json.dumps(
@@ -350,7 +350,10 @@ def test_d1_capture_demand_adds_complete_future_event_ladder(tmp_path) -> None:
                 "target_date": "2026-08-10",
                 "requested_at_utc": "2026-08-09T02:59:00Z",
                 "expires_at_utc": "2026-08-09T04:59:00Z",
-                "max_token_count": 32,
+                "max_token_count": 12,
+                "ladder_scope": "revision_path_plus_one_neighbor_yes_no",
+                "consensus_before_native": 32.0,
+                "consensus_after_native": 33.0,
             }
         )
         + "\n"
@@ -376,10 +379,11 @@ def test_d1_capture_demand_adds_complete_future_event_ladder(tmp_path) -> None:
         market_payload=future,
         demands=demand,
     )
-    assert len(selected.tokens) == 14
-    assert selected.city_token_counts == {"Busan": 14}
-    assert selected.capture_demands[0]["resolution_status"] == "resolved_complete_event"
-    assert selected.capture_demands[0]["resolved_token_count"] == 14
+    assert len(selected.tokens) == 8
+    assert selected.city_token_counts == {"Busan": 8}
+    assert selected.capture_demands[0]["resolution_status"] == "resolved_revision_strip"
+    assert selected.capture_demands[0]["resolved_token_count"] == 8
+    assert selected.capture_demands[0]["resolved_brackets"] == ["31", "32", "33", "34"]
 
 
 def test_collector_publishes_append_only_subscription_epoch_lineage(tmp_path) -> None:

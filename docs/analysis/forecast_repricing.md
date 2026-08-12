@@ -16,8 +16,9 @@ Observed-touch 后的 executable bid 回报在5/15/30/60/120m全部为负；coll
 native ladder真实bid/ask/depth，且同一盘口变化只归因一次。direct ask→30/60/90m future bid在官方双边fee
 和每边1 tick slippage后仍为负，尚无 admitted trade。
 
-下一步是仅为 Amsterdam/Busan/Helsinki/Tokyo 的新 D-1 provider run 开120分钟完整ladder WS capture demand，
-建立queue-conservative fill与动态退出同分母；代码和测试已完成，但 collector实际部署需单独确认。live/order均未改。
+下一步是仅为 Amsterdam/Busan/Helsinki/Tokyo 的新 D-1 provider run 开120分钟
+`revision path + 两侧邻档` WS capture demand；完整ladder继续由五分钟REST正本提供，WS只补queue/tape，避免把
+接近3GB/day的现有payload放大成全事件订阅。代码和测试已完成，但collector实际部署需单独确认。live/order均未改。
 
 ## Quote-level EV 目标修复（2026-08-12）
 

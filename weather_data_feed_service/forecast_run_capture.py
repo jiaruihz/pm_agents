@@ -298,7 +298,7 @@ def build_d1_market_capture_demands(
     rows: list[dict[str, Any]],
     *,
     ttl_minutes: int = 120,
-    max_token_count: int = 32,
+    max_token_count: int = 12,
     allowed_cities: set[str] | None = None,
     max_model_run_age_hours: float | None = None,
 ) -> list[dict[str, Any]]:
@@ -334,7 +334,30 @@ def build_d1_market_capture_demands(
         if all(key):
             grouped.setdefault(key, []).append(row)
     output: list[dict[str, Any]] = []
+    unit_by_city = {
+        config.city: config.unit
+        for config in load_city_configs(include_station_diff=False)
+    }
     for (city, target_date, run_at), members in sorted(grouped.items()):
+        revised_members = [
+            row
+            for row in members
+            if row.get("forecast_max_f") is not None
+            and row.get("run_to_run_delta_f") is not None
+        ]
+        if not revised_members:
+            continue
+        after_f = sum(float(row["forecast_max_f"]) for row in revised_members) / len(
+            revised_members
+        )
+        before_f = sum(
+            float(row["forecast_max_f"]) - float(row["run_to_run_delta_f"])
+            for row in revised_members
+        ) / len(revised_members)
+        if abs(after_f - before_f) <= 1e-12:
+            continue
+        unit = unit_by_city[city]
+        to_native = lambda value: value if unit == "F" else (value - 32.0) * 5.0 / 9.0
         requested_at = max(str(row["available_at_utc"]) for row in members)
         requested_clock = datetime.fromisoformat(
             requested_at.replace("Z", "+00:00")
@@ -369,7 +392,10 @@ def build_d1_market_capture_demands(
                 "expires_at_utc": (
                     requested_clock + timedelta(minutes=ttl_minutes)
                 ).isoformat().replace("+00:00", "Z"),
-                "ladder_scope": "complete_event_yes_no",
+                "ladder_scope": "revision_path_plus_one_neighbor_yes_no",
+                "native_unit": unit,
+                "consensus_before_native": to_native(before_f),
+                "consensus_after_native": to_native(after_f),
                 "max_token_count": max_token_count,
                 "model_events": model_events,
                 "producer": "weather_data_feed_service.forecast_run_capture",
