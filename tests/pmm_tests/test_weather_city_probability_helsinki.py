@@ -7,6 +7,9 @@ import pytest
 from src.strategies.weather_city_probability_shadow.core import InputNotReady
 from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
 from src.strategies.weather_city_probability_shadow.helsinki import _offset_probability
+from src.strategies.weather_city_probability_shadow.helsinki import (
+    _regime_calibrated_weather_probability,
+)
 from src.strategies.weather_city_probability_shadow.helsinki import _quote
 from src.strategies.weather_city_probability_shadow.helsinki import _yes_quote_from_no_quote
 
@@ -95,6 +98,59 @@ def test_bounded_residual_cannot_move_market_by_more_than_cap_in_logit_space():
     market_logit = math.log(0.8 / 0.2)
     model_logit = math.log(probability / (1 - probability))
     assert 0 < market_logit - model_logit <= 0.25
+
+
+def test_regime_calibration_scoring_matches_declared_linear_contract():
+    features = {
+        "weather_probability": 0.7,
+        "local_hour_sin": 0.5,
+        "local_hour_cos": -0.25,
+        "forecast_minutes_to_future_peak": 900.0,
+        "forecast_available": 1.0,
+        "path_state": "plateau",
+    }
+    beta = [0.1, 1.0, 0.2, -0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.1, 0.2, 0.3, 0.4]
+    probability = _regime_calibrated_weather_probability({"beta": beta}, features)
+    weather_logit = math.log(0.7 / 0.3)
+    vector = [
+        weather_logit,
+        0.5,
+        -0.25,
+        2.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        weather_logit,
+        0.0,
+        0.0,
+    ]
+    expected_logit = beta[0] + sum(
+        coefficient * value for coefficient, value in zip(beta[1:], vector)
+    )
+    assert probability == pytest.approx(1 / (1 + math.exp(-expected_logit)))
+
+
+def test_regime_calibrated_residual_still_respects_market_logit_cap():
+    artifact = {
+        "kind": "regime_calibrated_bounded_weather_market_residual",
+        "logit_cap": 0.15,
+        "weather_calibration": {"beta": [0.0, 1.0] + [0.0] * 12},
+    }
+    features = {
+        "weather_probability": 0.01,
+        "local_hour_sin": 0.0,
+        "local_hour_cos": 1.0,
+        "forecast_minutes_to_future_peak": 60.0,
+        "forecast_available": 1.0,
+        "path_state": "fade",
+    }
+    probability = _offset_probability(artifact, features, market_p=0.8)
+    market_logit = math.log(0.8 / 0.2)
+    model_logit = math.log(probability / (1 - probability))
+    assert 0 < market_logit - model_logit <= 0.15
 
 
 def test_quote_uses_response_availability_and_exact_fmi_checkpoint(tmp_path):

@@ -161,8 +161,8 @@
       "enabled": true,
       "city": "Helsinki",
       "adapter": "helsinki_remaining_heat_v1",
-      "profile_id": "helsinki_bounded_market_residual_c015_symmetric_v1",
-      "forward_start_utc": "2026-08-12T03:30:00Z",
+      "profile_id": "helsinki_regime_calibrated_bounded_residual_c015_v2",
+      "forward_start_utc": "2026-08-12T08:31:24Z",
       "max_book_age_seconds": 900,
       "max_source_to_book_lag_seconds": 120,
       "selection_shares": 5.0,
@@ -183,8 +183,8 @@
           "sha256": "4a34089bab953c4e1e7ae95560222b812f553138409b57e301b779721942f7e2"
         },
         "bounded": {
-          "path": "docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v1/helsinki_bounded_market_residual_c015_symmetric_v1.json",
-          "sha256": "9f63dea09ce1a80d69d3f1c156704e4d199dafce1ea172168823e165b93c40f7"
+          "path": "docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v2/helsinki_regime_calibrated_bounded_residual_c015_v2.json",
+          "sha256": "fd09be9c39e585a8b5502452a84db517fbaa455a728427db71de92e030f614e9"
         }
       }
     },

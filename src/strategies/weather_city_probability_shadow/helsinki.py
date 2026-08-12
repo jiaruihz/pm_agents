@@ -71,6 +71,38 @@ def _sigmoid(value: float) -> float:
     return 1.0 / (1.0 + math.exp(-max(-35.0, min(35.0, value))))
 
 
+def _regime_calibrated_weather_probability(
+    calibration: dict[str, Any], features: dict[str, Any]
+) -> float:
+    weather_p = float(np.clip(features["weather_probability"], 1e-5, 1 - 1e-5))
+    weather_logit = math.log(weather_p / (1 - weather_p))
+    future_peak_minutes = float(features.get("forecast_minutes_to_future_peak") or 0.0)
+    future_peak_scaled = min(720.0, max(0.0, future_peak_minutes)) / 360.0
+    path_state = str(features.get("path_state") or "")
+    paths = [
+        float(path_state == state)
+        for state in ("fresh_runway", "plateau", "pullback", "fade")
+    ]
+    vector = np.asarray(
+        [
+            weather_logit,
+            float(features["local_hour_sin"]),
+            float(features["local_hour_cos"]),
+            future_peak_scaled,
+            float(features.get("forecast_available") or 0.0),
+            *paths,
+            *(path * weather_logit for path in paths),
+        ],
+        dtype=float,
+    )
+    beta = np.asarray(calibration["beta"], dtype=float)
+    if len(beta) != len(vector) + 1:
+        raise RuntimeError(
+            "Helsinki regime calibration beta does not match declared feature contract"
+        )
+    return _sigmoid(float(beta[0] + vector @ beta[1:]))
+
+
 def _offset_probability(artifact: dict[str, Any], features: dict[str, Any], market_p: float) -> float:
     if artifact.get("kind") == "fitted_weather_reliability":
         scale = float(artifact["gap_scale"])
@@ -99,6 +131,16 @@ def _offset_probability(artifact: dict[str, Any], features: dict[str, Any], mark
             np.clip(weather_p, 1e-6, 1 - 1e-6)
             / np.clip(1 - weather_p, 1e-6, 1)
         )
+        correction = cap * math.tanh((weather_logit - market_logit) / cap)
+        return _sigmoid(market_logit + correction)
+    if artifact.get("kind") == "regime_calibrated_bounded_weather_market_residual":
+        cap = float(artifact["logit_cap"])
+        weather_p = _regime_calibrated_weather_probability(
+            artifact["weather_calibration"], features
+        )
+        market_value = float(np.clip(market_p, 1e-6, 1 - 1e-6))
+        market_logit = math.log(market_value / (1 - market_value))
+        weather_logit = math.log(weather_p / (1 - weather_p))
         correction = cap * math.tanh((weather_logit - market_logit) / cap)
         return _sigmoid(market_logit + correction)
     names = artifact["features"]

@@ -29,6 +29,7 @@ DEFAULT_FMI = Path("/Volumes/jrs/pm_agents/research/artifact_store/objects/a3/a3
 DEFAULT_AUDIT = Path("/Volumes/jrs/pm_agents/research/artifact_store/objects/fd/fd36db931b3077e921df426fee74187f389b9f38aafce2e5531701b121ebf614")
 DEFAULT_MODEL = ROOT / "docs/analysis/2026-07/generated/helsinki_remaining_heat_probability_v5/helsinki_remaining_heat_v5_composite_hazard_challenger.joblib"
 DEFAULT_OOF_2025 = Path("/Volumes/jrs/pm_agents/research/artifact_store/objects/e0/e0d9467bc2f630a8788ca373b39a4748415dff6385050937a738179fdecc0a2d")
+DEFAULT_RICH_OOF_2025 = Path("/Volumes/jrs/pm_agents/research/artifact_store/objects/81/810cd436e4220c59008a298c8690e857b0adc9bb080504053188a3a04738e0ac")
 DEFAULT_MARKET_OOF = Path("/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_first_principles_v6/oof_model/oof_checkpoint_predictions.csv.gz")
 DEFAULT_MARKET_OPPORTUNITIES = Path("/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_live_readiness_case_audit_v1/evaluation/signal_opportunities_5share.csv")
 DEFAULT_MARKET_LABELS = Path("/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_live_readiness_case_audit_v1/evaluation/probability_same_rows.csv")
@@ -84,6 +85,22 @@ CAP_COLUMNS = {
     1.50: "p_bounded_weather_market_c150",
     2.00: "p_bounded_weather_market_c200",
 }
+
+REGIME_CALIBRATION_FEATURES = (
+    "weather_logit",
+    "local_hour_sin",
+    "local_hour_cos",
+    "forecast_minutes_to_future_peak_scaled",
+    "forecast_available",
+    "path_fresh_runway",
+    "path_plateau",
+    "path_pullback",
+    "path_fade",
+    "weather_logit_x_path_fresh_runway",
+    "weather_logit_x_path_plateau",
+    "weather_logit_x_path_pullback",
+    "weather_logit_x_path_fade",
+)
 
 
 def _raw_row(row: pd.Series) -> dict:
@@ -772,6 +789,443 @@ def market_cap_robustness(
     return summary, split_frame, fixed_summary, retrospective
 
 
+def _regime_calibration_matrix(
+    frame: pd.DataFrame, probability: str
+) -> np.ndarray:
+    weather_logit = logit(
+        np.clip(frame[probability].to_numpy(dtype=float), 1e-5, 1 - 1e-5)
+    )
+    if "local_hour" in frame:
+        local_hour = frame.local_hour.to_numpy(dtype=float)
+        local_hour_sin = np.sin(2 * np.pi * local_hour / 24)
+        local_hour_cos = np.cos(2 * np.pi * local_hour / 24)
+    else:
+        decision = pd.to_datetime(frame.decision_ts_utc, utc=True).dt.tz_convert(
+            "Europe/Helsinki"
+        )
+        local_hour = decision.dt.hour + decision.dt.minute / 60
+        local_hour_sin = np.sin(2 * np.pi * local_hour / 24)
+        local_hour_cos = np.cos(2 * np.pi * local_hour / 24)
+    forecast_minutes = np.clip(
+        pd.to_numeric(frame.forecast_minutes_to_future_peak, errors="coerce")
+        .fillna(0)
+        .to_numpy(dtype=float),
+        0,
+        720,
+    ) / 360
+    if "forecast_available" in frame:
+        forecast_available = (
+            pd.to_numeric(frame.forecast_available, errors="coerce")
+            .fillna(0)
+            .to_numpy(dtype=float)
+        )
+    else:
+        forecast_available = frame.forecast_minutes_to_future_peak.notna().to_numpy(
+            dtype=float
+        )
+    path = frame.path_state.astype(str).to_numpy()
+    path_columns = [
+        (path == state).astype(float)
+        for state in ("fresh_runway", "plateau", "pullback", "fade")
+    ]
+    return np.column_stack(
+        [
+            weather_logit,
+            local_hour_sin,
+            local_hour_cos,
+            forecast_minutes,
+            forecast_available,
+            *path_columns,
+            *(column * weather_logit for column in path_columns),
+        ]
+    )
+
+
+def _fit_regime_calibration(
+    frame: pd.DataFrame,
+    *,
+    probability: str,
+    label: str,
+    regularization: float,
+) -> np.ndarray:
+    matrix = _regime_calibration_matrix(frame, probability)
+    design = np.column_stack([np.ones(len(matrix)), matrix])
+    y = frame[label].to_numpy(dtype=float)
+    counts = frame.target_date.astype(str).value_counts()
+    weights = frame.target_date.astype(str).map(lambda value: 1 / counts[value]).to_numpy()
+    weights /= weights.sum()
+    identity = np.zeros(design.shape[1])
+    identity[1] = 1.0
+
+    def objective(beta: np.ndarray) -> float:
+        calibrated = expit(design @ beta)
+        brier = np.sum(weights * (calibrated - y) ** 2)
+        penalty = regularization * np.sum((beta - identity) ** 2) / len(frame)
+        return float(brier + penalty)
+
+    fitted = minimize(objective, identity, method="L-BFGS-B")
+    if not fitted.success:
+        raise RuntimeError(f"regime calibration failed: {fitted.message}")
+    return fitted.x
+
+
+def _apply_regime_calibration(
+    frame: pd.DataFrame, probability: str, beta: np.ndarray
+) -> np.ndarray:
+    matrix = _regime_calibration_matrix(frame, probability)
+    return expit(np.column_stack([np.ones(len(matrix)), matrix]) @ beta)
+
+
+def _bounded_probability(
+    market_probability: pd.Series | np.ndarray,
+    weather_probability: pd.Series | np.ndarray,
+    cap: float = 0.15,
+) -> np.ndarray:
+    market = np.clip(np.asarray(market_probability, dtype=float), 1e-6, 1 - 1e-6)
+    weather = np.clip(np.asarray(weather_probability, dtype=float), 1e-6, 1 - 1e-6)
+    market_logit = logit(market)
+    return expit(
+        market_logit + cap * np.tanh((logit(weather) - market_logit) / cap)
+    )
+
+
+def _trade_summary(trades: pd.DataFrame) -> dict:
+    cost = float(trades.cash_cost.sum())
+    pnl = float(trades.pnl.sum())
+    return {
+        "trades": int(len(trades)),
+        "target_dates": int(trades.target_date.nunique()),
+        "wins": int(trades.won.sum()),
+        "cash_cost": cost,
+        "pnl": pnl,
+        "roi": pnl / cost if cost else None,
+    }
+
+
+def _trade_date_bootstrap(trades: pd.DataFrame, iterations: int = 5000) -> dict:
+    daily = trades.groupby("target_date", as_index=False).agg(
+        cash_cost=("cash_cost", "sum"), pnl=("pnl", "sum")
+    )
+    rng = np.random.default_rng(20260812)
+    sampled = rng.integers(0, len(daily), size=(iterations, len(daily)))
+    cost = daily.cash_cost.to_numpy()[sampled].sum(axis=1)
+    pnl = daily.pnl.to_numpy()[sampled].sum(axis=1)
+    roi = np.divide(pnl, cost, out=np.full(iterations, np.nan), where=cost > 0)
+    return {
+        "target_dates": int(len(daily)),
+        "iterations": iterations,
+        "roi_ci95": [float(value) for value in np.nanquantile(roi, [0.025, 0.975])],
+    }
+
+
+def complete_model_training(
+    oof: pd.DataFrame,
+    rich_oof: pd.DataFrame,
+    market_oof: pd.DataFrame,
+    opportunities: pd.DataFrame,
+    labels: pd.DataFrame,
+    output_dir: Path,
+) -> dict:
+    """Fit the frozen Helsinki regime calibrator and audit its full expression."""
+    keys = ["target_date", "observation_time_utc", "official_running_max_c"]
+    development = oof[
+        keys
+        + [
+            "label_break_eod",
+            "p_eod_composite",
+            "path_state",
+            "local_hour",
+            "forecast_available",
+        ]
+    ].merge(
+        rich_oof[keys + ["forecast_minutes_to_future_peak"]],
+        on=keys,
+        how="inner",
+        validate="one_to_one",
+    )
+    development["target_date"] = development.target_date.astype(str)
+    dates = sorted(development.target_date.unique())
+    date_blocks = [list(block) for block in np.array_split(dates, 4)]
+    candidate_rows = []
+    fold_rows = []
+    for regularization in (64.0, 128.0, 256.0, 512.0, 1024.0):
+        deltas = []
+        for fold in range(1, 4):
+            train_dates = sum(date_blocks[:fold], [])
+            validation_dates = date_blocks[fold]
+            train = development.loc[development.target_date.isin(train_dates)]
+            validation = development.loc[
+                development.target_date.isin(validation_dates)
+            ].copy()
+            beta = _fit_regime_calibration(
+                train,
+                probability="p_eod_composite",
+                label="label_break_eod",
+                regularization=regularization,
+            )
+            validation["calibrated"] = _apply_regime_calibration(
+                validation, "p_eod_composite", beta
+            )
+            raw = _date_equal_metrics(
+                validation, "p_eod_composite", label="label_break_eod"
+            )
+            calibrated = _date_equal_metrics(
+                validation, "calibrated", label="label_break_eod"
+            )
+            brier_delta = calibrated["brier"] - raw["brier"]
+            logloss_delta = calibrated["logloss"] - raw["logloss"]
+            deltas.append((brier_delta, logloss_delta))
+            fold_rows.append(
+                {
+                    "candidate": f"regime_brier_l2_{regularization:g}",
+                    "fold": fold,
+                    "train_target_dates": len(train_dates),
+                    "validation_target_dates": len(validation_dates),
+                    "brier_delta_vs_weather": brier_delta,
+                    "logloss_delta_vs_weather": logloss_delta,
+                }
+            )
+        values = np.asarray(deltas)
+        candidate_rows.append(
+            {
+                "candidate": f"regime_brier_l2_{regularization:g}",
+                "regularization": regularization,
+                "mean_brier_delta_vs_weather": float(values[:, 0].mean()),
+                "mean_logloss_delta_vs_weather": float(values[:, 1].mean()),
+                "brier_better_folds": int(np.sum(values[:, 0] < 0)),
+                "logloss_better_folds": int(np.sum(values[:, 1] < 0)),
+                "runtime_feature_parity": True,
+                "selection_eligible": bool(np.all(values < 0)),
+            }
+        )
+    candidate_frame = pd.DataFrame(candidate_rows)
+    eligible = candidate_frame.loc[candidate_frame.selection_eligible]
+    if eligible.empty:
+        raise RuntimeError("no regime calibration candidate passed all rolling folds")
+    selected = eligible.sort_values(
+        ["mean_brier_delta_vs_weather", "mean_logloss_delta_vs_weather"]
+    ).iloc[0]
+    selected_regularization = float(selected.regularization)
+    beta = _fit_regime_calibration(
+        development,
+        probability="p_eod_composite",
+        label="label_break_eod",
+        regularization=selected_regularization,
+    )
+
+    market = market_oof.copy()
+    market["target_date"] = market.target_date.astype(str)
+    market["weather_calibrated"] = _apply_regime_calibration(
+        market, "p_break_v7", beta
+    )
+    market["incumbent"] = _bounded_probability(
+        market.market_probability, market.p_break_v7
+    )
+    market["candidate"] = _bounded_probability(
+        market.market_probability, market.weather_calibrated
+    )
+    market["label"] = market.y_break.astype(int)
+    market_metrics = {
+        name: _date_equal_metrics(market, column)
+        for name, column in (
+            ("market", "market_probability"),
+            ("incumbent", "incumbent"),
+            ("candidate", "candidate"),
+        )
+    }
+    market_bootstrap = {
+        "candidate_minus_market": _paired_date_bootstrap(
+            market, "candidate", "market_probability"
+        ),
+        "candidate_minus_incumbent": _paired_date_bootstrap(
+            market, "candidate", "incumbent"
+        ),
+    }
+
+    no_opportunities = opportunities.loc[opportunities.side.eq("no")].copy()
+    no_opportunities["target_date"] = no_opportunities.target_date.astype(str)
+    no_opportunities["weather_calibrated"] = _apply_regime_calibration(
+        no_opportunities, "weather_no_probability", beta
+    )
+    incumbent_trades = _retrospective_cap_trades(opportunities, labels, 0.15)
+    calibrated_opportunities = opportunities.copy()
+    calibrated_weather = no_opportunities[
+        ["target_date", "bracket", "decision_ts_utc", "weather_calibrated"]
+    ]
+    calibrated_opportunities = calibrated_opportunities.merge(
+        calibrated_weather,
+        on=["target_date", "bracket", "decision_ts_utc"],
+        how="left",
+        validate="many_to_one",
+    )
+    calibrated_opportunities["weather_no_probability"] = (
+        calibrated_opportunities.weather_calibrated
+    )
+    candidate_trades = _retrospective_cap_trades(
+        calibrated_opportunities, labels, 0.15
+    )
+
+    aug = no_opportunities.merge(
+        labels[["target_date", "bracket", "y_no"]].drop_duplicates(),
+        on=["target_date", "bracket"],
+        how="inner",
+        validate="many_to_one",
+    )
+    aug["label"] = aug.y_no.astype(int)
+    aug["incumbent"] = _bounded_probability(
+        aug.market_probability, aug.weather_no_probability
+    )
+    aug["candidate"] = _bounded_probability(
+        aug.market_probability, aug.weather_calibrated
+    )
+    aug_metrics = {
+        name: _date_equal_metrics(aug, column)
+        for name, column in (
+            ("market", "market_probability"),
+            ("incumbent", "incumbent"),
+            ("candidate", "candidate"),
+        )
+    }
+    aug_bootstrap = {
+        "candidate_minus_market": _paired_date_bootstrap(
+            aug, "candidate", "market_probability"
+        ),
+        "candidate_minus_incumbent": _paired_date_bootstrap(
+            aug, "candidate", "incumbent"
+        ),
+    }
+
+    artifact = {
+        "schema_version": "helsinki_regime_calibrated_bounded_residual_v1",
+        "kind": "regime_calibrated_bounded_weather_market_residual",
+        "model_id": "helsinki_regime_calibrated_bounded_residual_c015_v2",
+        "candidate_name": "regime_brier_l2_256_then_bounded_c015",
+        "weather_calibration": {
+            "kind": "compact_regime_logit_calibration",
+            "objective": "target_date_equal_brier_plus_identity_l2",
+            "regularization": selected_regularization,
+            "feature_names": list(REGIME_CALIBRATION_FEATURES),
+            "beta": [float(value) for value in beta],
+            "weather_probability_clip": [1e-5, 1 - 1e-5],
+            "forecast_minutes_to_future_peak_clip": [0.0, 720.0],
+            "forecast_minutes_scale": 360.0,
+        },
+        "logit_cap": 0.15,
+        "expression_sides": ["NO", "YES"],
+        "expression_policy": "first_best_fee_adjusted_edge_per_date_bracket",
+        "training_scope": {
+            "weather_rows": int(len(development)),
+            "weather_target_dates": int(development.target_date.nunique()),
+            "weather_train_start": min(dates),
+            "weather_train_end": max(dates),
+            "market_cap_train_end": "2026-07-29",
+        },
+        "selection_rule": (
+            "2025 four-block expanding validation only: require both Brier and "
+            "logloss improvement in every validation block, then minimize mean Brier; "
+            "2026 market and taker results are pressure tests, never selectors"
+        ),
+        "retrospective_evidence_seen_through": "2026-08-11",
+        "untouched_forward_start": "2026-08-12T08:31:24Z",
+        "deployment_status": "deployable_zero_notional_shadow_candidate",
+        "live_eligible": False,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "helsinki_regime_calibrated_bounded_residual_c015_v2.json"
+    artifact_path.write_text(
+        json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    candidate_frame.to_csv(output_dir / "candidate_selection.csv", index=False)
+    pd.DataFrame(fold_rows).to_csv(output_dir / "rolling_fold_metrics.csv", index=False)
+    market[
+        [
+            "target_date",
+            "decision_ts_utc",
+            "official_running_max_c",
+            "path_state",
+            "label",
+            "market_probability",
+            "p_break_v7",
+            "weather_calibrated",
+            "incumbent",
+            "candidate",
+        ]
+    ].to_csv(output_dir / "market_development_same_rows.csv", index=False)
+    aug[
+        [
+            "target_date",
+            "decision_ts_utc",
+            "bracket",
+            "path_state",
+            "label",
+            "market_probability",
+            "weather_no_probability",
+            "weather_calibrated",
+            "incumbent",
+            "candidate",
+        ]
+    ].to_csv(output_dir / "august_same_rows.csv", index=False)
+    incumbent_trades.to_csv(output_dir / "incumbent_trades_5share.csv", index=False)
+    candidate_trades.to_csv(output_dir / "candidate_trades_5share.csv", index=False)
+    summary = {
+        "schema_version": "helsinki_complete_model_training_v1",
+        "selection": {
+            "selected_candidate": str(selected.candidate),
+            "selected_regularization": selected_regularization,
+            "candidate_count": int(len(candidate_frame)),
+            "eligible_candidate_count": int(candidate_frame.selection_eligible.sum()),
+            "rolling_mean_brier_delta_vs_weather": float(
+                selected.mean_brier_delta_vs_weather
+            ),
+            "rolling_mean_logloss_delta_vs_weather": float(
+                selected.mean_logloss_delta_vs_weather
+            ),
+        },
+        "denominator_scope": {
+            "weather_selection": f"{len(development)} rows / {development.target_date.nunique()} target dates; 2025 OOF only",
+            "market_development": f"{len(market)} rows / {market.target_date.nunique()} target dates; 2026-07-20..29",
+            "august_retrospective": f"{len(aug)} NO rows / {aug.target_date.nunique()} settled target dates; 2026-08-02..11; not used for selection",
+        },
+        "market_development_metrics": market_metrics,
+        "market_development_bootstrap": market_bootstrap,
+        "august_retrospective_metrics": aug_metrics,
+        "august_retrospective_bootstrap": aug_bootstrap,
+        "five_share_taker": {
+            "incumbent": _trade_summary(incumbent_trades),
+            "candidate": _trade_summary(candidate_trades),
+            "candidate_target_date_bootstrap": _trade_date_bootstrap(candidate_trades),
+            "same_trade_identity": bool(
+                incumbent_trades[["target_date", "bracket", "side"]]
+                .reset_index(drop=True)
+                .equals(
+                    candidate_trades[["target_date", "bracket", "side"]]
+                    .reset_index(drop=True)
+                )
+            ),
+        },
+        "signal_funnel": {
+            "raw_side_opportunities": int(len(opportunities)),
+            "mechanism_checkpoints": int(len(no_opportunities)),
+            "first_positive_date_bracket_trades": int(len(candidate_trades)),
+        },
+        "evidence_funnel": {
+            "pit_book_rows": int(len(no_opportunities)),
+            "settled_same_rows": int(len(aug)),
+            "executable_two_side_rows": int(len(opportunities)),
+            "settled_expressed_trades": int(len(candidate_trades)),
+        },
+        "artifact": str(artifact_path),
+        "decision": (
+            "replace the zero-notional shadow probability artifact with the compact "
+            "regime-calibrated c=0.15 expression; do not promote to live"
+        ),
+    }
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return summary
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fmi", type=Path, default=DEFAULT_FMI)
@@ -780,7 +1234,11 @@ def main() -> None:
     parser.add_argument("--sample-dates", type=int, default=24)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--robustness-dir", type=Path)
+    parser.add_argument("--complete-model-dir", type=Path)
     parser.add_argument("--oof-2025", type=Path, default=DEFAULT_OOF_2025)
+    parser.add_argument(
+        "--rich-oof-2025", type=Path, default=DEFAULT_RICH_OOF_2025
+    )
     parser.add_argument("--market-oof", type=Path, default=DEFAULT_MARKET_OOF)
     parser.add_argument(
         "--market-opportunities", type=Path, default=DEFAULT_MARKET_OPPORTUNITIES
@@ -832,6 +1290,20 @@ def main() -> None:
         fixed_caps.to_csv(args.robustness_dir / "market_fixed_cap_validation.csv", index=False)
         retrospective.to_csv(
             args.robustness_dir / "market_cap_retrospective_taker.csv", index=False
+        )
+    if args.complete_model_dir is not None:
+        oof = pd.read_csv(args.oof_2025, compression="gzip")
+        rich_oof = pd.read_csv(args.rich_oof_2025, compression="gzip")
+        market_oof = pd.read_csv(args.market_oof)
+        opportunities = pd.read_csv(args.market_opportunities)
+        labels = pd.read_csv(args.market_labels)
+        result["complete_model_training"] = complete_model_training(
+            oof,
+            rich_oof,
+            market_oof,
+            opportunities,
+            labels,
+            args.complete_model_dir,
         )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -1,4 +1,4 @@
-# Helsinki bounded market-residual exact-bracket strategy v1
+# Helsinki regime-calibrated bounded market-residual exact-bracket strategy v2
 
 ## 数据快照
 
@@ -9,15 +9,37 @@
 
 ## 结论
 
-交付策略为 `helsinki_bounded_market_residual_c015_symmetric_v1`。它不是天气模型单独猜最终温度，也不是跟着盘口复制：盘口是 prior，FMI remaining-heat 概率只允许在 logit 上有限修正；每个 `target_date × current bracket` 比较真实 5-share YES/NO ask 与官方 taker fee，只在净 EV 为正时选择较优一边，首次入场后不重复开同档。METAR 不开仓，当前版本持有到 settlement。
+交付策略升级为 `helsinki_regime_calibrated_bounded_residual_c015_v2`。它不是天气模型单独猜最终温度，也不是跟着盘口复制：先用 2025 OOF 学到的统一 regime calibration 修正 FMI remaining-heat 概率，再把盘口作为 prior，天气只允许在 logit 上做最多 `0.15` 的连续修正；每个 `target_date × current bracket` 比较真实 5-share YES/NO ask 与官方 taker fee，只在净 EV 为正时选择较优一边，首次入场后不重复开同档。METAR 不开仓，当前版本持有到 settlement。
 
 公式：
 
 ```text
-p_no = sigmoid(logit(market_no) + 0.15 * tanh((logit(weather_no)-logit(market_no))/0.15))
+weather_no_cal = sigmoid(beta · [weather_logit, local clock, forecast peak clock,
+                                 forecast availability, path state,
+                                 weather_logit × path state])
+p_no = sigmoid(logit(market_no) + 0.15 * tanh((logit(weather_no_cal)-logit(market_no))/0.15))
 ```
 
-`0.15` 不是按交易 ROI 挑选。固定旧 OOF 的 bounded family 中，它最小化 worst-target-date checkpoint logloss；没有增加价格、小时、天气形态或事后坏日期阈值。研究 joblib SHA-256 为 `3d57f1ce9eadeb11d3699df9617d44c0d2b55814fb0250847708f4bfb2ec2cd0`。研究 joblib 不直接部署；git 内 JSON artifact 使用唯一 `model_id`，preflight 修复后已作为 zero-notional shadow artifact 加载。
+`0.15` 仍沿用既有固定表达，不按交易 ROI 重选。新增 calibration 只用 2025 的 `51,451 rows / 365 target dates` OOF 训练：四个连续日期块做三次 expanding validation，五个预声明正则强度中，只有 `256/512/1024` 在三段里同时改善 Brier 与 logloss；按 mean Brier 选择 `L2=256`。2026-07 与 8 月盘口/收益只作压力测试，没有参与模型选择，也没有增加价格、小时、天气形态或坏日期 hard gate。git 内 artifact SHA-256 为 `fd09be9c39e585a8b5502452a84db517fbaa455a728427db71de92e030f614e9`；v2 clean forward 从 artifact freeze 后的 `2026-08-12T08:31:24Z` 开始，v1 当天更早记录不冒充 v2 forward。
+
+## 完整训练与模型选择收口
+
+这次不是围绕两三个坏 case 改规则，而是把目标函数和训练 grain 一次收口：每个 target date 等权，直接最小化 Brier，并用 identity-centered L2 约束 calibration 不远离原天气概率；logloss 作为共同晋级条件。比较结果如下：
+
+| 候选 | rolling Brier delta | rolling logloss delta | Brier/LL 胜出折 | 结论 |
+|---|---:|---:|---:|---|
+| compact logistic / Platt | 既有 8-split 中仅 3/8 | 仅 4/8 | 不稳定 | 拒绝 |
+| shallow HGB calibration | Brier 点估略好 | logloss 2/3 折变差 | 2/3、1/3 | 拒绝 |
+| rich physical calibration | 2025 可改善 | 2026 market replay 缺逐字段同钟 parity | 不具备完整同分母 | 保留 challenger |
+| compact regime `L2=256` | `-0.000317` | `-0.002260` | `3/3、3/3` | 选中 |
+
+选中模型只读取 live 已有且已经做过 PIT parity 的字段：天气概率、Helsinki local clock、距 forecast future peak 的分钟数、forecast availability、`fresh_runway/plateau/pullback/fade` 及 path×weather-logit。这样修复的是统一的概率表达：不同峰值时钟与路径状态下，天气基座的置信度不同；没有把 8/5、8/10、8/11 写成例外。
+
+固定 7/20–29 的 362 rows/9 dates 上，新版 Brier/logloss 为 `0.07388/0.24195`，旧版为 `0.07430/0.24309`，market 为 `0.07641/0.24874`。新版相对旧版的 target-date block bootstrap delta CI：Brier `[-0.000916,-0.000047]`、logloss `[-0.002188,-0.000292]`，九个开发日期上是稳定的小幅概率升级。
+
+8/2–11 的 282 rows/8 dates 没有参与选择。新版 Brier/logloss `0.05234/0.17027`，旧版 `0.05227/0.17065`，market `0.05442/0.17542`：logloss 小幅改善、Brier 与旧版基本持平且 CI 跨零。5-share first-positive 仍是完全相同的 9 笔、6胜3负、cost `$23.0224`、PnL `+$6.9776`、ROI `+30.31%`，说明升级没有靠新增/删除历史交易制造收益。
+
+runtime scorer 用 git artifact 对 362 个开发 checkpoint 逐行复算，最大概率误差 `1.11e-16`；24 个日期、3,456 个 FMI rows 的 37 项特征公式仍是 `122,950` 次比较零 mismatch。artifact、训练脚本、运行时实现与 5-share expression 已形成可部署闭环。
 
 ## Independent shadow preflight audit（已修复并通过）
 
@@ -54,7 +76,7 @@ p_no = sigmoid(logit(market_no) + 0.15 * tanh((logit(weather_no)-logit(market_no
 - YES：5笔4胜，PnL `+$6.92`、ROI `+52.93%`；NO：4笔2胜，PnL `+$0.06`、ROI `+0.56%`。两边仍属于一个预注册的竞争表达，不据此关闭 NO。
 - 价格档：1–20% 为2笔0胜；40–60% 为3笔2胜、ROI `+22.91%`；60–80% 为3笔3胜、ROI `+53.50%`；80–99% 为1笔1胜。主结果没有过滤任何价格档，且没有 ≤1% / ≥99% 成交。
 
-这 8 天已经在模型设计过程中被查看，因此是 retrospective PIT replay，不冒充下一版 untouched forward。真正 forward 已从 `2026-08-12 03:30 UTC` 开始；尚无已结算 forward 日。
+这 8 天已经在模型设计过程中被查看，因此是 retrospective PIT replay。v1 曾从 `03:30 UTC` 开始记录；v2 在完成选择与 artifact freeze 后把 clean-forward 起点重新锁为 `2026-08-12 08:31:24 UTC`，尚无已结算 v2 forward 日。
 
 ## 漏斗
 
@@ -81,16 +103,16 @@ Evidence funnel（盘口和标签覆盖）：
 ## 执行状态与资格
 
 - 已实现：bounded JSON artifact、YES/NO token identity、同档 best-net-edge 去重、5-share depth/fee scorer、response-clock PIT replay、FMI weather+radiation producer、共享训练/runtime feature builder、逐笔 CSV 和 target-date bootstrap。
-- 当前资格：`zero-notional shadow eligible / not live-eligible`。feature parity blocker 已消除；proper-score 与 ROI CI 仍跨零，所以只能积累 clean forward，不能真实下单。
+- 当前资格：`deployable zero-notional shadow candidate / not live-eligible`。feature/runtime parity blocker 已消除；新模型相对旧模型在开发日期上稳定改善，但相对 market 的 proper-score CI 与 8 月 ROI CI 仍跨零，所以不能真实下单。
 - production preflight 已重新检查；部署只允许在 strict manifest 无 critical、controller health 健康时执行。METAR 仍不开仓，只可作为持仓退出 A/B。
-- 已于 `2026-08-12 02:36 UTC` 完成 git-first zero-notional 部署，untouched forward 起点锁为 `2026-08-12 03:30 UTC`（Helsinki 06:30）。FMI producer release `65fc4d8f`、city runtime `ddecbbd6`、forecast collector `03691ebb`；Helsinki ladder 使用隔离 release `f6472819`，没有扰动共享 `strategy_runtime`。post-deploy strict manifest 与 controller health 均为 healthy。
-- city runtime 已实际加载 bounded artifact SHA `9f63dea0…c40f7`，`execution_mode=zero_notional_shadow`、`orders_submitted=0`。部署时 Helsinki 尚在配置的当地 06:00 active-window 之前，因此首个正式 rich FMI forward checkpoint 按正常 collector 时钟生成，不伪造早晨前事件。
+- v1 已于 `2026-08-12 02:36 UTC` 完成 git-first zero-notional 部署，当时的 forward 起点为 `03:30 UTC`。FMI producer release `65fc4d8f`、city runtime `ddecbbd6`、forecast collector `03691ebb`；Helsinki ladder 使用隔离 release `f6472819`，没有扰动共享 `strategy_runtime`。这些是 v1 的生产证据，不延伸为 v2 已加载证明。
+- 截至本次训练开始前，city runtime 实际加载的是 v1 bounded artifact SHA `9f63dea0…c40f7`，`execution_mode=zero_notional_shadow`、`orders_submitted=0`。v2 artifact、runtime scorer 与 active config 已在 git worktree 完成并通过 parity/test，但本报告不把“code-ready”冒充“已重启加载”；生产 reload 必须在提交后按 controller/release pin 执行并重新核对 loaded SHA。
 
 ## Live-readiness 与完整持仓时间线审计
 
 当前用于决策的唯一 retrospective 结果是 `run=20260812_rich_contract_replay_v1/replay` 和从它确定性生成的 `run=20260812_live_readiness_case_audit_v1/evaluation`。早期 `first_principles_v4/v5`、旧 preflight 分数均标为 superseded-for-decision-use；中断且 artifact hash 错误的 8/7 partial run 只保留在 `quarantine/`，没有进入 runner 输入、282-row 概率分母或9笔交易。原始证据不删除。
 
-8/12 clean forward 已收到10个 rich FMI new-content observations（当地06:32–08:01 first seen，`9.5→11.6°C`，全部 `fmi_rich_feature_status=complete`）。当天市场最低可表达档是14，official current maximum仍低于14，因此0 active-book、0 model decision 是 `outside current exact-bracket expression`，不是 source/book 缺失，也不是漏单。这个策略本身不覆盖清晨基于 forecast path 提前买低档 NO；该方向如研究，必须另建固定 expression，不能算作当前策略的历史收益。
+8/12 在 v1 窗口收到10个 rich FMI new-content observations（当地06:32–08:01 first seen，`9.5→11.6°C`，全部 `fmi_rich_feature_status=complete`）。当天市场最低可表达档是14，official current maximum仍低于14，因此0 active-book、0 model decision 是 `outside current exact-bracket expression`，不是 source/book 缺失，也不是漏单；这些早于 `08:31:24Z` 的行不计入 v2 forward。这个策略本身不覆盖清晨基于 forecast path 提前买低档 NO。
 
 全部9笔的 entry edge 只有 `0.052c–1.950c/share`，中位 `0.467c/share`；FMI first-seen→可用5-share book lag 中位 `27.8s`、p95 `53.3s`。现有 replay 已用 response clock 和真实深度，但还没有 signal 后的真实 order ack/fill/slippage，所以历史正 ROI 对正式实盘最薄弱的环节不是手续费，而是这些很小的 edge 能否存活到真正成交。
 
@@ -133,7 +155,7 @@ Evidence funnel（盘口和标签覆盖）：
 - 更复杂的`c015 + Platt market calibration`在开发日期互换中`8/9`胜raw和market，看似很强；但8月回放扩大到27笔23胜仍亏`-$5.32`、ROI `-4.42%`。原因是它把大量接近结算价的高成本赢家加入分母，胜率高却没有正EV，这是明确的过拟合反例。
 - 当前`c=0.15`在同一8月压力测试仍为9笔6胜、ROI `+30.31%`；但它的cap本身不稳定、proper-score与ROI CI跨0，所以保留incumbent只代表“小修正比复杂重训更稳”，不代表已证明盈利。
 
-因此本轮没有替换shadow artifact。下一版模型只沿两个结构方向推进：天气基座按`forecast availability × peak clock/path transition`分头校准，盘口residual使用更多新settled日期学习强收缩的连续修正；不按价格、小时或8/11坏例增加hard gate。目标顺序保持：先让冻结5-share taker在forward同分母为正，再用真实maker fill/queue/adverse-selection放大收益。
+因此本轮选择 v2 替换 zero-notional shadow 的概率 artifact，但不改 live。它已经把 `forecast availability × peak clock/path transition` 作为连续 calibration 纳入统一表达，同时保留强收缩的 `c=0.15` market residual；不按价格、小时或8/11坏例增加 hard gate。下一步不再继续用已看日期调模型，而是让 v2 在 untouched forward 上积累同分母 proper score 与5-share taker；maker 只在 taker forward 至少小正、并有真实 queue/adverse-selection 证据后作为收益放大器。
 
 ## 执行证据
 
@@ -145,4 +167,6 @@ Evidence funnel（盘口和标签覆盖）：
 - rich-contract replay：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_rich_contract_replay_v1/`
 - live-readiness/case timeline：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_live_readiness_case_audit_v1/evaluation/`
 - model robustness：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_model_robustness_v1/`
+- complete v2 training/freeze：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_complete_model_v1/`
+- deployable v2 artifact：`docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v2/helsinki_regime_calibrated_bounded_residual_c015_v2.json`（SHA `fd09be9c…14e9`）
 - production loaded identity：FMI `65fc4d8f933f…`、city runtime `ddecbbd6a26a…`、forecast `03691ebb3657…`、Helsinki ladder `f64728197135…`；post-deploy manifest exit `0`、controller `HEALTHY`、0 order。
