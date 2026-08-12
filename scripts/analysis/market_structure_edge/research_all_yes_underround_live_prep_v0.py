@@ -26,8 +26,8 @@ STATION_BASIS_GATE_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "station_bas
 PAPER_GATE_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "live_prep_gate.json"
 PAPER_MONITOR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "monitor.json"
 FRESH_CYCLE_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "fresh_cycle.json"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-live-prep-v0.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-live-prep-v0.md"
+OUT_JSON_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "latest_scan.json"
+OUT_MD_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "latest_scan.md"
 
 
 def parse_args() -> argparse.Namespace:

@@ -49,8 +49,6 @@ OUT_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_bas
 SNAPSHOT_ROOT_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "orderbook_snapshots"
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
 GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.json"
-REPORT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-15-all-yes-underround-basket-facts-v0.json"
-REPORT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-15-all-yes-underround-basket-facts-v0.md"
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,8 +62,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-baskets", default=None)
     parser.add_argument("--out-legs", default=None)
     parser.add_argument("--out-summary", default=None)
-    parser.add_argument("--out-json", default=str(REPORT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(REPORT_MD_DEFAULT))
     parser.add_argument("--gate-path", default=str(GATE_DEFAULT))
     parser.add_argument("--min-underround", type=float, default=0.02)
     parser.add_argument("--min-leg-count", type=int, default=5)
@@ -570,15 +566,10 @@ def main() -> int:
     }
     out_summary.parent.mkdir(parents=True, exist_ok=True)
     out_summary.write_text(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
-    Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out_json).write_text(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
-    write_md(Path(args.out_md), report)
     print(f"wrote {out_baskets}")
     if not args.no_legs:
         print(f"wrote {out_legs}")
     print(f"wrote {out_summary}")
-    print(f"wrote {args.out_json}")
-    print(f"wrote {args.out_md}")
     print(
         "summary="
         + json.dumps(

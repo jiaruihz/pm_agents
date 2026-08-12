@@ -38,8 +38,8 @@ from scripts.ops.all_yes_underround_guards import BasketGuardConfig, check_candi
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
 SNAPSHOT_ROOT_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "orderbook_snapshots"
 GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.json"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-persistence-v0.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-persistence-v0.md"
+OUT_JSON_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "persistence.json"
+OUT_MD_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "persistence.md"
 
 
 def parse_args() -> argparse.Namespace:
