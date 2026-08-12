@@ -198,7 +198,16 @@ class CoreCarryRequestBuilder:
                 Decimal(str(plan.get("maker_price_cap") or "0")),
                 intent.model_token_probability or Decimal("0"),
             )
-            if replacement is not None:
+            maker_arm = str(plan.get("maker_arm") or "staged")
+            if maker_arm == "pullback":
+                price = round_price_to_tick(
+                    min(planned_limit, strategy_cap),
+                    book.tick_size,
+                    venue_side="BUY",
+                )
+                if price <= 0 or price >= book.asks[0].price:
+                    raise ValueError("static pullback maker price would cross fresh ask")
+            elif replacement is not None:
                 decision_bid = Decimal(
                     str(plan.get("maker_reprice_decision_best_bid") or "0")
                 )
@@ -583,7 +592,11 @@ def _entry_like_lifecycle_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
         )
     return {
         **{key: value for key, value in plan.items() if key not in ignored},
-        "child_order_role": "maker",
+        "child_order_role": (
+            "maker_pullback"
+            if str(plan.get("maker_arm") or "") == "pullback"
+            else "maker_staged"
+        ),
         "maker_only": True,
         "comparison_group_id": comparison_group_id,
         "status": "accepted",

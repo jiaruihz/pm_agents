@@ -63,6 +63,10 @@ def allocate_profile_shares(
     return allocated
 
 
+def _is_maker_role(role: str) -> bool:
+    return role == "maker" or role.startswith("maker_")
+
+
 def _required(plan: Mapping[str, Any], name: str) -> str:
     value = plan.get(name)
     text = "" if value is None else str(value).strip()
@@ -523,10 +527,10 @@ def build_core_carry_legacy_plan_compatibility(
         if _required(plan, "status").lower() != "accepted":
             raise LegacyPlanCompatibilityError("core-carry compatibility requires accepted legacy entry plans")
         role = _required(plan, "child_order_role")
-        if role not in {"taker", "maker", "single"}:
+        if role not in {"taker", "maker", "maker_staged", "maker_pullback", "single"}:
             raise LegacyPlanCompatibilityError(f"unsupported core-carry entry child role: {role}")
         maker_only = bool(plan.get("maker_only"))
-        if maker_only != (role == "maker"):
+        if maker_only != _is_maker_role(role):
             raise LegacyPlanCompatibilityError("core-carry child role and maker_only disagree")
         venue_side = _required(plan, "order_side").upper()
         signal_side = _required(plan, "signal_side")

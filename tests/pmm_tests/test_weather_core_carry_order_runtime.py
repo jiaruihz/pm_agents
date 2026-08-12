@@ -239,18 +239,19 @@ def test_core_carry_live_submits_each_child_once_through_shared_runtime(
 
     assert result["execution_runtime"] == "OrderRuntime"
     assert result["venue_adapter"] == "PolymarketVenueAdapter"
-    assert result["live_written"] == 2
+    assert result["live_written"] == 3
     assert result["live_errors"] == 0
-    assert len(transport.posts) == 2
+    assert len(transport.posts) == 3
     assert [post_only for _signed, _kind, post_only in transport.posts] == [
         False,
+        True,
         True,
     ]
     live_rows = [
         json.loads(line)
         for line in (tmp_path / "live_orders.jsonl").read_text().splitlines()
     ]
-    assert len(live_rows) == 2
+    assert len(live_rows) == 3
     assert all(row["execution_schema_version"] for row in live_rows)
     assert all(row["client_order_id"] for row in live_rows)
     journal_rows = [
@@ -259,7 +260,7 @@ def test_core_carry_live_submits_each_child_once_through_shared_runtime(
     ]
     assert [row["event_type"] for row in journal_rows].count(
         "attempt_before_side_effect"
-    ) == 2
+    ) == 3
 
 
 def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatch):
@@ -274,7 +275,7 @@ def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatc
             maker_shares=5,
             order_ttl_min=15,
         )
-        if plan["child_order_role"] == "maker"
+        if plan["child_order_role"] == "maker_staged"
     )
     assert maker_plan["limit_price"] == 0.81
     transport = FakeTransport()
@@ -307,6 +308,44 @@ def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatc
 
     assert result["live_errors"] == 0
     assert str(transport.posts[0][0]["price"]) == "0.81"
+
+
+def test_pullback_maker_posts_planned_static_price_not_fresh_bid_plus_tick(
+    tmp_path, monkeypatch
+):
+    pullback_plan = next(
+        plan
+        for plan in runner.build_entry_plans(
+            _score(),
+            live_enabled=True,
+            now=datetime(2026, 7, 28, 4, 31, tzinfo=timezone.utc),
+            taker_shares=5,
+            maker_shares=5,
+            pullback_maker_shares=5,
+            order_ttl_min=15,
+        )
+        if plan["child_order_role"] == "maker_pullback"
+    )
+    assert pullback_plan["limit_price"] == 0.82
+    transport = FakeTransport()
+    monkeypatch.setattr(
+        shared,
+        "build_live_transport",
+        lambda **_kwargs: (transport, {"mode": "test"}),
+    )
+
+    result = shared.execute_core_carry_plans(
+        plans=[pullback_plan],
+        output_dir=tmp_path,
+        live=True,
+        market_proxy=None,
+        max_child_shares=5,
+        max_batch_cost_usd=100,
+        code_commit="test-sha",
+    )
+
+    assert result["live_errors"] == 0
+    assert str(transport.posts[0][0]["price"]) == "0.82"
 
 
 def test_journaled_submit_is_projected_after_restart_without_resubmission(
@@ -430,7 +469,7 @@ def test_known_post_only_rejection_can_repost_without_a_retry_cap(
             maker_shares=5,
             order_ttl_min=15,
         )
-        if plan["child_order_role"] == "maker"
+        if plan["child_order_role"] == "maker_staged"
     )
     rejected = FakeTransport(
         post_responses=[
@@ -507,7 +546,7 @@ def test_terminal_maker_is_projected_once_and_removed_from_lifecycle_heads(
             maker_shares=5,
             order_ttl_min=15,
         )
-        if plan["child_order_role"] == "maker"
+        if plan["child_order_role"] == "maker_staged"
     )
     transport = FakeTransport()
     monkeypatch.setattr(

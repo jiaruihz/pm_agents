@@ -4,13 +4,15 @@
 The signal/checkpoint contract remains owned by
 ``weather_current_yes_core_carry_pre_live_v1.py`` and the no-age/no-peak-clock
 v3 artifact.
-For each first positive-EV city-day signal this adapter submits two separately
+For each first positive-EV city-day signal this adapter submits three separately
 attributed children:
 
 * taker: fresh full-ladder ten-share EV is revalidated immediately before send;
-* maker: five shares at best bid + one tick, held in queue for five minutes,
+* staged maker: five shares at best bid + one tick, held in queue for five minutes,
   then repriced at most once at the midpoint stage and once at the near-ask
   stage while retaining one cent of model edge.
+* pullback maker: five shares at the entry ask minus two cents, held without
+  repricing for at most 15 minutes.
 
 Maker replacements never cross the ask and never convert to taker. They are
 cancelled 90 seconds before the next expected source report, when an unexpected
@@ -68,12 +70,13 @@ from weather_data_feed.observation_cache import index_observation_cache  # noqa:
 
 STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
-CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_integrated_v4"
-EXECUTION_PROFILE = "split_taker_maker_event_validated_staged_no_fallback_v4"
-DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_integrated_maker_v4"
+CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_staged_5_pullback_v5"
+EXECUTION_PROFILE = "split_taker_two_maker_event_validated_no_fallback_v5"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_v5"
 MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
 FROZEN_TAKER_SHARES = 10.0
 FROZEN_MAKER_SHARES = 5.0
+FROZEN_PULLBACK_MAKER_SHARES = 5.0
 OUTPUT_DIR = ROOT / "runtime/weather_edge_v1" / STRATEGY_INSTANCE
 ARTIFACT_PATH = ROOT / "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v3.json"
 LEGACY_FAMILY_LIVE_ORDER_FILES = (
@@ -460,7 +463,8 @@ def maker_lifecycle_root(row: Mapping[str, Any]) -> str:
     root_created = str(row.get("maker_lifecycle_root_created_at_utc") or "")
     signal = str(row.get("signal_id") or "")
     comparison = str(row.get("comparison_group_id") or "")
-    return "|".join((signal, comparison, root_created))
+    maker_arm = str(row.get("maker_arm") or "legacy_staged")
+    return "|".join((signal, comparison, maker_arm, root_created))
 
 
 def maker_lifecycle_heads(path: Path) -> list[dict[str, Any]]:
@@ -575,6 +579,8 @@ def recover_journal_terminal_makers(output_dir: Path) -> int:
 
 
 def retryable_maker_post_failure(row: Mapping[str, Any]) -> bool:
+    if str(row.get("maker_arm") or "") == "pullback":
+        return False
     if str(row.get("status") or "") != "error":
         return False
     response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
@@ -626,9 +632,17 @@ def attempted_child_roles(output_dir: Path) -> dict[str, set[str]]:
         if not sid:
             continue
         if str(row.get("status") or "") == "blocked":
-            attempted.setdefault(sid, set()).update({"taker", "maker"})
+            attempted.setdefault(sid, set()).update(
+                {"taker", "maker_staged", "maker_pullback"}
+            )
         elif str(row.get("maker_live_action") or "") == "skip_terminal":
-            attempted.setdefault(sid, set()).add("maker")
+            arm = str(row.get("maker_arm") or "")
+            if arm in {"staged", "pullback"}:
+                attempted.setdefault(sid, set()).add(f"maker_{arm}")
+            else:
+                attempted.setdefault(sid, set()).update(
+                    {"maker_staged", "maker_pullback"}
+                )
     for row in iter_jsonl(output_dir / "live_orders.jsonl"):
         sid = str(row.get("signal_id") or "")
         if not sid:
@@ -636,8 +650,22 @@ def attempted_child_roles(output_dir: Path) -> dict[str, set[str]]:
         role = str(row.get("child_order_role") or "")
         if role == "taker":
             attempted.setdefault(sid, set()).add("taker")
-        elif role == "maker" or role.startswith("core_carry_maker_"):
-            attempted.setdefault(sid, set()).add("maker")
+        elif role == "maker":
+            # Legacy single-maker signals must not receive a retrospective
+            # pullback child when the dual-maker profile is deployed.
+            attempted.setdefault(sid, set()).update(
+                {"maker_staged", "maker_pullback"}
+            )
+        elif role in {"maker_staged", "maker_pullback"}:
+            attempted.setdefault(sid, set()).add(role)
+        elif role.startswith("core_carry_maker_"):
+            arm = str(row.get("maker_arm") or "")
+            if arm in {"staged", "pullback"}:
+                attempted.setdefault(sid, set()).add(f"maker_{arm}")
+            else:
+                attempted.setdefault(sid, set()).update(
+                    {"maker_staged", "maker_pullback"}
+                )
     return attempted
 
 
@@ -666,7 +694,11 @@ def entry_cost_reservation(args: argparse.Namespace, row: Mapping[str, Any]) -> 
     """Conservatively reserve both children at the current taker ask."""
 
     ask = finite(row.get("current_yes_ask")) or 1.0
-    return (float(args.taker_shares) + float(args.maker_shares)) * ask
+    return (
+        float(args.taker_shares)
+        + float(args.maker_shares)
+        + float(args.pullback_maker_shares)
+    ) * ask
 
 
 def entry_plan_cost_reservation(plans: Iterable[Mapping[str, Any]]) -> float:
@@ -678,7 +710,11 @@ def entry_plan_cost_reservation(plans: Iterable[Mapping[str, Any]]) -> float:
 def max_live_child_notional_usd(args: argparse.Namespace) -> float:
     """Maximum principal for one child at the binary-market price ceiling."""
 
-    return max(float(args.taker_shares), float(args.maker_shares))
+    return max(
+        float(args.taker_shares),
+        float(args.maker_shares),
+        float(args.pullback_maker_shares),
+    )
 
 
 def maker_profile_parameter(name: str) -> float:
@@ -689,9 +725,10 @@ def maker_profile_parameter(name: str) -> float:
     return value
 
 
-def maker_max_reprices() -> int:
+def maker_max_reprices(maker_arm: str = "staged") -> int:
     profile = get_execution_profile(EXECUTION_PROFILE)
-    maker_leg = next((leg for leg in profile.legs if leg.role == "maker"), None)
+    role = "maker_pullback" if maker_arm == "pullback" else "maker_staged"
+    maker_leg = next((leg for leg in profile.legs if leg.role == role), None)
     if maker_leg is None or maker_leg.max_reprices is None:
         raise RuntimeError("core carry maker profile requires a finite max_reprices")
     return int(maker_leg.max_reprices)
@@ -713,6 +750,21 @@ def maker_edge_price_cap(
     if raw_cap <= 0 or tick <= 0:
         return 0.0
     return float((raw_cap // tick) * tick)
+
+
+def pullback_maker_resting_price(
+    *, best_ask: float, tick_size: float, price_cap: float
+) -> float:
+    tick = Decimal(str(tick_size))
+    if tick <= 0:
+        return 0.0
+    raw = min(
+        Decimal(str(best_ask)) - Decimal(str(maker_profile_parameter("pullback_offset"))),
+        Decimal(str(price_cap)),
+    )
+    if raw <= 0:
+        return 0.0
+    return float((raw // tick) * tick)
 
 
 def maker_clock_assessment(
@@ -872,9 +924,18 @@ def base_plan_fields(
         model_probability=probability,
     )
     sid = signal_id(row)
-    maker = child_order_role == "maker"
+    maker = child_order_role == "maker" or child_order_role.startswith("maker_")
+    maker_arm = (
+        "pullback" if child_order_role == "maker_pullback" else "staged"
+    ) if maker else ""
     limit = (
-        maker_resting_price(
+        pullback_maker_resting_price(
+            best_ask=ask,
+            tick_size=tick,
+            price_cap=maker_cap,
+        )
+        if maker_arm == "pullback"
+        else maker_resting_price(
             best_bid=bid,
             best_ask=ask,
             tick_size=tick,
@@ -897,7 +958,7 @@ def base_plan_fields(
         "config_id": CONFIG_ID,
         "strategy_family": "reheat_risk.current_yes",
         "decision_mode": "frozen_core_v3_first_positive_ten_share_taker_ev",
-        "execution_mode": "tiny_live_split_10_taker_5_maker",
+        "execution_mode": "tiny_live_split_10_taker_5_staged_5_pullback",
         "execution_profile": EXECUTION_PROFILE,
         "comparison_group_id": stable_hash({"signal_id": sid, "token_id": row.get("token_id")}),
         "city": str(row.get("city") or ""),
@@ -911,13 +972,24 @@ def base_plan_fields(
         "signal_side": "BUY_YES",
         "order_side": "BUY",
         "child_order_role": child_order_role,
+        "maker_arm": maker_arm,
+        "maker_experiment_id": str(
+            get_execution_profile(EXECUTION_PROFILE).fixed_parameters.get(
+                "maker_experiment_id"
+            )
+            or ""
+        ) if maker else "",
         "execution_policy": (
-            "current_yes_residual_carry_maker_v2"
+            "current_yes_residual_carry_pullback_maker_v1"
+            if maker_arm == "pullback"
+            else "current_yes_residual_carry_staged_maker_v3"
             if maker
             else "current_yes_residual_carry_taker_v1"
         ),
         "order_lifecycle_policy": (
-            "maker_event_validated_staged_until_update_or_ttl_v3"
+            "maker_event_validated_static_pullback_until_update_or_ttl_v1"
+            if maker_arm == "pullback"
+            else "maker_event_validated_staged_until_update_or_ttl_v3"
             if maker
             else "taker_now"
         ),
@@ -931,7 +1003,9 @@ def base_plan_fields(
         "quote_best_ask": round(ask, 6),
         "quote_tick_size": round(tick, 6),
         "quote_mode": (
-            "fresh_bid_improve_one_tick_post_only_retained_edge_capped"
+            "entry_ask_minus_2c_static_post_only_edge_capped"
+            if maker_arm == "pullback"
+            else "fresh_bid_improve_one_tick_post_only_retained_edge_capped"
             if maker
             else "fresh_full_ladder_taker_ev_recheck"
         ),
@@ -991,6 +1065,7 @@ def build_entry_plans(
     now: datetime,
     taker_shares: float,
     maker_shares: float,
+    pullback_maker_shares: float = FROZEN_PULLBACK_MAKER_SHARES,
     order_ttl_min: float,
 ) -> list[dict[str, Any]]:
     plans: list[dict[str, Any]] = []
@@ -998,8 +1073,12 @@ def build_entry_plans(
     profile = get_execution_profile(EXECUTION_PROFILE)
     allocation = allocate_profile_shares(
         profile=profile,
-        total_shares=taker_shares + maker_shares,
-        leg_share_overrides={"taker": taker_shares, "maker": maker_shares},
+        total_shares=taker_shares + maker_shares + pullback_maker_shares,
+        leg_share_overrides={
+            "taker": taker_shares,
+            "maker_staged": maker_shares,
+            "maker_pullback": pullback_maker_shares,
+        },
     )
     for role, allocated_shares in allocation:
         shares = float(allocated_shares)
@@ -1011,7 +1090,7 @@ def build_entry_plans(
             now=now,
             order_ttl_min=order_ttl_min,
         )
-        if role == "maker" and (
+        if role.startswith("maker_") and (
             not bool(fields.get("maker_live_eligible"))
             or (finite(fields["limit_price"]) or 0.0) <= 0
         ):
@@ -1086,7 +1165,10 @@ def build_maker_lifecycle_plan(
         "created_at_utc": now.isoformat(timespec="seconds"),
         "child_order_role": action,
         "execution_action": action,
-        "execution_policy": "current_yes_residual_carry_maker_v2",
+        "execution_policy": str(
+            order.get("execution_policy")
+            or "current_yes_residual_carry_staged_maker_v3"
+        ),
         "order_lifecycle_policy": str(
             order.get("order_lifecycle_policy")
             or "maker_event_validated_staged_until_update_or_ttl_v3"
@@ -1125,6 +1207,7 @@ def build_maker_lifecycle_plan(
     fields["plan_id"] = "plan-" + stable_hash(
         {
             "source_order_id": lineage_source_id,
+            "maker_arm": str(order.get("maker_arm") or "staged"),
             "action": action,
             "limit_price": limit_price,
             "created_at_utc": fields["created_at_utc"],
@@ -1190,7 +1273,8 @@ def maker_lifecycle_plans(
                 finite(order.get("maker_lifecycle_reprice_count")) or 0
             )
             last_reprice_stage = str(order.get("maker_last_reprice_stage") or "")
-            max_reprices = maker_max_reprices()
+            maker_arm = str(order.get("maker_arm") or "staged")
+            max_reprices = maker_max_reprices(maker_arm)
             if deadline is None or now >= deadline:
                 if active_order:
                     cancel_before_update = parse_utc(
@@ -1226,6 +1310,8 @@ def maker_lifecycle_plans(
                 if active_order:
                     action = "core_carry_maker_cancel_new_observation"
                     cancel_only = True
+            elif maker_arm == "pullback":
+                blocker = "pullback_static_resting_no_reprice"
             else:
                 quote = weather_state._fetch_token_book(client, str(order.get("token_id") or ""))  # noqa: SLF001
                 best_bid = finite(quote.get("bid")) or 0.0
@@ -1287,6 +1373,7 @@ def maker_lifecycle_plans(
                 "maker_reprice_count": reprice_count,
                 "maker_max_reprices": max_reprices,
                 "maker_last_reprice_stage": last_reprice_stage,
+                "maker_arm": maker_arm,
             }
             decisions.append(decision)
             if action:
@@ -1327,7 +1414,8 @@ def new_entry_plans(
         sid = signal_id(row)
         city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
         existing_roles = attempted_roles.get(sid, set())
-        if existing_roles == {"taker", "maker"}:
+        expected_roles = {"taker", "maker_staged", "maker_pullback"}
+        if expected_roles.issubset(existing_roles):
             continue
         reason = ""
         if not existing_roles and (
@@ -1345,6 +1433,7 @@ def new_entry_plans(
                 now=now,
                 taker_shares=float(args.taker_shares),
                 maker_shares=float(args.maker_shares),
+                pullback_maker_shares=float(args.pullback_maker_shares),
                 order_ttl_min=float(args.order_ttl_min),
             )
         )
@@ -1373,9 +1462,11 @@ def new_entry_plans(
             now=now,
             order_ttl_min=float(args.order_ttl_min),
         )
-        maker_planned = any(
-            plan.get("child_order_role") == "maker" for plan in entry_plans
-        )
+        maker_planned_roles = {
+            str(plan.get("child_order_role") or "")
+            for plan in entry_plans
+            if str(plan.get("child_order_role") or "").startswith("maker_")
+        }
         attempts.append(
             {
                 "record_type": "current_yes_core_carry_entry_attempt",
@@ -1388,19 +1479,24 @@ def new_entry_plans(
                 "status": "blocked" if reason else "planned",
                 "reason": reason,
                 "live_enabled": bool(args.live and args.confirm_live),
-                "maker_requested_shares": float(args.maker_shares),
-                "maker_planned_shares": (
-                    float(args.maker_shares) if maker_planned else 0.0
+                "maker_requested_shares": float(args.maker_shares)
+                + float(args.pullback_maker_shares),
+                "maker_planned_shares": sum(
+                    float(plan.get("size") or 0.0)
+                    for plan in entry_plans
+                    if str(plan.get("child_order_role") or "").startswith("maker_")
                 ),
+                "staged_maker_planned": "maker_staged" in maker_planned_roles,
+                "pullback_maker_planned": "maker_pullback" in maker_planned_roles,
                 "maker_live_action": (
                     "entry_blocked"
                     if reason
-                    else ("post" if maker_planned else "skip_terminal")
+                    else ("post" if maker_planned_roles else "skip_terminal")
                 ),
                 "maker_shadow_revalidation_shares": (
-                    float(args.maker_shares)
+                    float(args.maker_shares) + float(args.pullback_maker_shares)
                     if not reason
-                    and not maker_planned
+                    and not maker_planned_roles
                     and maker_clock.get("maker_clock_status")
                     == "pre_source_report_blackout"
                     else 0.0
@@ -1411,8 +1507,9 @@ def new_entry_plans(
         attempted_roles.setdefault(sid, set()).update(
             str(plan.get("child_order_role") or "") for plan in entry_plans
         )
-        if not reason and not maker_planned:
-            attempted_roles[sid].add("maker")
+        if not reason:
+            for maker_role in {"maker_staged", "maker_pullback"} - maker_planned_roles:
+                attempted_roles[sid].add(maker_role)
         if entry_plans:
             plans.extend(entry_plans)
             if not existing_roles:
@@ -1436,8 +1533,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     if (
         float(args.taker_shares) != FROZEN_TAKER_SHARES
         or float(args.maker_shares) != FROZEN_MAKER_SHARES
+        or float(args.pullback_maker_shares) != FROZEN_PULLBACK_MAKER_SHARES
     ):
-        raise RuntimeError("frozen tiny-live split requires exactly 10 taker + 5 maker shares")
+        raise RuntimeError(
+            "frozen tiny-live split requires exactly 10 taker + 5 staged maker + 5 pullback maker shares"
+        )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     configure_signal_runner(output_dir)
@@ -1473,6 +1573,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "journal_terminal_recoveries": journal_terminal_recoveries,
         "taker_shares": float(args.taker_shares),
         "maker_shares": float(args.maker_shares),
+        "pullback_maker_shares": float(args.pullback_maker_shares),
+        "maximum_signal_shares": (
+            float(args.taker_shares)
+            + float(args.maker_shares)
+            + float(args.pullback_maker_shares)
+        ),
         "maker_refresh_sec": float(args.maker_refresh_sec),
         "maker_reprice_limit": maker_max_reprices(),
         "maker_cancel_buffer_sec": get_execution_profile(
@@ -1508,6 +1614,11 @@ def parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--taker-shares", type=float, default=FROZEN_TAKER_SHARES)
     ap.add_argument("--maker-shares", type=float, default=FROZEN_MAKER_SHARES)
+    ap.add_argument(
+        "--pullback-maker-shares",
+        type=float,
+        default=FROZEN_PULLBACK_MAKER_SHARES,
+    )
     ap.add_argument("--maker-refresh-sec", type=float, default=15.0)
     ap.add_argument("--order-ttl-min", type=float, default=15.0)
     ap.add_argument("--max-city-days-per-bj-day", type=int, default=10)

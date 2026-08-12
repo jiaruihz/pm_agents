@@ -1,16 +1,17 @@
-# Core Carry integrated maker v4
+# Core Carry integrated maker v4 / dual-maker A/B v5
 
-Status: `implementation verified / live unchanged / deployment authorization pending`
+Status: `v5 implementation verified / production rollout target`
 
 ## 结论与交易动作
 
-Core Carry 不应再叠加第二个 pullback maker。现有 5-share maker sleeve
-同时承担初始排队、短时回调承接和最多两次主动提价；新天气信息到达后先撤单，
-由 event-rescore 重新计算，post-update re-arm 继续 zero-notional。这样单信号仍是
-`10 taker + 最多 5 maker`，最大 15 股，不改变 selector、Core 概率或 taker。
+交易决定已改为小额真实 A/B：Core selector、概率与 10-share taker 不动，单信号
+增加两个独立 5-share maker sleeve。`maker_staged` 执行现有 queue→midpoint→near-ask；
+`maker_pullback` 静态挂 `entry ask-2c`、15 分钟内不追价。两者独立 role、dedupe、
+order lifecycle、fill/PnL attribution，共享 METAR/forecast/rebracket 失效时钟。单信号
+最大 `10+5+5=20` 股；每日成本上限仍为 `$100`，没有同步放宽总日风险。
 
-本次实现 profile
-`split_taker_maker_event_validated_staged_no_fallback_v4`：
+v5 profile 为 `split_taker_two_maker_event_validated_no_fallback_v5`；其中 staged arm
+沿用并修复 v4：
 
 1. 初始 `bid+1 tick`，受 retained-edge 与 taker-improvement cap 约束；
 2. 前 5 分钟保留 queue；5 分钟后最多一次 midpoint reprice；
@@ -21,7 +22,9 @@ Core Carry 不应再叠加第二个 pullback maker。现有 5-share maker sleeve
 7. 15 分钟 TTL 或下一份 source report 前 90 秒撤单；无 maker→taker fallback；
 8. reprice stage、天气 state hash 与决策盘口完整写入 order lineage。
 
-它是现有证据支持下的统一执行版本，不是已证明提高 ROI 的新 alpha。部署后仍需按
+pullback arm 固定 5 股、报价为 entry ask 下方 2c、无 reprice、无 taker fallback，
+并写入实验标识 `core_carry_staged_vs_pullback_maker_ab_20260813`。它是经明确授权的
+小额执行实验，不是已证明提高 ROI 的新 alpha。部署后仍需按
 真实 maker intent、authenticated fill、paired price improvement、adverse selection
 和 settlement PnL 复评，不能用 future touch 冒充成交。
 
@@ -30,9 +33,11 @@ Core Carry 不应再叠加第二个 pullback maker。现有 5-share maker sleeve
 - 最近 28 个真实 maker root intents 有 15 个成交；已结算 maker 70 股贡献
   `+$1.80`、ROI `+2.85%`，相对同 signal taker 平均改善 `1.18c/share`。
   它增加绝对 PnL，但低于 taker-only `7.77%` ROI，不能靠盲目增量仓位优化。
-- pullback replay 的 `entry ask-2c / 15m` 为 7/7、增量 `+$4.40`，但这些价格会先
-  穿过当前 active maker；30m 已转为 `-$3.65`。因此正确表达是同一 5 股在短 TTL
-  内保持有效，而不是再加 5 股深价单。
+- pullback replay 的 `entry ask-2c / 15m` 为 7/7、增量 `+$4.40`，56 个 settled
+  signals 中占 12.5%；30m 已转为 `-$3.65`。这只证明 15m/5-share 容量值得做
+  有界 live A/B，不能把 future ask crossing 当真实 queue fill，也不能延长 TTL。
+- 两个 maker 可能在同一次回调都成交；所以 v5 的目的同时包含扩大单信号仓位，
+  不是把 pullback arm 伪装成与 staged arm 完全独立的历史 alpha。
 - post-update re-arm 的保守 fill 仍只有 Amsterdam 1 个；它继续 shadow，不进入 live。
 - event-rescore 已能区分 observation、forecast revision 与 exact-bracket transition；
   v4 把这些事件用于撤销 stale maker，但没有把低样本 event selector 偷渡进下单。
@@ -65,7 +70,8 @@ fill/cost/PnL 影响均为 0；影响是撤掉了原 0.78 queue、浪费第二�
   gate 通过，1,464 个 live_real fill ids 无 missing/over-order，fee unknown 为 0。
 - 定向测试覆盖 exact stage target、quote drift、禁止向下 replacement、reprice stage
   持久化、forecast revision 撤单、new observation/rebracket 撤单、两次上限和无 fallback。
-- v4 尚未部署，当前生产仍为 v3。本报告不把实现完成写成收益确认。
+- v5 上线前必须确认交易所无遗留 open order；上线后按两个 maker arm 分开报告
+  submitted、fill、均价改善、adverse selection 与 settlement PnL。
 
 参考：
 

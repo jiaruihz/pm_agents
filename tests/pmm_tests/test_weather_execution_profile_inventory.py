@@ -13,6 +13,7 @@ def test_execution_profile_inventory_is_explicit():
         "split_taker_maker_edge_capped_no_fallback_v2",
         "split_taker_maker_edge_capped_no_fallback_v3",
         "split_taker_maker_event_validated_staged_no_fallback_v4",
+        "split_taker_two_maker_event_validated_no_fallback_v5",
     )
     assert profiles.execution_profile_names() == (
         "taker_now_v1",
