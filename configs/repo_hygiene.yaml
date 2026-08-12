@@ -8,7 +8,9 @@ untracked_artifact_archive_min_bytes: 0
 # Historical debt budgets are monotone: cleanup batches lower these measured
 # ceilings; new research may not grow dated reports or top-level machine data.
 max_dated_analysis_reports: 651
+max_untracked_dated_analysis_reports: 2
 max_top_level_analysis_machine_artifacts: 148
+max_untracked_top_level_analysis_machine_artifacts: 0
 max_top_level_analysis_machine_bytes: 8942901
 top_level_analysis_machine_artifact_max_bytes: 1500000
 max_parallel_machine_format_stems: 0

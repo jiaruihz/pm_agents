@@ -65,7 +65,9 @@ def test_analysis_history_debt_rejects_new_reports_and_parallel_machine_outputs(
         "hygiene_config",
         lambda: {
             "max_dated_analysis_reports": 0,
+            "max_untracked_dated_analysis_reports": 0,
             "max_top_level_analysis_machine_artifacts": 1,
+            "max_untracked_top_level_analysis_machine_artifacts": 0,
             "max_top_level_analysis_machine_bytes": 1,
             "top_level_analysis_machine_artifact_max_bytes": 4,
             "max_parallel_machine_format_stems": 0,
@@ -80,6 +82,10 @@ def test_analysis_history_debt_rejects_new_reports_and_parallel_machine_outputs(
             "docs/analysis/2026-08/one-off.csv",
             "docs/analysis/2026-08/one-off.json",
         },
+        {
+            "docs/analysis/2026-08/2026-08-13-untracked-v1.md",
+            "docs/analysis/2026-08/untracked.jsonl",
+        },
     )
 
     assert any("dated analysis reports grew" in error for error in errors)
@@ -87,6 +93,8 @@ def test_analysis_history_debt_rejects_new_reports_and_parallel_machine_outputs(
     assert any("machine bytes grew" in error for error in errors)
     assert any("artifact exceeds" in error for error in errors)
     assert any("parallel CSV/JSON" in error for error in errors)
+    assert any("untracked dated analysis reports" in error for error in errors)
+    assert any("untracked top-level analysis machine artifacts" in error for error in errors)
 
 
 def test_late_window_shared_helper_contract(tmp_path):

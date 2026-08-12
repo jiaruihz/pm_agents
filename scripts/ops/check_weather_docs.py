@@ -498,7 +498,11 @@ def check_generated_artifacts(errors: list[str], tracked: set[str]) -> None:
             fail(errors, f"stale large_generated_allowlist entry: {relative}")
 
 
-def check_analysis_history_debt(errors: list[str], tracked: set[str]) -> None:
+def check_analysis_history_debt(
+    errors: list[str],
+    tracked: set[str],
+    untracked: set[str] | None = None,
+) -> None:
     """Prevent dated reports and repository machine data from growing again."""
     config = hygiene_config()
     dated_reports = sorted(
@@ -516,6 +520,21 @@ def check_analysis_history_debt(errors: list[str], tracked: set[str]) -> None:
             f"dated analysis reports grew from ceiling {dated_ceiling} to "
             f"{len(dated_reports)}; merge the result into its family living doc",
         )
+    if untracked is not None:
+        untracked_dated = sorted(
+            relative
+            for relative in untracked
+            if relative.startswith("docs/analysis/")
+            and Path(relative).suffix.lower() == ".md"
+            and re.match(r"20\d\d-\d\d-\d\d-", Path(relative).name)
+        )
+        untracked_dated_ceiling = int(config["max_untracked_dated_analysis_reports"])
+        if len(untracked_dated) > untracked_dated_ceiling:
+            fail(
+                errors,
+                "untracked dated analysis reports grew from ceiling "
+                f"{untracked_dated_ceiling} to {len(untracked_dated)}; merge before commit",
+            )
 
     machine_artifacts = sorted(
         relative
@@ -532,6 +551,23 @@ def check_analysis_history_debt(errors: list[str], tracked: set[str]) -> None:
             "top-level analysis machine artifacts grew from ceiling "
             f"{count_ceiling} to {len(machine_artifacts)}; write machine rows to JRS",
         )
+    if untracked is not None:
+        untracked_machine = sorted(
+            relative
+            for relative in untracked
+            if relative.startswith("docs/analysis/")
+            and "/generated/" not in relative
+            and Path(relative).suffix.lower() in ANALYSIS_MACHINE_SUFFIXES
+        )
+        untracked_machine_ceiling = int(
+            config["max_untracked_top_level_analysis_machine_artifacts"]
+        )
+        if len(untracked_machine) > untracked_machine_ceiling:
+            fail(
+                errors,
+                "untracked top-level analysis machine artifacts grew from ceiling "
+                f"{untracked_machine_ceiling} to {len(untracked_machine)}; write to JRS",
+            )
     total_bytes = sum((ROOT / relative).stat().st_size for relative in machine_artifacts)
     bytes_ceiling = int(config["max_top_level_analysis_machine_bytes"])
     if total_bytes > bytes_ceiling:
@@ -786,7 +822,7 @@ def main() -> int:
     check_index_links(errors, tracked)
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)
-    check_analysis_history_debt(errors, tracked)
+    check_analysis_history_debt(errors, tracked, untracked)
     check_runtime_artifacts_are_untracked(errors, tracked)
     check_production_entrypoints(errors, tracked)
     check_research_script_debt(errors, tracked, untracked)
