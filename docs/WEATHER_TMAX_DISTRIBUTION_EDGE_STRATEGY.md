@@ -224,13 +224,36 @@ promotion = no live
 next = zero-notional target-book shadow runner / position_book telemetry
 ```
 
-### D-1/D-2 shared weather probability（2026-08-12）
+### D-1/D-2 shared weather probability（2026-08-13 update）
+
+```text
+weather-only: significance=legacy compatibility only; calibration=improved point estimate; pooled_baseline=combined W0; forward=blocked at D1 6/D2 5 settled dates
+market residual: baseline=market; forward=not tested; execution=not run
+production: live_action=none; orders_changed=0
+```
 
 D-1/D-2 已统一为共享概率架构：共同学习 weather distribution 的 temperature、ordinal center、
-adjacent diffusion 与 tail floor，lead-specific 参数和 strongly-shrunk city center 只作候选。恢复的共同分母为
-D-1 `9,648 states/74 dates/48 cities`、D-2 `246/29/14`。secondary holdout 上校准显著改善旧
-telemetry，但 D-1/D-2 market-offset 均在 inner selection 选择 `beta=0`，没有可交易 market residual；
-保持 research，不产生 signal/order。正式数字与 artifact 见
+adjacent diffusion 与 tail floor，lead-specific 参数和 strongly-shrunk city center 只作候选。2026-08-13
+进一步把旧 D-1 robust-tail W0 原样接入同一 runner：D-1 用 `87.5% ensemble mean + 12.5% assigned +
+full shrunk bias + 1.25× residual scale + 2% climatology tail`，D-2 暂保留 incumbent telemetry，再由同一
+lead/partial-city calibrator 训练。三种 base 在 source state 交集上固定分母比较，共 `3,124 states`：D-1
+`2,878/49 dates/35 cities`、D-2 `246/29/14`。
+
+兼容重放支持“旧 D-1 模型应接入统一 runner，而不是丢掉”：D-1 late slice 为 `1,153 states/23 dates`，
+W0-combined logloss `1.6600`，旧 telemetry `1.8923`，paired delta `-0.2323`；但同期 market 为
+`1.3811`，W0-combined 相对 market delta `+0.2789`。这些23天中14天曾用于旧W0选参，9天是旧报告已经
+查看的 secondary；更早的4-day shared slice 也全部属于旧W0 development。也就是说 combined 的 D-1
+evaluation 27/27 dates 都不是 untouched forward，bootstrap CI 只作兼容性诊断，不能宣称显著改善。该4-day
+slice 的 D-1 W0-combined/旧 telemetry/market
+为 `1.7204/1.9533/1.5756`；D-2 为 `1.8694/1.8729/1.7008`。market-offset 在 D-1 选 `beta=0`
+（严格回到 market），D-2 只选 `beta=.025`，compatibility slice 相对 market delta `-0.00405`、CI
+`[-0.00870,+0.00033]`，区间穿0且不是 exact-run forward，不构成确认 residual。
+
+当前 exact-run collector 已覆盖8个 capture dates；319,464 rows 全部有真实 run identity 与
+first-seen/available，52,360 complete batches。已结算、batch-complete 的严格样本仍只有 D-1 6 dates、D-2
+5 dates，尚未达到各 horizon 30 dates 的 formal inner-train 门槛。因此 combined W0 是当前最好的
+secondary reconstructed weather-only baseline，但不冻结 W1、不计算交易 ROI、不产生 signal/order。机器产物：
+`d1_d2_weather_only_probability/combined_w0_20260813`；上一轮恢复口径见
 [D-1/D-2 shared weather probability v1](analysis/2026-08/2026-08-12-d1-d2-shared-weather-probability-v1.md)。
 
 ## 2026-07-10 Lineage Repair

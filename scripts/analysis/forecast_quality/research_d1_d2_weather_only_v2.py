@@ -14,6 +14,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,9 @@ from weather_model_evaluation.d1_d2_probability import (
     serialize_bundle,
     summarize_scores,
 )
+from scripts.analysis.forecast_quality import research_d1_cross_city_hierarchy_v1 as legacy_base
+from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_robust_tail as legacy_w0
+from scripts.analysis.forecast_quality import research_d1_legacy_weather_only_v2 as legacy_weather
 
 
 MODELS = (
@@ -49,6 +53,18 @@ MODELS = (
 )
 DEFAULT_D1_CHALLENGER_SPEC = (
     ROOT / "docs/analysis/2026-08/2026-08-05-d1-weather-only-clean-forward-freeze-v1.json"
+)
+LOCKED_W0_DEVELOPMENT_DATES = (
+    "2026-06-17", "2026-06-18", "2026-06-19", "2026-06-20",
+    "2026-06-21", "2026-06-22", "2026-06-23", "2026-06-24",
+    "2026-06-25", "2026-06-26", "2026-06-27", "2026-06-28",
+    "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-04",
+    "2026-07-05", "2026-07-06",
+)
+LOCKED_W0_SECONDARY_DATES = (
+    "2026-07-07", "2026-07-16", "2026-07-17", "2026-07-18",
+    "2026-07-19", "2026-07-20", "2026-07-21", "2026-07-22",
+    "2026-07-23",
 )
 
 
@@ -194,6 +210,193 @@ def _date_equal_arm_logloss(scored: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def _locked_w0_brackets(labels: list[Any]) -> tuple[list[legacy_base.Bracket], str]:
+    """Translate a native exact ladder into the locked W0 bracket contract."""
+    clean = [
+        str(value).replace("°F", "").replace("°C", "").replace("°", "").strip()
+        for value in labels
+    ]
+    unit = "F" if any("-" in label[1:] for label in clean[1:-1]) else "C"
+    brackets: list[legacy_base.Bracket] = []
+    for index, label in enumerate(clean):
+        values = [float(value) for value in re.findall(r"(?<![\d.])-?\d+(?:\.\d+)?", label)]
+        if not values:
+            raise ValueError(f"unparseable locked-W0 bracket={label!r}")
+        if index == 0:
+            brackets.append(legacy_base.Bracket(label, None, values[-1], True, False))
+        elif index == len(clean) - 1:
+            brackets.append(legacy_base.Bracket(label, values[0], None, False, True))
+        elif len(values) >= 2:
+            brackets.append(legacy_base.Bracket(label, values[0], values[1], False, False))
+        else:
+            brackets.append(legacy_base.Bracket(label, values[0], values[0], False, False))
+    legacy_base.validate_ladder(brackets)
+    return brackets, unit
+
+
+def attach_locked_w0_robust_tail_prior(
+    raw_probability_rows: pd.DataFrame,
+    multimodel_forecasts: pd.DataFrame,
+    history: pd.DataFrame,
+    *,
+    maximum_asof_lag_hours: float = 12.0,
+) -> pd.DataFrame:
+    """Attach the historical locked W0 D-1 distribution without future runs.
+
+    The old W0 was defined only for D-1. D-2 stays on incumbent telemetry in
+    the hybrid base arm. Reconstructed multi-model batches are joined strictly
+    as-of the probability checkpoint; a later decision is never backfilled.
+    """
+    required = {"city", "target_date", "snapshot_ts_utc", "lead_days", "brackets_json"}
+    missing = sorted(required - set(raw_probability_rows.columns))
+    if missing:
+        raise ValueError(f"probability rows missing locked-W0 columns: {missing}")
+    forecast_required = {
+        "snapshot_key",
+        "city",
+        "target_date",
+        "decision_time_utc",
+        "model_key",
+        "forecast_max_f",
+    }
+    missing = sorted(forecast_required - set(multimodel_forecasts.columns))
+    if missing:
+        raise ValueError(f"multimodel forecasts missing columns: {missing}")
+
+    historical = history.copy()
+    historical["is_best_model"] = (
+        historical["is_best_model"].astype(str).str.lower().isin(["true", "1"])
+    )
+    historical["month_num"] = pd.to_datetime(historical["date"]).dt.month
+    test_start = str(raw_probability_rows["target_date"].astype(str).min())
+    fitted = legacy_weather.fit_legacy_history_slice(
+        historical,
+        test_start,
+        history_policy="summer_best",
+    )
+
+    forecasts = multimodel_forecasts.copy()
+    forecasts["decision_time_utc"] = pd.to_datetime(
+        forecasts["decision_time_utc"], utc=True, errors="coerce"
+    )
+    forecasts["forecast_max_f"] = pd.to_numeric(forecasts["forecast_max_f"], errors="coerce")
+    forecasts = forecasts[
+        forecasts["decision_time_utc"].notna() & np.isfinite(forecasts["forecast_max_f"])
+    ].copy()
+    batches: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for snapshot_key, group in forecasts.groupby("snapshot_key", sort=False):
+        identities = group[["city", "target_date", "decision_time_utc"]].drop_duplicates()
+        if len(identities) != 1:
+            raise ValueError(f"multimodel snapshot identity is not unique: {snapshot_key}")
+        identity = identities.iloc[0]
+        model_values = {
+            str(row.model_key): float(row.forecast_max_f)
+            for row in group.itertuples(index=False)
+        }
+        batches.setdefault((str(identity.city), str(identity.target_date)), []).append(
+            {
+                "decision_time_utc": identity.decision_time_utc,
+                "model_values_f": model_values,
+            }
+        )
+    for values in batches.values():
+        values.sort(key=lambda row: row["decision_time_utc"])
+
+    output = raw_probability_rows.copy()
+    w0_vectors: list[str | None] = []
+    asof_lags: list[float] = []
+    blockers: dict[str, int] = {}
+
+    def block(reason: str) -> None:
+        blockers[reason] = blockers.get(reason, 0) + 1
+        w0_vectors.append(None)
+
+    model_key_by_family = {"gfs": "gfs_global", "ecmwf": "ecmwf_ifs025"}
+    for row in output.itertuples(index=False):
+        if int(row.lead_days) != 1:
+            block("w0_not_defined_for_d2")
+            continue
+        checkpoint = pd.to_datetime(row.snapshot_ts_utc, utc=True, errors="coerce")
+        if pd.isna(checkpoint):
+            block("invalid_probability_checkpoint_clock")
+            continue
+        candidates = [
+            batch
+            for batch in batches.get((str(row.city), str(row.target_date)), [])
+            if batch["decision_time_utc"] <= checkpoint
+        ]
+        if not candidates:
+            block("no_prior_multimodel_batch")
+            continue
+        batch = candidates[-1]
+        lag_hours = float((checkpoint - batch["decision_time_utc"]).total_seconds() / 3600.0)
+        if lag_hours < 0 or lag_hours > maximum_asof_lag_hours:
+            block("multimodel_batch_too_old")
+            continue
+        spec = fitted["specs"].get(str(row.city))
+        if spec is None:
+            block("missing_locked_w0_city_spec")
+            continue
+        assigned_key = model_key_by_family.get(str(spec["model"]).lower())
+        model_values = batch["model_values_f"]
+        if assigned_key not in model_values or len(model_values) < 2:
+            block("assigned_or_ensemble_model_missing")
+            continue
+        try:
+            brackets, unit = _locked_w0_brackets(json.loads(row.brackets_json))
+        except (TypeError, ValueError):
+            # These rows are also rejected by prepare_probability_rows.  Keep
+            # the coverage loss explicit instead of mislabelling it as a W0
+            # model failure.
+            block("non_native_ladder_order_or_gap")
+            continue
+        try:
+            state = {
+                "city": str(row.city),
+                "target_date": str(row.target_date),
+                "market_unit": unit,
+                "brackets": brackets,
+                "forecast_max_f": float(model_values[assigned_key]),
+                "ensemble_mean_f": float(np.mean(list(model_values.values()))),
+            }
+            vector = legacy_w0.robust_tail_vector(
+                state,
+                fitted,
+                ensemble_weight=0.875,
+                scale_temperature=1.25,
+                climate_mix=0.02,
+                consensus_stat="mean",
+                bias_multiplier=1.0,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            block(f"locked_w0_vector_error:{type(exc).__name__}")
+            continue
+        w0_vectors.append(json.dumps(vector.tolist(), separators=(",", ":")))
+        asof_lags.append(lag_hours)
+
+    output["w0_robust_tail_probs_json"] = w0_vectors
+    available = output["w0_robust_tail_probs_json"].notna()
+    output.attrs["locked_w0"] = {
+        "lineage": "single_run_reconstructed_conservative_12h_lag",
+        "selection_dates": list(LOCKED_W0_DEVELOPMENT_DATES),
+        "previously_viewed_secondary_dates": list(LOCKED_W0_SECONDARY_DATES),
+        "parameters": {
+            "consensus_stat": "mean",
+            "ensemble_weight": 0.875,
+            "bias_multiplier": 1.0,
+            "residual_scale": 1.25,
+            "climatology_mix": 0.02,
+            "kernel_sd_f": legacy_weather.KERNEL_SD_F,
+        },
+        "d1_available_rows": int(available.sum()),
+        "d1_available_dates": int(output.loc[available, "target_date"].nunique()),
+        "maximum_asof_lag_hours": float(maximum_asof_lag_hours),
+        "median_asof_lag_hours": float(np.median(asof_lags)) if asof_lags else None,
+        "blockers": blockers,
+    }
+    return output
+
+
 def _market_offset_score(
     scored: pd.DataFrame,
     *,
@@ -304,6 +507,7 @@ def run_legacy_shared_training(
     shared_holdout_end: str,
     event_rungs_path: Path | None = None,
     history_path: Path | None = None,
+    multimodel_forecasts_path: Path | None = None,
 ) -> dict[str, Any]:
     """Train the shared D-1/D-2 structure on the recovered PIT-like panel.
 
@@ -314,7 +518,28 @@ def run_legacy_shared_training(
     """
 
     raw = pd.read_csv(probability_path)
+    input_files = {
+        "probability_rows": probability_path,
+        "event_rungs": event_rungs_path,
+        "historical_errors": history_path,
+        "multimodel_forecasts": multimodel_forecasts_path,
+    }
+
+    def input_identity(path: Path | None) -> dict[str, Any] | None:
+        if path is None:
+            return None
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return {
+            "path": str(path),
+            "sha256": digest.hexdigest(),
+            "bytes": path.stat().st_size,
+        }
     history_metadata: dict[str, Any] | None = None
+    locked_w0_metadata: dict[str, Any] | None = None
+    history: pd.DataFrame | None = None
     if event_rungs_path is not None and history_path is not None:
         event_rungs = pd.read_csv(
             event_rungs_path,
@@ -324,23 +549,56 @@ def run_legacy_shared_training(
         history = pd.read_csv(history_path)
         raw = attach_empirical_physical_prior(raw, event_rungs, history)
         history_metadata = dict(raw.attrs.get("historical_error_bank") or {})
+    if multimodel_forecasts_path is not None:
+        if history_path is None:
+            raise ValueError("--history is required with --multimodel-forecasts")
+        if history is None:
+            history = pd.read_csv(history_path)
+        raw = attach_locked_w0_robust_tail_prior(
+            raw,
+            pd.read_csv(multimodel_forecasts_path),
+            history,
+        )
+        locked_w0_metadata = dict(raw.attrs.get("locked_w0") or {})
     rows = prepare_probability_rows(raw)
     native_ladder_scoreable_rows = int(len(rows))
     empirical_prior_available_rows = 0
+    locked_w0_available_rows = 0
     base_frames = {"legacy_telemetry": rows}
     if "physical_probs" in rows and rows["physical_probs"].notna().any():
         physical = rows[rows["physical_probs"].notna()].copy()
         empirical_prior_available_rows = int(len(physical))
         physical["model_probs"] = physical["physical_probs"]
         base_frames["empirical_physical"] = physical
-        # Every model comparison uses the rows where the reusable historical
-        # physical prior is available.
-        common_sources = set(physical["source_index"])
-        base_frames = {
-            name: frame[frame["source_index"].isin(common_sources)].reset_index(drop=True)
-            for name, frame in base_frames.items()
-        }
-        rows = base_frames["legacy_telemetry"]
+    if "w0_robust_tail_probs" in rows and rows["w0_robust_tail_probs"].notna().any():
+        # W0 is a D-1 model. The combined base keeps D-2 incumbent telemetry,
+        # then lets the shared/lead calibrators decide whether that hybrid is
+        # superior to a common telemetry base.
+        w0_hybrid = rows[
+            (rows["lead_days"] == 2) | rows["w0_robust_tail_probs"].notna()
+        ].copy()
+        locked_w0_available_rows = int(
+            ((w0_hybrid["lead_days"] == 1) & w0_hybrid["w0_robust_tail_probs"].notna()).sum()
+        )
+        w0_hybrid["model_probs"] = [
+            w0 if int(lead) == 1 else legacy
+            for lead, w0, legacy in zip(
+                w0_hybrid["lead_days"],
+                w0_hybrid["w0_robust_tail_probs"],
+                w0_hybrid["model_probs"],
+            )
+        ]
+        base_frames["locked_w0_d1_legacy_d2"] = w0_hybrid
+
+    # Fixed-denominator comparison across every enabled base model.
+    common_sources = set.intersection(
+        *(set(frame["source_index"]) for frame in base_frames.values())
+    )
+    base_frames = {
+        name: frame[frame["source_index"].isin(common_sources)].reset_index(drop=True)
+        for name, frame in base_frames.items()
+    }
+    rows = base_frames["legacy_telemetry"]
     development = rows[rows["target_date"] <= development_end].copy()
     shared_holdout = rows[
         (rows["target_date"] > development_end)
@@ -397,6 +655,27 @@ def run_legacy_shared_training(
     selected_base_model = str(selected["base_model"])
     selected_shrinkage = float(selected["city_shrinkage"])
 
+    base_selected_specs = {
+        str(base_model): group.sort_values(
+            ["inner_validation_logloss", "city_shrinkage", "arm"]
+        ).iloc[0]
+        for base_model, group in selection.groupby("base_model")
+    }
+    candidate_bundles: dict[str, dict[str, Any]] = {}
+    candidate_output_arms: dict[str, str] = {}
+    for base_model, base_spec in base_selected_specs.items():
+        base_development = base_frames[base_model]
+        base_development = base_development[
+            base_development["source_index"].isin(set(development["source_index"]))
+        ].copy()
+        candidate_bundles[base_model] = fit_model_bundle(
+            base_development,
+            city_shrinkage=float(base_spec["city_shrinkage"]),
+        )
+        candidate_output_arms[base_model] = (
+            f"candidate:{base_model}:{str(base_spec['arm'])}"
+        )
+
     selected_inner_rows = base_frames[selected_base_model]
     selected_inner_train = selected_inner_rows[
         selected_inner_rows["source_index"].isin(set(inner_train["source_index"]))
@@ -437,8 +716,8 @@ def run_legacy_shared_training(
     score_tables: list[pd.DataFrame] = []
     delta_rows: list[dict[str, Any]] = []
     for slice_name, frame in (
-        ("shared_d1_d2_holdout", shared_holdout),
-        ("late_d1_temporal_stress", late_d1),
+        ("legacy_w0_seen_shared_compatibility", shared_holdout),
+        ("legacy_w0_seen_d1_compatibility", late_d1),
     ):
         if frame.empty:
             continue
@@ -466,6 +745,18 @@ def run_legacy_shared_training(
             incumbent = predict_rows(incumbent_frame, arm="raw_weather")
             incumbent["arm"] = "legacy_telemetry_raw"
             scored = pd.concat([scored, incumbent], ignore_index=True)
+        for base_model, base_spec in base_selected_specs.items():
+            candidate_frame = base_frames[base_model]
+            candidate_frame = candidate_frame[
+                candidate_frame["source_index"].isin(set(frame["source_index"]))
+            ].copy()
+            candidate = score_model_bundle(
+                candidate_frame,
+                candidate_bundles[base_model],
+            )
+            candidate = candidate[candidate["arm"] == str(base_spec["arm"])].copy()
+            candidate["arm"] = candidate_output_arms[base_model]
+            scored = pd.concat([scored, candidate], ignore_index=True)
         scored["evaluation_slice"] = slice_name
         scored_slices.append(scored)
         table = summarize_scores(scored)
@@ -485,18 +776,63 @@ def run_legacy_shared_training(
         ):
             delta["evaluation_slice"] = slice_name
             delta_rows.append(delta)
+        for candidate_arm in candidate_output_arms.values():
+            for delta in block_bootstrap_delta(
+                scored,
+                left=candidate_arm,
+                right="market",
+            ):
+                delta["evaluation_slice"] = slice_name
+                delta_rows.append(delta)
+        if "locked_w0_d1_legacy_d2" in candidate_output_arms:
+            for delta in block_bootstrap_delta(
+                scored,
+                left=candidate_output_arms["locked_w0_d1_legacy_d2"],
+                right=candidate_output_arms["legacy_telemetry"],
+            ):
+                delta["evaluation_slice"] = slice_name
+                delta_rows.append(delta)
 
     all_scored = pd.concat(scored_slices, ignore_index=True)
     score_table = pd.concat(score_tables, ignore_index=True)
     deltas = pd.DataFrame(delta_rows)
-    selected_holdout = score_table[
-        (score_table["evaluation_slice"] == "shared_d1_d2_holdout")
+    selected_compatibility = score_table[
+        (score_table["evaluation_slice"] == "legacy_w0_seen_shared_compatibility")
         & (score_table["arm"] == selected_output_arm)
     ]
-    market_holdout = score_table[
-        (score_table["evaluation_slice"] == "shared_d1_d2_holdout")
+    market_compatibility = score_table[
+        (score_table["evaluation_slice"] == "legacy_w0_seen_shared_compatibility")
         & (score_table["arm"] == "market")
     ]
+    candidate_compatibility = score_table[
+        (score_table["evaluation_slice"] == "legacy_w0_seen_shared_compatibility")
+        & score_table["arm"].isin(candidate_output_arms.values())
+    ]
+    residual_compatibility_evidence = deltas[
+        (deltas["evaluation_slice"] == "legacy_w0_seen_shared_compatibility")
+        & (deltas["left"] == "market_weather_residual")
+        & (deltas["right"] == "market")
+    ].copy()
+    nonzero_residual_leads = {
+        int(lead) for lead, beta in beta_by_lead.items() if float(beta) > 0.0
+    }
+    confirmed_residual_leads = set(
+        residual_compatibility_evidence.loc[
+            residual_compatibility_evidence["ci_high"] < 0.0, "lead_days"
+        ].astype(int)
+    )
+    if not nonzero_residual_leads:
+        market_residual_status = "development_rejected_beta_zero_exact_market"
+    elif nonzero_residual_leads <= confirmed_residual_leads:
+        market_residual_status = "legacy_compatibility_replay_predictive_information_only"
+    else:
+        market_residual_status = "no_confirmed_market_residual_on_legacy_compatibility_replay"
+
+    d1_evaluation_dates = set(
+        rows.loc[rows["lead_days"] == 1, "target_date"].astype(str)
+    ) - set(development["target_date"].astype(str))
+    locked_w0_seen_dates = set(LOCKED_W0_DEVELOPMENT_DATES) | set(LOCKED_W0_SECONDARY_DATES)
+    d1_seen_overlap = sorted(d1_evaluation_dates & locked_w0_seen_dates)
 
     summary = {
         "schema_version": "d1_d2_weather_only_v2_training_result_v1",
@@ -505,6 +841,7 @@ def run_legacy_shared_training(
         "selected_output_arm": selected_output_arm,
         "selected_base_model": selected_base_model,
         "selected_city_shrinkage": selected_shrinkage,
+        "candidate_output_arms": candidate_output_arms,
         "market_offset": {
             "mode": offset_mode,
             "beta_by_lead": {str(key): value for key, value in beta_by_lead.items()},
@@ -513,6 +850,9 @@ def run_legacy_shared_training(
         },
         "market_features_used_for_weather_model": False,
         "input": str(probability_path),
+        "input_identities": {
+            name: input_identity(path) for name, path in input_files.items()
+        },
         "denominator_scope": "recovered_strategy_snapshot_complete_D1_D2_ladders_with_settlement_and_same_row_market",
         "raw_rows": int(len(raw)),
         "scoreable_rows": int(len(rows)),
@@ -520,6 +860,7 @@ def run_legacy_shared_training(
             "raw_probability_rows": int(len(raw)),
             "native_ladder_and_winner_scoreable": native_ladder_scoreable_rows,
             "empirical_physical_prior_available": empirical_prior_available_rows,
+            "locked_w0_d1_available": locked_w0_available_rows,
             "common_model_comparison": int(len(rows)),
         },
         "coverage": {
@@ -533,30 +874,39 @@ def run_legacy_shared_training(
             for lead, group in rows.groupby("lead_days")
         },
         "historical_error_bank": history_metadata,
+        "locked_w0": locked_w0_metadata,
         "splits": {
             "development": {
                 "end": development_end,
                 "states": int(len(development)),
                 "dates": int(development["target_date"].nunique()),
             },
-            "shared_d1_d2_holdout": {
+            "legacy_w0_seen_shared_compatibility": {
                 "start_exclusive": development_end,
                 "end": shared_holdout_end,
                 "states": int(len(shared_holdout)),
                 "dates": int(shared_holdout["target_date"].nunique()),
             },
-            "late_d1_temporal_stress": {
+            "legacy_w0_seen_d1_compatibility": {
                 "start_exclusive": shared_holdout_end,
                 "states": int(len(late_d1)),
                 "dates": int(late_d1["target_date"].nunique()),
             },
+            "locked_w0_d1_evaluation_overlap": {
+                "evaluation_dates": len(d1_evaluation_dates),
+                "previously_used_or_viewed_dates": len(d1_seen_overlap),
+                "dates": d1_seen_overlap,
+                "untouched_forward_dates": len(d1_evaluation_dates - locked_w0_seen_dates),
+            },
         },
         "selection": selection.to_dict("records"),
         "parameters": artifact,
-        "selected_holdout_scores": selected_holdout.to_dict("records"),
-        "market_holdout_scores": market_holdout.to_dict("records"),
-        "weather_only_status": "trained_secondary_holdout_not_strict_run_aware_forward",
-        "market_residual_status": "development_rejected_beta_zero_exact_market",
+        "selected_compatibility_scores": selected_compatibility.to_dict("records"),
+        "candidate_compatibility_scores": candidate_compatibility.to_dict("records"),
+        "market_compatibility_scores": market_compatibility.to_dict("records"),
+        "market_residual_compatibility_evidence": residual_compatibility_evidence.to_dict("records"),
+        "weather_only_status": "legacy_compatibility_replay_only_exact_run_forward_insufficient",
+        "market_residual_status": market_residual_status,
         "production_action": "none",
         "orders_changed": 0,
     }
@@ -591,6 +941,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--shared-holdout-end", default="2026-06-20")
     parser.add_argument("--event-rungs", type=Path)
     parser.add_argument("--history", type=Path)
+    parser.add_argument("--multimodel-forecasts", type=Path)
     args = parser.parse_args(argv)
     if args.probability_rows is not None:
         summary = run_legacy_shared_training(
@@ -600,6 +951,7 @@ def main(argv: list[str] | None = None) -> int:
             shared_holdout_end=args.shared_holdout_end,
             event_rungs_path=args.event_rungs,
             history_path=args.history,
+            multimodel_forecasts_path=args.multimodel_forecasts,
         )
         print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
         return 0

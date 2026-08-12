@@ -115,6 +115,12 @@ def prepare_probability_rows(rows: pd.DataFrame) -> pd.DataFrame:
                 "model_probs": model,
                 "market_probs": market,
                 "rung_count": len(model),
+                "w0_robust_tail_probs": (
+                    _parse_vector(row["w0_robust_tail_probs_json"])
+                    if "w0_robust_tail_probs_json" in rows.columns
+                    and pd.notna(row.get("w0_robust_tail_probs_json"))
+                    else None
+                ),
                 "physical_probs": (
                     _parse_vector(row["physical_probs_json"])
                     if "physical_probs_json" in rows.columns
