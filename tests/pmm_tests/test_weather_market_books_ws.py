@@ -9,10 +9,12 @@ from weather_data_feed_service.market_books_ws import (
     Collector,
     DEFAULT_CITIES,
     HourlyWriter,
+    MarketCaptureDemandCursor,
     PreTransportSafeClientConnection,
     Selection,
     SourceEventCursor,
     _rest_health,
+    apply_market_capture_demands,
     build_parser,
     scheduled_report_windows,
     select_tokens,
@@ -337,6 +339,49 @@ def test_hourly_writer_uses_restart_safe_stream_file(tmp_path) -> None:
     assert path.read_text(encoding="utf-8").strip() == '{"message":"one"}'
 
 
+def test_d1_capture_demand_adds_complete_future_event_ladder(tmp_path) -> None:
+    path = tmp_path / "capture_demands.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "weather_market_capture_demand_v1",
+                "capture_request_id": "request-1",
+                "city": "Busan",
+                "target_date": "2026-08-10",
+                "requested_at_utc": "2026-08-09T02:59:00Z",
+                "expires_at_utc": "2026-08-09T04:59:00Z",
+                "max_token_count": 32,
+            }
+        )
+        + "\n"
+    )
+    demand = MarketCaptureDemandCursor(path).read(now_utc=NOW)
+    selection = Selection(
+        tokens=set(),
+        token_rows={},
+        city_token_counts={},
+        active_brackets={},
+        grace_brackets={},
+        scheduled_cities=[],
+        research_cities=[],
+        burst_cities=[],
+        missing_observation_cities=[],
+        invalidation_state={},
+    )
+    future = _market_payload()
+    for row in future["records"]:
+        row["event_date"] = "2026-08-10"
+    selected = apply_market_capture_demands(
+        selection,
+        market_payload=future,
+        demands=demand,
+    )
+    assert len(selected.tokens) == 14
+    assert selected.city_token_counts == {"Busan": 14}
+    assert selected.capture_demands[0]["resolution_status"] == "resolved_complete_event"
+    assert selected.capture_demands[0]["resolved_token_count"] == 14
+
+
 def test_collector_publishes_append_only_subscription_epoch_lineage(tmp_path) -> None:
     args = build_parser().parse_args(
         [
@@ -388,3 +433,4 @@ def test_collector_publishes_append_only_subscription_epoch_lineage(tmp_path) ->
     assert first["capture_policy_id"]
     assert first["subscription_set_id"]
     assert second["previous_subscription_epoch_id"] == first["subscription_epoch_id"]
+    apply_market_capture_demands,

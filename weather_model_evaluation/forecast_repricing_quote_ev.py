@@ -37,13 +37,19 @@ from .forecast_repricing_position import (
     add_full_ladder_position_features,
     weather_fee,
 )
+from .rest_quote_path import (
+    attach_first_touch_labels,
+    discover_market_book_paths,
+    load_relevant_quote_history,
+)
 
 
-SCHEMA_VERSION = "forecast_repricing_quote_ev_policy_v1"
-MODEL_ID = "forecast_repricing_quote_ev_v1"
+SCHEMA_VERSION = "forecast_repricing_quote_ev_policy_v2"
+MODEL_ID = "forecast_repricing_quote_ev_v2"
 QUOTE_CHECKPOINT_MIN = 30
 LIQUIDATION_CHECKPOINT_MIN = 60
 SIGNAL_TTL_MIN = 30
+MIN_QUOTE_PRICE = 0.01
 QUOTE_ACTIONS = (
     "best_bid",
     "bid_plus_tick",
@@ -71,6 +77,12 @@ MARKET_STATIC_QUOTE_FEATURES = (
     + QUOTE_ACTION_FEATURES
 )
 QUOTE_FEATURES = tuple(MICROSTRUCTURE_FEATURES) + QUOTE_ACTION_FEATURES
+SELECTION_SCORE_COLUMNS = (
+    "predicted_direct_proxy_ev",
+    "predicted_two_head_proxy_ev",
+    "predicted_average_proxy_ev",
+    "predicted_agreement_proxy_ev",
+)
 
 
 def _floor_to_tick(value: pd.Series, tick: pd.Series) -> pd.Series:
@@ -128,6 +140,7 @@ def materialize_quote_actions(frame: pd.DataFrame) -> pd.DataFrame:
     quotes = quotes.loc[
         quotes["quote_price"].ge(quotes["entry_bid"] - 1e-12)
         & quotes["quote_price"].lt(quotes["entry_ask"] - 1e-12)
+        & quotes["quote_price"].ge(MIN_QUOTE_PRICE - 1e-12)
     ].copy()
     quotes = quotes.drop_duplicates(
         [*IDENTITY_COLUMNS, "quote_price"], keep="first"
@@ -171,6 +184,15 @@ def _date_weights(frame: pd.DataFrame) -> np.ndarray:
     rungs = frame.groupby(["target_date", "forecast_event_id"])["condition_id"].transform("nunique")
     actions = frame.groupby([*IDENTITY_COLUMNS])["quote_price"].transform("nunique")
     weights = 1.0 / events.clip(lower=1) / rungs.clip(lower=1) / actions.clip(lower=1)
+    if "path_label_status" in frame:
+        lineage_weight = frame["path_label_status"].map(
+            {
+                "scoreable_observed_touch_fill_relative_exit": 1.0,
+                "scoreable_no_observed_touch": 1.0,
+                "legacy_sparse_observed_no_touch": 0.25,
+            }
+        ).fillna(1.0)
+        weights = weights * lineage_weight
     return (weights / weights.mean()).to_numpy(float)
 
 
@@ -223,7 +245,9 @@ def _fit_models(train: pd.DataFrame) -> dict[str, Any]:
         max_leaf_nodes=15,
         min_samples_leaf=50,
         l2_regularization=30.0,
-        loss="absolute_error",
+        # Expected value needs the conditional mean.  The v1 absolute-error
+        # head estimated a median and erased a sparse positive tail.
+        loss="squared_error",
         random_state=20260814,
     )
     value.fit(
@@ -261,19 +285,27 @@ def _score(frame: pd.DataFrame, models: Mapping[str, Any]) -> pd.DataFrame:
     scored["predicted_agreement_proxy_ev"] = scored[
         ["predicted_direct_proxy_ev", "predicted_two_head_proxy_ev"]
     ].min(axis=1)
+    scored["predicted_average_proxy_ev"] = scored[
+        ["predicted_direct_proxy_ev", "predicted_two_head_proxy_ev"]
+    ].mean(axis=1)
     return scored
 
 
-def _select(scored: pd.DataFrame) -> pd.DataFrame:
-    eligible = scored.loc[scored["predicted_agreement_proxy_ev"].gt(0.0)].copy()
+def _select(
+    scored: pd.DataFrame,
+    score_column: str = "predicted_agreement_proxy_ev",
+) -> pd.DataFrame:
+    if score_column not in scored:
+        raise ValueError(f"unknown selection score: {score_column}")
+    eligible = scored.loc[scored[score_column].gt(0.0)].copy()
     if eligible.empty:
         return eligible
     eligible = eligible.sort_values(
-        ["forecast_event_id", "predicted_agreement_proxy_ev"],
+        ["forecast_event_id", score_column],
         ascending=[True, False],
     ).drop_duplicates("forecast_event_id")
     return eligible.sort_values(
-        ["target_date", "city", "snapshot_epoch", "predicted_agreement_proxy_ev"],
+        ["target_date", "city", "snapshot_epoch", score_column],
         ascending=[True, True, True, False],
     ).drop_duplicates(["target_date", "city"], keep="first")
 
@@ -292,10 +324,47 @@ def _expanding_oof(
         test_dates = dates[start : start + block_dates]
         train = development.loc[development["target_date"].isin(dates[:start])]
         test = development.loc[development["target_date"].isin(test_dates)]
-        if train.empty or test.empty:
+        if (
+            train.empty
+            or test.empty
+            or train["ask_touch_30_proxy"].nunique() < 2
+            or train["ask_touch_30_proxy"].eq(True).sum() < 20
+        ):
             continue
         outputs.append(_score(test, _fit_models(train)))
     return pd.concat(outputs, ignore_index=True) if outputs else pd.DataFrame()
+
+
+def _choose_selection_score(
+    development_oof: pd.DataFrame,
+) -> tuple[str, list[dict[str, Any]]]:
+    diagnostics: list[dict[str, Any]] = []
+    for score_column in SELECTION_SCORE_COLUMNS:
+        selected = _select(development_oof, score_column)
+        realized = float(selected["proxy_expected_pnl_label"].sum()) if len(selected) else 0.0
+        diagnostics.append(
+            {
+                "score_column": score_column,
+                "posts": int(len(selected)),
+                "target_dates": int(selected["target_date"].nunique()) if len(selected) else 0,
+                "proxy_pnl": realized,
+                "proxy_pnl_per_post": realized / len(selected) if len(selected) else 0.0,
+            }
+        )
+    chosen = max(
+        diagnostics,
+        key=lambda row: (
+            row["proxy_pnl_per_post"],
+            row["proxy_pnl"],
+            -SELECTION_SCORE_COLUMNS.index(str(row["score_column"])),
+        ),
+    )
+    # A selector that only finds non-filled zero-PnL posts has not earned a
+    # directional choice.  Fail back to model agreement instead of allowing a
+    # tie-order accident to promote the optimistic direct head.
+    if float(chosen["proxy_pnl"]) <= 0.0:
+        return "predicted_agreement_proxy_ev", diagnostics
+    return str(chosen["score_column"]), diagnostics
 
 
 def _metrics(scored: pd.DataFrame, selected: pd.DataFrame) -> dict[str, Any]:
@@ -343,6 +412,12 @@ def _metrics(scored: pd.DataFrame, selected: pd.DataFrame) -> dict[str, Any]:
             "predicted_market_static_proxy_ev",
         ),
         "selected_low_tick_share": float(selected["native_entry_tick"].eq(0.001).mean()) if len(selected) else math.nan,
+        "selected_min_quote_price": float(selected["quote_price"].min()) if len(selected) else math.nan,
+        "exact_clock_scoreable_quotes": int(
+            labelled.get(
+                "path_clock_grade", pd.Series(index=labelled.index, dtype=object)
+            ).eq("collector_exact").sum()
+        ),
     }
 
 
@@ -377,11 +452,15 @@ def _paired_loss_delta(
     }
 
 
-def _funnel(quotes: pd.DataFrame, selected: pd.DataFrame) -> dict[str, Any]:
+def _funnel(
+    quotes: pd.DataFrame,
+    selected: pd.DataFrame,
+    score_column: str,
+) -> dict[str, Any]:
     scoreable = quotes.dropna(subset=["proxy_expected_pnl_label"])
-    positive = quotes.loc[quotes["predicted_agreement_proxy_ev"].gt(0.0)]
+    positive = quotes.loc[quotes[score_column].gt(0.0)]
     event_best = positive.sort_values(
-        ["forecast_event_id", "predicted_agreement_proxy_ev"],
+        ["forecast_event_id", score_column],
         ascending=[True, False],
     ).drop_duplicates("forecast_event_id")
 
@@ -412,7 +491,18 @@ def _funnel(quotes: pd.DataFrame, selected: pd.DataFrame) -> dict[str, Any]:
             "proxy_scoreable_quotes": int(len(scoreable)),
             "proxy_touch_quotes": int(scoreable["ask_touch_30_proxy"].eq(True).sum()),
             "actual_fills": 0,
-            "first_touch_clock_available": 0,
+            "first_touch_clock_available": int(
+                scoreable.get(
+                    "first_touch_at_utc",
+                    pd.Series(index=scoreable.index, dtype=object),
+                ).notna().sum()
+            ),
+            "collector_exact_clock_quotes": int(
+                scoreable.get(
+                    "path_clock_grade",
+                    pd.Series(index=scoreable.index, dtype=object),
+                ).eq("collector_exact").sum()
+            ),
         },
     }
 
@@ -421,20 +511,49 @@ def train_quote_ev_policy(
     frame: pd.DataFrame,
     *,
     holdout_dates: int = 15,
+    min_train_dates: int = 15,
+    materialized_quotes: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
-    quotes = materialize_quote_actions(frame)
+    quotes = (
+        materialized_quotes.copy()
+        if materialized_quotes is not None
+        else materialize_quote_actions(frame)
+    )
     labelled = quotes.dropna(subset=["proxy_expected_pnl_label"]).copy()
     dates = sorted(labelled["target_date"].astype(str).unique())
-    if len(dates) < holdout_dates + 15:
-        raise ValueError(f"need at least {holdout_dates + 15} labelled target dates, got {len(dates)}")
+    if len(dates) < holdout_dates + min_train_dates:
+        raise ValueError(
+            f"need at least {holdout_dates + min_train_dates} labelled target dates, got {len(dates)}"
+        )
     frozen_dates = dates[-holdout_dates:]
     development = labelled.loc[~labelled["target_date"].isin(frozen_dates)].copy()
     holdout = labelled.loc[labelled["target_date"].isin(frozen_dates)].copy()
-    development_oof = _expanding_oof(development)
-    development_oof_selected = _select(development_oof)
+    development_oof = _expanding_oof(
+        development,
+        min_train_dates=min_train_dates,
+        block_dates=3,
+    )
+    selection_score, selector_diagnostics = _choose_selection_score(development_oof)
+    development_oof_selected = _select(development_oof, selection_score)
     models = _fit_models(development)
     holdout_scored = _score(holdout, models)
-    holdout_selected = _select(holdout_scored)
+    holdout_selected = _select(holdout_scored, selection_score)
+    holdout_exact = holdout_scored.loc[
+        holdout_scored.get(
+            "path_clock_grade", pd.Series(index=holdout_scored.index, dtype=object)
+        ).eq("collector_exact")
+        & holdout_scored.get(
+            "path_label_status", pd.Series(index=holdout_scored.index, dtype=object)
+        ).isin(
+            {
+                "scoreable_observed_touch_fill_relative_exit",
+                "scoreable_no_observed_touch",
+            }
+        )
+    ].copy()
+    holdout_exact_selected = holdout_selected.loc[
+        holdout_selected.index.intersection(holdout_exact.index)
+    ].copy()
     bundle = {
         "schema_version": SCHEMA_VERSION,
         "model_id": MODEL_ID,
@@ -444,10 +563,16 @@ def train_quote_ev_policy(
         "market_quote_features": list(MARKET_QUOTE_FEATURES),
         "market_static_quote_features": list(MARKET_STATIC_QUOTE_FEATURES),
         "entry_threshold_dollars_per_share": 0.0,
+        "minimum_quote_price": MIN_QUOTE_PRICE,
+        "selection_score_column": selection_score,
         "quote_checkpoint_min": QUOTE_CHECKPOINT_MIN,
         "signal_ttl_min": SIGNAL_TTL_MIN,
         "hard_exit_min_after_actual_fill": LIQUIDATION_CHECKPOINT_MIN,
-        "fill_evidence": "ask_touch_proxy_only",
+        "fill_evidence": (
+            "first_observed_rest_ask_touch_fill_relative_exit_proxy"
+            if "first_touch_at_utc" in quotes
+            else "window_min_ask_event_relative_exit_proxy"
+        ),
         "live_eligible": False,
         **models,
     }
@@ -457,12 +582,23 @@ def train_quote_ev_policy(
         "holdout_scored": holdout_scored,
         "development_oof_selected": development_oof_selected,
         "holdout_selected": holdout_selected,
+        "holdout_exact": holdout_exact,
+        "holdout_exact_selected": holdout_exact_selected,
         "development_dates": dates[:-holdout_dates],
         "holdout_dates": frozen_dates,
+        "selection_score_column": selection_score,
+        "selector_development_oof_diagnostics": selector_diagnostics,
         "development_oof_metrics": _metrics(development_oof, development_oof_selected),
         "holdout_metrics": _metrics(holdout_scored, holdout_selected),
-        "development_funnel": _funnel(development_oof, development_oof_selected),
-        "holdout_funnel": _funnel(holdout_scored, holdout_selected),
+        "holdout_exact_metrics": _metrics(
+            holdout_exact, holdout_exact_selected
+        ),
+        "development_funnel": _funnel(
+            development_oof, development_oof_selected, selection_score
+        ),
+        "holdout_funnel": _funnel(
+            holdout_scored, holdout_selected, selection_score
+        ),
         "bundle": bundle,
     }
 
@@ -511,13 +647,16 @@ def score_runtime_quote_ev(
     if not np.allclose(tick_units, tick_units.round(), atol=1e-8):
         raise ValueError("runtime quote price is not aligned to exchange tick_size")
     scored = _score(quotes, bundle)
-    selected = _select(scored)
+    selection_score = str(
+        bundle.get("selection_score_column") or "predicted_agreement_proxy_ev"
+    )
+    selected = _select(scored, selection_score)
     records = scored.to_dict(orient="records")
     if selected.empty:
         return records, None
     chosen = selected.iloc[0].to_dict()
     chosen["maker_limit_price"] = chosen["quote_price"]
-    chosen["predicted_quote_ev"] = chosen["predicted_agreement_proxy_ev"]
+    chosen["predicted_quote_ev"] = chosen[selection_score]
     chosen["signal_ttl_min"] = float(bundle["signal_ttl_min"])
     decision_epoch = float(event_identity["snapshot_epoch"])
     chosen["signal_expires_epoch"] = decision_epoch + 60.0 * float(
@@ -661,8 +800,27 @@ def write_outputs(result: Mapping[str, Any], input_path: Path, output_dir: Path)
         "predicted_touch_probability",
         "predicted_touch_conditional_pnl",
         "predicted_two_head_proxy_ev",
+        "predicted_average_proxy_ev",
         "predicted_agreement_proxy_ev",
     ]
+    audit_columns.extend(
+        column
+        for column in (
+            "path_label_status",
+            "path_clock_grade",
+            "path_window_quote_count",
+            "path_window_start_gap_min",
+            "path_window_end_gap_min",
+            "first_touch_at_utc",
+            "first_touch_after_min",
+            "first_touch_clock_lineage_status",
+            "fill_relative_exit_at_utc",
+            "fill_relative_exit_bid",
+            "fill_relative_exit_gap_min",
+            "fill_relative_net_pnl_60",
+        )
+        if column in result["development_oof"]
+    )
     result["development_oof"][audit_columns].to_csv(
         output_dir / "development_oof_quote_scores.csv", index=False
     )
@@ -683,13 +841,23 @@ def write_outputs(result: Mapping[str, Any], input_path: Path, output_dir: Path)
         "schema_version": SCHEMA_VERSION,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "status": status,
-        "denominator_scope": "D-1 forecast event x full-ladder rung x legal post-only quote action; 30m ask-touch proxy; event+60m executable bid liquidation",
+        "denominator_scope": (
+            "D-1 forecast event x full-ladder rung x legal post-only quote action; "
+            "quote>=1c; first-observed 30m REST ask-touch proxy; touch+60m executable bid"
+            if "first_touch_at_utc" in result["quotes"]
+            else "D-1 forecast event x full-ladder rung x legal post-only quote action; quote>=1c; 30m window-min ask-touch proxy; event+60m executable bid"
+        ),
         "input_path": str(input_path),
         "input_sha256": _sha256(input_path),
         "development_dates": result["development_dates"],
         "holdout_dates": result["holdout_dates"],
         "development_oof": result["development_oof_metrics"],
         "holdout": result["holdout_metrics"],
+        "holdout_collector_exact": result["holdout_exact_metrics"],
+        "selection_score_column": result["selection_score_column"],
+        "selector_development_oof_diagnostics": result[
+            "selector_development_oof_diagnostics"
+        ],
         "development_funnel": result["development_funnel"],
         "holdout_funnel": result["holdout_funnel"],
         "qualification": {
@@ -719,10 +887,111 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--holdout-dates", type=int, default=15)
+    parser.add_argument("--min-train-dates", type=int, default=15)
+    parser.add_argument(
+        "--market-book-root",
+        action="append",
+        type=Path,
+        help="append-only market_books/batches root; enables first-touch/fill-relative labels",
+    )
+    parser.add_argument("--path-workers", type=int, default=4)
+    parser.add_argument("--labels-only", action="store_true")
     args = parser.parse_args(argv)
     frame = pd.read_csv(args.input, low_memory=False)
-    result = train_quote_ev_policy(frame, holdout_dates=args.holdout_dates)
+    materialized_quotes = None
+    path_evidence = None
+    if args.market_book_root:
+        materialized_quotes = materialize_quote_actions(frame)
+        start_epoch = float(materialized_quotes["snapshot_epoch"].min())
+        end_epoch = float(materialized_quotes["snapshot_epoch"].max()) + 2 * 86400.0
+        start_date = datetime.fromtimestamp(start_epoch, timezone.utc).date().isoformat()
+        end_date = datetime.fromtimestamp(end_epoch, timezone.utc).date().isoformat()
+        paths = discover_market_book_paths(
+            args.market_book_root,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        histories, path_counts = load_relevant_quote_history(
+            paths,
+            materialized_quotes["condition_id"].astype(str).unique(),
+            workers=args.path_workers,
+        )
+        materialized_quotes = attach_first_touch_labels(materialized_quotes, histories)
+        materialized_quotes["legacy_ask_touch_30_proxy"] = materialized_quotes[
+            "ask_touch_30_proxy"
+        ]
+        materialized_quotes["legacy_touch_conditional_net_pnl_60"] = materialized_quotes[
+            "touch_conditional_net_pnl_60"
+        ]
+        materialized_quotes["legacy_proxy_expected_pnl_label"] = materialized_quotes[
+            "proxy_expected_pnl_label"
+        ]
+        materialized_quotes["ask_touch_30_proxy"] = materialized_quotes[
+            "path_touch_proxy"
+        ]
+        materialized_quotes["touch_conditional_net_pnl_60"] = materialized_quotes[
+            "fill_relative_net_pnl_60"
+        ]
+        materialized_quotes["proxy_expected_pnl_label"] = materialized_quotes[
+            "path_expected_pnl_label"
+        ]
+        # Before v3 clock capture, most REST paths are too sparse to prove a
+        # continuous non-touch.  Preserve those old observed non-touches as a
+        # weak, explicitly down-weighted training label; strict holdout rows
+        # continue to use only the reconstructed endpoint-complete path.
+        weak_negative = (
+            materialized_quotes["proxy_expected_pnl_label"].isna()
+            & materialized_quotes["legacy_ask_touch_30_proxy"].eq(False)
+        )
+        materialized_quotes.loc[weak_negative, "ask_touch_30_proxy"] = False
+        materialized_quotes.loc[weak_negative, "proxy_expected_pnl_label"] = 0.0
+        materialized_quotes.loc[
+            weak_negative, "path_label_status"
+        ] = "legacy_sparse_observed_no_touch"
+        path_evidence = {
+            "market_book_files": len(paths),
+            "start_date": start_date,
+            "end_date": end_date,
+            **path_counts,
+        }
+        labelled_path = materialized_quotes.loc[
+            materialized_quotes["proxy_expected_pnl_label"].notna()
+        ].copy()
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        labelled_path.to_csv(
+            args.output_dir / "quote_path_labels.csv.gz",
+            index=False,
+            compression="gzip",
+        )
+        if args.labels_only:
+            payload = {
+                "schema_version": "forecast_repricing_quote_path_labels_v1",
+                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "labelled_quote_actions": int(len(labelled_path)),
+                "target_dates": int(labelled_path["target_date"].nunique()),
+                "path_evidence": path_evidence,
+                "production": {"live_action": "none", "orders_changed": 0},
+            }
+            (args.output_dir / "label_summary.json").write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            print(json.dumps(payload, ensure_ascii=False))
+            return 0
+    result = train_quote_ev_policy(
+        frame,
+        holdout_dates=args.holdout_dates,
+        min_train_dates=args.min_train_dates,
+        materialized_quotes=materialized_quotes,
+    )
     summary = write_outputs(result, args.input, args.output_dir)
+    if path_evidence is not None:
+        summary["path_evidence"] = path_evidence
+        (args.output_dir / "summary.json").write_text(
+            json.dumps(_json_safe(summary), ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
     print(json.dumps(_json_safe(summary), ensure_ascii=False))
     return 0
 

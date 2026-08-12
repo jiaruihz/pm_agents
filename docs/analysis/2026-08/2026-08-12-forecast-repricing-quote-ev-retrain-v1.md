@@ -6,6 +6,22 @@ production: `live_action=none` · `orders_changed=0`
 
 ## 结论
 
+后续 raw-path 体检确认，旧模型的根因比“低价 tick 偏置”更深：训练输入是 legacy strategy-snapshot
+innovation，并不是真实 provider-run first-seen；`min ask` 又没有 first-touch 时钟，导致 maker 条件收益把
+未成交好单与被动成交坏单混在一起。现已完成两项修复：
+
+- 从独立 append-only `market_books/batches` 重建每个 quote 的 first observed ask touch，并从 touch clock
+  起算 5/15/30/60/120m executable bid；quote `<1¢` 全部排除，touch 明确只是 proxy，不冒充 fill。
+- D-1 runner 现在保存 revision 前/后的 multi-model mean/median/IQR，并把每个完整 native ladder 的真实
+  bid/ask/depth写入 checkpoint；同一对 book snapshots 之间的多个 provider updates 只归因一次。
+
+修复后，所有 observed-touch 样本在 5–120m 均为负：全路径30m ROI `-17.20%`，collector-exact
+30m `-14.50%`；简单延长持仓不能消除 adverse selection。旧 quote-EV 在 collector-exact holdout
+3,406 actions / 4 dates 上选择0笔，状态保持 `no_admitted_quote_rejected_for_expression`。
+
+真实 run-aware D-1 `18–24h` consensus revision 对30m盘口方向有弱信号，但 direct ask→future bid 在完整
+fee+slippage 后仍为负；当前只够支持扩 event-driven WS 采集，不足以生成交易策略。
+
 旧单腿 maker selector 有结构性错误，不是简单排除 `0.1¢ tick` 即可修复：它预测
 `h60_relative_bid_move`，却把相对整条 ladder 的涨幅直接当绝对现金 markout；阈值又按假设
 best-bid 全成交后的 selected ROI 选择，未联合建模 quote price、fill、queue 与逆向选择。修复后在

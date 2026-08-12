@@ -50,6 +50,10 @@ BOOTSTRAP_WINDOW_MINUTES = 30
 # Short horizons distinguish a thin/stale first book from genuine absorption;
 # longer horizons measure whether the market keeps repricing the same run.
 MARKOUT_MINUTES = (5, 10, 30, 60, 90)
+EXECUTION_MARKOUT_MINUTES = (30, 60, 90)
+EXECUTION_SIGMA_F = (1.5, 2.0, 2.5, 3.0)
+WEATHER_TAKER_FEE_RATE = 0.05
+EXECUTION_SLIPPAGE_PER_SIDE = 0.001
 
 
 def default_snapshot_dirs() -> list[Path]:
@@ -149,6 +153,19 @@ def _assigned_value(batch: dict[str, Any]) -> float | None:
     assigned_key = assigned_single_run_model_key(str(batch.get("city") or ""))
     value = values.get(assigned_key)
     return float(value) if value is not None else None
+
+
+def _linear_quantile(values: Iterable[float], fraction: float) -> float | None:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        return None
+    position = (len(ordered) - 1) * fraction
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
 
 def d1_checkpoint_policy(
@@ -473,6 +490,10 @@ def build_provider_run_events(
         after_median = median(after_values.values()) if after_values else None
         before_mean = mean(before_values.values()) if before_values else None
         after_mean = mean(after_values.values()) if after_values else None
+        before_q25 = _linear_quantile(before_values.values(), 0.25)
+        before_q75 = _linear_quantile(before_values.values(), 0.75)
+        after_q25 = _linear_quantile(after_values.values(), 0.25)
+        after_q75 = _linear_quantile(after_values.values(), 0.75)
         assigned = bool(current.get("assigned_model"))
         events.append(
             {
@@ -502,6 +523,30 @@ def build_provider_run_events(
                 "checkpoint_policy": checkpoint_policy,
                 "local_hours_from_target_midnight": local_hours,
                 "common_model_count": len(before_values),
+                "model_value_before_f": float(previous_model_value),
+                "model_value_after_f": current_value,
+                "consensus_mean_before_f": (
+                    float(before_mean) if before_mean is not None else None
+                ),
+                "consensus_mean_after_f": (
+                    float(after_mean) if after_mean is not None else None
+                ),
+                "consensus_median_before_f": (
+                    float(before_median) if before_median is not None else None
+                ),
+                "consensus_median_after_f": (
+                    float(after_median) if after_median is not None else None
+                ),
+                "consensus_iqr_before_f": (
+                    float(before_q75 - before_q25)
+                    if before_q25 is not None and before_q75 is not None
+                    else None
+                ),
+                "consensus_iqr_after_f": (
+                    float(after_q75 - after_q25)
+                    if after_q25 is not None and after_q75 is not None
+                    else None
+                ),
                 "model_revision_f": current_value - float(previous_model_value),
                 "consensus_mean_revision_f": (
                     float(after_mean) - float(before_mean)
@@ -785,6 +830,12 @@ def load_canonical_market_checkpoints(
                         "token_id": rung.get("yes_token_id"),
                         "yes_best_bid": bid,
                         "yes_best_ask": ask,
+                        "yes_best_bid_size": (
+                            dict((yes or {}).get("summary") or {}).get("bid_size")
+                        ),
+                        "yes_best_ask_size": (
+                            dict((yes or {}).get("summary") or {}).get("ask_size")
+                        ),
                         "book_status": (
                             "effective_yes_two_sided"
                             if bid is not None and ask is not None
@@ -811,6 +862,17 @@ def load_canonical_market_checkpoints(
                 feature_book_snapshot_id=feature_book_snapshot_id,
                 horizon_days=1,
             )
+            quotes_by_condition = {
+                str(row.get("condition_id") or ""): {
+                    "yes_best_bid": row.get("yes_best_bid"),
+                    "yes_best_ask": row.get("yes_best_ask"),
+                    "yes_best_bid_size": row.get("yes_best_bid_size"),
+                    "yes_best_ask_size": row.get("yes_best_ask_size"),
+                }
+                for row in material_rows
+            }
+            for rung in checkpoint["rung_manifest"]:
+                rung.update(quotes_by_condition.get(str(rung.get("condition_id") or ""), {}))
             checkpoint.update(
                 {
                     "available_at_utc": published_at or None,
@@ -863,6 +925,214 @@ def _probability_markout(
         "total_variation": total_variation,
         "mean_rung_shift": mean_after - mean_before,
     }
+
+
+def _normal_cdf(value: float, mean_value: float, sigma: float) -> float:
+    return 0.5 * (1.0 + math.erf((value - mean_value) / (sigma * math.sqrt(2.0))))
+
+
+def _native_temperature(value_f: float, unit: str) -> float:
+    return value_f if unit == "F" else (value_f - 32.0) * 5.0 / 9.0
+
+
+def _shift_probabilities(
+    manifest: list[dict[str, Any]], *, mean_native: float, sigma_native: float
+) -> list[float]:
+    centers = [
+        float(
+            rung["high"]
+            if rung.get("low") is None
+            else rung["low"]
+            if rung.get("high") is None
+            else (float(rung["low"]) + float(rung["high"])) / 2.0
+        )
+        for rung in manifest
+    ]
+    boundaries = [float("-inf")]
+    boundaries.extend(
+        (centers[index] + centers[index + 1]) / 2.0
+        for index in range(len(centers) - 1)
+    )
+    boundaries.append(float("inf"))
+    return [
+        _normal_cdf(boundaries[index + 1], mean_native, sigma_native)
+        - _normal_cdf(boundaries[index], mean_native, sigma_native)
+        for index in range(len(centers))
+    ]
+
+
+def revision_execution_candidates(
+    events: list[dict[str, Any]], checkpoints: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Build one independent, executable exact-rung expression per book move.
+
+    This is deliberately conservative: one market transition is scored once,
+    both sides require exact canonical clocks and a complete native ladder,
+    direct entry/exit pay official weather taker fees plus one tick per side,
+    and bid+one-tick maker economics remain an unfilled counterfactual.
+    """
+
+    unit_by_city = {
+        config.city: config.unit
+        for config in load_city_configs(include_station_diff=False)
+    }
+    checkpoint_by_id = {
+        str(item.get("feature_book_snapshot_id") or ""): item
+        for item in checkpoints
+    }
+    output: list[dict[str, Any]] = []
+    for minutes in EXECUTION_MARKOUT_MINUTES:
+        grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+        for event in events:
+            post_id = str(event.get("post_book_snapshot_id") or "")
+            later_id = str(event.get(f"markout_{minutes}m_snapshot_id") or "")
+            if (
+                event.get("event_class") != "forward_provider_run_first_seen"
+                or event.get("checkpoint_policy") != "D-1_18_24"
+                or event.get(f"markout_{minutes}m_status") != "scoreable"
+                or not post_id
+                or not later_id
+            ):
+                continue
+            grouped.setdefault(
+                (str(event["city"]), str(event["target_date"]), post_id, later_id),
+                [],
+            ).append(event)
+        for (city, target_date, post_id, later_id), members in sorted(grouped.items()):
+            before_book = checkpoint_by_id.get(post_id)
+            exit_book = checkpoint_by_id.get(later_id)
+            if not before_book or not exit_book:
+                continue
+            if not all(
+                book.get("source_contract") == "canonical_market_books_v1"
+                and book.get("event_time_pit_scorable") is True
+                and book.get("market_distribution_complete")
+                for book in (before_book, exit_book)
+            ):
+                continue
+            ordered = sorted(members, key=lambda row: str(row["event_available_at_utc"]))
+            mean_before_f = float(ordered[0]["consensus_mean_before_f"])
+            mean_after_f = float(ordered[-1]["consensus_mean_after_f"])
+            revision_f = mean_after_f - mean_before_f
+            if abs(revision_f) <= 1e-12:
+                continue
+            before_manifest = list(before_book.get("rung_manifest") or [])
+            exit_manifest = list(exit_book.get("rung_manifest") or [])
+            if [rung.get("label") for rung in before_manifest] != [
+                rung.get("label") for rung in exit_manifest
+            ]:
+                continue
+            unit = unit_by_city[city]
+            for sigma_f in EXECUTION_SIGMA_F:
+                sigma_native = sigma_f if unit == "F" else sigma_f * 5.0 / 9.0
+                probability_before = _shift_probabilities(
+                    before_manifest,
+                    mean_native=_native_temperature(mean_before_f, unit),
+                    sigma_native=sigma_native,
+                )
+                probability_after = _shift_probabilities(
+                    before_manifest,
+                    mean_native=_native_temperature(mean_after_f, unit),
+                    sigma_native=sigma_native,
+                )
+                uplift = [
+                    right - left
+                    for left, right in zip(probability_before, probability_after)
+                ]
+                selected = max(range(len(uplift)), key=uplift.__getitem__)
+                entry_rung = before_manifest[selected]
+                exit_rung = exit_manifest[selected]
+                values = (
+                    entry_rung.get("yes_best_bid"),
+                    entry_rung.get("yes_best_ask"),
+                    entry_rung.get("yes_best_ask_size"),
+                    exit_rung.get("yes_best_bid"),
+                    exit_rung.get("yes_best_bid_size"),
+                )
+                if any(value is None for value in values):
+                    continue
+                entry_bid, entry_ask, entry_depth, exit_bid, exit_depth = map(float, values)
+                if entry_depth < 1.0 or exit_depth < 1.0:
+                    continue
+                entry_fee = WEATHER_TAKER_FEE_RATE * entry_ask * (1.0 - entry_ask)
+                exit_fee = WEATHER_TAKER_FEE_RATE * exit_bid * (1.0 - exit_bid)
+                cost = entry_ask + entry_fee + EXECUTION_SLIPPAGE_PER_SIDE
+                proceeds = exit_bid - exit_fee - EXECUTION_SLIPPAGE_PER_SIDE
+                pnl = proceeds - cost
+                output.append(
+                    {
+                        "horizon_min": minutes,
+                        "sigma_f": sigma_f,
+                        "city": city,
+                        "target_date": target_date,
+                        "post_book_snapshot_id": post_id,
+                        "exit_book_snapshot_id": later_id,
+                        "provider_events": len(ordered),
+                        "consensus_mean_before_f": mean_before_f,
+                        "consensus_mean_after_f": mean_after_f,
+                        "consensus_revision_f": revision_f,
+                        "condition_id": entry_rung.get("condition_id"),
+                        "bracket": entry_rung.get("label"),
+                        "weather_probability_uplift": uplift[selected],
+                        "entry_bid": entry_bid,
+                        "entry_ask": entry_ask,
+                        "entry_ask_size": entry_depth,
+                        "entry_spread": entry_ask - entry_bid,
+                        "exit_bid": exit_bid,
+                        "exit_bid_size": exit_depth,
+                        "entry_cost_fee_slippage": cost,
+                        "exit_proceeds_fee_slippage": proceeds,
+                        "taker_pnl_per_share": pnl,
+                        "taker_roi": pnl / cost,
+                        "maker_quote_bid_plus_tick": min(entry_ask, entry_bid + 0.001),
+                        "maker_fill_evidence": "blocked_no_own_order_queue_overlap",
+                    }
+                )
+    return output
+
+
+def summarize_revision_execution(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    dates = sorted({str(row["target_date"]) for row in rows})
+    holdout_dates = set(dates[-2:])
+    for horizon in EXECUTION_MARKOUT_MINUTES:
+        for sigma_f in EXECUTION_SIGMA_F:
+            scoped = [
+                row
+                for row in rows
+                if row["horizon_min"] == horizon and row["sigma_f"] == sigma_f
+            ]
+            for split, selected in (
+                ("development", [row for row in scoped if row["target_date"] not in holdout_dates]),
+                ("latest_two_dates_holdout", [row for row in scoped if row["target_date"] in holdout_dates]),
+                ("all_clean_development", scoped),
+            ):
+                cost = sum(float(row["entry_cost_fee_slippage"]) for row in selected)
+                pnl = sum(float(row["taker_pnl_per_share"]) for row in selected)
+                output.append(
+                    {
+                        "horizon_min": horizon,
+                        "sigma_f": sigma_f,
+                        "split": split,
+                        "expressions": len(selected),
+                        "target_dates": len({row["target_date"] for row in selected}),
+                        "cost": cost,
+                        "pnl": pnl,
+                        "roi": pnl / cost if cost else None,
+                        "positive_expression_rate": (
+                            sum(float(row["taker_pnl_per_share"]) > 0 for row in selected)
+                            / len(selected)
+                            if selected
+                            else None
+                        ),
+                        "mean_spread": (
+                            mean(float(row["entry_spread"]) for row in selected)
+                            if selected
+                            else None
+                        ),
+                    }
+                )
+    return output
 
 
 def attach_market_evidence(
@@ -1291,7 +1561,7 @@ def render_report(summary: dict[str, Any]) -> str:
             "market residual:",
             "baseline=same-event complete normalized full ladder",
             "forward=collector_exact_repricing_development_low_independent_dates",
-            "execution=not_run_no_probability_gate",
+            "execution=direct_ask_to_future_bid_diagnostic_failed_no_admitted_trade",
             "",
             "production:",
             "live_action=none",
@@ -1353,11 +1623,11 @@ def render_report(summary: dict[str, Any]) -> str:
             "2. 先累计 complete D-1 run events、完整 pre/post ladders与 settlement；第一段 clean rows 明确作为 development，不冒充 forward。",
             "3. W0 只作锁定 legacy reference；W1 在 clean development 的 inner train/validation 中选择 revision/spread/lead-age、层级收缩和 tail，先跑出 weather-only 结果再决定是否冻结。",
             "4. W1 评审后，在同一 development rows 上比较 M0/M1/M2/M3并选择 residual 正则；两条线都出结果后才生成 freeze artifact。只有 freeze timestamp 之后的新日期进入 untouched forward，且 M2/M3 必须在其 target-date block bootstrap 的 logloss/RPS/calibration 上优于 M0，才进入 ask/fee/depth EV。",
-            "5. 当前不做 ROI、maker、selected price band、城市名单或 live 动作。",
+            "5. 当前只报告全分母 direct ask→future bid execution diagnostic；maker 因无同事件 queue/own-order evidence 保持 blocked，不做 selected price band、城市筛选或 live 动作。",
             "",
             "## 8 环与结论",
             "",
-            "本轮覆盖 lineage、signal/evidence coverage、market checkpoint contract 与 collector-exact repricing 描述统计；独立 target dates 只有3–4个，尚未进入 target-date block 推断。概率模型、execution、容量、fills 与组合相关性均未覆盖。",
+            "本轮覆盖 lineage、signal/evidence coverage、market checkpoint contract、collector-exact repricing 与 direct ask→future bid execution diagnostic；独立 target dates 仍很少，maker queue、own fills、容量与组合相关性尚未覆盖。",
             "",
             "结论：`inconclusive / clean-development-low-independent-dates`。采集与研究 join 已跑通，但当前 revision 对5–90分钟盘口方向没有稳定领先；继续积累并训练 W1/repricing head，不改 live。",
             "",
@@ -1422,6 +1692,8 @@ def run_study(
     event_classes = Counter(str(event["event_class"]) for event in d1_events)
     directional_repricing = directional_repricing_summary(d1_events)
     market_transition_repricing = market_transition_repricing_summary(d1_events)
+    execution_candidates = revision_execution_candidates(d1_events, checkpoints)
+    execution_summary = summarize_revision_execution(execution_candidates)
     signal_funnel = {
         **provider_summary,
         "complete_batch_material_forecast_batches": complete_batch_summary[
@@ -1469,7 +1741,7 @@ def run_study(
             )
             for minutes in MARKOUT_MINUTES
         },
-        "executable": 0,
+        "executable": len(execution_candidates),
         "actual_fills": 0,
     }
     market_markout_status_counts = {
@@ -1512,6 +1784,7 @@ def run_study(
         "event_classes": dict(sorted(event_classes.items())),
         "directional_repricing": directional_repricing,
         "market_transition_repricing": market_transition_repricing,
+        "revision_execution_summary": execution_summary,
         "blocker_rows": len(blockers),
         "conclusion": "inconclusive_clean_development_low_independent_dates",
         "production": {"live_action": "none", "orders_changed": 0},
@@ -1519,6 +1792,8 @@ def run_study(
     output_dir.mkdir(parents=True, exist_ok=True)
     write_csv(output_dir / "revision_events.csv", d1_events)
     write_csv(output_dir / "market_checkpoints.csv", checkpoints)
+    write_csv(output_dir / "revision_execution_candidates.csv", execution_candidates)
+    write_csv(output_dir / "revision_execution_summary.csv", execution_summary)
     (output_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

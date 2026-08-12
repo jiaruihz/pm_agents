@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from weather_data_feed_service.forecast_run_capture import (
+    build_d1_market_capture_demands,
     latest_cycle_candidate,
     materialize_capture,
     upgrade_first_seen_state_from_rows,
@@ -208,3 +209,61 @@ def test_assigned_model_is_materialized_into_batch_summary() -> None:
     assert all(row["assigned_model"] is True for row in rows)
     assert all(batch["assigned_model_value_f"] is not None for batch in batches)
     assert all(batch["assigned_minus_consensus_f"] == 0 for batch in batches)
+
+
+def test_new_d1_run_emits_bounded_market_capture_demand_once() -> None:
+    first, _, state = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, tzinfo=timezone.utc),
+        city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
+        responses_by_model={"gfs_global": [_response()]},
+        metadata_by_model={
+            "gfs_global": {"raw_hash": "raw", "request_key": "request"}
+        },
+        expected_models=["gfs_global"],
+    )
+    demands = build_d1_market_capture_demands(first, ttl_minutes=120)
+    assert len(demands) == 1
+    assert demands[0]["city"] == "Tokyo"
+    assert demands[0]["target_date"] == "2026-08-06"
+    assert demands[0]["reason"] == "d1_provider_run_first_seen"
+    assert demands[0]["ladder_scope"] == "complete_event_yes_no"
+    assert demands[0]["expires_at_utc"] == "2026-08-05T05:00:00Z"
+
+    repeated, _, _ = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, 30, tzinfo=timezone.utc),
+        city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
+        responses_by_model={"gfs_global": [_response()]},
+        metadata_by_model={
+            "gfs_global": {"raw_hash": "raw-2", "request_key": "request"}
+        },
+        expected_models=["gfs_global"],
+        previous_state=state,
+    )
+    assert build_d1_market_capture_demands(repeated) == []
+
+
+def test_market_capture_demand_respects_explicit_city_and_run_age_bounds() -> None:
+    rows, _, _ = materialize_capture(
+        run="2026-08-04T12:00",
+        captured_at_utc=datetime(2026, 8, 5, 3, tzinfo=timezone.utc),
+        city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
+        responses_by_model={"gfs_global": [_response()]},
+        metadata_by_model={"gfs_global": {"raw_hash": "raw", "request_key": "request"}},
+        expected_models=["gfs_global"],
+    )
+    assert build_d1_market_capture_demands(rows, allowed_cities=set()) == []
+    assert build_d1_market_capture_demands(rows, allowed_cities={"Amsterdam"}) == []
+    assert build_d1_market_capture_demands(
+        rows,
+        allowed_cities={"Tokyo"},
+        max_model_run_age_hours=12,
+    ) == []
+    assert len(
+        build_d1_market_capture_demands(
+            rows,
+            allowed_cities={"Tokyo"},
+            max_model_run_age_hours=24,
+        )
+    ) == 1

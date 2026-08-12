@@ -210,6 +210,12 @@ def test_provider_run_events_use_asof_model_arrivals_not_complete_batches() -> N
     assert summary["provider_run_transition_events"] == 2
     assert events[0]["event_class"] == "legacy_provider_run_earliest_observed"
     assert events[0]["model_key"] == "icon_seamless"
+    assert events[0]["model_value_before_f"] == 82.0
+    assert events[0]["model_value_after_f"] == 85.0
+    assert events[0]["consensus_median_before_f"] == 82.0
+    assert events[0]["consensus_median_after_f"] == 83.0
+    assert events[0]["consensus_iqr_before_f"] == 2.0
+    assert events[0]["consensus_iqr_after_f"] == 3.0
     assert events[0]["consensus_median_revision_f"] == 1.0
     assert events[1]["event_class"] == "forward_provider_run_first_seen"
     assert events[1]["assigned_model_revision_f"] == 2.0
@@ -332,3 +338,71 @@ def test_canonical_market_books_join_materializes_exact_checkpoint(tmp_path) -> 
     assert checkpoint["rung_manifest"][-1]["top"] is True
     assert checkpoint["market_distribution_complete"] is True
     assert sum(checkpoint["probabilities"].values()) == 1.0
+    assert checkpoint["rung_manifest"][0]["yes_best_bid"] == 0.1
+    assert checkpoint["rung_manifest"][0]["yes_best_ask"] == 0.12
+
+
+def test_revision_execution_scores_independent_transition_with_real_quotes() -> None:
+    event = {
+        "event_class": "forward_provider_run_first_seen",
+        "checkpoint_policy": "D-1_18_24",
+        "event_available_at_utc": "2026-08-11T10:00:00Z",
+        "city": "Tokyo",
+        "target_date": "2026-08-12",
+        "post_book_snapshot_id": "post",
+        "markout_30m_status": "scoreable",
+        "markout_30m_snapshot_id": "later",
+        "markout_60m_status": "missing_checkpoint",
+        "markout_90m_status": "missing_checkpoint",
+        "consensus_mean_before_f": 79.0,
+        "consensus_mean_after_f": 80.0,
+    }
+    common = {
+        "source_contract": "canonical_market_books_v1",
+        "event_time_pit_scorable": True,
+        "market_distribution_complete": True,
+    }
+    before = [
+        {
+            "label": "25",
+            "low": None,
+            "high": 25.0,
+            "condition_id": "cold",
+            "yes_best_bid": 0.20,
+            "yes_best_ask": 0.21,
+            "yes_best_bid_size": 10.0,
+            "yes_best_ask_size": 10.0,
+        },
+        {
+            "label": "26+",
+            "low": 26.0,
+            "high": None,
+            "condition_id": "warm",
+            "yes_best_bid": 0.30,
+            "yes_best_ask": 0.31,
+            "yes_best_bid_size": 10.0,
+            "yes_best_ask_size": 10.0,
+        },
+    ]
+    later = [dict(before[0]), {**before[1], "yes_best_bid": 0.35}]
+    rows = subject.revision_execution_candidates(
+        [event],
+        [
+            {**common, "feature_book_snapshot_id": "post", "rung_manifest": before},
+            {**common, "feature_book_snapshot_id": "later", "rung_manifest": later},
+        ],
+    )
+    sigma_two = next(row for row in rows if row["sigma_f"] == 2.0)
+    assert sigma_two["condition_id"] == "warm"
+    assert sigma_two["entry_ask"] == 0.31
+    assert sigma_two["exit_bid"] == 0.35
+    expected = (
+        0.35
+        - 0.05 * 0.35 * 0.65
+        - 0.001
+        - 0.31
+        - 0.05 * 0.31 * 0.69
+        - 0.001
+    )
+    assert abs(sigma_two["taker_pnl_per_share"] - expected) < 1e-12
+    assert sigma_two["maker_fill_evidence"] == "blocked_no_own_order_queue_overlap"

@@ -294,6 +294,90 @@ def materialize_capture(
     }
 
 
+def build_d1_market_capture_demands(
+    rows: list[dict[str, Any]],
+    *,
+    ttl_minutes: int = 120,
+    max_token_count: int = 32,
+    allowed_cities: set[str] | None = None,
+    max_model_run_age_hours: float | None = None,
+) -> list[dict[str, Any]]:
+    """Request bounded WS evidence for genuinely new D-1 provider runs.
+
+    The demand is city/date based because forecast capture does not own market
+    discovery.  ``market_books_ws`` resolves the current event ladder from its
+    canonical REST denominator.  Duplicate polling deliveries do not emit a
+    second demand because their run first-seen clock predates availability.
+    """
+
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        run_age = row.get("model_run_age_hours")
+        if (
+            int(row.get("horizon_days_local") or -1) != 1
+            or (allowed_cities is not None and str(row.get("city") or "") not in allowed_cities)
+            or (
+                max_model_run_age_hours is not None
+                and (run_age is None or float(run_age) > max_model_run_age_hours)
+            )
+            or row.get("forecast_run_lineage_status") != "identified"
+            or row.get("lineage_blocker")
+            or str(row.get("first_seen_at_utc") or "")
+            != str(row.get("available_at_utc") or "")
+        ):
+            continue
+        key = (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("forecast_run_at_utc") or ""),
+        )
+        if all(key):
+            grouped.setdefault(key, []).append(row)
+    output: list[dict[str, Any]] = []
+    for (city, target_date, run_at), members in sorted(grouped.items()):
+        requested_at = max(str(row["available_at_utc"]) for row in members)
+        requested_clock = datetime.fromisoformat(
+            requested_at.replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+        model_events = [
+            {
+                "model_key": str(row.get("model_key") or ""),
+                "capture_id": str(row.get("capture_id") or ""),
+                "batch_capture_id": str(row.get("batch_capture_id") or ""),
+                "run_to_run_delta_f": row.get("run_to_run_delta_f"),
+                "forecast_max_f": row.get("forecast_max_f"),
+                "assigned_model": bool(row.get("assigned_model")),
+            }
+            for row in sorted(members, key=lambda item: str(item.get("model_key") or ""))
+        ]
+        identity = {
+            "city": city,
+            "target_date": target_date,
+            "forecast_run_at_utc": run_at,
+            "forecast_capture_ids": [row["capture_id"] for row in model_events],
+        }
+        output.append(
+            {
+                "schema_version": "weather_market_capture_demand_v1",
+                "capture_request_id": stable_content_hash(identity),
+                "reason": "d1_provider_run_first_seen",
+                "city": city,
+                "target_date": target_date,
+                "forecast_run_at_utc": run_at,
+                "requested_at_utc": requested_at,
+                "available_at_utc": requested_at,
+                "expires_at_utc": (
+                    requested_clock + timedelta(minutes=ttl_minutes)
+                ).isoformat().replace("+00:00", "Z"),
+                "ladder_scope": "complete_event_yes_no",
+                "max_token_count": max_token_count,
+                "model_events": model_events,
+                "producer": "weather_data_feed_service.forecast_run_capture",
+            }
+        )
+    return output
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -305,6 +389,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_GLOBAL_SINGLE_RUN_MODELS))
     parser.add_argument("--forecast-days", type=int, default=4)
     parser.add_argument("--timeout-sec", type=float, default=60.0)
+    parser.add_argument(
+        "--market-capture-demand-output",
+        type=Path,
+        help="optional append-only D-1 WS capture demand journal",
+    )
+    parser.add_argument("--market-capture-demand-ttl-min", type=int, default=120)
+    parser.add_argument(
+        "--market-capture-demand-cities",
+        nargs="*",
+        help="explicit bounded pilot city allowlist; empty disables demand emission",
+    )
+    parser.add_argument("--market-capture-demand-max-run-age-hours", type=float, default=24.0)
     return parser
 
 
@@ -387,6 +483,14 @@ def main(argv: list[str] | None = None) -> int:
     append_jsonl(args.output_dir / "forecast_run_rows.jsonl", rows)
     append_jsonl(args.output_dir / "forecast_batches.jsonl", batches)
     append_jsonl(args.output_dir / "blockers.jsonl", blockers)
+    demands = build_d1_market_capture_demands(
+        rows,
+        ttl_minutes=args.market_capture_demand_ttl_min,
+        allowed_cities=set(args.market_capture_demand_cities or []),
+        max_model_run_age_hours=args.market_capture_demand_max_run_age_hours,
+    )
+    if args.market_capture_demand_output is not None:
+        append_jsonl(args.market_capture_demand_output, demands)
     write_json(state_path, state)
     summary = {
         "schema_version": "weather_forecast_run_capture_summary_v1",
@@ -409,6 +513,12 @@ def main(argv: list[str] | None = None) -> int:
         "forecast_rows": len(rows),
         "forecast_batches": len(batches),
         "blockers": blockers,
+        "market_capture_demands": len(demands),
+        "market_capture_demand_output": (
+            str(args.market_capture_demand_output)
+            if args.market_capture_demand_output is not None
+            else None
+        ),
     }
     write_json(args.output_dir / "latest.json", summary)
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))

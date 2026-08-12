@@ -1,5 +1,24 @@
 # Forecast Repricing
 
+## Real run-aware / first-touch repair（2026-08-12）
+
+旧 selector 已停止继续调参：其 forecast innovation 来自 legacy strategy snapshots，不是真实 provider-run
+first-seen；maker label 又缺 first-touch 与 fill-relative exit。独立 raw market-books 重建共扫描2,442 batches /
+4,520,972 rows，形成186,803个 quote-path labels / 72 target dates，并排除所有 `<1¢` quote。
+
+Observed-touch 后的 executable bid 回报在5/15/30/60/120m全部为负；collector-exact touch rows的30m ROI
+为`-14.50%`。重训 quote-EV 的 collector-exact holdout为3,406 quote actions / 4 dates，选择0笔。因此旧
+`+30%~40% maker`只保留为错误 fill-conditional 上限，不再作为策略证据。
+
+新的主信号改为真实 provider-run first-seen 的 rolling multi-model consensus revision。2026-08-06..08-13
+已有3,638个 collector-exact D-1 provider events、13,279个complete market checkpoints；primary D-1
+18–24h中 consensus revision 的30m方向一致率约60%（独立日期仍只有6个）。每次完整 checkpoint现已保存
+native ladder真实bid/ask/depth，且同一盘口变化只归因一次。direct ask→30/60/90m future bid在官方双边fee
+和每边1 tick slippage后仍为负，尚无 admitted trade。
+
+下一步是仅为 Amsterdam/Busan/Helsinki/Tokyo 的新 D-1 provider run 开120分钟完整ladder WS capture demand，
+建立queue-conservative fill与动态退出同分母；代码和测试已完成，但 collector实际部署需单独确认。live/order均未改。
+
 ## Quote-level EV 目标修复（2026-08-12）
 
 旧55信号的低价尾档偏置已定位为模型目标错位：entry head预测`h60_relative_bid_move`，selector却把它

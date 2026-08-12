@@ -11,15 +11,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import defaultdict
 import hashlib
 import json
 import os
 import signal
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping, Sequence
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -31,7 +32,7 @@ from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "tiered_hot_strip_v4"
+SELECTOR_VERSION = "tiered_hot_strip_plus_d1_capture_demand_v5"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -236,6 +237,52 @@ class SourceEventCursor:
         return {(city, target_date) for city, target_date, _ in self.recent}
 
 
+class MarketCaptureDemandCursor:
+    """Incrementally fold bounded D-1 capture requests from forecast lineage."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.offset = 0
+        self.active: dict[str, dict[str, Any]] = {}
+
+    def read(self, *, now_utc: datetime) -> list[dict[str, Any]]:
+        try:
+            size = self.path.stat().st_size
+            with self.path.open("rb") as handle:
+                if self.offset > size:
+                    self.offset = 0
+                handle.seek(self.offset)
+                data = handle.read()
+                self.offset = handle.tell()
+        except OSError:
+            data = b""
+        for line in data.splitlines():
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            identity = str(row.get("capture_request_id") or "")
+            if (
+                row.get("schema_version") == "weather_market_capture_demand_v1"
+                and identity
+            ):
+                self.active[identity] = row
+        result: list[dict[str, Any]] = []
+        retained: dict[str, dict[str, Any]] = {}
+        for identity, row in self.active.items():
+            requested = _parse_utc(row.get("requested_at_utc"))
+            expires = _parse_utc(row.get("expires_at_utc"))
+            if requested is None or expires is None or expires <= now_utc:
+                continue
+            retained[identity] = row
+            if requested <= now_utc:
+                result.append(row)
+        self.active = retained
+        return sorted(result, key=lambda row: str(row.get("capture_request_id")))
+
+
 def scheduled_report_windows(
     observations: dict[tuple[str, str], dict[str, Any]],
     *,
@@ -302,6 +349,57 @@ class Selection:
     burst_cities: list[str]
     missing_observation_cities: list[str]
     invalidation_state: dict[str, float]
+    capture_demands: list[dict[str, Any]] = field(default_factory=list)
+
+
+def apply_market_capture_demands(
+    selection: Selection,
+    *,
+    market_payload: dict[str, Any],
+    demands: Sequence[Mapping[str, Any]],
+) -> Selection:
+    """Union complete D-1 event ladders into the selective subscription set."""
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for source in market_payload.get("records") or []:
+        if not isinstance(source, dict) or str(source.get("extreme_kind") or "max") != "max":
+            continue
+        key = (str(source.get("city") or ""), str(source.get("event_date") or ""))
+        grouped[key].append(source)
+    resolved: list[dict[str, Any]] = []
+    for source in demands:
+        demand = dict(source)
+        key = (str(demand.get("city") or ""), str(demand.get("target_date") or ""))
+        rows = [row for row in grouped.get(key, ()) if row.get("token_id")]
+        token_ids = sorted({str(row["token_id"]) for row in rows})
+        max_tokens = int(demand.get("max_token_count") or 0)
+        if not rows:
+            demand["resolution_status"] = "market_event_not_discovered"
+        elif max_tokens <= 0 or len(token_ids) > max_tokens:
+            demand["resolution_status"] = "token_budget_exceeded"
+        else:
+            demand["resolution_status"] = "resolved_complete_event"
+            demand["resolved_token_ids"] = token_ids
+            for row in rows:
+                token_id = str(row["token_id"])
+                selection.tokens.add(token_id)
+                selection.token_rows[token_id] = row
+            city = key[0]
+            selection.city_token_counts[city] = sum(
+                1
+                for token in selection.tokens
+                if str(selection.token_rows.get(token, {}).get("city") or "") == city
+            )
+            labels = {
+                str(row.get("bracket") or "") for row in rows if row.get("bracket")
+            }
+            selection.active_brackets[city] = sorted(
+                set(selection.active_brackets.get(city, ())) | labels
+            )
+        demand["resolved_token_count"] = len(token_ids)
+        resolved.append(demand)
+    selection.capture_demands = resolved
+    return selection
 
 
 def select_tokens(
@@ -584,6 +682,11 @@ class Collector:
         self.subscription_epoch_id: str | None = None
         self.subscription_manifest_path: str | None = None
         self.source_event_cursor = SourceEventCursor(self.source_events)
+        self.market_capture_demand_cursor = (
+            MarketCaptureDemandCursor(Path(args.market_capture_demands_jsonl))
+            if args.market_capture_demands_jsonl
+            else None
+        )
         self.next_report_at_utc: dict[str, str] = {}
         self.selection = Selection(
             tokens=set(),
@@ -626,8 +729,9 @@ class Collector:
             now_utc=now_utc,
             burst_sec=self.args.event_burst_sec,
         )
+        market_payload = _load_json(self.market_latest)
         self.selection = select_tokens(
-            market_payload=_load_json(self.market_latest),
+            market_payload=market_payload,
             observations=observations,
             cities=self.args.cities,
             now_utc=now_utc,
@@ -640,6 +744,12 @@ class Collector:
             burst_keys=bursts,
             invalidation_state=self.invalidation_state,
         )
+        if self.market_capture_demand_cursor is not None:
+            self.selection = apply_market_capture_demands(
+                self.selection,
+                market_payload=market_payload,
+                demands=self.market_capture_demand_cursor.read(now_utc=now_utc),
+            )
         self.invalidation_state = self.selection.invalidation_state
         _publish_json_atomic(
             self.state_path,
@@ -677,6 +787,7 @@ class Collector:
             "report_window_after_sec": self.args.report_window_after_sec,
             "research_window_before_sec": self.args.research_window_before_sec,
             "research_sample_modulus": self.args.research_sample_modulus,
+            "market_capture_demand_contract": "weather_market_capture_demand_v1",
         }
         token_map_id = hashlib.sha256(
             json.dumps(token_rows, sort_keys=True, separators=(",", ":")).encode()
@@ -719,6 +830,7 @@ class Collector:
             "scheduled_cities": self.selection.scheduled_cities,
             "research_cities": self.selection.research_cities,
             "burst_cities": self.selection.burst_cities,
+            "capture_demands": self.selection.capture_demands,
         }
         path = self.subscription_writer.write(payload, now_utc)
         self.subscription_epoch_id = epoch_id
@@ -766,6 +878,8 @@ class Collector:
                 "research_cities": self.selection.research_cities,
                 "burst_cities": self.selection.burst_cities,
                 "missing_observation_cities": self.selection.missing_observation_cities,
+                "capture_demands": self.selection.capture_demands,
+                "market_capture_demands_jsonl": self.args.market_capture_demands_jsonl,
                 "post_invalidation_sec": self.args.post_invalidation_sec,
                 "event_burst_sec": self.args.event_burst_sec,
                 "report_window_before_sec": self.args.report_window_before_sec,
@@ -938,6 +1052,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--market-books-latest", required=True)
     parser.add_argument("--observation-cache", required=True)
     parser.add_argument("--source-events-jsonl", required=True)
+    parser.add_argument("--market-capture-demands-jsonl", default="")
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--health-path", required=True)
     parser.add_argument("--market-proxy", default=os.environ.get("WEATHER_DATA_FEED_MARKET_PROXY", ""))
@@ -977,6 +1092,7 @@ def main(argv: list[str] | None = None) -> int:
                     "research_cities": selection.research_cities,
                     "burst_cities": selection.burst_cities,
                     "missing_observation_cities": selection.missing_observation_cities,
+                    "capture_demands": selection.capture_demands,
                 },
                 ensure_ascii=False,
                 sort_keys=True,
