@@ -1,6 +1,47 @@
 # Amsterdam KNMI V9：PIT 特征合同修复、冻结评测与策略表达
 
-状态：`唯一主策略已选定：KNMI .7°C CrossNO / dedicated survival head frozen / V9 standalone dormant-for-now / tiny-live证据仍不足以称稳定`
+状态：`CrossNO live不变 / 新增独立market-offset概率策略为zero-notional shadow candidate / 尚未确认稳定alpha`
+
+## CrossNO 之外：独立概率策略（2026-08-12 更新）
+
+用户要求的第二条路线不是给 `.7°C CrossNO` 加模型过滤，而是在每个可交易 KNMI checkpoint 直接估计
+`P(final EHAM settlement leaves current exact bracket)`，并同时允许表达 current bracket 的 YES（不离档）和
+NO（离档）。模型采用 coefficient-one market prior：
+
+```text
+logit(p_post) = logit(p_current_bracket_NO_market)
+              + g(KNMI path, forecast peak, remaining heat, market disagreement)
+```
+
+这里 market 不是训练标签，也不是让模型“更像市场”；settlement 才是标签，天气/path head 只学习市场 log-odds
+之上的 correction。底层 weather probability 使用五年 KNMI 10-minute 数据和 fixed-lead ECMWF previous-day1；
+market residual 使用 2026-04-03..07-29 的11,800个 PIT sampled-price checkpoints / 112 dates。开发只在4–5月
+训练和选择，6月 validation；最终 residual 仅用截至6月的数据 refit，7月不进训练。
+
+审计时修正了两个会虚高结果的口径 bug：binary current-bracket prior 必须用该合约直接 NO price，不能用
+full-ladder 归一化后的 `1-q_current`；6月 validation 必须由只训练到5月的模型评分，不能用含6月标签的 refit
+模型回报。修正后 expanding OOF（6月由截至5月模型、7月由截至6月模型）为6,136 rows / 57 dates：posterior
+Brier/logloss=`0.04056/0.13588`，market=`0.04718/0.15212`；delta点估为
+`-0.00662/-0.01624`，但95% CI上界仍轻微跨0。
+
+固定交易合同为 Amsterdam local 10–16点、KNMI `:10/:40`、side probability≥55%、相对 sampled price +
+Weather fee proxy 的edge≥2pp、每 `target_date × expression bracket` 首次进入、5 shares。expanding OOF中98笔/
+55 dates、78胜（79.59%），fee proxy后PnL `+$41.3237`、ROI `+11.85%`，target-date bootstrap ROI 95% CI
+`[+0.61%,+23.05%]`。同一98个时点只买market favorite为70胜、PnL `-$22.1470`、ROI `-5.95%`；模型相对
+market多赚 `$63.4707`，paired target-date bootstrap PnL-delta CI `[$20.7404,$109.1779]`。这组价格是PIT
+sampled reference，不是可执行 order book，因此只能证明“值得正式shadow”，不能直接称可兑现收益。
+
+7/30–8/11 collector-exact first-seen t0 book 的seen-window审计覆盖448同盘口checkpoints / 9 dates。posterior
+Brier/logloss=`0.01157/0.06502`，market=`0.03362/0.13075`，两项paired date CI均优于market；固定policy为
+7笔/6 dates、7胜、5-share taker counterfactual ROI `+31.49%`。但这7笔与同rows market favorite方向完全
+相同，故该窄窗只能支持概率校准，不证明额外选向alpha；actual fills仍为0。
+
+artifact `amsterdam_knmi_market_offset_probability_v2` 已冻结，clean-forward boundary 为
+`2026-08-12T07:45:13.999634Z`。WCIR adapter/config 已实现但本轮没有重启生产：它保持
+`zero_notional_shadow / orders_submitted=0`，与现有 live CrossNO 完全分开。真实sample smoke还发现并修复了旧
+Amsterdam adapter 的expression anchor bug：物理running max为18°C而盘口最低档为“23°C or below”时，必须保存
+`physical_current=18`、使用`expression_current=23 / hard_floor`构造概率和交易命题；不能拿18去找不存在的合约。
+若floor盘口只有单边book，market-offset模型按合同写`market_prior_midpoint_interval_censored` blocker，不伪造概率。
 
 ## 最终选定的交易策略
 
@@ -80,6 +121,9 @@ V9 的 `2pp` policy 是在 post-freeze development 后锁定，配置的最早 c
 - Cross-survival artifact：`/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_cross_survival/run=53d49e6d7a4c075e/model.pkl`，SHA-256 `b2d5ec1b06cd2c85e764182fbe65ac5a96a438c399016c6107dc80180bd854a2`
 - Cross-survival frozen metrics：同 run 下 `metrics.json`；development PIT replay：`/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_cross_survival/development_20260730_20260811/metrics.json`
 - fixed-lead history：`/Volumes/jrs/weather_data_feed_service_runtime/research/amsterdam_ecmwf_previous_day1_path_v1/forecast_hourly.csv.gz`，SHA-256 `821ae0c4c613a5b863b9c86927dd9f5c02c4cbaecb9d60bd982001fd96c57b42`
+- market-offset v2 artifact：`/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_market_offset_probability/run=development_20260812_direct_contract_v3/market_offset.pkl`，SHA-256 `a3c69c23964a9344f8f75311af99116b3aa7963087cb2878c4296c08d56e4822`
+- market-offset training/expanding OOF：同目录 `market_offset_metrics.json`
+- collector-exact t0 replay：`/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_market_offset_probability/collector_replay_20260730_20260811_v3/metrics.json`
 
 后续主 scorecard 只看 `cross07_survival_edge01` 在 2026-08-12 03:00 UTC 后新增的 settled target dates；
 固定同时报告裸 `.7`、模型合同和同 checkpoint market favorite，不再用新增标签改 margin、edge 或退出方式。

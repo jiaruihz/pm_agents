@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import json
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -18,6 +19,12 @@ from weather_modeling.solar_geometry import add_solar_geometry_features
 from weather_modeling.forecast_path import (
     FORECAST_PATH_FEATURES,
     add_fixed_lead_forecast_path_features,
+)
+from weather_modeling.amsterdam_market_offset import (
+    add_amsterdam_market_offset_features,
+)
+from weather_model_evaluation.market_offset_probability import (
+    predict_fixed_market_offset,
 )
 from weather_data_feed.input_catalog import JsonlInputCatalog
 
@@ -177,7 +184,31 @@ def _market_quote(profile: dict[str, Any], source_event_id: str, target_date: st
             details={"source_event_id": source_event_id, "bracket": bracket},
         )
     _, _, filename, payload = sorted(candidates, key=lambda item: (item[0], item[1]))[0]
-    record = next((row for row in payload.get("records", []) if str(row.get("bracket")) == str(bracket)), None)
+    records = list(payload.get("records", []))
+    record = next(
+        (row for row in records if str(row.get("bracket")) == str(bracket)),
+        None,
+    )
+    bracket_anchor = "exact"
+    if record is None:
+        numeric_records = []
+        for candidate in records:
+            match = re.search(r"-?\d+", str(candidate.get("bracket") or ""))
+            if match:
+                numeric_records.append((int(match.group()), candidate))
+        if numeric_records:
+            floor_value, floor_record = min(numeric_records, key=lambda item: item[0])
+            ceiling_value, ceiling_record = max(
+                numeric_records, key=lambda item: item[0]
+            )
+            floor_question = str(floor_record.get("question") or "").lower()
+            ceiling_question = str(ceiling_record.get("question") or "").lower()
+            if bracket < floor_value and "or below" in floor_question:
+                record = floor_record
+                bracket_anchor = "hard_floor"
+            elif bracket > ceiling_value and "or higher" in ceiling_question:
+                record = ceiling_record
+                bracket_anchor = "hard_ceiling"
     if record is None:
         raise InputNotReady(
             "missing_current_bracket_market",
@@ -201,6 +232,11 @@ def _market_quote(profile: dict[str, Any], source_event_id: str, target_date: st
     )
     return {
         **record,
+        "physical_current_bracket": bracket,
+        "resolved_bracket": int(
+            re.search(r"-?\d+", str(record.get("bracket"))).group()
+        ),
+        "bracket_anchor": bracket_anchor,
         "snapshot_path": filename,
         "book_snapshot_id": snapshot_id,
         "best_bid": bid,
@@ -331,10 +367,30 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
         official_lineage, official = _official_as_of(
             profile, target_date, decision, _parse(source["observation_time_utc"])
         )
-        current = _half_up(float(official["running_max_c"]))
+        physical_current = _half_up(float(official["running_max_c"]))
+        quote = _market_quote(
+            profile,
+            str(source["information_event_id"]),
+            target_date,
+            physical_current,
+            now,
+        )
+        current = int(quote.get("resolved_bracket", physical_current))
         row = frame.iloc[-1].copy()
         observed_local = _parse(source["observation_time_utc"]).astimezone(ZoneInfo("Europe/Amsterdam"))
         minute = observed_local.hour * 60 + observed_local.minute
+        allowed_source_minutes = profile.get("allowed_source_minutes")
+        if (
+            allowed_source_minutes is not None
+            and observed_local.minute
+            not in {int(value) for value in allowed_source_minutes}
+        ):
+            return []
+        allowed_local_hours = profile.get("allowed_local_hours")
+        if allowed_local_hours is not None:
+            first_hour, last_hour = [int(value) for value in allowed_local_hours]
+            if not first_hour <= observed_local.hour <= last_hour:
+                return []
         row["decision_minute_local"] = float(minute)
         row["time_sin"] = math.sin(2 * math.pi * minute / 1440)
         row["time_cos"] = math.cos(2 * math.pi * minute / 1440)
@@ -379,7 +435,21 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
         artifact_path = Path(profile["artifacts"]["weather"]["path"])
         artifact = joblib.load(artifact_path)
         artifact_schema = artifact.get("schema_version")
-        if artifact_schema in {
+        market_offset_mode = artifact_schema == "fixed_market_logit_offset_v1"
+        if market_offset_mode:
+            base_declaration = profile["artifacts"].get("base_weather")
+            if not base_declaration:
+                raise ValueError("market-offset profile requires base_weather artifact")
+            base_artifact = joblib.load(Path(base_declaration["path"]))
+            if (
+                str(base_declaration["sha256"])
+                != str(artifact["base_weather_artifact_sha256"])
+            ):
+                raise ValueError("market-offset base weather artifact hash mismatch")
+            if base_artifact.get("model_id") != artifact.get("base_weather_model_id"):
+                raise ValueError("market-offset base weather model id mismatch")
+            base_features = list(base_artifact["features"])
+        elif artifact_schema in {
             "amsterdam_knmi_remaining_heat_model_v8",
             "amsterdam_knmi_remaining_heat_model_v9",
             "amsterdam_knmi_cross_survival_model_v1",
@@ -412,7 +482,47 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             if feature not in row.index:
                 row[feature] = np.nan
         score_frame = pd.DataFrame([row], columns=base_features)
-        probabilities = _predict(artifact, score_frame)
+        if market_offset_mode:
+            if quote["mid"] is None:
+                raise InputNotReady(
+                    "market_prior_midpoint_interval_censored",
+                    city="Amsterdam",
+                    target_date=target_date,
+                    decision_ts_utc=decision.isoformat(),
+                    details={
+                        "source_event_id": source["information_event_id"],
+                        "book_snapshot_id": quote.get("book_snapshot_id"),
+                    },
+                )
+            base_probabilities = _predict(base_artifact, score_frame)
+            residual_frame = pd.DataFrame([row])
+            residual_frame["p_model"] = base_probabilities["p_break_eod"]
+            residual_frame["market_p"] = float(quote["mid"])
+            residual_frame = add_amsterdam_market_offset_features(
+                residual_frame,
+                required_features=list(artifact["feature_columns"]),
+            )
+            posterior = float(
+                predict_fixed_market_offset(
+                    artifact,
+                    residual_frame,
+                    market_probability=residual_frame["market_p"],
+                )[0]
+            )
+            probabilities = {
+                "p_break_eod": posterior,
+                "p_weather_eod": float(base_probabilities["p_break_eod"]),
+                "p_market_prior": float(quote["mid"]),
+            }
+            score_feature_names = [
+                *base_features,
+                *list(artifact["feature_columns"]),
+            ]
+            score_feature_row = residual_frame.iloc[0]
+        else:
+            probabilities = _predict(artifact, score_frame)
+            score_feature_names = base_features
+            score_feature_row = score_frame.iloc[0]
         cross_survival_mode = (
             artifact_schema == "amsterdam_knmi_cross_survival_model_v1"
         )
@@ -421,14 +531,25 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
             and not cross_survival_mode
         ):
             raise ValueError("required_cross_margin_c requires cross-survival artifact")
-        quote = _market_quote(profile, str(source["information_event_id"]), target_date, current, now)
-        present = sum(pd.notna(score_frame.iloc[0][name]) for name in base_features)
-        missing = [name for name in base_features if pd.isna(score_frame.iloc[0][name])]
+        present = sum(
+            pd.notna(score_feature_row[name]) for name in score_feature_names
+        )
+        missing = [
+            name for name in score_feature_names if pd.isna(score_feature_row[name])
+        ]
         shared_lineage = {
             "profile_id": profile["profile_id"],
             "probability_policy": str(artifact["model_id"]),
             "model_artifact_sha256": profile["artifacts"]["weather"]["sha256"],
+            "base_weather_artifact_sha256": (
+                profile["artifacts"]["base_weather"]["sha256"]
+                if market_offset_mode
+                else None
+            ),
             "book_snapshot_id": quote.get("book_snapshot_id"),
+            "physical_current_bracket": physical_current,
+            "expression_current_bracket": current,
+            "bracket_anchor": quote.get("bracket_anchor", "exact"),
             "market_feature_clock": "knmi_first_seen_ladder_t0",
             "source_journal": profile["source_journal"],
             "source_line": source_line,
@@ -466,7 +587,7 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
                 market_entry_price=market_entry,
                 model_probability=p_leave if is_no else 1.0 - p_leave,
                 model_id=str(artifact["model_id"]),
-                feature_coverage=present / len(base_features),
+                feature_coverage=present / len(score_feature_names),
                 missing_features=missing,
                 features={key: float(value) for key, value in probabilities.items()},
                 market={

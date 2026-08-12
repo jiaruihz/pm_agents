@@ -6,10 +6,14 @@ from __future__ import annotations
 import argparse
 import csv
 import glob
+import gzip
+import hashlib
+import io
 import json
 import math
 import pickle
 import sqlite3
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -30,6 +34,17 @@ from weather_modeling.solar_geometry import add_solar_geometry_features
 from weather_modeling.forecast_path import (
     FORECAST_PATH_FEATURES,
     add_fixed_lead_forecast_path_features,
+)
+from weather_modeling.amsterdam_market_offset import (
+    add_amsterdam_market_offset_features,
+)
+from weather_model_evaluation.market_offset_probability import (
+    date_block_score_delta,
+    date_equal_binary_score,
+    fit_fixed_market_offset,
+    logit as market_logit,
+    predict_fixed_market_offset,
+    select_market_offset_model,
 )
 
 
@@ -72,6 +87,52 @@ CROSSNO_POLICIES = [
 ]
 MARKET_PRIOR_INTERCEPT = -0.0170
 MARKET_PRIOR_WEATHER_WEIGHT = 0.0641
+DEFAULT_HISTORICAL_DATASET = Path(
+    "/Volumes/jrs/weather_data_feed_service_runtime/research/"
+    "amsterdam_knmi_10m_remaining_heat_v1/weather_checkpoints.csv.gz"
+)
+DEFAULT_MARKET_REFERENCE_GIT_SPEC = (
+    "2009d308:docs/analysis/2026-07/generated/"
+    "amsterdam_polymarket_price_reference_v1/"
+    "prediction_market_reference_table.csv.gz"
+)
+
+MARKET_OFFSET_FEATURE_SETS = {
+    "weather_disagreement": ["weather_market_logit_disagreement"],
+    "weather_path_mechanism": [
+        "weather_market_logit_disagreement",
+        "ta_margin_current_c", "tx_margin_current_c",
+        "ta_delta_10m_c", "ta_delta_30m_c", "ta_delta_60m_c",
+        "ta_trend_accel_20m_c", "plateau_duration_minutes",
+        "knmi_drawdown_from_high_c", "rebound_from_60m_low_c",
+        "solar_w_m2", "remaining_clear_sky_integral_h",
+        "cloud_mean_60m_okta", "rain_minutes_60m",
+        "forecast_remaining_max_minus_d1_c", "forecast_minutes_to_peak",
+        "forecast_peak_passed", "forecast_future_warming_integral_6h_c_h",
+        "time_sin", "time_cos",
+    ],
+    "weather_path_market_interaction": [
+        "weather_market_logit_disagreement",
+        "ta_margin_current_c", "tx_margin_current_c",
+        "ta_delta_10m_c", "ta_delta_30m_c", "ta_delta_60m_c",
+        "ta_trend_accel_20m_c", "plateau_duration_minutes",
+        "knmi_drawdown_from_high_c", "rebound_from_60m_low_c",
+        "solar_w_m2", "remaining_clear_sky_integral_h",
+        "cloud_mean_60m_okta", "rain_minutes_60m",
+        "forecast_remaining_max_minus_d1_c", "forecast_minutes_to_peak",
+        "forecast_peak_passed", "forecast_future_warming_integral_6h_c_h",
+        "time_sin", "time_cos", "market_uncertainty",
+        "weather_disagreement_x_uncertainty",
+        "forecast_margin_x_remaining_solar", "trend_x_remaining_solar",
+        "peak_passed_x_drawdown",
+    ],
+}
+MARKET_OFFSET_L2_GRID = (0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0)
+MARKET_POSTERIOR_POLICIES = [
+    {"id": "market_posterior_preofficial10_edge02_p55", "minutes": {10, 40}, "edge": 0.02, "p_min": 0.55},
+    {"id": "market_posterior_preofficial10_edge01_p55", "minutes": {10, 40}, "edge": 0.01, "p_min": 0.55},
+    {"id": "market_posterior_preofficial10_edge05_p55", "minutes": {10, 40}, "edge": 0.05, "p_min": 0.55},
+]
 
 
 def parse(value: Any) -> datetime:
@@ -266,10 +327,12 @@ def probability_metrics(rows: pd.DataFrame, column: str) -> dict[str, Any]:
             "accuracy_0_5": float(((p >= .5) == y.astype(bool)).mean())}
 
 
-def paired_probability_delta(rows: pd.DataFrame) -> dict[str, Any]:
+def paired_probability_delta(
+    rows: pd.DataFrame, candidate_column: str = "p_model"
+) -> dict[str, Any]:
     if rows.empty:
         return {"rows": 0}
-    p_model = np.clip(rows["p_model"].to_numpy(float), 1e-9, 1 - 1e-9)
+    p_model = np.clip(rows[candidate_column].to_numpy(float), 1e-9, 1 - 1e-9)
     p_market = np.clip(rows["market_p"].to_numpy(float), 1e-9, 1 - 1e-9)
     label = rows["label_leave"].to_numpy(float)
     scores = pd.DataFrame({
@@ -452,6 +515,490 @@ def expit(values: pd.Series) -> pd.Series:
     return 1 / (1 + np.exp(-values))
 
 
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def predict_weather_artifact(
+    artifact: dict[str, Any], frame: pd.DataFrame
+) -> np.ndarray:
+    missing = sorted(set(artifact["features"]) - set(frame.columns))
+    if missing:
+        raise ValueError(f"weather probability frame missing columns: {missing}")
+    values = artifact["estimator"].predict_proba(
+        frame[artifact["features"]].apply(pd.to_numeric, errors="coerce")
+    )[:, 1]
+    if artifact.get("calibrator") is not None:
+        values = artifact["calibrator"].predict_proba(
+            market_logit(values).reshape(-1, 1)
+        )[:, 1]
+    return np.asarray(values, dtype=float)
+
+
+def load_market_reference(
+    *, path: Path | None, git_spec: str | None
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if path is not None:
+        payload = path.read_bytes()
+        source = str(path.resolve())
+    elif git_spec:
+        payload = subprocess.check_output(["git", "show", git_spec], cwd=ROOT)
+        source = f"git:{git_spec}"
+    else:
+        raise ValueError("market reference requires a path or git spec")
+    raw = gzip.decompress(payload) if payload[:2] == b"\x1f\x8b" else payload
+    return pd.read_csv(io.BytesIO(raw)), {
+        "source": source,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "bytes": len(payload),
+    }
+
+
+def replay_historical_price_reference(
+    rows: pd.DataFrame,
+    probability: np.ndarray,
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    """Replay a policy on sampled PIT prices, explicitly not executable books."""
+
+    working = rows.copy()
+    working["p_market_posterior"] = probability
+    observed = pd.to_datetime(working["observed_at_utc"], utc=True).dt.tz_convert(
+        LOCAL
+    )
+    working["source_minute"] = observed.dt.minute
+    working["local_hour"] = observed.dt.hour
+    working["no_reference_price"] = pd.to_numeric(
+        working["market_current_no_price_reference"], errors="coerce"
+    )
+    working["yes_reference_price"] = pd.to_numeric(
+        working["market_current_yes_price_reference"], errors="coerce"
+    )
+    working["no_effective_cost"] = (
+        working["no_reference_price"]
+        + FEE_RATE
+        * working["no_reference_price"]
+        * (1.0 - working["no_reference_price"])
+    )
+    working["yes_effective_cost"] = (
+        working["yes_reference_price"]
+        + FEE_RATE
+        * working["yes_reference_price"]
+        * (1.0 - working["yes_reference_price"])
+    )
+    working["no_edge"] = working["p_market_posterior"] - working["no_effective_cost"]
+    working["yes_edge"] = (
+        1.0 - working["p_market_posterior"] - working["yes_effective_cost"]
+    )
+    working["selected_side"] = np.where(
+        working["no_edge"] >= working["yes_edge"], "NO", "YES"
+    )
+    no_selected = working["selected_side"].eq("NO")
+    working["selected_probability"] = np.where(
+        no_selected,
+        working["p_market_posterior"],
+        1.0 - working["p_market_posterior"],
+    )
+    working["selected_edge"] = np.where(
+        no_selected, working["no_edge"], working["yes_edge"]
+    )
+    working["selected_reference_price"] = np.where(
+        no_selected,
+        working["no_reference_price"],
+        working["yes_reference_price"],
+    )
+    eligible = working[
+        working["source_minute"].isin(policy["minutes"])
+        & working["local_hour"].between(10, 16)
+        & working["selected_reference_price"].notna()
+        & working["selected_reference_price"].le(0.97)
+        & working["selected_probability"].ge(policy["p_min"])
+        & working["selected_edge"].ge(policy["edge"])
+    ].copy()
+    eligible = eligible.sort_values("observed_at_utc").drop_duplicates(
+        ["target_date", "current_bracket_c"], keep="first"
+    )
+    eligible["won"] = np.where(
+        eligible["selected_side"].eq("NO"),
+        eligible["label_leave"].astype(bool),
+        ~eligible["label_leave"].astype(bool),
+    )
+    eligible["shares"] = 5.0
+    eligible["source_first_seen_at_utc"] = eligible["observed_at_utc"]
+    eligible["cost"] = 5.0 * (
+        eligible["selected_reference_price"]
+        + FEE_RATE
+        * eligible["selected_reference_price"]
+        * (1.0 - eligible["selected_reference_price"])
+    )
+    eligible["pnl"] = np.where(eligible["won"], 5.0, 0.0) - eligible["cost"]
+    def summarize(selected: pd.DataFrame) -> dict[str, Any]:
+        selected_cost = float(selected["cost"].sum())
+        selected_pnl = float(selected["pnl"].sum())
+        return {
+            "signals": int(len(selected)),
+            "target_dates": int(selected["target_date"].nunique()),
+            "wins": int(selected["won"].sum()),
+            "accuracy": float(selected["won"].mean()) if len(selected) else None,
+            "cost": selected_cost,
+            "pnl": selected_pnl,
+            "roi": selected_pnl / selected_cost if selected_cost else None,
+        }
+
+    cost = float(eligible["cost"].sum())
+    pnl = float(eligible["pnl"].sum())
+    by_side = {}
+    for side in ("YES", "NO"):
+        selected = eligible[eligible["selected_side"].eq(side)]
+        side_cost = float(selected["cost"].sum())
+        side_pnl = float(selected["pnl"].sum())
+        by_side[side] = {
+            "signals": int(len(selected)),
+            "wins": int(selected["won"].sum()),
+            "cost": side_cost,
+            "pnl": side_pnl,
+            "roi": side_pnl / side_cost if side_cost else None,
+        }
+    same_rows_market = eligible.copy()
+    same_rows_market["selected_side"] = np.where(
+        same_rows_market["market_p"].ge(0.5), "NO", "YES"
+    )
+    same_no = same_rows_market["selected_side"].eq("NO")
+    same_rows_market["selected_reference_price"] = np.where(
+        same_no,
+        same_rows_market["no_reference_price"],
+        same_rows_market["yes_reference_price"],
+    )
+    same_rows_market["won"] = np.where(
+        same_no,
+        same_rows_market["label_leave"].astype(bool),
+        ~same_rows_market["label_leave"].astype(bool),
+    )
+    same_rows_market["cost"] = 5.0 * (
+        same_rows_market["selected_reference_price"]
+        + FEE_RATE
+        * same_rows_market["selected_reference_price"]
+        * (1.0 - same_rows_market["selected_reference_price"])
+    )
+    same_rows_market["pnl"] = (
+        np.where(same_rows_market["won"], 5.0, 0.0)
+        - same_rows_market["cost"]
+    )
+    same_rows_summary = summarize(same_rows_market)
+    same_rows_summary["model_minus_market_pnl"] = (
+        pnl - float(same_rows_market["pnl"].sum())
+    )
+    paired_daily = pd.DataFrame(
+        {
+            "target_date": eligible["target_date"].astype(str).to_numpy(),
+            "delta": (
+                eligible["pnl"].to_numpy(float)
+                - same_rows_market["pnl"].to_numpy(float)
+            ),
+        }
+    ).groupby("target_date", sort=True)["delta"].sum()
+    if len(paired_daily):
+        rng = np.random.default_rng(20260812)
+        indexes = rng.integers(
+            0, len(paired_daily), size=(10000, len(paired_daily))
+        )
+        sampled_delta = paired_daily.to_numpy(float)[indexes].sum(axis=1)
+        same_rows_summary["model_minus_market_pnl_ci95"] = [
+            float(value)
+            for value in np.quantile(sampled_delta, [0.025, 0.975])
+        ]
+    else:
+        same_rows_summary["model_minus_market_pnl_ci95"] = [None, None]
+
+    all_market = working[
+        working["source_minute"].isin(policy["minutes"])
+        & working["local_hour"].between(10, 16)
+    ].copy()
+    all_market["selected_side"] = np.where(
+        all_market["market_p"].ge(0.5), "NO", "YES"
+    )
+    all_no = all_market["selected_side"].eq("NO")
+    all_market["selected_reference_price"] = np.where(
+        all_no, all_market["no_reference_price"], all_market["yes_reference_price"]
+    )
+    all_market = all_market[
+        all_market["selected_reference_price"].notna()
+        & all_market["selected_reference_price"].le(0.97)
+    ].sort_values("observed_at_utc").drop_duplicates(
+        ["target_date", "current_bracket_c"], keep="first"
+    )
+    all_no = all_market["selected_side"].eq("NO")
+    all_market["won"] = np.where(
+        all_no,
+        all_market["label_leave"].astype(bool),
+        ~all_market["label_leave"].astype(bool),
+    )
+    all_market["cost"] = 5.0 * (
+        all_market["selected_reference_price"]
+        + FEE_RATE
+        * all_market["selected_reference_price"]
+        * (1.0 - all_market["selected_reference_price"])
+    )
+    all_market["pnl"] = np.where(all_market["won"], 5.0, 0.0) - all_market["cost"]
+
+    universe_dates = sorted(rows["target_date"].astype(str).unique())
+    records = eligible.to_dict("records")
+    output = {
+        **summarize(eligible),
+        "by_side": by_side,
+        "mode": "sampled_price_reference_plus_fee_proxy_not_executable_book",
+        "same_selected_rows_market_favorite": same_rows_summary,
+        "all_market_favorite_primary_clock": summarize(all_market),
+        "target_date_bootstrap": trade_date_bootstrap(records, universe_dates),
+        "stability": trade_stability(records, universe_dates),
+    }
+    return output
+
+
+def fit_amsterdam_market_offset(
+    *,
+    weather_artifact: dict[str, Any],
+    weather_artifact_path: Path,
+    historical_dataset: Path,
+    forecast_path: Path,
+    market_reference_path: Path | None,
+    market_reference_git_spec: str | None,
+    output_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    history = pd.read_csv(historical_dataset)
+    history = history[
+        history["target_date"].astype(str).between("2026-04-03", "2026-07-29")
+    ].copy()
+    history = add_knmi_10m_path_features(history)
+    history = add_solar_geometry_features(history)
+    forecast = pd.read_csv(forecast_path)
+    history = add_fixed_lead_forecast_path_features(history, forecast)
+    history["p_model"] = predict_weather_artifact(weather_artifact, history)
+    reference, reference_identity = load_market_reference(
+        path=market_reference_path, git_spec=market_reference_git_spec
+    )
+    joined = reference.merge(
+        history,
+        on="weather_checkpoint_key",
+        how="left",
+        suffixes=("", "_weather"),
+        validate="one_to_one",
+    )
+    if joined["p_model"].isna().any():
+        raise ValueError(
+            f"market reference has {int(joined['p_model'].isna().sum())} unmatched weather rows"
+        )
+    joined["target_date"] = joined["target_date"].astype(str)
+    # The target is the binary current-bracket contract, so the coefficient-one
+    # market prior must be that contract's direct NO price.  The normalized
+    # full-ladder q_market_0 has a different denominator when ladder sums are
+    # not one and is retained only as a separate full-distribution reference.
+    joined["market_p"] = pd.to_numeric(
+        joined["market_current_no_price_reference"], errors="raise"
+    )
+    joined["label_leave"] = pd.to_numeric(
+        joined["label_d1_cross_eod"], errors="raise"
+    ).astype(int)
+    joined = add_amsterdam_market_offset_features(joined)
+    fitted, selection = select_market_offset_model(
+        joined,
+        feature_sets=MARKET_OFFSET_FEATURE_SETS,
+        l2_grid=MARKET_OFFSET_L2_GRID,
+        fit_window=("2026-04-03", "2026-05-31"),
+        validation_window=("2026-06-01", "2026-06-30"),
+        refit_window=("2026-04-03", "2026-06-30"),
+        market_probability_column="market_p",
+        label_column="label_leave",
+    )
+    development_rows = joined[
+        joined["target_date"].between("2026-04-03", "2026-05-31")
+    ].copy()
+    development_model = fit_fixed_market_offset(
+        development_rows,
+        feature_columns=selection["selected"]["features"],
+        market_probability_column="market_p",
+        label_column="label_leave",
+        date_column="target_date",
+        l2_strength=float(selection["selected"]["l2_strength"]),
+    )
+    fitted.update(
+        {
+            "model_id": "amsterdam_knmi_market_offset_probability_v2",
+            "city": "Amsterdam",
+            "target": "P(final EHAM settlement leaves current exact bracket)",
+            "market_feature_role": "prior_offset",
+            "market_feature_clock": "decision_current",
+            "base_weather_model_id": weather_artifact["model_id"],
+            "base_weather_artifact": str(weather_artifact_path.resolve()),
+            "base_weather_artifact_sha256": sha256(weather_artifact_path),
+            "historical_dataset": str(historical_dataset.resolve()),
+            "historical_dataset_sha256": sha256(historical_dataset),
+            "forecast_path": str(forecast_path.resolve()),
+            "forecast_path_sha256": sha256(forecast_path),
+            "market_reference": reference_identity,
+            "clean_forward_start_utc": datetime.now(UTC).isoformat(),
+            "research_only_zero_notional": True,
+            "live_eligible": False,
+        }
+    )
+    scores: dict[str, Any] = {}
+    for split, start, end in (
+        ("fit", "2026-04-03", "2026-05-31"),
+        ("validation", "2026-06-01", "2026-06-30"),
+        ("reused_holdout_early", "2026-07-01", "2026-07-14"),
+        ("reused_holdout_late", "2026-07-15", "2026-07-29"),
+        ("reused_holdout_all", "2026-07-01", "2026-07-29"),
+    ):
+        subset = joined[joined["target_date"].between(start, end)].copy()
+        scoring_model = (
+            development_model
+            if split in {"fit", "validation"}
+            else fitted
+        )
+        posterior = predict_fixed_market_offset(scoring_model, subset)
+        scores[split] = {
+            "window": [start, end],
+            "market": date_equal_binary_score(
+                subset, subset["market_p"], label_column="label_leave"
+            ),
+            "weather": date_equal_binary_score(
+                subset, subset["p_model"], label_column="label_leave"
+            ),
+            "posterior": date_equal_binary_score(
+                subset, posterior, label_column="label_leave"
+            ),
+            "posterior_minus_market": date_block_score_delta(
+                subset,
+                posterior,
+                subset["market_p"],
+                label_column="label_leave",
+            ),
+            "price_reference_policy": replay_historical_price_reference(
+                subset,
+                posterior,
+                MARKET_POSTERIOR_POLICIES[0],
+            ),
+            "scoring_model_fit_through": (
+                "2026-05-31"
+                if split in {"fit", "validation"}
+                else "2026-06-30"
+            ),
+        }
+    expanding_parts = []
+    for start, end, scoring_model in (
+        ("2026-06-01", "2026-06-30", development_model),
+        ("2026-07-01", "2026-07-29", fitted),
+    ):
+        part = joined[joined["target_date"].between(start, end)].copy()
+        part["p_expanding_oof"] = predict_fixed_market_offset(
+            scoring_model, part
+        )
+        expanding_parts.append(part)
+    expanding_oof = pd.concat(expanding_parts, ignore_index=True)
+    scores["expanding_oof_20260601_20260729"] = {
+        "window": ["2026-06-01", "2026-07-29"],
+        "rows": int(len(expanding_oof)),
+        "target_dates": int(expanding_oof["target_date"].nunique()),
+        "market": date_equal_binary_score(
+            expanding_oof,
+            expanding_oof["market_p"],
+            label_column="label_leave",
+        ),
+        "posterior": date_equal_binary_score(
+            expanding_oof,
+            expanding_oof["p_expanding_oof"],
+            label_column="label_leave",
+        ),
+        "posterior_minus_market": date_block_score_delta(
+            expanding_oof,
+            expanding_oof["p_expanding_oof"],
+            expanding_oof["market_p"],
+            label_column="label_leave",
+        ),
+        "price_reference_policy": replay_historical_price_reference(
+            expanding_oof,
+            expanding_oof["p_expanding_oof"].to_numpy(float),
+            MARKET_POSTERIOR_POLICIES[0],
+        ),
+        "clock": (
+            "June scored by model fit through May; July scored by refit through June"
+        ),
+    }
+    summary = {
+        "schema_version": "amsterdam_knmi_market_offset_training_v2",
+        "model_id": fitted["model_id"],
+        "denominator_scope": (
+            "Amsterdam 10-minute archive-reconstructed weather checkpoints joined "
+            "to timestamped Polymarket price references; sampled prices are not books"
+        ),
+        "raw_reference_rows": int(len(reference)),
+        "joined_rows": int(len(joined)),
+        "target_dates": int(joined["target_date"].nunique()),
+        "target_date_range": [joined["target_date"].min(), joined["target_date"].max()],
+        "selection": selection,
+        "multiple_test_candidates": int(selection["selected"] and len(selection["candidates"])),
+        "multiple_test_adjustment": "none_development_selection_only",
+        "market_probability_contract": (
+            "direct current-bracket NO price; q_market_0 full-ladder normalization "
+            "is not used as the binary prior"
+        ),
+        "scores": scores,
+        "artifact_path": str(output_path),
+        "evidence_boundary": (
+            "probability history is PIT price-reference research but non-executable; "
+            "July is a reused historical holdout and cannot be called untouched forward"
+        ),
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("wb") as handle:
+        pickle.dump(fitted, handle)
+    metrics_path = output_path.with_name("market_offset_metrics.json")
+    metrics_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    return fitted, summary
+
+
+def apply_probability_expression(
+    frame: pd.DataFrame, probability_column: str
+) -> pd.DataFrame:
+    output = frame.copy()
+    output["expression_probability_leave"] = output[probability_column]
+    output["no_edge_after_fee"] = (
+        output["expression_probability_leave"]
+        - output["effective_cost_per_share"]
+    )
+    output["yes_edge_after_fee"] = (
+        1.0
+        - output["expression_probability_leave"]
+        - output["yes_effective_cost_per_share"]
+    )
+    output["selected_side"] = np.where(
+        output["no_edge_after_fee"] >= output["yes_edge_after_fee"], "NO", "YES"
+    )
+    no_selected = output["selected_side"].eq("NO")
+    output["selected_model_probability"] = np.where(
+        no_selected,
+        output["expression_probability_leave"],
+        1.0 - output["expression_probability_leave"],
+    )
+    output["selected_market_probability"] = np.where(
+        no_selected, output["market_p"], 1.0 - output["market_p"]
+    )
+    output["selected_edge_after_fee"] = np.where(
+        no_selected, output["no_edge_after_fee"], output["yes_edge_after_fee"]
+    )
+    output["selected_ask"] = np.where(
+        no_selected, output["no_best_ask"], output["yes_best_ask"]
+    )
+    output["selected_ask_size"] = np.where(
+        no_selected, output["no_ask_size"], output["yes_ask_size"]
+    )
+    return output
+
+
 def replay_crossno_policy(
     rows: pd.DataFrame,
     policy: dict[str, Any],
@@ -607,6 +1154,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--forecast-path", type=Path, default=None)
     parser.add_argument("--cross-survival-artifact", type=Path, default=None)
+    parser.add_argument("--historical-dataset", type=Path, default=DEFAULT_HISTORICAL_DATASET)
+    parser.add_argument("--market-reference-path", type=Path, default=None)
+    parser.add_argument(
+        "--market-reference-git-spec",
+        default=DEFAULT_MARKET_REFERENCE_GIT_SPEC,
+    )
+    parser.add_argument("--fit-market-prior-output", type=Path, default=None)
+    parser.add_argument("--market-prior-artifact", type=Path, default=None)
     parser.add_argument(
         "--evaluation-role",
         choices=(
@@ -619,6 +1174,20 @@ def main() -> int:
     args = parser.parse_args()
     with args.artifact.open("rb") as handle:
         artifact = pickle.load(handle)
+    market_prior_training = None
+    if args.fit_market_prior_output is not None:
+        if args.forecast_path is None:
+            raise ValueError("--fit-market-prior-output requires --forecast-path")
+        _, market_prior_training = fit_amsterdam_market_offset(
+            weather_artifact=artifact,
+            weather_artifact_path=args.artifact,
+            historical_dataset=args.historical_dataset,
+            forecast_path=args.forecast_path,
+            market_reference_path=args.market_reference_path,
+            market_reference_git_spec=args.market_reference_git_spec,
+            output_path=args.fit_market_prior_output,
+        )
+        args.market_prior_artifact = args.fit_market_prior_output
     sources = source_rows(args.runtime_root, args.start, args.end)
     frame = feature_frame(args.runtime_root, sources)
     if any(name in artifact["features"] for name in FORECAST_PATH_FEATURES):
@@ -632,12 +1201,7 @@ def main() -> int:
     missing = sorted(set(artifact["features"]) - set(frame.columns))
     if missing:
         raise ValueError(f"frozen frame missing artifact columns: {missing}")
-    matrix = frame[artifact["features"]].apply(pd.to_numeric, errors="coerce")
-    raw = artifact["estimator"].predict_proba(matrix)[:, 1]
-    if artifact.get("calibrator") is not None:
-        clipped = np.clip(raw, 1e-7, 1 - 1e-7)
-        raw = artifact["calibrator"].predict_proba(np.log(clipped/(1-clipped)).reshape(-1, 1))[:, 1]
-    frame["p_model"] = raw
+    frame["p_model"] = predict_weather_artifact(artifact, frame)
     if args.cross_survival_artifact is not None:
         with args.cross_survival_artifact.open("rb") as handle:
             cross_artifact = pickle.load(handle)
@@ -710,6 +1274,67 @@ def main() -> int:
     same_set_market, same_set_market_records = same_selected_rows_market_favorite(
         records_by_policy[locked_policy_id], universe_dates
     )
+    market_posterior_probability = None
+    market_posterior_delta = None
+    market_posterior_policies: dict[str, Any] = {}
+    market_posterior_records: list[dict[str, Any]] = []
+    market_posterior_same_rows_market = None
+    market_posterior_same_rows_records: list[dict[str, Any]] = []
+    market_prior_identity = None
+    if args.market_prior_artifact is not None:
+        with args.market_prior_artifact.open("rb") as handle:
+            market_prior_artifact = pickle.load(handle)
+        posterior_frame = add_amsterdam_market_offset_features(frame)
+        posterior_frame["p_market_posterior"] = predict_fixed_market_offset(
+            market_prior_artifact,
+            posterior_frame,
+            market_probability=posterior_frame["market_p"],
+        )
+        posterior_frame = apply_probability_expression(
+            posterior_frame, "p_market_posterior"
+        )
+        posterior_common = posterior_frame[
+            posterior_frame["market_p"].notna()
+        ].copy()
+        market_posterior_probability = probability_metrics(
+            posterior_common, "p_market_posterior"
+        )
+        market_posterior_delta = paired_probability_delta(
+            posterior_common, "p_market_posterior"
+        )
+        posterior_records_by_policy: dict[str, list[dict[str, Any]]] = {}
+        for policy in MARKET_POSTERIOR_POLICIES:
+            posterior_summary, posterior_records = replay_policy(
+                posterior_common, policy
+            )
+            posterior_summary["target_date_bootstrap"] = trade_date_bootstrap(
+                posterior_records, universe_dates
+            )
+            posterior_summary["stability"] = trade_stability(
+                posterior_records, universe_dates
+            )
+            market_posterior_policies[policy["id"]] = posterior_summary
+            posterior_records_by_policy[policy["id"]] = posterior_records
+            market_posterior_records.extend(
+                {"policy_id": policy["id"], **row} for row in posterior_records
+            )
+        posterior_primary_id = "market_posterior_preofficial10_edge02_p55"
+        (
+            market_posterior_same_rows_market,
+            market_posterior_same_rows_records,
+        ) = same_selected_rows_market_favorite(
+            posterior_records_by_policy[posterior_primary_id], universe_dates
+        )
+        market_prior_identity = {
+            "path": str(args.market_prior_artifact),
+            "sha256": sha256(args.market_prior_artifact),
+            "model_id": market_prior_artifact["model_id"],
+            "feature_set_id": market_prior_artifact["feature_set_id"],
+            "l2_strength": market_prior_artifact["l2_strength"],
+            "clean_forward_start_utc": market_prior_artifact[
+                "clean_forward_start_utc"
+            ],
+        }
     crossno = {}
     crossno_records = []
     for policy in CROSSNO_POLICIES:
@@ -734,6 +1359,18 @@ def main() -> int:
         "policies": strategy, "market_favorite_primary_clock": market_summary,
         "locked_policy_id": locked_policy_id,
         "same_selected_rows_market_favorite": same_set_market,
+        "market_posterior_probability_common": market_posterior_probability,
+        "market_posterior_minus_market_common": market_posterior_delta,
+        "market_posterior_policies": market_posterior_policies,
+        "market_posterior_same_selected_rows_market_favorite": (
+            market_posterior_same_rows_market
+        ),
+        "market_posterior_policy_contract": [
+            {**row, "minutes": sorted(row["minutes"])}
+            for row in MARKET_POSTERIOR_POLICIES
+        ],
+        "market_prior_artifact": market_prior_identity,
+        "market_prior_training": market_prior_training,
         "crossno_policies": crossno,
         "crossno_policy_contract": CROSSNO_POLICIES,
         "market_prior_contract": {
@@ -760,6 +1397,13 @@ def main() -> int:
     )
     pd.DataFrame(crossno_records).to_csv(
         args.output / "crossno_policy_trades.csv", index=False
+    )
+    pd.DataFrame(market_posterior_records).to_csv(
+        args.output / "market_posterior_policy_trades.csv", index=False
+    )
+    pd.DataFrame(market_posterior_same_rows_records).to_csv(
+        args.output / "market_posterior_same_rows_market_favorite_trades.csv",
+        index=False,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0

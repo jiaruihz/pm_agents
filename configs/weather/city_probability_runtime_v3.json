@@ -99,6 +99,39 @@
     },
     {
       "enabled": true,
+      "city": "Amsterdam",
+      "adapter": "amsterdam_knmi_market_offset_probability_v2",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "amsterdam_knmi_market_offset_probability_v2_clean_forward",
+      "source": "knmi",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
+      "forecast_previous_day1_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/previous_day1/forecast_hourly_curves",
+      "forward_start_utc": "2026-08-12T07:45:13.999634+00:00",
+      "max_source_age_seconds": 900,
+      "allowed_source_minutes": [10, 40],
+      "allowed_local_hours": [10, 16],
+      "expression_sides": ["YES", "NO"],
+      "material_state_change_only": true,
+      "edge_threshold": 0.02,
+      "selection_shares": 5.0,
+      "position_scope": "city_date_bracket_side_model",
+      "emit_paper_intents": true,
+      "artifacts": {
+        "weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_market_offset_probability/run=development_20260812_direct_contract_v3/market_offset.pkl",
+          "sha256": "a3c69c23964a9344f8f75311af99116b3aa7963087cb2878c4296c08d56e4822"
+        },
+        "base_weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_remaining_heat_v9_ecmwf_day1/run=61b8cde77f5320a4/model_v9.pkl",
+          "sha256": "c0bcb0afe1a86da376e86affb411e146b26c292c68bad9c9b6db246acaecd4d2"
+        }
+      }
+    },
+    {
+      "enabled": true,
       "city": "Busan",
       "adapter": "busan_online_market_prior_v1",
       "framework_id": "weather_city_intraday_runtime_v1",
