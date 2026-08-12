@@ -45,6 +45,11 @@ def test_full_ladder_manifest_has_stable_ids_and_normalized_distribution() -> No
     assert sum(manifest["normalized_market_probability"]) == pytest.approx(1.0)
     assert len(manifest["book_snapshot_id"]) == 64
     assert {row["book_snapshot_id"] for row in payload["records"]} == {manifest["book_snapshot_id"]}
+    assert len(manifest["generic_market_group_snapshot"]["expressions"]) == 6
+    assert manifest["generic_market_group_snapshot"]["batch_complete"] is False
+    assert {row["market_group_snapshot_id"] for row in payload["records"]} == {
+        manifest["market_group_snapshot_id"]
+    }
 
 
 def test_missing_rung_is_a_blocker_not_a_silent_drop() -> None:

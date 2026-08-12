@@ -22,6 +22,14 @@ _EXPORT_TO_MODULE = {
     "parse_partition": "src.platform.market_data.parsers",
     "parse_account_state": "src.platform.market_data.parsers",
     "pending_credit_total": "src.platform.market_data.parsers",
+    "CaptureDemand": "src.platform.market_data.capture_demand",
+    "CaptureAssignment": "src.platform.market_data.capture_demand",
+    "coalesce_capture_demands": "src.platform.market_data.capture_demand",
+    "CaptureReceipt": "src.platform.market_data.capture_receipt",
+    "MarketExpression": "src.platform.market_data.market_group",
+    "MarketGroupSnapshot": "src.platform.market_data.market_group",
+    "binary_market_group_snapshot": "src.platform.market_data.market_group",
+    "condition_market_group_snapshot": "src.platform.market_data.market_group",
 }
 
 __all__ = list(_EXPORT_TO_MODULE.keys())

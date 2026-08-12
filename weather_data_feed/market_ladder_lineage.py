@@ -10,6 +10,7 @@ from weather_data_feed.information_events import canonical_json_hash
 from weather_data_feed.forecast_run_contract import materialize_full_ladder_checkpoint
 from weather_data_feed.market_brackets import parse_market_bracket
 from weather_data_feed.source_lineage import capture_batch_id
+from src.platform.market_data.market_group import condition_market_group_snapshot
 
 
 MARKET_LADDER_MANIFEST_SCHEMA_VERSION = "weather_market_ladder_manifest_v1"
@@ -241,11 +242,63 @@ def annotate_market_ladder_snapshot(
             "strict_book_checkpoint": strict_book_checkpoint,
             **clock_manifest,
         }
+        generic_group = None
+        try:
+            generic_group = condition_market_group_snapshot(
+                group_id=f"polymarket_event:{event_key}",
+                group_kind="exact_bracket_ladder",
+                markets=[
+                    {
+                        "market_id": str(row.get("market_id") or ""),
+                        "condition_id": str(row.get("condition_id") or ""),
+                        "outcomes": ("YES", "NO"),
+                        "token_ids": (
+                            str(row.get("yes_token_id") or ""),
+                            str(row.get("no_token_id") or ""),
+                        ),
+                        "book_snapshot_ids": (
+                            row.get("yes_book_capture_id"),
+                            row.get("no_book_capture_id"),
+                        ),
+                        "metadata": {
+                            "domain_projection": "weather_exact_bracket",
+                            "bracket": str(row.get("bracket") or ""),
+                        },
+                    }
+                    for row in rows
+                ],
+                captured_at_utc=captured_at,
+                available_at_utc=available_at,
+                capture_batch_id=batch_id,
+                metadata={
+                    "weather_book_snapshot_id": book_snapshot_id,
+                    "city": city,
+                    "target_date": target_date,
+                    "native_lattice_complete": native_complete,
+                },
+            )
+            manifest["generic_market_group_snapshot"] = generic_group.to_dict()
+            manifest["market_group_snapshot_id"] = generic_group.group_snapshot_id
+        except ValueError as exc:
+            # Generic projection is additive during compatibility migration;
+            # incomplete legacy token mappings must not break the existing
+            # weather ladder.  The blocker remains explicit and replayable.
+            manifest["generic_market_group_snapshot"] = {
+                "schema_version": "polymarket_market_group_snapshot_v1",
+                "group_id": f"polymarket_event:{event_key}",
+                "group_kind": "exact_bracket_ladder",
+                "batch_complete": False,
+                "blockers": [f"generic_projection_error:{type(exc).__name__}:{exc}"],
+            }
+            manifest["market_group_snapshot_id"] = None
         manifests.append(manifest)
         for row in rows:
             row["snapshot_capture_id"] = snapshot_capture_id
             row["batch_capture_id"] = batch_id
             row["book_snapshot_id"] = book_snapshot_id
+            row["market_group_snapshot_id"] = (
+                None if generic_group is None else generic_group.group_snapshot_id
+            )
             row["rung_manifest_hash"] = rung_hash
             row["city_target_ladder_hash"] = rung_hash
             row["native_lattice_complete"] = native_complete
