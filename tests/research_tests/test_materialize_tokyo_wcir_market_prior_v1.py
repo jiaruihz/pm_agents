@@ -274,3 +274,69 @@ def test_market_sharpening_never_flips_market_minor_side() -> None:
 
     assert sharpened[0] == pytest.approx(0.2)
     assert sharpened[1] == pytest.approx(0.9411764706)
+
+
+def test_v2_forward_reserves_half_spread_without_price_band() -> None:
+    wide = _pre_cross_row(
+        event_id="wide",
+        decision="2026-08-12T01:00:00Z",
+        jma_temp_c=31.3,
+        won_no=None,
+    )
+    wide.update(
+        {
+            "market_no_probability": 0.80,
+            "no_best_bid": 0.70,
+            "no_best_ask": 0.90,
+            "cash_cost_5": 4.51,
+            "effective_cost_5": 0.902,
+        }
+    )
+    spec = {
+        "model_id": module.PRE_CROSS_MODEL_ID,
+        "effective_from_target_date": "2026-08-12",
+        "posterior": {
+            "exponent": 2.0,
+            "weather_innovation_alpha": 0.0,
+        },
+        "execution_uncertainty_reserve": {
+            "minimum_reserve": 0.001,
+            "spread_multiplier": 0.5,
+        },
+    }
+
+    candidates, summary = module.score_tokyo_pre_cross_forward(
+        [wide], frozen_spec=spec
+    )
+
+    row = candidates.iloc[0]
+    assert row["entry_edge"] > 0.0
+    assert row["execution_uncertainty_reserve"] == pytest.approx(0.10)
+    assert row["net_entry_edge"] < 0.0
+    assert not bool(row["zero_notional_signal"])
+    assert row["candidate_status"] == "edge_below_execution_uncertainty_reserve"
+    assert summary["zero_notional_signals"] == 0
+
+
+def test_v2_rejects_unfrozen_weather_innovation_in_forward() -> None:
+    spec = {
+        "model_id": module.PRE_CROSS_MODEL_ID,
+        "effective_from_target_date": "2026-08-12",
+        "posterior": {
+            "exponent": 2.0,
+            "weather_innovation_alpha": 0.25,
+        },
+    }
+
+    with pytest.raises(ValueError, match="selected alpha must remain zero"):
+        module.score_tokyo_pre_cross_forward(
+            [
+                _pre_cross_row(
+                    event_id="unsettled",
+                    decision="2026-08-12T01:00:00Z",
+                    jma_temp_c=31.3,
+                    won_no=None,
+                )
+            ],
+            frozen_spec=spec,
+        )

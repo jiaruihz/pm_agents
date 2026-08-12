@@ -1,23 +1,38 @@
-# Tokyo first pre-cross market sharpening（2026-08-12）
+# Tokyo first pre-cross market-anchored strategy（2026-08-12，v2）
 
-Status: `shadow_candidate / point-profitable / live gates FAIL / zero-notional only`
+Status: `inconclusive / reused-audit profitable / clean-forward accumulating / zero-notional only`
 
 ## 结论与动作
 
 Tokyo 当前最值得继续积累的表达不是“天气模型取代盘口”，而是：每档只在 JMA 首次进入
 `current +0.3/+0.4°C`、但 JMA native rounding 仍未跨到下一档时判断一次；盘口若仍偏 YES，保持原概率，
-盘口已偏 NO 时才把同刻 market odds 有界强化。7 月开发窗选择的冻结式为：
+盘口已偏 NO 时才把同刻 market odds 有界强化。v2 不增加高价 hard filter，而是为同刻盘口的不确定性预留
+`max(1 tick, half spread)`：
 
 ```text
 P_market_NO < 0.5: P_post = P_market_NO
 P_market_NO >= 0.5: logit(P_post) = 2 × logit(P_market_NO)
-BUY 5 NO iff P_post > five-share ask VWAP + official Weather fee
+reserve = max(0.001, 0.5 × (NO ask - NO bid))
+BUY 5 NO iff P_post > five-share ask VWAP + official Weather fee + reserve
 ```
 
-8/1–8/11 raw-exact 重放为 29 笔、28 胜，投入 `$136.8457`，fee 后 PnL `+$3.1543`、
-ROI `+2.30%`。但 target-date bootstrap 95% CI 为 `[-1.19%, +5.65%]`，Brier 相对同 rows market
-的改善 CI 也跨 0；并且这个窗口在形成方向前已经被查看过，所以只能叫 reused audit，不能叫 clean forward。
-候选已冻结从 8/12 起离线 zero-notional 评分；不接 intent/order/fill，不改 live。
+8/1–8/11 raw-exact reused audit 从 v1 的 29 笔降为 12 笔，12 胜，投入 `$53.4381`，fee 后
+PnL `+$6.5619`、ROI `+12.28%`，target-date bootstrap 95% CI `[+7.23%, +17.69%]`。但该窗口已经被用于
+发现执行问题，不能冒充 clean forward；同 rows Brier 相对 market 的 CI 也仍跨 0。v2 已冻结从 8/12 起离线
+zero-notional 评分，不接 intent/order/fill，不改 live。
+
+## v2 做了什么、没做什么
+
+天气路径 challenger 用长历史构造
+`logit(P_full path) - logit(P_clock + margin base)`，只在 7 月 development 的 9 个候选/6 日选择
+`alpha ∈ {0, 0.25, 0.5}`。三者 Brier 分别为 `0.01643 / 0.01725 / 0.01809`，因此冻结 `alpha=0`：
+当前 exact-clock 可用的 slope、pullback、remaining heat 没有提供盘口之外的稳定概率增量，不能为了“看起来更像天气模型”
+硬塞进 posterior。这个 negative result 被保留，后续只有新 clean-forward 日期能推翻。
+
+真正进入 v2 的是执行不确定性：ask 已计 taker 成本和官方 fee，但宽 spread 仍表示 quote/latency/adverse-selection
+风险。统一扣除半个 spread（最低 1 tick），不是按 98¢、90¢ 做事后价格切片。8/1–11 v2 入场 ask 均值
+`88.61¢`、中位 `94.35¢`、范围 `70.0–99.8¢`；`≥98¢` 仅 2/12，而 v1 为 18/29。高价并非绝对禁止：
+只有 posterior edge 足以覆盖 fee 和 spread reserve 才保留。
 
 ## 固定目标、时钟与 grain
 
@@ -40,11 +55,12 @@ ROI `+2.30%`。但 target-date bootstrap 95% CI 为 `[-1.19%, +5.65%]`，Brier �
 | 8/1–8/11 strict raw-exact expression | 554 | 11 | reused audit |
 | development 首次 pre-cross 候选 | 9 | 6 | exponent 选择 |
 | reused-audit 首次 pre-cross 候选 | 34 | 11 | probability 与 execution 复核 |
-| reused-audit selected trades | 29 | 11 | 真实 5-share depth + fee，28 胜 1 负 |
+| reused-audit v1 fee-only trades | 29 | 11 | 真实 5-share depth + fee，28 胜 1 负 |
+| reused-audit v2 reserve trades | 12 | 7 | 真实 5-share depth + fee + half-spread reserve，12 胜 |
 
-Signal funnel：`678 expression rows → 68 mechanism rows → 43 first date-bracket candidates → 36 selected
-development/audit expressions`。Evidence funnel：开发 7 笔只有 top-of-book proxy、无 5-share depth；严格审计
-29 笔全部有 exact 5-share ask depth、binary settlement 和 fee。
+Signal funnel：`678 expression rows → 68 mechanism rows → 43 first date-bracket candidates → 15 v2 selected
+development/audit expressions`。Evidence funnel：开发 3 笔只有 top-of-book proxy、无 5-share depth；严格审计
+12 笔全部有 exact 5-share ask depth、binary settlement 和 fee。
 
 ## 结构性修复
 
@@ -80,23 +96,27 @@ CI `[-0.03821,-0.01351]`。主指标 Brier 仍未显著通过，因此 baseline 
 
 ## 交易层与错误
 
-29 笔中唯一失败是 8/11 12:26:55 JST 的 `32 NO`：JMA `32.3°C`，market NO `0.6295`，
+v1 29 笔中唯一失败是 8/11 12:26:55 JST 的 `32 NO`：JMA `32.3°C`，market NO `0.6295`，
 posterior `0.7427`，5-share fee 后成本 `$3.63085`，终局停在 32，亏 `$3.63085`。同日其余五档 NO
 虽胜，整日仍净亏 `$1.31435`。这正说明“升温过程中多个低档 NO 可以同时获胜”的现金流结构成立，
 但每日最后 terminal bracket 的一次错误足以吃掉许多 99c 尘埃利润；不能用 28/29 胜率替代日期级风险。
 
-本轮不根据这一个 8/11 错例追加 remaining-hour 或价格 hard filter。后续 clean forward 必须完整记录全部
-selected/unselected candidate，等新 settled dates 后只做一次冻结复核。
+该笔 NO bid/ask 为约 `0.543/0.716`，raw posterior edge 只有 `1.65¢`，而 half-spread reserve 为 `8.65¢`，
+因此 v2 会在事前阻断；这不是知道最终停在 32 后追加 terminal-hour 或价格 gate。后续 clean forward 必须完整记录
+全部 selected/unselected candidate，不能只报成交子集。
 
 ## 三门与产物
 
-- significance：FAIL，ROI CI 下界 `<0`。
+- reused-audit execution ROI：点估和 CI PASS，但窗口已用于改模，不能充当 clean-forward significance。
 - same-denominator market baseline：Brier 点估 PASS、CI FAIL；主门 FAIL。
-- clean frozen forward：NA，8/12 才开始。
+- clean frozen forward：已开始；8/12 有 27 个 exact expressions、1 个 pre-cross candidate、0 signal，尚未结算。
+  该候选为 13:17 JST 的 `28 NO`：JMA `28.3°C`，bid/ask `0.44/0.60`，posterior `0.53994`，fee 后成本
+  `0.612`，未扣 reserve 前 edge 已是 `-7.21¢`，所以 0 signal 是无正 edge，不是市场已经 99¢ 定死。
 - live：不具备资格。
 
 可重复入口仍是 `weather_model_evaluation.tokyo_market_prior_adapter`，没有新增平行 runner。主要产物：
 
-- research artifact：`tokyo_pre_cross_market_sharpening/run_20260812_v1/pre_cross_research`
+- research artifact：`tokyo_pre_cross_market_sharpening/run_20260812_v2/pre_cross_research`
 - frozen spec：`frozen_candidate_spec.json`
-- 8/12 首次离线 forward：3 个 exact expression、0 pre-cross candidate、0 signal；未使用 settlement，notional=0。
+- 8/12 离线 forward：`tokyo_pre_cross_market_sharpening/forward_20260812_v2`；27 个 exact expression、
+  1 pre-cross candidate、0 signal；未使用 settlement，notional=0。

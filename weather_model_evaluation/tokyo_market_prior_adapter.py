@@ -78,6 +78,10 @@ PRE_CROSS_MARGIN_MIN_C = 0.3
 PRE_CROSS_MARGIN_MAX_C = 0.5
 PRE_CROSS_MARKET_CONFIRMATION_FLOOR = 0.5
 PRE_CROSS_EXPONENTS = (1.0, 1.25, 1.5, 2.0)
+PRE_CROSS_WEATHER_INNOVATION_ALPHAS = (0.0, 0.25, 0.5)
+PRE_CROSS_WEATHER_INNOVATION_CAP_LOGIT = 1.0
+PRE_CROSS_EXECUTION_MIN_RESERVE = 0.001
+PRE_CROSS_EXECUTION_SPREAD_MULTIPLIER = 0.5
 PRE_CROSS_PHYSICAL_FEATURES = (
     "jma_current_minus_current_bracket",
     "remaining_to_18h",
@@ -87,6 +91,15 @@ PRE_CROSS_PHYSICAL_FEATURES = (
     "minutes_since_jma_strict_high",
     "jma_warming_run_count",
     "jma_pullback_from_running_max_c",
+    "solar_elevation_deg",
+    "local_hour_sin",
+    "local_hour_cos",
+    "doy_sin",
+    "doy_cos",
+)
+PRE_CROSS_BASE_FEATURES = (
+    "jma_current_minus_current_bracket",
+    "remaining_to_18h",
     "solar_elevation_deg",
     "local_hour_sin",
     "local_hour_cos",
@@ -1097,6 +1110,52 @@ def _sharpen_probability(probability: pd.Series, exponent: float) -> np.ndarray:
     )
 
 
+def _market_weather_posterior(
+    market_probability: pd.Series,
+    *,
+    exponent: float,
+    weather_innovation: np.ndarray,
+    weather_alpha: float,
+    innovation_cap_logit: float = PRE_CROSS_WEATHER_INNOVATION_CAP_LOGIT,
+) -> np.ndarray:
+    """Apply only a bounded path innovation on top of the market anchor."""
+
+    clipped = np.clip(
+        market_probability.to_numpy(dtype=float), 1e-6, 1.0 - 1e-6
+    )
+    market_logit = np.log(clipped / (1.0 - clipped))
+    innovation = np.clip(
+        np.asarray(weather_innovation, dtype=float),
+        -float(innovation_cap_logit),
+        float(innovation_cap_logit),
+    )
+    posterior_logit = (
+        float(exponent) * market_logit
+        + float(weather_alpha) * innovation
+    )
+    posterior = 1.0 / (1.0 + np.exp(-posterior_logit))
+    return np.where(
+        clipped >= PRE_CROSS_MARKET_CONFIRMATION_FLOOR,
+        posterior,
+        clipped,
+    )
+
+
+def _execution_uncertainty_reserve(
+    bid: pd.Series,
+    ask: pd.Series,
+    *,
+    minimum_reserve: float = PRE_CROSS_EXECUTION_MIN_RESERVE,
+    spread_multiplier: float = PRE_CROSS_EXECUTION_SPREAD_MULTIPLIER,
+) -> np.ndarray:
+    """Reserve one tick or half the observed spread, whichever is larger."""
+
+    spread = np.maximum(
+        ask.to_numpy(dtype=float) - bid.to_numpy(dtype=float), 0.0
+    )
+    return np.maximum(float(minimum_reserve), float(spread_multiplier) * spread)
+
+
 def build_tokyo_pre_cross_candidates(
     frame: pd.DataFrame,
     *,
@@ -1208,6 +1267,19 @@ def score_tokyo_pre_cross_forward(
     exponent = float(frozen_spec["posterior"]["exponent"])
     if exponent not in PRE_CROSS_EXPONENTS:
         raise ValueError(f"unfrozen Tokyo pre-cross exponent={exponent}")
+    weather_alpha = float(
+        frozen_spec.get("posterior", {}).get("weather_innovation_alpha", 0.0)
+    )
+    if weather_alpha != 0.0:
+        raise ValueError(
+            "Tokyo pre-cross forward does not load a weather innovation model; "
+            "the development-selected alpha must remain zero"
+        )
+    reserve_spec = frozen_spec.get("execution_uncertainty_reserve") or {}
+    minimum_reserve = float(reserve_spec.get("minimum_reserve", 0.0))
+    spread_multiplier = float(reserve_spec.get("spread_multiplier", 0.0))
+    if minimum_reserve < 0.0 or spread_multiplier < 0.0:
+        raise ValueError("Tokyo pre-cross execution reserve must be non-negative")
     candidates, funnel = build_tokyo_pre_cross_candidates(
         pd.DataFrame(expression_rows), require_settled=False
     )
@@ -1220,13 +1292,25 @@ def score_tokyo_pre_cross_forward(
     candidates["entry_edge"] = (
         candidates["p_pre_cross_posterior"] - candidates["effective_cost_5"]
     )
+    candidates["execution_uncertainty_reserve"] = (
+        _execution_uncertainty_reserve(
+            candidates["no_best_bid"],
+            candidates["no_best_ask"],
+            minimum_reserve=minimum_reserve,
+            spread_multiplier=spread_multiplier,
+        )
+    )
+    candidates["net_entry_edge"] = (
+        candidates["entry_edge"]
+        - candidates["execution_uncertainty_reserve"]
+    )
     executable = (
         candidates["cash_cost_5"].gt(0.0)
         & candidates["effective_cost_5"].gt(0.0)
         & candidates["displayed_ask_depth_5"].eq(1)
     )
     candidates["zero_notional_signal"] = executable & candidates[
-        "entry_edge"
+        "net_entry_edge"
     ].gt(0.0)
     candidates["signal_notional"] = 0.0
     candidates["side"] = "NO"
@@ -1234,14 +1318,31 @@ def score_tokyo_pre_cross_forward(
     candidates["candidate_status"] = np.where(
         candidates["zero_notional_signal"],
         "eligible_zero_notional",
-        np.where(executable, "no_positive_edge", "execution_depth_blocked"),
+        np.where(
+            executable,
+            np.where(
+                candidates["entry_edge"].gt(0.0),
+                "edge_below_execution_uncertainty_reserve",
+                "no_positive_edge",
+            ),
+            "execution_depth_blocked",
+        ),
     )
     summary = {
-        "schema_version": "tokyo_pre_cross_zero_notional_forward_v1",
+        "schema_version": (
+            "tokyo_pre_cross_zero_notional_forward_v2"
+            if reserve_spec
+            else "tokyo_pre_cross_zero_notional_forward_v1"
+        ),
         "model_id": PRE_CROSS_MODEL_ID,
         "candidate_grain_version": PRE_CROSS_CANDIDATE_GRAIN_VERSION,
         "effective_from_target_date": effective_from,
         "posterior_exponent": exponent,
+        "weather_innovation_alpha": weather_alpha,
+        "execution_uncertainty_reserve": {
+            "minimum_reserve": minimum_reserve,
+            "spread_multiplier": spread_multiplier,
+        },
         "signal_funnel": funnel,
         "forward_candidates": int(len(candidates)),
         "forward_target_dates": int(candidates["target_date"].nunique()),
@@ -1303,7 +1404,7 @@ def _historical_pre_cross_candidates(path: Path) -> tuple[pd.DataFrame, dict[str
 
 def _fit_tokyo_pre_cross_physical_model(
     history: pd.DataFrame,
-) -> tuple[Pipeline, pd.DataFrame, dict[str, Any]]:
+) -> tuple[Pipeline, Pipeline, pd.DataFrame, dict[str, Any]]:
     train = history.loc[history["target_date"].le("2025-06-30")].copy()
     calibration = history.loc[
         history["target_date"].between("2025-07-01", "2025-12-31")
@@ -1383,6 +1484,74 @@ def _fit_tokyo_pre_cross_physical_model(
         final_train["won_no"],
         model__sample_weight=_date_equal_fit_weights(final_train),
     )
+    base_selection_rows: list[dict[str, Any]] = []
+    base_fitted: dict[float, Pipeline] = {}
+    for regularization in candidates:
+        base_model = Pipeline(
+            [
+                ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+                ("scale", StandardScaler()),
+                (
+                    "model",
+                    LogisticRegression(
+                        C=regularization,
+                        max_iter=1000,
+                        random_state=20260812,
+                    ),
+                ),
+            ]
+        )
+        base_model.fit(
+            train[list(PRE_CROSS_BASE_FEATURES)],
+            train["won_no"],
+            model__sample_weight=_date_equal_fit_weights(train),
+        )
+        base_probability = base_model.predict_proba(
+            calibration[list(PRE_CROSS_BASE_FEATURES)]
+        )[:, 1]
+        base_selection_rows.append(
+            {
+                "regularization_c": regularization,
+                "calibration_brier": _date_equal_brier(
+                    calibration, base_probability
+                ),
+            }
+        )
+        base_fitted[regularization] = base_model
+    selected_base = min(
+        base_selection_rows,
+        key=lambda row: (row["calibration_brier"], row["regularization_c"]),
+    )["regularization_c"]
+    final_base_model = Pipeline(
+        [
+            ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+            ("scale", StandardScaler()),
+            (
+                "model",
+                LogisticRegression(
+                    C=float(selected_base),
+                    max_iter=1000,
+                    random_state=20260812,
+                ),
+            ),
+        ]
+    )
+    final_base_model.fit(
+        final_train[list(PRE_CROSS_BASE_FEATURES)],
+        final_train["won_no"],
+        model__sample_weight=_date_equal_fit_weights(final_train),
+    )
+    for name, split in (("calibration", calibration), ("physical_audit", audit)):
+        base_probability = base_fitted[float(selected_base)].predict_proba(
+            split[list(PRE_CROSS_BASE_FEATURES)]
+        )[:, 1]
+        split_scores.append(
+            {
+                "split": name,
+                "model": "clock_and_margin_base",
+                **binary_score(split, base_probability, label_column="won_no"),
+            }
+        )
     summary = {
         "target": "P(final official exact bracket leaves current bracket upward)",
         "features": list(PRE_CROSS_PHYSICAL_FEATURES),
@@ -1396,6 +1565,14 @@ def _fit_tokyo_pre_cross_physical_model(
         "selection_metric": "target-date-equal Brier",
         "selection_candidates": selection_rows,
         "selected_regularization_c": float(selected),
+        "weather_innovation_reference": {
+            "features": list(PRE_CROSS_BASE_FEATURES),
+            "selection_candidates": base_selection_rows,
+            "selected_regularization_c": float(selected_base),
+            "definition": (
+                "logit(P_full_path) - logit(P_clock_and_margin_base)"
+            ),
+        },
         "train": {
             "end": "2025-06-30",
             "rows": int(len(train)),
@@ -1419,7 +1596,7 @@ def _fit_tokyo_pre_cross_physical_model(
             "target_dates": int(final_train["target_date"].nunique()),
         },
     }
-    return final_model, pd.DataFrame(split_scores), summary
+    return final_model, final_base_model, pd.DataFrame(split_scores), summary
 
 
 def _roi_bootstrap(
@@ -1464,7 +1641,9 @@ def run_tokyo_pre_cross_research(
     historical_feature_rows: Path,
     clean_forward_start: str,
     bootstrap_draws: int = 20_000,
-) -> tuple[dict[str, Any], dict[str, pd.DataFrame], Pipeline]:
+) -> tuple[
+    dict[str, Any], dict[str, pd.DataFrame], dict[str, Pipeline]
+]:
     """Fit and replay the bounded Tokyo pre-cross market posterior."""
 
     if bootstrap_draws <= 0:
@@ -1474,7 +1653,7 @@ def run_tokyo_pre_cross_research(
     history, history_funnel = _historical_pre_cross_candidates(
         historical_feature_rows
     )
-    physical_model, physical_scores, physical_summary = (
+    physical_model, base_model, physical_scores, physical_summary = (
         _fit_tokyo_pre_cross_physical_model(history)
     )
     for feature in PRE_CROSS_PHYSICAL_FEATURES:
@@ -1488,6 +1667,23 @@ def run_tokyo_pre_cross_research(
     candidates["p_physical_source_only"] = physical_model.predict_proba(
         candidates[list(PRE_CROSS_PHYSICAL_FEATURES)]
     )[:, 1]
+    candidates["p_clock_and_margin_base"] = base_model.predict_proba(
+        candidates[list(PRE_CROSS_BASE_FEATURES)]
+    )[:, 1]
+    physical_clipped = np.clip(
+        candidates["p_physical_source_only"].to_numpy(dtype=float),
+        1e-6,
+        1.0 - 1e-6,
+    )
+    base_clipped = np.clip(
+        candidates["p_clock_and_margin_base"].to_numpy(dtype=float),
+        1e-6,
+        1.0 - 1e-6,
+    )
+    candidates["weather_path_innovation_logit"] = (
+        np.log(physical_clipped / (1.0 - physical_clipped))
+        - np.log(base_clipped / (1.0 - base_clipped))
+    )
     development = candidates.loc[
         candidates["evaluation_role"].eq("development_only")
     ].copy()
@@ -1510,9 +1706,39 @@ def run_tokyo_pre_cross_research(
         selection_rows,
         key=lambda row: (row["development_brier"], row["exponent"]),
     )["exponent"]
+    innovation_selection_rows = []
+    for alpha in PRE_CROSS_WEATHER_INNOVATION_ALPHAS:
+        probability = _market_weather_posterior(
+            development["market_no_probability"],
+            exponent=float(selected_exponent),
+            weather_innovation=development[
+                "weather_path_innovation_logit"
+            ].to_numpy(dtype=float),
+            weather_alpha=alpha,
+        )
+        innovation_selection_rows.append(
+            {
+                "weather_innovation_alpha": alpha,
+                "development_brier": _date_equal_brier(
+                    development, probability
+                ),
+            }
+        )
+    selected_weather_alpha = min(
+        innovation_selection_rows,
+        key=lambda row: (
+            row["development_brier"],
+            row["weather_innovation_alpha"],
+        ),
+    )["weather_innovation_alpha"]
     candidates["p_raw_market"] = candidates["market_no_probability"]
-    candidates["p_pre_cross_posterior"] = _sharpen_probability(
-        candidates["market_no_probability"], float(selected_exponent)
+    candidates["p_pre_cross_posterior"] = _market_weather_posterior(
+        candidates["market_no_probability"],
+        exponent=float(selected_exponent),
+        weather_innovation=candidates[
+            "weather_path_innovation_logit"
+        ].to_numpy(dtype=float),
+        weather_alpha=float(selected_weather_alpha),
     )
 
     sensitivity_rows = []
@@ -1541,8 +1767,9 @@ def run_tokyo_pre_cross_research(
             )
         for model, column in (
             ("raw_market", "p_raw_market"),
+            ("clock_and_margin_base", "p_clock_and_margin_base"),
             ("physical_source_only", "p_physical_source_only"),
-            ("pre_cross_market_posterior", "p_pre_cross_posterior"),
+            ("pre_cross_market_posterior_v2", "p_pre_cross_posterior"),
         ):
             score_rows.append(
                 {
@@ -1557,7 +1784,7 @@ def run_tokyo_pre_cross_research(
             bootstrap_rows.append(
                 {
                     "evaluation_slice": evaluation_slice,
-                    "model": "pre_cross_market_posterior",
+                    "model": "pre_cross_market_posterior_v2",
                     "baseline": "raw_market",
                     "metric": metric,
                     **date_block_bootstrap_delta(
@@ -1594,29 +1821,87 @@ def run_tokyo_pre_cross_research(
     candidates["replay_cash_cost_5"] = exact_cash.fillna(
         SHARES * candidates["proxy_effective_cost_5"]
     )
-    candidates["entry_edge"] = (
+    candidates["entry_edge_before_reserve"] = (
         candidates["p_pre_cross_posterior"]
         - candidates["replay_effective_cost_5"]
     )
-    candidates["selected_trade"] = candidates["entry_edge"].gt(0.0)
+    candidates["execution_uncertainty_reserve"] = (
+        _execution_uncertainty_reserve(
+            candidates["no_best_bid"], candidates["no_best_ask"]
+        )
+    )
+    candidates["net_entry_edge"] = (
+        candidates["entry_edge_before_reserve"]
+        - candidates["execution_uncertainty_reserve"]
+    )
+    candidates["selected_fee_only_v1"] = candidates[
+        "entry_edge_before_reserve"
+    ].gt(0.0)
+    candidates["selected_trade"] = candidates["net_entry_edge"].gt(0.0)
     candidates["execution_evidence"] = np.where(
         candidates["evaluation_role"].eq("strict_pit_forward"),
         "exact_5_share_depth",
         "top_of_book_proxy_no_depth",
     )
-    trades = candidates.loc[candidates["selected_trade"]].copy()
-    trades["cash_cost_5"] = trades["replay_cash_cost_5"]
-    trades["effective_cost_5"] = trades["replay_effective_cost_5"]
-    trades["pnl_5"] = np.where(
-        trades["won_no"].eq(1),
-        SHARES - trades["cash_cost_5"],
-        -trades["cash_cost_5"],
+    candidates["pnl_5_if_bought"] = np.where(
+        candidates["won_no"].eq(1),
+        SHARES - candidates["replay_cash_cost_5"],
+        -candidates["replay_cash_cost_5"],
     )
-    trade_summary = {}
-    for role, subset in trades.groupby("evaluation_role", sort=True):
-        trade_summary[role_mapping.get(role, role)] = _roi_bootstrap(
-            subset, draws=bootstrap_draws, seed=20260812
-        )
+
+    def replay_selected(
+        selection_column: str,
+    ) -> tuple[pd.DataFrame, dict[str, Any]]:
+        selected = candidates.loc[candidates[selection_column]].copy()
+        selected["cash_cost_5"] = selected["replay_cash_cost_5"]
+        selected["effective_cost_5"] = selected["replay_effective_cost_5"]
+        selected["pnl_5"] = selected["pnl_5_if_bought"]
+        result = {}
+        for role, subset in selected.groupby("evaluation_role", sort=True):
+            result[role_mapping.get(role, role)] = _roi_bootstrap(
+                subset, draws=bootstrap_draws, seed=20260812
+            )
+        return selected, result
+
+    trades_fee_only, fee_only_trade_summary = replay_selected(
+        "selected_fee_only_v1"
+    )
+    trades, trade_summary = replay_selected("selected_trade")
+
+    execution_sensitivity_rows = []
+    reserve_variants = {
+        "fee_only_v1": np.zeros(len(candidates), dtype=float),
+        "one_tick_only": np.full(
+            len(candidates), PRE_CROSS_EXECUTION_MIN_RESERVE, dtype=float
+        ),
+        "half_spread_or_tick_v2": candidates[
+            "execution_uncertainty_reserve"
+        ].to_numpy(dtype=float),
+        "full_spread_or_tick": _execution_uncertainty_reserve(
+            candidates["no_best_bid"],
+            candidates["no_best_ask"],
+            spread_multiplier=1.0,
+        ),
+    }
+    for variant, reserve in reserve_variants.items():
+        selected = candidates["entry_edge_before_reserve"].to_numpy(
+            dtype=float
+        ) > reserve
+        for role, subset in candidates.assign(_selected=selected).groupby(
+            "evaluation_role", sort=True
+        ):
+            chosen = subset.loc[subset["_selected"]].copy()
+            chosen["cash_cost_5"] = chosen["replay_cash_cost_5"]
+            chosen["pnl_5"] = chosen["pnl_5_if_bought"]
+            execution_sensitivity_rows.append(
+                {
+                    "evaluation_slice": role_mapping.get(role, role),
+                    "reserve_variant": variant,
+                    **_roi_bootstrap(
+                        chosen, draws=bootstrap_draws, seed=20260812
+                    ),
+                }
+            )
 
     score_table = pd.DataFrame(score_rows)
     bootstrap_table = pd.DataFrame(bootstrap_rows)
@@ -1628,12 +1913,12 @@ def run_tokyo_pre_cross_research(
     ].iloc[0]
     audit_trade = trade_summary.get("reused_audit_not_clean_forward", {})
     development_trade = trade_summary.get("parameter_development", {})
-    point_profitable = bool(
+    point_profitable_both_slices = bool(
         (development_trade.get("pnl_5") or 0.0) > 0.0
         and (audit_trade.get("pnl_5") or 0.0) > 0.0
     )
     summary = {
-        "schema_version": "tokyo_pre_cross_market_sharpening_research_v1",
+        "schema_version": "tokyo_pre_cross_market_sharpening_research_v2",
         "model_id": PRE_CROSS_MODEL_ID,
         "candidate_grain_version": PRE_CROSS_CANDIDATE_GRAIN_VERSION,
         "city": "Tokyo",
@@ -1659,6 +1944,28 @@ def run_tokyo_pre_cross_research(
             "selection_trials_k": len(PRE_CROSS_EXPONENTS),
             "selection_table": selection_rows,
             "selected_exponent": float(selected_exponent),
+            "weather_path_innovation": {
+                "formula": (
+                    "clip(logit(P_full_path) - "
+                    "logit(P_clock_and_margin_base), -1, +1)"
+                ),
+                "candidate_alphas": list(
+                    PRE_CROSS_WEATHER_INNOVATION_ALPHAS
+                ),
+                "selection_metric": (
+                    "target-date-equal Brier on development_only"
+                ),
+                "selection_trials_k": len(
+                    PRE_CROSS_WEATHER_INNOVATION_ALPHAS
+                ),
+                "selection_table": innovation_selection_rows,
+                "selected_alpha": float(selected_weather_alpha),
+                "result": (
+                    "rejected_as_probability_update"
+                    if float(selected_weather_alpha) == 0.0
+                    else "retained_bounded_update"
+                ),
+            },
         },
         "denominator_scope": (
             "Tokyo rows in the supplied expression artifact with causal two-sided "
@@ -1681,8 +1988,23 @@ def run_tokyo_pre_cross_research(
         },
         "trade_expression": (
             "BUY 5 NO once at the first pre-cross state only when posterior exceeds "
-            "official-fee-adjusted five-share cost; never wait for a later cheaper quote"
+            "official-fee-adjusted five-share cost plus max(one tick, half spread); "
+            "never wait for a later cheaper quote"
         ),
+        "execution_uncertainty_reserve": {
+            "formula": "max(minimum_reserve, spread_multiplier * (ask - bid))",
+            "minimum_reserve": PRE_CROSS_EXECUTION_MIN_RESERVE,
+            "spread_multiplier": PRE_CROSS_EXECUTION_SPREAD_MULTIPLIER,
+            "reason": (
+                "reserve observed quote uncertainty/adverse selection without a "
+                "hard odds band"
+            ),
+            "parameter_selection": (
+                "mechanism-fixed before clean forward; not selected on "
+                "reused-audit ROI"
+            ),
+        },
+        "fee_only_v1_trade_summary": fee_only_trade_summary,
         "trade_summary": trade_summary,
         "live_gates": {
             "absolute_fee_roi_significant": bool(
@@ -1695,9 +2017,10 @@ def run_tokyo_pre_cross_research(
             "clean_frozen_forward": "NA",
             "live_eligible": False,
         },
-        "research_status": (
-            "shadow_candidate" if point_profitable else "inconclusive"
+        "point_profitable_on_development_and_reused_audit": (
+            point_profitable_both_slices
         ),
+        "research_status": "inconclusive_zero_notional_candidate",
         "action": (
             f"freeze zero-notional forward from {clean_forward_start}; no live change"
         ),
@@ -1711,8 +2034,16 @@ def run_tokyo_pre_cross_research(
         "sensitivity": pd.DataFrame(sensitivity_rows),
         "physical_scores": physical_scores,
         "trades": trades,
+        "trades_fee_only_v1": trades_fee_only,
+        "weather_innovation_selection": pd.DataFrame(
+            innovation_selection_rows
+        ),
+        "execution_sensitivity": pd.DataFrame(execution_sensitivity_rows),
     }
-    return summary, frames, physical_model
+    return summary, frames, {
+        "full_path_negative_control": physical_model,
+        "clock_and_margin_reference": base_model,
+    }
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -1875,7 +2206,7 @@ def main(argv: list[str] | None = None) -> int:
         clean_forward_start = args.pre_cross_clean_forward_start or (
             datetime.fromisoformat(args.end_date) + timedelta(days=1)
         ).date().isoformat()
-        research_summary, frames, physical_model = run_tokyo_pre_cross_research(
+        research_summary, frames, physical_models = run_tokyo_pre_cross_research(
             rows,
             historical_feature_rows=args.pre_cross_history_rows,
             clean_forward_start=clean_forward_start,
@@ -1885,9 +2216,10 @@ def main(argv: list[str] | None = None) -> int:
         research_dir.mkdir(parents=True, exist_ok=True)
         for name, frame in frames.items():
             frame.to_csv(research_dir / f"{name}.csv", index=False)
-        joblib.dump(physical_model, research_dir / "physical_negative_control.joblib")
+        for name, model in physical_models.items():
+            joblib.dump(model, research_dir / f"{name}.joblib")
         frozen_candidate = {
-            "schema_version": "tokyo_pre_cross_zero_notional_candidate_v1",
+            "schema_version": "tokyo_pre_cross_zero_notional_candidate_v2",
             "model_id": PRE_CROSS_MODEL_ID,
             "candidate_grain_version": PRE_CROSS_CANDIDATE_GRAIN_VERSION,
             "effective_from_target_date": clean_forward_start,
@@ -1897,12 +2229,21 @@ def main(argv: list[str] | None = None) -> int:
             "posterior": {
                 "formula": research_summary["posterior"]["formula"],
                 "exponent": research_summary["posterior"]["selected_exponent"],
+                "weather_innovation_alpha": research_summary["posterior"][
+                    "weather_path_innovation"
+                ]["selected_alpha"],
+            },
+            "execution_uncertainty_reserve": {
+                "formula": "max(minimum_reserve, spread_multiplier * (ask - bid))",
+                "minimum_reserve": PRE_CROSS_EXECUTION_MIN_RESERVE,
+                "spread_multiplier": PRE_CROSS_EXECUTION_SPREAD_MULTIPLIER,
             },
             "side": "NO",
             "shares": SHARES,
             "eligibility": (
                 "first state entry per target_date/bracket and posterior greater "
-                "than official-fee-adjusted five-share executable cost"
+                "than official-fee-adjusted five-share executable cost plus the "
+                "execution uncertainty reserve"
             ),
             "deployment_status": "not_deployed_offline_frozen_candidate",
             "live_notional": 0.0,
@@ -1928,6 +2269,9 @@ def main(argv: list[str] | None = None) -> int:
             "selected_exponent": research_summary["posterior"][
                 "selected_exponent"
             ],
+            "selected_weather_innovation_alpha": research_summary["posterior"][
+                "weather_path_innovation"
+            ]["selected_alpha"],
             "clean_forward_start": clean_forward_start,
             "live_behavior_changed": False,
         }
