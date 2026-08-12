@@ -20,9 +20,13 @@ innovation，并不是真实 provider-run first-seen；`min ask` 又没有 first
 3,406 actions / 4 dates 上选择0笔，状态保持 `no_admitted_quote_rejected_for_expression`。
 
 真实 run-aware D-1 `18–24h` consensus revision 对30m盘口方向有弱信号，但 fixed 2°F distribution 的
-direct ask→future bid 在官方双边fee与每边1 tick slippage后，30/60/90m全分母ROI分别为
-`-12.68%/-11.98%/-13.47%`；latest-two-date holdout为`-9.21%/-8.79%/-8.40%`。当前只够支持扩
+direct ask→future bid 在官方双边fee与每边1¢ slippage后，30/60/90m全分母ROI分别为
+`-22.62%/-22.27%/-24.70%`；latest-two-date holdout为`-15.74%/-15.33%/-14.96%`。当前只够支持扩
 event-driven WS 采集，不足以生成交易策略。
+
+时钟复核又发现：当时3,638个所谓collector-exact provider events使用的是HTTP前poll-start clock，相对raw
+响应完成提前median 6.32s、p95 14.19s、max 28.34s，现已全部降级为legacy development。新代码保存
+per-model request/response clock，只有`collector_response_complete`进入fresh forward；旧JSONL不重写。
 
 旧单腿 maker selector 有结构性错误，不是简单排除 `0.1¢ tick` 即可修复：它预测
 `h60_relative_bid_move`，却把相对整条 ladder 的涨幅直接当绝对现金 markout；阈值又按假设

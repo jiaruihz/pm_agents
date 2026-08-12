@@ -346,6 +346,8 @@ def test_d1_capture_demand_adds_revision_path_and_neighbors(tmp_path) -> None:
             {
                 "schema_version": "weather_market_capture_demand_v1",
                 "capture_request_id": "request-1",
+                "producer": "weather_data_feed_service.forecast_run_capture",
+                "reason": "d1_provider_run_first_seen",
                 "city": "Busan",
                 "target_date": "2026-08-10",
                 "requested_at_utc": "2026-08-09T02:59:00Z",
@@ -378,12 +380,57 @@ def test_d1_capture_demand_adds_revision_path_and_neighbors(tmp_path) -> None:
         selection,
         market_payload=future,
         demands=demand,
+        allowed_cities={"Busan"},
     )
     assert len(selected.tokens) == 8
     assert selected.city_token_counts == {"Busan": 8}
     assert selected.capture_demands[0]["resolution_status"] == "resolved_revision_strip"
     assert selected.capture_demands[0]["resolved_token_count"] == 8
     assert selected.capture_demands[0]["resolved_brackets"] == ["31", "32", "33", "34"]
+
+
+def test_capture_demand_rejects_untrusted_or_over_budget_request() -> None:
+    base = {
+        "schema_version": "weather_market_capture_demand_v1",
+        "capture_request_id": "request-1",
+        "producer": "weather_data_feed_service.forecast_run_capture",
+        "reason": "d1_provider_run_first_seen",
+        "city": "Busan",
+        "target_date": "2026-08-09",
+        "requested_at_utc": "2026-08-09T02:59:00Z",
+        "expires_at_utc": "2026-08-09T04:59:00Z",
+        "max_token_count": 12,
+        "ladder_scope": "revision_path_plus_one_neighbor_yes_no",
+        "consensus_before_native": 32.0,
+        "consensus_after_native": 33.0,
+    }
+    selection = Selection(
+        tokens=set(),
+        token_rows={},
+        city_token_counts={},
+        active_brackets={},
+        grace_brackets={},
+        scheduled_cities=[],
+        research_cities=[],
+        burst_cities=[],
+        missing_observation_cities=[],
+        invalidation_state={},
+    )
+    rejected = apply_market_capture_demands(
+        selection,
+        market_payload=_market_payload(),
+        demands=[{**base, "producer": "unknown"}],
+        allowed_cities={"Busan"},
+    )
+    assert rejected.capture_demands[0]["resolution_status"] == "invalid_capture_demand_contract"
+    capped = apply_market_capture_demands(
+        selection,
+        market_payload=_market_payload(),
+        demands=[base],
+        allowed_cities={"Busan"},
+        max_active_tokens=6,
+    )
+    assert capped.capture_demands[0]["resolution_status"] == "global_active_token_budget_exceeded"
 
 
 def test_collector_publishes_append_only_subscription_epoch_lineage(tmp_path) -> None:

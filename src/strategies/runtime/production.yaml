@@ -178,6 +178,10 @@ managed_runtimes:
     accepted_health_statuses: [ok, ok_with_discovery_reuse]
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
+    launch_environment:
+      WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
+      WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
+      WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "12"
 
   - instance_id: weather_forecast_run_capture_v1
     tmux_session: weather_forecast_run_capture_v1
@@ -191,6 +195,11 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    # Explicitly disabled until the one-city collector deploy is confirmed.
+    launch_environment:
+      WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_CITIES: ""
+      WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_TTL_MIN: "120"
+      WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_MAX_RUN_AGE_HOURS: "24"
 
   - instance_id: weather_live_cross_observations
     tmux_session: weather_live_cross_observations

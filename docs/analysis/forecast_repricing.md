@@ -14,12 +14,18 @@ Observed-touch 后的 executable bid 回报在5/15/30/60/120m全部为负；coll
 已有3,638个 collector-exact D-1 provider events、13,279个complete market checkpoints；primary D-1
 18–24h中 consensus revision 的30m方向一致率约60%（独立日期仍只有6个）。每次完整 checkpoint现已保存
 native ladder真实bid/ask/depth，且同一盘口变化只归因一次。direct ask→30/60/90m future bid在官方双边fee
-和每边1 tick slippage后，fixed 2°F distribution 的30/60/90m全分母ROI为
-`-12.68%/-11.98%/-13.47%`，latest-two-date holdout为`-9.21%/-8.79%/-8.40%`，尚无 admitted trade。
+和每边1¢ slippage后，fixed 2°F distribution 的30/60/90m全分母ROI为
+`-22.62%/-22.27%/-24.70%`，latest-two-date holdout为`-15.74%/-15.33%/-14.96%`，尚无 admitted trade。
 
-下一步是仅为 Amsterdam/Busan/Helsinki/Tokyo 的新 D-1 provider run 开120分钟
+复核后上述3,638行已降级为`legacy poll-start observed`：旧collector在HTTP前取时钟，相对raw响应完成
+提前median 6.32s、p95 14.19s、max 28.34s。该秒级误差不会解释30–90m的大幅负ROI，但不能作为formal
+forward。新合同已改为每model保存request-start/response-complete，只有
+`collector_response_complete`可进入fresh forward；旧JSONL不改写。
+
+采集probe默认在production contract中明确disabled；确认后先仅为Tokyo的新 D-1 provider run开120分钟
 `revision path + 两侧邻档` WS capture demand；完整ladder继续由五分钟REST正本提供，WS只补queue/tape，避免把
-接近3GB/day的现有payload放大成全事件订阅。代码和测试已完成，但collector实际部署需单独确认。live/order均未改。
+接近3GB/day的现有payload放大成全事件订阅。consumer强制producer/reason/city/TTL、12-token全局cap；
+代码和测试已完成，但collector实际部署需单独确认。live/order均未改。
 
 ## Quote-level EV 目标修复（2026-08-12）
 

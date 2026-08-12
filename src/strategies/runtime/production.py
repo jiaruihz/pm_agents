@@ -43,6 +43,7 @@ class WeatherManagedRuntimeSpec:
     recovery_policy: str = "manual"
     uses_market_proxy: bool = False
     release_id: str | None = None
+    launch_environment: tuple[tuple[str, str], ...] = ()
 
     def resolved_start_script(self) -> Path | None:
         if self.start_script is None:
@@ -254,6 +255,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             )
         if release_id and release_id not in release_by_id:
             raise ValueError(f"unknown production release_id for {instance_id}: {release_id}")
+        launch_environment_raw = item.get("launch_environment") or {}
+        if not isinstance(launch_environment_raw, dict):
+            raise ValueError(
+                f"managed runtime launch_environment must be a mapping: {instance_id}"
+            )
         checkout_root = (
             release_by_id[release_id].checkout_root
             if release_id
@@ -306,6 +312,12 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 recovery_policy=str(item.get("recovery_policy") or "manual"),
                 uses_market_proxy=bool(item.get("uses_market_proxy", False)),
                 release_id=release_id,
+                launch_environment=tuple(
+                    sorted(
+                        (str(key), str(value))
+                        for key, value in launch_environment_raw.items()
+                    )
+                ),
             )
         )
     allowed_unmanaged = raw.get("allowed_unmanaged_sessions") or []

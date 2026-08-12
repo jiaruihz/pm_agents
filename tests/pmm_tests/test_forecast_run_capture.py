@@ -24,6 +24,16 @@ def _response() -> dict[str, object]:
     }
 
 
+def _response_clock_metadata(*, raw_hash: str, request_key: str) -> dict[str, object]:
+    return {
+        "raw_hash": raw_hash,
+        "request_key": request_key,
+        "source_fetch_start_utc": "2026-08-05T02:59:59Z",
+        "source_fetch_end_utc": "2026-08-05T03:00:00Z",
+        "source_fetch_clock_status": "response_complete",
+    }
+
+
 def test_latest_cycle_candidate_is_request_only() -> None:
     assert latest_cycle_candidate(datetime(2026, 8, 5, 5, 59, tzinfo=timezone.utc)) == "2026-08-05T00:00"
     assert latest_cycle_candidate(datetime(2026, 8, 4, 17, 59, tzinfo=timezone.utc)) == "2026-08-04T12:00"
@@ -40,6 +50,7 @@ def test_capture_materializes_d1_d2_and_missing_models() -> None:
     )
     assert [row["horizon_days_local"] for row in rows] == [1, 2]
     assert all(row["forecast_run_lineage_status"] == "identified" for row in rows)
+    assert all(row["run_first_observation"] is True for row in rows)
     assert all(batch["missing_model_keys"] == ["ecmwf_ifs025"] for batch in batches)
     assert state["latest_by_model_city_target"]
     assert state["run_history_by_model_city_target"]
@@ -201,9 +212,7 @@ def test_assigned_model_is_materialized_into_batch_summary() -> None:
         captured_at_utc=datetime(2026, 8, 5, 3, tzinfo=timezone.utc),
         city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
         responses_by_model={"gfs_global": [_response()]},
-        metadata_by_model={
-            "gfs_global": {"raw_hash": "raw", "request_key": "request"}
-        },
+        metadata_by_model={"gfs_global": _response_clock_metadata(raw_hash="raw", request_key="request")},
         expected_models=["gfs_global"],
     )
     assert all(row["assigned_model"] is True for row in rows)
@@ -230,7 +239,7 @@ def test_new_d1_run_emits_bounded_market_capture_demand_once() -> None:
         captured_at_utc=datetime(2026, 8, 5, 3, 20, tzinfo=timezone.utc),
         city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
         responses_by_model={"gfs_global": [changed]},
-        metadata_by_model={"gfs_global": {"raw_hash": "raw-2", "request_key": "request-2"}},
+        metadata_by_model={"gfs_global": _response_clock_metadata(raw_hash="raw-2", request_key="request-2")},
         expected_models=["gfs_global"],
         previous_state=state,
     )
@@ -242,20 +251,19 @@ def test_new_d1_run_emits_bounded_market_capture_demand_once() -> None:
     assert demands[0]["ladder_scope"] == "revision_path_plus_one_neighbor_yes_no"
     assert demands[0]["native_unit"] == "C"
     assert demands[0]["consensus_after_native"] > demands[0]["consensus_before_native"]
-    assert demands[0]["expires_at_utc"] == "2026-08-05T05:20:00Z"
+    assert demands[0]["expires_at_utc"] == "2026-08-05T05:00:00Z"
 
     repeated, _, _ = materialize_capture(
         run="2026-08-04T18:00",
         captured_at_utc=datetime(2026, 8, 5, 3, 30, tzinfo=timezone.utc),
         city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
         responses_by_model={"gfs_global": [changed]},
-        metadata_by_model={
-            "gfs_global": {"raw_hash": "raw-2", "request_key": "request"}
-        },
+        metadata_by_model={"gfs_global": _response_clock_metadata(raw_hash="raw-2", request_key="request")},
         expected_models=["gfs_global"],
         previous_state=state,
     )
     assert build_d1_market_capture_demands(repeated) == []
+    assert all(row["run_first_observation"] is False for row in repeated)
 
 
 def test_market_capture_demand_respects_explicit_city_and_run_age_bounds() -> None:
@@ -264,7 +272,7 @@ def test_market_capture_demand_respects_explicit_city_and_run_age_bounds() -> No
         captured_at_utc=datetime(2026, 8, 5, 3, tzinfo=timezone.utc),
         city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
         responses_by_model={"gfs_global": [_response()]},
-        metadata_by_model={"gfs_global": {"raw_hash": "raw", "request_key": "request"}},
+        metadata_by_model={"gfs_global": _response_clock_metadata(raw_hash="raw", request_key="request")},
         expected_models=["gfs_global"],
     )
     changed = _response()
@@ -274,7 +282,7 @@ def test_market_capture_demand_respects_explicit_city_and_run_age_bounds() -> No
         captured_at_utc=datetime(2026, 8, 5, 3, 20, tzinfo=timezone.utc),
         city_inputs=[{"city": "Tokyo", "timezone_name": "Asia/Tokyo"}],
         responses_by_model={"gfs_global": [changed]},
-        metadata_by_model={"gfs_global": {"raw_hash": "raw-2", "request_key": "request-2"}},
+        metadata_by_model={"gfs_global": _response_clock_metadata(raw_hash="raw-2", request_key="request-2")},
         expected_models=["gfs_global"],
         previous_state=state,
     )

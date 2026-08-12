@@ -8,6 +8,7 @@ import pandas as pd
 from weather_data_feed.historical_forecast_runs import (
     conservative_available_run,
     daily_max_rows,
+    fetch_single_run_batch,
 )
 
 
@@ -59,6 +60,32 @@ def test_daily_max_rows_uses_target_local_date_and_preserves_run() -> None:
     assert len(rows) == 1
     assert rows[0]["forecast_max_f"] == 82.0
     assert rows[0]["requested_run_utc"] == "2026-07-22T06:00:00Z"
+
+
+def test_single_run_fetch_metadata_uses_response_complete_clock(monkeypatch, tmp_path) -> None:
+    class Response:
+        content = b'{"hourly":{"time":[],"temperature_2m":[]}}'
+        text = content.decode()
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return {"hourly": {"time": [], "temperature_2m": []}}
+
+    monkeypatch.setattr(
+        "weather_data_feed.historical_forecast_runs.httpx.get",
+        lambda *args, **kwargs: Response(),
+    )
+    _, metadata = fetch_single_run_batch(
+        [{"city": "Tokyo", "latitude": 35.0, "longitude": 139.0}],
+        run="2026-08-04T18:00",
+        models=("gfs_global",),
+        cache_dir=tmp_path,
+        max_attempts=1,
+    )
+    assert metadata["source_fetch_clock_status"] == "response_complete"
+    assert metadata["source_fetch_start_utc"] <= metadata["source_fetch_end_utc"]
 
 
 def test_outer_two_selection_never_uses_deeper_rung() -> None:

@@ -156,9 +156,15 @@ def materialize_capture(
             raw_payload_hash=str(metadata.get("raw_hash") or ""),
             request_hash=str(metadata.get("request_key") or ""),
         )
+        response_complete = metadata.get("source_fetch_clock_status") == "response_complete"
         available_text = str(metadata.get("source_fetch_end_utc") or captured_text)
+        available_utc = datetime.fromisoformat(
+            available_text.replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
         for city_input, response in zip(city_inputs, responses):
-            local_today = captured_at_utc.astimezone(ZoneInfo(str(city_input["timezone_name"]))).date()
+            local_today = available_utc.astimezone(
+                ZoneInfo(str(city_input["timezone_name"]))
+            ).date()
             for horizon in (1, 2):
                 target_date = (local_today + timedelta(days=horizon)).isoformat()
                 try:
@@ -183,12 +189,18 @@ def materialize_capture(
                 run_identity = "|".join(
                     (model, str(city_input["city"]), target_date, current_run_ts)
                 )
+                run_first_observation = run_identity not in first_seen_by_run
                 run_first_seen = str(
                     first_seen_by_run.setdefault(run_identity, available_text)
                 )
                 run_first_seen_status = str(
                     first_seen_status_by_run.setdefault(
-                        run_identity, "collector_exact"
+                        run_identity,
+                        (
+                            "collector_response_complete"
+                            if response_complete
+                            else "cache_or_legacy_clock_not_response_complete"
+                        ),
                     )
                 )
                 content_identity = stable_content_hash(
@@ -261,7 +273,12 @@ def materialize_capture(
                     revision_of_content_id=(
                         str(same_run_prior.get("capture_id")) if same_run_prior else None
                     ),
+                    request_started_at_utc=metadata.get("source_fetch_start_utc"),
+                    response_received_at_utc=(
+                        metadata.get("source_fetch_end_utc") if response_complete else None
+                    ),
                 )
+                row["run_first_observation"] = run_first_observation
                 contract_rows.append(row)
                 version_state = {
                     "forecast_run_at_utc": row["forecast_run_at_utc"],
@@ -315,6 +332,8 @@ def build_d1_market_capture_demands(
         run_age = row.get("model_run_age_hours")
         if (
             int(row.get("horizon_days_local") or -1) != 1
+            or row.get("run_first_observation") is not True
+            or row.get("run_first_seen_status") != "collector_response_complete"
             or (allowed_cities is not None and str(row.get("city") or "") not in allowed_cities)
             or (
                 max_model_run_age_hours is not None
@@ -377,7 +396,10 @@ def build_d1_market_capture_demands(
             "city": city,
             "target_date": target_date,
             "forecast_run_at_utc": run_at,
-            "forecast_capture_ids": [row["capture_id"] for row in model_events],
+            "model_revisions": [
+                (row["model_key"], row["run_to_run_delta_f"])
+                for row in model_events
+            ],
         }
         output.append(
             {

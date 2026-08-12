@@ -130,8 +130,13 @@ def fetch_single_run_batch(
         else None
     )
     cache_hit = bool(cache_path and cache_path.exists())
+    source_fetch_start: datetime | None = None
+    source_fetch_end: datetime | None = None
     if cache_hit:
         data = json.loads(cache_path.read_text(encoding="utf-8"))
+        source_fetch_end = datetime.fromtimestamp(
+            cache_path.stat().st_mtime, timezone.utc
+        )
     else:
         params = {
             "latitude": ",".join(
@@ -150,6 +155,7 @@ def fetch_single_run_batch(
         last_error: Exception | None = None
         for attempt in range(max_attempts):
             try:
+                source_fetch_start = datetime.now(timezone.utc)
                 response = httpx.get(
                     OPEN_METEO_SINGLE_RUN_API,
                     params=params,
@@ -165,6 +171,7 @@ def fetch_single_run_batch(
                 if "modelRunUnavailable" in response.text:
                     raise ModelRunUnavailable(response.text.strip())
                 data = response.json()
+                source_fetch_end = datetime.now(timezone.utc)
                 break
             except ModelRunUnavailable:
                 raise
@@ -196,6 +203,15 @@ def fetch_single_run_batch(
         "raw_hash": stable_hash(data),
         "run": run,
         "models": list(models),
+        "source_fetch_start_utc": (
+            source_fetch_start.isoformat() if source_fetch_start else None
+        ),
+        "source_fetch_end_utc": source_fetch_end.isoformat() if source_fetch_end else None,
+        "source_fetch_clock_status": (
+            "response_complete"
+            if not cache_hit and source_fetch_start and source_fetch_end
+            else "cache_file_mtime_not_response_complete"
+        ),
     }
 
 

@@ -1124,6 +1124,7 @@ def _runtime_launch_env(
         ROOT / "src/strategies/runtime/production.yaml"
     )
     env["WEATHER_PRODUCTION_CONFIG"] = production_config
+    env.update(dict(runtime.launch_environment))
     update_environment = _tmux(
         spec,
         "show-options",

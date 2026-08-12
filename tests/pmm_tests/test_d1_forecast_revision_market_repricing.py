@@ -201,7 +201,7 @@ def test_provider_run_events_use_asof_model_arrivals_not_complete_batches() -> N
                 "forecast_run_at_utc": "2026-08-05T06:00:00Z",
                 "forecast_max_f": 82.0,
                 "run_first_seen_at_utc": "2026-08-06T01:10:00Z",
-                "run_first_seen_status": "collector_exact",
+                "run_first_seen_status": "collector_response_complete",
                 "assigned_model": True,
             },
         ]
@@ -399,10 +399,10 @@ def test_revision_execution_scores_independent_transition_with_real_quotes() -> 
     expected = (
         0.35
         - 0.05 * 0.35 * 0.65
-        - 0.001
+        - 0.01
         - 0.31
         - 0.05 * 0.31 * 0.69
-        - 0.001
+        - 0.01
     )
     assert abs(sigma_two["taker_pnl_per_share"] - expected) < 1e-12
     assert sigma_two["maker_fill_evidence"] == "blocked_no_own_order_queue_overlap"

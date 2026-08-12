@@ -141,6 +141,8 @@ def build_forecast_row(
     previous_content_hash: str | None = None,
     previous_content_forecast_max_f: float | None = None,
     revision_of_content_id: str | None = None,
+    request_started_at_utc: str | None = None,
+    response_received_at_utc: str | None = None,
 ) -> dict[str, Any]:
     fetched = parse_utc(source_fetched_at_utc, field="source_fetched_at_utc")
     detected = parse_utc(detected_at_utc, field="detected_at_utc")
@@ -157,6 +159,24 @@ def build_forecast_row(
         raise ValueError("clock constraint requires first_seen <= available")
     if content_first_seen > available:
         raise ValueError("clock constraint requires content_first_seen <= available")
+    request_started = (
+        parse_utc(request_started_at_utc, field="request_started_at_utc")
+        if request_started_at_utc
+        else None
+    )
+    response_received = (
+        parse_utc(response_received_at_utc, field="response_received_at_utc")
+        if response_received_at_utc
+        else None
+    )
+    if (request_started is None) != (response_received is None):
+        raise ValueError("request and response clocks must be present together")
+    if request_started is not None and not (
+        request_started <= response_received == fetched <= detected <= available
+    ):
+        raise ValueError(
+            "clock constraint requires request <= response == fetched <= detected <= available"
+        )
     run_at = parse_utc(forecast_run_at_utc, field="forecast_run_at_utc") if forecast_run_at_utc else None
     if forecast_run_lineage_status == "identified" and run_at is None:
         raise ValueError("identified run lineage requires forecast_run_at_utc")
@@ -199,6 +219,16 @@ def build_forecast_row(
         "run_first_seen_status": run_first_seen_status,
         "content_first_seen_at_utc": utc_text(content_first_seen),
         "available_at_utc": utc_text(available),
+        "request_started_at_utc": (
+            utc_text(request_started)
+            if request_started
+            else None
+        ),
+        "response_received_at_utc": (
+            utc_text(response_received)
+            if response_received
+            else None
+        ),
         "lead_hours": round((_target_start_utc(target_date) - available).total_seconds() / 3600.0, 6),
         "model_run_age_hours": round((available - run_at).total_seconds() / 3600.0, 6) if run_at else None,
         "raw_payload_hash": raw_payload_hash,

@@ -53,7 +53,7 @@ MARKOUT_MINUTES = (5, 10, 30, 60, 90)
 EXECUTION_MARKOUT_MINUTES = (30, 60, 90)
 EXECUTION_SIGMA_F = (1.5, 2.0, 2.5, 3.0)
 WEATHER_TAKER_FEE_RATE = 0.05
-EXECUTION_SLIPPAGE_PER_SIDE = 0.001
+EXECUTION_SLIPPAGE_PER_SIDE = 0.01
 
 
 def default_snapshot_dirs() -> list[Path]:
@@ -479,7 +479,7 @@ def build_provider_run_events(
         first_seen_status = str(current.get("run_first_seen_status") or "")
         collector_exact = (
             schema_version == "weather_forecast_run_row_v3"
-            and first_seen_status == "collector_exact"
+            and first_seen_status == "collector_response_complete"
         )
         event_class = (
             "forward_provider_run_first_seen"
@@ -722,24 +722,31 @@ def _canonical_book_path(books_root: Path, ladder_path: Path) -> Path | None:
 def _effective_yes_quote(
     yes_book: dict[str, Any] | None,
     no_book: dict[str, Any] | None,
-) -> tuple[float | None, float | None]:
+) -> tuple[float | None, float | None, float | None, float | None]:
     yes_summary = dict((yes_book or {}).get("summary") or {})
     no_summary = dict((no_book or {}).get("summary") or {})
-    bid_candidates: list[float] = []
-    ask_candidates: list[float] = []
+    bid_candidates: list[tuple[float, float | None]] = []
+    ask_candidates: list[tuple[float, float | None]] = []
     if yes_summary.get("best_bid") is not None:
-        bid_candidates.append(float(yes_summary["best_bid"]))
+        bid_candidates.append((float(yes_summary["best_bid"]), yes_summary.get("bid_size")))
     if no_summary.get("best_ask") is not None:
-        bid_candidates.append(1.0 - float(no_summary["best_ask"]))
+        bid_candidates.append((1.0 - float(no_summary["best_ask"]), no_summary.get("ask_size")))
     if yes_summary.get("best_ask") is not None:
-        ask_candidates.append(float(yes_summary["best_ask"]))
+        ask_candidates.append((float(yes_summary["best_ask"]), yes_summary.get("ask_size")))
     if no_summary.get("best_bid") is not None:
-        ask_candidates.append(1.0 - float(no_summary["best_bid"]))
-    bid = max(bid_candidates) if bid_candidates else None
-    ask = min(ask_candidates) if ask_candidates else None
+        ask_candidates.append((1.0 - float(no_summary["best_bid"]), no_summary.get("bid_size")))
+    bid_value = max(bid_candidates, key=lambda value: value[0]) if bid_candidates else None
+    ask_value = min(ask_candidates, key=lambda value: value[0]) if ask_candidates else None
+    bid = bid_value[0] if bid_value else None
+    ask = ask_value[0] if ask_value else None
     if bid is not None and ask is not None and ask < bid:
-        return None, None
-    return bid, ask
+        return None, None, None, None
+    return (
+        bid,
+        ask,
+        float(bid_value[1]) if bid_value and bid_value[1] is not None else None,
+        float(ask_value[1]) if ask_value and ask_value[1] is not None else None,
+    )
 
 
 def _canonical_book_clock_exact(
@@ -814,7 +821,7 @@ def load_canonical_market_checkpoints(
                     )
                     for row in referenced
                 )
-                bid, ask = _effective_yes_quote(yes, no)
+                bid, ask, bid_size, ask_size = _effective_yes_quote(yes, no)
                 bracket = str(rung.get("bracket") or "")
                 if index == 0:
                     question = f"Will Tmax be {bracket} or below?"
@@ -830,12 +837,8 @@ def load_canonical_market_checkpoints(
                         "token_id": rung.get("yes_token_id"),
                         "yes_best_bid": bid,
                         "yes_best_ask": ask,
-                        "yes_best_bid_size": (
-                            dict((yes or {}).get("summary") or {}).get("bid_size")
-                        ),
-                        "yes_best_ask_size": (
-                            dict((yes or {}).get("summary") or {}).get("ask_size")
-                        ),
+                        "yes_best_bid_size": bid_size,
+                        "yes_best_ask_size": ask_size,
                         "book_status": (
                             "effective_yes_two_sided"
                             if bid is not None and ask is not None
@@ -968,7 +971,7 @@ def revision_execution_candidates(
 
     This is deliberately conservative: one market transition is scored once,
     both sides require exact canonical clocks and a complete native ladder,
-    direct entry/exit pay official weather taker fees plus one tick per side,
+    direct entry/exit pay official weather taker fees plus one cent per side,
     and bid+one-tick maker economics remain an unfilled counterfactual.
     """
 
@@ -1084,7 +1087,7 @@ def revision_execution_candidates(
                         "exit_proceeds_fee_slippage": proceeds,
                         "taker_pnl_per_share": pnl,
                         "taker_roi": pnl / cost,
-                        "maker_quote_bid_plus_tick": min(entry_ask, entry_bid + 0.001),
+                        "maker_quote_bid_plus_cent": min(entry_ask, entry_bid + 0.01),
                         "maker_fill_evidence": "blocked_no_own_order_queue_overlap",
                     }
                 )

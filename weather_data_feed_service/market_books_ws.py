@@ -357,6 +357,9 @@ def apply_market_capture_demands(
     *,
     market_payload: dict[str, Any],
     demands: Sequence[Mapping[str, Any]],
+    allowed_cities: Iterable[str] | None = None,
+    max_ttl_minutes: float = 120.0,
+    max_active_tokens: int = 12,
 ) -> Selection:
     """Union a revision-centered local strip into the selective WS set.
 
@@ -366,15 +369,35 @@ def apply_market_capture_demands(
     """
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    allowed_city_set = set(allowed_cities or ())
     for source in market_payload.get("records") or []:
         if not isinstance(source, dict) or str(source.get("extreme_kind") or "max") != "max":
             continue
         key = (str(source.get("city") or ""), str(source.get("event_date") or ""))
         grouped[key].append(source)
     resolved: list[dict[str, Any]] = []
+    active_demand_tokens: set[str] = set()
     for source in demands:
         demand = dict(source)
         key = (str(demand.get("city") or ""), str(demand.get("target_date") or ""))
+        requested = _parse_utc(demand.get("requested_at_utc"))
+        expires = _parse_utc(demand.get("expires_at_utc"))
+        ttl_minutes = (
+            (expires - requested).total_seconds() / 60.0
+            if requested is not None and expires is not None
+            else None
+        )
+        if (
+            demand.get("producer") != "weather_data_feed_service.forecast_run_capture"
+            or demand.get("reason") != "d1_provider_run_first_seen"
+            or key[0] not in allowed_city_set
+            or ttl_minutes is None
+            or not 0 < ttl_minutes <= max_ttl_minutes
+        ):
+            demand["resolution_status"] = "invalid_capture_demand_contract"
+            demand["resolved_token_count"] = 0
+            resolved.append(demand)
+            continue
         event_rows = [row for row in grouped.get(key, ()) if row.get("token_id")]
         by_label: dict[str, list[dict[str, Any]]] = defaultdict(list)
         parsed_by_label: dict[str, MarketBracket] = {}
@@ -425,9 +448,12 @@ def apply_market_capture_demands(
             demand["resolution_status"] = "market_event_not_discovered"
         elif max_tokens <= 0 or len(token_ids) > max_tokens:
             demand["resolution_status"] = "token_budget_exceeded"
+        elif len(active_demand_tokens | set(token_ids)) > max_active_tokens:
+            demand["resolution_status"] = "global_active_token_budget_exceeded"
         else:
             demand["resolution_status"] = "resolved_revision_strip"
             demand["resolved_token_ids"] = token_ids
+            active_demand_tokens.update(token_ids)
             for row in rows:
                 token_id = str(row["token_id"])
                 selection.tokens.add(token_id)
@@ -797,6 +823,9 @@ class Collector:
                 self.selection,
                 market_payload=market_payload,
                 demands=self.market_capture_demand_cursor.read(now_utc=now_utc),
+                allowed_cities=self.args.cities,
+                max_ttl_minutes=self.args.market_capture_max_ttl_min,
+                max_active_tokens=self.args.market_capture_max_active_tokens,
             )
         self.invalidation_state = self.selection.invalidation_state
         _publish_json_atomic(
@@ -1101,6 +1130,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--observation-cache", required=True)
     parser.add_argument("--source-events-jsonl", required=True)
     parser.add_argument("--market-capture-demands-jsonl", default="")
+    parser.add_argument("--market-capture-max-ttl-min", type=float, default=120.0)
+    parser.add_argument("--market-capture-max-active-tokens", type=int, default=12)
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--health-path", required=True)
     parser.add_argument("--market-proxy", default=os.environ.get("WEATHER_DATA_FEED_MARKET_PROXY", ""))

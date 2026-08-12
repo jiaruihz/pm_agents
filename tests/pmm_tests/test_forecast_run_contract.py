@@ -80,6 +80,30 @@ def test_clock_constraints_and_lead_run_age() -> None:
         build_forecast_row(**{**BASE, "first_seen_at_utc": "2026-08-05T00:00:04Z"})
 
 
+def test_response_complete_request_clock_is_preserved_and_ordered() -> None:
+    row = build_forecast_row(
+        **{
+            **BASE,
+            "source_fetched_at_utc": "2026-08-05T00:00:01Z",
+            "detected_at_utc": "2026-08-05T00:00:01Z",
+            "first_seen_at_utc": "2026-08-05T00:00:01Z",
+            "available_at_utc": "2026-08-05T00:00:01Z",
+            "request_started_at_utc": "2026-08-05T00:00:00Z",
+            "response_received_at_utc": "2026-08-05T00:00:01Z",
+        }
+    )
+    assert row["request_started_at_utc"] == "2026-08-05T00:00:00.000000Z"
+    assert row["response_received_at_utc"] == row["available_at_utc"]
+    with pytest.raises(ValueError, match="request <= response"):
+        build_forecast_row(
+            **{
+                **BASE,
+                "request_started_at_utc": "2026-08-05T00:00:02Z",
+                "response_received_at_utc": "2026-08-05T00:00:01Z",
+            }
+        )
+
+
 def test_normalized_content_hash_ignores_volatile_raw_payload_hash() -> None:
     first = build_forecast_row(
         **BASE,
