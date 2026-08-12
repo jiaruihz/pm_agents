@@ -340,6 +340,8 @@ def test_failed_first_capture_persists_trigger_until_demand_is_written(
         "capture_case",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("temporary")),
     )
+    # This is an already-running listener, not its historical bootstrap.
+    (tmp_path / "state.json").write_text('{"seen_case_ids":[],"tracked":{}}')
     first = forward_module.run_capture_once(
         tmp_path, now_ts=1_000, fetch_source_evidence=False, workers=1
     )
@@ -388,6 +390,96 @@ def test_failed_first_capture_persists_trigger_until_demand_is_written(
     )
     assert third["capture_demands_written"] == 0
     assert len((tmp_path / "capture_demands.jsonl").read_text().splitlines()) == 2
+
+
+def test_initial_bootstrap_does_not_publish_historical_realtime_demands(
+    tmp_path, monkeypatch
+) -> None:
+    raw = {
+        "subgraph": "test-subgraph",
+        "id": "request-old",
+        "ancillaryData": "0x" + b"q: title: T, market_id: 100".hex(),
+        "disputeTimestamp": "100",
+    }
+    monkeypatch.setattr(forward_module, "SUBGRAPHS", {"test-subgraph": "unused"})
+    monkeypatch.setattr(
+        forward_module, "fetch_disputed_requests_since", lambda *a, **k: [dict(raw)]
+    )
+    monkeypatch.setattr(
+        forward_module,
+        "fetch_request_rounds",
+        lambda *a, **k: [{**raw, "settlementPrice": None, "proposedPrice": "0"}],
+    )
+    monkeypatch.setattr(
+        forward_module,
+        "capture_case",
+        lambda *a, **k: {
+            "case_id": "test-subgraph:request-old",
+            "captured_at_utc": "1970-01-01T00:16:40+00:00",
+            "tokens": [],
+            "contract_corpus": {"fragments": []},
+            "bulletin_state": {},
+            "request_rounds_fingerprint": "rounds",
+            "proposal": {"request_class": "unsettled"},
+            "market_status": {"closed": False},
+            "books": {},
+            "reverse_token": "",
+            "reverse_executable_vwap": {"25": None},
+        },
+    )
+    summary = forward_module.run_capture_once(
+        tmp_path,
+        now_ts=1_000,
+        fetch_source_evidence=False,
+        workers=1,
+        max_bootstrap_reconciliations_per_run=1,
+    )
+    assert summary["bootstrap_historical_events_without_trigger_demand"] == 1
+    assert summary["capture_demands_written"] == 0
+    assert not (tmp_path / "capture_demands.jsonl").exists()
+    event = json.loads((tmp_path / "events.jsonl").read_text())
+    assert event["observation_kind"] == "bootstrap_historical"
+    assert event["dispute_age_seconds_at_first_observation"] == 900
+
+
+def test_initial_bootstrap_keeps_genuinely_fresh_dispute_trigger(
+    tmp_path, monkeypatch
+) -> None:
+    raw = {
+        "subgraph": "test-subgraph",
+        "id": "request-fresh",
+        "ancillaryData": "0x" + b"q: title: T, market_id: 100".hex(),
+        "disputeTimestamp": "900",
+    }
+    monkeypatch.setattr(forward_module, "SUBGRAPHS", {"test-subgraph": "unused"})
+    monkeypatch.setattr(
+        forward_module, "fetch_disputed_requests_since", lambda *a, **k: [dict(raw)]
+    )
+    monkeypatch.setattr(
+        forward_module,
+        "capture_case",
+        lambda *a, **k: {
+            "case_id": "test-subgraph:request-fresh",
+            "captured_at_utc": "1970-01-01T00:16:40+00:00",
+            "market_id": "100",
+            "condition_id": "condition-1",
+            "tokens": ["yes-token", "no-token"],
+            "contract_corpus": {"contract_corpus_sha256": "c", "fragments": []},
+            "bulletin_state": {},
+            "proposal": {"request_class": "unsettled"},
+            "market_status": {"closed": False},
+            "books": {},
+            "reverse_token": "",
+            "reverse_executable_vwap": {"25": None},
+        },
+    )
+    summary = forward_module.run_capture_once(
+        tmp_path, now_ts=1_000, fetch_source_evidence=False, workers=1
+    )
+    assert summary["bootstrap_historical_events_without_trigger_demand"] == 0
+    assert summary["capture_demands_written"] == 2
+    event = json.loads((tmp_path / "events.jsonl").read_text())
+    assert event["observation_kind"] == "realtime_first_seen"
 
 
 def test_old_case_does_not_periodically_refetch_full_books(tmp_path, monkeypatch) -> None:

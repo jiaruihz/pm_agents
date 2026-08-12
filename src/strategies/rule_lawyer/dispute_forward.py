@@ -892,9 +892,11 @@ def run_capture_once(
 ) -> dict[str, Any]:
     captured_at_ts = int(now_ts or time.time())
     state_path = output_root / "state.json"
+    events_path = output_root / "events.jsonl"
+    initial_bootstrap = not state_path.exists() and not events_path.exists()
     state = load_state(
         state_path,
-        output_root / "events.jsonl",
+        events_path,
         output_root / "snapshots.jsonl",
     )
     since = int(state.get("last_dispute_ts") or (captured_at_ts - lookback_hours * 3600))
@@ -916,6 +918,7 @@ def run_capture_once(
         str(row.get("demand_id") or "")
         for row in read_jsonl_rows(output_root / "capture_demands.jsonl")
     }
+    bootstrap_historical_events = 0
     for row in fetched:
         ancillary = decode_ancillary(str(row.get("ancillaryData") or ""))
         if not extract_market_id(ancillary):
@@ -931,14 +934,29 @@ def run_capture_once(
         retired_lifecycle_fingerprints.pop(case_id, None)
         tracked[case_id] = row
         if case_id not in seen:
-            append_jsonl(output_root / "events.jsonl", {
+            dispute_ts = int(row.get("disputeTimestamp") or 0)
+            historical_bootstrap = initial_bootstrap and (
+                not dispute_ts or captured_at_ts - dispute_ts > 300
+            )
+            append_jsonl(events_path, {
                 "schema_version": "dispute_forward_event_v1",
                 "first_observed_at_utc": utc_iso(captured_at_ts),
+                "observation_kind": (
+                    "bootstrap_historical"
+                    if historical_bootstrap
+                    else "realtime_first_seen"
+                ),
+                "dispute_age_seconds_at_first_observation": (
+                    captured_at_ts - dispute_ts if dispute_ts else None
+                ),
                 "case_id": case_id,
                 "raw_request": row,
             })
             seen.add(case_id)
-            pending_trigger_reason[case_id] = "dispute_first_seen"
+            if historical_bootstrap:
+                bootstrap_historical_events += 1
+            else:
+                pending_trigger_reason[case_id] = "dispute_first_seen"
 
     last_capture = {
         str(case_id): int(ts)
@@ -1279,6 +1297,9 @@ def run_capture_once(
         "force_recapture": force_recapture,
         "snapshots_written": len(snapshots),
         "capture_demands_written": capture_demands_written,
+        "bootstrap_historical_events_without_trigger_demand": (
+            bootstrap_historical_events
+        ),
         "rest_checkpoint_cases_due": len(checkpoint_due_by_case),
         "rest_checkpoint_items_due": sum(map(len, checkpoint_due_by_case.values())),
         "rest_checkpoint_receipts_written": capture_checkpoint_receipts_written,
