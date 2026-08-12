@@ -273,7 +273,7 @@ production runner 做 zero-notional frozen forward：所有 strict-cross candida
 `signal_candidates.jsonl`，合格行另写 append-only `shadow_decisions.jsonl`；每笔记录 5-share raw ask、
 top ask depth、官方 fee 与 producer SHA，不创建 TradeIntent/order/fill，也不改变 live。
 
-部署验收时 clean journal 为 1 个 pre-policy candidate、0 个合格 frozen-forward decision，目标 PID `26988`
+部署验收时 clean journal 为 1 个 pre-policy candidate、0 个合格 frozen-forward decision，目标进程
 加载上述 SHA，summary 为 `policy_status=frozen_forward_shadow`、`orders_enabled=false`、0 intent/order/fill、
 0 venue write；从部署后的新 strict-cross 开始累计 untouched forward。
 
