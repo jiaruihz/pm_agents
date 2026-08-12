@@ -791,7 +791,24 @@ def main() -> None:
         if not chengdu_policy_rows.empty
         else [],
     }
-    (args.out_dir / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    compact_summary = {
+        "schema_version": "late_window_residual_heating_done_summary_v2",
+        "report": str(args.out_md),
+        "snapshot_files": summary["snapshot_files"],
+        "raw_rows": summary["raw_rows"],
+        "book_rows": summary["book_rows"],
+        "strict_rows": summary["strict_rows"],
+        "first_cross_rows": summary["first_cross_rows"],
+        "settlement_rows": summary["settlement_rows"],
+        "settled_complete_max_date": summary["settled_complete_max_date"],
+        "incomplete_dates": summary["incomplete_dates"],
+        "verdict": verdict,
+        "contract_gates": payload["contract_gates"],
+    }
+    (args.out_dir / "summary.json").write_text(
+        json.dumps(compact_summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     write_report(payload, args.out_md)
     print(json.dumps({"out_dir": str(args.out_dir), "out_md": str(args.out_md), "summary": summary}, ensure_ascii=False, indent=2))
 

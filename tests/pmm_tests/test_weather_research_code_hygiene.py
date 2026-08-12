@@ -9,10 +9,6 @@ from scripts.analysis.reheat_risk import late_window_shared
 from scripts.analysis.reheat_risk import peak_forming_hazard_shared
 from scripts.analysis.reheat_risk import peak_yes_timing_shared
 from scripts.analysis.reheat_risk import weather_research_data_shared
-from scripts.analysis.reheat_risk import (
-    research_late_window_residual_capture_feature_layer_v2 as feature_layer_v2,
-)
-from scripts.analysis.reheat_risk import research_late_window_residual_capture_v1 as legacy_v1
 from scripts.analysis.reheat_risk import train_current_yes_peak_forming_hazard_v1 as peak_v1
 from scripts.analysis.reheat_risk import current_yes_peak_forming_hazard as peak_v2
 from scripts.analysis.reheat_risk import (
@@ -51,12 +47,7 @@ def test_repo_hygiene_accepts_runtime_files_outside_git():
     assert errors == []
 
 
-def test_late_window_variants_use_one_shared_helper_implementation(tmp_path):
-    assert legacy_v1.best_level is late_window_shared.best_level
-    assert feature_layer_v2.best_level is late_window_shared.best_level
-    assert legacy_v1.block_ci is late_window_shared.block_ci
-    assert feature_layer_v2.block_ci is late_window_shared.block_ci
-
+def test_late_window_shared_helper_contract(tmp_path):
     observation = tmp_path / "latest.json"
     observation.write_text(
         json.dumps(

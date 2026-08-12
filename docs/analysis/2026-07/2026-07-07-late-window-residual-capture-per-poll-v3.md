@@ -10,6 +10,29 @@ were retained. Its exact source remains recoverable as git blob
 `research_late_window_residual_heating_done_v1.py`, which owns the same per-poll
 denominator and adds the physical heating-done contract.
 
+## Absorbed capture v1/v2 lineage
+This is also the canonical snapshot for the two earlier capture reports. Their
+single-purpose runners and duplicate machine summaries were removed after the
+following evidence was preserved here; git history retains their full tables.
+
+- v1 used observed-shard state plus snapshot orderbook and counted 6,709 PIT
+  states, 32,028 expanded leg quotes and 12,676 strict-depth rows. It corrected
+  the initial hourly-slice miss: Chengdu 39 NO was genuinely visible at
+  15:28:57 BJ at `ask/bid=0.950/0.940` and at 15:45:43 at
+  `0.960/0.959`; the 0.962/0.966 user fills belonged to a real residual window.
+  Broad taker current YES/d1/d2 remained negative; d3 and maker point estimates
+  were not reliable because of repeated-snapshot correlation and unknown queue.
+- feature-layer v2 replaced the observed shard with
+  `intraday_weather_regime_atlas_v1` and canonical exact-bracket parsing. Its
+  atlas was stale through 2026-07-04: 5,052 h15–18 states, 14,956 quote rows,
+  5,621 strict-depth rows and 5,598 first-cross rows. First-cross taker basket
+  ROI was -1.2%; current YES/d1/d2 were -0.8%/-1.3%/-2.5%, while d3 was only
+  +0.4% with CI crossing zero. Post-hoc regime pockets had just 2–5 forward
+  dates and 2–24 rows, so they remained `shadow_scorer_only_inconclusive`.
+- v3 fixed the real denominator to every persisted polling cycle and made
+  first-cross/no-add explicit. The sections below therefore supersede both
+  earlier replay structures; new work belongs in the heating-done producer.
+
 ## Verdict
 Per-poll replay confirms the Chengdu-style 39 NO opportunity exists in the snapshot layer, and a separate late-confirmed d1 NO policy captures the Chengdu 17:10-style 38 NO setup. Broad current YES / d1 NO / d2 NO first-cross remains mixed, while the plug-in late policies are positive but still low-sample after 2026-07-05..2026-07-06 label completion. Conclusion: `inconclusive_research_shadow_only`; do not change live. Positive forward point estimates exist for: d3_no.
 
