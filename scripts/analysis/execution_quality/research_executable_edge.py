@@ -28,9 +28,14 @@ from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-08-executable-edge.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-08-executable-edge.md"
 
 INSTANCE_EXPR = """
 CASE
@@ -52,8 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", default=str(DB_DEFAULT))
     parser.add_argument("--trade-class", default="live_real")
-    parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--market-structure-json", default=None, help="Optional Step 1 JSON; selected buckets are reused for the candidate proxy.")
     parser.add_argument(
         "--orderbook-glob",
@@ -807,10 +812,17 @@ def main() -> None:
         ),
     }
     report["gates"] = gate_status(overall, edge)
-    write_json(Path(args.out_json), report)
-    write_md(Path(args.out_md), report)
-    print(f"wrote {args.out_json}")
-    print(f"wrote {args.out_md}")
+    report["living_doc"] = "docs/analysis/execution_quality.md"
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "executable_edge",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    result_json = output_dir / "result.json"
+    write_json(result_json, report)
+    print(f"wrote {result_json}")
 
 
 if __name__ == "__main__":

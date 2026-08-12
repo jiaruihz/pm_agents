@@ -16,6 +16,7 @@ import json
 import re
 import sqlite3
 import subprocess
+import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,14 +24,17 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
 MARKET_DATA = ROOT / "runtime" / "weather_edge_v1" / "market_data"
 GAMMA_DIR = MARKET_DATA / "gamma_events"
 CLOB_HISTORY_DIR = MARKET_DATA / "clob_price_history"
-RESEARCH_DIR = MARKET_DATA / "research"
-OUT_CSV_DEFAULT = RESEARCH_DIR / "april_historical_opportunity_preview_v0.csv.gz"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-10-april-historical-opportunity-preview-v0.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-10-april-historical-opportunity-preview-v0.md"
 
 BRACKET_NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 
@@ -68,9 +72,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-date", default="2026-04-01")
     parser.add_argument("--end-date", default="2026-04-30")
     parser.add_argument("--horizons", default="24,18,12,6", help="Comma separated hours before event-date noon UTC.")
-    parser.add_argument("--out-csv", default=str(OUT_CSV_DEFAULT))
-    parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     return parser.parse_args()
 
 
@@ -475,16 +478,24 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
 
 def main() -> None:
     args = parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "april_historical_opportunity_preview_v0",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    rows_csv = output_dir / "rows.csv.gz"
     horizons = [int(x.strip()) for x in args.horizons.split(",") if x.strip()]
     conn = connect(args.db_path)
     preview_rows, preview_stats = build_preview_rows(args.start_date, args.end_date, horizons)
-    write_csv(Path(args.out_csv), preview_rows)
+    write_csv(rows_csv, preview_rows)
     report = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_sha": git_sha(),
         "window": {"start_date": args.start_date, "end_date": args.end_date},
         "horizons": horizons,
-        "out_csv": str(Path(args.out_csv)),
+        "rows_artifact": str(rows_csv),
         "db": summarize_db(conn, Path(args.db_path)),
         "preview_stats": preview_stats,
         "sample_rows": preview_rows[:8],
@@ -493,12 +504,12 @@ def main() -> None:
             "can_use_as_backfill_input": True,
             "reason": "Missing model_p_yes, final_yes, and orderbook depth; preview rows must be upgraded into fact_signal_candidates before strategy gates.",
         },
+        "living_doc": "docs/analysis/market_structure_edge.md",
     }
-    write_json(Path(args.out_json), report)
-    write_md(Path(args.out_md), report)
-    print(args.out_csv)
-    print(args.out_json)
-    print(args.out_md)
+    result_json = output_dir / "result.json"
+    write_json(result_json, report)
+    print(rows_csv)
+    print(result_json)
 
 
 if __name__ == "__main__":
