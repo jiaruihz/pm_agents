@@ -26,14 +26,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.analysis.forecast_quality import research_d1_cross_city_hierarchy_v1 as base  # noqa: E402
-
-
-DEFAULT_OUT = ROOT / "docs/analysis/2026-08/generated/d1_legacy_weather_only_v2"
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-05-d1-legacy-weather-only-v2.md"
-DEFAULT_ENRICHMENT_HISTORY = (
-    ROOT
-    / "docs/analysis/2026-07/generated/historical_forecast_enrichment_bias_v1/daily_error_rows.csv"
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_content_addressed_artifact,
+    resolve_run_output,
 )
+
+
+ARTIFACT_FAMILY = "d1_legacy_weather_only_v2"
+ENRICHMENT_HISTORY_SHA256 = "35802482add6330d9f39f90ecff1b11c4813704b07ac710f7a153f1f6a100719"
 KERNEL_SD_F = 0.75
 EPS = 1e-8
 ENRICHMENT_AVAILABLE_DATE = "2026-07-08"
@@ -682,12 +683,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--forecasts", type=Path, default=base.DEFAULT_FORECASTS)
     parser.add_argument("--baskets", type=Path, default=base.DEFAULT_BASKETS)
     parser.add_argument("--history", type=Path, default=base.DEFAULT_HISTORY)
-    parser.add_argument("--enrichment-history", type=Path, default=DEFAULT_ENRICHMENT_HISTORY)
+    parser.add_argument(
+        "--enrichment-history",
+        type=Path,
+        default=resolve_content_addressed_artifact(ENRICHMENT_HISTORY_SHA256),
+    )
     parser.add_argument("--db", type=Path, default=base.DEFAULT_DB)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--run-id")
+    parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="optional explicit durable report path; omitted by default",
+    )
     parser.add_argument("--history-policy", choices=HISTORY_POLICIES, default="summer_best")
     args = parser.parse_args(argv)
+    output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.out,
+    )
 
     forecasts = pd.read_csv(args.forecasts, dtype={"target_date": str})
     baskets = pd.read_csv(args.baskets, dtype={"target_date": str})
@@ -817,23 +832,25 @@ def main(argv: list[str] | None = None) -> int:
         "diagnostics": {row["arm"]: row for row in diagnostics.to_dict("records")},
         "paired_deltas": deltas.to_dict("records"),
     }
-    args.out.mkdir(parents=True, exist_ok=True)
-    scored.to_csv(args.out / "holdout_scored_states.csv", index=False)
-    score_summary.to_csv(args.out / "holdout_score_summary.csv", index=False)
+    output = prepare_new_run_output(output)
+    scored.to_csv(output / "holdout_scored_states.csv", index=False)
+    score_summary.to_csv(output / "holdout_score_summary.csv", index=False)
     enrichment_comparison.to_csv(
-        args.out / "archive_known_multimodel_score_summary.csv", index=False
+        output / "archive_known_multimodel_score_summary.csv", index=False
     )
     enrichment_deltas.to_csv(
-        args.out / "archive_known_multimodel_paired_date_bootstrap.csv", index=False
+        output / "archive_known_multimodel_paired_date_bootstrap.csv", index=False
     )
-    deltas.to_csv(args.out / "holdout_paired_date_bootstrap.csv", index=False)
-    calibration(scored).to_csv(args.out / "holdout_calibration.csv", index=False)
-    diagnostics.to_csv(args.out / "holdout_probability_diagnostics.csv", index=False)
-    (args.out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    args.report.write_text(
-        render_report(summary, score_summary, deltas, enrichment_comparison),
-        encoding="utf-8",
-    )
+    deltas.to_csv(output / "holdout_paired_date_bootstrap.csv", index=False)
+    calibration(scored).to_csv(output / "holdout_calibration.csv", index=False)
+    diagnostics.to_csv(output / "holdout_probability_diagnostics.csv", index=False)
+    (output / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(
+            render_report(summary, score_summary, deltas, enrichment_comparison),
+            encoding="utf-8",
+        )
     print(json.dumps(summary, ensure_ascii=False))
     return 0
 

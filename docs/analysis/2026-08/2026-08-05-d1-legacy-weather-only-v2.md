@@ -15,6 +15,11 @@ production:
 live_action=none
 orders_changed=0
 
+Artifact routing: historical machine outputs are recoverable from the archive
+manifests referenced by the repository artifact index. New runs require a
+stable `--run-id` and write beneath the configured JRS research artifact root;
+the runner no longer overwrites this snapshot report by default.
+
 ## 结论
 
 F ensemble/spread holdout logloss=1.9763；相对 zero-bias pooled Δ=-0.9139（95% CI -1.3574..-0.4532）。相对 market Δ=+0.4266（+0.1211..+0.7907）。
