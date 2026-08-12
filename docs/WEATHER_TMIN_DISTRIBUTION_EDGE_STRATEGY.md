@@ -249,7 +249,7 @@ SignalCandidate`。机制 candidate 状态为 `observed`，不把尚未冻结的
 `tmin_prev_warmer_no_given_cross_pending_v0`。next-colder exact-NO 是另一条表达，不参与本 runtime 评分。
 
 实例 identity 为 `weather_tmin_cross_prev_no_shadow_v1`。2026-08-13 起使用独立 production release
-`tmin_cross_prev_no_shadow`，代码 SHA `d450aba34a84ceb1d8344177cefad55de322d41f`；共享
+`tmin_cross_prev_no_shadow`，代码 SHA `d3a439356f8346dded3af051df3216b44af9406e`；共享
 `fast_observation` release 保持原 pin，避免影响其他 collector/shadow。
 
 2026-08-12 事件合同审计推翻了“51 条都是严格 first-cross”的分母解释。可用高频 raw 重放的

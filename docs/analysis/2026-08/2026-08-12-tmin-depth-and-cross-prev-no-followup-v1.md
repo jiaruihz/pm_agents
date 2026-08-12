@@ -13,7 +13,7 @@ market residual 在严格 expanding OOF 上仍输给同 rows market。cross prev
 
 2026-08-13 deployment follow-up：该 challenger 已接入现有
 `weather_tmin_cross_prev_no_shadow_v1`，独立 release `tmin_cross_prev_no_shadow` 加载 SHA
-`d450aba34a84ceb1d8344177cefad55de322d41f`。全量 candidate journal 不变，合格行另写
+`d3a439356f8346dded3af051df3216b44af9406e`。全量 candidate journal 不变，合格行另写
 `shadow_decisions.jsonl`；上线验收为 1 个 pre-policy candidate、0 个 forward decision、0
 intent/order/fill/venue write，后续新 target dates 才计 untouched forward。
 
