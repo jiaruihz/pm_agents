@@ -3,22 +3,35 @@
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_PATH = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-07-mid-price-core-v1-city-model-downgrade.md"
-OUT_JSON = OUT_DIR / "2026-06-07-mid-price-core-v1-city-model-downgrade.json"
 
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
 RECENT_START = "2026-06-01"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    return parser.parse_args()
 
 
 def connect() -> sqlite3.Connection:
@@ -413,7 +426,14 @@ def render(data: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "mid_price_core_v1_city_model_downgrade",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     conn = connect()
     trades = load_trades(conn)
     candidates = load_candidates(conn)
@@ -473,11 +493,11 @@ def main() -> int:
         "action_counts": action_counts,
         "conclusion": conclusion,
         "actions": actions,
+        "living_doc": "docs/analysis/model_vs_market.md",
     }
-    OUT_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-    OUT_MD.write_text(render(data), encoding="utf-8")
-    print(f"wrote {OUT_MD}")
-    print(f"wrote {OUT_JSON}")
+    result_json = output_dir / "result.json"
+    result_json.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    print(f"wrote {result_json}")
     return 0
 
 

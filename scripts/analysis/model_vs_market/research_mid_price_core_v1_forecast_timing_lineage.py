@@ -8,11 +8,13 @@ materialized live_real fills.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import math
 import random
 import sqlite3
+import sys
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean, median
@@ -20,11 +22,15 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_PATH = ROOT / "runtime" / "weather.db"
 SNAPSHOT_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "paper_snapshots"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md"
-OUT_JSON = OUT_DIR / "2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.json"
 
 RECENT_START = "2026-06-01"
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
@@ -37,6 +43,13 @@ REPORT_RUN_CONTEXT = (
     "fact_signal_candidates 和 CLOB coverage gate；最后 API 启动阶段因端口占用报 "
     "`Errno 98`，不影响本离线报告取数。"
 )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    return parser.parse_args()
 
 
 def parse_ts(value: Any) -> dt.datetime | None:
@@ -930,7 +943,14 @@ def render(data: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "mid_price_core_v1_forecast_timing_lineage",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     conn = connect()
     gate = run_gate()
     if not gate.get("gate_pass"):
@@ -966,12 +986,12 @@ def main() -> int:
         "policy_simulations": policy_simulations(enriched),
     }
     data["conclusion"] = conclusion(data)
+    data["living_doc"] = "docs/analysis/model_vs_market.md"
 
     json_ready = json.loads(json.dumps(data, default=str))
-    OUT_JSON.write_text(json.dumps(json_ready, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    OUT_MD.write_text(render(data), encoding="utf-8")
-    print(f"wrote {OUT_MD}")
-    print(f"wrote {OUT_JSON}")
+    result_json = output_dir / "result.json"
+    result_json.write_text(json.dumps(json_ready, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote {result_json}")
     return 0
 
 

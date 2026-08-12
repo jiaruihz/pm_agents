@@ -8,6 +8,7 @@ filtered. This is a control-variable overlay, not a fill-rate simulation.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
@@ -24,15 +25,23 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_dashboard.blend import blend_probability, load_default_config
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 DB_PATH = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-07-v1-raw-regime-filter-walkforward.md"
-OUT_JSON = OUT_DIR / "2026-06-07-v1-raw-regime-filter-walkforward.json"
 
 RECENT_START = "2026-06-01"
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
 STRATEGY_LABEL = "mid_price_core_v1_25_75"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    return parser.parse_args()
 
 
 @dataclass(frozen=True)
@@ -690,7 +699,14 @@ def build_markdown(
 
 
 def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "v1_raw_regime_filter_walkforward",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     clob_gate = run_clob_gate()
     if not clob_gate.get("gate_pass"):
         raise RuntimeError("CLOB coverage gate failed; refusing to publish live_real PnL analysis")
@@ -752,10 +768,11 @@ def main() -> None:
         "results": results,
         "robustness": robustness,
         "group_details": group_details,
+        "living_doc": "docs/analysis/model_vs_market.md",
     }
-    OUT_JSON.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    OUT_MD.write_text(build_markdown(df, self_checks, clob_gate, results, robustness, group_details), encoding="utf-8")
-    print(json.dumps({"out_md": str(OUT_MD), "out_json": str(OUT_JSON), "rows": len(df)}, ensure_ascii=False))
+    result_json = output_dir / "result.json"
+    result_json.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"result_json": str(result_json), "rows": len(df)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

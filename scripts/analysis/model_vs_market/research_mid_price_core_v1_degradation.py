@@ -7,6 +7,7 @@ fact_signal_candidates is used for opportunity/timing diagnostics.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import sqlite3
@@ -21,15 +22,23 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_dashboard.blend import blend_probability, load_default_config
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 DB_PATH = ROOT / "runtime" / "weather.db"
-OUT_DIR = ROOT / "docs" / "analysis" / "2026-06"
-OUT_MD = OUT_DIR / "2026-06-07-mid-price-core-v1-raw-degradation.md"
-OUT_JSON = OUT_DIR / "2026-06-07-mid-price-core-v1-raw-degradation.json"
 
 RECENT_START = "2026-06-01"
 STRATEGY_ID = "live_weather_edge_v1_4ef9b3ec3e2e"
 STRATEGY_LABEL = "mid_price_core_v1_25_75"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    return parser.parse_args()
 
 
 def connect() -> sqlite3.Connection:
@@ -702,7 +711,14 @@ def render_report(data: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "mid_price_core_v1_degradation",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
     conn = connect()
     checks = self_checks(conn)
     trades = load_trades(conn)
@@ -853,12 +869,12 @@ def main() -> int:
         "trade_candidate_timing_fmt": timing_rows,
         "conclusion": conclusion,
         "actions": actions,
+        "living_doc": "docs/analysis/model_vs_market.md",
     }
 
-    OUT_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-    OUT_MD.write_text(render_report(data), encoding="utf-8")
-    print(f"wrote {OUT_MD}")
-    print(f"wrote {OUT_JSON}")
+    result_json = output_dir / "result.json"
+    result_json.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    print(f"wrote {result_json}")
     return 0
 
 
