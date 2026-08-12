@@ -28,6 +28,7 @@ sys.path.append(str(SCRIPT_DIR))
 
 import research_range_rv_scanner as scanner  # noqa: E402
 import research_range_rv_variant_lab_v03 as variants  # noqa: E402
+import adjacent3_legacy_denominator as legacy_denominator  # noqa: E402
 
 
 TARGET_METRIC = "forecast_quality_adjacent3_union_flexible_alpha_v02"
@@ -560,10 +561,8 @@ def render_md(report: dict[str, Any]) -> str:
 
 
 def old_reference(conn: sqlite3.Connection) -> dict[str, Any]:
-    import research_adjacent3_quality_shadow_journal_v0 as old
-
-    old_rows = old.load_candidates(conn)
-    old_sets = old.build_decision_sets(old_rows)
+    old_rows = legacy_denominator.load_candidates(conn)
+    old_sets = legacy_denominator.build_decision_sets(old_rows)
     return {
         "decision_sets": len(old_sets),
         "min_9": sum(1 for row in old_sets if int(row["n_brackets"]) >= 9),

@@ -740,6 +740,79 @@ def select_worktree_artifacts(
     }
 
 
+def select_repository_artifacts(
+    selected_paths: set[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Select explicit machine artifacts from this repository for archival.
+
+    Historical producers wrote large JSON/CSV files directly beside dated
+    Markdown reports, before the ``generated/`` and JRS contracts existed.
+    Explicit ``--path`` is the migration boundary for those files; active code
+    and authoritative Markdown links still fail closed.
+    """
+    if not selected_paths:
+        raise ValueError("repository artifact archive requires at least one --path")
+    tracked = git_tracked_files()
+    corpus = active_code_corpus(tracked)
+    authoritative_targets = authoritative_link_targets(tracked)
+    machine_suffixes = {
+        ".csv",
+        ".html",
+        ".joblib",
+        ".json",
+        ".jsonl",
+        ".parquet",
+        ".pkl",
+        ".png",
+        ".svg",
+        ".tsv",
+    }
+    rows: list[dict[str, Any]] = []
+    for raw in sorted(selected_paths):
+        relative = Path(raw)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"archive path must be repository-relative: {raw}")
+        normalized = relative.as_posix()
+        if not normalized.startswith("docs/analysis/") or relative.suffix.lower() not in machine_suffixes:
+            raise ValueError(
+                f"explicit repository archive only accepts analysis machine artifacts: {raw}"
+            )
+        source = ROOT / relative
+        if source.is_symlink() or not source.is_file():
+            raise ValueError(f"archive source must be a regular file: {source}")
+        if generated_artifact_required_in_worktree(
+            normalized,
+            corpus=corpus,
+            authoritative_targets=authoritative_targets,
+        ):
+            raise ValueError(f"active code or docs still require artifact: {normalized}")
+        rows.append(
+            {
+                "path": normalized,
+                "size_bytes": source.stat().st_size,
+                "git_tracked": normalized in tracked,
+                "repo_eligible": False,
+                "required_in_worktree": False,
+                "selected": True,
+            }
+        )
+    size = sum(int(row["size_bytes"]) for row in rows)
+    return rows, {
+        "all_file_count": len(rows),
+        "all_bytes": size,
+        "selected_file_count": len(rows),
+        "selected_bytes": size,
+        "selected_tracked_file_count": sum(bool(row["git_tracked"]) for row in rows),
+        "selected_tracked_bytes": sum(
+            int(row["size_bytes"]) for row in rows if row["git_tracked"]
+        ),
+        "selected_untracked_file_count": sum(not row["git_tracked"] for row in rows),
+        "selected_untracked_bytes": sum(
+            int(row["size_bytes"]) for row in rows if not row["git_tracked"]
+        ),
+    }
+
+
 def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
@@ -781,35 +854,37 @@ def archive(
         rows, summary = select_worktree_artifacts(
             archive_source_root, selected_paths or set()
         )
+    elif selected_paths and not all("/generated/" in path for path in selected_paths):
+        rows, summary = select_repository_artifacts(selected_paths)
     else:
         rows, summary = select_artifacts()
-    if selected_paths and source_root is None:
-        eligible_paths = {row["path"] for row in rows}
-        unknown = sorted(selected_paths - eligible_paths)
-        if unknown:
-            raise ValueError(
-                "archive paths are absent or not eligible for archival: "
-                f"{unknown}"
-            )
-        rows = [row for row in rows if row["path"] in selected_paths]
-        summary = {
-            "all_file_count": summary["all_file_count"],
-            "all_bytes": summary["all_bytes"],
-            "selected_file_count": len(rows),
-            "selected_bytes": sum(int(row["size_bytes"]) for row in rows),
-            "selected_tracked_file_count": sum(
-                bool(row["git_tracked"]) for row in rows
-            ),
-            "selected_tracked_bytes": sum(
-                int(row["size_bytes"]) for row in rows if row["git_tracked"]
-            ),
-            "selected_untracked_file_count": sum(
-                not row["git_tracked"] for row in rows
-            ),
-            "selected_untracked_bytes": sum(
-                int(row["size_bytes"]) for row in rows if not row["git_tracked"]
-            ),
-        }
+        if selected_paths:
+            eligible_paths = {row["path"] for row in rows}
+            unknown = sorted(selected_paths - eligible_paths)
+            if unknown:
+                raise ValueError(
+                    "archive paths are absent or not eligible for archival: "
+                    f"{unknown}"
+                )
+            rows = [row for row in rows if row["path"] in selected_paths]
+            summary = {
+                "all_file_count": summary["all_file_count"],
+                "all_bytes": summary["all_bytes"],
+                "selected_file_count": len(rows),
+                "selected_bytes": sum(int(row["size_bytes"]) for row in rows),
+                "selected_tracked_file_count": sum(
+                    bool(row["git_tracked"]) for row in rows
+                ),
+                "selected_tracked_bytes": sum(
+                    int(row["size_bytes"]) for row in rows if row["git_tracked"]
+                ),
+                "selected_untracked_file_count": sum(
+                    not row["git_tracked"] for row in rows
+                ),
+                "selected_untracked_bytes": sum(
+                    int(row["size_bytes"]) for row in rows if not row["git_tracked"]
+                ),
+            }
     spec = load_production_spec()
     artifact_root = spec.research_artifact_root
     payload: dict[str, Any] = {

@@ -35,7 +35,6 @@ Side conclusions must report win-rate, ROI/PnL, top-winner dependence, matched b
 | `docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.md` | 2026-06 | clean full-opportunity side-band + forecast regime test; gates failed | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md` | 2026-06 | mechanism attribution for side-band, low YES, BUY_NO, forecast regime; gates failed | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md` | 2026-06 | synthesis says side-band is not a live-test candidate | active-evidence |
-| `docs/analysis/2026-06/2026-06-10-shadow-paper-queue-v0.md` | 2026-06 | side-band remains shadow tag only, not paper/live queue | active-evidence |
 
 ## Required Gates Before Live Use
 

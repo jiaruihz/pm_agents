@@ -102,7 +102,7 @@ recoverable as git blob `48430bb761fddb7b93269933524265a339e24339`.
 | scripts/analysis/market_structure_edge/research_range_rv_noarb_v09.py | 20 | buy_yes_only_universe, full_orderbook_match_only, posthoc_best_or_top |
 | scripts/analysis/market_structure_edge/research_side_band_forecast_regime_v0.py | 17 | buy_yes_only_universe, eligible_hard_gate, settled_prefilter |
 | scripts/analysis/execution_quality/research_executable_edge.py | 16 | eligible_hard_gate, settled_prefilter, full_orderbook_match_only |
-| scripts/analysis/market_structure_edge/research_adjacent3_quality_matched_baseline_v0.py | 15 | buy_yes_only_universe, eligible_hard_gate, all_legs_settled, full_orderbook_match_only |
+| retired Adjacent3 quality producers (git history; coverage helper now `adjacent3_legacy_denominator.py`) | 15 | buy_yes_only_universe, eligible_hard_gate, all_legs_settled, full_orderbook_match_only |
 | scripts/analysis/side_alpha/weather_side_band_timing_impact.py | 14 | buy_yes_only_universe, settled_prefilter |
 | scripts/analysis/market_structure_edge/research_market_structural_edge.py | 14 | buy_yes_only_universe, eligible_hard_gate, settled_prefilter |
 | scripts/analysis/market_structure_edge/research_hybrid_adjacent3_single_v0.py | 14 | buy_yes_only_universe, all_legs_settled, full_orderbook_match_only |
@@ -113,7 +113,7 @@ recoverable as git blob `48430bb761fddb7b93269933524265a339e24339`.
 
 ## 需要优先复核的脚本
 
-1. `research_adjacent3_quality_shadow_journal_v0.py` / `research_adjacent3_quality_matched_baseline_v0.py`: BUY_YES-only universe，必须用 union builder 重跑。
+1. 旧 Adjacent3 quality shadow/matched-baseline producers：BUY_YES-only universe，已由 union builder 重跑；2026-08-13 删除报告型 producer，只保留最小 legacy denominator helper 供覆盖差异回归。
 2. `research_range_rv_scanner.py`: 先 `settlement_status='settled'` / `final_yes IS NOT NULL` 再 group，容易把未结算 bracket 从分布删掉。
 3. `research_range_rv_variant_lab_v03.py`: 继承 scanner denominator，且部分算法用 eligible 子集；需要 union + selected-leg settled 口径复跑。
 4. `research_forecast_first_adjacent_range_rv.py`: `all_legs_eligible` / all legs price/spread 属于执行覆盖过滤，不能当主机会分母。

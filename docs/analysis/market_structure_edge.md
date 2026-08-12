@@ -85,7 +85,15 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 1. `2026-06-08-market-structural-edge.md` tested a model-free H_B structural hypothesis; selected BUY_NO buckets had positive point estimates but failed significance and baseline gates.
 2. Early Range RV scanner files (`v0`, `v0-1`, `positive-v0-2`, `variant-lab-v0-3`) are useful as search history, but their final verdicts remain `inconclusive`; they should not drive live action.
 3. `noarb_all_yes_underround` became the first durable offline family: v0.9 showed the signal in proxy, `range-rv-underround-robust-v1-0.md` confirmed both proxy and executable orderbook thresholds, and `2026-06-15-all-yes-underround-basket-facts-v0.md` is now the canonical all-YES basket denominator. Current/live-prep scans and paper ledgers must be interpreted as forward evidence layers on top of that denominator, not as replacements for it. The family remains retail-live blocked unless a later executor can prove low-latency all-leg fill quality and enough TTL-valid settled forward edge.
-4. Forecast-quality overlays should be treated as soft stratification. Strict forecast-quality hard filters did not reliably improve the no-filter adjacent3 baseline, and city/model samples are still thin.
+4. Forecast-quality overlays should be treated as soft stratification. The absorbed
+   BUY_YES-only Adjacent3 experiments produced 1,642 shadow rows but only 29
+   fully matched orderbook rows; the matched-baseline holdout had only 2
+   medium-quality rows and both lost. The later denominator audit showed those
+   producers also excluded BUY_NO/mixed expressions, so their strict quality
+   filter was not a valid promotion gate. Their two reports, five machine
+   artifacts, and three one-off producers were removed on 2026-08-13; exact
+   machine evidence remains recoverable from the JRS artifact manifest
+   `adjacent3_quality_legacy_cleanup_20260813.json`.
 5. Market-shape, temporal-reversion, regime, center/shoulder/butterfly, and tail-fade variants are negative or sample-limited evidence. Positive point estimates in those files are not enough because holdout, baseline, or top5-removed gates failed.
 6. All Range RV reports are opportunity/counterfactual research unless a later shadow/paper/live run produces actual orders and fills. They must not be mixed with live_real PnL or CLOB account reconciliation.
 7. Source-aware Range RV consumers must keep the decision grain at `city + event_date + forecast_source/model_version + decision_snapshot_ts_utc`; older scanner paths that omitted source/model could mix ECMWF/GFS rows and should be treated as pre-fix evidence.
