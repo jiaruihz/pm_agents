@@ -18,7 +18,7 @@ production_releases:
     expected_repo_sha: 03691ebb36579f8a604936af19924c5123022439
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v3_prod
-    expected_repo_sha: 269c1072fe0c5a464d6ec681db4805a1815dca2d
+    expected_repo_sha: c049184472971d21c509ba275814eaef0abfef80
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/projects/pm_agents_dispute_repricing_prod
     expected_repo_sha: 95fe0532413a6798287b4cb7d93b4655ea1967ba
@@ -69,7 +69,7 @@ production_releases:
     expected_repo_sha: 68056035ec324305c3e60a88fb06dce1a63f2c11
   - release_id: paired_bid_mm
     checkout_root: /Users/deepsleep/projects/pm_agents_paired_bid_mm_prod
-    expected_repo_sha: d07f9e0a336a417a843700850f48cb4ff6f59184
+    expected_repo_sha: c049184472971d21c509ba275814eaef0abfef80
 
 canonical_refresh_release_id: control_plane
 # The mount name is a compatibility contract; UUID is the physical identity.
@@ -219,7 +219,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS: "6"
       WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES: "3000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/pmm/paired_bid_mm_shadow_v1/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "12"
 
