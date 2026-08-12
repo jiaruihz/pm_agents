@@ -34,7 +34,7 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.compare_city_day_basket_vs_legacy_baselines import (  # noqa: E402
+from scripts.analysis.city_selection.compare_city_day_basket_vs_legacy_baselines import (  # noqa: E402
     PROFILES,
     _decide_legacy_profile,
     _evaluate_profile,
@@ -42,14 +42,14 @@ from scripts.analysis.compare_city_day_basket_vs_legacy_baselines import (  # no
     _legacy_trigger_universe,
     _load_rows as _load_compare_rows,
 )
-from scripts.analysis.eval_city_day_basket import (  # noqa: E402
+from scripts.analysis.city_selection.eval_city_day_basket import (  # noqa: E402
     DB_DEFAULT,
     OUT_DEFAULT,
     Leg,
     _attribution,
     _summarize,
 )
-from scripts.analysis.research_city_day_basket_optimizer import (  # noqa: E402
+from scripts.analysis.city_selection.research_city_day_basket_optimizer import (  # noqa: E402
     ComboLeg,
     _candidate_legs_for_group,
     _cvar20,
@@ -62,11 +62,11 @@ from scripts.analysis.research_city_day_basket_optimizer import (  # noqa: E402
     _to_eval_leg,
     _valid_combo,
 )
-from scripts.analysis.research_city_day_basket_walkforward import (  # noqa: E402
+from scripts.analysis.city_selection.research_city_day_basket_walkforward import (  # noqa: E402
     _aggregate_folds,
     _walkforward,
 )
-from scripts.analysis.research_city_day_distribution_quality import _evaluate as _evaluate_distribution  # noqa: E402
+from scripts.analysis.city_selection.research_city_day_distribution_quality import _evaluate as _evaluate_distribution  # noqa: E402
 
 
 REMOVED_CITIES = {"Ankara", "BuenosAires", "Jeddah", "Karachi", "Moscow", "Munich"}
@@ -149,7 +149,13 @@ def _run_clob_gate(db_path: Path) -> dict[str, Any]:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
-        str(_ROOT / "scripts" / "analysis" / "weather_clob_fill_coverage_gate.py"),
+        str(
+            _ROOT
+            / "scripts"
+            / "analysis"
+            / "execution_quality"
+            / "weather_clob_fill_coverage_gate.py"
+        ),
         "--db",
         str(db_path),
         "--json-out",

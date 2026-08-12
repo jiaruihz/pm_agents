@@ -56,7 +56,16 @@ def fetchall(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -
 
 def run_clob_gate() -> dict[str, Any]:
     proc = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "analysis" / "weather_clob_fill_coverage_gate.py")],
+        [
+            sys.executable,
+            str(
+                ROOT
+                / "scripts"
+                / "analysis"
+                / "execution_quality"
+                / "weather_clob_fill_coverage_gate.py"
+            ),
+        ],
         cwd=ROOT,
         check=True,
         text=True,

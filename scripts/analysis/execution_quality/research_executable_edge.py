@@ -168,7 +168,13 @@ def run_live_gate(trade_class: str, skip: bool) -> dict[str, Any]:
         return {"required": False, "status": "not_live_real"}
     if skip:
         return {"required": True, "status": "skipped_by_flag", "gate_pass": None}
-    script = ROOT / "scripts" / "analysis" / "weather_clob_fill_coverage_gate.py"
+    script = (
+        ROOT
+        / "scripts"
+        / "analysis"
+        / "execution_quality"
+        / "weather_clob_fill_coverage_gate.py"
+    )
     proc = subprocess.run(
         [sys.executable, str(script)],
         cwd=str(ROOT),

@@ -47,6 +47,29 @@ def test_repo_hygiene_accepts_runtime_files_outside_git():
     assert errors == []
 
 
+def test_internal_analysis_import_check_rejects_pre_reorganization_path(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    script = repo / "scripts/analysis/family/research_runner.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        "from scripts.analysis.old_runner import load_rows\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_weather_docs, "ROOT", repo)
+
+    errors: list[str] = []
+    check_weather_docs.check_internal_analysis_imports(
+        errors, {"scripts/analysis/family/research_runner.py"}
+    )
+
+    assert errors == [
+        "scripts/analysis/family/research_runner.py:1: internal analysis import "
+        "does not exist: scripts.analysis.old_runner"
+    ]
+
+
 def test_analysis_history_debt_rejects_new_reports_and_parallel_machine_outputs(
     tmp_path, monkeypatch
 ):

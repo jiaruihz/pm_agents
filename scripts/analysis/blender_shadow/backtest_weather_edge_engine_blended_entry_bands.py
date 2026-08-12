@@ -31,14 +31,14 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.backtest_weather_edge_engine_blended_single import (  # noqa: E402
+from scripts.analysis.blender_shadow.backtest_weather_edge_engine_blended_single import (  # noqa: E402
     INSTANCE_CASE,
     STRATEGY_ID,
     STRATEGY_SPEC,
     _current_live_actual,
     _data_self_check,
 )
-from scripts.analysis.eval_city_day_basket import (  # noqa: E402
+from scripts.analysis.city_selection.eval_city_day_basket import (  # noqa: E402
     DB_DEFAULT,
     OUT_DEFAULT,
     Leg,

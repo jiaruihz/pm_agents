@@ -23,7 +23,7 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.eval_city_day_basket import (  # noqa: E402
+from scripts.analysis.city_selection.eval_city_day_basket import (  # noqa: E402
     DB_DEFAULT,
     OUT_DEFAULT,
     _attribution,

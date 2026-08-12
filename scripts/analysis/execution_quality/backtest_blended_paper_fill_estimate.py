@@ -25,12 +25,12 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.backtest_weather_edge_engine_blended_entry_bands import (
+from scripts.analysis.blender_shadow.backtest_weather_edge_engine_blended_entry_bands import (
     SideBand,
     _data_self_check,
     _side_edge,
 )
-from scripts.analysis.eval_city_day_basket import DB_DEFAULT, OUT_DEFAULT, _leg_pnl
+from scripts.analysis.city_selection.eval_city_day_basket import DB_DEFAULT, OUT_DEFAULT, _leg_pnl
 from weather_dashboard.blend import blend_probability, load_default_config
 
 

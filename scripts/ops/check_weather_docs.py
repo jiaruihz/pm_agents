@@ -620,6 +620,34 @@ def check_runtime_artifacts_are_untracked(errors: list[str], tracked: set[str]) 
         )
 
 
+def check_internal_analysis_imports(errors: list[str], tracked: set[str]) -> None:
+    """Reject imports left pointing at a module's pre-reorganization path."""
+    for relative in sorted(tracked):
+        if not relative.startswith("scripts/analysis/") or not relative.endswith(".py"):
+            continue
+        path = ROOT / relative
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            module = node.module or ""
+            if not module.startswith("scripts.analysis."):
+                continue
+            module_path = ROOT / module.replace(".", "/")
+            if module_path.is_dir() or module_path.with_suffix(".py").is_file():
+                continue
+            fail(
+                errors,
+                f"{relative}:{node.lineno}: internal analysis import does not exist: "
+                f"{module}",
+            )
+
+
 def production_script_closure(tracked: set[str]) -> tuple[set[str], set[str]]:
     production = read("src/strategies/runtime/production.yaml")
     scripts = {
@@ -824,6 +852,7 @@ def main() -> int:
     check_generated_artifacts(errors, tracked)
     check_analysis_history_debt(errors, tracked, untracked)
     check_runtime_artifacts_are_untracked(errors, tracked)
+    check_internal_analysis_imports(errors, tracked)
     check_production_entrypoints(errors, tracked)
     check_research_script_debt(errors, tracked, untracked)
     if errors:

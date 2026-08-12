@@ -25,7 +25,7 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.eval_city_day_basket import DB_DEFAULT, OUT_DEFAULT  # noqa: E402
+from scripts.analysis.city_selection.eval_city_day_basket import DB_DEFAULT, OUT_DEFAULT  # noqa: E402
 from weather_dashboard.blend import blend_probability, load_default_config  # noqa: E402
 
 

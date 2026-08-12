@@ -27,7 +27,7 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.eval_city_day_basket import (  # noqa: E402
+from scripts.analysis.city_selection.eval_city_day_basket import (  # noqa: E402
     DB_DEFAULT,
     OUT_DEFAULT,
     _attribution,
@@ -36,7 +36,7 @@ from scripts.analysis.eval_city_day_basket import (  # noqa: E402
     _decide_raw_single,
     _summarize,
 )
-from scripts.analysis.research_city_day_basket_optimizer import (  # noqa: E402
+from scripts.analysis.city_selection.research_city_day_basket_optimizer import (  # noqa: E402
     _decide_combo_optimizer,
     _load_rows,
 )

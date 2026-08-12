@@ -22,7 +22,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.analysis.weather_polymarket_account_activity import iter_activity  # noqa: E402
+from scripts.analysis.account_reconcile.weather_polymarket_account_activity import (  # noqa: E402
+    iter_activity,
+)
 
 
 def parse_utc_date(value: str) -> dt.datetime:

@@ -25,21 +25,21 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.analysis.compare_city_day_basket_vs_legacy_baselines import (  # noqa: E402
+from scripts.analysis.city_selection.compare_city_day_basket_vs_legacy_baselines import (  # noqa: E402
     PROFILES,
     _decide_legacy_profile,
     _entry_band_universe,
     _legacy_trigger_universe,
     _load_rows,
 )
-from scripts.analysis.eval_city_day_basket import (  # noqa: E402
+from scripts.analysis.city_selection.eval_city_day_basket import (  # noqa: E402
     DB_DEFAULT,
     OUT_DEFAULT,
     Leg,
     _attribution,
     _summarize,
 )
-from scripts.analysis.research_city_day_basket_optimizer import (  # noqa: E402
+from scripts.analysis.city_selection.research_city_day_basket_optimizer import (  # noqa: E402
     ComboLeg,
     _candidate_legs_for_group,
     _cvar20,
@@ -49,7 +49,7 @@ from scripts.analysis.research_city_day_basket_optimizer import (  # noqa: E402
     _payoff_by_temp,
     _probability_distribution,
 )
-from scripts.analysis.research_weather_edge_v2_filtered_operational_base import (  # noqa: E402
+from scripts.analysis.blender_shadow.research_weather_edge_v2_filtered_operational_base import (  # noqa: E402
     MAX_DECISION_HOURS_TO_SETTLE,
     REMOVED_CITIES,
     _actual_live_operational_base,
