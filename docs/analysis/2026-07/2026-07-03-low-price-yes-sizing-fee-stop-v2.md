@@ -195,4 +195,7 @@ Closed forward:
 - Script: `scripts/analysis/forecast_quality/research_low_price_yes_sizing_fee_stop_v2.py`
 - Replay rows: `docs/analysis/2026-07/generated/low_price_yes_sizing_fee_stop_v2/replay_rows.csv`
 - Summary: `docs/analysis/2026-07/generated/low_price_yes_sizing_fee_stop_v2/summary.csv`
-- JSON: `docs/analysis/2026-07/2026-07-03-low-price-yes-sizing-fee-stop-v2.json`
+- Machine-readable result: `docs/analysis/2026-07/generated/low_price_yes_sizing_fee_stop_v2/summary.csv`
+- The former top-level JSON duplicated all 2,520 CSV summary rows and was removed
+  on 2026-08-12. Git retains its historical blob; future replays write only the
+  CSV machine result plus this decision summary.

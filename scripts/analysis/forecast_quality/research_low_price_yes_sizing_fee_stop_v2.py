@@ -37,7 +37,6 @@ INPUT = ROOT / "docs/analysis/2026-07/generated/low_price_yes_integrated_tail_v2
 SNAPSHOT_DIR = historical_strategy_snapshots()
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/low_price_yes_sizing_fee_stop_v2"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-03-low-price-yes-sizing-fee-stop-v2.md"
-OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-03-low-price-yes-sizing-fee-stop-v2.json"
 
 RNG_SEED = 20260703
 N_BOOT = 5000
@@ -790,7 +789,7 @@ Closed forward:
 - Script: `{Path(__file__).relative_to(ROOT)}`
 - Replay rows: `{(OUT_DIR / 'replay_rows.csv').relative_to(ROOT)}`
 - Summary: `{(OUT_DIR / 'summary.csv').relative_to(ROOT)}`
-- JSON: `{OUT_JSON.relative_to(ROOT)}`
+- Machine-readable result: `{(OUT_DIR / 'summary.csv').relative_to(ROOT)}`
 """
 
 
@@ -813,35 +812,8 @@ def main() -> None:
     summary.to_csv(OUT_DIR / "summary.csv", index=False)
     paths.to_csv(OUT_DIR / "paths.csv", index=False)
 
-    payload = {
-        "generated_at_utc": now_utc(),
-        "input": str(INPUT.relative_to(ROOT)),
-        "rows": int(len(base)),
-        "date_min": str(base["target_date"].min()),
-        "date_max": str(base["target_date"].max()),
-        "cities": int(base["city"].nunique()),
-        "summary": json.loads(summary.to_json(orient="records")),
-        "path_coverage": {
-            "future_quote_rows": int((paths["future_quotes"] > 0).sum()),
-            "future_bid_rows": int((paths["future_bid_quotes"] > 0).sum()),
-            "tp20_rows": int((paths["first_tp20_ts_utc"].astype(str) != "").sum()),
-            "tp30_rows": int((paths["first_tp30_ts_utc"].astype(str) != "").sum()),
-            "time_stop_rows": int((paths["time_stop_ts_utc"].astype(str) != "").sum()),
-            "late_salvage_rows": int((paths["late_salvage_ts_utc"].astype(str) != "").sum()),
-            "strict_dead_stop_rows": int((paths["strict_dead_stop_ts_utc"].astype(str) != "").sum()),
-            "late_dust_stop_rows": int((paths["late_dust_stop_ts_utc"].astype(str) != "").sum()),
-        },
-        "fee_model": {
-            "weather_taker_fee_rate": WEATHER_TAKER_FEE_RATE,
-            "formula": "shares * fee_rate * price * (1 - price)",
-            "maker_fee": 0,
-            "live_manila_check": {"fd": {"r": 0.05, "e": 1, "to": True}, "fee_rate_endpoint_base_fee": 1000},
-        },
-    }
-    OUT_JSON.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     OUT_MD.write_text(make_markdown(summary, replay, base, paths), encoding="utf-8")
     print(f"wrote {OUT_MD.relative_to(ROOT)}")
-    print(f"wrote {OUT_JSON.relative_to(ROOT)}")
     print(f"wrote {(OUT_DIR / 'summary.csv').relative_to(ROOT)}")
 
 
