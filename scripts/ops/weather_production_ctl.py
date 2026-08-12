@@ -1312,12 +1312,8 @@ def _run_restart(
                 "status": "error",
                 "reason": str(exc),
             }
-        stopped = _tmux(
-            spec, "kill-session", "-t", f"={runtime.tmux_session}"
-        )
-        session_was_missing = (
-            stopped.returncode != 0
-            and "can't find session" in stopped.stdout.lower()
+        stopped, session_was_missing = _stop_registered_session(
+            spec, runtime.tmux_session
         )
         if stopped.returncode != 0 and not session_was_missing:
             return {
@@ -1417,7 +1413,7 @@ def _run_stop(
             "status": "blocked",
             "reason": "safe_recovery_policy_required",
         }
-    stopped = _tmux(spec, "kill-session", "-t", f"={runtime.tmux_session}")
+    stopped, _ = _stop_registered_session(spec, runtime.tmux_session)
     if stopped.returncode != 0:
         return {
             "instance_id": runtime.instance_id,
@@ -1431,6 +1427,55 @@ def _run_stop(
         "status": "stopped",
         "tmux_session": runtime.tmux_session,
     }
+
+
+def _pid_is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _stop_registered_session(
+    spec: WeatherProductionSpec,
+    session: str,
+    *,
+    quiescence_timeout_sec: float = 10.0,
+) -> tuple[subprocess.CompletedProcess[str], bool]:
+    """Kill one exact session and wait for its observed pane processes to exit."""
+
+    panes = _tmux(spec, "list-panes", "-t", f"={session}", "-F", "#{pane_pid}")
+    pane_pids = {
+        int(value)
+        for value in panes.stdout.splitlines()
+        if value.strip().isdigit()
+    }
+    stopped = _tmux(spec, "kill-session", "-t", f"={session}")
+    session_was_missing = (
+        stopped.returncode != 0 and "can't find session" in stopped.stdout.lower()
+    )
+    if stopped.returncode != 0 or not pane_pids:
+        return stopped, session_was_missing
+    deadline = time.monotonic() + max(0.0, quiescence_timeout_sec)
+    alive = {pid for pid in pane_pids if _pid_is_alive(pid)}
+    while alive and time.monotonic() < deadline:
+        time.sleep(0.1)
+        alive = {pid for pid in alive if _pid_is_alive(pid)}
+    if alive:
+        return (
+            subprocess.CompletedProcess(
+                stopped.args,
+                1,
+                "session removed but pane processes remained alive: "
+                + ",".join(str(pid) for pid in sorted(alive)),
+                "",
+            ),
+            False,
+        )
+    return stopped, False
 
 
 def _ordered_start_items(

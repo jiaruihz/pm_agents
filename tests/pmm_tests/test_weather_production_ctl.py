@@ -1253,7 +1253,10 @@ def test_controller_stops_exact_safe_non_live_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl, "_tmux", fake_tmux)
 
     assert ctl._run_stop(spec, runtime)["status"] == "stopped"
-    assert calls == [("kill-session", "-t", "=shadow_session")]
+    assert calls == [
+        ("list-panes", "-t", "=shadow_session", "-F", "#{pane_pid}"),
+        ("kill-session", "-t", "=shadow_session"),
+    ]
 
 
 def test_controller_refuses_stop_for_live_runtime(tmp_path):
@@ -1296,7 +1299,35 @@ def test_controller_stops_exact_confirmed_live_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl, "_tmux", fake_tmux)
 
     assert ctl._run_stop(spec, runtime, confirm_live=True)["status"] == "stopped"
-    assert calls == [("kill-session", "-t", "=live_session")]
+    assert calls == [
+        ("list-panes", "-t", "=live_session", "-F", "#{pane_pid}"),
+        ("kill-session", "-t", "=live_session"),
+    ]
+
+
+def test_controller_stop_fails_if_observed_pane_process_does_not_quiesce(
+    tmp_path, monkeypatch
+):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow_session",
+        role="shadow",
+        execution_mode="zero_notional_shadow",
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+
+    def fake_tmux(_spec, *args):
+        output = "123\n" if args[0] == "list-panes" else ""
+        return subprocess.CompletedProcess(args, 0, output, "")
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
+    monkeypatch.setattr(ctl, "_pid_is_alive", lambda pid: True)
+    result = ctl._stop_registered_session(
+        spec, "shadow_session", quiescence_timeout_sec=0
+    )[0]
+    assert result.returncode == 1
+    assert "pane processes remained alive: 123" in result.stdout
 
 
 def test_data_feed_semantics_separates_coverage_warning_from_critical_chain():
