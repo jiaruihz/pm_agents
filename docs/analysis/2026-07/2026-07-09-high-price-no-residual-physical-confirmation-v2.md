@@ -3,7 +3,7 @@
 状态:`snapshot`;仅研究,不改 live/shadow。
 
 ## 问题定义
-v1(2026-07-09-high-price-no-residual-decay-capture-v1)证明:只按价格(NO ask>=0.85)无差别收残值,taker 持有到结算显著为负(edge>=0 篮子 ROI -2.0%,CI [-3.5%,-0.1%]),市场平均残值 5.4c 小于真实 exact-failure 6.5%。
+前置 broad 基线证明:只按价格(NO ask>=0.85)无差别收残值,taker 持有到结算显著为负(edge>=0 篮子 ROI -2.0%,CI [-3.5%,-0.1%]),市场平均残值 5.4c 小于真实 exact-failure 6.5%。
 v2 检验真正的论点:**carry 只有在 PIT 物理状态确认当天升温已结束时才能赚**——预报峰值时刻已过、预报天花板打不到目标档、温度路径回落/平台且高点已陈旧;并检查城市是否有稳定模式。
 
 ## 数据与口径
@@ -12,6 +12,30 @@ v2 检验真正的论点:**carry 只有在 PIT 物理状态确认当天升温已
 - 物理分数 = canonical `weather_data_feed.weather_context.heating_done_features`(峰值时钟/预报余量/回落/高点陈旧度/1h 趋势),d2-d4 叠加 leg 级天花板余量 addon(沿用 heating_done_v1 逻辑扩到 d4)。**分数不含任何价格信息。**
 - 帧覆盖 2026-06-20..2026-07-07(paper snapshot 的 METAR 字段 ~06-29 才有,更早无决策帧);只用结算完整日(>=30 城)。
 - taker 成本 = ask + 0.05*p*(1-p) 手续费;first-cross 去重(city/date/leg/bracket 首次满足入场)。
+
+## 已吸收的 broad v1 证据
+本报告是 high-price NO residual/decay 家族的单一历史正本。原 broad v1
+报告已合并删除，完整旧表仍可从 git history 恢复；以下保留后续判断真正需要的分母、反例和
+overlay 结论。
+
+- broad 帧为 3,676 个 paper snapshots、21,210 条 raw NO leg、6,882 条
+  `ask>=0.85 & depth>=5` 可执行行和 2,504 条 first-cross，覆盖
+  2026-06-20..07-07；expanding score 有 2,478 行。
+- 0.85–0.90 带在 current/d1/d2/d3/d4 的 forward exact-failure 分别为
+  15.2%/15.1%/13.8%/16.7%/14.5%，而平均残值约 12–12.6c；五腿持有
+  ROI 全负（-2.3% 到 -5.4%）。这不是 fee 主导，而是 tail 被低估。
+- 该价带 d1–d4 虽有 52%–64% 的行后来出现 `bid>=entry+5c`，hold 仍全负；
+  事后最优退出收益只约 +2c 到 +4c，无法覆盖失败时约 -88c 的尾部损失，故
+  “早段 decay”只是 mark-to-market illusion。
+- empirical `p_hat_exact_failure` 的最低风险桶（<=2%）仍有 3.5% 实现失败，
+  高于平均 2.1c market residual。forward `edge_hat>=0/0.5c/1c/2c` 篮子
+  ROI 分别为 -2.0%/-3.1%/-3.5%/-3.0%，阈值越严没有修复 broad edge。
+- 唯一小 pocket 是 d1 `ask>=0.95`、下一份 METAR<=5 分钟且 at-high：25 行、
+  0 败、ROI +2.3% CI `[+1.9%,+2.7%]`；d3 0.90–0.95 与 current 0.99+
+  也只有薄正点估。它们均为同窗事后切片，只能作为 shadow hypothesis。
+- 25 个 live_real 亏损 city-day 中 17 个有同日 confident residual 行，但
+  Helsinki 07-04、Busan 07-04/07-07 的 residual leg 本身发生更大 tail loss；
+  因此覆盖率不能冒充 portfolio uplift，负 EV overlay 不用于回本。
 
 ## 政策阶梯(物理确认逐层收紧)
 - `P0_all`:全部可执行高价 NO(v1 的 broad 基线)。
