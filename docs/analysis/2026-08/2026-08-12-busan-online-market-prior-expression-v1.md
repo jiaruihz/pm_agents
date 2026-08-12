@@ -149,7 +149,7 @@ generic hot-strip 的 60s markout 当本模型收益。
 2. 保留 `weight=0.25, trained_through=8/11` 作为**待验证**的下一日状态；
    8/12 残缺数据不得补入。
 3. 已固化并 parity-lock composite artifact，也已实现不读 label 的 Busan WCIR adapter；
-   clean forward 从 `2026-08-12T03:00:00Z` 起 append，部署前的当日数据不回填冒充 forward。
+   clean forward 从 `2026-08-12T02:00:00Z` 起 append，部署前的当日数据不回填冒充 forward。
 4. 至少新增 5 个 `weight>0` 的独立日期并出现可执行信号后，再做一次固定分母
    admission；当前只有 3 天，且 clean forward 为 0 天。
 5. WS 等覆盖至少跨多个独立 settlement dates 后，只做增量 A/B：

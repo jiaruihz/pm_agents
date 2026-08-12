@@ -78,7 +78,7 @@
       "profile_id": "busan_pending_confirmation_market_prior_clean_forward_v1",
       "source": "amos_runway",
       "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/korea_first_seen_state_v1/checkpoints",
-      "forward_start_utc": "2026-08-12T03:00:00Z",
+      "forward_start_utc": "2026-08-12T02:00:00Z",
       "max_source_age_seconds": 180,
       "max_feature_book_response_seconds": 10,
       "max_execution_book_age_seconds": 90,

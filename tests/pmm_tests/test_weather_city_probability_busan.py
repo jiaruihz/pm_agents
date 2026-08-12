@@ -193,7 +193,7 @@ def test_busan_production_profile_is_zero_notional_clean_forward() -> None:
     assert config["execution_mode"] == "zero_notional_shadow"
     assert config["orders_submitted"] == 0
     assert profile["adapter"] == "busan_online_market_prior_v1"
-    assert profile["forward_start_utc"] == "2026-08-12T03:00:00Z"
+    assert profile["forward_start_utc"] == "2026-08-12T02:00:00Z"
     assert profile["max_feature_book_response_seconds"] == 10
     assert profile["max_execution_book_age_seconds"] == 90
     assert profile["edge_threshold"] == 0.0
