@@ -125,6 +125,11 @@ system contract 和 ops runbook。
   `superseded-for-now`。它们保留历史机制框架，但不再与 skill、research brief、Quant Design、
   WCIR/TMIN 和 registry 争夺当前提示词/架构权威；docs check 新增反回归，禁止 superseded/retired
   文档继续在索引中标作 `current-reference`。
+- 2026-08-12：7 个 Tokyo overshoot 逐日 replay 目录和 1 个临时 JSON 共 22 个文件经全仓引用
+  扫描确认为 orphan，已迁入 JRS content-addressed artifact store（manifest
+  `cleanup-orphan-tokyo-daily-replays-20260812-b3`）并移除空目录。保留 Tokyo 当前模型真正消费的
+  `tokyo_continuous_ladder_probability_v1`、forward-v3 model 与 JMA path 数据；不能因为体积大就迁走
+  active consumer 输入。
 
 ## 仍有效的历史边界
 
