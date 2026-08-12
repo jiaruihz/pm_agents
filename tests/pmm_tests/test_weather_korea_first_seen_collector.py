@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 from scripts.ops.weather_korea_first_seen_collector import (
     LATEST_SCHEMA_FINGERPRINT,
@@ -9,6 +12,9 @@ from scripts.ops.weather_korea_first_seen_collector import (
     build_producer_identity,
     read_appended_rows,
 )
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_row(path, sequence: int) -> None:
@@ -64,3 +70,26 @@ def test_korea_collector_producer_identity_matches_latest_contract(tmp_path) -> 
     assert identity["output_schema_version"] == LATEST_SCHEMA_VERSION
     assert identity["output_schema_fingerprint"] == LATEST_SCHEMA_FINGERPRINT
     assert identity["loaded_module_sha256"]
+
+
+def test_korea_collector_direct_script_entrypoint_builds_identity(tmp_path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/ops/weather_korea_first_seen_collector.py"),
+            "--config",
+            str(ROOT / "configs/weather/korea_first_seen_collector_v1.json"),
+            "--source-jsonl",
+            str(tmp_path / "missing-source"),
+            "--forecast-root",
+            str(tmp_path / "forecast"),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+    assert payload["schema_version"] == LATEST_SCHEMA_VERSION
+    assert payload["producer_identity"]["runtime_instance_id"]

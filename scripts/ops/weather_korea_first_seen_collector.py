@@ -107,11 +107,13 @@ def build_producer_identity(
     if cached is not None:
         return cached
     module_names = {
-        __name__,
         "weather_data_feed.korea_amos_features",
         "scripts.ops.weather_fast_source_stale_book_observer",
     }
-    module_hashes: dict[str, str] = {}
+    entrypoint_path = Path(__file__).resolve()
+    module_hashes: dict[str, str] = {
+        str(entrypoint_path): _sha256_file(entrypoint_path)
+    }
     for module_name in sorted(module_names):
         spec = importlib.util.find_spec(module_name)
         if spec is None or not spec.origin:
