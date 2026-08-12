@@ -174,3 +174,16 @@ feature parity / conditional tail calibration，不用这 11 日继续挑 alpha�
 
 V3 spec：`configs/weather/tokyo_continuous_full_probability_v3.json`；audit artifact：
 `tokyo_v2_v3_model_map/run_20260812_v1/tokyo_v3_full_probability_audit`。
+
+## V2 zero-notional 部署验收（2026-08-12）
+
+Tokyo V2 已加入公共 WCIR `weather_city_probability_runtime_v3`，仅生成 zero-notional decision telemetry；
+Tokyo V3 没有加入 runtime config，仍是 research-only。生产 release 为
+`625abc438e4461682479134ca42231fa4b3fad2b`，部署后进程 PID `67203`。连续周期的
+`latest_summary.json` 为 `status=ok`、`execution_mode=zero_notional_shadow`、`errors=0`、
+`orders_submitted=0`，并记录 V2 candidate spec SHA
+`4d454faaa89af0b9e6b4793175385333f1af845f0ea78015a3429ac2dde34aac`。
+
+部署发生在 22:48 CST（23:48 JST），已经超过 Tokyo source window，因此部署后的周期尚无新的 V2
+decision bundle 或 paper intent；这只证明 release/config/zero-notional 链已正确加载，不冒充首日 forward
+模型结果。第一批可评价的 live first-seen evidence 从下一个 Tokyo 采集窗口开始累计。
