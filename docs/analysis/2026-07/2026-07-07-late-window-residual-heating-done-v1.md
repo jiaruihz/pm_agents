@@ -3,6 +3,33 @@
 Status: `snapshot`
 Evidence: `paper_snapshots/snapshot_YYYYMMDD_HHMM.json` per polling cycle; settlement joined only after PIT candidate generation.
 
+## Capture lineage absorbed here
+This is the single historical snapshot for capture v1, feature-layer v2,
+per-poll v3 and the heating-done extension. The first three one-off producers,
+their duplicate reports and bulky JSON were retired; their full source/tables
+remain in git history.
+
+- capture v1 proved the Chengdu 39 NO window was real, not an hourly-resample
+  artifact: 15:28:57 BJ `ask/bid=0.950/0.940`, 15:45:43
+  `0.960/0.959`. Its 6,709 PIT states / 32,028 expanded quotes / 12,676
+  strict-depth rows still showed broad taker current YES/d1/d2 negative; maker
+  estimates lacked queue evidence.
+- feature-layer v2 moved state and bracket parsing to shared packages, but its
+  atlas stopped at 2026-07-04. On 5,598 first-cross rows the taker basket was
+  -1.2%; current YES/d1/d2 were -0.8%/-1.3%/-2.5%, and d3 +0.4% with CI
+  crossing zero. Regime pockets had only 2–5 forward dates.
+- per-poll v3 fixed the decision denominator to each persisted polling cycle
+  and made first-cross/no-add explicit: 4,341 raw legs, 692 strict 1–5pt rows
+  and 264 strict first-cross rows. Forward current YES/d1/d2 were
+  -3.7%/-1.3%/-4.1%; d3 was +2.6% on 5 dates. The late-confirmed d1 policy was
+  15 rows / 5 dates / +2.5%, while the 97-row combo was +1.4% with CI crossing
+  zero. These are diagnostics inside the broader no-price-filter denominator
+  below, not a second strategy contract.
+- heating-done is the surviving producer because it keeps that per-poll
+  denominator while replacing fixed time/price eligibility with reusable
+  physical state. Its replay input is restored from JRS manifest
+  `late_window_residual_heating_done_v1_cleanup_20260812` when needed.
+
 ## Verdict
 Per-poll replay now separates physical residual state from price: entry is based on `heating_done_score_v1` and bracket-specific `leg_residual_done_score_v1`, while price is only reported as execution/EV. This fixes the overly rigid 17:00 and 1-5c entry gates, but the available settled forward window is still too small for live promotion. Conclusion: `inconclusive_research_shadow_only`; do not change live. Positive forward point estimates exist for feature policies: d1_no_heating_done, d2_no_residual_done, d3_no_residual_done, heating_done_residual_combo.
 
