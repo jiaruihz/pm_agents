@@ -1,33 +1,43 @@
 {
-  "schema_version": "tokyo_continuous_full_probability_research_v1",
+  "schema_version": "tokyo_continuous_full_probability_candidate_v2",
   "user_facing_version": "Tokyo V3",
-  "human_summary": "连续全概率模型：每个JMA 10分钟checkpoint输出最终停在当前档或再升+1/+2/+3+档的完整概率，并可同时评估YES和NO",
+  "human_summary": "连续全概率模型：每个PIT checkpoint联合完整market ladder与天气路径，输出stay/+1/+2/+3+并同时评估YES和NO",
   "model_id": "weather.city_intraday_probability.tokyo_continuous_full_probability",
   "target": "end_of_day_remaining_rise_distribution",
   "outcomes": ["stay", "plus_1", "plus_2", "plus_3plus"],
   "checkpoint_grain": "every causal JMA 10-minute checkpoint",
   "weather_artifact": {
-    "path": "docs/analysis/2026-07/generated/tokyo_continuous_ladder_forward_v3/models/direct_checkpoint_hgb_v3.joblib",
-    "sha256": "ec7fecc9e25343dc9684e39757ea90cdd9353ae5d868196bb32da263b0bd9709",
+    "path": "docs/analysis/2026-07/generated/tokyo_continuous_ladder_forward_v3/models/coherent_multigrain_hgb_v3.joblib",
+    "sha256": "de77e4fb065a1a9812caf70cabed1b2e2184c6a5d546b27b59160a34add00e64",
     "training_cutoff": "2026-07-15"
   },
   "market_anchor": {
-    "formula": "blend total leave logit with same-checkpoint market; preserve weather conditional tail shape",
-    "development_alpha_candidates": [0.0, 0.05, 0.1, 0.25, 0.5, 1.0],
-    "selected_alpha": 0.5
+    "formula": "normalized geometric pool over the complete conditional market and weather distributions",
+    "market_temperature": 0.5,
+    "weather_weight": 0.5,
+    "selection_end": "2026-07-23",
+    "clean_forward_start": "2026-08-13"
   },
-  "latest_reused_audit": {
-    "window": ["2026-08-01", "2026-08-11"],
-    "rows": 554,
-    "target_dates": 11,
-    "v3_leave_brier": 0.0865745313566119,
-    "v3_leave_logloss": 0.2701352929073394,
-    "v3_leave_accuracy": 0.8784244805397475,
-    "market_leave_brier": 0.07473194314665672,
-    "market_leave_logloss": 0.24058006771335638,
-    "market_leave_accuracy": 0.9099108942839625,
-    "baseline_gate": "fail"
+  "latest_temporal_validation": {
+    "window": ["2026-07-24", "2026-07-29"],
+    "rows": 126,
+    "target_dates": 6,
+    "v3_multiclass_brier": 0.07327705153619025,
+    "market_multiclass_brier": 0.09529715113246784,
+    "brier_delta_vs_market": -0.022020099596277588,
+    "brier_delta_ci": [-0.04207612127212653, -0.007420444771465792],
+    "trade_signals": 13,
+    "trade_wins": 11,
+    "trade_fee_adjusted_pnl_usd": 10.56855,
+    "trade_fee_adjusted_roi": 0.23786191987882463,
+    "role": "reused_temporal_validation_not_clean_forward"
   },
+  "research_artifact": {
+    "path": "/Volumes/jrs-archive/pm_agents/research/artifact_store/active/tokyo_continuous_full_probability/fusion_20260813_v1",
+    "candidate_spec_sha256": "d9c6be38425347f0b91c572e132ca324760935c3c86e0c7ee8ddcfd1abb42196",
+    "summary_sha256": "c5e227d01da7e145efea0198764160375c7a6b215286088d8b1e5c4cf8861972"
+  },
+  "research_status": "shadow_candidate_clean_forward_required",
   "deployment_status": "research_only_not_in_runtime",
   "live_notional": 0.0
 }

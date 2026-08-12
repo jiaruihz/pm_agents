@@ -57,6 +57,16 @@ MODEL_NAMES = (
     "coherent_multigrain_hgb_v3",
     "coherent_multigrain_hgb_v3__episode_state",
 )
+FULL_FUSION_WEATHER_MODELS = (
+    "direct_checkpoint_hgb_v3",
+    "coherent_checkpoint_hgb_v3",
+    "coherent_multigrain_hgb_v3",
+)
+FULL_FUSION_MARKET_TEMPERATURES = (0.5, 0.6, 0.7, 0.8, 1.0)
+FULL_FUSION_WEATHER_WEIGHTS = (0.0, 0.25, 0.33, 0.5, 0.67)
+FULL_FUSION_MODEL_ID = (
+    "weather.city_intraday_probability.tokyo_continuous_full_probability"
+)
 CHAMPION = "direct_checkpoint_hgb_v3"
 OUTCOMES = ("delta_0", "delta_1", "delta_2", "delta_3plus")
 FROZEN_PARAMS = {
@@ -105,6 +115,117 @@ FEATURE_AB_PAIRS = {
         "coherent_multigrain_hgb_v3"
     ),
 }
+
+
+def full_distribution_geometric_pool(
+    market: np.ndarray,
+    weather: np.ndarray,
+    *,
+    market_temperature: float,
+    weather_weight: float,
+) -> np.ndarray:
+    """Fuse complete PIT market/weather distributions without dropping tails."""
+
+    if market.shape != weather.shape or market.ndim != 2:
+        raise ValueError("market and weather distributions must have equal 2D shape")
+    if market_temperature <= 0:
+        raise ValueError("market_temperature must be positive")
+    if not 0.0 <= weather_weight <= 1.0:
+        raise ValueError("weather_weight must be in [0, 1]")
+    market_power = 1.0 / float(market_temperature)
+    logits = (
+        (1.0 - float(weather_weight))
+        * market_power
+        * np.log(np.clip(market, EPS, 1.0))
+        + float(weather_weight) * np.log(np.clip(weather, EPS, 1.0))
+    )
+    logits -= logits.max(axis=1, keepdims=True)
+    output = np.exp(logits)
+    return output / output.sum(axis=1, keepdims=True)
+
+
+def _date_equal_distribution_losses(
+    rows: list[dict[str, Any]], probabilities: np.ndarray
+) -> dict[str, float | int]:
+    if len(rows) != len(probabilities):
+        raise ValueError("row/probability length mismatch")
+    daily: dict[str, list[tuple[float, float, float]]] = defaultdict(list)
+    for row, probability in zip(rows, probabilities):
+        label = min(max(int(row["actual_delta"]), 0), 3)
+        target = np.eye(4, dtype=float)[label]
+        brier = float(np.sum((probability - target) ** 2))
+        logloss = float(-math.log(max(float(probability[label]), EPS)))
+        rps = float(
+            np.mean(
+                (
+                    np.cumsum(probability)[:-1]
+                    - np.cumsum(target)[:-1]
+                )
+                ** 2
+            )
+        )
+        daily[str(row["target_date"])].append((brier, logloss, rps))
+    date_means = [np.mean(values, axis=0) for values in daily.values()]
+    aggregate = np.mean(date_means, axis=0)
+    return {
+        "rows": len(rows),
+        "target_dates": len(daily),
+        "multiclass_brier": float(aggregate[0]),
+        "multiclass_logloss": float(aggregate[1]),
+        "ranked_probability_score": float(aggregate[2]),
+    }
+
+
+def _date_block_distribution_delta(
+    rows: list[dict[str, Any]],
+    candidate: np.ndarray,
+    baseline: np.ndarray,
+    *,
+    metric: str,
+    draws: int = 20_000,
+) -> dict[str, float | int]:
+    metric_index = {"brier": 0, "logloss": 1, "rps": 2}[metric]
+    grouped: dict[str, list[float]] = defaultdict(list)
+    for row, candidate_probability, baseline_probability in zip(
+        rows, candidate, baseline
+    ):
+        label = min(max(int(row["actual_delta"]), 0), 3)
+        target = np.eye(4, dtype=float)[label]
+        values = []
+        for probability in (candidate_probability, baseline_probability):
+            values.append(
+                (
+                    float(np.sum((probability - target) ** 2)),
+                    float(-math.log(max(float(probability[label]), EPS))),
+                    float(
+                        np.mean(
+                            (
+                                np.cumsum(probability)[:-1]
+                                - np.cumsum(target)[:-1]
+                            )
+                            ** 2
+                        )
+                    ),
+                )[metric_index]
+            )
+        grouped[str(row["target_date"])].append(values[0] - values[1])
+    blocks = np.asarray(
+        [float(np.mean(values)) for values in grouped.values()], dtype=float
+    )
+    rng = np.random.default_rng(20260813)
+    sampled = np.asarray(
+        [
+            float(np.mean(rng.choice(blocks, len(blocks), replace=True)))
+            for _ in range(draws)
+        ]
+    )
+    return {
+        "delta": float(np.mean(blocks)),
+        "ci_low": float(np.quantile(sampled, 0.025)),
+        "ci_high": float(np.quantile(sampled, 0.975)),
+        "draws": draws,
+        "target_dates": len(blocks),
+    }
 
 
 def add_episode_state_features(
@@ -1463,6 +1584,348 @@ def join_market_asof_books(
     return output
 
 
+def run_full_probability_fusion_audit(
+    *,
+    input_path: Path,
+    output_dir: Path,
+    raw_books: Path,
+    selection_end: str,
+    clean_forward_start: str,
+) -> dict[str, Any]:
+    """Develop and freeze Tokyo V3 full-ladder market/weather fusion.
+
+    The supplied July market-overlap slice has already been inspected by prior
+    research, so the later temporal split is validation, not clean forward.
+    A genuinely clean window starts only after this candidate spec is frozen.
+    """
+
+    raw_rows = v1.read_rows(input_path)
+    rows = [
+        row
+        for row in raw_rows
+        if int(float(row.get("settlement_lower_bound_violation") or 0)) == 0
+        and row.get("market_distribution_json")
+        and all(
+            row.get(f"{model}_distribution_json")
+            for model in FULL_FUSION_WEATHER_MODELS
+        )
+    ]
+    rows.sort(key=lambda row: (str(row["target_date"]), str(row["snapshot_ts_utc"])))
+    if not rows:
+        raise RuntimeError("no complete settled full-ladder rows")
+    selection_rows = [row for row in rows if str(row["target_date"]) <= selection_end]
+    validation_rows = [row for row in rows if str(row["target_date"]) > selection_end]
+    if len({str(row["target_date"]) for row in selection_rows}) < 5:
+        raise RuntimeError("full fusion selection requires at least five target dates")
+    if len({str(row["target_date"]) for row in validation_rows}) < 2:
+        raise RuntimeError("full fusion validation requires at least two target dates")
+
+    market = np.asarray(
+        [json.loads(str(row["market_distribution_json"])) for row in rows],
+        dtype=float,
+    )
+    weather_by_model = {
+        model: np.asarray(
+            [
+                json.loads(str(row[f"{model}_distribution_json"]))
+                for row in rows
+            ],
+            dtype=float,
+        )
+        for model in FULL_FUSION_WEATHER_MODELS
+    }
+    selection_mask = np.asarray(
+        [str(row["target_date"]) <= selection_end for row in rows], dtype=bool
+    )
+    validation_mask = ~selection_mask
+
+    parameter_rows: list[dict[str, Any]] = []
+    probability_by_key: dict[tuple[str, float, float], np.ndarray] = {}
+    for weather_model, weather in weather_by_model.items():
+        for market_temperature in FULL_FUSION_MARKET_TEMPERATURES:
+            for weather_weight in FULL_FUSION_WEATHER_WEIGHTS:
+                probability = full_distribution_geometric_pool(
+                    market,
+                    weather,
+                    market_temperature=market_temperature,
+                    weather_weight=weather_weight,
+                )
+                key = (weather_model, market_temperature, weather_weight)
+                probability_by_key[key] = probability
+                selection_score = _date_equal_distribution_losses(
+                    selection_rows, probability[selection_mask]
+                )
+                parameter_rows.append(
+                    {
+                        "weather_model": weather_model,
+                        "market_temperature": market_temperature,
+                        "weather_weight": weather_weight,
+                        "selection_end": selection_end,
+                        **selection_score,
+                    }
+                )
+    selected = min(
+        parameter_rows,
+        key=lambda row: (
+            float(row["multiclass_brier"]),
+            float(row["multiclass_logloss"]),
+        ),
+    )
+    selected_key = (
+        str(selected["weather_model"]),
+        float(selected["market_temperature"]),
+        float(selected["weather_weight"]),
+    )
+    candidate = probability_by_key[selected_key]
+
+    market_temperature_rows = []
+    calibrated_market_by_temperature: dict[float, np.ndarray] = {}
+    for temperature in FULL_FUSION_MARKET_TEMPERATURES:
+        calibrated = full_distribution_geometric_pool(
+            market,
+            market,
+            market_temperature=temperature,
+            weather_weight=0.0,
+        )
+        calibrated_market_by_temperature[temperature] = calibrated
+        market_temperature_rows.append(
+            {
+                "market_temperature": temperature,
+                "selection_end": selection_end,
+                **_date_equal_distribution_losses(
+                    selection_rows, calibrated[selection_mask]
+                ),
+            }
+        )
+    selected_market_temperature = float(
+        min(
+            market_temperature_rows,
+            key=lambda row: (
+                float(row["multiclass_brier"]),
+                float(row["multiclass_logloss"]),
+            ),
+        )["market_temperature"]
+    )
+    calibrated_market = calibrated_market_by_temperature[
+        selected_market_temperature
+    ]
+
+    score_rows: list[dict[str, Any]] = []
+    for split, mask, selected_rows in (
+        ("parameter_selection", selection_mask, selection_rows),
+        ("temporal_validation_reused", validation_mask, validation_rows),
+    ):
+        for model, probability in (
+            ("same_checkpoint_market_full_distribution", market),
+            ("selection_calibrated_market_full_distribution", calibrated_market),
+            ("tokyo_v3_full_ladder_fusion", candidate),
+        ):
+            score_rows.append(
+                {
+                    "split": split,
+                    "model": model,
+                    **_date_equal_distribution_losses(
+                        selected_rows, probability[mask]
+                    ),
+                }
+            )
+
+    bootstrap_rows: list[dict[str, Any]] = []
+    for baseline_name, baseline in (
+        ("same_checkpoint_market_full_distribution", market),
+        ("selection_calibrated_market_full_distribution", calibrated_market),
+    ):
+        for metric in ("brier", "logloss", "rps"):
+            bootstrap_rows.append(
+                {
+                    "split": "temporal_validation_reused",
+                    "candidate": "tokyo_v3_full_ladder_fusion",
+                    "baseline": baseline_name,
+                    "metric": metric,
+                    **_date_block_distribution_delta(
+                        validation_rows,
+                        candidate[validation_mask],
+                        baseline[validation_mask],
+                        metric=metric,
+                    ),
+                }
+            )
+
+    prediction_rows = []
+    for row, candidate_probability, market_probability, calibrated_probability in zip(
+        rows, candidate, market, calibrated_market
+    ):
+        output = dict(row)
+        output["tokyo_v3_full_ladder_fusion_distribution_json"] = json.dumps(
+            candidate_probability.tolist()
+        )
+        output["selection_calibrated_market_full_distribution_json"] = json.dumps(
+            calibrated_probability.tolist()
+        )
+        output["raw_market_full_distribution_json"] = json.dumps(
+            market_probability.tolist()
+        )
+        output["fusion_split"] = (
+            "parameter_selection"
+            if str(row["target_date"]) <= selection_end
+            else "temporal_validation_reused"
+        )
+        prediction_rows.append(output)
+
+    validation_predictions = [
+        row
+        for row in prediction_rows
+        if row["fusion_split"] == "temporal_validation_reused"
+    ]
+    for row in validation_predictions:
+        row["tokyo_v3_full_ladder_fusion_distribution_json"] = row.pop(
+            "tokyo_v3_full_ladder_fusion_distribution_json"
+        )
+        row["selection_calibrated_market_distribution_json"] = row.pop(
+            "selection_calibrated_market_full_distribution_json"
+        )
+    candidates = current_next_candidates(
+        validation_predictions,
+        (
+            "tokyo_v3_full_ladder_fusion",
+            "selection_calibrated_market",
+        ),
+    )
+    trades = select_first_signal(
+        candidates,
+        raw_books,
+        selection_policy="first_signal_per_model_target_date_bracket",
+    )
+    trade_summary = strategy_summary(
+        candidates,
+        trades,
+        split="temporal_validation_reused",
+        denominator_dates=sorted(
+            {str(row["target_date"]) for row in validation_rows}
+        ),
+        model_names=(
+            "tokyo_v3_full_ladder_fusion",
+            "selection_calibrated_market",
+        ),
+    )
+
+    validation_candidate = next(
+        row
+        for row in score_rows
+        if row["split"] == "temporal_validation_reused"
+        and row["model"] == "tokyo_v3_full_ladder_fusion"
+    )
+    validation_market = next(
+        row
+        for row in score_rows
+        if row["split"] == "temporal_validation_reused"
+        and row["model"] == "same_checkpoint_market_full_distribution"
+    )
+    validation_brier_delta = next(
+        row
+        for row in bootstrap_rows
+        if row["baseline"] == "same_checkpoint_market_full_distribution"
+        and row["metric"] == "brier"
+    )
+    spec = {
+        "schema_version": "tokyo_continuous_full_probability_candidate_v2",
+        "user_facing_version": "Tokyo V3",
+        "human_summary": (
+            "连续全概率模型：每个PIT checkpoint联合完整market ladder与天气路径，"
+            "输出stay/+1/+2/+3+，不再丢弃market tail shape"
+        ),
+        "model_id": FULL_FUSION_MODEL_ID,
+        "weather_model": selected_key[0],
+        "market_temperature": selected_key[1],
+        "weather_weight": selected_key[2],
+        "fusion": "normalized geometric pool over all four outcomes",
+        "outcomes": list(OUTCOMES),
+        "selection_end": selection_end,
+        "clean_forward_start": clean_forward_start,
+        "clean_forward_labels_used_in_selection": False,
+        "deployment_status": "research_only_not_in_runtime",
+        "live_notional": 0.0,
+    }
+    summary = {
+        "schema_version": "tokyo_continuous_full_probability_fusion_audit_v2",
+        "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "model_id": FULL_FUSION_MODEL_ID,
+        "input_artifact": str(input_path),
+        "denominator_scope": (
+            "Tokyo July 16-29 settled full-ladder PIT book snapshots joined as-of "
+            "the latest available JMA checkpoint; lower-bound violations excluded"
+        ),
+        "raw_rows": len(raw_rows),
+        "usable_rows": len(rows),
+        "usable_target_dates": len({str(row["target_date"]) for row in rows}),
+        "selection": {
+            "end": selection_end,
+            "rows": len(selection_rows),
+            "target_dates": len(
+                {str(row["target_date"]) for row in selection_rows}
+            ),
+            "candidate_count_k": len(parameter_rows),
+            "selected": spec,
+            "selected_market_temperature": selected_market_temperature,
+        },
+        "validation": {
+            "role": "temporal_validation_reused_not_clean_forward",
+            "rows": len(validation_rows),
+            "target_dates": len(
+                {str(row["target_date"]) for row in validation_rows}
+            ),
+            "candidate_multiclass_brier": validation_candidate[
+                "multiclass_brier"
+            ],
+            "market_multiclass_brier": validation_market[
+                "multiclass_brier"
+            ],
+            "brier_delta_vs_market": validation_brier_delta["delta"],
+            "brier_delta_ci": [
+                validation_brier_delta["ci_low"],
+                validation_brier_delta["ci_high"],
+            ],
+        },
+        "signal_funnel": {
+            "raw_full_ladder_states": len(raw_rows),
+            "usable_settled_states": len(rows),
+            "validation_current_next_candidates": len(candidates),
+            "validation_first_date_bracket_signals": len(trades),
+        },
+        "evidence_funnel": {
+            "pit_full_ladder_states": len(rows),
+            "settled_states": len(rows),
+            "five_share_executable_signals": sum(
+                int(row.get("five_share_executable", 0)) for row in trades
+            ),
+            "actual_fills": 0,
+        },
+        "research_status": "shadow_candidate_clean_forward_required",
+        "action": (
+            "freeze full-ladder fusion and collect zero-notional clean forward; "
+            "do not replace Tokyo V2 or change live behavior"
+        ),
+        "research_only_zero_notional": True,
+        "live_behavior_changed": False,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_rows(output_dir / "parameter_selection.csv", parameter_rows)
+    write_rows(output_dir / "market_temperature_selection.csv", market_temperature_rows)
+    write_rows(output_dir / "scores.csv", score_rows)
+    write_rows(output_dir / "bootstrap.csv", bootstrap_rows)
+    write_rows(output_dir / "predictions.csv.gz", prediction_rows)
+    write_rows(output_dir / "trade_candidates.csv.gz", candidates)
+    write_rows(output_dir / "selected_trades.csv", trades)
+    write_rows(output_dir / "trade_summary.csv", trade_summary)
+    (output_dir / "frozen_candidate_spec.json").write_text(
+        json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return summary
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--features", type=Path, default=v1.FEATURE_ROWS)
@@ -1498,8 +1961,36 @@ def main(argv: list[str] | None = None) -> int:
         "--strategy-evaluation-status",
         default="frozen_before_forward",
     )
+    parser.add_argument(
+        "--full-probability-fusion-input",
+        type=Path,
+        help=(
+            "Run only the Tokyo V3 complete-ladder fusion audit using an "
+            "existing market_join_rows CSV/CSV.GZ from this runner."
+        ),
+    )
+    parser.add_argument(
+        "--fusion-selection-end",
+        default="2026-07-23",
+        help="Last target date allowed to select V3 fusion parameters.",
+    )
+    parser.add_argument(
+        "--fusion-clean-forward-start",
+        default="2026-08-13",
+        help="First target date reserved for post-freeze clean forward.",
+    )
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.full_probability_fusion_input is not None:
+        summary = run_full_probability_fusion_audit(
+            input_path=args.full_probability_fusion_input,
+            output_dir=args.out,
+            raw_books=args.raw_books,
+            selection_end=args.fusion_selection_end,
+            clean_forward_start=args.fusion_clean_forward_start,
+        )
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0
     strategy_market_split = (
         "frozen_forward_15d_market_available"
         if args.strategy_evaluation_status == "frozen_before_forward"

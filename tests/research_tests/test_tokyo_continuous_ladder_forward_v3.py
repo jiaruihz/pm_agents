@@ -323,3 +323,79 @@ def test_first_per_bracket_keeps_new_brackets_without_add_ons(
         (row["expression_bracket"], row["state_id"]) for row in selected
     ] == [("29", "29-first"), ("30", "30-first")]
     assert all(row["add_on_allowed"] == 0 for row in selected)
+
+
+def test_full_distribution_fusion_preserves_normalization_and_market_tails() -> None:
+    market = np.asarray([[0.10, 0.20, 0.30, 0.40]])
+    weather = np.asarray([[0.40, 0.30, 0.20, 0.10]])
+
+    fused = forward.full_distribution_geometric_pool(
+        market,
+        weather,
+        market_temperature=1.0,
+        weather_weight=0.5,
+    )
+
+    assert fused.shape == (1, 4)
+    assert fused.sum(axis=1) == pytest.approx([1.0])
+    assert np.all(fused > 0)
+    assert fused[0, 2] > 0
+    assert fused[0, 3] > 0
+
+
+def test_full_probability_fusion_audit_freezes_after_temporal_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = []
+    for day in range(16, 25):
+        target_date = f"2026-07-{day:02d}"
+        actual_delta = day % 2
+        winner = str(30 + actual_delta)
+        market = [0.55, 0.35, 0.08, 0.02]
+        weather = (
+            [0.90, 0.07, 0.02, 0.01]
+            if actual_delta == 0
+            else [0.08, 0.86, 0.04, 0.02]
+        )
+        row = {
+            "state_id": target_date,
+            "target_date": target_date,
+            "snapshot_ts_utc": f"{target_date}T01:00:00+00:00",
+            "availability_ts_utc": f"{target_date}T01:00:00+00:00",
+            "current_bracket": 30,
+            "winning_bracket": winner,
+            "actual_delta": actual_delta,
+            "settlement_lower_bound_violation": 0,
+            "market_distribution_json": json.dumps(market),
+            "quotes_json": json.dumps(
+                {
+                    "30": {"ask": 0.58, "bid": 0.52},
+                    "31": {"ask": 0.38, "bid": 0.32},
+                }
+            ),
+        }
+        for model in forward.FULL_FUSION_WEATHER_MODELS:
+            row[f"{model}_distribution_json"] = json.dumps(weather)
+        rows.append(row)
+    input_path = tmp_path / "market_join_rows.csv"
+    forward.write_rows(input_path, rows)
+    monkeypatch.setattr(forward.v1, "raw_ask_size", lambda *_args: 10.0)
+
+    summary = forward.run_full_probability_fusion_audit(
+        input_path=input_path,
+        output_dir=tmp_path / "out",
+        raw_books=tmp_path,
+        selection_end="2026-07-21",
+        clean_forward_start="2026-08-13",
+    )
+
+    assert summary["validation"]["target_dates"] == 3
+    assert summary["selection"]["selected"]["clean_forward_start"] == (
+        "2026-08-13"
+    )
+    assert summary["selection"]["candidate_count_k"] == (
+        len(forward.FULL_FUSION_WEATHER_MODELS)
+        * len(forward.FULL_FUSION_MARKET_TEMPERATURES)
+        * len(forward.FULL_FUSION_WEATHER_WEIGHTS)
+    )
+    assert (tmp_path / "out" / "frozen_candidate_spec.json").exists()

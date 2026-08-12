@@ -175,6 +175,43 @@ feature parity / conditional tail calibration，不用这 11 日继续挑 alpha�
 V3 spec：`configs/weather/tokyo_continuous_full_probability_v3.json`；audit artifact：
 `tokyo_v2_v3_model_map/run_20260812_v1/tokyo_v3_full_probability_audit`。
 
+## V3 第二轮：完整 ladder probability fusion（2026-08-13）
+
+第一版的根因不是“天气特征完全没用”，而是概率结构错误：它只读取 current-NO 的 market leave 概率，
+`+1/+2/+3+` 条件分布仍完全来自 weather head，等于丢弃完整盘口的 tail shape。第二轮保留同一稳定 model ID，
+改为在四个 outcome 上直接做 normalized geometric pool：完整 conditional market distribution 与
+`coherent_multigrain_hgb_v3` weather distribution 都参与每一档概率。
+
+本轮输入是 7/16–29 的 248 个 settled PIT full-ladder states/12 dates。7/16–23 的 122 states/6 dates
+用于在固定 3 个 weather heads × 5 个 market temperatures × 5 个 weather weights（K=75）中选参数；
+7/24–29 的 126 states/6 dates只作后切 temporal validation。该窗口此前已被 Tokyo 研究查看，因此明确标为
+`reused temporal validation`，不是 clean forward。
+
+| 7/24–29 同分母 | multiclass Brier | logloss | RPS |
+|---|---:|---:|---:|
+| raw full-ladder market | 0.09530 | 0.18006 | 0.02053 |
+| selection-calibrated market | 0.10063 | 0.17280 | 0.02042 |
+| Tokyo V3 full-ladder fusion | **0.07328** | **0.12823** | **0.01465** |
+
+V3 相对 raw market 的 Brier delta 为 `-0.02202`，target-date block bootstrap 95% CI
+`[-0.04208,-0.00742]`；logloss delta `-0.05183`，CI `[-0.08219,-0.02558]`；RPS delta
+`-0.00589`，CI `[-0.01081,-0.00205]`。相对 selection-calibrated market 的 Brier/logloss CI
+仍轻微跨 0，但 RPS CI 全负；因此天气 head 的增量不能归因成单纯 market sharpening。
+
+固定 first-per-date×bracket、current/next exact、2pp、5-share taker ask+官方 fee 的探索性表达为13笔11胜，
+cost `$44.43145`、fee 后 PnL `+$10.56855`、ROI `+23.79%`，日期 bootstrap CI
+`[+11.30%,+41.73%]`。NO 为7/7、PnL `+$4.1147`；YES 为4/6、PnL `+$6.45385`。
+两笔错误分别是7/26 `33 YES`（最终32）和7/29 `33 YES`（最终34），说明 full distribution 能同时提供
+升/不升表达，但 exact-YES 仍承受 undershoot/overshoot 双尾风险。
+
+冻结 candidate 为 `market_temperature=.5, weather_weight=.5, weather_head=coherent_multigrain_hgb_v3`，
+clean-forward boundary=`2026-08-13`。8/13 00:08 CST 已运行 bounded canonical refresh，fill gate通过，
+但 canonical settlement 仍只到8/11、8/12标签未进入，因此没有用非权威终值提前评分。当前等级是
+`shadow_candidate / clean forward required / research-only`：不替换 V2、不接 intent/order/fill、不改变 live。
+
+artifact：`tokyo_continuous_full_probability/fusion_20260813_v1`；可重复入口仍为
+`research_tokyo_continuous_ladder_forward_v3.py --full-probability-fusion-input ...`。
+
 ## V2 zero-notional 部署验收（2026-08-12）
 
 Tokyo V2 已加入公共 WCIR `weather_city_probability_runtime_v3`，仅生成 zero-notional decision telemetry；
