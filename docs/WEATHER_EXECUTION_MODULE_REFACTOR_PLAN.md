@@ -154,7 +154,6 @@ Taker-only and SELL runners also belong on the final shared entry path even
 when they have no maker lifecycle. Representative current files include:
 
 - `scripts/ops/regime_routed_no_tiny_live.py`
-- `scripts/ops/late_window_residual_split_runner_v1.py`
 - `scripts/ops/weather_theta_current_yes_tiny_live.py`
 - `scripts/ops/tmax_distribution_edge_live_candidate_v1.py`
 - `scripts/ops/low_price_yes_take_profit_exit_v1.py`

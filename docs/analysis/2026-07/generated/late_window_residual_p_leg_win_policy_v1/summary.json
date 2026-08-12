@@ -1,6 +1,0 @@
-{
-  "chengdu_rows": 31,
-  "scored_rows": 998,
-  "selected_rows": 4663,
-  "verdict": "Using p_leg_win as an EV scorer is directionally cleaner than the raw heating_done gate, but the label-completed 2026-07-05..2026-07-06 replay removes the broad all-leg edge. In non-leaky expanding-forward evaluation, all-leg edge>=0 selects 259 rows across 6 active dates with ROI -1.9%; edge>=3c is only +0.6% and the date-block CI still crosses 0. The only still-interesting slice is d1 NO: edge>=0 has 85 rows / 6 dates / ROI +6.6% with CI crossing 0, so treat it as research-only and do not start execution from this scorer alone. On Chengdu 2026-07-06, the full model scores 39 NO as high-probability but negative-EV at 95-96c, while early 38 NO is positive-EV."
-}

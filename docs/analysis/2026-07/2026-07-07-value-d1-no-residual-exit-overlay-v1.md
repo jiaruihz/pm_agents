@@ -2,6 +2,12 @@
 
 Status: `snapshot`
 
+Producer status: `retired`. The one-off runner depended on an intermediate
+`selected_rows.csv` that is no longer a maintained artifact. This snapshot is
+retained for the exit-vs-hold result; any revival must build entries from the
+current physical-feature runner and shared execution contract rather than
+restoring the old producer chain.
+
 ## Verdict
 On the clean non-leaky forward `value_d1_no` denominator at edge>=0, hold ROI is 6.6% and the residual exit overlay ROI is 7.3%; delta is 0.7% with date-block CI [-3.1%, 4.5%]. The edge>=0 point estimate is slightly better than hold, but it is not robust: stricter entry thresholds turn negative and the CI crosses 0. The overlay mostly sells eventual winners rather than rescuing losers, so keep it as shadow telemetry until the exit model can distinguish true thesis invalidation from profitable repricing.
 

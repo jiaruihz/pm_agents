@@ -14,6 +14,31 @@ The lean enriched PIT physical view is the cleaner next research view because it
 - Model inputs exclude orderbook price/depth/spread, settlement labels, PnL, and ROI.
 - `physical_clean` uses true city-local clock, F/C tick-normalized distances, and observation age/count.
 - `physical_plus` further adds forecast source, solar-window proxies, and native duplicate features; it is included as a stress test, not the recommended view.
+- The 930,266-byte replay input `first_cross_rows.csv` is archived in JRS
+  manifest `late_window_residual_heating_done_v1_cleanup_20260812`; restore it
+  with the artifact controller before rerunning the historical producer.
+
+## Absorbed v1 lineage
+This report is the canonical snapshot for the former calibrated-features v1 and
+`p_leg_win` policy v1 reports.  The `physical_base` rows below reproduce their
+998-row probability model and fee-adjusted policy denominator, while the clean
+and plus columns are the later ablation.  The superseded reports and their
+single-purpose producers were removed after this merge; git history retains the
+full generated tables.
+
+- The base model improved materially over the hand score, but remained weaker
+  than executable market price: strict expanding logloss/Brier/AUC were
+  `0.4150/0.1254/0.7553`, versus market `0.2783/0.0920/0.9067` on the same 731
+  rows.
+- Base all-leg `edge>=0` selected 259 rows on 6 dates and lost 1.9% ROI; the
+  `edge>=3c` point estimate was +0.6%, with CI `[-9.5%, +12.4%]`.  Base d1 NO
+  was the only constructive slice at 85 rows / 6 dates / +6.6% ROI, but its CI
+  `[-4.2%, +21.4%]` crossed zero.
+- Chengdu 2026-07-06 illustrates why probability and price must remain
+  separate.  At 15:12/15:28/15:45 BJ, 38 NO scored about 0.877/0.876/0.875
+  against fee-adjusted costs 0.711/0.711/0.691, while 39 NO scored about
+  0.887/0.886/0.885 against 0.933/0.952/0.962 and was negative EV.  By 17:10,
+  38 NO cost 0.990 against model probability 0.901 and was no longer an entry.
 
 ## Probability Metrics
 | model | scope | rows | dates | hit_rate | logloss | brier | auc | avg_p |
