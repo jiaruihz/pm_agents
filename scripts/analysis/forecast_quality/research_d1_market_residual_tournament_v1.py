@@ -50,7 +50,7 @@ DEFAULT_OUT = Path(
     "/Volumes/jrs/pm_agents/research/artifact_store/active/"
     "d1_market_residual_tournament_v2"
 )
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-d1-market-residual-tournament-v2.md"
+DEFAULT_REPORT = DEFAULT_OUT / "report.md"
 PINNED_HIERARCHY_RUN = resolve_run_output(
     "d1_cross_city_hierarchy_v1",
     run_id="denominator_scope_repair_20260807",

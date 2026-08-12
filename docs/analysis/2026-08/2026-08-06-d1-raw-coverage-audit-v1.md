@@ -58,7 +58,7 @@ legacy paper baskets（2026-05-20..2026-07-23）
 - `/Volumes/jrs/pm_agents/research/artifact_store/active/d1_expanded_reconstructed_20260806/forecasts`
 - `/Volumes/jrs/pm_agents/research/artifact_store/active/d1_expanded_reconstructed_20260806/hierarchy`
 - `/Volumes/jrs/pm_agents/research/artifact_store/active/d1_expanded_reconstructed_20260806/tournament`
-- [expanded market rerun](2026-08-06-d1-expanded-reconstructed-market-rerun-v1.md)
+- [consolidated market-residual tournament evidence](2026-08-06-d1-market-residual-tournament-v2.md#expanded-denominator-four-arm-rerun)
 
 结论分两层：历史 full-ladder/raw 数据确实比旧报告使用得多，现已重接；但旧 snapshot 并不等于每个 checkpoint 都有连续完整 native lattice。provider `run_at + first_seen` 更不能从旧 first-seen hash 反推出，严格 clean forward 仍只能从 2026-08-05 起积累。
 

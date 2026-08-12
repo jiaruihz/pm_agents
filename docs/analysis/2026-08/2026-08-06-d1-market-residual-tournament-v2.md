@@ -1,4 +1,11 @@
-# D-1 market-residual nonlinear nested expanding-OOF tournament v2
+# D-1 market-residual reconstructed tournament evidence
+
+Status: `snapshot / consolidated`
+
+This document consolidates three same-day runs of one tournament contract. The
+original four-arm 168-state run is an exact subset of the eight-arm run below;
+the expanded 571-state four-arm rerun is retained as a separate denominator
+section. None is clean provider-run forward evidence.
 
 weather-only:
 significance=FAIL; W0-market delta=+0.2552, 95% CI +0.1357..+0.3819
@@ -98,3 +105,41 @@ baseline gate=FAIL。每个候选都可由 inner OOF 选择 `ridge=∞` 严格�
 
 - point-estimate best=V04_revision_spread_bias，final expanding selection ridge=1.0；artifact schema=`weather_d1_market_residual_artifact_v1` / family=`regularized_nonlinear_basis_market_log_offset`。
 - baseline_gate_pass=False，shadow_eligible=false，converter=blocked_missing_rung_feature_materializer。artifact 可被现有 loader 校验，但在 WCIR 生成同 lineage 的逐 rung features 前不可运行，更不可下单。
+
+## Expanded-denominator four-arm rerun
+
+The conservative reconstructed input was subsequently expanded from 1,774 to
+3,550 forecast snapshots. The primary prepared denominator grew from 279
+states / 27 dates to 763 states / 49 dates, leaving 571 OOF states / 39 dates /
+47 cities after the first ten dates were reserved for training. This is more
+historical coverage, not a change from reconstructed development to strict PIT.
+
+| arm | states | dates | logloss | Brier | RPS | top-1 | ΔLL vs market (95% / Bonf.) |
+|---|---:|---:|---:|---:|---:|---:|---|
+| M0_market | 571 | 39 | 1.4608 | 0.06421 | 0.05667 | 42.6% | reference |
+| W0_weather_only | 571 | 39 | 1.7712 | 0.07212 | 0.07658 | 31.1% | +0.3104 (+0.2402..+0.3900) |
+| V01_weather_logratio | 571 | 39 | 1.4608 | 0.06421 | 0.05667 | 42.6% | +0.0000 |
+| V02_ordinal_location_scale | 571 | 39 | 1.4606 | 0.06421 | 0.05670 | 41.3% | -0.0001 (-0.0022..+0.0021 / -0.0028..+0.0028) |
+| V03_structured_weather | 571 | 39 | 1.4608 | 0.06421 | 0.05667 | 42.6% | +0.0000 |
+| V04_revision_spread_bias | 571 | 39 | 1.4593 | 0.06416 | 0.05652 | 42.8% | -0.0014 (-0.0042..+0.0010 / -0.0050..+0.0017) |
+
+- Null selection by outer fold: V01 39/39, V02 5/39, V03 39/39,
+  V04 28/39. V04 had 11 non-null folds but its date-block and family-wise CIs
+  still crossed zero; `baseline_gate_pass=false` and `shadow_eligible=false`.
+- Signal funnel: 3,550 forecast snapshots → 3,550 assigned → 763 prepared;
+  evidence funnel: 3,550 basket snapshots → 1,844 scoreable → 571 OOF. The
+  1,706 invalid ladders are coverage blockers, not a strategy filter.
+- Expanded forecast artifact:
+  `/Volumes/jrs/pm_agents/research/artifact_store/active/d1_expanded_reconstructed_20260806/forecasts/forecast_rows.csv`
+  (SHA prefix `cda50d638ff9`); market baskets remain
+  `d1_extreme_no_snapshot_history_v4/executable_baskets.csv` (SHA prefix
+  `04e157bc60d5`). Actual fills remain zero.
+- Expanded calibration stayed market-like because most residual folds selected
+  null: market rung ECE 0.0104; V04 0.0105. Worst-city mean ΔLL for V04 was
+  +0.0231 (Houston). W0 was materially worse, with worst-city ΔLL +1.3647 (LA).
+- The same evidence boundary applies: reconstructed single-run forecast and
+  contemporaneous normalized mids are not executable ask/depth/fee evidence;
+  provider-run/first-seen W1 was not available. No live action follows.
+
+For expanded coverage lineage and blocker breakdown, see
+[D-1 raw coverage audit](2026-08-06-d1-raw-coverage-audit-v1.md).

@@ -146,6 +146,10 @@ system contract 和 ops runbook。
   扩展报告。合并明确保留了关键反转：NOAA MADIS 从 102-row 的 `usable_with_city_bias` 变成 2,777-row 的
   `basis_risky`。扩展报告内“keep Helsinki live”改为历史操作记录，并明确当前生产状态只能由 manifest/process/raw/
   exchange 判断，避免旧 snapshot 继续充当部署指令。
+- 2026-08-12：D-1 market-residual 同日三份报告收成一份。168-state 四臂初跑被同分母八臂 tournament 严格
+  包含；571-state 扩分母四臂重跑作为独立 denominator section 保留，连同 OOF 表、CI、null-fold、漏斗、输入 SHA、
+  calibration 和 evidence boundary。删除两个平行 Markdown，raw coverage audit 改指合并章节；producer 默认报告迁到
+  JRS run artifact，避免复跑覆盖人工收口后的稳定证据文档。
 
 ## 仍有效的历史边界
 
