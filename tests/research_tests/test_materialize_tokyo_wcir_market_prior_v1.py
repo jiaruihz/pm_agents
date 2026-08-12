@@ -7,6 +7,7 @@ import sys
 
 import pytest
 import sqlite3
+import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,6 +15,34 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_model_evaluation import tokyo_market_prior_adapter as module
+
+
+def test_tokyo_v3_market_blend_is_coherent_and_preserves_tail_shape() -> None:
+    weather = np.asarray([[0.4, 0.3, 0.2, 0.1]], dtype=float)
+    posterior = module._blend_tokyo_v3_with_market(
+        weather, np.asarray([0.8]), alpha=0.5
+    )
+    assert posterior.shape == (1, 4)
+    assert posterior.sum(axis=1)[0] == pytest.approx(1.0)
+    assert 1.0 - posterior[0, 0] > 0.6
+    assert posterior[0, 1] / posterior[0, 2] == pytest.approx(1.5)
+    assert posterior[0, 2] / posterior[0, 3] == pytest.approx(2.0)
+
+
+def test_tokyo_user_facing_v2_v3_specs_are_unambiguous() -> None:
+    v2 = json.loads(
+        (ROOT / "configs/weather/tokyo_pre_cross_market_sharpening_v2.json")
+        .read_text()
+    )
+    v3 = json.loads(
+        (ROOT / "configs/weather/tokyo_continuous_full_probability_v3.json")
+        .read_text()
+    )
+    assert v2["user_facing_version"] == "Tokyo V2"
+    assert v2["side"] == "NO"
+    assert v3["user_facing_version"] == "Tokyo V3"
+    assert v3["outcomes"] == ["stay", "plus_1", "plus_2", "plus_3plus"]
+    assert v3["deployment_status"] == "research_only_not_in_runtime"
 
 
 def test_five_share_cost_uses_depth_and_weather_fee() -> None:

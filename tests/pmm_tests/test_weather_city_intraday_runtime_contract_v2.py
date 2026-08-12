@@ -286,6 +286,47 @@ def test_city_day_scope_selects_best_side_and_never_stacks_brackets(tmp_path: Pa
     assert intent["position_key"] == "Tokyo|2026-08-01|v7"
 
 
+def test_runtime_applies_dynamic_execution_uncertainty_reserve(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    config = _config(output, [{
+        "adapter": "fixed",
+        "city": "Tokyo",
+        "selection_shares": 5.0,
+        "edge_threshold": 0.0,
+        "execution_uncertainty_reserve": {
+            "minimum_reserve": 0.001,
+            "spread_multiplier": 0.5,
+        },
+    }])
+
+    class Fixed:
+        def score(self, profile, now):
+            from src.strategies.weather_city_probability_shadow.core import CityScore
+            return [CityScore(
+                city="Tokyo", target_date="2026-08-12",
+                decision_ts_utc=now.isoformat(), source_obs_ts_utc=now.isoformat(),
+                current_bracket=31, market_side="NO", market_probability=.8,
+                market_entry_price=.9, model_probability=.95, model_id="tokyo-v2",
+                feature_coverage=1.0, missing_features=[], features={},
+                market={
+                    "no_bid": .7,
+                    "no_ask": .9,
+                    "raw": {"asks": [{"price": .9, "size": 5}]},
+                },
+                lineage={},
+            )]
+
+    summary = ShadowRuntime(config, {"fixed": Fixed()}).run_once(
+        datetime(2026, 8, 12, 2, 0, tzinfo=UTC)
+    )
+    row = json.loads((output / "evaluations.jsonl").read_text())
+    assert row["edge_after_fee"] > 0
+    assert row["execution_uncertainty_reserve"] == pytest.approx(.1)
+    assert row["net_entry_edge"] < 0
+    assert row["would_enter"] is False
+    assert summary["new_paper_intents"] == 0
+
+
 def test_profile_can_emit_probability_telemetry_without_paper_intent(tmp_path: Path) -> None:
     output = tmp_path / "output"
     config = _config(output, [{

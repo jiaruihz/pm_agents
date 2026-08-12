@@ -120,3 +120,57 @@ posterior `0.7427`，5-share fee 后成本 `$3.63085`，终局停在 32，亏 `$
 - frozen spec：`frozen_candidate_spec.json`
 - 8/12 离线 forward：`tokyo_pre_cross_market_sharpening/forward_20260812_v2`；27 个 exact expression、
   1 pre-cross candidate、0 signal；未使用 settlement，notional=0。
+
+## 用户口径命名（2026-08-12）
+
+以后 Tokyo 这两条方向固定用下面的短名，避免再把脚本内部历史版本号混进讨论：
+
+- **Tokyo V2 — cross 前升温/离档模型**：只在每个 exact bracket 首次出现 JMA `current+0.3/+0.4°C`
+  时判断一次“当前档最终会不会被向上离开”，当前只表达 current-NO。它比 `.7 cross` 规则早，但不是纯天气模型；
+  同刻 market 是 prior，宽 spread 作为连续 execution reserve。
+- **Tokyo V3 — 连续全概率模型**：每个 causal JMA 10-minute checkpoint 都输出
+  `P(stay), P(+1), P(+2), P(+3+)`，因此既能表达“还会升”也能表达“不会再升”，未来可在完整 ladder 上同时评估
+  YES/NO。V3 是研究方向，不替代 V2，也未接 runtime。
+
+稳定 model ID 分别为
+`weather.city_intraday_probability.tokyo_pre_cross_market_sharpening` 与
+`weather.city_intraday_probability.tokyo_continuous_full_probability`。数字只作为人类短名；血缘仍使用稳定语义 ID。
+
+## V2 与 `.7 cross` 规则的同机会对照
+
+不能把 V2 的 8/1–11 结果和规则的 7/9–8/9 结果直接横比后就称 V2 胜出。本轮锁成双方都实际覆盖的
+`target_date × exact bracket`：8/1–9 的 V2 有 26 个候选/8 个信号，规则有 4 笔；真正重合只有 3 档。
+
+| target date / bracket | V2 时刻 | `.7` 规则时刻 | V2 提前 | V2 动作 | V2 PnL | 规则 PnL |
+|---|---|---|---:|---|---:|---:|
+| 8/04 / 28 | 13:00 JST | 13:10 | 10m | 入场 | +$1.1057 | +$0.3816 |
+| 8/06 / 29 | 11:00 JST | 14:20 | 200m | ask=.997，reserve 后无 edge，不入 | $0 | +$0.2811 |
+| 8/07 / 32 | 10:50 JST | 11:50 | 60m | 入场 | +$0.1427 | +$0.2381 |
+
+V2 平均提前 90m、中位 60m。双方都入场的 2 档，V2 合计 `+$1.2484`、规则 `+$0.6197`，V2 多
+`$0.6287`；三档按各自实际动作，V2 `+$1.2484`、规则 `+$0.9008`。这是“更早且点估更好”的直接证据，
+但只有 3 个 shared opportunities，不能称统计确认。正确动作是规则保留 baseline，V2 跑 clean zero-notional forward。
+
+paired artifact：`tokyo_v2_v3_model_map/run_20260812_v1/v2_vs_cross07_rule`。
+
+## V3 第一版结果
+
+V3 没有重新发明 collector/clock/订单链，直接复用已冻结于 2026-07-15 的 Tokyo continuous distribution head；
+天气特征包括 JMA 温度路径、斜率、running max、solar/clock，以及 PIT RJTT METAR 的露点、湿度、风、气压、云、雨、
+能见度。需要特别说明：当前 exact runtime 的 **JMA 自身 wind/precip 覆盖仍为 0**，这些字段不能冒充已在实时起作用；
+METAR 天气特征有约 89.4% checkpoint 覆盖。
+
+开发窗 124 rows/12 日只用来从固定 alpha `0/.05/.1/.25/.5/1` 选择 market/weather leave-logit blend，选中
+`alpha=.5`。随后在已经看过、因此只能叫 reused audit 的 8/1–11（554 checkpoints/11 日）评测：
+
+| same checkpoint leave-current target | accuracy | Brier | logloss |
+|---|---:|---:|---:|
+| Tokyo V3 | 87.84% | 0.08657 | 0.27014 |
+| market | **90.99%** | **0.07473** | **0.24058** |
+
+所以 V3 的**问题定义与结构是对的**：它确实能在没有 `.7` cross 时连续判断升/不升，并给完整上升档位分布；但当前
+第一版 posterior 在同分母上输 market，不能接 shadow intent，更不能替换 V2。下一轮 V3 只沿连续全概率方向改进
+feature parity / conditional tail calibration，不用这 11 日继续挑 alpha。新 clean forward 必须从下一次冻结后开始。
+
+V3 spec：`configs/weather/tokyo_continuous_full_probability_v3.json`；audit artifact：
+`tokyo_v2_v3_model_map/run_20260812_v1/tokyo_v3_full_probability_audit`。

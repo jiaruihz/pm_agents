@@ -479,6 +479,6 @@ managed_runtimes:
     start_script: scripts/ops/start_weather_tokyo_current_break_active_ladder_shadow_v1.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/latest.json
     max_health_age_sec: 180
-    accepted_health_statuses: [ok]
+    accepted_health_statuses: [ok, idle_outside_source_window]
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: safe

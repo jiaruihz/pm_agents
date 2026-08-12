@@ -598,7 +598,30 @@ class ShadowRuntime:
                     and effective_cost is not None
                     else None
                 )
-                would_enter = edge is not None and edge > edge_threshold
+                reserve_spec = profile.get("execution_uncertainty_reserve") or {}
+                execution_uncertainty_reserve = 0.0
+                if reserve_spec:
+                    side_prefix = score.market_side.lower()
+                    bid = score.market.get(f"{side_prefix}_bid")
+                    ask = score.market.get(f"{side_prefix}_ask")
+                    if bid is None or ask is None:
+                        execution_uncertainty_reserve = None
+                    else:
+                        execution_uncertainty_reserve = max(
+                            float(reserve_spec.get("minimum_reserve", 0.0)),
+                            float(reserve_spec.get("spread_multiplier", 0.0))
+                            * (float(ask) - float(bid)),
+                        )
+                net_entry_edge = (
+                    edge - execution_uncertainty_reserve
+                    if edge is not None
+                    and execution_uncertainty_reserve is not None
+                    else None
+                )
+                would_enter = (
+                    net_entry_edge is not None
+                    and net_entry_edge > edge_threshold
+                )
                 row = {
                     **self._contract_fields("evaluation"),
                     "execution_mode": "zero_notional_shadow",
@@ -615,6 +638,8 @@ class ShadowRuntime:
                     ),
                     "effective_cost_per_share": effective_cost,
                     "edge_after_fee": edge,
+                    "execution_uncertainty_reserve": execution_uncertainty_reserve,
+                    "net_entry_edge": net_entry_edge,
                     "edge_threshold": edge_threshold,
                     "would_enter": would_enter,
                 }
@@ -649,8 +674,8 @@ class ShadowRuntime:
                 if not row["would_enter"] or position_key in first_intents:
                     continue
                 previous = best_by_position.get(position_key)
-                if previous is None or float(row["edge_after_fee"]) > float(
-                    previous["edge_after_fee"]
+                if previous is None or float(row["net_entry_edge"]) > float(
+                    previous["net_entry_edge"]
                 ):
                     best_by_position[position_key] = row
             if profile.get("emit_paper_intents", True):

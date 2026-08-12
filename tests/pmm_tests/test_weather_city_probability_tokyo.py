@@ -223,3 +223,96 @@ def test_tokyo_adapter_scores_both_sides_from_pit_first_seen(tmp_path):
     assert overshoot[1].lineage["probability_target"] == "leave_current_exact_bracket"
     assert overshoot[1].lineage["training_clock_class"] == "archive_reconstructed_plus_15m_price_proxy"
     assert overshoot[1].model_id == "tokyo_overshoot_market_residual_v2"
+
+
+def test_tokyo_v2_scores_only_first_pre_cross_no_state(tmp_path):
+    source_path = tmp_path / "jma.jsonl"
+    _write_jsonl(source_path, [
+        {
+            "city": "Tokyo", "source": "jma_amedas", "source_status": "ok",
+            "target_date": "2026-08-12",
+            "observation_time_utc": "2026-08-12T02:00:00Z",
+            "source_first_seen_at_utc": "2026-08-12T02:07:00Z",
+            "temp_c": 31.2, "payload_hash": "a", "raw_payload_hash": "a-raw",
+        },
+        {
+            "city": "Tokyo", "source": "jma_amedas", "source_status": "ok",
+            "target_date": "2026-08-12",
+            "observation_time_utc": "2026-08-12T02:10:00Z",
+            "source_first_seen_at_utc": "2026-08-12T02:17:00Z",
+            "temp_c": 31.3, "payload_hash": "b", "raw_payload_hash": "b-raw",
+        },
+    ])
+    _write_jsonl(
+        tmp_path / "official" / "2026-08-12" / "observations.jsonl",
+        [{
+            "city": "Tokyo", "target_date": "2026-08-12",
+            "fetched_at_utc": "2026-08-12T02:15:00Z",
+            "last_obs_utc": "2026-08-12T02:00:00Z",
+            "current_temp_c": 31.0, "running_max_c": 31.0,
+            "wind_speed_kt": 5.0, "wind_dir_deg": 180.0,
+            "raw_metar": "METAR RJTT 120200Z 18005KT 9999 31/24 Q1004",
+            "source": "aviationweather_metar",
+        }],
+    )
+    book_dir = tmp_path / "books"
+    _write_jsonl(book_dir / "2026-08-12.jsonl", [{
+        "city": "Tokyo", "source": "jma_amedas", "outcome": "no",
+        "relative_offset": 0, "book_status": "ok", "target_date": "2026-08-12",
+        "book_fetched_at_utc": "2026-08-12T02:17:02Z",
+        "source_obs_ts_utc": "2026-08-12T02:10:00Z",
+        "reference_market_value": 31, "bracket": "31°C",
+        "question": "Will the highest temperature in Tokyo be 31°C?",
+        "summary": {
+            "best_ask": .80, "best_bid": .70,
+            "asks": [{"price": .80, "size": 10}],
+        },
+        "token_id": "paper",
+    }])
+    spec_path = ROOT / "configs/weather/tokyo_pre_cross_market_sharpening_v2.json"
+    profile = {
+        "forward_start_utc": "2026-08-12T00:00:00Z",
+        "max_book_age_seconds": 180,
+        "book_dir": str(book_dir),
+        "source_journal": str(source_path),
+        "observation_journal_dir": str(tmp_path / "official"),
+        "model_id": "weather.city_intraday_probability.tokyo_pre_cross_market_sharpening",
+        "probability_policy": "pre_cross_market_sharpening_v2",
+        "artifacts": {
+            "candidate_spec": {
+                "path": str(spec_path),
+                "sha256": "4d454faaa89af0b9e6b4793175385333f1af845f0ea78015a3429ac2dde34aac",
+            }
+        },
+    }
+    scores = TokyoMarketAnchorAdapter().score(
+        profile, datetime(2026, 8, 12, 2, 18, tzinfo=timezone.utc)
+    )
+    assert len(scores) == 1
+    assert scores[0].market_side == "NO"
+    assert scores[0].model_probability == pytest.approx(
+        .75 ** 2 / (.75 ** 2 + .25 ** 2)
+    )
+    assert scores[0].lineage["user_facing_version"] == "Tokyo V2"
+    assert scores[0].lineage["first_pre_cross_state_for_bracket"] is True
+    assert scores[0].market["raw"]["asks"][0]["size"] == 10
+
+    # A later +0.4 checkpoint is not a second candidate for this bracket.
+    source_rows = [json.loads(line) for line in source_path.read_text().splitlines()]
+    source_rows.append({
+        **source_rows[-1],
+        "observation_time_utc": "2026-08-12T02:20:00Z",
+        "source_first_seen_at_utc": "2026-08-12T02:27:00Z",
+        "temp_c": 31.4,
+        "payload_hash": "c",
+        "raw_payload_hash": "c-raw",
+    })
+    _write_jsonl(source_path, source_rows)
+    _write_jsonl(book_dir / "2026-08-12.jsonl", [{
+        **json.loads((book_dir / "2026-08-12.jsonl").read_text()),
+        "book_fetched_at_utc": "2026-08-12T02:27:02Z",
+        "source_obs_ts_utc": "2026-08-12T02:20:00Z",
+    }])
+    assert TokyoMarketAnchorAdapter().score(
+        profile, datetime(2026, 8, 12, 2, 28, tzinfo=timezone.utc)
+    ) == []

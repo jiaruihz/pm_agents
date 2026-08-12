@@ -57,6 +57,14 @@ def _load_artifact(spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]
     return artifact, metadata
 
 
+def _load_json_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    path = _verified_path(spec)
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError(f"expected JSON object in {path}")
+    return value
+
+
 def _finite(value: Any) -> float | None:
     try:
         parsed = float(value)
@@ -558,6 +566,134 @@ class TokyoMarketAnchorAdapter:
         probability_policy = str(
             profile.get("probability_policy", "state_entry_routed_market_residual_v7")
         )
+        if probability_policy == "pre_cross_market_sharpening_v2":
+            frozen = _load_json_spec(profile["artifacts"]["candidate_spec"])
+            if frozen.get("model_id") != profile.get("model_id"):
+                raise RuntimeError("Tokyo pre-cross model id does not match frozen spec")
+            state_rule = frozen["state_rule"]
+            margin_low, margin_high = [
+                float(value) for value in state_rule["pre_cross_margin_c"]
+            ]
+            current_temp = float(source["temp_c"])
+            margin = current_temp - bracket
+            source_bracket = _round_native_c(current_temp)
+            if not (
+                source_bracket == bracket
+                and margin_low <= margin < margin_high
+            ):
+                return []
+            earlier_qualifying = [
+                row
+                for row in jma[:-1]
+                if _round_native_c(float(row["temp_c"])) == bracket
+                and margin_low <= float(row["temp_c"]) - bracket < margin_high
+            ]
+            if earlier_qualifying:
+                return []
+            no_mid = _finite(prices["no_mid"])
+            exponent = float(frozen["posterior"]["exponent"])
+            confirmation_floor = float(
+                frozen["posterior"].get("market_confirmation_floor", 0.5)
+            )
+            model_no = (
+                None
+                if no_mid is None
+                else no_mid
+                if no_mid < confirmation_floor
+                else _sigmoid(exponent * _logit(no_mid))
+            )
+            offset_features = {
+                "jma_temp_c": current_temp,
+                "pre_cross_margin_c": margin,
+                "jma_temp_delta_10m": weather_features["jma_temp_delta_10m"],
+                "jma_temp_slope_30m_cph": weather_features[
+                    "jma_temp_slope_30m_cph"
+                ],
+                "jma_temp_slope_60m_cph": weather_features[
+                    "jma_temp_slope_60m_cph"
+                ],
+                "remaining_to_18h": weather_features["remaining_to_18h"],
+            }
+            probability_lineage = {
+                "probability_target": "leave_current_exact_bracket_upward",
+                "probability_policy": probability_policy,
+                "user_facing_version": frozen["user_facing_version"],
+                "human_summary": frozen["human_summary"],
+                "candidate_grain_version": frozen["candidate_grain_version"],
+                "market_confirmation_floor": confirmation_floor,
+                "posterior_exponent": exponent,
+                "pre_cross_margin_c": margin,
+                "first_pre_cross_state_for_bracket": True,
+                "clean_forward_start": frozen["effective_from_target_date"],
+            }
+            compact_market = {
+                key: book.get(key)
+                for key in (
+                    "condition_id",
+                    "market_id",
+                    "token_id",
+                    "outcome",
+                    "question",
+                    "book_fetched_at_utc",
+                    "book_status",
+                )
+            }
+            compact_market.update(prices)
+            compact_market["raw"] = {
+                "asks": list((book.get("summary") or {}).get("asks") or [])
+            }
+            lineage = {
+                "availability_clock_class": "collector_exact_hash_verified",
+                "source": "jma_amedas",
+                "source_first_seen_at_utc": source["source_first_seen_at_utc"],
+                "source_payload_hash": source.get("payload_hash"),
+                "source_raw_payload_hash": source.get("raw_payload_hash"),
+                "official_source": official[-1].get("source"),
+                "official_last_obs_utc": official[-1].get("last_obs_utc"),
+                "official_snapshot_fetched_at_utc": official[-1].get(
+                    "fetched_at_utc"
+                ),
+                "official_input_ref": official[-1].get("_input_ref"),
+                "source_lattice_anchor": int(book["reference_market_value"]),
+                "official_lattice_anchor": bracket,
+                "market_expression_anchor": bracket,
+                "capture_cycle_id": book.get("capture_cycle_id"),
+                "capture_anchor_values": book.get("capture_anchor_values"),
+                **probability_lineage,
+            }
+            feature_missing = [
+                name for name, value in offset_features.items()
+                if _finite(value) is None
+            ]
+            return [
+                CityScore(
+                    city="Tokyo",
+                    target_date=target_date,
+                    decision_ts_utc=decision.isoformat(),
+                    source_obs_ts_utc=source_obs.isoformat(),
+                    current_bracket=bracket,
+                    market_side="NO",
+                    market_probability=no_mid,
+                    market_entry_price=_finite(prices["no_ask"]),
+                    model_probability=model_no,
+                    model_id=str(profile["model_id"]),
+                    feature_coverage=(
+                        1.0 - len(feature_missing) / len(offset_features)
+                    ),
+                    missing_features=feature_missing,
+                    features=offset_features,
+                    market=compact_market,
+                    lineage=lineage,
+                    evaluation_status=(
+                        "scored" if model_no is not None else "not_scorable"
+                    ),
+                    not_scorable_reason=(
+                        None
+                        if model_no is not None
+                        else "one_sided_market_probability_interval"
+                    ),
+                )
+            ]
         if probability_policy == "overshoot_market_residual_v2":
             overshoot_artifact, _ = _load_artifact(profile["artifacts"]["overshoot"])
             offset_features = {

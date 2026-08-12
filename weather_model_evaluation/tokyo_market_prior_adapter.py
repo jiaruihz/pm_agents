@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
@@ -38,6 +39,7 @@ from weather_model_evaluation.probability import (
     binary_loss_values,
     binary_score,
     date_block_bootstrap_delta,
+    ordinal_score,
 )
 
 
@@ -65,6 +67,11 @@ DEFAULT_FEATURE_ROWS = (
     ROOT
     / "docs/analysis/2026-07/generated/tokyo_continuous_ladder_probability_v1"
     / "continuous_feature_rows.csv.gz"
+)
+DEFAULT_TOKYO_V3_ARTIFACT = (
+    ROOT
+    / "docs/analysis/2026-07/generated/tokyo_continuous_ladder_forward_v3/models"
+    / "direct_checkpoint_hgb_v3.joblib"
 )
 UTC = timezone.utc
 TOKYO = ZoneInfo("Asia/Tokyo")
@@ -106,6 +113,9 @@ PRE_CROSS_BASE_FEATURES = (
     "doy_sin",
     "doy_cos",
 )
+TOKYO_V3_USER_FACING_VERSION = "Tokyo V3"
+TOKYO_V3_MODEL_ID = "weather.city_intraday_probability.tokyo_continuous_full_probability"
+TOKYO_V3_BLEND_ALPHAS = (0.0, 0.05, 0.1, 0.25, 0.5, 1.0)
 
 
 def parse_ts(value: Any) -> datetime:
@@ -2046,6 +2056,272 @@ def run_tokyo_pre_cross_research(
     }
 
 
+def _tokyo_winning_brackets(path: Path) -> dict[str, int]:
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2.0)
+    connection.execute("PRAGMA query_only=ON")
+    connection.execute("PRAGMA busy_timeout=2000")
+    try:
+        rows = connection.execute(
+            """
+            SELECT target_date, bracket
+            FROM settlement_outcomes
+            WHERE city = 'Tokyo'
+              AND settlement_status = 'settled'
+              AND final_price >= 0.99
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+    output: dict[str, int] = {}
+    for target_date, bracket in rows:
+        match = re.search(r"-?\d+", str(bracket))
+        if match:
+            output[str(target_date)] = int(match.group())
+    return output
+
+
+def _tokyo_v3_probabilities(
+    frame: pd.DataFrame,
+    artifact: dict[str, Any],
+) -> np.ndarray:
+    feature_names = tuple(artifact["feature_names"])
+    matrix_values = np.asarray(
+        [
+            [finite(row.get(f"{WEATHER_FEATURE_PREFIX}{name}")) for name in feature_names]
+            for row in frame.to_dict(orient="records")
+        ],
+        dtype=float,
+    )
+    raw = artifact["model"].predict_proba(matrix_values)
+    classes = [int(value) for value in artifact["model"].classes_]
+    aligned = np.zeros((len(frame), 4), dtype=float)
+    for index, value in enumerate(classes):
+        aligned[:, value] = raw[:, index]
+    temperature = float(artifact["temperature"])
+    logits = np.log(np.clip(aligned, 1e-8, 1.0)) / temperature
+    logits -= logits.max(axis=1, keepdims=True)
+    calibrated = np.exp(logits)
+    return calibrated / calibrated.sum(axis=1, keepdims=True)
+
+
+def _blend_tokyo_v3_with_market(
+    weather: np.ndarray,
+    market_leave: np.ndarray,
+    alpha: float,
+) -> np.ndarray:
+    weather_leave = np.clip(1.0 - weather[:, 0], 1e-6, 1.0 - 1e-6)
+    market_leave = np.clip(market_leave, 1e-6, 1.0 - 1e-6)
+    blended_logit = (
+        (1.0 - alpha) * np.log(market_leave / (1.0 - market_leave))
+        + alpha * np.log(weather_leave / (1.0 - weather_leave))
+    )
+    leave = 1.0 / (1.0 + np.exp(-blended_logit))
+    positive = weather[:, 1:]
+    conditional = positive / np.clip(positive.sum(axis=1, keepdims=True), 1e-8, None)
+    output = np.column_stack((1.0 - leave, conditional * leave[:, None]))
+    return output / output.sum(axis=1, keepdims=True)
+
+
+def run_tokyo_v3_full_probability_audit(
+    rows: list[dict[str, Any]],
+    *,
+    artifact_path: Path,
+    db_path: Path,
+    bootstrap_draws: int = 20_000,
+) -> tuple[dict[str, Any], dict[str, pd.DataFrame]]:
+    """Audit the user-facing Tokyo V3 on the same PIT expression rows.
+
+    V3 is a continuous four-class weather distribution at every JMA checkpoint:
+    stay in the current exact bracket, or finish +1/+2/+3+ brackets higher.  The
+    market blend changes only total leave probability; the weather head retains
+    the conditional tail shape.  All parameter selection is development-only.
+    """
+
+    frame = pd.DataFrame(rows).copy()
+    required = {
+        "target_date", "evaluation_role", "bracket", "won_no",
+        "market_no_probability",
+    }
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"Tokyo V3 rows missing columns: {sorted(missing)}")
+    artifact = joblib.load(artifact_path)
+    if artifact.get("kind") != "direct":
+        raise ValueError("Tokyo V3 audit requires the frozen direct distribution head")
+    if not artifact.get("feature_names"):
+        artifact_spec_path = artifact_path.with_suffix(".spec.json")
+        artifact_spec = json.loads(artifact_spec_path.read_text(encoding="utf-8"))
+        artifact = {**artifact, "feature_names": tuple(artifact_spec["features"])}
+    frame["current_bracket"] = pd.to_numeric(frame["bracket"], errors="raise").astype(int)
+    frame["label_leave"] = pd.to_numeric(frame["won_no"], errors="raise").astype(int)
+    winners = _tokyo_winning_brackets(db_path)
+    frame["winning_bracket"] = frame["target_date"].astype(str).map(winners)
+    frame = frame.loc[frame["winning_bracket"].notna()].copy().reset_index(drop=True)
+    frame["remaining_rise_class"] = np.minimum(
+        3,
+        np.maximum(
+            0,
+            frame["winning_bracket"].astype(int) - frame["current_bracket"],
+        ),
+    ).astype(int)
+    weather = _tokyo_v3_probabilities(frame, artifact)
+    market = frame["market_no_probability"].to_numpy(dtype=float)
+
+    development_mask = frame["evaluation_role"].eq("development_only").to_numpy()
+    if not development_mask.any():
+        raise ValueError("Tokyo V3 audit needs development_only rows for alpha selection")
+    selection_rows: list[dict[str, Any]] = []
+    for alpha in TOKYO_V3_BLEND_ALPHAS:
+        distribution = _blend_tokyo_v3_with_market(weather, market, alpha)
+        score = binary_score(
+            frame.loc[development_mask],
+            1.0 - distribution[development_mask, 0],
+            label_column="label_leave",
+        )
+        selection_rows.append({"market_weather_alpha": alpha, **score})
+    selected_alpha = min(
+        selection_rows,
+        key=lambda row: (float(row["brier"]), float(row["logloss"])),
+    )["market_weather_alpha"]
+    posterior = _blend_tokyo_v3_with_market(weather, market, float(selected_alpha))
+
+    prediction = frame[
+        [
+            "target_date", "event_id", "event_decision_ts_utc", "source_obs_ts_utc",
+            "current_bracket", "winning_bracket", "remaining_rise_class",
+            "label_leave", "evaluation_role", "availability_clock_class",
+        ]
+    ].copy()
+    for index, label in enumerate(("stay", "plus_1", "plus_2", "plus_3plus")):
+        prediction[f"p_weather_{label}"] = weather[:, index]
+        prediction[f"p_posterior_{label}"] = posterior[:, index]
+    prediction["p_market_leave"] = market
+    prediction["p_weather_leave"] = 1.0 - weather[:, 0]
+    prediction["p_posterior_leave"] = 1.0 - posterior[:, 0]
+    prediction["user_facing_version"] = TOKYO_V3_USER_FACING_VERSION
+    prediction["model_id"] = TOKYO_V3_MODEL_ID
+
+    score_rows: list[dict[str, Any]] = []
+    bootstrap_rows: list[dict[str, Any]] = []
+    role_names = {
+        "development_only": "parameter_development",
+        "strict_pit_forward": "reused_audit_not_clean_forward",
+    }
+    for raw_role, role_name in role_names.items():
+        mask = frame["evaluation_role"].eq(raw_role).to_numpy()
+        if not mask.any():
+            continue
+        subset = frame.loc[mask].copy()
+        for model_name, distribution in (
+            ("v3_weather_full_distribution", weather[mask]),
+            ("v3_market_anchored_full_distribution", posterior[mask]),
+        ):
+            score_rows.append(
+                {
+                    "evaluation_role": role_name,
+                    "model": model_name,
+                    **ordinal_score(
+                        subset,
+                        distribution,
+                        label_column="remaining_rise_class",
+                    ),
+                    **{
+                        f"binary_{key}": value
+                        for key, value in binary_score(
+                            subset,
+                            1.0 - distribution[:, 0],
+                            label_column="label_leave",
+                        ).items()
+                    },
+                }
+            )
+        market_score = binary_score(
+            subset, market[mask], label_column="label_leave"
+        )
+        score_rows.append(
+            {
+                "evaluation_role": role_name,
+                "model": "same_checkpoint_market_leave",
+                **{f"binary_{key}": value for key, value in market_score.items()},
+            }
+        )
+        for metric in ("brier", "logloss"):
+            bootstrap_rows.append(
+                {
+                    "evaluation_role": role_name,
+                    "candidate": "v3_market_anchored_full_distribution",
+                    "baseline": "same_checkpoint_market_leave",
+                    "metric": metric,
+                    **date_block_bootstrap_delta(
+                        subset,
+                        binary_loss_values(
+                            subset["label_leave"],
+                            1.0 - posterior[mask, 0],
+                            metric=metric,
+                        ),
+                        binary_loss_values(
+                            subset["label_leave"], market[mask], metric=metric
+                        ),
+                        draws=bootstrap_draws,
+                    ),
+                }
+            )
+
+    audit_score = next(
+        row for row in score_rows
+        if row["evaluation_role"] == "reused_audit_not_clean_forward"
+        and row["model"] == "v3_market_anchored_full_distribution"
+    )
+    market_audit = next(
+        row for row in score_rows
+        if row["evaluation_role"] == "reused_audit_not_clean_forward"
+        and row["model"] == "same_checkpoint_market_leave"
+    )
+    summary = {
+        "schema_version": "tokyo_v2_v3_model_map_v1",
+        "user_facing_version": TOKYO_V3_USER_FACING_VERSION,
+        "human_summary": (
+            "连续全概率模型：每个JMA 10分钟checkpoint输出最终停在当前档或再升"
+            "+1/+2/+3+档的完整概率，并可同时评估YES和NO"
+        ),
+        "model_id": TOKYO_V3_MODEL_ID,
+        "outcomes": ["stay", "plus_1", "plus_2", "plus_3plus"],
+        "artifact": str(artifact_path),
+        "artifact_sha256": sha256_file(artifact_path),
+        "training_cutoff": "2026-07-15",
+        "alpha_selection": {
+            "role": "development_only",
+            "candidates": list(TOKYO_V3_BLEND_ALPHAS),
+            "selected": selected_alpha,
+            "metric": "target-date-equal Brier",
+        },
+        "denominator_scope": (
+            "supplied Tokyo causal expression rows with binary settlement and exact "
+            "PIT weather feature frame; development and reused audit remain separate"
+        ),
+        "rows": int(len(frame)),
+        "target_dates": int(frame["target_date"].nunique()),
+        "audit_binary_leave": {
+            "v3_brier": audit_score["binary_brier"],
+            "v3_logloss": audit_score["binary_logloss"],
+            "v3_accuracy": audit_score["binary_threshold_accuracy"],
+            "market_brier": market_audit["binary_brier"],
+            "market_logloss": market_audit["binary_logloss"],
+            "market_accuracy": market_audit["binary_threshold_accuracy"],
+        },
+        "research_status": "research_only_baseline_gate_fail",
+        "action": "keep V3 in research; do not add it to zero-notional runtime yet",
+        "research_only_zero_notional": True,
+        "live_behavior_changed": False,
+    }
+    return summary, {
+        "predictions": prediction,
+        "alpha_selection": pd.DataFrame(selection_rows),
+        "scores": pd.DataFrame(score_rows),
+        "bootstrap": pd.DataFrame(bootstrap_rows),
+    }
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fields: list[str] = []
@@ -2127,6 +2403,17 @@ def main(argv: list[str] | None = None) -> int:
             "Score the materialized rows with a frozen Tokyo pre-cross spec. "
             "Writes zero-notional telemetry only and does not deploy a runner."
         ),
+    )
+    parser.add_argument(
+        "--run-tokyo-v3-audit",
+        action="store_true",
+        help=(
+            "Audit the continuous Tokyo V3 full distribution on the same "
+            "development/audit expression denominator. Research only."
+        ),
+    )
+    parser.add_argument(
+        "--tokyo-v3-artifact", type=Path, default=DEFAULT_TOKYO_V3_ARTIFACT
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -2293,6 +2580,26 @@ def main(argv: list[str] | None = None) -> int:
             "path": str(forward_dir),
             "spec": str(args.pre_cross_forward_spec),
             **forward_summary,
+        }
+    if args.run_tokyo_v3_audit:
+        v3_summary, v3_frames = run_tokyo_v3_full_probability_audit(
+            rows,
+            artifact_path=args.tokyo_v3_artifact,
+            db_path=args.db_path,
+            bootstrap_draws=args.pre_cross_bootstrap_draws,
+        )
+        v3_dir = args.output_dir / "tokyo_v3_full_probability_audit"
+        v3_dir.mkdir(parents=True, exist_ok=True)
+        for name, frame in v3_frames.items():
+            frame.to_csv(v3_dir / f"{name}.csv", index=False)
+        (v3_dir / "summary.json").write_text(
+            json.dumps(v3_summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        summary["tokyo_v3_full_probability_audit"] = {
+            "path": str(v3_dir),
+            "research_status": v3_summary["research_status"],
+            "live_behavior_changed": False,
         }
     if summary.get("coverage_by_target_date"):
         write_csv(

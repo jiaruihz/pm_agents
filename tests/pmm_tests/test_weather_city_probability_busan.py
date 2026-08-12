@@ -217,3 +217,23 @@ def test_busan_production_profile_is_zero_notional_clean_forward() -> None:
         if row["journal_path"].endswith("korea_first_seen_state_v1/checkpoints")
     )
     assert contract["schema_version"] == "korea_first_seen_collector_latest_v2"
+
+
+def test_tokyo_v2_production_profile_is_zero_notional_clean_forward() -> None:
+    config = json.loads(
+        (ROOT / "configs/weather/city_probability_runtime_v3.json").read_text()
+    )
+    profile = next(
+        row for row in config["profiles"]
+        if row.get("adapter") == "tokyo_pre_cross_market_sharpening_v2"
+    )
+    assert config["execution_mode"] == "zero_notional_shadow"
+    assert config["orders_submitted"] == 0
+    assert profile["user_facing_version"] == "Tokyo V2"
+    assert profile["probability_policy"] == "pre_cross_market_sharpening_v2"
+    assert profile["selection_shares"] == 5.0
+    assert profile["execution_uncertainty_reserve"] == {
+        "minimum_reserve": 0.001,
+        "spread_multiplier": 0.5,
+    }
+    assert profile["emit_paper_intents"] is True

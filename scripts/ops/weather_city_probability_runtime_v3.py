@@ -45,6 +45,7 @@ def main() -> None:
             "amsterdam_knmi_market_offset_probability_v3": AmsterdamKnmiRemainingHeatV7Adapter(),
             "busan_online_market_prior_v1": BusanOnlineMarketPriorAdapter(),
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
+            "tokyo_pre_cross_market_sharpening_v2": TokyoMarketAnchorAdapter(),
             "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),
             "tokyo_overshoot_market_residual_v2": TokyoMarketAnchorAdapter(),
             "observation_coverage_v1": ObservationCoverageAdapter(),

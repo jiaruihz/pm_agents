@@ -206,6 +206,35 @@
     {
       "enabled": true,
       "city": "Tokyo",
+      "adapter": "tokyo_pre_cross_market_sharpening_v2",
+      "profile_id": "tokyo_v2_pre_cross_market_sharpening_clean_forward",
+      "user_facing_version": "Tokyo V2",
+      "human_summary": "cross前升温/离档模型：首次到current+0.3/+0.4C时判断当前档最终是否会被向上离开",
+      "model_id": "weather.city_intraday_probability.tokyo_pre_cross_market_sharpening",
+      "probability_policy": "pre_cross_market_sharpening_v2",
+      "forward_start_utc": "2026-08-12T00:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.0,
+      "selection_shares": 5.0,
+      "execution_uncertainty_reserve": {
+        "minimum_reserve": 0.001,
+        "spread_multiplier": 0.5
+      },
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": true,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "artifacts": {
+        "candidate_spec": {
+          "path": "configs/weather/tokyo_pre_cross_market_sharpening_v2.json",
+          "sha256": "4d454faaa89af0b9e6b4793175385333f1af845f0ea78015a3429ac2dde34aac"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
       "adapter": "tokyo_market_anchor_v7",
       "model_id": "tokyo_state_entry_routed_market_residual_v7",
       "forward_start_utc": "2026-07-31T15:00:00Z",
