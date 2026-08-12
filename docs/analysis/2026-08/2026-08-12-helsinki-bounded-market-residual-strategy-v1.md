@@ -76,6 +76,8 @@ Evidence funnel（盘口和标签覆盖）：
 - 已实现：bounded JSON artifact、YES/NO token identity、同档 best-net-edge 去重、5-share depth/fee scorer、response-clock PIT replay、FMI weather+radiation producer、共享训练/runtime feature builder、逐笔 CSV 和 target-date bootstrap。
 - 当前资格：`zero-notional shadow eligible / not live-eligible`。feature parity blocker 已消除；proper-score 与 ROI CI 仍跨零，所以只能积累 clean forward，不能真实下单。
 - production preflight 已重新检查；部署只允许在 strict manifest 无 critical、controller health 健康时执行。METAR 仍不开仓，只可作为持仓退出 A/B。
+- 已于 `2026-08-12 02:36 UTC` 完成 git-first zero-notional 部署，untouched forward 起点锁为 `2026-08-12 03:30 UTC`（Helsinki 06:30）。FMI producer release `65fc4d8f`、city runtime `ddecbbd6`、forecast collector `03691ebb`；Helsinki ladder 使用隔离 release `f6472819`，没有扰动共享 `strategy_runtime`。post-deploy strict manifest 与 controller health 均为 healthy。
+- city runtime 已实际加载 bounded artifact SHA `9f63dea0…c40f7`，`execution_mode=zero_notional_shadow`、`orders_submitted=0`。部署时 Helsinki 尚在配置的当地 06:00 active-window 之前，因此首个正式 rich FMI forward checkpoint 按正常 collector 时钟生成，不伪造早晨前事件。
 
 ## 执行证据
 
@@ -85,3 +87,4 @@ Evidence funnel（盘口和标签覆盖）：
 - corrected preflight replay：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_preflight_audit_v1/`
 - rich feature parity：`docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v1/runtime_feature_parity_v1.json`
 - rich-contract replay：`/Volumes/jrs-archive/pm_agents/research/artifact_store/helsinki_bounded_market_residual/run=20260812_rich_contract_replay_v1/`
+- production loaded identity：FMI `65fc4d8f933f…`、city runtime `ddecbbd6a26a…`、forecast `03691ebb3657…`、Helsinki ladder `f64728197135…`；post-deploy manifest exit `0`、controller `HEALTHY`、0 order。
