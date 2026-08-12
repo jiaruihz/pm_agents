@@ -2,7 +2,7 @@
 
 Status: current-source
 
-Updated: 2026-07-29
+Updated: 2026-08-12
 
 Source of truth: external-wallet public-data collection, JRS storage, and whole-ladder replay
 
@@ -12,10 +12,11 @@ Source of truth: external-wallet public-data collection, JRS storage, and whole-
 `fact_trades` / `fact_signal_candidates`。默认只保存文件，不创建 SQLite，也不写
 `runtime/weather.db`。
 
-最终数据实体必须在 JRS：
+最终数据实体必须在 `production.yaml.archive_storage_root` 解析出的 JRS archive；
+当前为：
 
 ```text
-/Volumes/jrs/pm_agents/research/external_wallet_weather/
+/Volumes/jrs-archive/pm_agents/research/external_wallet_weather/
   raw/
     wallet=<0xaddress>/
       snapshot=<YYYYMMDDTHHMMSSZ>/
@@ -36,7 +37,7 @@ Source of truth: external-wallet public-data collection, JRS storage, and whole-
 本机 `docs/analysis/.../generated/` 只可保留小 manifest、报告或指向 JRS 的
 symlink，不长期保存大数据副本。
 
-所有 `/Volumes/jrs` 读写必须经
+所有 `/Volumes/jrs*` 读写必须经
 `scripts/ops/weather_jrs_tmux_env.sh` 的 canonical
 `tmux -L weather-data-feed-jrs` 上下文。禁止默认 tmux、screen、nohup 或直接让
 LaunchAgent 承载。
@@ -80,6 +81,42 @@ scripts/ops/import_external_wallet_weather_jrs.sh /path/to/snapshot [wallet]
 
 源/目标逐文件 SHA256 验证通过后，才允许把本机大文件移入废纸篓并改成 JRS
 symlink。
+
+direct-to-JRS 采集没有 copy boundary：注册时对 exact same path 记录
+`source_is_exact_destination_no_copy`，完整性沿用 collector manifest、aggregate
+artifact SHA 和 daily checkpoint 自校验，不再为数千个 metadata checkpoint 重复做
+归档盘随机读取。只有 staging→JRS 或 alias→canonical import 才逐文件重新 SHA256。
+
+### 多地址发现与批量复盘
+
+先用同一个 peer-scan runner 扫描 leaderboard 的 `ALL / MONTH / WEEK`，排除已研究
+地址并只做近期 public-activity profile：
+
+```bash
+.venv/bin/python scripts/analysis/wallet_weather/research_weather_wallet_peer_scan_v1.py \
+  --exclude-wallet-file /path/to/known_wallets.txt \
+  --discover-leaderboard-rows 250 \
+  --max-profile-wallets 120 \
+  --select-count 30 \
+  --output /path/to/peer_scan/summary.json
+```
+
+默认 research-priority screen 排除 lifetime turnover proxy `>$2m`、近期 weather
+trade rows 达到 `4,000` 截断风险、每 event `>20` trades、`>=95c` 买入成本占比
+`>25%` 或近期 weather events `<10` 的地址。它只决定“谁值得花网络与存储做全历史”，
+不是 alpha、PnL 或 live gate。所有 HTTP 失败显式写 blocker；runner 每完成一地址就
+原子 checkpoint，可续跑。
+
+全历史采集仍逐地址调用 `collect_external_wallet_weather_jrs.sh`。所有 immutable
+snapshot 就绪后，批量复用同一个 whole-ladder runner：
+
+```bash
+scripts/ops/research_external_wallet_full_ladder_batch_jrs.sh wallets.txt
+```
+
+批量入口只负责编排：从 `latest/<wallet>.json` 锁定 snapshot，并逐钱包调用
+`research_external_wallet_full_ladder_history_v1.py`；不会复制算法或建立第二套分析口径。
+批次 manifest 会逐地址记录 snapshot、source、analysis path、return code 和失败原因。
 
 ### 2. 完整 ladder 生命周期复盘
 
@@ -145,6 +182,22 @@ NegRisk conversion 可能让最终 redeemable shares 大于普通 TRADE activity
 - 城市时区覆盖必须为 100%，否则先补 slug mapping 再发布入场时间；
 - settled PnL 按 `target_date` block bootstrap，但外部钱包 selected fills 仍没有
   opportunity denominator 或 same-time market baseline，不能据此升级本账户 live。
+
+多地址比较使用：
+
+```bash
+.venv/bin/python scripts/analysis/wallet_weather/compare_external_wallet_performance_v1.py \
+  --batch-manifest /path/to/batch_manifest.json \
+  --output /path/to/comparison
+```
+
+也可对少量地址重复传入 `--run label=/path/to/analysis/full_ladder_history_v1`。
+
+除 PnL/CI 外必须同时发布每 event 买入成本中位/P90、unique BUY transactions、
+`>5m` sessions、买入跨度、dominant ladder expression、target-day cost share 和
+`>=95c` SELL proceeds share。低频/资金/near-binary 可复制性是 research triage，
+不得冒充交易 eligibility；最终仍回到我们的固定机会分母、PIT market baseline 与
+frozen forward。
 
 ## 更新与保留
 

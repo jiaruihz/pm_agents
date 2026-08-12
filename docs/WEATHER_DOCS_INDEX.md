@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-08-11 daily minimum temperature initial implementation
+Updated: 2026-08-12 external-wallet low-frequency peer audit
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-08-11
+更新时间：2026-08-12
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -38,7 +38,7 @@ Status 口径：
 | Tmax distribution / full ladder / target book | [WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md](WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md) | P0–P6、lineage repair、v3 报告用于复核演进；当前结论是概率/会计框架保留、alpha 未 confirmed |
 | daily minimum temperature / Tmin exact ladder | [WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md](WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md) | 先读双冷却窗口、三 anchor、PIT 分母与晋级门；中央三城 full-ladder 与 running-min path 已在生产 zero-order collection。cross previous-NO 旧51条已证实混入initial-state并漏真cross，旧结果降为legacy探索；主journal已按显式strict-cross合同重启，当前1条Tokyo clean candidate、0订单。见 [event-contract correction](analysis/2026-08/2026-08-12-tmin-cross-event-contract-correction-v1.md) |
 | Amsterdam / Busan / Helsinki / Seoul / Tokyo 城市模型 | [WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md](WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md) + [WCIR runtime design](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md) | 先读“五城知识账”；数字版本是experiment/run，不自动成为新模型身份或新collector。Helsinki当前完整模型是regime-calibrated bounded residual v2；Busan online market-prior仍为低样本candidate。Seoul首版preferred-runway exact-NO artifact已训练，但13个同盘口独立日上开发选择`alpha=0`、holdout显著输market，仍coverage-only；下一步是长历史settlement-native full distribution。WS等跨多个settled dates后再做frozen A/B |
-| 外部钱包 | [WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md](WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md) | 先读全钱包结论矩阵；逐钱包报告只支持机制与历史 selected-fill 证据，不支持地址跟单或 live eligibility |
+| 外部钱包 | [WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md](WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md) | 先读全钱包结论矩阵和其中 2026-08-12 低频 cohort；新 26 地址首选 `fildoro` 型 sparse D-1 NO，只作为现有 D-1/PIT 模型的 expression hypothesis；逐钱包 selected fills 不支持地址跟单或 live eligibility |
 | market structure / Range RV / underround / microstructure | [market_structure_edge.md](analysis/market_structure_edge.md) | 历史 scanner 版本是 search history；exact-kink与旧ladder mass transport均branch-exhausted；Amsterdam/Helsinki/Tokyo pooled transport固定15/30/60s主targets，历史联合rows仍为0；共享守恒ΔP_weather + pre/0/15/30/60/120/300s整梯collector已于生产SHA `30b671a4`以zero-notional data shadow启动，先积累三城forward，不拟合、不改live |
 | Polymarket weather proposal reward | [WEATHER_PROPOSAL_REWARD.md](research/WEATHER_PROPOSAL_REWARD.md) | 独立 oracle strategy family；当前 `$0.60/$500/900s` cohort 的规则、proposal 竞争时钟与资金释放证据，不与天气 CLOB alpha/PnL 合并 |
 | forecast source / city-model calibration | [WEATHER_FORECAST_SOURCE_CALIBRATION.md](WEATHER_FORECAST_SOURCE_CALIBRATION.md) | 单日/单模型 scorecard 只作 snapshot；当前每城模型与 lineage 以 living calibration doc 为准 |

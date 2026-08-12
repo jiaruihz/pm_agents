@@ -2,7 +2,7 @@
 
 Status: current-reference
 
-Updated: 2026-08-05 semantic consolidation
+Updated: 2026-08-12 low-frequency peer cohort
 
 Source of truth: external-wallet research register, not production strategy truth
 
@@ -19,6 +19,7 @@ Source of truth: external-wallet research register, not production strategy trut
 
 | 钱包 / 家族 | 已吸收的耐久机制 | 当前可复用部分 | 当前状态 / 详细证据 |
 |---|---|---|---|
+| 2026-08-12 新 26 地址低频 cohort | 低交易笔数、小 event capital 的 sparse exact-bracket selector；首选 `fildoro` D-1 NO，次选 `0xfc179…886a` D-2/D-1 NO | 接现有 D-1 probability + first_seen/PIT；每 city-day 最多一个 fee 后 max-EV YES/NO，并与 market/full-distribution/0x43cb strip 同分母比较 | `research-only / 26 complete / no-live-change`；见下文耐久结论，机器明细见 JRS manifest `weather_wallet_peer_scan_20260812_v1.json` |
 | `yourthos` | Seoul/RKSI source-event 后动态切换 current NO、current YES 与 upper YES，并用 NegRisk/SELL 释放资金 | source-event 后重算整条 ladder；钱包方向只作 confirmation/veto | `inconclusive / 秒级执行不可跟单`；见下文 |
 | `Gptball` | Chengdu/ZUUU 日内 path-state router，NO pass-through 后切 current YES | 单城 source/basis adapter、状态切换而非单腿模仿 | `inconclusive / research-only`；见下文 |
 | `0x43cb` | 全球 target-day 连续 YES strip：range 底仓 + 中心加权，主要持有到结算 | full-ladder bounded-support probability 与 basket accounting | `historically profitable / transferable alpha unproven`；见下文与 [架构推断](analysis/2026-08/2026-08-05-research-43cb-city-model-architecture-v1.md) |
@@ -40,6 +41,31 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
 切片，除非在我们的全机会分母、PIT book 和 frozen forward 上重现，否则不进入 eligibility。
 
 ## 已完整研究
+
+### 2026-08-12 低频 cohort
+
+- 分母：从 WEATHER leaderboard 的 ALL / MONTH / WEEK 各 250 行排除既有研究对象，
+  profile 120 个新地址，筛出 26 个做完整历史；26/26 完成，合计 87,026 条
+  weather activity、13,667 个 cashflow-complete portfolios，另有 5 个 portfolio
+  缺 Gamma metadata，作为 coverage gap 保留。
+- 首选机制 `fildoro`（`0x180e62e6f035dbf69118a2306df25d28762129df`）：
+  跨城市 D-1 NO exclusion，802 events / 104 target dates / 30 cities；每 event
+  中位 1 笔、成本 `$43.47`，selected-fill ROI `+7.89%`，target-date block CI
+  `[+5.19%, +11.06%]`，去掉 top-5 盈利事件仍 `+5.53%`。
+- 第二 challenger `0xfc17946b7bedc82eb11329e67d0f2d3a76c1886a`：D-2/D-1
+  NO-only，81 events / 36 dates / 27 cities；中位 1 笔、成本 `$48.83`，
+  selected-fill ROI `+19.72%`、CI `[+2.81%, +32.60%]`，但独立日期较少。
+- 次级机制只作 control：LA D-1 single-YES、跨城市 D-1/D0 single-YES、D0
+  sparse selector、Kuala Lumpur 单城 router 和 0x43cb bounded strip；不各建 runner。
+- 耐久研究动作：复用同一个 D-1 runner，在同一 PIT city-day 分母比较 market、当前
+  full-distribution、sparse NO、sparse YES、bounded strip 五臂；每 city-day 最多表达
+  一个 fee 后 max-EV exact YES/NO，至少等 15 个全新 settled target dates。
+- 边界：上述 ROI 是钱包 selected fills，没有我们的全机会分母、私有信号、未成交单和
+  同刻可执行 baseline；只能作为 expression prior，不能用地址成交触发或升级 live。
+- 机器明细已归档到
+  `/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/weather_wallet_peer_scan_20260812_v1.json`；
+  原始 immutable snapshots 和 per-wallet replay 仍在
+  `/Volumes/jrs-archive/pm_agents/research/external_wallet_weather/`。
 
 ### yourthos
 

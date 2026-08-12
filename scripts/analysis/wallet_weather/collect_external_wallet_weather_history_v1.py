@@ -266,7 +266,10 @@ def collect_day(
         **file_stats,
     }
     atomic_write_json(meta_path, meta)
-    return {**meta, "resumed": False}
+    # Keep freshly fetched rows in memory for the aggregate build.  Re-reading
+    # hundreds of just-written daily gzip files from the archive is pure random
+    # I/O; resumed checkpoints still follow the verified on-disk path.
+    return {**meta, "resumed": False, "_fresh_rows": deduplicated}
 
 
 def collect_days(
@@ -504,8 +507,13 @@ def main() -> int:
 
     all_rows: dict[tuple[Any, ...], dict[str, Any]] = {}
     for meta in day_meta:
-        data_path = output / str(meta["file"])
-        for row in read_jsonl_gz(data_path):
+        fresh_rows = meta.pop("_fresh_rows", None)
+        rows = (
+            fresh_rows
+            if isinstance(fresh_rows, list)
+            else read_jsonl_gz(output / str(meta["file"]))
+        )
+        for row in rows:
             all_rows[_activity_key(row)] = row
     activity = sorted(
         all_rows.values(),

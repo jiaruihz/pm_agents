@@ -108,9 +108,68 @@ def monthly_rows(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def dominant_expression(counts: dict[str, int]) -> tuple[str, float | None]:
+    total = sum(int(value) for value in counts.values())
+    if not total:
+        return "unknown", None
+    label, count = max(counts.items(), key=lambda item: int(item[1]))
+    return label, int(count) / total
+
+
+def classify_copyability(
+    *,
+    complete_events: int,
+    target_dates: int,
+    median_event_buy_cost: float | None,
+    p90_event_buy_cost: float | None,
+    median_transactions: float | None,
+    median_sessions: float | None,
+    median_span_minutes: float | None,
+    near_binary_buy_share: float | None,
+    dominant_expression_label: str,
+    dominant_expression_share: float | None,
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    if complete_events < 20 or target_dates < 15:
+        blockers.append("insufficient_independent_history")
+    if (median_transactions or 0) > 10 or (median_sessions or 0) > 4:
+        blockers.append("high_frequency_or_many_staged_entries")
+    if (median_span_minutes or 0) > 360:
+        blockers.append("long_active_execution_window")
+    if (median_event_buy_cost or 0) > 300 or (p90_event_buy_cost or 0) > 1_000:
+        blockers.append("large_event_capital_requirement")
+    if (near_binary_buy_share or 0) > 0.25:
+        blockers.append("near_binary_buy_dependence")
+
+    if (median_transactions or 0) <= 2 and (median_sessions or 0) <= 2:
+        execution_style = "low_frequency"
+    elif (median_transactions or 0) <= 10 and (median_sessions or 0) <= 4:
+        execution_style = "moderate_frequency"
+    else:
+        execution_style = "high_frequency_or_staged"
+
+    if (median_event_buy_cost or 0) <= 100 and (p90_event_buy_cost or 0) <= 500:
+        capital_style = "small"
+    elif (median_event_buy_cost or 0) <= 300 and (p90_event_buy_cost or 0) <= 1_000:
+        capital_style = "moderate"
+    else:
+        capital_style = "large_or_concentrated"
+
+    return {
+        "screen_purpose": "research prioritization only; not a strategy/live gate",
+        "copyable_for_our_execution": not blockers,
+        "blockers": blockers,
+        "execution_style": execution_style,
+        "capital_style": capital_style,
+        "dominant_expression": dominant_expression_label,
+        "dominant_expression_share": dominant_expression_share,
+    }
+
+
 def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
     summary = json.loads((analysis_dir / "summary.json").read_text(encoding="utf-8"))
     raw_events = read_events(analysis_dir / "event_portfolios.csv")
+    city_rows = read_events(analysis_dir / "city_summary.csv")
     events = [
         row
         for row in raw_events
@@ -142,6 +201,39 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
         hour_timing["buy_cost_share_by_target_day_offset"].get("0") or 0.0
     )
     portfolio = summary["portfolio_summary"]
+    event_buy_costs = [float(row["buy_cost"]) for row in events]
+    expression_label, expression_share = dominant_expression(
+        summary["expression_counts"]
+    )
+    median_event_buy_cost = percentile(event_buy_costs, 0.50)
+    p90_event_buy_cost = percentile(event_buy_costs, 0.90)
+    median_transactions = portfolio["unique_buy_transactions"]["median"]
+    median_sessions = portfolio["buy_sessions_gap_gt_5m"]["median"]
+    median_span_minutes = portfolio["buy_span_minutes"]["median"]
+    near_binary_buy_share = portfolio["buy_cost_share_ge_95c"]
+    ranked_cities = sorted(
+        (
+            {
+                "city": str(row["label"]),
+                "buy_cost": float(row.get("buy_cost") or 0),
+                "events": int(float(row.get("events") or 0)),
+                "turnover_roi": (
+                    float(row["turnover_roi"])
+                    if row.get("turnover_roi") not in (None, "")
+                    else None
+                ),
+            }
+            for row in city_rows
+        ),
+        key=lambda row: float(row["buy_cost"]),
+        reverse=True,
+    )
+    city_total_cost = sum(float(row["buy_cost"]) for row in ranked_cities)
+    city_shares = [
+        float(row["buy_cost"]) / city_total_cost
+        for row in ranked_cities
+        if city_total_cost
+    ]
     return {
         "label": label,
         "wallet": summary["wallet"],
@@ -189,7 +281,15 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
             "without_top_five_pnl_dates": period_from_dates(without_top_five),
         },
         "replication_inputs": {
+            "median_event_buy_cost": median_event_buy_cost,
+            "p90_event_buy_cost": p90_event_buy_cost,
+            "buy_price_cost_weighted": portfolio["buy_price_cost_weighted"],
+            "buy_cost_share_ge_95c": portfolio["buy_cost_share_ge_95c"],
+            "buy_cost_share_ge_99c": portfolio["buy_cost_share_ge_99c"],
             "yes_buy_cost_share": portfolio["yes_buy_cost_share"],
+            "buy_cost_share_by_target_day_offset": hour_timing[
+                "buy_cost_share_by_target_day_offset"
+            ],
             "target_day_buy_cost_share": target_day_share,
             "sell_event_share": portfolio["sell_event_share"],
             "settlement_without_sell_share": portfolio[
@@ -215,6 +315,41 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
                 "sell_proceeds_share_ge_99c"
             ],
             "expression_counts": summary["expression_counts"],
+            "dominant_expression": expression_label,
+            "dominant_expression_share": expression_share,
+            "contiguous_yes_strip_share": portfolio["contiguous_yes_strip_share"],
+            "median_first_buy_local_hour": portfolio["first_buy_local_hour"][
+                "median"
+            ],
+            "median_cost_weighted_buy_local_hour": portfolio[
+                "cost_weighted_buy_local_hour"
+            ]["median"],
+        },
+        "copyability": classify_copyability(
+            complete_events=len(events),
+            target_dates=len(dates),
+            median_event_buy_cost=median_event_buy_cost,
+            p90_event_buy_cost=p90_event_buy_cost,
+            median_transactions=median_transactions,
+            median_sessions=median_sessions,
+            median_span_minutes=median_span_minutes,
+            near_binary_buy_share=near_binary_buy_share,
+            dominant_expression_label=expression_label,
+            dominant_expression_share=expression_share,
+        ),
+        "city_profile": {
+            "top_city": ranked_cities[0]["city"] if ranked_cities else None,
+            "top_city_buy_cost_share": city_shares[0] if city_shares else None,
+            "top_3_buy_cost_share": sum(city_shares[:3]) if city_shares else None,
+            "effective_city_count": (
+                1 / sum(value * value for value in city_shares)
+                if city_shares
+                else None
+            ),
+            "top_cities": [
+                {**row, "buy_cost_share": city_shares[index]}
+                for index, row in enumerate(ranked_cities[:5])
+            ],
         },
         "date_rows": dates,
         "month_rows": months,
@@ -228,6 +363,19 @@ def parse_run(value: str) -> tuple[str, Path]:
     return label, Path(raw_path).expanduser().resolve()
 
 
+def runs_from_batch_manifest(path: Path) -> list[tuple[str, Path]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    runs: list[tuple[str, Path]] = []
+    for row in payload.get("results") or []:
+        if row.get("status") != "complete":
+            continue
+        wallet = str(row["wallet"]).lower()
+        runs.append((wallet, Path(str(row["analysis"])).resolve()))
+    if not runs:
+        raise ValueError(f"batch manifest has no completed runs: {path}")
+    return runs
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fields = [
         "label",
@@ -237,6 +385,8 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "events",
         "target_dates",
         "buy_cost",
+        "median_event_buy_cost",
+        "p90_event_buy_cost",
         "pnl",
         "lifetime_turnover_roi",
         "mean_target_date_roi",
@@ -256,6 +406,19 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "median_unique_buy_transactions",
         "sell_proceeds_share_ge_95c",
         "sell_proceeds_share_ge_99c",
+        "buy_price_cost_weighted",
+        "buy_cost_share_ge_95c",
+        "buy_cost_share_ge_99c",
+        "dominant_expression",
+        "dominant_expression_share",
+        "execution_style",
+        "capital_style",
+        "copyable_for_our_execution",
+        "copyability_blockers",
+        "top_city",
+        "top_city_buy_cost_share",
+        "top_3_buy_cost_share",
+        "effective_city_count",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
@@ -271,6 +434,12 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "events": row["coverage"]["cashflow_complete_events"],
                     "target_dates": row["coverage"]["independent_target_dates"],
                     "buy_cost": row["lifetime"]["buy_cost"],
+                    "median_event_buy_cost": row["replication_inputs"][
+                        "median_event_buy_cost"
+                    ],
+                    "p90_event_buy_cost": row["replication_inputs"][
+                        "p90_event_buy_cost"
+                    ],
                     "pnl": row["lifetime"]["pnl"],
                     "lifetime_turnover_roi": row["lifetime"]["turnover_roi"],
                     "mean_target_date_roi": row["average_roi"]["mean_target_date_roi"],
@@ -314,17 +483,56 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "sell_proceeds_share_ge_99c": row["replication_inputs"][
                         "sell_proceeds_share_ge_99c"
                     ],
+                    "buy_price_cost_weighted": row["replication_inputs"][
+                        "buy_price_cost_weighted"
+                    ],
+                    "buy_cost_share_ge_95c": row["replication_inputs"][
+                        "buy_cost_share_ge_95c"
+                    ],
+                    "buy_cost_share_ge_99c": row["replication_inputs"][
+                        "buy_cost_share_ge_99c"
+                    ],
+                    "dominant_expression": row["copyability"][
+                        "dominant_expression"
+                    ],
+                    "dominant_expression_share": row["copyability"][
+                        "dominant_expression_share"
+                    ],
+                    "execution_style": row["copyability"]["execution_style"],
+                    "capital_style": row["copyability"]["capital_style"],
+                    "copyable_for_our_execution": row["copyability"][
+                        "copyable_for_our_execution"
+                    ],
+                    "copyability_blockers": ",".join(
+                        row["copyability"]["blockers"]
+                    ),
+                    "top_city": row["city_profile"]["top_city"],
+                    "top_city_buy_cost_share": row["city_profile"][
+                        "top_city_buy_cost_share"
+                    ],
+                    "top_3_buy_cost_share": row["city_profile"][
+                        "top_3_buy_cost_share"
+                    ],
+                    "effective_city_count": row["city_profile"][
+                        "effective_city_count"
+                    ],
                 }
             )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", action="append", type=parse_run, required=True)
+    parser.add_argument("--run", action="append", type=parse_run, default=[])
+    parser.add_argument("--batch-manifest", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    comparisons = [summarize(label, path) for label, path in args.run]
+    runs = list(args.run)
+    if args.batch_manifest:
+        runs.extend(runs_from_batch_manifest(args.batch_manifest.resolve()))
+    if not runs:
+        parser.error("at least one --run or --batch-manifest is required")
+    comparisons = [summarize(label, path) for label, path in runs]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     (output / "comparison.json").write_text(

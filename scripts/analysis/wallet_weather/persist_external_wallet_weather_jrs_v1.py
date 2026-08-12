@@ -64,6 +64,18 @@ def snapshot_id_from_manifest(manifest: dict[str, Any]) -> str:
 
 
 def copy_verified(source: Path, destination: Path) -> dict[str, Any]:
+    # Direct-to-JRS collection intentionally persists from the exact destination
+    # path.  The collector has already atomically written and checksummed the
+    # aggregate artifacts/checkpoints, so there is no copy boundary to verify.
+    if source == destination:
+        return {
+            "path": str(destination),
+            "bytes": 0,
+            "sha256": None,
+            "copied": False,
+            "verification": "source_is_exact_destination_no_copy",
+            "size_accounting": "not_recounted; collector manifest/checkpoint owns size",
+        }
     source_hash = file_sha256(source)
     if source.resolve() == destination.resolve():
         return {
@@ -71,6 +83,7 @@ def copy_verified(source: Path, destination: Path) -> dict[str, Any]:
             "bytes": source.stat().st_size,
             "sha256": source_hash,
             "copied": False,
+            "verification": "source_destination_alias_sha256_verified",
         }
     if destination.exists():
         destination_hash = file_sha256(destination)
@@ -110,12 +123,18 @@ def checkpoint_files(source: Path) -> list[Path]:
     if not metadata.is_dir():
         raise FileNotFoundError(metadata)
     rows = sorted(
-        path
-        for path in daily.iterdir()
-        if path.is_file()
-        and (path.name.endswith(".jsonl.gz") or path.name.endswith(".meta.json"))
+        Path(entry.path)
+        for entry in os.scandir(daily)
+        if entry.is_file(follow_symlinks=False)
+        and (entry.name.endswith(".jsonl.gz") or entry.name.endswith(".meta.json"))
     )
-    rows.extend(sorted(path for path in metadata.iterdir() if path.is_file()))
+    rows.extend(
+        sorted(
+            Path(entry.path)
+            for entry in os.scandir(metadata)
+            if entry.is_file(follow_symlinks=False)
+        )
+    )
     if not rows:
         raise RuntimeError(f"checkpoint directories are empty: {source}")
     return rows
@@ -132,6 +151,28 @@ def persist_snapshot(source: Path, destination: Path) -> list[dict[str, Any]]:
         if not path.is_file():
             raise FileNotFoundError(path)
         artifacts.append(path)
+    if source == destination:
+        rows = [copy_verified(path, path) for path in artifacts]
+        for name in ("daily_activity", "event_metadata_by_slug"):
+            directory = source / name
+            if not directory.is_dir():
+                raise FileNotFoundError(directory)
+            with os.scandir(directory) as entries:
+                if not any(entry.is_file(follow_symlinks=False) for entry in entries):
+                    raise RuntimeError(f"checkpoint directory is empty: {directory}")
+            rows.append(
+                {
+                    "path": str(directory),
+                    "bytes": 0,
+                    "sha256": None,
+                    "copied": False,
+                    "verification": "source_is_exact_destination_directory_registered",
+                    "size_accounting": (
+                        "not_recounted; collector manifest/checkpoint owns contents"
+                    ),
+                }
+            )
+        return rows
     artifacts.extend(checkpoint_files(source))
     return [
         copy_verified(path, destination / relative_artifact_path(source, path))

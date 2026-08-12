@@ -241,6 +241,29 @@ def event_portfolio(
     ]
 
     buy_cost = sum(float(row.get("usdcSize") or 0) for row in buys)
+    buy_price_cost_weighted = ratio(
+        sum(
+            float(row.get("price") or 0) * float(row.get("usdcSize") or 0)
+            for row in buys
+        ),
+        buy_cost,
+    )
+    buy_cost_share_ge_95c = ratio(
+        sum(
+            float(row.get("usdcSize") or 0)
+            for row in buys
+            if float(row.get("price") or 0) >= 0.95
+        ),
+        buy_cost,
+    )
+    buy_cost_share_ge_99c = ratio(
+        sum(
+            float(row.get("usdcSize") or 0)
+            for row in buys
+            if float(row.get("price") or 0) >= 0.99
+        ),
+        buy_cost,
+    )
     sell_proceeds = sum(float(row.get("usdcSize") or 0) for row in sells)
     redeem_cash = sum(float(row.get("usdcSize") or 0) for row in redeems)
     merge_cash = sum(float(row.get("usdcSize") or 0) for row in merges)
@@ -460,6 +483,9 @@ def event_portfolio(
         "buy_rows": len(buys),
         "sell_rows": len(sells),
         "buy_cost": buy_cost,
+        "buy_price_cost_weighted": buy_price_cost_weighted,
+        "buy_cost_share_ge_95c": buy_cost_share_ge_95c,
+        "buy_cost_share_ge_99c": buy_cost_share_ge_99c,
         "yes_buy_cost": yes_buy_cost,
         "no_buy_cost": no_buy_cost,
         "yes_buy_cost_share": ratio(yes_buy_cost, buy_cost),
@@ -647,6 +673,30 @@ def summarize_group(
         "turnover_roi": ratio(pnl, sum(float(row["buy_cost"]) for row in resolved)),
         "yes_buy_cost_share": ratio(
             sum(float(row["yes_buy_cost"]) for row in rows),
+            buy_cost,
+        ),
+        "buy_price_cost_weighted": ratio(
+            sum(
+                float(row["buy_price_cost_weighted"] or 0)
+                * float(row["buy_cost"])
+                for row in rows
+            ),
+            buy_cost,
+        ),
+        "buy_cost_share_ge_95c": ratio(
+            sum(
+                float(row["buy_cost_share_ge_95c"] or 0)
+                * float(row["buy_cost"])
+                for row in rows
+            ),
+            buy_cost,
+        ),
+        "buy_cost_share_ge_99c": ratio(
+            sum(
+                float(row["buy_cost_share_ge_99c"] or 0)
+                * float(row["buy_cost"])
+                for row in rows
+            ),
             buy_cost,
         ),
         "sell_event_share": ratio(sum(bool(row["has_sell"]) for row in rows), len(rows)),
