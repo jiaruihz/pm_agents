@@ -1,7 +1,7 @@
 # Weather Daily Minimum Temperature Strategy
 
 Status: current-reference
-Updated: 2026-08-11 initial implementation and readiness audit
+Updated: 2026-08-13 frozen cross-prev-NO policy deployed to zero-notional shadow
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md;
 WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md
@@ -24,7 +24,7 @@ design = frozen_v1
 collection_runtime = active central market_books Tmin full ladder for HongKong/Seoul/Tokyo
 model_implementation = D-1 18:00 PIT panel + W0 weather residual development baseline
 probability_artifact = none
-forward = not_started
+forward = running for tmin_cross_prev_no_cap90_first_cityday_v1; probability model forward not_started
 runtime = central full-ladder collection + cross-prev-NO zero-notional shadow; zero orders
 promotion = no live
 ```
@@ -232,7 +232,7 @@ readiness verdict：`BLOCKED_FOR_FIT / KEEP_ZERO_NOTIONAL_COLLECTION`。
 
 ### Cross previous-NO forward shadow
 
-`weather_tmin_cross_prev_no_shadow_v1` 把 Seoul AMOS 与 Tokyo JMA AMeDAS 明确连续观测到的第一次向下跨档
+`weather_tmin_cross_prev_no_shadow_v1` 把 Seoul AMOS 与 Tokyo JMA AMeDAS 的第一次向下跨档
 映射为“观察刚离开的上一档（更暖 exact bracket）的 NO”。它只消费现有
 `source_event_ladder_repricing_shadow/lowest_10m` event 与 fresh quote journal，不请求盘口、不读取
 私有 collector，也不创建订单。
@@ -248,20 +248,46 @@ SignalCandidate`。机制 candidate 状态为 `observed`，不把尚未冻结的
 0 intent/order/fill。原 journal 保留为 superseded evidence，修正版改用
 `tmin_prev_warmer_no_given_cross_pending_v0`。next-colder exact-NO 是另一条表达，不参与本 runtime 评分。
 
-生产 runtime 使用 `fast_observation` release
-`9bb6678b936464df94bdc7ab1de80d6ddf500ecd`，实例 identity 为
-`weather_tmin_cross_prev_no_shadow_v1`。
+实例 identity 为 `weather_tmin_cross_prev_no_shadow_v1`。2026-08-13 起使用独立 production release
+`tmin_cross_prev_no_shadow`，代码 SHA `d450aba34a84ceb1d8344177cefad55de322d41f`；共享
+`fast_observation` release 保持原 pin，避免影响其他 collector/shadow。
 
-2026-08-12 事件合同审计推翻了“旧 51 条都是严格 first-cross”的分母解释。可用高频 raw
-重放的 10 个 target dates 中，21 条 legacy candidate 只有 6 条能证明为 strict cross，15 条是
+2026-08-12 事件合同审计推翻了“51 条都是严格 first-cross”的分母解释。可用高频 raw 重放的
+10 个 target dates 中，21 条 legacy candidate 只有 6 条能证明为 strict cross，15 条是
 initial-state/非 strict，另有 5 个 raw strict cross 被旧链路漏掉；更早 7 个日期的 30 条缺对应
-高频 raw，不能重分类。旧 51 条整体保留为 `legacy mixed semantics`，不得再支持 alpha 或 forward
-promotion。主 journal 在 `2026-08-12T02:46Z` 清零，并只接收显式
-`source_transition_kind=strict_cross`；盘口统一读取中央 `market_books/latest.json`，事件落盘不再等待
-盘口。版本化 event dedupe 已把与旧 key 重名的 Tokyo `24→23` v3 strict event 正确补入 clean journal，
-consumer 同步输出 WCIR `DecisionBundle`；增量 canonical materialization 得到 raw/canonical `1/1`、
-delta=0，第二次 apply inserted=0，证明幂等。当前为 1 candidate、0 selected/intent/order/fill。完整清单见
-[event contract correction](analysis/2026-08/2026-08-12-tmin-cross-event-contract-correction-v1.md)。
+高频 raw，不能重分类。旧 51 条整体保留为 `legacy mixed semantics`，其下述 settlement/ROI/cap90
+结果只作历史探索，不再支持 strict-cross alpha 或 forward promotion。主 journal 已在
+`2026-08-12T02:46Z` 清零，并只接收显式 `source_transition_kind=strict_cross` 的新事件；盘口统一读取
+中央 `market_books/latest.json`，事件落盘不再等待盘口。影响为 0 selected/intent/order/fill。
+完整清单见 [event contract correction](analysis/2026-08/2026-08-12-tmin-cross-event-contract-correction-v1.md)。
+
+以下为合同修复前的 legacy mixed-semantics snapshot：2026-08-12 settlement/quote 回连曾把 raw
+snapshot 扩到 51 candidates / 17 target dates；8/12
+两条 open event 保留为 unsettled，禁止用 near-binary `outcomePrices` 冒充结算。49 条 closed candidates
+中 29 条有 direct NO ask，27 条同时有至少 5 shares top depth。全 27 条按 5 shares 和官方 fee 重放为
+25 胜 2 负、PnL `+$0.1169`、ROI `+0.09%`，target-date bootstrap CI
+`[-15.74%,+11.32%]`，没有可用 edge。开发窗口冻结的 challenger
+`tmin_cross_prev_no_cap90_first_cityday_v1`（NO ask<=0.90、每 city-day 第一条 eligible、5 shares）为
+5 条/5 dates、4 胜 1 负、ROI `+13.62%`，CI `[-49.24%,+88.32%]`。2026-08-13 已部署到现有
+production runner 做 zero-notional frozen forward：所有 strict-cross candidates 继续进入全分母
+`signal_candidates.jsonl`，合格行另写 append-only `shadow_decisions.jsonl`；每笔记录 5-share raw ask、
+top ask depth、官方 fee 与 producer SHA，不创建 TradeIntent/order/fill，也不改变 live。
+
+部署验收时 clean journal 为 1 个 pre-policy candidate、0 个合格 frozen-forward decision，目标 PID `26988`
+加载上述 SHA，summary 为 `policy_status=frozen_forward_shadow`、`orders_enabled=false`、0 intent/order/fill、
+0 venue write；从部署后的新 strict-cross 开始累计 untouched forward。
+
+同一 denominator 的替代表达也已排查：三腿 `previous NO + current YES + next NO` 在 26 条完整
+5-share coverage rows 上没有 fee-adjusted cost<1；两腿 `current YES + next NO` 的 15 条 under-1
+settlement ROI 为 `+3.06%`、CI `[-37.80%,+64.78%]`。previous-NO 在 10m 后按真实 5-share bid taker
+退出为 ROI `-6.55%`、CI `[-12.35%,-1.49%]`；30/60/120/240m 均无正证据。因此不把 basket 或
+短时 repricing 另起 live/shadow；当前唯一新增动作是上述 cap90 zero-notional frozen-forward journal。
+
+remaining-cooling `0/1/2/3+` hurdle head 在 98 OOF rows / 15 dates 的 proxy labels 上显著胜 clock，
+且 structured exact-NO 胜 direct binary head；但加入同 rows market 的 expanding residual 在 68 rows /
+10 dates 上仍输 market：logloss delta `+0.0267`、Brier delta `+0.0137`，CI 均跨 0。因此 depth 是保留的
+physical feature，不是可交易 probability artifact。完整口径见
+[2026-08-12 follow-up](analysis/2026-08/2026-08-12-tmin-depth-and-cross-prev-no-followup-v1.md)。
 
 ### 首轮实现与真实 denominator
 
