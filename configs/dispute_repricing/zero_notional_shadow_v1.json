@@ -1,0 +1,18 @@
+{
+  "schema_version": "dispute_repricing_artifact_manifest_v1",
+  "strategy_instance": "polymarket_dispute_repricing_zero_notional_v1",
+  "execution_mode": "zero_notional_shadow",
+  "live_authority": false,
+  "model": {
+    "source_path": "runtime/dispute_repricing/dispute_case_panel_v1/market_plus_rules_model.joblib",
+    "install_path": "dispute_repricing/dispute_case_panel_v1/market_plus_rules_model.joblib",
+    "sha256": "0f5f06798c91451b76b897eb0e882fafd50b80b1a4a831a1781360ec09910252",
+    "training_cases": 807,
+    "training_max_dispute_utc": "2026-08-07T16:05:18+00:00"
+  },
+  "research_summary": {
+    "source_path": "runtime/dispute_repricing/dispute_case_panel_v1/summary.json",
+    "install_path": "dispute_repricing/dispute_case_panel_v1/summary.json",
+    "sha256": "54071cf1fe4da0e64a5b449b1a54f00935a6b9c9a49ec44e748849f6eed2b0cd"
+  }
+}

@@ -25,6 +25,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import websockets
 from websockets.asyncio.client import ClientConnection
 
+from src.platform.market_data.capture_demand import CaptureDemand
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
@@ -32,7 +33,7 @@ from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "tiered_hot_strip_plus_d1_capture_demand_v5"
+SELECTOR_VERSION = "tiered_hot_strip_plus_shared_capture_demand_v6"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -238,37 +239,65 @@ class SourceEventCursor:
 
 
 class MarketCaptureDemandCursor:
-    """Incrementally fold bounded D-1 capture requests from forecast lineage."""
+    """Incrementally fold bounded weather and shared direct-token requests."""
 
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.offset = 0
+    def __init__(self, path: Path | Sequence[Path]) -> None:
+        self.paths = (path,) if isinstance(path, Path) else tuple(path)
+        self.offsets: dict[Path, int] = {item: 0 for item in self.paths}
         self.active: dict[str, dict[str, Any]] = {}
 
     def read(self, *, now_utc: datetime) -> list[dict[str, Any]]:
-        try:
-            size = self.path.stat().st_size
-            with self.path.open("rb") as handle:
-                if self.offset > size:
-                    self.offset = 0
-                handle.seek(self.offset)
-                data = handle.read()
-                self.offset = handle.tell()
-        except OSError:
-            data = b""
-        for line in data.splitlines():
+        for path in self.paths:
             try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(row, dict):
-                continue
-            identity = str(row.get("capture_request_id") or "")
-            if (
-                row.get("schema_version") == "weather_market_capture_demand_v1"
-                and identity
-            ):
-                self.active[identity] = row
+                size = path.stat().st_size
+                with path.open("rb") as handle:
+                    offset = self.offsets[path]
+                    if offset > size:
+                        offset = 0
+                    handle.seek(offset)
+                    data = handle.read()
+                lines = data.splitlines(keepends=True)
+                if lines and not lines[-1].endswith(b"\n"):
+                    lines.pop()
+                self.offsets[path] = offset + sum(len(line) for line in lines)
+            except OSError:
+                lines = []
+            for line in lines:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                schema = row.get("schema_version")
+                identity = str(
+                    row.get("capture_request_id") or row.get("demand_id") or ""
+                )
+                if schema == "weather_market_capture_demand_v1" and identity:
+                    self.active[identity] = row
+                elif schema == "polymarket_capture_demand_v1" and identity:
+                    try:
+                        demand = CaptureDemand(
+                            demand_id=str(row["demand_id"]),
+                            consumer_id=str(row["consumer_id"]),
+                            strategy_key=str(row["strategy_key"]),
+                            condition_id=str(row["condition_id"]),
+                            token_id=str(row["token_id"]),
+                            reason=str(row["reason"]),
+                            priority=str(row["priority"]),
+                            requested_at_utc=str(row["requested_at_utc"]),
+                            expires_at_utc=str(row["expires_at_utc"]),
+                            desired_transport=str(row["desired_transport"]),
+                            requested_checkpoints_seconds=tuple(
+                                row.get("requested_checkpoints_seconds") or ()
+                            ),
+                            trigger_event_id=row.get("trigger_event_id"),
+                            metadata=row.get("metadata") or {},
+                            schema_version=str(row["schema_version"]),
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    self.active[identity] = demand.to_dict()
         result: list[dict[str, Any]] = []
         retained: dict[str, dict[str, Any]] = {}
         for identity, row in self.active.items():
@@ -280,7 +309,10 @@ class MarketCaptureDemandCursor:
             if requested <= now_utc:
                 result.append(row)
         self.active = retained
-        return sorted(result, key=lambda row: str(row.get("capture_request_id")))
+        return sorted(
+            result,
+            key=lambda row: str(row.get("capture_request_id") or row.get("demand_id")),
+        )
 
 
 def scheduled_report_windows(
@@ -360,6 +392,9 @@ def apply_market_capture_demands(
     allowed_cities: Iterable[str] | None = None,
     max_ttl_minutes: float = 120.0,
     max_active_tokens: int = 12,
+    allowed_shared_strategy_keys: Iterable[str] = (
+        "rule_lawyer.dispute_repricing",
+    ),
 ) -> Selection:
     """Union a revision-centered local strip into the selective WS set.
 
@@ -377,8 +412,60 @@ def apply_market_capture_demands(
         grouped[key].append(source)
     resolved: list[dict[str, Any]] = []
     active_demand_tokens: set[str] = set()
+    allowed_shared = set(allowed_shared_strategy_keys)
     for source in demands:
         demand = dict(source)
+        if demand.get("schema_version") == "polymarket_capture_demand_v1":
+            requested = _parse_utc(demand.get("requested_at_utc"))
+            expires = _parse_utc(demand.get("expires_at_utc"))
+            ttl_minutes = (
+                (expires - requested).total_seconds() / 60.0
+                if requested is not None and expires is not None
+                else None
+            )
+            token_id = str(demand.get("token_id") or "")
+            valid = (
+                str(demand.get("strategy_key") or "") in allowed_shared
+                and str(demand.get("desired_transport") or "") in {"WS", "REST_WS"}
+                and str(demand.get("priority") or "") in {"P0", "P1", "P2"}
+                and bool(token_id)
+                and ttl_minutes is not None
+                and 0 < ttl_minutes <= max_ttl_minutes
+            )
+            if not valid:
+                demand["resolution_status"] = "invalid_shared_capture_demand_contract"
+                demand["resolved_token_count"] = 0
+            elif len(active_demand_tokens | {token_id}) > max_active_tokens:
+                demand["resolution_status"] = "global_active_token_budget_exceeded"
+                demand["resolved_token_count"] = 0
+            else:
+                active_demand_tokens.add(token_id)
+                selection.tokens.add(token_id)
+                token_row = dict(selection.token_rows.get(token_id) or {})
+                demand_ids = {
+                    str(value)
+                    for value in token_row.get("capture_demand_ids") or ()
+                    if value
+                }
+                if token_row.get("capture_demand_id"):
+                    demand_ids.add(str(token_row["capture_demand_id"]))
+                demand_ids.add(str(demand.get("demand_id") or ""))
+                token_row.update(
+                    {
+                        "token_id": token_id,
+                        "condition_id": demand.get("condition_id"),
+                        "strategy_key": demand.get("strategy_key"),
+                        "capture_demand_id": sorted(demand_ids)[0],
+                        "capture_demand_ids": sorted(demand_ids),
+                        "capture_universe": "shared_direct_token",
+                    }
+                )
+                selection.token_rows[token_id] = token_row
+                demand["resolution_status"] = "resolved_direct_token"
+                demand["resolved_token_ids"] = [token_id]
+                demand["resolved_token_count"] = 1
+            resolved.append(demand)
+            continue
         key = (str(demand.get("city") or ""), str(demand.get("target_date") or ""))
         requested = _parse_utc(demand.get("requested_at_utc"))
         expires = _parse_utc(demand.get("expires_at_utc"))
@@ -756,10 +843,12 @@ class Collector:
         self.subscription_epoch_id: str | None = None
         self.subscription_manifest_path: str | None = None
         self.source_event_cursor = SourceEventCursor(self.source_events)
+        demand_paths = (
+            ([Path(args.market_capture_demands_jsonl)] if args.market_capture_demands_jsonl else [])
+            + [Path(value) for value in args.shared_capture_demands_jsonl]
+        )
         self.market_capture_demand_cursor = (
-            MarketCaptureDemandCursor(Path(args.market_capture_demands_jsonl))
-            if args.market_capture_demands_jsonl
-            else None
+            MarketCaptureDemandCursor(demand_paths) if demand_paths else None
         )
         self.next_report_at_utc: dict[str, str] = {}
         self.selection = Selection(
@@ -849,7 +938,11 @@ class Collector:
         token_rows = {
             token: {
                 key: self.selection.token_rows.get(token, {}).get(key)
-                for key in ("city", "event_date", "bracket", "outcome", "condition_id")
+                for key in (
+                    "city", "event_date", "bracket", "outcome", "condition_id",
+                    "strategy_key", "capture_demand_id", "capture_demand_ids",
+                    "capture_universe",
+                )
             }
             for token in sorted(tokens)
         }
@@ -864,7 +957,10 @@ class Collector:
             "report_window_after_sec": self.args.report_window_after_sec,
             "research_window_before_sec": self.args.research_window_before_sec,
             "research_sample_modulus": self.args.research_sample_modulus,
-            "market_capture_demand_contract": "weather_market_capture_demand_v1",
+            "market_capture_demand_contracts": [
+                "weather_market_capture_demand_v1",
+                "polymarket_capture_demand_v1",
+            ],
         }
         token_map_id = hashlib.sha256(
             json.dumps(token_rows, sort_keys=True, separators=(",", ":")).encode()
@@ -957,6 +1053,7 @@ class Collector:
                 "missing_observation_cities": self.selection.missing_observation_cities,
                 "capture_demands": self.selection.capture_demands,
                 "market_capture_demands_jsonl": self.args.market_capture_demands_jsonl,
+                "shared_capture_demands_jsonl": self.args.shared_capture_demands_jsonl,
                 "post_invalidation_sec": self.args.post_invalidation_sec,
                 "event_burst_sec": self.args.event_burst_sec,
                 "report_window_before_sec": self.args.report_window_before_sec,
@@ -1130,6 +1227,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--observation-cache", required=True)
     parser.add_argument("--source-events-jsonl", required=True)
     parser.add_argument("--market-capture-demands-jsonl", default="")
+    parser.add_argument(
+        "--shared-capture-demands-jsonl",
+        action="append",
+        default=[],
+        help="Additional append-only polymarket_capture_demand_v1 stream; repeatable",
+    )
     parser.add_argument("--market-capture-max-ttl-min", type=float, default=120.0)
     parser.add_argument("--market-capture-max-active-tokens", type=int, default=12)
     parser.add_argument("--output-root", required=True)

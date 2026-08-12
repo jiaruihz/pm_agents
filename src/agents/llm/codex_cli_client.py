@@ -47,6 +47,23 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _forbidden_codex_item_types(event_lines: str) -> list[str]:
+    """Reject external data/actions while allowing internal reasoning state."""
+    forbidden: list[str] = []
+    for line in event_lines.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("codex JSON event stream was not valid JSONL") from exc
+        item = event.get("item") if isinstance(event, dict) else None
+        item_type = str(item.get("type") or "") if isinstance(item, dict) else ""
+        if item_type and item_type not in {"reasoning", "agent_message", "todo_list"}:
+            forbidden.append(item_type)
+    return sorted(set(forbidden))
+
+
 def run_codex_exec_json(
     *,
     prompt: str,
@@ -56,6 +73,8 @@ def run_codex_exec_json(
     reasoning_effort: Optional[str] = None,
     cwd: Optional[Path] = None,
     timeout_seconds: int = 180,
+    isolated_context: bool = False,
+    forbid_tool_calls: bool = False,
 ) -> Dict[str, Any]:
     if not codex_cli_available():
         raise RuntimeError("codex CLI not found in PATH")
@@ -68,6 +87,9 @@ def run_codex_exec_json(
         tmp_path = Path(tmpdir)
         schema_path = tmp_path / "schema.json"
         output_path = tmp_path / "result.json"
+        if isolated_context:
+            workdir = tmp_path / "isolated_workspace"
+            workdir.mkdir()
 
         schema_path.write_text(
             json.dumps(_strict_json_schema(output_schema or output_model.model_json_schema()), ensure_ascii=False, indent=2),
@@ -86,6 +108,16 @@ def run_codex_exec_json(
             str(output_path),
             "-",
         ]
+        if isolated_context:
+            cmd[2:2] = [
+                "--ignore-user-config",
+                "--ignore-rules",
+                "--skip-git-repo-check",
+                "--sandbox",
+                "read-only",
+            ]
+        if forbid_tool_calls:
+            cmd[2:2] = ["--json"]
         if selected_model:
             cmd[2:2] = ["-m", selected_model]
 
@@ -102,6 +134,13 @@ def run_codex_exec_json(
             stderr = (proc.stderr or "").strip()
             stdout = (proc.stdout or "").strip()
             raise RuntimeError(f"codex exec failed ({proc.returncode}): {stderr or stdout or 'unknown error'}")
+        if forbid_tool_calls:
+            forbidden_items = _forbidden_codex_item_types(proc.stdout or "")
+            if forbidden_items:
+                raise RuntimeError(
+                    "codex adjudication attempted forbidden external/action items: "
+                    + ", ".join(forbidden_items)
+                )
         if not output_path.exists():
             raise RuntimeError("codex exec completed without producing an output file")
 

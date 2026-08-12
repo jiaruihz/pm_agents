@@ -920,3 +920,46 @@
     - trade_intent_blockers.jsonl
   - - runtime_errors
     - runtime_errors.jsonl
+- strategy_instance: polymarket_dispute_repricing_zero_notional_v1
+  display_name: Polymarket dispute repricing rule-lawyer
+  family: rule_lawyer.dispute_repricing
+  strategy_key: rule_lawyer.dispute_repricing
+  lifecycle_status: research
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1
+  summary_file: health.json
+  primary_journal: signals.jsonl
+  live_order_file: null
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: runs.jsonl
+  start_script: null
+  tmux_session: null
+  notes: Non-live research runtime with a deployment script held outside catalog authority.
+    Dispute/update triggers publish shared direct-token
+    capture demand, the single market-books owner returns subscription receipts, and selected
+    candidates traverse TradeIntent -> paper plan/order/fill -> position/markout/settlement.
+    This catalog row grants no production desired state and no live authority.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - events
+    - events.jsonl
+  - - snapshots
+    - snapshots.jsonl
+  - - candidates
+    - signals.jsonl
+  - - trade_intents
+    - trade_intents.jsonl
+  - - paper_plans
+    - paper_plans.jsonl
+  - - paper_orders
+    - paper_orders.jsonl
+  - - paper_fills
+    - paper_fills.jsonl
+  - - capture_demands
+    - capture_demands.jsonl
+  - - capture_receipts
+    - capture_receipts.jsonl
+  - - health
+    - health.json

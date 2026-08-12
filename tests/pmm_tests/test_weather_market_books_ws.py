@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from websockets.client import ClientProtocol
 from websockets.uri import parse_uri
 
+from src.platform.market_data.capture_demand import CaptureDemand
 from weather_data_feed_service.market_books_ws import (
     Collector,
     DEFAULT_CITIES,
@@ -387,6 +388,111 @@ def test_d1_capture_demand_adds_revision_path_and_neighbors(tmp_path) -> None:
     assert selected.capture_demands[0]["resolution_status"] == "resolved_revision_strip"
     assert selected.capture_demands[0]["resolved_token_count"] == 8
     assert selected.capture_demands[0]["resolved_brackets"] == ["31", "32", "33", "34"]
+
+
+def test_shared_direct_token_demand_uses_same_ws_owner(tmp_path) -> None:
+    demand = CaptureDemand.create(
+        consumer_id="rule_lawyer_dispute_forward",
+        strategy_key="rule_lawyer.dispute_repricing",
+        condition_id="condition-1",
+        token_id="dispute-token",
+        reason="dispute_first_seen",
+        priority="P0",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T03:09:00Z",
+        desired_transport="REST_WS",
+        trigger_event_id="trigger-1",
+    )
+    weather_path = tmp_path / "weather.jsonl"
+    shared_path = tmp_path / "dispute.jsonl"
+    weather_path.write_text("")
+    shared_path.write_text(json.dumps(demand.to_dict()) + "\n")
+    rows = MarketCaptureDemandCursor([weather_path, shared_path]).read(now_utc=NOW)
+    selection = Selection(
+        tokens=set(),
+        token_rows={},
+        city_token_counts={},
+        active_brackets={},
+        grace_brackets={},
+        scheduled_cities=[],
+        research_cities=[],
+        burst_cities=[],
+        missing_observation_cities=[],
+        invalidation_state={},
+    )
+    selected = apply_market_capture_demands(
+        selection,
+        market_payload={"records": []},
+        demands=rows,
+    )
+    assert selected.tokens == {"dispute-token"}
+    assert selected.capture_demands[0]["resolution_status"] == "resolved_direct_token"
+    assert selected.token_rows["dispute-token"]["capture_universe"] == "shared_direct_token"
+
+
+def test_multiple_direct_demands_for_same_token_keep_all_lineage() -> None:
+    base = CaptureDemand.create(
+        consumer_id="rule_lawyer_dispute_forward",
+        strategy_key="rule_lawyer.dispute_repricing",
+        condition_id="condition-1",
+        token_id="dispute-token",
+        reason="dispute_first_seen",
+        priority="P0",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T03:09:00Z",
+        desired_transport="REST_WS",
+        trigger_event_id="trigger-1",
+    ).to_dict()
+    second = CaptureDemand.create(
+        consumer_id="rule_lawyer_dispute_forward",
+        strategy_key="rule_lawyer.dispute_repricing",
+        condition_id="condition-1",
+        token_id="dispute-token",
+        reason="official_update",
+        priority="P0",
+        requested_at_utc="2026-08-09T03:00:00Z",
+        expires_at_utc="2026-08-09T03:10:00Z",
+        desired_transport="REST_WS",
+        trigger_event_id="trigger-2",
+    ).to_dict()
+    selection = Selection(
+        tokens=set(), token_rows={}, city_token_counts={}, active_brackets={},
+        grace_brackets={}, scheduled_cities=[], research_cities=[], burst_cities=[],
+        missing_observation_cities=[], invalidation_state={},
+    )
+    selected = apply_market_capture_demands(
+        selection, market_payload={"records": []}, demands=[base, second]
+    )
+    assert all(
+        row["resolution_status"] == "resolved_direct_token"
+        for row in selected.capture_demands
+    )
+    assert selected.token_rows["dispute-token"]["capture_demand_ids"] == sorted(
+        [base["demand_id"], second["demand_id"]]
+    )
+
+
+def test_capture_demand_cursor_does_not_consume_partial_json_line(tmp_path) -> None:
+    demand = CaptureDemand.create(
+        consumer_id="rule_lawyer_dispute_forward",
+        strategy_key="rule_lawyer.dispute_repricing",
+        condition_id="condition-1",
+        token_id="token-1",
+        reason="dispute_first_seen",
+        priority="P0",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T03:09:00Z",
+        desired_transport="REST_WS",
+        trigger_event_id="trigger-1",
+    ).to_dict()
+    encoded = json.dumps(demand)
+    path = tmp_path / "demands.jsonl"
+    path.write_text(encoded[: len(encoded) // 2])
+    cursor = MarketCaptureDemandCursor(path)
+    assert cursor.read(now_utc=NOW) == []
+    with path.open("a") as handle:
+        handle.write(encoded[len(encoded) // 2 :] + "\n")
+    assert [row["demand_id"] for row in cursor.read(now_utc=NOW)] == [demand["demand_id"]]
 
 
 def test_capture_demand_rejects_untrusted_or_over_budget_request() -> None:

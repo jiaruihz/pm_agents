@@ -1,5 +1,5 @@
 from src.strategies.rule_lawyer.parser import RuleParse, TimeWindow, EntityDef
-from src.agents.llm.codex_cli_client import _strict_json_schema
+from src.agents.llm.codex_cli_client import _forbidden_codex_item_types, _strict_json_schema
 
 
 def test_ruleparse_validation_accepts_schema():
@@ -44,3 +44,16 @@ def test_codex_cli_strict_schema_requires_all_object_properties():
     assert strict["required"] == ["decision", "nested"]
     assert strict["properties"]["nested"]["additionalProperties"] is False
     assert strict["properties"]["nested"]["required"] == ["reason"]
+
+
+def test_packet_only_trace_allows_reasoning_but_rejects_external_tools():
+    harmless = "\n".join(
+        [
+            '{"type":"item.completed","item":{"type":"reasoning"}}',
+            '{"type":"item.completed","item":{"type":"todo_list"}}',
+            '{"type":"item.completed","item":{"type":"agent_message"}}',
+        ]
+    )
+    assert _forbidden_codex_item_types(harmless) == []
+    external = '{"type":"item.completed","item":{"type":"command_execution"}}'
+    assert _forbidden_codex_item_types(external) == ["command_execution"]
