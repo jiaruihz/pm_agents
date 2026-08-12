@@ -1,5 +1,10 @@
 # April Historical Opportunity Mapping Audit v0
 
+Runner lifecycle: `retired-snapshot`. The dated result remains evidence; the
+one-off producer was removed from the active script tree on 2026-08-12 after
+canonical fact coverage and storage audits became the maintained owners. Exact
+source is recoverable as git blob `936ec95e5af18c4fb1da7b179c97e772e7f5e58a`.
+
 > generated_at_utc: `2026-06-10T01:27:35.158252+00:00`
 > git_sha: `4a252c7`
 > Scope: schema/coverage audit only; no raw-file strategy PnL; no N100/live config changed.

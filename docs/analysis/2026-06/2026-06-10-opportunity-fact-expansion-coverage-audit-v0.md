@@ -1,5 +1,10 @@
 # Opportunity Fact Expansion Coverage Audit v0
 
+Runner lifecycle: `retired-snapshot`. The dated result remains evidence; the
+one-off producer was removed from the active script tree on 2026-08-12 after
+canonical fact coverage and storage audits became the maintained owners. Exact
+source is recoverable as git blob `a0ec2767707d229ea863884f68adc9b7d9a07eaa`.
+
 > generated_at_utc: `2026-06-09T18:56:46.292593+00:00`
 > git_sha: `90fce40`
 > Scope: local coverage audit only; no raw-file strategy PnL; no N100/live config changed.

@@ -1,5 +1,10 @@
 # Weather Strategy Denominator Audit v0
 
+Runner lifecycle: `retired-snapshot`. Its denominator findings remain durable
+evidence in this report and the analysis contract; the repository-wide one-off
+scanner was removed from the active script tree on 2026-08-12. Exact source is
+recoverable as git blob `48430bb761fddb7b93269933524265a339e24339`.
+
 > generated_at_utc: `2026-06-11T08:28:05.515834+00:00`
 > target_metric: `weather_research_denominator_integrity_audit_v0`
 > DB: `/Users/deepsleep/projects/pm_agents/runtime/weather.db`

@@ -35,6 +35,10 @@ manifest；新增入口要说明它在 `EventEnvelope → ... → fill → settl
   per-poll v3 由 heating-done v1 接管，low-price sizing-stop v1 由 fee-stop v2
   接管；日期报告保留结论和原 source blob。观测对齐 family 的公共时间解析与
   CSV 输出已抽到 `source_alignment_common.py`，不再复制到两个 runner。
+- 同日退场 4 个只生成单次 dated snapshot 的旧审计入口：April mapping、
+  opportunity coverage、live readiness scoreboard、denominator audit。报告和
+  source blob 均保留；当前事实分别由 canonical coverage/storage audit、
+  strategy registry/production manifest 和 analysis contract 承担。
 
 ## 当前脚本债务
 

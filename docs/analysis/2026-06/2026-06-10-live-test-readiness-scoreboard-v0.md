@@ -1,5 +1,11 @@
 # Live-Test Readiness Scoreboard v0
 
+Runner lifecycle: `retired-snapshot`. This historical scoreboard is retained
+for lineage but must not be regenerated as a current readiness view; current
+strategy status comes from `WEATHER_STRATEGY_REGISTRY.md` and the production
+manifest. Exact producer source is recoverable as git blob
+`e7d19f49291f0d13d60078876b23e7e4410f209a`.
+
 > generated_at_utc: `2026-06-09T18:48:31.920035+00:00`
 > git_sha: `2e31cd9`
 > Scope: synthesis of submitted fact-table research; no N100/live config changed; no live orders.
