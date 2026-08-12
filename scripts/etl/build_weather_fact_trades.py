@@ -242,19 +242,26 @@ def _load_settlements(
         row = dict(zip(cols, r))
         tok = row.get("token_id")
         if tok:
-            # The normalized settlements row is preferred when both sources
-            # cover the token; settlement_outcomes fills its known coverage gaps.
+            # A later settled correction must supersede an earlier
+            # missing_bracket observation.  Source preference is only a
+            # tiebreaker after settlement completeness.
             prior = by_token.get(tok)
-            if prior is None or (
-                prior.get("source_table") != "settlements"
-                and row.get("source_table") == "settlements"
-            ):
+            if prior is None or _settlement_rank(row) < _settlement_rank(prior):
                 by_token[tok] = row
         key_cid = (row["target_date"], row["condition_id"], row["bracket"])
         key_mid = (row["target_date"], row["market_id"], row["bracket"])
         by_cid.setdefault(key_cid, []).append(row)
         by_mid.setdefault(key_mid, []).append(row)
     return by_token, by_cid, by_mid
+
+
+def _settlement_rank(row: dict) -> tuple[int, int, str]:
+    """Rank append-only settlement evidence by completeness, then source."""
+    return (
+        0 if row.get("settlement_status") == "settled" else 1,
+        0 if row.get("source_table") == "settlements" else 1,
+        str(row.get("settlement_id") or ""),
+    )
 
 
 def _match_settlement(
@@ -268,15 +275,18 @@ def _match_settlement(
     by_mid: dict,
 ) -> tuple[str, dict | None, int]:
     """Returns (join_method, settlement_row_or_None, match_count)."""
-    # Token-first
-    if token_id and token_id in by_token:
-        return "token", by_token[token_id], 1
-
-    # Fallback via condition_id then market_id
+    # Gather token and exact condition/market candidates together.  A stale
+    # token-grain missing_bracket row must not hide a later exact settled row.
     candidates: list[dict] = []
     key_cid = (target_date, condition_id, bracket)
     key_mid = (target_date, market_id, bracket)
     seen_ids: set[str] = set()
+    token_settlement_id = None
+    if token_id and token_id in by_token:
+        token_row = by_token[token_id]
+        token_settlement_id = token_row["settlement_id"]
+        candidates.append(token_row)
+        seen_ids.add(token_settlement_id)
     for row in by_cid.get(key_cid, []):
         sid = row["settlement_id"]
         if sid not in seen_ids:
@@ -291,14 +301,10 @@ def _match_settlement(
     if not candidates:
         return "none", None, 0
 
-    # Deterministic dedup: sort by settlement_id, take first
-    candidates.sort(
-        key=lambda x: (
-            0 if x.get("source_table") == "settlements" else 1,
-            x["settlement_id"],
-        )
-    )
-    return "fallback", candidates[0], len(candidates)
+    candidates.sort(key=_settlement_rank)
+    chosen = candidates[0]
+    method = "token" if chosen["settlement_id"] == token_settlement_id else "fallback"
+    return method, chosen, len(candidates)
 
 
 # ---------------------------------------------------------------------------

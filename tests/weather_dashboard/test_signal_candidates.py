@@ -7,6 +7,7 @@ import pytest
 
 from scripts.etl.build_weather_fact_trades import FACT_DDL
 from scripts.etl.build_weather_signal_candidates import (
+    _load_settlements,
     build,
     load_forecast_curve_rows,
     write_db,
@@ -87,6 +88,23 @@ def _seed_live_fill(conn, condition_id, side, target_date, fill_id, fill_price, 
         (fill_id, condition_id, side, target_date, "live_real", fill_price, qty, pnl),
     )
     conn.commit()
+
+
+def test_settlement_loader_prefers_later_settled_correction(canon_db):
+    canon_db.executemany(
+        "INSERT INTO settlements VALUES (?,?,?,?,?,?,?,?,?)",
+        [
+            ("old", "2026-08-11", "0xCID", "M", "12", "T", 0.775,
+             "missing_bracket", "2026-08-11T17:11:32Z"),
+            ("new", "2026-08-11", "0xCID", "M", "12", None, 1.0,
+             "settled", "2026-08-12T17:21:06Z"),
+        ],
+    )
+
+    row = _load_settlements(canon_db)[("2026-08-11", "0xCID", "12")]
+
+    assert row["settlement_status"] == "settled"
+    assert row["final_price"] == 1.0
 
 
 # ── counterfactual PnL formula ────────────────────────────────────────────────

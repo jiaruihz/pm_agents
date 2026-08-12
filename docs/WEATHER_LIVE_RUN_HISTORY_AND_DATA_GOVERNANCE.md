@@ -5,7 +5,7 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 This document records the early weather live-trading rollout history, known mistakes, and data-model rules needed to keep future analysis reproducible. Read it with:
 
@@ -1656,7 +1656,56 @@ Final production evidence: manifest healthy with no findings, all 29 managed
 runtimes healthy, 13 proxy consumers with zero process mismatch, canonical
 refresh exit 0, and both live journals unchanged across the restart.
 
-## 25. Immediate Follow-Up Work
+## 25. 2026-08-13 End-to-End Reconciliation And Lineage Audit
+
+The production manifest, JRS probes, DB route and storage identity were healthy.
+After syncing current snapshots/books/forecast curves and running the bounded
+canonical refresh, the effective fill gate reconciled `1,464/1,464` live fill
+ids with zero DB/cache id mismatch, missing-order row, over-order key or unknown
+fee lineage.
+
+Two analysis-layer defects were fixed and replayed:
+
+- The account order reconciliation summed physical `fills` without canonical
+  alias/validity/price adjustments.  The affected evidence spans
+  `2026-07-18T13:39:05Z..2026-08-09T18:36:22Z`: 39 alias rows (`$279.6770`),
+  15 excluded rows (`$9.689008`) and two retained price corrections
+  (`+$0.5900`).  Full-window actual cost changed from the polluted
+  `$5,116.253075` to `$4,827.477067` (`-$288.776008`).  Orders and fills were
+  not changed; only the reporting filter was corrected and regression-tested.
+- Append-only settlement evidence could leave an old token-grain
+  `missing_bracket` ahead of a later exact-market `settled` correction.  Five
+  fills covering Buenos Aires 2026-08-11 and Busan/Seoul/Tokyo 2026-08-12 were
+  backfilled and replayed.  Open cost fell by `$49.5130`; realized fee-adjusted
+  PnL increased by `$9.81361`.  The exact settled correction now outranks a
+  stale token gap, while source precedence remains a tiebreaker.  Four fills in
+  three still-open 2026-08-12 markets remain `[UNSETTLED]`, cost `$31.33`.
+
+The 30-target-date audit window is `2026-07-15..2026-08-13`.  It contains
+1,390 order records (1,340 non-alias), 299 effective live fill rows and zero
+side mismatch, orphan fill, cap excess or settled-PnL-null case.  Historical
+execution losses are 138 GTD-expiration rejects from
+`2026-07-15T02:58:11Z..06:16:09Z`, two post-only-cross rejects at
+`2026-07-16T04:45:24Z..04:45:34Z`, and one transport request exception:
+141 rejected attempts, six expressions, `$792.90` attempted notional and zero
+fills.  The GTD threshold fix (`5939c0bd`) and bounded reprice fix (`66a32dc7`)
+already prevent recurrence.  Replaying code eligibility makes 138/138 expiry
+intents valid and sends 2/2 crossing cases into reprice; fill counterfactual is
+not identifiable because no exchange order existed.
+
+The same window retains 119 submitted live plans without a linked order from
+the pre-2026-08-04 migration.  They are canonical lineage pollution, not 119
+proven missed venue calls: 52/64 affected signals have another physical order,
+and the current migration (`5d70a130`) deduplicates physical order identity
+before inserting signals/plans.  These append-only rows remain retained and
+must be excluded/tagged as `historical_canonical_orphan_plan`; they are not
+deleted.  The complete per-order and per-gap list is stored at
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/weather_production_e2e_audit/2026-08-13/lineage_30_target_dates_v1.json`.
+
+Human summary:
+`analysis/2026-08/2026-08-13-weather-production-e2e-audit-v1.md`.
+
+## 26. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history

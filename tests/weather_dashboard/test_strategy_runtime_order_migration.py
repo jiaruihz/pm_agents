@@ -623,3 +623,35 @@ def test_fact_settlement_lookup_uses_token_complete_outcomes_fallback():
         assert row["source_table"] == "settlement_outcomes"
     finally:
         conn.close()
+
+
+def test_fact_settlement_lookup_prefers_exact_settled_correction_over_stale_token_gap():
+    conn = _conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO settlements (
+                settlement_id, target_date, condition_id, market_id, bracket,
+                token_id, final_price, settlement_status, created_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "old-token-gap", "2026-08-11", None, None, "12",
+                "token-12", 0.775, "missing_bracket", "2026-08-11T17:11:32Z",
+                "corrected-exact", "2026-08-11", "0xcondition", "0xmarket", "12",
+                None, 1.0, "settled", "2026-08-12T17:21:06Z",
+            ),
+        )
+        by_token, by_cid, by_mid = _load_settlements(conn)
+        method, row, count = _match_settlement(
+            "token-12", "2026-08-11", "0xcondition", "0xmarket", "12",
+            by_token, by_cid, by_mid,
+        )
+
+        assert method == "fallback"
+        assert count == 2
+        assert row is not None
+        assert row["settlement_id"] == "corrected-exact"
+        assert row["settlement_status"] == "settled"
+    finally:
+        conn.close()

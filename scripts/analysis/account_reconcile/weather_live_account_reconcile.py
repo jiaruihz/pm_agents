@@ -261,59 +261,95 @@ def aggregate_live(conn: sqlite3.Connection, args: Args) -> list[dict[str, Any]]
 
 
 def aggregate_orders(conn: sqlite3.Connection, args: Args) -> list[dict[str, Any]]:
-    # Current orders carry instance_id. Keep run_id suffixes only for historical rows.
-    date_col = "substr(placed_at_utc, 1, 10)"
-    filter_sql = ""
-    params: list[Any] = [args.start, args.end]
-    if args.date_field in ("order_date_bj", "placed_date_bj"):
-        # Approximate BJ date from UTC string inside SQLite.
-        date_col = "date(placed_at_utc, '+8 hours')"
-    elif args.date_field == "fill_date_bj":
-        date_col = "date(filled_at_utc, '+8 hours')"
-    elif args.date_field == "target_date":
+    if args.date_field == "target_date":
         # orders table has no target_date; return no rows rather than pretending.
         return []
-    inst_filter, inst_params = instance_filter(args.instances)
-    filter_sql += inst_filter
-    params.extend(inst_params)
-    return fetch_all(
+
+    tables = {str(row[0]) for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    fill_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(fills)").fetchall()}
+    has_effective_contract = {
+        "fill_price_adjustments", "order_execution_aliases", "fill_validity_adjustments"
+    }.issubset(tables) and {"fill_id", "order_id"}.issubset(fill_columns)
+    if has_effective_contract:
+        spec = importlib.util.spec_from_file_location(
+            "weather_clob_fill_coverage_gate", DEFAULT_COVERAGE_GATE
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("coverage gate import failed")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        fill_rows = module.load_effective_db_fill_rows(conn)
+    else:
+        # Minimal historical/test schemas predate canonical adjustment tables.
+        fill_rows = fetch_all(
+            conn,
+            "SELECT execution_id, filled_at_utc, filled_price, filled_shares "
+            "FROM fills WHERE status='filled'",
+        )
+
+    fill_summary: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"filled_at_utc": "", "actual_fill_cost_usd": 0.0}
+    )
+    for fill in fill_rows:
+        item = fill_summary[str(fill.get("execution_id") or "")]
+        item["filled_at_utc"] = max(
+            str(item["filled_at_utc"] or ""), str(fill.get("filled_at_utc") or "")
+        )
+        item["actual_fill_cost_usd"] += float(fill.get("filled_price") or 0.0) * float(
+            fill.get("filled_shares") or 0.0
+        )
+
+    alias_join = (
+        "LEFT JOIN order_execution_aliases alias ON alias.alias_execution_id=orders.execution_id"
+        if "order_execution_aliases" in tables else ""
+    )
+    alias_filter = "AND alias.alias_execution_id IS NULL" if alias_join else ""
+    orders = fetch_all(
         conn,
         f"""
-        WITH o AS (
-          SELECT
-            orders.*,
-            fill_summary.filled_at_utc,
-            fill_summary.actual_fill_cost_usd,
-            {ORDER_INSTANCE_CASE} AS strategy_instance,
-            {date_col} AS selected_date
-          FROM orders
-          LEFT JOIN (
-            SELECT
-              execution_id,
-              MAX(filled_at_utc) AS filled_at_utc,
-              SUM(filled_price * filled_shares) AS actual_fill_cost_usd
-            FROM fills
-            WHERE status='filled'
-            GROUP BY execution_id
-          ) fill_summary USING(execution_id)
-          WHERE venue='polymarket_clob'
-        )
-        SELECT
-          selected_date,
-          strategy_instance,
-          status,
-          COUNT(*) AS orders,
-          ROUND(SUM(cost_usd), 4) AS submitted_or_error_cost_usd,
-          SUM(CASE WHEN filled_at_utc IS NOT NULL THEN 1 ELSE 0 END) AS filled_orders,
-          ROUND(SUM(COALESCE(actual_fill_cost_usd, 0)), 4) AS actual_fill_cost_usd
-        FROM o
-        WHERE selected_date BETWEEN ? AND ?
-          {filter_sql}
-        GROUP BY selected_date, strategy_instance, status
-        ORDER BY selected_date, strategy_instance, status
+        SELECT execution_id, placed_at_utc, status, cost_usd,
+               {ORDER_INSTANCE_CASE} AS strategy_instance
+        FROM orders
+        {alias_join}
+        WHERE venue='polymarket_clob'
+          {alias_filter}
         """,
-        params,
     )
+    selected_instances = set(args.instances)
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for order in orders:
+        summary = fill_summary.get(str(order["execution_id"]), {})
+        if args.date_field.startswith("fill_date"):
+            timestamp = str(summary.get("filled_at_utc") or "")
+        else:
+            timestamp = str(order.get("placed_at_utc") or "")
+        selected_date = bj_date(timestamp) if args.date_field.endswith("_bj") else timestamp[:10]
+        instance = str(order.get("strategy_instance") or "unknown")
+        if not (args.start <= selected_date <= args.end):
+            continue
+        if selected_instances and selected_instances != {"all"} and instance not in selected_instances:
+            continue
+        key = (selected_date, instance, str(order.get("status") or ""))
+        item = grouped.setdefault(key, {
+            "selected_date": selected_date,
+            "strategy_instance": instance,
+            "status": key[2],
+            "orders": 0,
+            "submitted_or_error_cost_usd": 0.0,
+            "filled_orders": 0,
+            "actual_fill_cost_usd": 0.0,
+        })
+        item["orders"] += 1
+        item["submitted_or_error_cost_usd"] += float(order.get("cost_usd") or 0.0)
+        item["filled_orders"] += int(bool(summary.get("filled_at_utc")))
+        item["actual_fill_cost_usd"] += float(summary.get("actual_fill_cost_usd") or 0.0)
+    rows = [grouped[key] for key in sorted(grouped)]
+    for row in rows:
+        row["submitted_or_error_cost_usd"] = round(row["submitted_or_error_cost_usd"], 4)
+        row["actual_fill_cost_usd"] = round(row["actual_fill_cost_usd"], 4)
+    return rows
 
 
 def bj_date(iso_ts: str) -> str:

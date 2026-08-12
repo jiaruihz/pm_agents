@@ -188,3 +188,58 @@ def test_order_reconcile_does_not_duplicate_partial_fill_orders() -> None:
             "actual_fill_cost_usd": 5.0,
         }
     ]
+
+
+def test_order_reconcile_uses_effective_alias_validity_and_price_contract() -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE orders (
+          execution_id TEXT, order_id TEXT, instance_id TEXT, run_id TEXT,
+          placed_at_utc TEXT, venue TEXT, cost_usd REAL, status TEXT
+        );
+        CREATE TABLE fills (
+          fill_id TEXT, execution_id TEXT, order_id TEXT, filled_at_utc TEXT,
+          filled_price REAL, filled_shares REAL, status TEXT
+        );
+        CREATE TABLE order_execution_aliases (alias_execution_id TEXT);
+        CREATE TABLE fill_validity_adjustments (fill_id TEXT, effective_status TEXT);
+        CREATE TABLE fill_price_adjustments (fill_id TEXT, corrected_filled_price REAL);
+        INSERT INTO orders VALUES
+          ('canonical', 'order-1', 'live-v1', 'run-1', '2026-08-09T01:00:00Z',
+           'polymarket_clob', 5.0, 'submitted'),
+          ('alias', 'order-1', 'live-v1', 'run-1', '2026-08-09T01:00:00Z',
+           'polymarket_clob', 5.0, 'submitted');
+        INSERT INTO fills VALUES
+          ('valid', 'canonical', 'order-1', '2026-08-09T01:01:00Z', 0.50, 4.0, 'filled'),
+          ('excluded', 'canonical', 'order-1', '2026-08-09T01:02:00Z', 0.50, 2.0, 'filled'),
+          ('duplicate', 'alias', 'order-1', '2026-08-09T01:01:00Z', 0.50, 4.0, 'filled');
+        INSERT INTO order_execution_aliases VALUES ('alias');
+        INSERT INTO fill_validity_adjustments VALUES ('excluded', 'excluded');
+        INSERT INTO fill_price_adjustments VALUES ('valid', 0.40);
+        """
+    )
+    args = reconcile.Args(
+        db=Path("unused"), clob_fills=Path("unused"), raw_order_sources=(),
+        start="2026-08-09", end="2026-08-09", date_field="fill_date_utc",
+        instances=("all",), group_by=("instance",), format="json",
+    )
+
+    rows = reconcile.aggregate_orders(conn, args)
+
+    assert len(rows) == 1
+    assert rows[0]["orders"] == 1
+    assert rows[0]["filled_orders"] == 1
+    assert rows[0]["actual_fill_cost_usd"] == 1.6
+
+    order_date_rows = reconcile.aggregate_orders(
+        conn,
+        reconcile.Args(
+            db=Path("unused"), clob_fills=Path("unused"), raw_order_sources=(),
+            start="2026-08-09", end="2026-08-09", date_field="order_date_bj",
+            instances=("all",), group_by=("instance",), format="json",
+        ),
+    )
+    assert len(order_date_rows) == 1
+    assert order_date_rows[0]["orders"] == 1

@@ -910,10 +910,12 @@ def _load_live_fills(
 
 
 def _load_settlements(conn: sqlite3.Connection) -> dict[tuple, dict]:
-    """settlements keyed by (target_date, condition_id, bracket). First wins."""
+    """Settlements keyed by exact market expression, preferring corrections."""
     rows = conn.execute(
         "SELECT target_date, condition_id, bracket, final_price, settlement_status "
-        "FROM settlements"
+        "FROM settlements "
+        "ORDER BY CASE WHEN settlement_status='settled' THEN 0 ELSE 1 END, "
+        "created_at_utc DESC, settlement_id DESC"
     ).fetchall()
     cols = ["target_date", "condition_id", "bracket", "final_price", "settlement_status"]
     out: dict[tuple, dict] = {}
@@ -925,7 +927,7 @@ def _load_settlements(conn: sqlite3.Connection) -> dict[tuple, dict]:
 
 
 def _load_settlement_outcomes(conn: sqlite3.Connection) -> dict[tuple, dict]:
-    """settlement_outcomes keyed by (target_date, city, bracket). First wins.
+    """Settlement outcomes keyed by city expression, preferring corrections.
 
     `settlements` is condition-grain and can miss opportunity rows when the
     snapshot condition_id lineage differs from the pm_history condition_id.
@@ -937,6 +939,8 @@ def _load_settlement_outcomes(conn: sqlite3.Connection) -> dict[tuple, dict]:
             """
             SELECT target_date, city, bracket, final_price, settlement_status
             FROM settlement_outcomes
+            ORDER BY CASE WHEN settlement_status='settled' THEN 0 ELSE 1 END,
+                     created_at_utc DESC, settlement_outcome_id DESC
             """
         ).fetchall()
     except sqlite3.OperationalError as exc:
