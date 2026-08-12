@@ -14,7 +14,8 @@ Observed-touch 后的 executable bid 回报在5/15/30/60/120m全部为负；coll
 已有3,638个 collector-exact D-1 provider events、13,279个complete market checkpoints；primary D-1
 18–24h中 consensus revision 的30m方向一致率约60%（独立日期仍只有6个）。每次完整 checkpoint现已保存
 native ladder真实bid/ask/depth，且同一盘口变化只归因一次。direct ask→30/60/90m future bid在官方双边fee
-和每边1 tick slippage后仍为负，尚无 admitted trade。
+和每边1 tick slippage后，fixed 2°F distribution 的30/60/90m全分母ROI为
+`-12.68%/-11.98%/-13.47%`，latest-two-date holdout为`-9.21%/-8.79%/-8.40%`，尚无 admitted trade。
 
 下一步是仅为 Amsterdam/Busan/Helsinki/Tokyo 的新 D-1 provider run 开120分钟
 `revision path + 两侧邻档` WS capture demand；完整ladder继续由五分钟REST正本提供，WS只补queue/tape，避免把

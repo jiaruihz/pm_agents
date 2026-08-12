@@ -19,8 +19,10 @@ innovation，并不是真实 provider-run first-seen；`min ask` 又没有 first
 30m `-14.50%`；简单延长持仓不能消除 adverse selection。旧 quote-EV 在 collector-exact holdout
 3,406 actions / 4 dates 上选择0笔，状态保持 `no_admitted_quote_rejected_for_expression`。
 
-真实 run-aware D-1 `18–24h` consensus revision 对30m盘口方向有弱信号，但 direct ask→future bid 在完整
-fee+slippage 后仍为负；当前只够支持扩 event-driven WS 采集，不足以生成交易策略。
+真实 run-aware D-1 `18–24h` consensus revision 对30m盘口方向有弱信号，但 fixed 2°F distribution 的
+direct ask→future bid 在官方双边fee与每边1 tick slippage后，30/60/90m全分母ROI分别为
+`-12.68%/-11.98%/-13.47%`；latest-two-date holdout为`-9.21%/-8.79%/-8.40%`。当前只够支持扩
+event-driven WS 采集，不足以生成交易策略。
 
 旧单腿 maker selector 有结构性错误，不是简单排除 `0.1¢ tick` 即可修复：它预测
 `h60_relative_bid_move`，却把相对整条 ladder 的涨幅直接当绝对现金 markout；阈值又按假设
