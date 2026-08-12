@@ -93,8 +93,9 @@ Busan 少一截，但解释不了 39→3 的大落差；后者几乎全部发生
 
 城市结论：
 
-- **Busan 是“单数变多”的主体。** 最近十日多 `12` 个 trigger、多 `9` 个 fill。观测 rows 反而从
-  `6,113` 降到 `5,305`，所以不是多抓了 polling 样本；天气路径把更多相邻档依次跨过去。工程也有贡献：
+- **Busan 是“单数变多”的主体。** 最近十日多 `12` 个 trigger、多 `9` 个 fill。按 observation-time
+  去重后的观测 rows 反而从 `6,078` 降到 `5,305`，所以不是多抓了 polling 样本；天气路径把更多相邻档
+  依次跨过去。工程也有贡献：
   detect→runner p50 `2.509s → 0.444s`，book coverage `91.2% → 95.7%`，ask≤0.97 expressions
   `13 → 21`。但正确率下降且最近十日 ROI 近 0，说明多单不等于更优 regime。
 - **Seoul 是“信号多、成交没有同比变多”。** trigger `25 → 39`，但 fill 只 `2 → 3`，conversion
