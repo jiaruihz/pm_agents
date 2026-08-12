@@ -34,6 +34,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -541,6 +542,35 @@ def attempted_signal_ids(output_dir: Path) -> set[str]:
     return attempted
 
 
+def attempted_child_roles(output_dir: Path) -> dict[str, set[str]]:
+    """Return terminally attempted entry children, without collapsing the batch.
+
+    A taker outcome must not consume a maker child that never reached a durable
+    order outcome.  Conversely, any projected maker outcome is owned by the
+    maker lifecycle and must not be recreated by the entry path.
+    """
+
+    attempted: dict[str, set[str]] = {}
+    for row in iter_jsonl(output_dir / "entry_attempts.jsonl"):
+        sid = str(row.get("signal_id") or "")
+        if not sid:
+            continue
+        if str(row.get("status") or "") == "blocked":
+            attempted.setdefault(sid, set()).update({"taker", "maker"})
+        elif str(row.get("maker_live_action") or "") == "skip_terminal":
+            attempted.setdefault(sid, set()).add("maker")
+    for row in iter_jsonl(output_dir / "live_orders.jsonl"):
+        sid = str(row.get("signal_id") or "")
+        if not sid:
+            continue
+        role = str(row.get("child_order_role") or "")
+        if role == "taker":
+            attempted.setdefault(sid, set()).add("taker")
+        elif role == "maker" or role.startswith("core_carry_maker_"):
+            attempted.setdefault(sid, set()).add("maker")
+    return attempted
+
+
 def daily_family_usage(paths: Iterable[Path], now: datetime) -> tuple[int, float]:
     day = now.astimezone(BJ).date()
     city_days: set[tuple[str, str]] = set()
@@ -605,13 +635,14 @@ def maker_edge_price_cap(
 ) -> float:
     retained_edge = maker_profile_parameter("retained_edge")
     improvement_ticks = maker_profile_parameter("minimum_taker_improvement_ticks")
+    tick = Decimal(str(tick_size))
     raw_cap = min(
-        model_probability - retained_edge,
-        best_ask - improvement_ticks * tick_size,
+        Decimal(str(model_probability)) - Decimal(str(retained_edge)),
+        Decimal(str(best_ask)) - Decimal(str(improvement_ticks)) * tick,
     )
-    if raw_cap <= 0 or tick_size <= 0:
+    if raw_cap <= 0 or tick <= 0:
         return 0.0
-    return math.floor((raw_cap + 1e-12) / tick_size) * tick_size
+    return float((raw_cap // tick) * tick)
 
 
 def maker_clock_assessment(
@@ -1144,7 +1175,7 @@ def new_entry_plans(
     now: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     scores = latest_rows_by_checkpoint(output_dir / "pre_live_scores.jsonl")
-    attempted = attempted_signal_ids(output_dir)
+    attempted_roles = attempted_child_roles(output_dir)
     family_paths = family_live_order_files(output_dir)
     family_city_days = submitted_city_days(family_paths)
     used_city_days, used_cost = daily_family_usage(family_paths, now)
@@ -1156,12 +1187,15 @@ def new_entry_plans(
             continue
         sid = signal_id(row)
         city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
-        if sid in attempted:
+        existing_roles = attempted_roles.get(sid, set())
+        if existing_roles == {"taker", "maker"}:
             continue
         reason = ""
-        if bool(would.get("family_city_day_conflict")) or city_day in family_city_days:
+        if not existing_roles and (
+            bool(would.get("family_city_day_conflict")) or city_day in family_city_days
+        ):
             reason = "family_city_day_conflict"
-        elif used_city_days >= int(args.max_city_days_per_bj_day):
+        elif not existing_roles and used_city_days >= int(args.max_city_days_per_bj_day):
             reason = "daily_city_day_cap"
         entry_plans = (
             []
@@ -1175,7 +1209,16 @@ def new_entry_plans(
                 order_ttl_min=float(args.order_ttl_min),
             )
         )
-        if not reason and not any(plan.get("child_order_role") == "taker" for plan in entry_plans):
+        entry_plans = [
+            plan
+            for plan in entry_plans
+            if str(plan.get("child_order_role") or "") not in existing_roles
+        ]
+        if (
+            not reason
+            and "taker" not in existing_roles
+            and not any(plan.get("child_order_role") == "taker" for plan in entry_plans)
+        ):
             reason = "missing_taker_plan"
             entry_plans = []
         planned_cost = entry_plan_cost_reservation(entry_plans)
@@ -1226,10 +1269,15 @@ def new_entry_plans(
                 **maker_clock,
             }
         )
-        attempted.add(sid)
+        attempted_roles.setdefault(sid, set()).update(
+            str(plan.get("child_order_role") or "") for plan in entry_plans
+        )
+        if not reason and not maker_planned:
+            attempted_roles[sid].add("maker")
         if entry_plans:
             plans.extend(entry_plans)
-            used_city_days += 1
+            if not existing_roles:
+                used_city_days += 1
             used_cost += planned_cost
     return plans, attempts
 

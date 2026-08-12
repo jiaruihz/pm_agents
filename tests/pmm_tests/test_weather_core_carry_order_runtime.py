@@ -153,6 +153,53 @@ def test_core_carry_live_submits_each_child_once_through_shared_runtime(
     ) == 2
 
 
+def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatch):
+    score = {**_score(), "current_yes_ask": 0.82}
+    maker_plan = next(
+        plan
+        for plan in runner.build_entry_plans(
+            score,
+            live_enabled=True,
+            now=datetime(2026, 7, 28, 4, 31, tzinfo=timezone.utc),
+            taker_shares=5,
+            maker_shares=5,
+            order_ttl_min=15,
+        )
+        if plan["child_order_role"] == "maker"
+    )
+    assert maker_plan["limit_price"] == 0.81
+    transport = FakeTransport()
+
+    def narrow_book(_token_id):
+        return {
+            "status": "ok",
+            "fetched_at_utc": "2026-07-28T08:00:00Z",
+            "sequence": "book-2",
+            "bids": [{"price": "0.80", "size": "20"}],
+            "asks": [{"price": "0.82", "size": "20"}],
+        }
+
+    transport.fetch_market_book = narrow_book
+    monkeypatch.setattr(
+        shared,
+        "build_live_transport",
+        lambda **_kwargs: (transport, {"mode": "test"}),
+    )
+
+    result = shared.execute_core_carry_plans(
+        plans=[maker_plan],
+        output_dir=tmp_path,
+        live=True,
+        market_proxy=None,
+        max_child_shares=5,
+        max_batch_cost_usd=100,
+        code_commit="test-sha",
+    )
+
+    assert result["live_errors"] == 0
+    assert str(transport.posts[0][0]["price"]) == "0.81"
+
+
 def test_journaled_submit_is_projected_after_restart_without_resubmission(
     tmp_path,
     monkeypatch,

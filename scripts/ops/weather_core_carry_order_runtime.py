@@ -190,9 +190,11 @@ class CoreCarryRequestBuilder:
         if not book.bids or not book.asks:
             raise ValueError("fresh two-sided book unavailable")
         if child.maker_only:
+            planned_limit = Decimal(str(plan.get("limit_price") or "0"))
             cap = min(
                 Decimal(str(plan.get("maker_price_cap") or "0")),
                 intent.model_token_probability or Decimal("0"),
+                planned_limit,
             )
             price = Decimal(
                 str(
@@ -206,6 +208,8 @@ class CoreCarryRequestBuilder:
             )
             if price <= 0:
                 raise ValueError("no fresh non-crossing maker price")
+            if price > planned_limit:
+                raise ValueError("fresh maker price exceeds lifecycle plan limit")
             post_only = True
         else:
             ladder = walk_ask_ladder(

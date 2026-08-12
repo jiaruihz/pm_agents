@@ -924,6 +924,43 @@ def test_planned_attempt_without_order_does_not_permanently_consume_signal(
     assert "business-blocked" in attempted
 
 
+def test_completed_taker_only_recovers_missing_maker_child(tmp_path) -> None:
+    row = score_row()
+    sid = runner.signal_id(row)
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [{"checkpoint_key": row["checkpoint_key"], "family_city_day_conflict": True}],
+    )
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [
+            {
+                "signal_id": sid,
+                "child_order_role": "taker",
+                "status": "submitted",
+                "city": row["city"],
+                "target_date": row["target_date"],
+                "created_at_utc": "2026-07-24T04:31:00+00:00",
+                "posted_notional": 4.2,
+            }
+        ],
+    )
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--max-daily-cost-usd", "100"]
+    )
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 32, tzinfo=timezone.utc),
+    )
+
+    assert [plan["child_order_role"] for plan in plans] == ["maker"]
+    assert attempts[0]["maker_live_action"] == "post"
+    assert attempts[0]["maker_planned_shares"] == 5.0
+
+
 def test_executor_rechecks_full_taker_ladder_and_fee() -> None:
     quote = _current_yes_residual_taker_quote(
         {

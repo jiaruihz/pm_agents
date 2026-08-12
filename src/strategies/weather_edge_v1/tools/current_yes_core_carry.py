@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -189,10 +190,14 @@ def maker_resting_price(
 
     if best_bid <= 0 or best_ask <= best_bid or tick_size <= 0 or price_cap <= 0:
         return 0.0
-    candidate = min(best_bid + tick_size, best_ask - tick_size, price_cap)
-    if candidate > best_bid + 1e-12:
-        return candidate
-    return best_bid if best_bid < best_ask and best_bid <= price_cap + 1e-12 else 0.0
+    bid = Decimal(str(best_bid))
+    ask = Decimal(str(best_ask))
+    tick = Decimal(str(tick_size))
+    cap = Decimal(str(price_cap))
+    candidate = min(bid + tick, ask - tick, cap)
+    if candidate > bid:
+        return float(candidate)
+    return float(bid) if bid < ask and bid <= cap else 0.0
 
 
 def evaluate_entry(
