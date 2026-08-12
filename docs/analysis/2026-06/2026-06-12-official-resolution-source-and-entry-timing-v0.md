@@ -30,7 +30,9 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 产物目录：
 
 - `generated/official_resolution_source_v0/`（52 城官方源 + 6 城对齐验证）
-- `generated/official_station_running_max_v0/`（6 城官方站 running max）
+- 6 城官方站 running max 明细已迁出仓库；恢复索引为
+  `/Volumes/jrs-archive/pm_agents/research/artifact_store/manifests/pm_agents_generated_cleanup_small_20260805.json`。
+  当前 producer 使用稳定 `--run-id` 写入 JRS research artifact root，历史消费者按内容 SHA 读取，不再依赖 dated docs 路径。
 - `generated/m3_observed_max_v2_h14_21/`（14-21h 物理 residual，300,397 rows）
 - `generated/m3_orderbook_best_ask_v2_h14_17/`、`v2_h18_19/`（14-19h 盘口重建）
 - `generated/m3_entry_timing_v0/`（入场时机 EV 表 + 全部 tail NO trades）

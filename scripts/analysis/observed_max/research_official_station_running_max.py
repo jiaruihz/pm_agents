@@ -16,11 +16,21 @@ import argparse
 import json
 import math
 from pathlib import Path
+import sys
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
+ARTIFACT_FAMILY = "official_station_running_max_v0"
 
 # city -> (official_icao, market_unit, iem_data_col, tz)
 DIFF_CITIES = {
@@ -42,16 +52,17 @@ def main() -> None:
     )
     parser.add_argument("--decision-hours", default="10,11,12,13,14,15,16,17,18,19,20,21")
     parser.add_argument("--end", default="2026-06-10")
-    parser.add_argument(
-        "--output-dir",
-        default=str(REPO / "docs/analysis/2026-06/generated/official_station_running_max_v0"),
-    )
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
 
     hours = [int(x) for x in args.decision_hours.split(",") if x.strip()]
     cache_dir = Path(args.cache_dir)
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    resolved_output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.output_dir,
+    )
 
     rows = []
     for city, (icao, unit, data_col, tz_name) in DIFF_CITIES.items():
@@ -108,6 +119,7 @@ def main() -> None:
                 )
 
     detail = pd.DataFrame(rows)
+    out_dir = prepare_new_run_output(resolved_output)
     detail_path = out_dir / "official_station_running_max_detail.csv"
     detail.to_csv(detail_path, index=False)
 

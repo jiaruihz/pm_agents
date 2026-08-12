@@ -43,12 +43,19 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 OBS = REPO / "scripts/analysis/observed_max"
 if str(OBS) not in sys.path:
     sys.path.insert(0, str(OBS))
 
 from research_m3_observed_max_residual import CITY_TIMEZONE  # noqa: E402
 from research_m3_paper_snapshot_proxy_backtest import parse_bracket  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    resolve_content_addressed_artifact,
+)
+
+OFFICIAL_RUNNING_DETAIL_SHA256 = "5ba66fa0201d2385d53fe085f827020172ab95aab726d20232755fce2a7b4e1a"
 
 BASIS_CITIES = ["Paris", "London", "Milan", "Chicago", "KualaLumpur", "PanamaCity"]
 DECISION_HOURS = (14, 15, 16, 17)
@@ -377,8 +384,10 @@ def roi_by_rule(df: pd.DataFrame) -> pd.DataFrame:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--running-max", default=str(
-        REPO / "docs/analysis/2026-06/generated/official_station_running_max_v0/official_station_running_max_detail.csv"))
+    ap.add_argument(
+        "--running-max",
+        default=str(resolve_content_addressed_artifact(OFFICIAL_RUNNING_DETAIL_SHA256)),
+    )
     ap.add_argument("--alignment", default=str(
         REPO / "docs/analysis/2026-06/generated/m3_settlement_alignment_v1/m3_settlement_alignment_city_days.csv"))
     ap.add_argument("--pm-history-dir", default=str(

@@ -36,6 +36,7 @@ import gzip
 import json
 import math
 import re
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -43,10 +44,18 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    resolve_content_addressed_artifact,
+)
+
+OFFICIAL_RUNNING_DETAIL_SHA256 = "5ba66fa0201d2385d53fe085f827020172ab95aab726d20232755fce2a7b4e1a"
+
 from research_m3_observed_max_residual import CITY_TIMEZONE
 from research_m3_paper_snapshot_proxy_backtest import parse_bracket
-
-REPO = Path(__file__).resolve().parents[3]
 
 WHITELIST_MIN_DAYS = 20
 REPAIRED_CITIES = {"Paris", "London", "Milan", "Chicago", "KualaLumpur", "PanamaCity"}
@@ -292,7 +301,10 @@ def main() -> int:
     parser.add_argument("--orderbook-dir", default=str(REPO / "runtime/weather_edge_v1/market_data/orderbook_snapshots"))
     parser.add_argument("--alignment-city-days", default=str(REPO / "docs/analysis/2026-06/generated/m3_settlement_alignment_v1/m3_settlement_alignment_city_days.csv"))
     parser.add_argument("--wu-observed-detail", default=str(REPO / "docs/analysis/2026-06/generated/m3_observed_max_v3_h10_21/m3_observed_max_residual_detail.csv"))
-    parser.add_argument("--official-running-detail", default=str(REPO / "docs/analysis/2026-06/generated/official_station_running_max_v0/official_station_running_max_detail.csv"))
+    parser.add_argument(
+        "--official-running-detail",
+        default=str(resolve_content_addressed_artifact(OFFICIAL_RUNNING_DETAIL_SHA256)),
+    )
     parser.add_argument("--pm-history-dir", default=str(REPO / "runtime/weather_edge_v1/market_data/cache/pm_history"))
     parser.add_argument("--output-dir", default=str(REPO / "docs/analysis/2026-06/generated/m3_maker_backtest_v0"))
     args = parser.parse_args()

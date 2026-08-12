@@ -26,12 +26,21 @@ import argparse
 import json
 import math
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    resolve_content_addressed_artifact,
+)
+
+OFFICIAL_RUNNING_DETAIL_SHA256 = "5ba66fa0201d2385d53fe085f827020172ab95aab726d20232755fce2a7b4e1a"
 
 WHITELIST_MIN_DAYS = 20
 REPAIRED_CITIES = {"Paris", "London", "Milan", "Chicago", "KualaLumpur", "PanamaCity"}
@@ -167,7 +176,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--official-detail",
-        default=str(REPO / "docs/analysis/2026-06/generated/official_station_running_max_v0/official_station_running_max_detail.csv"),
+        default=str(resolve_content_addressed_artifact(OFFICIAL_RUNNING_DETAIL_SHA256)),
     )
     parser.add_argument(
         "--alignment-city-days",

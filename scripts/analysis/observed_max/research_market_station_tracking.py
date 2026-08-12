@@ -39,7 +39,12 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    resolve_content_addressed_artifact,
+)
 from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
+
+OFFICIAL_RUNNING_DETAIL_SHA256 = "5ba66fa0201d2385d53fe085f827020172ab95aab726d20232755fce2a7b4e1a"
 
 PROXIES = [None, production_market_proxy_url()]
 
@@ -382,10 +387,7 @@ def main() -> int:
     )
     ap.add_argument(
         "--official-running-max",
-        default=str(
-            REPO
-            / "docs/analysis/2026-06/generated/official_station_running_max_v0/official_station_running_max_detail.csv"
-        ),
+        default=str(resolve_content_addressed_artifact(OFFICIAL_RUNNING_DETAIL_SHA256)),
     )
     ap.add_argument(
         "--wrong-cache-dir",
