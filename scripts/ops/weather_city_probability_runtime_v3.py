@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.weather_city_probability_shadow import (
+    BusanOnlineMarketPriorAdapter,
     ObservationCoverageAdapter,
     ShadowRuntime,
 )
@@ -39,6 +40,7 @@ def main() -> None:
         {
             "amsterdam_knmi_remaining_heat_v7": AmsterdamKnmiRemainingHeatV7Adapter(),
             "amsterdam_knmi_remaining_heat_v9": AmsterdamKnmiRemainingHeatV7Adapter(),
+            "busan_online_market_prior_v1": BusanOnlineMarketPriorAdapter(),
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
             "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),
             "tokyo_overshoot_market_residual_v2": TokyoMarketAnchorAdapter(),

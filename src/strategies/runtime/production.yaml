@@ -206,7 +206,7 @@ managed_runtimes:
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
     max_health_age_sec: 1200
     accepted_health_statuses: [ok]
-    dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs, weather_knmi_first_seen_ladder_v1]
+    dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs, weather_knmi_first_seen_ladder_v1, weather_korea_first_seen_state_v1]
     recovery_policy: safe
 
   - instance_id: weather_knmi_first_seen_ladder_v1

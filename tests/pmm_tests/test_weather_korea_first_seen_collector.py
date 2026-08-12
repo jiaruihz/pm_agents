@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import json
 
-from scripts.ops.weather_korea_first_seen_collector import read_appended_rows
+from scripts.ops.weather_korea_first_seen_collector import (
+    LATEST_SCHEMA_FINGERPRINT,
+    LATEST_SCHEMA_VERSION,
+    build_parser,
+    build_producer_identity,
+    read_appended_rows,
+)
 
 
 def _write_row(path, sequence: int) -> None:
@@ -30,3 +36,31 @@ def test_read_appended_rows_follows_dated_shard_rollover(tmp_path) -> None:
     assert [row["sequence"] for row in rows] == [3]
     assert cursor["source_path"] == str(second)
     assert audit["reset_reason"] == "source_path_changed"
+
+
+def test_korea_collector_producer_identity_matches_latest_contract(tmp_path) -> None:
+    args = build_parser().parse_args(
+        [
+            "--source-jsonl",
+            str(tmp_path / "source"),
+            "--forecast-root",
+            str(tmp_path / "forecast"),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ]
+    )
+    identity = build_producer_identity(
+        args,
+        {
+            "cities": ["Busan", "Seoul"],
+            "source": "amos_runway",
+            "path_window_minutes": [15, 60],
+            "market_capture": {},
+            "mode": "research_shadow",
+        },
+    )
+
+    assert identity["runtime_instance_id"]
+    assert identity["output_schema_version"] == LATEST_SCHEMA_VERSION
+    assert identity["output_schema_fingerprint"] == LATEST_SCHEMA_FINGERPRINT
+    assert identity["loaded_module_sha256"]

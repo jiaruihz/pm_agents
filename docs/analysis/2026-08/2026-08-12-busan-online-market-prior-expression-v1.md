@@ -2,7 +2,7 @@
 
 ## 结论
 
-Busan 得到了第一套**点估为正、可重复离线评估、但尚不能在线运行**的 market-prior
+Busan 得到了第一套**点估为正、可重复离线评估、可运行 zero-notional shadow**的 market-prior
 候选：`busan_intraday_exact_no_online_market_prior_residual`。
 
 它不再让 weather-only 模型直接和 ask 比较，而是把同一 PIT checkpoint 的盘口
@@ -28,7 +28,7 @@ logit(P_post) = logit(P_market)
 fee-adjusted taker replay 为 **6 单 / 3 天 / 5 胜，PnL +$5.6138，ROI
 +28.96%，date-block CI95 `[+15.54%,+40.48%]`**。但有效天气创新只有 3 个
 独立日期，而且 online family 是看过 8/04–11 后才确定的，所以状态仍是
-`offline candidate / blocked for shadow`，不是 live alpha。原报告把数值误差造成的
+`zero-notional shadow candidate / clean forward pending`，不是 live alpha。原报告把数值误差造成的
 `-1e-17` 当成了严格负上界，从而误判为 CI 胜过市场；当前已修正为
 上界 0，因此不具备统计显著性。
 
@@ -122,21 +122,25 @@ target dates、约 12 个潜在同 checkpoint exact-rung rows 可用于 WS 增�
 spread/depth/短时 adverse-selection 诊断。不得把 frames 当独立样本，也不得把
 generic hot-strip 的 60s markout 当本模型收益。
 
-## Shadow 部署审计
+## Shadow 部署审计与修复
 
-当前不部署，原因不是 zero-notional 风险，而是还没有同一个可验证的在线模型：
+审计发现的阻断项已按同一模型合同修复：
 
-- 当前 `busan-market-prior` 入口要求 `label_no`，是已结算离线 evaluator，不能消费未结算 checkpoint。
-- 历史 `p_factorized_random_forest_full_weather` 实际使用 18 个训练特征，而
-  `busan_model.py` 里是 19 个特征的新 ontology；两者不是同一个已冻结模型。
-- 没有落盘的 RF artifact；生产 Korea checkpoint 也没有直接给出组合所需的
-  `p_model_no`。在无法对历史 prediction 做一致性回放前，不应现场重训一个近似模型。
-- 65 条同盘口行中 64 条 book response 约为 0.1–5 秒，但 1 条为 177.6 秒；
-  当前 evaluator 只检查 `book_ts >= decision_ts`，没有 book freshness 上限。
+- 在线 adapter 只读未结算 Korea checkpoint，不读取 `label_no/settled`；注入或翻转
+  label 不改变输出。
+- 冻结的是历史真实使用的 18 特征 RF confirmation head，而不是拿 19 特征新 ontology
+  冒充原模型；底层 physical artifact 仍为 train-through 7/21 的四特征模型。
+- 序列化 composite artifact 在 8/04–11 的 106 条 frozen rows 上逐行复现：RF confirmation
+  与 composed weather probability 的最大绝对误差均为 `1.11e-16`。
+- feature book response 上限为 10 秒，runtime execution book age 上限为 90 秒；历史
+  177.6 秒异常行会明确输出 `not_scorable`。
+- 真实 8/11 case 已穿过 `CityScore → ModelOutput → SignalCandidate → TradeIntent`；
+  token/condition/outcome/book identity 完整，TradeIntent 为 `mode=zero_notional`、
+  `requested_size=0`，不会创建真实订单。
 - 6 笔 replay 的 raw checkpoint、rung、ask/depth、fee 和 settlement 可回连，但其中两笔
   edge 不足 0.3c，且 6 笔只来自 3 个 active dates，不足以支持显著性。
-- 8/12 部署预检时 `127.0.0.1:7896` 无 listener，market-books 为 `degraded`；
-  strict production manifest 同时因 canonical refresh 上次 exit 1 为 `critical`。
+- 8/12 早先的 proxy 与 canonical refresh 阻断已经恢复；部署前 strict manifest、JRS、
+  market-books、Korea collector、city runtime 均为 healthy。
 
 ## 决策与下一步
 
@@ -144,9 +148,8 @@ generic hot-strip 的 60s markout 当本模型收益。
    不把盘口混入物理特征。
 2. 保留 `weight=0.25, trained_through=8/11` 作为**待验证**的下一日状态；
    8/12 残缺数据不得补入。
-3. 先固化 physical artifact，在历史 fixed-forward rows 上逐行复现原概率，再实现
-   不读 label 的 Busan WCIR adapter。生产盘口链和 strict manifest 恢复后，才能
-   append clean shadow forward。
+3. 已固化并 parity-lock composite artifact，也已实现不读 label 的 Busan WCIR adapter；
+   clean forward 从 `2026-08-12T03:00:00Z` 起 append，部署前的当日数据不回填冒充 forward。
 4. 至少新增 5 个 `weight>0` 的独立日期并出现可执行信号后，再做一次固定分母
    admission；当前只有 3 天，且 clean forward 为 0 天。
 5. WS 等覆盖至少跨多个独立 settlement dates 后，只做增量 A/B：
@@ -165,10 +168,15 @@ python -m weather_model_evaluation.cli busan-market-prior \
   --freeze-cutoff 2026-08-11 \
   --forward-start 2026-08-12 \
   --bootstrap-draws 10000 \
+  --runtime-state-input <frozen-pending-state.csv.gz> \
+  --physical-artifact <physical-v7.joblib> \
+  --runtime-artifact-output <busan-online-market-prior.joblib> \
   --output-dir <artifact-dir>
 ```
 
 当前修正后 durable output：
-`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/busan_market_prior_expression/run=20260812_cutoff_20260811_auditfix/summary.json`。
+`/Volumes/jrs-archive/weather_data_feed_service_runtime/research/model_runs/busan_online_market_prior/run=20260812_010000z/evaluation/summary.json`；
+生产可读的 parity-locked artifact 位于
+`/Volumes/jrs/weather_data_feed_service_runtime/model_artifacts/city_probability_runtime_v3/busan_online_market_prior_v1.joblib`。
 其中包含 prediction、逐单、daily weight history、weight-grid、robustness 和
 execution-buffer sensitivity 的完整路径与 SHA/build identity。

@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -38,6 +39,8 @@ from .busan_market_prior import (
     DEFAULT_WEATHER_WEIGHT as BUSAN_DEFAULT_WEATHER_WEIGHT,
     ONLINE_MODEL_ID as BUSAN_ONLINE_MARKET_PRIOR_MODEL_ID,
     SCHEMA_VERSION as BUSAN_MARKET_PRIOR_SCHEMA_VERSION,
+    build_busan_runtime_artifact,
+    dump_busan_runtime_artifact,
     evaluate_busan_market_prior,
     evaluate_online_busan_market_prior,
     evaluate_weight_grid as evaluate_busan_weight_grid,
@@ -257,6 +260,24 @@ def _add_busan_market_prior_parser(subparsers: Any) -> None:
     parser.add_argument("--freeze-cutoff", required=True)
     parser.add_argument("--forward-start", required=True)
     parser.add_argument("--bootstrap-draws", type=int, default=10_000)
+    parser.add_argument(
+        "--runtime-state-input",
+        type=Path,
+        help="Frozen pending-state table used to fit the runtime confirmation head.",
+    )
+    parser.add_argument(
+        "--physical-artifact",
+        type=Path,
+        help="Frozen Busan clock/rung physical-prior joblib artifact.",
+    )
+    parser.add_argument(
+        "--runtime-artifact-output",
+        type=Path,
+        help="Optional production-readable composite joblib output.",
+    )
+    parser.add_argument(
+        "--confirmation-train-end", default="2026-08-03"
+    )
     parser.set_defaults(handler=run_busan_market_prior)
 
 
@@ -442,6 +463,55 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
     development_grid.to_csv(development_grid_path, index=False)
     evaluation_grid.to_csv(evaluation_grid_path, index=False)
 
+    runtime_options = (
+        args.runtime_state_input,
+        args.physical_artifact,
+        args.runtime_artifact_output,
+    )
+    if any(value is not None for value in runtime_options) and not all(
+        value is not None for value in runtime_options
+    ):
+        raise ValueError(
+            "runtime artifact build requires --runtime-state-input, "
+            "--physical-artifact, and --runtime-artifact-output together"
+        )
+    runtime_artifact_info: dict[str, Any] | None = None
+    if args.runtime_artifact_output is not None:
+        state_frame = load_busan_prediction_frame(args.runtime_state_input)
+        physical_artifact = joblib.load(args.physical_artifact)
+        runtime_artifact, runtime_parity = build_busan_runtime_artifact(
+            state_frame,
+            evaluation,
+            physical_artifact,
+            confirmation_train_end=args.confirmation_train_end,
+            expression_weight=online.summary["next_date_state"][
+                "selected_weather_weight"
+            ],
+            expression_weight_trained_through=online.summary["next_date_state"][
+                "trained_through"
+            ],
+        )
+        dump_busan_runtime_artifact(
+            runtime_artifact, args.runtime_artifact_output
+        )
+        runtime_spec_path = args.runtime_artifact_output.with_suffix(".spec.json")
+        runtime_artifact_info = {
+            "path": str(args.runtime_artifact_output.resolve()),
+            "sha256": sha256_file(args.runtime_artifact_output),
+            "spec_path": str(runtime_spec_path.resolve()),
+            "confirmation_state_input": str(args.runtime_state_input.resolve()),
+            "confirmation_state_input_sha256": sha256_file(
+                args.runtime_state_input
+            ),
+            "physical_artifact": str(args.physical_artifact.resolve()),
+            "physical_artifact_sha256": sha256_file(args.physical_artifact),
+            "frozen_forward_input": str(args.evaluation_input.resolve()),
+            "frozen_forward_input_sha256": sha256_file(args.evaluation_input),
+            "parity": runtime_parity,
+        }
+        write_summary(runtime_spec_path, runtime_artifact_info)
+        runtime_artifact_info["spec_sha256"] = sha256_file(runtime_spec_path)
+
     probability_delta = online.summary["paired_candidate_minus_market"]
     trade = online.summary["fee_adjusted_taker_replay"]
     gates = {
@@ -498,13 +568,17 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
         ),
         "signal_notional": 0.0,
         "research_only_zero_notional": True,
-        "offline_evaluator_only": True,
-        "zero_notional_shadow_ready": False,
+        "offline_evaluator_only": not bool(runtime_artifact_info),
+        "online_adapter": "busan_online_market_prior_v1",
+        "zero_notional_shadow_ready": bool(runtime_artifact_info),
+        "physical_runtime_artifact_ready": bool(runtime_artifact_info),
         "live_eligible": False,
         "ws_feature_role": "coverage_diagnostic_only_not_model_input",
         "admission_gates_on_seen_window": gates,
         "admission_status": (
-            "fail_ci_low_sample_no_clean_forward_and_no_online_adapter"
+            "zero_notional_shadow_only_pending_clean_forward"
+            if runtime_artifact_info
+            else "blocked_missing_runtime_artifact_and_online_adapter"
         ),
     }
     write_summary(candidate_path, candidate_spec)
@@ -514,7 +588,11 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
     model_source = Path(__file__).with_name("busan_market_prior.py").resolve()
     summary = {
         "schema_version": BUSAN_MARKET_PRIOR_SCHEMA_VERSION,
-        "status": "offline_candidate_blocked_for_shadow",
+        "status": (
+            "zero_notional_shadow_candidate_ready"
+            if runtime_artifact_info
+            else "offline_candidate_blocked_for_shadow"
+        ),
         "candidate": candidate_spec,
         "development": {
             "input": str(args.development_input.resolve()),
@@ -553,7 +631,16 @@ def run_busan_market_prior(args: argparse.Namespace) -> int:
             "development_weight_grid": str(development_grid_path),
             "seen_window_weight_grid": str(evaluation_grid_path),
             "candidate_spec": str(candidate_path),
+            **(
+                {
+                    "runtime_artifact": runtime_artifact_info["path"],
+                    "runtime_artifact_spec": runtime_artifact_info["spec_path"],
+                }
+                if runtime_artifact_info
+                else {}
+            ),
         },
+        "runtime_artifact": runtime_artifact_info,
         "producer": {
             "entrypoint": "weather_model_evaluation.cli:busan-market-prior",
             "cli_source_sha256": sha256_file(Path(__file__).resolve()),

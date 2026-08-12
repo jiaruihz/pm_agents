@@ -7,8 +7,11 @@ This process is zero-notional telemetry. It never creates orders.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.util
 import json
 import os
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -51,6 +54,24 @@ DEFAULT_CONFIG = ROOT / "configs/weather/korea_first_seen_collector_v1.json"
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
 STATE_SCHEMA_VERSION = "korea_first_seen_collector_state_v1"
 OUTPUT_SCHEMA_VERSION = "korea_first_seen_research_checkpoint_v1"
+LATEST_SCHEMA_VERSION = "korea_first_seen_collector_latest_v2"
+LATEST_SCHEMA = {
+    "schema_version": LATEST_SCHEMA_VERSION,
+    "schema_fingerprint": "sha256",
+    "producer_identity": {
+        "runtime_instance_id": "sha256",
+        "repo_head": "git_sha",
+        "repo_dirty_tracked": "bool",
+        "config_sha256": "sha256",
+        "loaded_module_sha256": "mapping[path,sha256]",
+    },
+    "checkpoint_schema_version": OUTPUT_SCHEMA_VERSION,
+    "checkpoint_root": "append_only_jsonl_directory",
+}
+LATEST_SCHEMA_FINGERPRINT = hashlib.sha256(
+    json.dumps(LATEST_SCHEMA, sort_keys=True, separators=(",", ":")).encode()
+).hexdigest()
+_PRODUCER_IDENTITY_CACHE: dict[str, dict[str, Any]] = {}
 _FORECAST_INDEX_CACHE: dict[
     tuple[str, str, str], list[tuple[datetime, dict[str, Any]]]
 ] = {}
@@ -58,6 +79,70 @@ _FORECAST_INDEX_CACHE: dict[
 
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def build_producer_identity(
+    args: argparse.Namespace, config: dict[str, Any]
+) -> dict[str, Any]:
+    config_payload = {
+        "collector_config": config,
+        "source_jsonl": str(Path(args.source_jsonl).resolve()),
+        "forecast_root": str(Path(args.forecast_root).resolve()),
+        "output_dir": str(Path(args.output_dir).resolve()),
+        "market_proxy": str(args.market_proxy),
+        "interval_seconds": float(args.interval_seconds),
+    }
+    cache_key = hashlib.sha256(
+        json.dumps(config_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    cached = _PRODUCER_IDENTITY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    module_names = {
+        __name__,
+        "weather_data_feed.korea_amos_features",
+        "scripts.ops.weather_fast_source_stale_book_observer",
+    }
+    module_hashes: dict[str, str] = {}
+    for module_name in sorted(module_names):
+        spec = importlib.util.find_spec(module_name)
+        if spec is None or not spec.origin:
+            raise RuntimeError(f"cannot resolve producer module: {module_name}")
+        module_path = Path(spec.origin).resolve()
+        module_hashes[str(module_path)] = _sha256_file(module_path)
+    git = lambda *parts: subprocess.run(  # noqa: E731
+        ["git", "-C", str(ROOT), *parts],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    identity = {
+        "repo_root": str(ROOT),
+        "repo_head": git("rev-parse", "HEAD"),
+        "repo_dirty_tracked": bool(
+            git("status", "--short", "--untracked-files=no")
+        ),
+        "config_sha256": cache_key,
+        "loaded_module_sha256": module_hashes,
+        "output_schema_version": LATEST_SCHEMA_VERSION,
+        "output_schema_fingerprint": LATEST_SCHEMA_FINGERPRINT,
+    }
+    result = {
+        **identity,
+        "runtime_instance_id": hashlib.sha256(
+            json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    _PRODUCER_IDENTITY_CACHE[cache_key] = result
+    return result
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -646,7 +731,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     }
     write_json_atomic(state_path, persisted_out)
     latest = {
-        "schema_version": "korea_first_seen_collector_latest_v1",
+        "schema_version": LATEST_SCHEMA_VERSION,
+        "schema_fingerprint": LATEST_SCHEMA_FINGERPRINT,
+        "producer_identity": build_producer_identity(args, config),
+        "checkpoint_schema_version": OUTPUT_SCHEMA_VERSION,
         "status": "ok",
         "generated_at_utc": iso_now(),
         "mode": config["mode"],

@@ -12,8 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+import joblib
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
 
 from .probability import (
     binary_loss_values,
@@ -23,6 +27,7 @@ from .probability import (
 
 
 SCHEMA_VERSION = "busan_market_prior_expression_v1"
+RUNTIME_ARTIFACT_SCHEMA_VERSION = "busan_online_market_prior_artifact_v1"
 MODEL_ID = "busan_intraday_exact_no_market_prior_residual"
 ONLINE_MODEL_ID = "busan_intraday_exact_no_online_market_prior_residual"
 DEFAULT_WEATHER_WEIGHT = 0.125
@@ -41,6 +46,26 @@ REQUIRED_COLUMNS = {
     "no_book_ts_utc",
     "routine_running_max_market_value",
 }
+CONFIRMATION_FEATURES = (
+    "source_margin_to_rung_c",
+    "source_running_margin_to_rung_c",
+    "distance_below_source_running_max_c",
+    "minutes_since_source_running_max",
+    "current_cross_retained",
+    "observation_history_count",
+    "minutes_to_next_routine",
+    "local_hour",
+    "path_15m_slope_c_per_hour",
+    "path_60m_slope_c_per_hour",
+    "hours_to_forecast_peak",
+    "forecast_ceiling_margin_c",
+    "relative_humidity_pct",
+    "dewpoint_depression_c",
+    "forecast_cloud_cover_remaining_3h_mean_pct",
+    "forecast_precip_probability_remaining_3h_max_pct",
+    "forecast_wind_speed_remaining_3h_max_kt",
+    "physical_prior_logit",
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +81,182 @@ class BusanOnlineMarketPriorEvaluation:
     trades: pd.DataFrame
     weight_history: pd.DataFrame
     summary: dict[str, Any]
+
+
+def _date_equal_sample_weight(frame: pd.DataFrame) -> np.ndarray:
+    return (
+        1.0 / frame.groupby("target_date")["target_date"].transform("size")
+    ).to_numpy(float)
+
+
+def _physical_feature_frame(
+    frame: pd.DataFrame,
+    feature_names: Iterable[str],
+) -> pd.DataFrame:
+    decision = pd.to_datetime(
+        frame["decision_ts_utc"], utc=True, errors="raise", format="mixed"
+    )
+    local = decision.dt.tz_convert("Asia/Seoul")
+    day = local.dt.dayofyear
+    values = {
+        "local_hour": local.dt.hour.astype(float),
+        "running_max_market_value": frame[
+            "routine_running_max_market_value"
+        ].astype(float),
+        "day_of_year_sin": np.sin(2.0 * np.pi * day / 366.0),
+        "day_of_year_cos": np.cos(2.0 * np.pi * day / 366.0),
+    }
+    missing = sorted(set(feature_names) - set(values))
+    if missing:
+        raise ValueError(f"unsupported Busan physical features: {missing}")
+    return pd.DataFrame({name: values[name] for name in feature_names})
+
+
+def build_busan_runtime_artifact(
+    state_frame: pd.DataFrame,
+    frozen_forward_frame: pd.DataFrame,
+    physical_artifact: dict[str, Any],
+    *,
+    confirmation_train_end: str = "2026-08-03",
+    expression_weight: float = 0.25,
+    expression_weight_trained_through: str = "2026-08-11",
+    parity_tolerance: float = 1e-12,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Fit and parity-lock the historical Busan physical probability stack.
+
+    The confirmation head is reconstructed from the exact frozen tournament
+    contract.  The function refuses to produce a runtime artifact unless both
+    the confirmation and composed weather probabilities reproduce the archived
+    forward rows within numerical tolerance.
+    """
+
+    required_state = {
+        "target_date",
+        "label_next_routine_confirms",
+        *CONFIRMATION_FEATURES,
+    }
+    required_forward = {
+        "target_date",
+        "decision_ts_utc",
+        "routine_running_max_market_value",
+        "p_confirm_random_forest_full_weather",
+        "p_factorized_random_forest_full_weather",
+        *CONFIRMATION_FEATURES,
+    }
+    missing_state = sorted(required_state - set(state_frame.columns))
+    missing_forward = sorted(required_forward - set(frozen_forward_frame.columns))
+    if missing_state or missing_forward:
+        raise ValueError(
+            "Busan runtime artifact inputs are incomplete: "
+            f"state={missing_state} forward={missing_forward}"
+        )
+    if not 0.0 <= float(expression_weight) <= 1.0:
+        raise ValueError("expression_weight must be in [0, 1]")
+    if physical_artifact.get("city") != "Busan":
+        raise ValueError("physical artifact city must be Busan")
+    physical_model = physical_artifact.get("physical_model")
+    physical_features = tuple(physical_artifact.get("physical_features") or ())
+    if physical_model is None or not physical_features:
+        raise ValueError("physical artifact is missing model/features")
+
+    train = state_frame.loc[
+        state_frame["target_date"].astype(str).le(confirmation_train_end)
+        & state_frame["label_next_routine_confirms"].notna()
+    ].copy()
+    if train.empty:
+        raise ValueError("Busan confirmation training slice is empty")
+    confirmation_model = Pipeline(
+        [
+            (
+                "impute",
+                SimpleImputer(
+                    strategy="median", keep_empty_features=True, add_indicator=True
+                ),
+            ),
+            (
+                "model",
+                RandomForestClassifier(
+                    n_estimators=400,
+                    max_depth=3,
+                    min_samples_leaf=8,
+                    max_features=0.7,
+                    random_state=8404,
+                    n_jobs=1,
+                ),
+            ),
+        ]
+    )
+    confirmation_model.fit(
+        train[list(CONFIRMATION_FEATURES)],
+        train["label_next_routine_confirms"].astype(float),
+        model__sample_weight=_date_equal_sample_weight(train),
+    )
+
+    validation = frozen_forward_frame.copy()
+    confirmation_probability = confirmation_model.predict_proba(
+        validation[list(CONFIRMATION_FEATURES)]
+    )[:, 1]
+    physical_probability = physical_model.predict_proba(
+        _physical_feature_frame(validation, physical_features)
+    )[:, 1]
+    composed_probability = confirmation_probability + (
+        1.0 - confirmation_probability
+    ) * physical_probability
+    confirmation_error = np.abs(
+        confirmation_probability
+        - validation["p_confirm_random_forest_full_weather"].to_numpy(float)
+    )
+    composed_error = np.abs(
+        composed_probability
+        - validation["p_factorized_random_forest_full_weather"].to_numpy(float)
+    )
+    parity = {
+        "rows": int(len(validation)),
+        "target_dates": int(validation["target_date"].nunique()),
+        "date_start": str(validation["target_date"].astype(str).min()),
+        "date_end": str(validation["target_date"].astype(str).max()),
+        "confirmation_max_abs_error": float(confirmation_error.max()),
+        "composed_max_abs_error": float(composed_error.max()),
+        "tolerance": float(parity_tolerance),
+        "pass": bool(
+            confirmation_error.max() <= parity_tolerance
+            and composed_error.max() <= parity_tolerance
+        ),
+    }
+    if not parity["pass"]:
+        raise RuntimeError(f"Busan runtime artifact parity failed: {parity}")
+
+    artifact = {
+        "schema_version": RUNTIME_ARTIFACT_SCHEMA_VERSION,
+        "model_id": ONLINE_MODEL_ID,
+        "online_adapter": "busan_online_market_prior_v1",
+        "city": "Busan",
+        "target": "final exact-rung NO settlement probability",
+        "confirmation_model": confirmation_model,
+        "confirmation_features": list(CONFIRMATION_FEATURES),
+        "confirmation_train_start": str(train["target_date"].astype(str).min()),
+        "confirmation_train_end": str(train["target_date"].astype(str).max()),
+        "confirmation_train_dates": int(train["target_date"].nunique()),
+        "confirmation_train_rows": int(len(train)),
+        "physical_model": physical_model,
+        "physical_features": list(physical_features),
+        "physical_train_end": str(physical_artifact.get("artifact_train_end")),
+        "expression_weight": float(expression_weight),
+        "expression_weight_trained_through": expression_weight_trained_through,
+        "market_feature_role": "prior_offset",
+        "market_feature_clock": "decision_current",
+        "candidate_grain_version": "busan_pending_confirmation_state_v1",
+        "parity": parity,
+    }
+    return artifact, parity
+
+
+def dump_busan_runtime_artifact(
+    artifact: dict[str, Any],
+    path: Path,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(artifact, path)
 
 
 def _clip_probability(value: np.ndarray | Iterable[float] | float) -> np.ndarray:
@@ -530,11 +731,15 @@ def evaluate_online_busan_market_prior(
 __all__ = [
     "BusanMarketPriorEvaluation",
     "BusanOnlineMarketPriorEvaluation",
+    "CONFIRMATION_FEATURES",
     "DEFAULT_WEATHER_COLUMN",
     "DEFAULT_WEATHER_WEIGHT",
     "MODEL_ID",
     "ONLINE_MODEL_ID",
+    "RUNTIME_ARTIFACT_SCHEMA_VERSION",
     "SCHEMA_VERSION",
+    "build_busan_runtime_artifact",
+    "dump_busan_runtime_artifact",
     "evaluate_busan_market_prior",
     "evaluate_online_busan_market_prior",
     "evaluate_weight_grid",
