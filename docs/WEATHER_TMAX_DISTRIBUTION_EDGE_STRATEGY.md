@@ -224,6 +224,15 @@ promotion = no live
 next = zero-notional target-book shadow runner / position_book telemetry
 ```
 
+### D-1/D-2 shared weather probability（2026-08-12）
+
+D-1/D-2 已统一为共享概率架构：共同学习 weather distribution 的 temperature、ordinal center、
+adjacent diffusion 与 tail floor，lead-specific 参数和 strongly-shrunk city center 只作候选。恢复的共同分母为
+D-1 `9,648 states/74 dates/48 cities`、D-2 `246/29/14`。secondary holdout 上校准显著改善旧
+telemetry，但 D-1/D-2 market-offset 均在 inner selection 选择 `beta=0`，没有可交易 market residual；
+保持 research，不产生 signal/order。正式数字与 artifact 见
+[D-1/D-2 shared weather probability v1](analysis/2026-08/2026-08-12-d1-d2-shared-weather-probability-v1.md)。
+
 ## 2026-07-10 Lineage Repair
 
 [2026-07-10-tmax-lineage-repair-replay-v1.md](analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.md)
