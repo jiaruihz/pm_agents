@@ -399,3 +399,120 @@ def test_full_probability_fusion_audit_freezes_after_temporal_validation(
         * len(forward.FULL_FUSION_WEATHER_WEIGHTS)
     )
     assert (tmp_path / "out" / "frozen_candidate_spec.json").exists()
+
+
+def test_canonical_forward_join_uses_first_ladder_before_next_jma_state() -> None:
+    expressions = [
+        {
+            "event_id": "first",
+            "target_date": "2026-08-01",
+            "quote_ts_utc": "2026-08-01T01:01:00Z",
+            "source_obs_ts_utc": "2026-08-01T01:00:00Z",
+            "bracket": "30",
+            "availability_clock_class": "collector_exact",
+            "book_snapshot_id": "active-first",
+        },
+        {
+            "event_id": "second",
+            "target_date": "2026-08-01",
+            "quote_ts_utc": "2026-08-01T01:11:00Z",
+            "source_obs_ts_utc": "2026-08-01T01:10:00Z",
+            "bracket": "30",
+            "availability_clock_class": "collector_exact",
+            "book_snapshot_id": "active-second",
+        },
+    ]
+    quote = {
+        "bid": 0.45,
+        "ask": 0.47,
+        "mid": 0.46,
+        "yes_ask_size": 10.0,
+        "no_ask": 0.56,
+        "no_ask_size": 12.0,
+    }
+    ladders = [
+        {
+            "ladder_snapshot_id": "before",
+            "target_date": "2026-08-01",
+            "source_snapshot_ts_utc": "2026-08-01T00:59:00Z",
+            "available_at_utc": "2026-08-01T00:59:00Z",
+            "source_path": "before",
+            "quotes": {"30": quote, "31": {**quote, "mid": 0.54}},
+        },
+        {
+            "ladder_snapshot_id": "causal",
+            "target_date": "2026-08-01",
+            "source_snapshot_ts_utc": "2026-08-01T01:05:00Z",
+            "available_at_utc": "2026-08-01T01:05:00Z",
+            "source_path": "causal",
+            "quotes": {"30": quote, "31": {**quote, "mid": 0.54}},
+        },
+        {
+            "ladder_snapshot_id": "after-next",
+            "target_date": "2026-08-01",
+            "source_snapshot_ts_utc": "2026-08-01T01:12:00Z",
+            "available_at_utc": "2026-08-01T01:12:00Z",
+            "source_path": "after-next",
+            "quotes": {"30": quote, "31": {**quote, "mid": 0.54}},
+        },
+    ]
+
+    joined = forward.join_frozen_forward_to_canonical_ladders(
+        expressions,
+        np.asarray([[0.6, 0.3, 0.08, 0.02], [0.5, 0.4, 0.08, 0.02]]),
+        ladders,
+        {"2026-08-01": "31"},
+    )
+
+    assert [row["state_id"] for row in joined] == ["first", "second"]
+    assert joined[0]["execution_book_snapshot_id"] == "causal"
+    assert joined[0]["feature_to_ladder_wait_min"] == 4.0
+    assert joined[1]["execution_book_snapshot_id"] == "after-next"
+
+
+def test_canonical_direct_no_ask_and_depth_are_used_without_raw_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    row = {
+        "state_id": "state",
+        "target_date": "2026-08-01",
+        "availability_ts_utc": "2026-08-01T01:05:00Z",
+        "snapshot_ts_utc": "2026-08-01T01:05:00Z",
+        "settlement_lower_bound_violation": 0,
+        "current_bracket": 30,
+        "winning_bracket": "31",
+        "quotes_json": json.dumps(
+            {
+                "30": {
+                    "bid": 0.40,
+                    "ask": 0.42,
+                    "no_ask": 0.55,
+                    "no_ask_size": 8.0,
+                },
+                "31": {"bid": 0.30, "ask": 0.32},
+            }
+        ),
+        "model_distribution_json": json.dumps([0.2, 0.7, 0.08, 0.02]),
+    }
+    monkeypatch.setattr(
+        forward.v1,
+        "raw_ask_size",
+        lambda *_args: pytest.fail("raw lookup should not run"),
+    )
+
+    candidates = forward.current_next_candidates([row], ["model"])
+    no_candidate = next(
+        candidate
+        for candidate in candidates
+        if candidate["expression_bracket"] == "30"
+        and candidate["side"] == "NO"
+    )
+    selected = forward.select_first_signal(
+        [no_candidate],
+        Path("unused"),
+        selection_policy="first_signal_per_model_target_date_bracket",
+    )
+
+    assert no_candidate["selected_side_ask"] == 0.55
+    assert selected[0]["ask_size"] == 8.0
+    assert selected[0]["five_share_executable"] == 1

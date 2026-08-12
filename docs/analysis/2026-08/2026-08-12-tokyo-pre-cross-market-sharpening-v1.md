@@ -212,6 +212,35 @@ clean-forward boundary=`2026-08-13`。8/13 00:08 CST 已运行 bounded canonical
 artifact：`tokyo_continuous_full_probability/fusion_20260813_v1`；可重复入口仍为
 `research_tokyo_continuous_ladder_forward_v3.py --full-probability-fusion-input ...`。
 
+## V3 八月同分母纠错（2026-08-13）
+
+前一版 V3 结论只读了 `episode_state_ab_20260811_final_v2/market_join_rows.csv.gz`，其真实范围是
+7/16–29（248 rows/12 dates）；所以“最新仍到 7/29”不是 8 月没有采集，而是研究入口选错了历史 artifact。
+同时 canonical full-ladder materializer 把“某 bracket 缺一个互补 token book”误判为“整条 ladder 不完整”，
+使 8/9–12 的 Tokyo 同日盘口被丢弃，只留下前一晚盘口。修复后缺失 side 保持 null，不伪造价格；8/9–12
+增量补入 1,323 ladder snapshots 和 12,661 rung quotes，canonical Tokyo 该窗为 2,466 ladders。
+
+修复后的输入覆盖 8/1–12：581 个 strict collector-first-seen expressions/12 日，其中 8/12 的 27 rows
+尚未结算；可评分分母为 8/1–11 的 430 个 causal JMA→首个完整 ladder joins/11 settled dates。另有
+1 row（8/5）违反 source running-max 对 settlement 的下界，按 source/settlement basis 冲突显式剔除，未冒充 exact。
+
+| 8/1–11 同分母 | multiclass Brier | logloss | RPS |
+|---|---:|---:|---:|
+| raw full-ladder market | **0.62922** | 4.01132 | **0.13429** |
+| Tokyo V3 frozen fusion | 0.68576 | **3.83540** | 0.13761 |
+
+V3 相对 market 的 Brier delta 为 `+0.05654`，target-date block bootstrap 95% CI
+`[+0.01170,+0.10701]`，即主概率门明确 **FAIL**；logloss较好，但不能覆盖 Brier 失败。固定 current/next、
+每 date×bracket 首次、2pp、5-share ask+fee 的研究回放有 19 笔可执行、12 胜，cost `$46.26845`、
+fee 后 PnL `+$13.73155`、ROI `+29.68%`，日期 bootstrap CI `[+15.50%,+56.84%]`。这是已经看过的
+8 月 reused audit，且 probability score 输 market，不能用正 ROI 把模型升级为 live/shadow candidate。
+
+因此 7/24–29 的正结果保留为历史 evidence，但不再代表当前可升级状态。V3 改为
+`inconclusive / August probability FAIL / trade-expression positive / clean-forward required / research-only`；
+冻结参数未用 8 月 refit，clean forward 仍从 8/13 起累计，不替换 V2、不接 intent/order/fill、不改变 live。
+canonical 机器结果：`tokyo_continuous_full_probability/august_replay_20260813_v3`；8/12 strict 输入：
+`tokyo_market_posterior/raw_exact_20260812_v1`。
+
 ## V2 zero-notional 部署验收（2026-08-12）
 
 Tokyo V2 已加入公共 WCIR `weather_city_probability_runtime_v3`，仅生成 zero-notional decision telemetry；

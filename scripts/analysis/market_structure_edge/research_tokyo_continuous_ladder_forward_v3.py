@@ -11,7 +11,7 @@ submitted.
 from __future__ import annotations
 
 import argparse
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 import csv
 from datetime import date, datetime, timedelta, timezone
@@ -20,6 +20,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import sqlite3
 import sys
 from typing import Any, Iterable
 
@@ -67,6 +68,7 @@ FULL_FUSION_WEATHER_WEIGHTS = (0.0, 0.25, 0.33, 0.5, 0.67)
 FULL_FUSION_MODEL_ID = (
     "weather.city_intraday_probability.tokyo_continuous_full_probability"
 )
+FROZEN_FULL_FUSION_WEATHER_MODEL = "coherent_multigrain_hgb_v3"
 CHAMPION = "direct_checkpoint_hgb_v3"
 OUTCOMES = ("delta_0", "delta_1", "delta_2", "delta_3plus")
 FROZEN_PARAMS = {
@@ -142,6 +144,277 @@ def full_distribution_geometric_pool(
     logits -= logits.max(axis=1, keepdims=True)
     output = np.exp(logits)
     return output / output.sum(axis=1, keepdims=True)
+
+
+def _read_expression_feature_rows(
+    path: Path, *, start_date: str, end_date: str
+) -> list[dict[str, Any]]:
+    rows = v1.read_rows(path)
+    selected = [
+        row
+        for row in rows
+        if row.get("evaluation_role") == "strict_pit_forward"
+        and start_date <= str(row.get("target_date") or "") <= end_date
+    ]
+    selected.sort(
+        key=lambda row: (
+            str(row["target_date"]),
+            v1.parse_ts(str(row["quote_ts_utc"])),
+        )
+    )
+    return selected
+
+
+def _score_frozen_weather_distribution(
+    rows: list[dict[str, Any]], *, artifact_path: Path, spec_path: Path
+) -> np.ndarray:
+    artifact = joblib.load(artifact_path)
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    features = tuple(str(value) for value in spec["features"])
+    model_rows = [
+        {
+            feature: v1.finite(row.get(f"weather_feature__{feature}"))
+            for feature in features
+        }
+        for row in rows
+    ]
+    if artifact.get("kind") == "coherent_hurdle":
+        return v2.coherent_probabilities(
+            artifact["model"],
+            model_rows,
+            temperature=float(artifact["temperature"]),
+            feature_names=features,
+        )
+    if artifact.get("kind") != "direct":
+        raise ValueError(f"unsupported frozen weather artifact kind: {artifact.get('kind')}")
+    matrix = np.asarray(
+        [
+            [
+                (
+                    np.nan if model_row[feature] is None else model_row[feature]
+                )
+                for feature in features
+            ]
+            for model_row in model_rows
+        ],
+        dtype=float,
+    )
+    raw = artifact["model"].predict_proba(matrix)
+    classes = [int(value) for value in artifact["model"].classes_]
+    aligned = np.zeros((len(rows), 4), dtype=float)
+    for index, outcome in enumerate(classes):
+        aligned[:, outcome] = raw[:, index]
+    temperature = float(artifact["temperature"])
+    logits = np.log(np.clip(aligned, EPS, 1.0)) / temperature
+    logits -= logits.max(axis=1, keepdims=True)
+    calibrated = np.exp(logits)
+    return calibrated / calibrated.sum(axis=1, keepdims=True)
+
+
+def _load_tokyo_canonical_ladders(
+    db_path: Path, *, start_date: str, end_date: str
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    connection = sqlite3.connect(
+        f"file:{db_path}?mode=ro", uri=True, timeout=3.0
+    )
+    connection.execute("PRAGMA query_only=ON")
+    connection.execute("PRAGMA busy_timeout=3000")
+    connection.row_factory = sqlite3.Row
+    try:
+        quote_rows = connection.execute(
+            """
+            SELECT s.ladder_snapshot_id, s.target_date,
+                   s.source_snapshot_ts_utc, s.available_at_utc,
+                   s.source_path, s.lineage_status, s.completeness_status,
+                   r.absolute_bracket_identity AS bracket,
+                   r.yes_direct_bid, r.yes_direct_ask,
+                   r.yes_direct_bid_size, r.yes_direct_ask_size,
+                   r.no_direct_bid, r.no_direct_ask,
+                   r.no_direct_bid_size, r.no_direct_ask_size
+            FROM tmax_v2_ladder_snapshots AS s
+            JOIN tmax_v2_ladder_rung_quotes AS r
+              USING (ladder_snapshot_id)
+            WHERE s.city = 'Tokyo'
+              AND s.target_date BETWEEN ? AND ?
+              AND s.completeness_status = 'complete'
+              AND s.lineage_status = 'pit_verified_capture'
+            ORDER BY s.target_date, s.available_at_utc,
+                     s.ladder_snapshot_id, r.absolute_bracket_identity
+            """,
+            (start_date, end_date),
+        ).fetchall()
+        winner_rows = connection.execute(
+            """
+            SELECT target_date, bracket
+            FROM settlement_outcomes
+            WHERE city = 'Tokyo'
+              AND target_date BETWEEN ? AND ?
+              AND settlement_status = 'settled'
+              AND final_price >= 0.99
+            """,
+            (start_date, end_date),
+        ).fetchall()
+    finally:
+        connection.close()
+    grouped: dict[str, dict[str, Any]] = {}
+    for raw in quote_rows:
+        row = dict(raw)
+        snapshot = grouped.setdefault(
+            str(row["ladder_snapshot_id"]),
+            {
+                "ladder_snapshot_id": str(row["ladder_snapshot_id"]),
+                "target_date": str(row["target_date"]),
+                "source_snapshot_ts_utc": str(row["source_snapshot_ts_utc"]),
+                "available_at_utc": str(row["available_at_utc"]),
+                "source_path": str(row["source_path"]),
+                "quotes": {},
+            },
+        )
+        direct_yes_bid = v1.finite(row.get("yes_direct_bid"))
+        direct_yes_ask = v1.finite(row.get("yes_direct_ask"))
+        direct_no_bid = v1.finite(row.get("no_direct_bid"))
+        direct_no_ask = v1.finite(row.get("no_direct_ask"))
+        bid_candidates = [
+            value
+            for value in (
+                direct_yes_bid,
+                None if direct_no_ask is None else 1.0 - direct_no_ask,
+            )
+            if value is not None
+        ]
+        ask_candidates = [
+            value
+            for value in (
+                direct_yes_ask,
+                None if direct_no_bid is None else 1.0 - direct_no_bid,
+            )
+            if value is not None
+        ]
+        bid = max(bid_candidates) if bid_candidates else None
+        ask = min(ask_candidates) if ask_candidates else None
+        mid = (
+            (bid + ask) / 2.0
+            if bid is not None and ask is not None
+            else ask if ask is not None else bid
+        )
+        snapshot["quotes"][str(row["bracket"])] = {
+            key: value
+            for key, value in {
+                "bid": bid,
+                "ask": ask,
+                "mid": mid,
+                "yes_ask": direct_yes_ask,
+                "yes_ask_size": v1.finite(row.get("yes_direct_ask_size")),
+                "no_ask": direct_no_ask,
+                "no_ask_size": v1.finite(row.get("no_direct_ask_size")),
+            }.items()
+            if value is not None
+        }
+    ladders = list(grouped.values())
+    ladders.sort(
+        key=lambda row: (
+            str(row["target_date"]),
+            v1.parse_ts(str(row["available_at_utc"])),
+            str(row["ladder_snapshot_id"]),
+        )
+    )
+    winners = {str(row["target_date"]): str(row["bracket"]) for row in winner_rows}
+    return ladders, winners
+
+
+def join_frozen_forward_to_canonical_ladders(
+    expression_rows: list[dict[str, Any]],
+    weather_probabilities: np.ndarray,
+    ladders: list[dict[str, Any]],
+    winners: dict[str, str],
+    *,
+    maximum_ladder_wait_minutes: float = 10.0,
+) -> list[dict[str, Any]]:
+    """Join each exact JMA state to its first causal full-ladder capture.
+
+    The ladder must arrive after the feature frame and before the next JMA
+    state.  This keeps August evaluation PIT while avoiding hundreds of
+    repeated five-minute books per one physical weather update.
+    """
+
+    if len(expression_rows) != len(weather_probabilities):
+        raise ValueError("expression/probability length mismatch")
+    ladders_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for ladder in ladders:
+        ladders_by_date[str(ladder["target_date"])].append(ladder)
+    states_by_date: dict[str, list[tuple[dict[str, Any], np.ndarray]]] = defaultdict(list)
+    for row, probability in zip(expression_rows, weather_probabilities):
+        states_by_date[str(row["target_date"])].append((row, probability))
+
+    output: list[dict[str, Any]] = []
+    for target_date, states in sorted(states_by_date.items()):
+        winner = winners.get(target_date)
+        winner_anchor = v1.label_anchor(winner) if winner else None
+        if winner_anchor is None:
+            continue
+        available_ladders = ladders_by_date.get(target_date, [])
+        ladder_times = [
+            v1.parse_ts(str(row["available_at_utc"])) for row in available_ladders
+        ]
+        for state_index, (state, weather_probability) in enumerate(states):
+            feature_time = v1.parse_ts(str(state["quote_ts_utc"]))
+            next_feature_time = (
+                v1.parse_ts(str(states[state_index + 1][0]["quote_ts_utc"]))
+                if state_index + 1 < len(states)
+                else None
+            )
+            ladder_index = bisect_left(ladder_times, feature_time)
+            if ladder_index >= len(available_ladders):
+                continue
+            ladder = available_ladders[ladder_index]
+            ladder_time = ladder_times[ladder_index]
+            wait_minutes = (ladder_time - feature_time).total_seconds() / 60.0
+            if wait_minutes > maximum_ladder_wait_minutes:
+                continue
+            if next_feature_time is not None and ladder_time >= next_feature_time:
+                continue
+            current = int(float(state["bracket"]))
+            quotes = ladder["quotes"]
+            market_probability, stale_mass = v1.conditional_market_distribution(
+                quotes, current
+            )
+            if market_probability is None:
+                continue
+            actual_delta = winner_anchor - current
+            output.append(
+                {
+                    "state_id": str(state["event_id"]),
+                    "target_date": target_date,
+                    "decision_ts_utc": str(state["source_obs_ts_utc"]),
+                    "availability_ts_utc": str(ladder["available_at_utc"]),
+                    "availability_clock_class": str(
+                        state["availability_clock_class"]
+                    ),
+                    "snapshot_ts_utc": str(ladder["source_snapshot_ts_utc"]),
+                    "feature_book_snapshot_id": str(state["book_snapshot_id"]),
+                    "execution_book_snapshot_id": str(
+                        ladder["ladder_snapshot_id"]
+                    ),
+                    "feature_to_ladder_wait_min": wait_minutes,
+                    "book_join_policy": (
+                        "first_full_ladder_after_exact_feature_before_next_jma_state"
+                    ),
+                    "current_bracket": current,
+                    "winning_bracket": winner,
+                    "actual_delta": actual_delta,
+                    "settlement_lower_bound_violation": int(actual_delta < 0),
+                    "stale_market_mass_below_current": stale_mass,
+                    "quotes_json": json.dumps(quotes, sort_keys=True),
+                    "market_distribution_json": json.dumps(
+                        market_probability.tolist()
+                    ),
+                    f"{FROZEN_FULL_FUSION_WEATHER_MODEL}_distribution_json": json.dumps(
+                        weather_probability.tolist()
+                    ),
+                    "source_path": str(ladder["source_path"]),
+                }
+            )
+    return output
 
 
 def _date_equal_distribution_losses(
@@ -1016,14 +1289,23 @@ def current_next_candidates(
                 if not quote:
                     continue
                 p_yes = float(probabilities[delta])
-                yes_ask = v1.finite(quote.get("ask"))
+                yes_ask = v1.finite(quote.get("yes_ask"))
+                if yes_ask is None:
+                    yes_ask = v1.finite(quote.get("ask"))
                 yes_bid = v1.finite(quote.get("bid"))
+                yes_ask_size = v1.finite(quote.get("yes_ask_size"))
+                no_ask = v1.finite(quote.get("no_ask"))
+                no_ask_size = v1.finite(quote.get("no_ask_size"))
                 for side, p_win, ask in (
                     ("YES", p_yes, yes_ask),
                     (
                         "NO",
                         1.0 - p_yes,
-                        None if yes_bid is None else 1.0 - yes_bid,
+                        (
+                            no_ask
+                            if no_ask is not None
+                            else None if yes_bid is None else 1.0 - yes_bid
+                        ),
                     ),
                 ):
                     if ask is None or not 0 < ask < 1:
@@ -1038,6 +1320,9 @@ def current_next_candidates(
                             "side": side,
                             "p_win": p_win,
                             "selected_side_ask": ask,
+                            "selected_side_ask_size": (
+                                yes_ask_size if side == "YES" else no_ask_size
+                            ),
                             "fee_per_share": fee,
                             "fee_adjusted_edge": p_win - ask - fee,
                             "strategy_policy": (
@@ -1103,13 +1388,15 @@ def select_first_signal(
 
     output = []
     for row in first_by_position.values():
-        ask_size = v1.raw_ask_size(
-            raw_books,
-            str(row["target_date"]),
-            str(row["snapshot_ts_utc"]),
-            str(row["expression_bracket"]),
-            str(row["side"]),
-        )
+        ask_size = v1.finite(row.get("selected_side_ask_size"))
+        if ask_size is None:
+            ask_size = v1.raw_ask_size(
+                raw_books,
+                str(row["target_date"]),
+                str(row["snapshot_ts_utc"]),
+                str(row["expression_bracket"]),
+                str(row["side"]),
+            )
         executable = ask_size is not None and ask_size >= SHARES
         winner = str(row["winning_bracket"])
         won = (
@@ -1926,6 +2213,273 @@ def run_full_probability_fusion_audit(
     return summary
 
 
+def run_frozen_full_probability_forward(
+    *,
+    expressions_path: Path,
+    db_path: Path,
+    weather_artifact_path: Path,
+    weather_spec_path: Path,
+    frozen_candidate_spec_path: Path,
+    output_dir: Path,
+    raw_books: Path,
+    start_date: str,
+    end_date: str,
+    maximum_ladder_wait_minutes: float,
+) -> dict[str, Any]:
+    """Score an already-frozen Tokyo V3 candidate on later exact states."""
+
+    spec = json.loads(frozen_candidate_spec_path.read_text(encoding="utf-8"))
+    if spec.get("model_id") != FULL_FUSION_MODEL_ID:
+        raise ValueError("frozen candidate has the wrong model_id")
+    if spec.get("weather_model") != FROZEN_FULL_FUSION_WEATHER_MODEL:
+        raise ValueError("frozen candidate has the wrong weather model")
+    expressions = _read_expression_feature_rows(
+        expressions_path, start_date=start_date, end_date=end_date
+    )
+    if not expressions:
+        raise RuntimeError("no strict-PIT expression feature rows in requested window")
+    weather = _score_frozen_weather_distribution(
+        expressions,
+        artifact_path=weather_artifact_path,
+        spec_path=weather_spec_path,
+    )
+    ladders, winners = _load_tokyo_canonical_ladders(
+        db_path, start_date=start_date, end_date=end_date
+    )
+    joined_all = join_frozen_forward_to_canonical_ladders(
+        expressions,
+        weather,
+        ladders,
+        winners,
+        maximum_ladder_wait_minutes=maximum_ladder_wait_minutes,
+    )
+    if not joined_all:
+        raise RuntimeError("no settled causal full-ladder joins in requested window")
+    lower_bound_violations = [
+        row
+        for row in joined_all
+        if int(float(row.get("settlement_lower_bound_violation") or 0)) != 0
+    ]
+    joined = [
+        row
+        for row in joined_all
+        if int(float(row.get("settlement_lower_bound_violation") or 0)) == 0
+    ]
+    if not joined:
+        raise RuntimeError("all causal joins violate the observed settlement lower bound")
+
+    market = np.asarray(
+        [json.loads(str(row["market_distribution_json"])) for row in joined],
+        dtype=float,
+    )
+    joined_weather = np.asarray(
+        [
+            json.loads(
+                str(
+                    row[
+                        f"{FROZEN_FULL_FUSION_WEATHER_MODEL}_distribution_json"
+                    ]
+                )
+            )
+            for row in joined
+        ],
+        dtype=float,
+    )
+    candidate = full_distribution_geometric_pool(
+        market,
+        joined_weather,
+        market_temperature=float(spec["market_temperature"]),
+        weather_weight=float(spec["weather_weight"]),
+    )
+    calibrated_market = full_distribution_geometric_pool(
+        market,
+        market,
+        market_temperature=float(spec["market_temperature"]),
+        weather_weight=0.0,
+    )
+    split = "august_reused_audit_not_clean_forward"
+    model_probabilities = (
+        ("raw_market_full_distribution", market),
+        ("selection_calibrated_market", calibrated_market),
+        ("tokyo_v3_full_ladder_fusion", candidate),
+    )
+    score_rows = [
+        {
+            "split": split,
+            "model": model,
+            **_date_equal_distribution_losses(joined, probability),
+        }
+        for model, probability in model_probabilities
+    ]
+    bootstrap_rows = []
+    for baseline_name, baseline in model_probabilities[:2]:
+        for metric in ("brier", "logloss", "rps"):
+            bootstrap_rows.append(
+                {
+                    "split": split,
+                    "candidate": "tokyo_v3_full_ladder_fusion",
+                    "baseline": baseline_name,
+                    "metric": metric,
+                    **_date_block_distribution_delta(
+                        joined,
+                        candidate,
+                        baseline,
+                        metric=metric,
+                    ),
+                }
+            )
+
+    prediction_rows = []
+    for row, raw_probability, calibrated_probability, candidate_probability in zip(
+        joined, market, calibrated_market, candidate
+    ):
+        output = dict(row)
+        output["raw_market_full_distribution_distribution_json"] = json.dumps(
+            raw_probability.tolist()
+        )
+        output["selection_calibrated_market_distribution_json"] = json.dumps(
+            calibrated_probability.tolist()
+        )
+        output["tokyo_v3_full_ladder_fusion_distribution_json"] = json.dumps(
+            candidate_probability.tolist()
+        )
+        prediction_rows.append(output)
+    model_names = tuple(model for model, _ in model_probabilities)
+    candidates = current_next_candidates(prediction_rows, model_names)
+    trades = select_first_signal(
+        candidates,
+        raw_books,
+        selection_policy="first_signal_per_model_target_date_bracket",
+    )
+    denominator_dates = sorted({str(row["target_date"]) for row in joined})
+    trade_summary = strategy_summary(
+        candidates,
+        trades,
+        split=split,
+        denominator_dates=denominator_dates,
+        model_names=model_names,
+    )
+    side_summary = strategy_side_summary(
+        trades, split=split, model_names=model_names
+    )
+    candidate_score = next(
+        row for row in score_rows if row["model"] == "tokyo_v3_full_ladder_fusion"
+    )
+    market_score = next(
+        row for row in score_rows if row["model"] == "raw_market_full_distribution"
+    )
+    brier_delta = next(
+        row
+        for row in bootstrap_rows
+        if row["baseline"] == "raw_market_full_distribution"
+        and row["metric"] == "brier"
+    )
+    v3_trade_result = next(
+        row
+        for row in trade_summary
+        if row["model"] == "tokyo_v3_full_ladder_fusion"
+    )
+    summary = {
+        "schema_version": "tokyo_continuous_full_probability_august_replay_v1",
+        "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "model_id": FULL_FUSION_MODEL_ID,
+        "evaluation_role": split,
+        "denominator_scope": (
+            f"Tokyo {start_date}..{end_date} strict collector-first-seen JMA feature "
+            "states joined to the first canonical complete PIT full-ladder capture "
+            "before the next JMA state; only canonical settled target dates scored; "
+            "source/settlement lower-bound violations excluded from probability and trade metrics"
+        ),
+        "frozen_parameters": {
+            "weather_model": spec["weather_model"],
+            "market_temperature": spec["market_temperature"],
+            "weather_weight": spec["weather_weight"],
+            "selection_end": spec["selection_end"],
+            "parameters_refit_on_august": False,
+        },
+        "inputs": {
+            "expressions": str(expressions_path),
+            "canonical_db": str(db_path.resolve()),
+            "weather_artifact": str(weather_artifact_path),
+            "weather_spec": str(weather_spec_path),
+            "frozen_candidate_spec": str(frozen_candidate_spec_path),
+        },
+        "signal_funnel": {
+            "strict_pit_expression_states": len(expressions),
+            "strict_pit_expression_dates": len(
+                {str(row["target_date"]) for row in expressions}
+            ),
+            "causal_settled_full_ladder_states": len(joined),
+            "causal_settled_full_ladder_dates": len(denominator_dates),
+            "current_next_expression_candidates": len(candidates),
+            "first_date_bracket_signals": len(trades),
+        },
+        "evidence_funnel": {
+            "canonical_complete_pit_ladders": len(ladders),
+            "canonical_ladder_dates": len(
+                {str(row["target_date"]) for row in ladders}
+            ),
+            "settlement_dates": len(winners),
+            "causal_joins_before_source_settlement_check": len(joined_all),
+            "settlement_lower_bound_violations_excluded": len(
+                lower_bound_violations
+            ),
+            "settlement_lower_bound_violation_dates": sorted(
+                {str(row["target_date"]) for row in lower_bound_violations}
+            ),
+            "five_share_executable_signals": sum(
+                int(row.get("five_share_executable", 0)) for row in trades
+            ),
+            "actual_fills": 0,
+        },
+        "probability_result": {
+            "v3_multiclass_brier": candidate_score["multiclass_brier"],
+            "market_multiclass_brier": market_score["multiclass_brier"],
+            "brier_delta_vs_market": brier_delta["delta"],
+            "brier_delta_ci": [brier_delta["ci_low"], brier_delta["ci_high"]],
+        },
+        "v3_trade_replay": {
+            key: v3_trade_result[key]
+            for key in (
+                "selected_signals",
+                "five_share_executable",
+                "wins",
+                "strategy_win_rate",
+                "cost_usd",
+                "fee_adjusted_pnl_usd",
+                "fee_adjusted_roi",
+                "roi_ci_low",
+                "roi_ci_high",
+            )
+        },
+        "research_status": (
+            "reused_august_probability_fail_trade_expression_positive_"
+            "clean_forward_required"
+        ),
+        "action": (
+            "retain research-only zero-notional telemetry; do not replace Tokyo V2 "
+            "or change live behavior; score the frozen candidate on target dates "
+            "from 2026-08-13 onward before any promotion"
+        ),
+        "clean_forward_status": (
+            "not_clean_forward_window_precedes_2026-08-13_candidate_freeze"
+        ),
+        "research_only_zero_notional": True,
+        "live_behavior_changed": False,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_rows(output_dir / "forward_rows.csv.gz", prediction_rows)
+    write_rows(output_dir / "probability_scores.csv", score_rows)
+    write_rows(output_dir / "probability_bootstrap.csv", bootstrap_rows)
+    write_rows(output_dir / "selected_trades.csv", trades)
+    write_rows(output_dir / "trade_summary.csv", trade_summary)
+    write_rows(output_dir / "side_summary.csv", side_summary)
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return summary
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--features", type=Path, default=v1.FEATURE_ROWS)
@@ -1979,8 +2533,55 @@ def main(argv: list[str] | None = None) -> int:
         default="2026-08-13",
         help="First target date reserved for post-freeze clean forward.",
     )
+    parser.add_argument(
+        "--frozen-full-probability-forward-expressions",
+        type=Path,
+        help=(
+            "Score a frozen Tokyo V3 candidate on strict-PIT expression feature "
+            "rows joined to canonical complete ladders. No parameter refit."
+        ),
+    )
+    parser.add_argument("--frozen-forward-db", type=Path)
+    parser.add_argument("--frozen-forward-weather-artifact", type=Path)
+    parser.add_argument("--frozen-forward-weather-spec", type=Path)
+    parser.add_argument("--frozen-forward-candidate-spec", type=Path)
+    parser.add_argument("--frozen-forward-start", default="2026-08-01")
+    parser.add_argument("--frozen-forward-end", default="2026-08-11")
+    parser.add_argument(
+        "--frozen-forward-maximum-ladder-wait-minutes",
+        type=float,
+        default=10.0,
+    )
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.frozen_full_probability_forward_expressions is not None:
+        required = {
+            "--frozen-forward-db": args.frozen_forward_db,
+            "--frozen-forward-weather-artifact": (
+                args.frozen_forward_weather_artifact
+            ),
+            "--frozen-forward-weather-spec": args.frozen_forward_weather_spec,
+            "--frozen-forward-candidate-spec": args.frozen_forward_candidate_spec,
+        }
+        missing = [name for name, value in required.items() if value is None]
+        if missing:
+            parser.error("missing required frozen-forward arguments: " + ", ".join(missing))
+        summary = run_frozen_full_probability_forward(
+            expressions_path=args.frozen_full_probability_forward_expressions,
+            db_path=args.frozen_forward_db,
+            weather_artifact_path=args.frozen_forward_weather_artifact,
+            weather_spec_path=args.frozen_forward_weather_spec,
+            frozen_candidate_spec_path=args.frozen_forward_candidate_spec,
+            output_dir=args.out,
+            raw_books=args.raw_books,
+            start_date=args.frozen_forward_start,
+            end_date=args.frozen_forward_end,
+            maximum_ladder_wait_minutes=(
+                args.frozen_forward_maximum_ladder_wait_minutes
+            ),
+        )
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0
     if args.full_probability_fusion_input is not None:
         summary = run_full_probability_fusion_audit(
             input_path=args.full_probability_fusion_input,

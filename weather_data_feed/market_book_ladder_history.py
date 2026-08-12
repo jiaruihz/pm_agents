@@ -143,16 +143,24 @@ def iter_market_book_ladders(
                 # native rungs.  Smaller modern groups are strategy-hot subsets.
                 if invalid or len(by_bracket) < 8 or not clocks:
                     continue
-                if any(set(pair) != {"yes", "no"} for pair in by_bracket.values()):
-                    continue
                 available = max(clocks)
                 local = available.astimezone(ZoneInfo(profile.timezone_name))
                 offset = int((local.utcoffset() or timedelta()).total_seconds())
                 records: list[dict[str, Any]] = []
                 for bracket, pair in by_bracket.items():
-                    yes, no = pair["yes"], pair["no"]
-                    condition_ids = {_text(yes.get("condition_id")), _text(no.get("condition_id"))}
-                    market_ids = {_text(yes.get("market_id")), _text(no.get("market_id"))}
+                    # Near resolution the exchange may stop returning one of
+                    # the complementary token books even though the collector
+                    # still captured the complete native bracket lattice.  A
+                    # missing complementary book is quote availability, not a
+                    # missing exact-bracket rung.  Preserve the present direct
+                    # side and leave the absent side null; downstream PIT
+                    # scoring can reconstruct a complementary bound only when
+                    # the observed direct quote permits it.
+                    yes = pair.get("yes", {})
+                    no = pair.get("no", {})
+                    present = list(pair.values())
+                    condition_ids = {_text(row.get("condition_id")) for row in present}
+                    market_ids = {_text(row.get("market_id")) for row in present}
                     if None in condition_ids or len(condition_ids) != 1 or None in market_ids or len(market_ids) != 1:
                         invalid = True
                         break

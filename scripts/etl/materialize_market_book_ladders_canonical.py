@@ -121,6 +121,11 @@ def main() -> int:
     parser.add_argument("--market-book-batch-dir", required=True)
     parser.add_argument("--start-date", required=True)
     parser.add_argument("--end-date", required=True)
+    parser.add_argument(
+        "--city",
+        default="",
+        help="Optional exact city filter for a bounded incremental materialization.",
+    )
     parser.add_argument("--summary-json", default="")
     args = parser.parse_args()
     snapshots: list[dict[str, Any]] = []
@@ -128,6 +133,8 @@ def main() -> int:
     for meta, records in iter_market_book_ladders(
         Path(args.market_book_batch_dir), str(args.start_date), str(args.end_date)
     ):
+        if args.city and str(meta.get("city")) != str(args.city):
+            continue
         snapshot, quotes = _snapshot_rows(meta, records)
         snapshots.append(snapshot)
         rungs.extend(quotes)
@@ -145,6 +152,7 @@ def main() -> int:
         "schema_version": "market_book_ladder_canonical_materialization_v1",
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "range": [args.start_date, args.end_date],
+        "city": args.city or None,
         "source": str(Path(args.market_book_batch_dir).resolve()),
         "source_ladders": len(snapshots),
         "source_rungs": len(rungs),

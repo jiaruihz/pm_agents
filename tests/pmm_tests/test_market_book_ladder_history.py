@@ -67,3 +67,24 @@ def test_iter_market_book_ladders_rejects_hot_subset(tmp_path: Path) -> None:
         for row in rows:
             handle.write(json.dumps(row) + "\n")
     assert list(iter_market_book_ladders(tmp_path, "2026-08-07", "2026-08-07")) == []
+
+
+def test_iter_market_book_ladders_preserves_complete_lattice_with_missing_complementary_book(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "2026-08-07"
+    directory.mkdir()
+    path = directory / "market_books.jsonl.gz"
+    rows = [_row("Amsterdam", str(bracket), outcome) for bracket in range(20, 28) for outcome in ("yes", "no")]
+    rows = [row for row in rows if not (row["bracket"] == "24" and row["outcome"] == "no")]
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row) + "\n")
+
+    ladders = list(iter_market_book_ladders(tmp_path, "2026-08-07", "2026-08-07"))
+    assert len(ladders) == 1
+    _, records = ladders[0]
+    missing_complement = next(row for row in records if row["bracket"] == "24")
+    assert missing_complement["yes_token_id"] == "yes-24"
+    assert missing_complement["no_token_id"] is None
+    assert missing_complement["no_best_ask"] is None

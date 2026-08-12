@@ -104,6 +104,11 @@ snapshot/rung contract；development、validation、forward 只是模型 split�
   `(city,target_date,event_identity,source_snapshot_ts_utc)` 归并为326,370 logical captures，72,230 rows仍是多个历史路径重复物化。
   其中7/29..8/8从raw `market_books/batches`按同batch末次response/fetch保守时钟补入47,806 full-ladder rows；模型读取必须
   先按capture clock去重并优先full-ladder raw lineage，且不得把`tmax_v2`称作项目full history（5月训练仍来自immutable archive adapter）。
+- 2026-08-13 Tokyo 研究审计发现，raw `market_books/batches` 在接近结算时可能只有某个 bracket 的单侧 token book；旧
+  materializer 将其误判为整梯不完整，造成 Tokyo 8/9–12 同日 PIT ladder 缺失、只剩前一晚盘口。修复后按完整 native
+  bracket lattice 保留 snapshot，缺失互补 side 显式留 null，不伪造 direct quote；8/9–12 增量补入 Tokyo 1,323 snapshots /
+  12,661 rungs。当前表覆盖推进到 8/12（458,901 physical rows / 40 dates / 47 cities），其中 raw full-ladder lineage
+  108,107 rows / 15 dates；该修复只改变 canonical/research coverage，未触发任何 plan/order/fill/live 行为。
 - 旧 archive 不是与 7 月后同质量的 weather state：上述 historical-training slice 有 163,773 / 178,810 ladders
   缺 intraday observation，107,861 / 178,810 只能使用 legacy forecast hash proxy。报告必须单列这些 coverage gap，
   不能让 imputation 把两代 schema 的差异伪装成 alpha。
