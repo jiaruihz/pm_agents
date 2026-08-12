@@ -34,6 +34,10 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from scripts.analysis.forecast_quality import research_forecast_quality_base_v0 as fq_base  # noqa: E402
 from scripts.analysis.forecast_quality import research_forecast_quality_source_adjusted_v0 as fq_source  # noqa: E402
 from scripts.analysis.observed_max import research_settlement_source_registry_v0 as source_registry  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 import research_range_rv_scanner as scanner  # noqa: E402
 import research_range_rv_variant_lab_v03 as variants  # noqa: E402
@@ -41,15 +45,13 @@ import research_range_rv_variant_lab_v03 as variants  # noqa: E402
 
 TARGET_METRIC = "source_aware_forecast_bounded_range_rv_expression_alpha_v0"
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-15-forecast-bounded-range-rv-source-aware-v0.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-15-forecast-bounded-range-rv-source-aware-v0.md"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", default=str(DB_DEFAULT))
-    parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--orderbook-glob", default=str(scanner.ORDERBOOK_GLOB_DEFAULT))
     parser.add_argument("--bootstrap-iters", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260615)
@@ -641,12 +643,17 @@ def main() -> None:
             "No Range RV result here changes N100/live config.",
         ],
     }
-    out_json = Path(args.out_json)
-    out_md = Path(args.out_md)
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "forecast_bounded_range_rv_source_aware_v0",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    payload["living_doc"] = "docs/analysis/market_structure_edge.md"
+    out_json = output_dir / "result.json"
     scanner.write_json(out_json, payload)
-    out_md.parent.mkdir(parents=True, exist_ok=True)
-    out_md.write_text(render_md(payload), encoding="utf-8")
-    print(json.dumps({"out_json": str(out_json), "out_md": str(out_md), "verdict": verdict, "funnel": payload["funnel"]}, indent=2, ensure_ascii=False))
+    print(json.dumps({"result_json": str(out_json), "verdict": verdict, "funnel": payload["funnel"]}, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

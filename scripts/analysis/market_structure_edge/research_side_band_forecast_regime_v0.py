@@ -17,6 +17,7 @@ import math
 import random
 import sqlite3
 import subprocess
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,9 +25,14 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-10-side-band-forecast-regime-v0.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-10-side-band-forecast-regime-v0.md"
 
 PRICE_BANDS = ((0.20, 0.80), (0.25, 0.75), (0.30, 0.70), (0.35, 0.65))
 SIDES = ("BUY_YES", "BUY_NO", "both")
@@ -58,8 +64,8 @@ END
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", default=str(DB_DEFAULT))
-    parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--bootstrap-iters", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260610)
     parser.add_argument("--train-frac", type=float, default=0.70)
@@ -1149,12 +1155,17 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> None:
     args = parse_args()
     report = build_report(args)
-    out_json = Path(args.out_json)
-    out_md = Path(args.out_md)
-    write_json(out_json, report)
-    write_md(out_md, report)
-    print(out_json)
-    print(out_md)
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "side_band_forecast_regime_v0",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    report["living_doc"] = "docs/analysis/market_structure_edge.md"
+    result_json = output_dir / "result.json"
+    write_json(result_json, report)
+    print(result_json)
 
 
 if __name__ == "__main__":

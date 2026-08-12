@@ -11,6 +11,7 @@ place.
 from __future__ import annotations
 
 import argparse
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,15 +22,19 @@ import research_range_rv_variant_lab_v03 as variants
 
 
 ROOT = Path(__file__).resolve().parents[3]
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-market-shape-fullop-v0-7.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-market-shape-fullop-v0-7.md"
+sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", default=str(scanner.DB_DEFAULT))
-    parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
-    parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--orderbook-glob", default=str(scanner.ORDERBOOK_GLOB_DEFAULT))
     parser.add_argument("--bootstrap-iters", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260609)
@@ -111,10 +116,17 @@ def main() -> None:
         "gates": gates,
         "verdict": gates["verdict"],
     }
-    scanner.write_json(Path(args.out_json), report)
-    shape.write_md(Path(args.out_md), report)
-    print(f"wrote {args.out_json}")
-    print(f"wrote {args.out_md}")
+    output_dir = prepare_new_run_output(
+        resolve_run_output(
+            "range_rv_market_shape_fullop_v07",
+            run_id=args.run_id,
+            explicit_output=args.output_dir,
+        )
+    )
+    report["living_doc"] = "docs/analysis/market_structure_edge.md"
+    result_json = output_dir / "result.json"
+    scanner.write_json(result_json, report)
+    print(f"wrote {result_json}")
     print(f"verdict={report['verdict']} confirmed_algorithms={sorted(confirmed_algorithms)}")
 
 
