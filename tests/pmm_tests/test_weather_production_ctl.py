@@ -130,12 +130,21 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_current_yes_heat_death_shadow_v1"].max_health_age_sec == 2400
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == observation_checkout
     assert by_id["weather_helsinki_pre_cross_active_ladder_shadow"].checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_market_books_prod"
+        "/Users/deepsleep/projects/pm_agents_helsinki_ladder_prod"
+    )
+    event_shadow = by_id["current_yes_core_carry_event_rescore_shadow_v1"]
+    assert event_shadow.execution_mode == "shadow"
+    assert event_shadow.expected_live is False
+    assert event_shadow.release_id == "core_carry_event_shadow"
+    assert event_shadow.dependencies == (
+        "weather_data_feed_jrs",
+        "current_yes_core_carry_tiny_live_v2",
+        "weather_market_books",
     )
     assert by_id[
         "weather_helsinki_pre_cross_active_ladder_shadow"
     ].resolved_start_script() == Path(
-        "/Users/deepsleep/projects/pm_agents_market_books_prod/scripts/ops/"
+        "/Users/deepsleep/projects/pm_agents_helsinki_ladder_prod/scripts/ops/"
         "start_weather_helsinki_pre_cross_active_ladder_shadow.sh"
     )
 
