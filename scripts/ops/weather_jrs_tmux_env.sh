@@ -223,7 +223,7 @@ weather_jrs_tmux_run_oneshot() (
   trap 'rm -f "$status_bridge"' EXIT INT TERM
 
   printf -v session_command \
-    'set +e; mkdir -p %q; rm -f %q; %s >> %q 2>&1; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
+    'set +e; mkdir -p %q; rm -f %q; ( %s ) >> %q 2>&1; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
     "$job_dir" "$status_file" "$job_command" "$log_file" "$status_file"
   WEATHER_JRS_TMUX_MUTATION_AUTHORITY=bounded-oneshot \
     weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"

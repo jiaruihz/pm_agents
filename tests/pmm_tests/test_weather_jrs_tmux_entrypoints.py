@@ -421,6 +421,51 @@ esac
     assert "JRS tmux one-shot failed" in failure.stderr
 
 
+def test_shared_helper_captures_errexit_job_status_and_log(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_tmux.write_text(
+        """#!/bin/sh
+case "$4" in
+  has-session)
+    exit 1
+    ;;
+  new-session)
+    /bin/sh -c "$8"
+    exit 0
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    runtime_root = tmp_path / "runtime"
+    job_dir = tmp_path / "job"
+    env = {
+        **os.environ,
+        "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+        "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+    }
+    command = (
+        f'source "{OPS / "weather_jrs_tmux_env.sh"}"; '
+        'weather_jrs_tmux_run_oneshot '
+        f'"{runtime_root}" errexit_job "{job_dir}" '
+        "'set -eu; printf before-failure; false; printf unreachable'"
+    )
+    result = subprocess.run(
+        ["bash", "-lc", command],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "JRS tmux one-shot failed" in result.stderr
+    assert "exited without status" not in result.stderr
+    assert (job_dir / "last_exit_status").read_text(encoding="utf-8").strip() == "1"
+    assert (job_dir / "tmux.log").read_text(encoding="utf-8") == "before-failure"
+
+
 def test_legacy_direct_launchagent_stack_cannot_start_jrs_workloads():
     for retired in (
         "mac_weather_stack.sh",
