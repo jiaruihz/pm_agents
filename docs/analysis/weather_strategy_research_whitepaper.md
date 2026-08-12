@@ -1,7 +1,13 @@
 # Weather Strategy Research Whitepaper
 
-Status: current-reference
+Status: superseded-for-now
 Created: 2026-06-16
+
+This document preserves the June two-branch research framing. It is no longer
+the current architecture: WCIR, daily-minimum/TMIN, canonical probability
+research and the strategy registry now define the maintained structure. Use
+`WEATHER_STRATEGY_QUANT_DESIGN.md`, `WEATHER_STRATEGY_REGISTRY.md` and the family
+living docs for current work.
 
 这份白皮书只回答一个问题：天气策略研究现在应该怎么拆分，哪些模块共享事实层，哪些方向适合派给不同模型并行推进。
 

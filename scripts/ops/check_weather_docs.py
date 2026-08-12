@@ -329,6 +329,30 @@ def check_dated_current_references(errors: list[str]) -> None:
             )
 
 
+def check_superseded_not_indexed_current(errors: list[str]) -> None:
+    """A retired/superseded document must not remain a current index entry."""
+    index_path = ROOT / "docs" / "WEATHER_DOCS_INDEX.md"
+    for line_number, line in enumerate(index_path.read_text(encoding="utf-8").splitlines(), 1):
+        if "| `current-reference`" not in line:
+            continue
+        match = MARKDOWN_LINK_RE.search(line)
+        if not match:
+            continue
+        resolved = (index_path.parent / match.group(1)).resolve()
+        if not resolved.exists() or resolved.suffix.lower() != ".md":
+            continue
+        head = "\n".join(resolved.read_text(encoding="utf-8").splitlines()[:20])
+        status = re.search(r"^Status:\s*`?([^`\n]+)", head, re.MULTILINE)
+        if status and status.group(1).strip().lower().startswith(
+            ("superseded", "retired", "historical")
+        ):
+            fail(
+                errors,
+                "WEATHER_DOCS_INDEX.md: superseded/retired document remains "
+                f"current-reference at line {line_number}: {match.group(1)}",
+            )
+
+
 def check_index_links(errors: list[str], tracked: set[str]) -> None:
     index_path = ROOT / "docs" / "WEATHER_DOCS_INDEX.md"
     for target, resolved in local_markdown_targets(index_path):
@@ -671,6 +695,7 @@ def main() -> int:
     check_operational_skill_contracts(errors)
     check_research_knowledge_routing(errors)
     check_dated_current_references(errors)
+    check_superseded_not_indexed_current(errors)
     check_index_links(errors, tracked)
     check_authoritative_links(errors, tracked)
     check_generated_artifacts(errors, tracked)

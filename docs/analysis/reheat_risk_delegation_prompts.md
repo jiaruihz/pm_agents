@@ -1,7 +1,13 @@
 # Reheat Risk Delegation Prompts
 
-Status: current-reference
+Status: superseded-for-now
 Created: 2026-06-16
+
+This is a historical delegation template, not a current system prompt or
+research contract. New research must use the applicable weather skill plus
+`docs/analysis/templates/research.md`; do not copy the task packages below as
+current instructions. The mechanisms remain useful context, so the document is
+retained rather than deleted.
 
 Use these prompts to spawn focused research threads. Each thread must keep one
 main line, but should not overfit itself into a single brittle threshold.

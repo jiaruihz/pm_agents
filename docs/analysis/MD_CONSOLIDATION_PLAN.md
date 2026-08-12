@@ -121,6 +121,10 @@ system contract 和 ops runbook。
 - 2026-08-10：删除 Git 中 12 个 2026-02 遗留 runtime 日志、PID 和 shadow 输出；`.gitignore` 现在同时覆盖根目录
   `runtime` 目录与 NVMe compatibility symlink，并由 repo hygiene 检查禁止任何 `runtime/` 文件重新进入版本库。production manifest 同时开始把登记或运行中的
   脏 checkout 明确报为 warning，避免 `dirty_tracked=true` 被藏在 `findings=[]` 的健康结论里。
+- 2026-08-12：把 2026-06 的 research whitepaper 与 reheat delegation prompt 降为
+  `superseded-for-now`。它们保留历史机制框架，但不再与 skill、research brief、Quant Design、
+  WCIR/TMIN 和 registry 争夺当前提示词/架构权威；docs check 新增反回归，禁止 superseded/retired
+  文档继续在索引中标作 `current-reference`。
 
 ## 仍有效的历史边界
 

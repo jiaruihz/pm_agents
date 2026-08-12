@@ -474,9 +474,9 @@ manifest/历史报告指针。需要重放历史研究时，用
 
 | 文档 | Status | 主线层 | 读它回答什么问题 |
 |---|---|---:|---|
-| [weather_strategy_research_whitepaper.md](analysis/weather_strategy_research_whitepaper.md) | `current-reference` | [0]-[6] | 天气策略总白皮书：pre_predict 与 reheat_risk 两条主分支、共享事实层、可派给不同模型的研究任务包 |
+| [weather_strategy_research_whitepaper.md](analysis/weather_strategy_research_whitepaper.md) | `superseded-for-now` | [0]-[6] | 2026-06 的 pre_predict/reheat_risk 两分支历史框架；当前结构以 Quant Design、Registry、WCIR/TMIN 和家族 living docs 为准 |
 | [external_weather_market_references.md](analysis/external_weather_market_references.md) | `current-reference` | [0]-[6] | 外部 weather / prediction-market 论文、官方资料和本项目可执行启发：forecast precision gate、source basis、point-in-time replay、execution microstructure、binary payoff、portfolio correlation |
-| [reheat_risk_delegation_prompts.md](analysis/reheat_risk_delegation_prompts.md) | `current-reference` | [0]-[6] | reheat-risk 研究任务提示词：feature factory、peak/fade timing、NO carry expression、cleanup 等可派发线程 |
+| [reheat_risk_delegation_prompts.md](analysis/reheat_risk_delegation_prompts.md) | `superseded-for-now` | [0]-[6] | 2026-06 历史 delegation 模板；新研究使用对应 weather skill + research brief，不再复制旧 prompt 包 |
 | [pre_predict.md](analysis/pre_predict.md) | `current-reference` | [1]-[2] | 赛前/早盘预测分支：forecast max、historical error、forecast quality、Range RV、低价 YES prior |
 | [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；forecast quality / reliability labels 如何作为 source-aware shared layer 影响 signal、shadow 分层或 sizing |
 | [market_structure_edge.md](analysis/market_structure_edge.md) | `current-reference` | [2] | 是否存在 model-free 的市场结构 edge，例如 favorite-longshot、BUY_NO base-rate、price-bucket mispricing |

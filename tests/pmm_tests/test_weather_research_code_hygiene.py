@@ -287,3 +287,26 @@ def test_research_debt_checker_includes_untracked_worktree_scripts(
     assert any("versioned research script families grew" in error for error in errors)
     assert any("versioned research script copies grew" in error for error in errors)
     assert any("worktree repeated research function copies grew" in error for error in errors)
+
+
+def test_superseded_document_cannot_remain_current_in_index(tmp_path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    analysis = docs / "analysis"
+    analysis.mkdir(parents=True)
+    (analysis / "old_prompt.md").write_text(
+        "# Old Prompt\n\nStatus: superseded-for-now\n", encoding="utf-8"
+    )
+    (docs / "WEATHER_DOCS_INDEX.md").write_text(
+        "| [old](analysis/old_prompt.md) | `current-reference` | stale |\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_weather_docs, "ROOT", repo)
+
+    errors: list[str] = []
+    check_weather_docs.check_superseded_not_indexed_current(errors)
+
+    assert errors == [
+        "WEATHER_DOCS_INDEX.md: superseded/retired document remains "
+        "current-reference at line 1: analysis/old_prompt.md"
+    ]
