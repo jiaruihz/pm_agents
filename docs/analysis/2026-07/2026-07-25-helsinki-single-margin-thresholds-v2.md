@@ -1,4 +1,11 @@
-# Helsinki FMI 单次 Cross Margin 回放 v1
+# Helsinki FMI Single-Margin Benchmark
+
+Status: exploratory benchmark / consolidated
+
+This 2026-07-25 refresh fully supersedes the 2026-07-22 partial snapshot: it
+keeps the same grain, gates and execution contract, and extends the collector
+window from 10/9 to 12/11 signal dates depending on margin. The earlier file was
+removed; it does not represent a separate experiment.
 
 ## 目标和口径
 

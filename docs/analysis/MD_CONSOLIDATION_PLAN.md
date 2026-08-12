@@ -130,6 +130,11 @@ system contract 和 ops runbook。
   `cleanup-orphan-tokyo-daily-replays-20260812-b3`）并移除空目录。保留 Tokyo 当前模型真正消费的
   `tokyo_continuous_ladder_probability_v1`、forward-v3 model 与 JMA path 数据；不能因为体积大就迁走
   active consumer 输入。
+- 2026-08-12：完成首批正文级合并，而非只改索引。全文核对后：HeadA cushion 的 0m/30m 两份
+  replay 合并成同一 sensitivity report；live PnL 05/24..06/06 partial 被包含 06/07 的 rebuild
+  snapshot 吸收；Helsinki single-margin 7/22 partial 被同合同、扩展日期的 7/25 refresh 吸收；
+  source-quality v1 的 score 定义与 333-row historical slice 并入 v2 forward report。共删除 4 份
+  平行 Markdown；相关 producer 默认输出改到 generated 或稳定 retained report，避免删后再生成。
 
 ## 仍有效的历史边界
 

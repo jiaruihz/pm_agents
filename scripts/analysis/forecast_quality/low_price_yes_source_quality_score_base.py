@@ -26,8 +26,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[3]
 IN_ROWS = ROOT / "docs/analysis/2026-07/generated/low_price_yes_forecast_source_calibration_v1/candidate_rows.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/low_price_yes_source_quality_score_v1"
-OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-08-low-price-yes-source-quality-score-v1.md"
-OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-08-low-price-yes-source-quality-score-v1.json"
+OUT_MD = ROOT / "docs/analysis/2026-07/generated/low_price_yes_source_quality_score_v1/report.md"
+OUT_JSON = ROOT / "docs/analysis/2026-07/generated/low_price_yes_source_quality_score_v1/report.json"
 
 TRAIN_END = "2026-06-20"
 RECENT_START = "2026-06-21"

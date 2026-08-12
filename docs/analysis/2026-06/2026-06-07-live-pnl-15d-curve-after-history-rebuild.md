@@ -1,5 +1,11 @@
 # 2026-06-07 live PnL 15d curve after history rebuild
 
+Status: historical snapshot / consolidated
+
+This is the retained version of the 2026-06-07 rebuild snapshot. It fully
+contains the earlier `2026-06-07-live-pnl-curve-0524-0606.md` table and adds
+2026-06-07 open rows; the earlier parallel file was removed.
+
 ## Scope
 
 - Window: `2026-05-24`..`2026-06-07` inclusive.

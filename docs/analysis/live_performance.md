@@ -33,8 +33,7 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
 | `docs/analysis/2026-06/2026-06-07-live-strategy-period-slice-current.md` | 2026-06 | current live strategy period slice | snapshot |
-| `docs/analysis/2026-06/2026-06-07-live-pnl-curve-0524-0606.md` | 2026-05/06 | live PnL curve | snapshot |
-| `docs/analysis/2026-06/2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | 2026-06 | 15d curve after history rebuild | snapshot |
+| `docs/analysis/2026-06/2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | 2026-05-24..06-07 | retained 15d curve after history rebuild; includes the removed 05/24..06/06 partial view | historical snapshot |
 | `docs/analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | 2026-06 | three strategy instances after near-binary fix | snapshot |
 | `docs/analysis/2026-06/2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | 2026-06 | post-fix recent loss attribution by cohort/city/side/instance | snapshot |
 | `docs/analysis/2026-08/2026-08-12-performance-cross-no-recent-accuracy-attribution-v1.md` | 2026-07-09..08-11 | CrossNO signal/fill accuracy, engineering/data/weather attribution, and instance metadata gap | current snapshot |

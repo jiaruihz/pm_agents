@@ -531,7 +531,9 @@ def main() -> int:
         execution_date_lines.append(
             f"| +{threshold:.1f} | {format_counts(direct_counts)} |"
         )
-    report = f"""# Helsinki FMI 单次 Cross Margin 回放 v1
+    report = f"""# Helsinki FMI Single-Margin Benchmark
+
+Status: exploratory benchmark
 
 ## 目标和口径
 

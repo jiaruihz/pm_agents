@@ -2,9 +2,30 @@
 
 Generated: 2026-07-08T12:04:51Z
 
+Status: snapshot / consolidated
+
+This report absorbs the original 333-row v1 snapshot and adds the settled
+2026-07-01..07 forward slice. The separate v1 report was removed; the shared
+base module remains only as the score/helper owner.
+
 ## Question
 
 Update the HeadA source-quality conclusion after adding settled forward opportunity rows through 2026-07-07.
+
+## Score Definition
+
+The score is mechanism-defined, without fitted coefficients or a threshold
+search:
+
+```text
+source_quality_score_v1 =
+  predictability_component(best model MAE bucket)
+  + source_gap_component(active source MAE - best MAE)
+  + hot_direction_component(actual > forecast rate / bias)
+  + noise_component(active source MAE)
+```
+
+Tier boundaries: high `>=3.0`, mid `1.5..3.0`, neutral `0..1.5`, low `<0`.
 
 ## Data Snapshot
 
