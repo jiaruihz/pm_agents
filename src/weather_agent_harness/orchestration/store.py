@@ -23,6 +23,7 @@ from .contracts import (
     WorkStatus,
 )
 from .dependency import DependencyResolver
+from .pricing import models_match, price_usage
 
 
 class OrchestrationStore:
@@ -113,6 +114,19 @@ class OrchestrationStore:
             if order.attempt >= order.max_attempts:
                 raise RuntimeError("work order attempt budget exhausted")
             role = self._role(state, order.role)
+            if role.require_exact_model:
+                if not observed_model:
+                    raise ValueError("exact-model role requires an observed dispatch model")
+                if not models_match(role.requested_model, observed_model):
+                    raise ValueError(
+                        "dispatch model mismatch: requested "
+                        f"{role.requested_model}, observed {observed_model}"
+                    )
+            if thread_id and any(item.thread_id == thread_id for item in state.agent_runs):
+                raise ValueError(
+                    "thread_id already belongs to another attempt; dedicated threads "
+                    "are required for unambiguous token accounting"
+                )
             lease_id = uuid.uuid4().hex
             started_at = now_utc or utc_now()
             lease_expires_at = self._plus_seconds(
@@ -297,6 +311,36 @@ class OrchestrationStore:
                 payload=result.model_dump(mode="json"),
             )
             return state, False
+        role = self._role(state, order.role)
+        active_record = next(
+            item
+            for item in reversed(state.agent_runs)
+            if item.work_order_id == order.work_order_id
+            and item.attempt == order.attempt
+            and item.lease_id == order.lease_id
+        )
+        observed_model = result.observed_model or active_record.observed_model
+        if result.status == "succeeded" and role.require_exact_model:
+            if not observed_model:
+                raise ValueError("successful result requires an observed model")
+            if not models_match(role.requested_model, observed_model):
+                raise ValueError(
+                    "result model mismatch: requested "
+                    f"{role.requested_model}, observed {observed_model}"
+                )
+        usage = result.usage
+        if result.status == "succeeded" and usage is not None and usage.source != "unavailable":
+            if not observed_model:
+                raise ValueError("measured usage requires an observed model")
+            usage = price_usage(
+                usage,
+                model=observed_model,
+                baseline_model=role.baseline_model,
+                fast_mode=usage.service_tier == "fast",
+            )
+        result = result.model_copy(
+            update={"observed_model": observed_model, "usage": usage}
+        )
         if result.status == "succeeded":
             next_status = WorkStatus.REVIEW
         elif result.status == "blocked":
@@ -326,6 +370,7 @@ class OrchestrationStore:
                     update={
                         "observed_model": result.observed_model
                         or record.observed_model,
+                        "execution_mode": result.execution_mode,
                         "finished_at_utc": result.finished_at_utc,
                         "terminal_reason": terminal_reason or result.status,
                         "duration_seconds": result.duration_seconds,
@@ -372,6 +417,11 @@ class OrchestrationStore:
             )
             if not result.evidence_refs:
                 raise ValueError("accepted work requires durable evidence_refs")
+            role = self._role(state, order.role)
+            if role.require_usage and (
+                result.usage is None or result.usage.source == "unavailable"
+            ):
+                raise ValueError("accepted work requires measured token usage")
             missing_refs = [
                 ref for ref in result.evidence_refs if not self._evidence_exists(ref)
             ]

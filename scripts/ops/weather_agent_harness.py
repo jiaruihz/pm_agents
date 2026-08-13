@@ -48,6 +48,7 @@ from src.weather_agent_harness.orchestration import (
     WorkOrder,
     WorkResult,
     build_run_receipt,
+    usage_from_codex_session,
 )
 from src.weather_agent_harness.scenarios.market_prior_training import (
     run_market_prior_training_scenario,
@@ -378,6 +379,18 @@ def record_dispatch(args: argparse.Namespace) -> int:
 
 def record_work_result(args: argparse.Namespace) -> int:
     result = WorkResult.model_validate_json(args.result_json.read_text(encoding="utf-8"))
+    if args.codex_session_jsonl:
+        usage, observed_model, duration_seconds, tool_calls = usage_from_codex_session(
+            args.codex_session_jsonl
+        )
+        result = result.model_copy(
+            update={
+                "observed_model": observed_model,
+                "usage": usage,
+                "duration_seconds": duration_seconds,
+                "tool_calls": tool_calls,
+            }
+        )
     state, accepted = OrchestrationStore(EvidenceStore(args.run_dir)).record_result(result)
     print(json.dumps({"accepted": accepted, "state": state.model_dump(mode="json")}, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if accepted else 2
@@ -555,12 +568,13 @@ def parser() -> argparse.ArgumentParser:
     dispatch_record.add_argument("--run-dir", type=Path, required=True)
     dispatch_record.add_argument("--work-order-id", required=True)
     dispatch_record.add_argument("--thread-id", required=True)
-    dispatch_record.add_argument("--observed-model")
+    dispatch_record.add_argument("--observed-model", required=True)
     dispatch_record.set_defaults(func=record_dispatch)
 
     work_result = sub.add_parser("record-work-result")
     work_result.add_argument("--run-dir", type=Path, required=True)
     work_result.add_argument("--result-json", type=Path, required=True)
+    work_result.add_argument("--codex-session-jsonl", type=Path)
     work_result.set_defaults(func=record_work_result)
 
     work_accept = sub.add_parser("accept-work-order")

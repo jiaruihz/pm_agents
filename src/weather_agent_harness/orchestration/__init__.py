@@ -16,8 +16,10 @@ from .contracts import (
 from .dependency import DependencyResolver
 from .dispatch import CodexDispatchAdapter
 from .receipt import build_run_receipt
+from .pricing import RATE_CARD_ID, canonical_model, models_match, price_usage
 from .router import RequestRouter
 from .store import OrchestrationStore
+from .usage import usage_from_codex_session
 
 __all__ = [
     "AgentRunRecord",
@@ -36,4 +38,9 @@ __all__ = [
     "WorkResult",
     "WorkStatus",
     "build_run_receipt",
+    "RATE_CARD_ID",
+    "canonical_model",
+    "models_match",
+    "price_usage",
+    "usage_from_codex_session",
 ]

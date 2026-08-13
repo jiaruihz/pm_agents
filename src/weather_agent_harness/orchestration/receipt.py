@@ -23,6 +23,18 @@ def aggregate_usage(results: tuple) -> UsageRecord:
         return UsageRecord()
     concrete = [item for item in observed if item is not None]
     costs = [item.estimated_cost_usd for item in concrete]
+    credit_costs = [item.estimated_cost_credits for item in concrete]
+    baseline_costs = [item.baseline_cost_credits for item in concrete]
+    actual_credits = (
+        sum(value for value in credit_costs if value is not None)
+        if all(value is not None for value in credit_costs)
+        else None
+    )
+    baseline_credits = (
+        sum(value for value in baseline_costs if value is not None)
+        if all(value is not None for value in baseline_costs)
+        else None
+    )
     return UsageRecord(
         source="aggregated_worker_results",
         input_tokens=sum(item.input_tokens or 0 for item in concrete),
@@ -31,6 +43,33 @@ def aggregate_usage(results: tuple) -> UsageRecord:
         estimated_cost_usd=(
             sum(value for value in costs if value is not None)
             if all(value is not None for value in costs)
+            else None
+        ),
+        billing_model=(
+            concrete[0].billing_model
+            if len({item.billing_model for item in concrete}) == 1
+            else "mixed"
+        ),
+        rate_card_id=(
+            concrete[0].rate_card_id
+            if len({item.rate_card_id for item in concrete}) == 1
+            else "mixed"
+        ),
+        estimated_cost_credits=actual_credits,
+        baseline_model=(
+            concrete[0].baseline_model
+            if len({item.baseline_model for item in concrete}) == 1
+            else "mixed"
+        ),
+        baseline_cost_credits=baseline_credits,
+        savings_credits=(
+            baseline_credits - actual_credits
+            if baseline_credits is not None and actual_credits is not None
+            else None
+        ),
+        savings_ratio=(
+            (baseline_credits - actual_credits) / baseline_credits
+            if baseline_credits and actual_credits is not None
             else None
         ),
     )

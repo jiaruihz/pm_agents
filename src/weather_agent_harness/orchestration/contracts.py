@@ -10,8 +10,8 @@ from pydantic import Field, field_validator, model_validator
 from ..contracts import HarnessModel, RiskLevel, stable_hash, utc_now
 
 
-ORCHESTRATION_SCHEMA_VERSION = "weather_agent_orchestration_v2"
-RECEIPT_SCHEMA_VERSION = "weather_agent_run_receipt_v1"
+ORCHESTRATION_SCHEMA_VERSION = "weather_agent_orchestration_v3"
+RECEIPT_SCHEMA_VERSION = "weather_agent_run_receipt_v2"
 
 
 class RouteLevel(StrEnum):
@@ -63,6 +63,9 @@ class RoleSpec(HarnessModel):
     sandbox: str = "read-only"
     allowed_tools: tuple[str, ...] = ()
     fallback_role: str | None = None
+    require_exact_model: bool = True
+    require_usage: bool = True
+    baseline_model: str = "gpt-5.6-sol"
 
 
 class WorkOrder(HarnessModel):
@@ -132,6 +135,27 @@ class UsageRecord(HarnessModel):
     output_tokens: int | None = Field(default=None, ge=0)
     cached_tokens: int | None = Field(default=None, ge=0)
     estimated_cost_usd: float | None = Field(default=None, ge=0)
+    billing_model: str | None = None
+    service_tier: str = "standard"
+    rate_card_id: str | None = None
+    estimated_cost_credits: float | None = Field(default=None, ge=0)
+    baseline_model: str | None = None
+    baseline_cost_credits: float | None = Field(default=None, ge=0)
+    savings_credits: float | None = None
+    savings_ratio: float | None = None
+
+    @model_validator(mode="after")
+    def complete_runtime_usage(self) -> "UsageRecord":
+        tokens = (self.input_tokens, self.output_tokens, self.cached_tokens)
+        if self.source != "unavailable" and any(value is None for value in tokens):
+            raise ValueError("available usage requires input, output and cached tokens")
+        if (
+            self.input_tokens is not None
+            and self.cached_tokens is not None
+            and self.cached_tokens > self.input_tokens
+        ):
+            raise ValueError("cached tokens cannot exceed input tokens")
+        return self
 
 
 class WorkResult(HarnessModel):
@@ -145,6 +169,7 @@ class WorkResult(HarnessModel):
     acceptance_claims: tuple[str, ...] = ()
     unresolved: tuple[str, ...] = ()
     observed_model: str | None = None
+    execution_mode: str = "agent"
     duration_seconds: float | None = Field(default=None, ge=0)
     tool_calls: int | None = Field(default=None, ge=0)
     usage: UsageRecord | None = None
@@ -157,6 +182,13 @@ class WorkResult(HarnessModel):
             raise ValueError("status must be succeeded, failed or blocked")
         return value
 
+    @field_validator("execution_mode")
+    @classmethod
+    def valid_execution_mode(cls, value: str) -> str:
+        if value not in {"agent", "coordinator_recovery"}:
+            raise ValueError("execution_mode must be agent or coordinator_recovery")
+        return value
+
 
 class AgentRunRecord(HarnessModel):
     work_order_id: str
@@ -165,6 +197,7 @@ class AgentRunRecord(HarnessModel):
     attempt: int = Field(default=0, ge=0)
     lease_id: str | None = None
     observed_model: str | None = None
+    execution_mode: str = "agent"
     reasoning_effort: str
     thread_id: str | None = None
     started_at_utc: str = Field(default_factory=utc_now)

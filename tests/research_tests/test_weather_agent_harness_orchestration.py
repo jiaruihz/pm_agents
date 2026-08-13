@@ -22,6 +22,7 @@ from src.weather_agent_harness.domains.strategy_research import (
 )
 from src.weather_agent_harness.evidence import EvidenceStore
 from src.weather_agent_harness.orchestration import (
+    CodexDispatchAdapter,
     DependencyResolver,
     OrchestrationStore,
     RequestProfile,
@@ -33,7 +34,18 @@ from src.weather_agent_harness.orchestration import (
     WorkResult,
     WorkStatus,
     build_run_receipt,
+    price_usage,
+    usage_from_codex_session,
 )
+
+
+def _usage() -> UsageRecord:
+    return UsageRecord(
+        source="codex_runtime",
+        input_tokens=120,
+        output_tokens=30,
+        cached_tokens=40,
+    )
 
 
 def _orders() -> tuple[WorkOrder, WorkOrder]:
@@ -130,7 +142,7 @@ def test_dependency_only_releases_after_verified_complete(tmp_path: Path) -> Non
     store = _store(tmp_path)
     state = store.add_work_orders(*_orders())
     assert [item.status for item in state.work_orders] == [WorkStatus.READY, WorkStatus.PENDING]
-    _, running, _ = store.start("inspect", thread_id="thread-1", observed_model="gpt-5.6-terra")
+    _, running, _ = store.start("inspect", thread_id="thread-1", observed_model="gpt-5.6-luna")
     evidence = store.evidence_store.artifact_path("inspect.json")
     evidence.write_text("{}\n", encoding="utf-8")
     result = WorkResult(
@@ -141,6 +153,8 @@ def test_dependency_only_releases_after_verified_complete(tmp_path: Path) -> Non
         summary="mapped",
         evidence_refs=(str(evidence),),
         acceptance_claims=("evidence_mapped",),
+        observed_model="gpt-5.6-luna",
+        usage=_usage(),
     )
     state, accepted = store.record_result(result)
     assert accepted is True
@@ -175,7 +189,7 @@ def test_conflicting_write_owners_are_serialized() -> None:
 def test_stale_and_duplicate_worker_results_cannot_overwrite_state(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.add_work_orders(_orders()[0])
-    _, running, _ = store.start("inspect", thread_id="thread-1", observed_model="gpt-5.6-terra")
+    _, running, _ = store.start("inspect", thread_id="thread-1", observed_model="gpt-5.6-luna")
     stale = WorkResult(
         work_order_id="inspect",
         attempt=running.attempt,
@@ -202,7 +216,7 @@ def test_stale_and_duplicate_worker_results_cannot_overwrite_state(tmp_path: Pat
 def test_receipt_requires_terminal_certification_and_is_idempotent(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.add_work_orders(_orders()[0])
-    _, running, _ = store.start("inspect", thread_id="thread-1", observed_model="gpt-5.6-terra")
+    _, running, _ = store.start("inspect", thread_id="thread-1", observed_model="gpt-5.6-luna")
     evidence = store.evidence_store.artifact_path("inspect.json")
     evidence.write_text("{}\n", encoding="utf-8")
     store.record_result(
@@ -213,16 +227,10 @@ def test_receipt_requires_terminal_certification_and_is_idempotent(tmp_path: Pat
             status="succeeded",
             summary="done",
             evidence_refs=(str(evidence),),
-            observed_model="gpt-5.6-terra",
+            observed_model="gpt-5.6-luna",
             duration_seconds=12.5,
             tool_calls=3,
-            usage=UsageRecord(
-                source="codex_runtime",
-                input_tokens=120,
-                output_tokens=30,
-                cached_tokens=40,
-                estimated_cost_usd=0.12,
-            ),
+            usage=_usage(),
         )
     )
     store.accept("inspect", verified_acceptance=("evidence_mapped",))
@@ -260,9 +268,12 @@ def test_receipt_requires_terminal_certification_and_is_idempotent(tmp_path: Pat
     assert first.usage.input_tokens == 120
     assert first.usage.output_tokens == 30
     assert first.usage.cached_tokens == 40
-    assert first.usage.estimated_cost_usd == pytest.approx(0.12)
+    assert first.usage.estimated_cost_usd is None
+    assert first.usage.estimated_cost_credits == pytest.approx(0.00132)
+    assert first.usage.baseline_cost_credits == pytest.approx(0.033)
+    assert first.usage.savings_ratio == pytest.approx(0.96)
     assert first.agents[0].requested_model == "gpt-5.6-luna"
-    assert first.agents[0].observed_model == "gpt-5.6-terra"
+    assert first.agents[0].observed_model == "gpt-5.6-luna"
 
 
 def test_heartbeat_extends_lease_and_expiry_retries_then_runtime_exit_fails(
@@ -277,7 +288,7 @@ def test_heartbeat_extends_lease_and_expiry_retries_then_runtime_exit_fails(
     )
     store.add_work_orders(order)
     _, first, _ = store.start(
-        "inspect", thread_id="thread-1", now_utc="2026-08-13T00:00:00Z"
+        "inspect", thread_id="thread-1", observed_model="gpt-5.6-luna", now_utc="2026-08-13T00:00:00Z"
     )
     state = store.heartbeat(
         "inspect",
@@ -297,7 +308,7 @@ def test_heartbeat_extends_lease_and_expiry_retries_then_runtime_exit_fails(
     assert state.agent_runs[0].terminal_reason == "lease_expired"
 
     _, second, _ = store.start(
-        "inspect", thread_id="thread-2", now_utc="2026-08-13T00:00:51Z"
+        "inspect", thread_id="thread-2", observed_model="gpt-5.6-luna", now_utc="2026-08-13T00:00:51Z"
     )
     state, accepted = store.record_runtime_exit(
         "inspect",
@@ -347,7 +358,9 @@ def test_chainlove_portable_task_supports_status_context_and_certify(
             closes_acceptance=("batch_processed", "batch_verified"),
         )
     )
-    _, running, _ = orchestration.start("bounty-batch", thread_id="thread-chain")
+    _, running, _ = orchestration.start(
+        "bounty-batch", thread_id="thread-chain", observed_model="gpt-5.6-terra"
+    )
     artifact = evidence_store.artifact_path("chainlove/bounty-batch.json")
     artifact.write_text('{"verified": true}\n', encoding="utf-8")
     orchestration.record_result(
@@ -358,6 +371,8 @@ def test_chainlove_portable_task_supports_status_context_and_certify(
             status="succeeded",
             summary="batch processed and independently verified",
             evidence_refs=(str(artifact),),
+            observed_model="gpt-5.6-terra",
+            usage=_usage(),
         )
     )
     orchestration.accept(
@@ -381,3 +396,65 @@ def test_chainlove_portable_task_supports_status_context_and_certify(
             assert payload["decision"]["state"] == "complete"
         elif command == "certify":
             assert payload["harness_certified"] is True
+
+
+def test_exact_model_and_dedicated_thread_are_enforced(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.add_work_orders(*_orders())
+    _, _, instruction = CodexDispatchAdapter().prepare(store, "inspect")
+    assert instruction["fork_turns"] == "none"
+    assert instruction["model"] == "gpt-5.6-luna"
+    with pytest.raises(ValueError, match="dispatch model mismatch"):
+        store.start("inspect", thread_id="bad", observed_model="gpt-5.6-sol")
+    _, running, _ = store.start(
+        "inspect", thread_id="dedicated", observed_model="gpt-5.6-luna"
+    )
+    store.record_runtime_exit(
+        "inspect",
+        attempt=running.attempt,
+        lease_id=running.lease_id or "",
+        runtime_status="interrupted",
+    )
+    with pytest.raises(ValueError, match="thread_id already belongs"):
+        store.start("inspect", thread_id="dedicated", observed_model="gpt-5.6-luna")
+
+
+def test_accept_rejects_success_without_measured_usage(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.add_work_orders(_orders()[0])
+    _, running, _ = store.start(
+        "inspect", thread_id="thread-1", observed_model="gpt-5.6-luna"
+    )
+    evidence = store.evidence_store.artifact_path("inspect.json")
+    evidence.write_text("{}\n", encoding="utf-8")
+    store.record_result(
+        WorkResult(
+            work_order_id="inspect",
+            attempt=running.attempt,
+            lease_id=running.lease_id or "",
+            status="succeeded",
+            summary="done",
+            evidence_refs=(str(evidence),),
+            observed_model="gpt-5.6-luna",
+        )
+    )
+    with pytest.raises(ValueError, match="measured token usage"):
+        store.accept("inspect", verified_acceptance=("evidence_mapped",))
+
+
+def test_codex_session_usage_is_extracted_and_priced(tmp_path: Path) -> None:
+    session = tmp_path / "rollout.jsonl"
+    rows = (
+        {"timestamp": "2026-08-13T00:00:00Z", "type": "turn_context", "payload": {"model": "gpt-5.6-terra"}},
+        {"timestamp": "2026-08-13T00:00:01Z", "type": "response_item", "payload": {"type": "function_call"}},
+        {"timestamp": "2026-08-13T00:00:02Z", "type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 1000, "cached_input_tokens": 800, "output_tokens": 100}}}},
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    usage, model, duration, calls = usage_from_codex_session(session)
+    priced = price_usage(usage, model=model)
+    assert model == "gpt-5.6-terra"
+    assert duration == 2.0
+    assert calls == 1
+    assert priced.estimated_cost_credits == pytest.approx(0.044)
+    assert priced.baseline_cost_credits == pytest.approx(0.11)
+    assert priced.savings_ratio == pytest.approx(0.6)

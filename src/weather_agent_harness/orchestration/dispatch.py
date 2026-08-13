@@ -14,6 +14,7 @@ class CodexDispatchAdapter:
     def instruction(self, order: WorkOrder, role: RoleSpec) -> dict[str, Any]:
         return {
             "task_name": order.work_order_id.replace("-", "_"),
+            "fork_turns": "none",
             "model": role.requested_model,
             "reasoning_effort": role.reasoning_effort,
             "message": (
