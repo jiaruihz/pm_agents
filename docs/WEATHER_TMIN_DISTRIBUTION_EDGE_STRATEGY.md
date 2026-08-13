@@ -277,6 +277,17 @@ top ask depth、官方 fee 与 producer SHA，不创建 TradeIntent/order/fill�
 加载上述 SHA，summary 为 `policy_status=frozen_forward_shadow`、`orders_enabled=false`、0 intent/order/fill、
 0 venue write；从部署后的新 strict-cross 开始累计 untouched forward。
 
+2026-08-13 首夜审计发现共享高频 observation 主路由使用当地 `06:00–22:00` 窗口，导致 Tmin
+shadow 的 `00:00–06:00` 核心降温段没有 same-source first-seen 证据；该 target date 因此标记为
+coverage gap，不计入 frozen forward。修复没有扩大共享主路由或现有 Tmax live 的触发时段，而是在同一
+`weather_live_cross_observations` producer 内增加隔离的全天 `tmin_seoul` / `tmin_tokyo` fast lanes，
+lowest observer 只额外读取这两个 append-only shard。collector release 为
+`f32d813da9f4874c4e3084afd225e918e7a46f59`，lowest consumer release 为
+`331f309ebeea14fd6b61727584a8cf19b40dc6a0`。routine METAR 反事实显示缺口内 Seoul 有
+`25→24`、`24→23`，Tokyo 在窗口边界有 `25→24`；它们不是 alternate-source 的可回填 forward
+事件。对应 Tmin previous-NO 近邻盘口分别为无 ask、`0.99`、`0.982/0.993`，均不满足冻结的
+`ask<=0.90`，所以影响半径为 3 个 proxy cross、0 个可确认合格 shadow decision、0 order/fill。
+
 同一 denominator 的替代表达也已排查：三腿 `previous NO + current YES + next NO` 在 26 条完整
 5-share coverage rows 上没有 fee-adjusted cost<1；两腿 `current YES + next NO` 的 15 条 under-1
 settlement ROI 为 `+3.06%`、CI `[-37.80%,+64.78%]`。previous-NO 在 10m 后按真实 5-share bid taker
