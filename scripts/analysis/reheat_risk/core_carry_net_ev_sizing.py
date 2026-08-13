@@ -3,17 +3,29 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
 import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[3]
-INPUT = ROOT / "docs/analysis/2026-07/generated/current_yes_core_carry_no_obs_age_freeze_pre_live_v5/frozen_policy_entries.csv"
-OUT_DIR = ROOT / "docs/analysis/2026-08/generated/current_yes_core_carry_net_ev_sizing_v1"
-REPORT = ROOT / "docs/analysis/2026-08/2026-08-06-current-yes-core-carry-net-ev-sizing-v1.md"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_content_addressed_artifact,
+    resolve_run_output,
+)
+
+ARTIFACT_FAMILY = "current_yes_core_carry_net_ev_sizing_v1"
+FROZEN_POLICY_ENTRIES_SHA256 = (
+    "cfea91fe4b8949f2d29848e9952dbdb65c806348e5813786c6b0dcf944965e0e"
+)
 SEED = 20260806
 REPS = 5000
 FORWARD_DATES = 8
@@ -58,8 +70,27 @@ def paired_bootstrap(frame: pd.DataFrame, candidate: str) -> list[float]:
     return [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))]
 
 
-def main() -> int:
-    frame = pd.read_csv(INPUT).sort_values(["target_date", "city"]).reset_index(drop=True)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=resolve_content_addressed_artifact(FROZEN_POLICY_ENTRIES_SHA256),
+    )
+    parser.add_argument("--run-id")
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="optional explicit durable report path; omitted by default",
+    )
+    args = parser.parse_args(argv)
+    output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.output_dir,
+    )
+    frame = pd.read_csv(args.input).sort_values(["target_date", "city"]).reset_index(drop=True)
     dates = sorted(frame.target_date.unique())
     forward = set(dates[-FORWARD_DATES:])
     development = frame[~frame.target_date.isin(forward)].copy()
@@ -86,12 +117,14 @@ def main() -> int:
         "paired_daily_pnl_delta_ci95": {p: paired_bootstrap(frame, p) for p in policies[1:]},
         "scales_fit_on_development_only": {"net_ev": net_scale, "kelly": kelly_scale},
     }
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(OUT_DIR / "sized_entries.csv", index=False)
-    (OUT_DIR / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
+    output = prepare_new_run_output(output)
+    frame.to_csv(output / "sized_entries.csv", index=False)
+    (output / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
     full = result["full"]
     fwd = result["frozen_forward"]
-    REPORT.write_text(f"""# Core Carry continuous net-EV sizing v1
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(f"""# Core Carry continuous net-EV sizing v1
 
 结论：`不升级 live sizing`。同一 136 个 frozen entry 上，连续 sizing 没有增加准确率（信号集合未变），也没有稳定增加美元 PnL。
 

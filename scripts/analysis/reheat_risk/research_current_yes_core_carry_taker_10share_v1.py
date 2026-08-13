@@ -218,7 +218,9 @@ def main() -> int:
             main as sizing_main,
         )
 
-        return sizing_main()
+        return sizing_main(
+            [arg for arg in sys.argv[1:] if arg != "--net-ev-sizing"]
+        )
     if args.descriptive_audit:
         from scripts.analysis.reheat_risk.core_carry_descriptive_audit import (
             main as descriptive_main,

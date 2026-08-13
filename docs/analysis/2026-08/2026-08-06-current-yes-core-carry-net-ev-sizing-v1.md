@@ -1,5 +1,9 @@
 # Core Carry continuous net-EV sizing v1
 
+Artifact routing: this report is the durable snapshot. New sizing runs require
+a stable `--run-id` and write immutable machine output beneath the configured
+JRS research artifact root; updating a report requires an explicit `--report`.
+
 结论：`不升级 live sizing`。同一 136 个 frozen entry 上，连续 sizing 没有增加准确率（信号集合未变），也没有稳定增加美元 PnL。
 
 | policy | full shares | full PnL | ROI | frozen-forward PnL | forward avg shares |
