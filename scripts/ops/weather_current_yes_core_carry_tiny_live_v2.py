@@ -1507,6 +1507,22 @@ def post_update_maker_rearm_score(
             "maker_rearm_state_ref": latest_ref,
             "maker_rearm_reason": "new_weather_epoch_not_observed",
         }
+    original_observation_epoch = parse_utc(
+        deferred_attempt.get("data_epoch_ts_utc")
+        or original_score.get("source_report_ts_utc")
+    )
+    latest_observation_epoch = parse_utc(latest.get("source_report_ts_utc"))
+    if (
+        original_observation_epoch is None
+        or latest_observation_epoch is None
+        or latest_observation_epoch <= original_observation_epoch
+    ):
+        return "waiting", None, {
+            **common,
+            "maker_rearm_status": "waiting",
+            "maker_rearm_state_ref": latest_ref,
+            "maker_rearm_reason": "new_source_report_not_observed",
+        }
     if str(latest_attempt.get("maker_rearm_evaluated_state_ref") or "") == latest_ref:
         return "waiting", None, {
             **common,

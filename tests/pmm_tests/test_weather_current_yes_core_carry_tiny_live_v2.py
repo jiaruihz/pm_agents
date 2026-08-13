@@ -973,6 +973,48 @@ def test_post_update_rearm_keeps_makers_off_when_core_net_ev_is_not_positive(
     assert attempts[0]["maker_rearm_reason"] == "non_positive_taker_ev"
 
 
+def test_forecast_revision_alone_does_not_rearm_source_blackout_makers(
+    tmp_path,
+) -> None:
+    row = score_row()
+    sid = runner.signal_id(row)
+    deferred = {
+        "signal_id": sid,
+        "created_at_utc": "2026-07-24T04:49:00+00:00",
+        "maker_live_action": "defer_post_update_rearm",
+        "data_epoch_ref": runner.weather_state_epoch_ref(row),
+        "data_epoch_ts_utc": row["source_report_ts_utc"],
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [{"checkpoint_key": row["checkpoint_key"], "family_city_day_conflict": False}],
+    )
+    runner.write_jsonl(tmp_path / "entry_attempts.jsonl", [deferred])
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [{"signal_id": sid, "child_order_role": "taker", "status": "submitted"}],
+    )
+    forecast_only = {
+        **row,
+        "decision_snapshot_ts_utc": "2026-07-24T04:51:00Z",
+        "hourly_curve": [
+            {"time_local": "2026-07-24T14:00", "temperature_f": 87.0}
+        ],
+    }
+    runner.write_jsonl(tmp_path / "state_decisions.jsonl", [forecast_only])
+    args = runner.parser().parse_args(["run", "--output-dir", str(tmp_path)])
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 51, 5, tzinfo=timezone.utc),
+    )
+
+    assert plans == []
+    assert attempts == []
+
+
 def test_maker_cancels_at_pre_update_deadline(tmp_path) -> None:
     now = datetime(2026, 7, 24, 4, 48, 31, tzinfo=timezone.utc)
     order = _live_maker_order(created=now - timedelta(minutes=5))
