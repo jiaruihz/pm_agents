@@ -33,9 +33,23 @@ done
 PY=".venv/bin/python"
 CTL=("scripts/ops/weather_production_ctl.py")
 
-"$PY" scripts/ops/weather_production_manifest.py --strict >/dev/null || true
-"$PY" "${CTL[@]}" health || true
-"$PY" "${CTL[@]}" plan
+run_status_allow_critical() {
+  local rc
+  set +e
+  "$@"
+  rc=$?
+  set -e
+  if [[ $rc -ne 0 && $rc -ne 2 ]]; then
+    return "$rc"
+  fi
+}
+
+# A missing post-reboot stack is expected to make these read-only commands
+# return 2 (critical).  Preserve real invocation errors, but do not let the
+# expected critical status prevent the explicit recovery below from running.
+run_status_allow_critical "$PY" scripts/ops/weather_production_manifest.py --strict >/dev/null
+run_status_allow_critical "$PY" "${CTL[@]}" health
+run_status_allow_critical "$PY" "${CTL[@]}" plan
 
 if [[ $APPLY -ne 1 ]]; then
   printf '%s\n' "[after_reboot] read-only audit complete; no process was started or stopped"

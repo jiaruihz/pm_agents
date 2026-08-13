@@ -1,7 +1,7 @@
 # Weather JRS Runtime Incident Ledger
 
 Status: current-source
-Updated: 2026-08-04
+Updated: 2026-08-13
 Scope: Mac canonical JRS tmux permission context, production runtime control,
 collector continuity, and recovery acceptance.
 
@@ -97,6 +97,69 @@ Current invariants:
   passed in the main repo and all production checkouts.
 - Lock/unlock recovery was exercised successfully.
 
-Reboot/login has not been exercised. Therefore the accepted wording is
+At that acceptance point, reboot/login had not been exercised. Therefore the accepted wording was
 `entrypoint race eliminated; recovery improved and production-validated`, not
 `resolved permanently` or `一劳永逸`.
+
+## 2026-08-13 WindowServer Failure And Reboot Recovery
+
+At `2026-08-13 09:51:14 +0800`, macOS watchdog terminated WindowServer after
+its main thread stopped checking in. This was not an ordinary idle lock. The
+failure overlapped an unbounded full-history alignment replay; system pressure
+from that replay is a likely trigger, but the crash report does not prove it
+was the sole cause. The replay was subsequently bounded and committed as
+`92b0c572`.
+
+The WindowServer restart invalidated the existing canonical tmux permission
+context. A later host reboot removed the tmux server and every registered
+session. After login, the pinned production NVMe mounted at the expected UUID,
+the canonical DB compatibility path resolved to the same device/inode, and the
+storage identity audit had zero critical or warning findings.
+
+Recovery used only the production controller:
+
+```text
+recover-jrs-context --apply --confirm-live --restore-manifest <saved-manifest>
+```
+
+The prospective permission-host probe succeeded before the canonical server
+was created. Controller dependency ordering restored all 34 registered
+runtimes. A transient Open-Meteo SSL timeout degraded three of 94 city-target
+requests on the first forecast pass; cached curves preserved 100% coverage,
+and an exact controller restart of the safe forecast collector returned it to
+`status=ok`. Two long-period shadows were also restarted through their exact
+safe controller contracts so their first post-reboot health artifacts did not
+remain stale.
+
+### Impact and acceptance evidence
+
+- Last pre-failure market-book batch: `2026-08-13 09:48:05 +0800`; first
+  recovered batch: `11:10:22`; observed gap `1h22m17s`, or 16 nominal
+  five-minute collection epochs without a durable batch.
+- Last pre-failure strategy snapshot: `09:43:54`; first recovered snapshot:
+  `11:11:22`; observed gap `1h27m28s`, or eight nominal snapshot epochs.
+- Both active live journals contain zero new rows from
+  `2026-08-13T01:51:47Z` through recovery. Authenticated CLOB post-recovery
+  evidence returned zero open orders. No recovery duplicate order or fill is
+  evidenced.
+- Missing PIT source/book epochs cannot be reconstructed as though they had
+  been observed, so missed opportunities remain a coverage gap rather than a
+  strategy-filter count or a claim of zero signals.
+- Final controller result: `34/34` runtimes healthy; JRS context and manifest
+  healthy; data-feed semantics healthy; observation cache `41` rows with no
+  blocking invalid record; latest snapshot `963` rows with `106/106` strategy
+  book targets complete; API `:8000` and FE `:5174` listening.
+
+The post-reboot wrapper itself exposed a separate control-plane bug: its
+read-only `plan` preflight correctly returned exit code `2` for a missing
+stack, but shell `set -e` aborted before the requested recovery. The wrapper
+now treats only the documented `0` and `2` status codes as valid preflight
+results while preserving all other invocation errors. A regression test
+proves explicit recovery still executes when manifest and plan report the
+expected post-reboot critical state.
+
+This run exercises reboot/login, fresh permission-host creation, canonical
+server recreation, full controller topology recovery, raw freshness,
+authenticated open-order evidence, and API/FE postconditions. It improves and
+validates recovery; it does not eliminate the architectural macOS TCC/GUI
+dependency or justify unattended restoration of live trading.
