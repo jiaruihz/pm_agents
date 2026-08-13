@@ -21,7 +21,7 @@ production_releases:
     expected_repo_sha: 269c1072fe0c5a464d6ec681db4805a1815dca2d
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/projects/pm_agents_dispute_repricing_prod
-    expected_repo_sha: 95fe0532413a6798287b4cb7d93b4655ea1967ba
+    expected_repo_sha: 6167180de34b47d012ecd2a9eac8a1dc683802ae
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/projects/pm_agents_d1_capture_v3_prod
     expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
@@ -259,7 +259,7 @@ managed_runtimes:
       execution_mode: zero_notional_shadow
       live_authority: false
       actual_notional: 0.0
-      worker: official_clarification_court
+      worker: dispute_and_official_clarification_court
     dependencies: [weather_jrs_context_keeper, polymarket_dispute_repricing_zero_notional_v1]
     recovery_policy: safe
 
