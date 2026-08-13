@@ -21,12 +21,13 @@ from scripts.analysis.forecast_quality.source_alignment_common import (  # noqa:
     parse_dt,
     write_csv,
 )
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
-
-DEFAULT_RUNTIME_ROOTS = [
-    Path("/Volumes/jrs/weather_data_feed_service_runtime"),
-    Path("~/projects/weather_data_feed_service_runtime").expanduser(),
-]
+ARTIFACT_FAMILY = "runway_metar_wu_alignment_v1"
 
 METAR_LIKE_SOURCES = {
     "aviationweather_metar",
@@ -50,10 +51,7 @@ def safe_float(value: Any) -> float | None:
 
 
 def default_runtime_root() -> Path:
-    for root in DEFAULT_RUNTIME_ROOTS:
-        if root.exists():
-            return root
-    return DEFAULT_RUNTIME_ROOTS[-1]
+    return load_production_spec().data_feed_runtime_root
 
 
 def read_json_or_jsonl(
@@ -201,14 +199,20 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summary
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     runtime_root = default_runtime_root()
     parser.add_argument("--runway-path", default=str(runtime_root / "output/runway_observations"))
     parser.add_argument("--source-events-path", default=str(runtime_root / "output/source_events"))
-    parser.add_argument("--out-dir", default=str(ROOT / "docs/analysis/2026-07/generated/runway_metar_wu_alignment_v1"))
+    parser.add_argument("--run-id")
+    parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--max-abs-lag-min", type=float, default=45.0)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    output = resolve_run_output(
+        ARTIFACT_FAMILY,
+        run_id=args.run_id,
+        explicit_output=args.out_dir,
+    )
 
     runway_rows = read_json_or_jsonl(Path(args.runway_path).expanduser())
     source_rows = read_json_or_jsonl(
@@ -221,7 +225,7 @@ def main() -> int:
         max_abs_lag_sec=float(args.max_abs_lag_min) * 60.0,
     )
     summary = summarize(alignment)
-    out_dir = Path(args.out_dir)
+    out_dir = prepare_new_run_output(output)
     write_csv(out_dir / "alignment_rows.csv", alignment)
     write_csv(out_dir / "summary_by_city_source.csv", summary)
     print(

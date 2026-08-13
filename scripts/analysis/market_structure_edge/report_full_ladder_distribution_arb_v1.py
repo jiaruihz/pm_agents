@@ -15,7 +15,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_INPUT = ROOT / "runtime/analysis_snapshots/full_ladder_distribution_arb_final_20260714.json"
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-07/2026-07-14-full-ladder-distribution-arb-v1.md"
 
 
 def pct(value: float | None) -> str:
@@ -34,11 +33,15 @@ def row(label: str, family: dict) -> str:
     )
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="optional explicit durable report path; stdout when omitted",
+    )
+    args = parser.parse_args(argv)
 
     payload = json.loads(args.input.read_text(encoding="utf-8"))
     params = payload["parameters"]
@@ -106,9 +109,12 @@ def main() -> None:
             "",
         ]
     )
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(report, encoding="utf-8")
-    print(args.report)
+    if args.report is None:
+        print(report)
+    else:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(report, encoding="utf-8")
+        print(args.report)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,9 @@
 # Full-Ladder Distribution Arbitrage v1
 
+Artifact routing: this is the durable snapshot. The renderer writes a report
+only when an explicit `--report` path is supplied; otherwise it renders to
+stdout and cannot overwrite this file implicitly.
+
 > 目标：换掉单档预测思路，穷举 complete-set / leave-one-out / any-k / mint-sell 表达，检查是否存在费用后、可执行、forward 的确定性结构利润。Research-only；zero notional。
 
 ## 数据与执行口径

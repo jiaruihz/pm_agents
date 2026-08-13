@@ -19,10 +19,12 @@ if str(ROOT) not in sys.path:
 from weather_data_feed_service.legacy_weather_predict.city_pools import (  # noqa: E402
     FULL_CITY_CONFIGS,
 )
-DEFAULT_INPUT = (
-    ROOT
-    / "docs/analysis/2026-07/generated/"
-    "historical_forecast_enrichment_bias_v1/daily_error_rows.csv"
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    resolve_content_addressed_artifact,
+)
+
+HISTORICAL_FORECAST_ERRORS_SHA256 = (
+    "35802482add6330d9f39f90ecff1b11c4813704b07ac710f7a153f1f6a100719"
 )
 DEFAULT_OUTPUT = (
     ROOT / "configs/weather/d1_multisource_consensus_shadow_v1.json"
@@ -54,7 +56,13 @@ def model_geography_is_valid(city: str, model_key: str) -> bool:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=resolve_content_addressed_artifact(
+            HISTORICAL_FORECAST_ERRORS_SHA256
+        ),
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--cutoff", default=DEFAULT_CUTOFF)
     return parser.parse_args()
