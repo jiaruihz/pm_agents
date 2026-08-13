@@ -48,7 +48,7 @@ def test_runtime_contract_proves_pit_clock_and_clean_deployment() -> None:
     assert runner.DEPLOYMENT_METADATA["critical_source_dirty"] is False
     assert (
         runner.DEPLOYMENT_METADATA["deployment_contract_version"]
-        == "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_v5"
+        == "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_rearm_v6"
     )
 
 
@@ -117,11 +117,11 @@ def test_entry_is_exactly_ten_taker_plus_two_five_share_makers() -> None:
     assert plans[1]["expires_at_utc"] == "2026-07-24T04:46:00+00:00"
     assert plans[1]["cancel_buffer_sec"] == 90
     assert plans[1]["maker_live_eligible"] is True
-    assert plans[1]["maker_post_update_live_rearm"] is False
+    assert plans[1]["maker_post_update_live_rearm"] is True
     assert plans[1]["post_update_reprice_required"] is False
     assert all(
         plan["resolved_execution_profile"]
-        == "split_taker_two_maker_event_validated_no_fallback_v5"
+        == "split_taker_two_maker_event_rearmed_no_fallback_v6"
         for plan in plans
     )
     assert len({plan["execution_config_id"] for plan in plans}) == 1
@@ -141,7 +141,7 @@ def test_live_parser_defaults_match_frozen_ten_plus_five_plus_five_contract() ->
     )
     assert args.summary_filename == "signal_latest_summary.json"
     assert args.summary_history_filename == "signal_summary_history.jsonl"
-    assert runner.CONFIG_ID.endswith("split_10_taker_5_staged_5_pullback_v5")
+    assert runner.CONFIG_ID.endswith("split_10_taker_5_staged_5_pullback_rearm_v6")
 
 
 def test_market_above_frozen_training_support_is_not_eligible() -> None:
@@ -265,7 +265,7 @@ def test_pullback_maker_is_exactly_entry_ask_minus_two_cents() -> None:
     assert pullback["limit_price"] == pytest.approx(0.82)
     assert pullback["quote_mode"] == "entry_ask_minus_2c_static_post_only_edge_capped"
     assert pullback["maker_experiment_id"] == (
-        "core_carry_staged_vs_pullback_maker_ab_20260813"
+        "core_carry_staged_vs_pullback_maker_rearm_ab_20260813"
     )
 
 
@@ -756,7 +756,7 @@ def test_maker_is_not_created_inside_pre_update_blackout() -> None:
     assert clock["maker_clock_status"] == "pre_source_report_blackout"
     assert clock["maker_live_eligible"] is False
     assert clock["maker_live_skip_reason"] == "source_report_deadline_elapsed"
-    assert clock["maker_post_update_live_rearm"] is False
+    assert clock["maker_post_update_live_rearm"] is True
     assert clock["maker_post_update_shadow_revalidation"] is True
     assert clock["maker_shadow_policy"] == (
         "first_post_update_positive_ev_replay_only_v1"
@@ -810,10 +810,167 @@ def test_late_epoch_entry_records_terminal_live_maker_and_shadow_counterfactual(
     assert runner.entry_plan_cost_reservation(plans) == pytest.approx(8.4)
     assert attempts[0]["status"] == "planned"
     assert attempts[0]["maker_clock_status"] == "pre_source_report_blackout"
-    assert attempts[0]["maker_live_action"] == "skip_terminal"
+    assert attempts[0]["maker_live_action"] == "defer_post_update_rearm"
     assert attempts[0]["maker_planned_shares"] == 0.0
     assert attempts[0]["maker_shadow_revalidation_shares"] == 10.0
-    assert attempts[0]["maker_post_update_live_rearm"] is False
+    assert attempts[0]["maker_post_update_live_rearm"] is True
+
+
+def test_deferred_makers_rearm_on_new_positive_ev_weather_epoch(
+    tmp_path, monkeypatch
+) -> None:
+    row = score_row()
+    sid = runner.signal_id(row)
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [{"checkpoint_key": row["checkpoint_key"], "family_city_day_conflict": False}],
+    )
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--max-daily-cost-usd", "100"]
+    )
+
+    initial_plans, initial_attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 49, tzinfo=timezone.utc),
+    )
+    assert [plan["child_order_role"] for plan in initial_plans] == ["taker"]
+    runner.write_jsonl(tmp_path / "entry_attempts.jsonl", initial_attempts)
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [
+            {
+                "signal_id": sid,
+                "child_order_role": "taker",
+                "status": "submitted",
+                "city": row["city"],
+                "target_date": row["target_date"],
+                "created_at_utc": "2026-07-24T04:49:00+00:00",
+                "posted_notional": 8.4,
+            }
+        ],
+    )
+    newer = {
+        **row,
+        "decision_snapshot_ts_utc": "2026-07-24T04:51:00Z",
+        "source_report_ts_utc": "2026-07-24T04:50:00Z",
+        "obs_status": "ok",
+        "station_gap_state": "within_expected_cadence",
+        "obs_age_min": 1.0,
+    }
+    runner.write_jsonl(tmp_path / "state_decisions.jsonl", [newer])
+    monkeypatch.setattr(
+        runner,
+        "market_httpx_client",
+        lambda *_args, **_kwargs: nullcontext(object()),
+    )
+    monkeypatch.setattr(
+        runner.signal_runner,
+        "fetch_full_book",
+        lambda *_args, **_kwargs: {
+            "status": "ok",
+            "bid": 0.82,
+            "ask": 0.86,
+            "bid_size": 20,
+            "ask_size": 20,
+            "tick_size": 0.01,
+            "asks": [{"price": 0.86, "size": 20}],
+            "fetched_at_utc": "2026-07-24T04:51:00Z",
+        },
+    )
+    monkeypatch.setattr(
+        runner,
+        "evaluate_entry",
+        lambda enriched, _asks, _artifact: {
+            "eligible": True,
+            "reasons": [],
+            "model_probability_hold": 0.93,
+            "model_edge_after_fee_and_depth": 0.02,
+        },
+    )
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 51, 5, tzinfo=timezone.utc),
+    )
+
+    assert [plan["child_order_role"] for plan in plans] == [
+        "maker_staged",
+        "maker_pullback",
+    ]
+    assert all(plan["limit_price"] == pytest.approx(0.83) for plan in plans)
+    assert all(plan["limit_price"] < row["current_yes_ask"] for plan in plans)
+    assert all(plan["maker_rearm_model_edge_after_fee_and_depth"] == 0.02 for plan in plans)
+    assert attempts[0]["maker_live_action"] == "post"
+    assert attempts[0]["maker_rearm_status"] == "eligible"
+
+
+def test_post_update_rearm_keeps_makers_off_when_core_net_ev_is_not_positive(
+    tmp_path, monkeypatch
+) -> None:
+    row = score_row()
+    sid = runner.signal_id(row)
+    deferred = {
+        "signal_id": sid,
+        "created_at_utc": "2026-07-24T04:49:00+00:00",
+        "maker_live_action": "defer_post_update_rearm",
+        "data_epoch_ref": runner.weather_state_epoch_ref(row),
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [{"checkpoint_key": row["checkpoint_key"], "family_city_day_conflict": False}],
+    )
+    runner.write_jsonl(tmp_path / "entry_attempts.jsonl", [deferred])
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [{"signal_id": sid, "child_order_role": "taker", "status": "submitted"}],
+    )
+    newer = {
+        **row,
+        "decision_snapshot_ts_utc": "2026-07-24T04:51:00Z",
+        "source_report_ts_utc": "2026-07-24T04:50:00Z",
+        "obs_status": "ok",
+        "station_gap_state": "within_expected_cadence",
+        "obs_age_min": 1.0,
+    }
+    runner.write_jsonl(tmp_path / "state_decisions.jsonl", [newer])
+    monkeypatch.setattr(runner, "market_httpx_client", lambda *_a, **_k: nullcontext(object()))
+    monkeypatch.setattr(
+        runner.signal_runner,
+        "fetch_full_book",
+        lambda *_a, **_k: {
+            "status": "ok",
+            "bid": 0.90,
+            "ask": 0.98,
+            "tick_size": 0.01,
+            "asks": [{"price": 0.98, "size": 20}],
+        },
+    )
+    monkeypatch.setattr(
+        runner,
+        "evaluate_entry",
+        lambda *_a, **_k: {
+            "eligible": False,
+            "reasons": ["non_positive_taker_ev"],
+            "model_probability_hold": 0.93,
+            "model_edge_after_fee_and_depth": -0.05,
+        },
+    )
+    args = runner.parser().parse_args(["run", "--output-dir", str(tmp_path)])
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 51, 5, tzinfo=timezone.utc),
+    )
+
+    assert plans == []
+    assert attempts[0]["maker_live_action"] == "defer_post_update_rearm"
+    assert attempts[0]["maker_rearm_status"] == "not_eligible"
+    assert attempts[0]["maker_rearm_reason"] == "non_positive_taker_ev"
 
 
 def test_maker_cancels_at_pre_update_deadline(tmp_path) -> None:

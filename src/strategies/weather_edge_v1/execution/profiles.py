@@ -314,6 +314,58 @@ _PROFILES = {
             "maker_experiment_id": "core_carry_staged_vs_pullback_maker_ab_20260813",
         },
     ),
+    "split_taker_two_maker_event_rearmed_no_fallback_v6": ExecutionProfile(
+        name="split_taker_two_maker_event_rearmed_no_fallback_v6",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="current_yes_residual_carry_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+            ),
+            ExecutionLegProfile(
+                role="maker_staged",
+                execution_policy="current_yes_residual_carry_staged_maker_v3",
+                order_lifecycle_policy="maker_event_validated_staged_until_update_or_ttl_v3",
+                maker_only=True,
+                reprice_policy="deadline_staged_exact_target",
+                price_cap_policy="model_probability_retained_edge_and_taker_improvement",
+                max_reprices=2,
+            ),
+            ExecutionLegProfile(
+                role="maker_pullback",
+                execution_policy="current_yes_residual_carry_pullback_maker_v1",
+                order_lifecycle_policy="maker_event_validated_static_pullback_until_update_or_ttl_v1",
+                maker_only=True,
+                reprice_policy="none",
+                price_cap_policy="entry_ask_minus_fixed_offset_and_model_edge_cap",
+                max_reprices=0,
+            ),
+        ),
+        cancel_buffer_sec=90,
+        planner_supported=False,
+        allocation_policy="explicit_leg_shares",
+        refresh_sec=15,
+        ttl_sec=900,
+        data_epoch_policy="cancel",
+        fixed_parameters={
+            "minimum_taker_improvement_ticks": 1,
+            "retained_edge": "0.01",
+            "pullback_offset": "0.02",
+            "stage_midpoint_after_sec": 300,
+            "stage_near_ask_after_sec": 600,
+            "clock_basis": "next_source_report_not_collector_availability",
+            "state_epoch_components": (
+                "observation+forecast_curve+exact_bracket_token"
+            ),
+            "replacement_price_policy": "exact_stage_target_never_down",
+            "replacement_max_quote_drift_ticks": 1,
+            "post_update_live_rearm": True,
+            "post_update_rearm_max_age_sec": 3600,
+            "post_update_shadow_revalidation": True,
+            "maker_experiment_id": "core_carry_staged_vs_pullback_maker_rearm_ab_20260813",
+        },
+    ),
 }
 
 # Alias values are (resolved profile name, fixture identity). Keep this empty

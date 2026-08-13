@@ -1,6 +1,6 @@
-# Core Carry integrated maker v4 / dual-maker A/B v5
+# Core Carry integrated maker v4 / dual-maker A/B v5 / post-update rearm v6
 
-Status: `v5 implementation verified / production rollout target`
+Status: `v5 live / v6 implementation verified / production rollout target`
 
 ## 结论与交易动作
 
@@ -28,6 +28,24 @@ pullback arm 固定 5 股、报价为 entry ask 下方 2c、无 reprice、无 ta
 真实 maker intent、authenticated fill、paired price improvement、adverse selection
 和 settlement PnL 复评，不能用 future touch 冒充成交。
 
+v6 不改变 Core selector、模型、10+5+5 sizing 或现有 maker 的追价方式；只修正
+maker 首次撞上 source-report blackout 后被永久 `skip_terminal` 的容量缺口。处理改为：
+
+1. 旧天气 epoch 下不挂 maker，避免抢在新 METAR 前被反向选择；
+2. 最多等待 60 分钟内的下一份 observation/forecast/exact-bracket state；
+3. 新 epoch 到达后用冻结 Core v3 和新鲜十股 ask ladder 完整重评；
+4. 只有 exact bracket/token 未变、Core taker net-EV 仍为正时才重新武装缺失的两条 maker；
+5. maker cap 同时低于新 ask、原 taker ask，并保留至少 1c 模型 edge；仍为 post-only、
+   无 taker fallback，且单 city-day 最大仓位保持 20 股；
+6. 若新 epoch 不再正 EV，只记录评估并等待下一 epoch；超时或 token/bracket 改变后终止。
+
+2026-08-13 Shanghai 是直接影响案例：13:31 local 的 Core 信号在 `0.88/0.91`，
+10-share taker 因 CLOB read timeout 未成交，两个 maker 因已越过预期 13:30 METAR
+时间而没有创建。13:41 新 METAR 后冻结 Core 重评为 `p=0.929867`、十股 net edge
+`+1.5777c/share`；v6 反事实会分别创建 5-share staged 与 5-share pullback，二者
+初始限价均为 `0.89`、cap `0.90`。这增加本应可执行的 maker 容量，但不是成交或
+收益保证；真实效果仍按 authenticated fill、adverse selection 和 settlement 统计。
+
 ## 为什么是这个组合
 
 - 最近 28 个真实 maker root intents 有 15 个成交；已结算 maker 70 股贡献
@@ -38,7 +56,8 @@ pullback arm 固定 5 股、报价为 entry ask 下方 2c、无 reprice、无 ta
   有界 live A/B，不能把 future ask crossing 当真实 queue fill，也不能延长 TTL。
 - 两个 maker 可能在同一次回调都成交；所以 v5 的目的同时包含扩大单信号仓位，
   不是把 pullback arm 伪装成与 staged arm 完全独立的历史 alpha。
-- post-update re-arm 的保守 fill 仍只有 Amsterdam 1 个；它继续 shadow，不进入 live。
+- 旧 post-update re-arm 研究只有 Amsterdam 1 个保守 fill，不能支持扩大 selector；v6
+  仅恢复已经通过 Core selector、却因 clock blackout 缺失的 maker child，不交易新 city-day。
 - event-rescore 已能区分 observation、forecast revision 与 exact-bracket transition；
   v4 把这些事件用于撤销 stale maker，但没有把低样本 event selector 偷渡进下单。
 

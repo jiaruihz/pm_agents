@@ -19,9 +19,11 @@ cancelled 90 seconds before the next expected source report, when an unexpected
 observation epoch arrives, or when the 15-minute parent TTL expires.  The clock
 is intentionally based on source-report time rather than this collector's later
 availability: another participant may receive the report first.  A maker first
-seen inside that blackout is skipped for live and retained only as an explicit
-post-update shadow counterfactual; it is never silently or automatically
-re-armed.
+seen inside that blackout is deferred until a new weather epoch is observed,
+then re-scored against the frozen Core model and a fresh executable ladder.  It
+is armed only when the exact-bracket token is unchanged, taker net-EV remains
+positive, its limit is below both the current and parent taker ask, and the
+original city-day remains below the fixed twenty-share cap.
 """
 
 from __future__ import annotations
@@ -70,9 +72,9 @@ from weather_data_feed.observation_cache import index_observation_cache  # noqa:
 
 STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
-CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_staged_5_pullback_v5"
-EXECUTION_PROFILE = "split_taker_two_maker_event_validated_no_fallback_v5"
-DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_v5"
+CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_staged_5_pullback_rearm_v6"
+EXECUTION_PROFILE = "split_taker_two_maker_event_rearmed_no_fallback_v6"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_rearm_v6"
 MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
 FROZEN_TAKER_SHARES = 10.0
 FROZEN_MAKER_SHARES = 5.0
@@ -618,7 +620,9 @@ def attempted_signal_ids(output_dir: Path) -> set[str]:
     return attempted
 
 
-def attempted_child_roles(output_dir: Path) -> dict[str, set[str]]:
+def attempted_child_roles(
+    output_dir: Path, *, now: datetime | None = None
+) -> dict[str, set[str]]:
     """Return terminally attempted entry children, without collapsing the batch.
 
     A taker outcome must not consume a maker child that never reached a durable
@@ -636,6 +640,28 @@ def attempted_child_roles(output_dir: Path) -> dict[str, set[str]]:
                 {"taker", "maker_staged", "maker_pullback"}
             )
         elif str(row.get("maker_live_action") or "") == "skip_terminal":
+            if bool(row.get("maker_rearm_terminal")):
+                attempted.setdefault(sid, set()).update(
+                    {"maker_staged", "maker_pullback"}
+                )
+                continue
+            created = parse_utc(row.get("created_at_utc"))
+            rearm_enabled = bool(
+                get_execution_profile(EXECUTION_PROFILE).fixed_parameters.get(
+                    "post_update_live_rearm"
+                )
+            )
+            rearm_max_age = maker_profile_parameter("post_update_rearm_max_age_sec")
+            if (
+                rearm_enabled
+                and now is not None
+                and created is not None
+                and 0 <= (now - created).total_seconds() <= rearm_max_age
+            ):
+                # A pre-v6 terminal skip inside the bounded migration window is
+                # reinterpreted as deferred.  It still requires a newer weather
+                # epoch and a fresh positive-EV score before any order exists.
+                continue
             arm = str(row.get("maker_arm") or "")
             if arm in {"staged", "pullback"}:
                 attempted.setdefault(sid, set()).add(f"maker_{arm}")
@@ -739,14 +765,21 @@ def maker_edge_price_cap(
     best_ask: float,
     tick_size: float,
     model_probability: float,
+    parent_taker_ask: float | None = None,
 ) -> float:
     retained_edge = maker_profile_parameter("retained_edge")
     improvement_ticks = maker_profile_parameter("minimum_taker_improvement_ticks")
     tick = Decimal(str(tick_size))
-    raw_cap = min(
+    caps = [
         Decimal(str(model_probability)) - Decimal(str(retained_edge)),
         Decimal(str(best_ask)) - Decimal(str(improvement_ticks)) * tick,
-    )
+    ]
+    if parent_taker_ask is not None and parent_taker_ask > 0:
+        caps.append(
+            Decimal(str(parent_taker_ask))
+            - Decimal(str(improvement_ticks)) * tick
+        )
+    raw_cap = min(caps)
     if raw_cap <= 0 or tick <= 0:
         return 0.0
     return float((raw_cap // tick) * tick)
@@ -922,6 +955,7 @@ def base_plan_fields(
         best_ask=ask,
         tick_size=tick,
         model_probability=probability,
+        parent_taker_ask=finite(row.get("maker_rearm_parent_taker_ask")),
     )
     sid = signal_id(row)
     maker = child_order_role == "maker" or child_order_role.startswith("maker_")
@@ -1033,6 +1067,13 @@ def base_plan_fields(
             else expires.isoformat(timespec="seconds")
         ),
         "maker_price_cap": round(maker_cap, 6) if maker else 0.0,
+        "maker_rearm_parent_taker_ask": (
+            finite(row.get("maker_rearm_parent_taker_ask")) or 0.0
+        ),
+        "maker_rearm_state_ref": str(row.get("maker_rearm_state_ref") or ""),
+        "maker_rearm_model_edge_after_fee_and_depth": (
+            finite(row.get("maker_rearm_model_edge_after_fee_and_depth")) or 0.0
+        ),
         "maker_price_cap_policy": (
             "model_probability_retained_edge_and_taker_improvement"
             if maker
@@ -1394,6 +1435,159 @@ def maker_lifecycle_plans(
     return plans, decisions
 
 
+def maker_rearm_attempts(output_dir: Path) -> dict[str, dict[str, dict[str, Any]]]:
+    """Return the first defer and latest rearm evaluation for each signal."""
+
+    attempts: dict[str, dict[str, dict[str, Any]]] = {}
+    for row in iter_jsonl(output_dir / "entry_attempts.jsonl"):
+        sid = str(row.get("signal_id") or "")
+        if not sid:
+            continue
+        action = str(row.get("maker_live_action") or "")
+        if action not in {"skip_terminal", "defer_post_update_rearm"}:
+            continue
+        bucket = attempts.setdefault(sid, {})
+        if "deferred" not in bucket:
+            bucket["deferred"] = row
+        bucket["latest"] = row
+    return attempts
+
+
+def post_update_maker_rearm_score(
+    *,
+    args: argparse.Namespace,
+    output_dir: Path,
+    original_score: Mapping[str, Any],
+    deferred_attempt: Mapping[str, Any],
+    latest_attempt: Mapping[str, Any],
+    now: datetime,
+) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
+    """Re-score a deferred Core maker on a strictly newer weather epoch.
+
+    This does not create a new Core signal.  It only gives the missing maker
+    children of an already selected city-day one bounded chance per new state.
+    """
+
+    created = parse_utc(deferred_attempt.get("created_at_utc"))
+    max_age_sec = maker_profile_parameter("post_update_rearm_max_age_sec")
+    common = {
+        "maker_rearm_parent_taker_ask": (
+            finite(original_score.get("current_yes_ask")) or 0.0
+        ),
+        "maker_rearm_original_state_ref": str(
+            deferred_attempt.get("data_epoch_ref") or ""
+        ),
+        "maker_rearm_max_age_sec": max_age_sec,
+    }
+    if created is None or (now - created).total_seconds() > max_age_sec:
+        return "terminal", None, {
+            **common,
+            "maker_rearm_status": "expired",
+            "maker_rearm_terminal": True,
+            "maker_rearm_reason": "post_update_rearm_window_expired",
+        }
+
+    city_day = (
+        str(original_score.get("city") or ""),
+        str(original_score.get("target_date") or ""),
+    )
+    latest = latest_weather_epochs(output_dir / "state_decisions.jsonl").get(city_day)
+    if latest is None:
+        return "waiting", None, {
+            **common,
+            "maker_rearm_status": "waiting",
+            "maker_rearm_reason": "latest_weather_state_unavailable",
+        }
+    original_ref = str(deferred_attempt.get("data_epoch_ref") or "")
+    latest_ref = weather_state_epoch_ref(latest)
+    if not latest_ref or latest_ref == original_ref:
+        return "waiting", None, {
+            **common,
+            "maker_rearm_status": "waiting",
+            "maker_rearm_state_ref": latest_ref,
+            "maker_rearm_reason": "new_weather_epoch_not_observed",
+        }
+    if str(latest_attempt.get("maker_rearm_evaluated_state_ref") or "") == latest_ref:
+        return "waiting", None, {
+            **common,
+            "maker_rearm_status": "waiting",
+            "maker_rearm_state_ref": latest_ref,
+            "maker_rearm_reason": "weather_epoch_already_re_scored",
+        }
+
+    original_token = str(
+        original_score.get("current_yes_token_id")
+        or original_score.get("token_id")
+        or ""
+    )
+    latest_token = str(
+        latest.get("current_yes_token_id") or latest.get("token_id") or ""
+    )
+    original_bracket = str(
+        original_score.get("current_bracket") or original_score.get("bracket") or ""
+    )
+    latest_bracket = str(
+        latest.get("current_bracket") or latest.get("bracket") or ""
+    )
+    if latest_token != original_token or latest_bracket != original_bracket:
+        return "terminal", None, {
+            **common,
+            "maker_rearm_status": "invalidated",
+            "maker_rearm_terminal": True,
+            "maker_rearm_evaluated_state_ref": latest_ref,
+            "maker_rearm_reason": "exact_bracket_or_token_changed",
+        }
+
+    freshness_ok, freshness_reason = signal_runner.observation_freshness_valid(latest)
+    if not freshness_ok:
+        return "evaluated", None, {
+            **common,
+            "maker_rearm_status": "not_eligible",
+            "maker_rearm_evaluated_state_ref": latest_ref,
+            "maker_rearm_reason": freshness_reason,
+        }
+
+    with market_httpx_client(
+        args.book_proxy, timeout=float(args.book_timeout_sec)
+    ) as client:
+        book = signal_runner.fetch_full_book(client, latest_token)
+    enriched = {
+        **dict(latest),
+        "current_yes_bid": book.get("bid"),
+        "current_yes_ask": book.get("ask"),
+        "current_yes_bid_size": book.get("bid_size"),
+        "current_yes_ask_size": book.get("ask_size"),
+        "current_yes_tick_size": book.get("tick_size"),
+        "current_yes_book_status": book.get("status"),
+        "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
+        "checkpoint_key": str(original_score.get("checkpoint_key") or ""),
+        "artifact_hash": str(original_score.get("artifact_hash") or ""),
+    }
+    result = evaluate_entry(
+        enriched,
+        book.get("asks") or [],
+        load_artifact(Path(args.artifact)),
+    )
+    meta = {
+        **common,
+        "maker_rearm_status": "eligible" if bool(result.get("eligible")) else "not_eligible",
+        "maker_rearm_evaluated_state_ref": latest_ref,
+        "maker_rearm_state_ref": latest_ref,
+        "maker_rearm_reason": (
+            "fresh_positive_taker_net_ev"
+            if bool(result.get("eligible"))
+            else ",".join(map(str, result.get("reasons") or ["core_not_eligible"]))
+        ),
+        "maker_rearm_model_edge_after_fee_and_depth": (
+            finite(result.get("model_edge_after_fee_and_depth")) or 0.0
+        ),
+        "maker_rearm_current_taker_ask": finite(book.get("ask")) or 0.0,
+    }
+    if not bool(result.get("eligible")):
+        return "evaluated", None, meta
+    return "eligible", {**enriched, **result, **meta}, meta
+
+
 def new_entry_plans(
     args: argparse.Namespace,
     output_dir: Path,
@@ -1401,7 +1595,8 @@ def new_entry_plans(
     now: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     scores = latest_rows_by_checkpoint(output_dir / "pre_live_scores.jsonl")
-    attempted_roles = attempted_child_roles(output_dir)
+    attempted_roles = attempted_child_roles(output_dir, now=now)
+    rearm_attempts = maker_rearm_attempts(output_dir)
     family_paths = family_live_order_files(output_dir)
     family_city_days = submitted_city_days(family_paths)
     used_city_days, used_cost = daily_family_usage(family_paths, now)
@@ -1417,6 +1612,64 @@ def new_entry_plans(
         expected_roles = {"taker", "maker_staged", "maker_pullback"}
         if expected_roles.issubset(existing_roles):
             continue
+        planning_row: Mapping[str, Any] = row
+        rearm_meta: dict[str, Any] = {}
+        missing_maker_roles = {
+            "maker_staged",
+            "maker_pullback",
+        } - existing_roles
+        if "taker" in existing_roles and missing_maker_roles:
+            history = rearm_attempts.get(sid, {})
+            deferred = history.get("deferred")
+            latest_attempt = history.get("latest", deferred or {})
+            if deferred is None:
+                # Missing maker children without an explicit clock defer are not
+                # a post-update rearm.  Preserve the existing same-epoch recovery
+                # path for a taker-only partial batch.
+                rearm_status, rearmed_row = "same_epoch_recovery", None
+            else:
+                rearm_status, rearmed_row, rearm_meta = post_update_maker_rearm_score(
+                    args=args,
+                    output_dir=output_dir,
+                    original_score=row,
+                    deferred_attempt=deferred,
+                    latest_attempt=latest_attempt,
+                    now=now,
+                )
+            if rearm_status == "waiting":
+                continue
+            if rearm_status in {"evaluated", "terminal"}:
+                attempts.append(
+                    {
+                        "record_type": "current_yes_core_carry_entry_attempt",
+                        "created_at_utc": now.isoformat(timespec="seconds"),
+                        "signal_id": sid,
+                        "city": city_day[0],
+                        "target_date": city_day[1],
+                        "checkpoint_key": row.get("checkpoint_key"),
+                        "model_probability_hold": row.get("model_probability_hold"),
+                        "status": "planned",
+                        "reason": "",
+                        "live_enabled": bool(args.live and args.confirm_live),
+                        "maker_requested_shares": float(args.maker_shares)
+                        + float(args.pullback_maker_shares),
+                        "maker_planned_shares": 0.0,
+                        "staged_maker_planned": False,
+                        "pullback_maker_planned": False,
+                        "maker_live_action": (
+                            "skip_terminal"
+                            if rearm_status == "terminal"
+                            else "defer_post_update_rearm"
+                        ),
+                        "maker_post_update_live_rearm": True,
+                        **rearm_meta,
+                    }
+                )
+                continue
+            if rearm_status == "eligible" and rearmed_row is None:
+                continue
+            if rearmed_row is not None:
+                planning_row = rearmed_row
         reason = ""
         if not existing_roles and (
             bool(would.get("family_city_day_conflict")) or city_day in family_city_days
@@ -1428,7 +1681,7 @@ def new_entry_plans(
             []
             if reason
             else build_entry_plans(
-                row,
+                planning_row,
                 live_enabled=bool(args.live and args.confirm_live),
                 now=now,
                 taker_shares=float(args.taker_shares),
@@ -1458,7 +1711,7 @@ def new_entry_plans(
             entry_plans = []
             planned_cost = 0.0
         maker_clock = maker_clock_assessment(
-            row,
+            planning_row,
             now=now,
             order_ttl_min=float(args.order_ttl_min),
         )
@@ -1491,7 +1744,17 @@ def new_entry_plans(
                 "maker_live_action": (
                     "entry_blocked"
                     if reason
-                    else ("post" if maker_planned_roles else "skip_terminal")
+                    else (
+                        "post"
+                        if maker_planned_roles
+                        else (
+                            "defer_post_update_rearm"
+                            if bool(maker_clock.get("maker_post_update_live_rearm"))
+                            and maker_clock.get("maker_clock_status")
+                            == "pre_source_report_blackout"
+                            else "skip_terminal"
+                        )
+                    )
                 ),
                 "maker_shadow_revalidation_shares": (
                     float(args.maker_shares) + float(args.pullback_maker_shares)
@@ -1502,12 +1765,16 @@ def new_entry_plans(
                     else 0.0
                 ),
                 **maker_clock,
+                **rearm_meta,
             }
         )
         attempted_roles.setdefault(sid, set()).update(
             str(plan.get("child_order_role") or "") for plan in entry_plans
         )
-        if not reason:
+        defer_missing_makers = bool(
+            maker_clock.get("maker_post_update_live_rearm")
+        ) and maker_clock.get("maker_clock_status") == "pre_source_report_blackout"
+        if not reason and not defer_missing_makers:
             for maker_role in {"maker_staged", "maker_pullback"} - maker_planned_roles:
                 attempted_roles[sid].add(maker_role)
         if entry_plans:
