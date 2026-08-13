@@ -20,22 +20,28 @@ from src.weather_agent_harness.domains.strategy_research import (
     StrategyResearchDomain,
     strategy_task_spec,
 )
+from src.weather_agent_harness.domains.generic import GenericDomain
 from src.weather_agent_harness.evidence import EvidenceStore
 from src.weather_agent_harness.orchestration import (
     CodexDispatchAdapter,
     DependencyResolver,
+    JsonAssertion,
     OrchestrationStore,
     RequestProfile,
     RequestRouter,
     RoleSpec,
     RouteLevel,
     UsageRecord,
+    VerifierKind,
+    VerifierSpec,
     WorkOrder,
     WorkResult,
     WorkStatus,
     build_run_receipt,
+    compile_execution_profile,
     price_usage,
     usage_from_codex_session,
+    verify_evidence_record,
 )
 
 
@@ -55,6 +61,11 @@ def _orders() -> tuple[WorkOrder, WorkOrder]:
             objective="inspect evidence",
             role="luna_verifier",
             acceptance=("evidence_mapped",),
+            verifiers=(VerifierSpec(
+                acceptance_id="evidence_mapped",
+                kind=VerifierKind.EVIDENCE_HASH,
+                evidence_ref="inspect.json",
+            ),),
         ),
         WorkOrder(
             work_order_id="implement",
@@ -62,6 +73,18 @@ def _orders() -> tuple[WorkOrder, WorkOrder]:
             role="terra_worker",
             depends_on=("inspect",),
             acceptance=("fix_implemented", "tests_passed"),
+            verifiers=(
+                VerifierSpec(
+                    acceptance_id="fix_implemented",
+                    kind=VerifierKind.EVIDENCE_HASH,
+                    evidence_ref="implement.json",
+                ),
+                VerifierSpec(
+                    acceptance_id="tests_passed",
+                    kind=VerifierKind.EVIDENCE_HASH,
+                    evidence_ref="implement.json",
+                ),
+            ),
             risk=RiskLevel.REPOSITORY_WRITE,
             write_owners=("src/weather_agent_harness",),
         ),
@@ -159,7 +182,7 @@ def test_dependency_only_releases_after_verified_complete(tmp_path: Path) -> Non
     state, accepted = store.record_result(result)
     assert accepted is True
     assert [item.status for item in state.work_orders] == [WorkStatus.REVIEW, WorkStatus.PENDING]
-    state = store.accept("inspect", verified_acceptance=("evidence_mapped",))
+    state = store.accept("inspect")
     assert [item.status for item in state.work_orders] == [WorkStatus.COMPLETE, WorkStatus.READY]
 
 
@@ -233,7 +256,7 @@ def test_receipt_requires_terminal_certification_and_is_idempotent(tmp_path: Pat
             usage=_usage(),
         )
     )
-    store.accept("inspect", verified_acceptance=("evidence_mapped",))
+    store.accept("inspect")
     with pytest.raises(RuntimeError, match="terminal"):
         build_run_receipt(store)
 
@@ -250,6 +273,9 @@ def test_receipt_requires_terminal_certification_and_is_idempotent(tmp_path: Pat
         domain=StrategyResearchDomain(),
     )
     assert certification.harness_certified is True
+    assert certification.process_certified is True
+    assert certification.artifact_verified is True
+    assert certification.domain_outcome == "falsified"
     certification_path = store.evidence_store.run_dir / "certification.json"
     payload = json.loads(certification_path.read_text(encoding="utf-8"))
     payload["task_hash"] = "tampered"
@@ -274,6 +300,13 @@ def test_receipt_requires_terminal_certification_and_is_idempotent(tmp_path: Pat
     assert first.usage.savings_ratio == pytest.approx(0.96)
     assert first.agents[0].requested_model == "gpt-5.6-luna"
     assert first.agents[0].observed_model == "gpt-5.6-luna"
+    assert first.process_certified is True
+    assert first.artifact_verified is True
+    assert first.domain_outcome == "falsified"
+    snapshot = Path(first.evidence_records[0].snapshot_uri or "")
+    snapshot.write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="evidence integrity failed"):
+        build_run_receipt(store)
 
 
 def test_heartbeat_extends_lease_and_expiry_retries_then_runtime_exit_fails(
@@ -355,6 +388,19 @@ def test_chainlove_portable_task_supports_status_context_and_certify(
             objective="process the frozen bounty batch",
             role="terra_worker",
             acceptance=("output_present", "verification_present"),
+            verifiers=(
+                VerifierSpec(
+                    acceptance_id="output_present",
+                    kind=VerifierKind.EVIDENCE_HASH,
+                    evidence_ref="bounty-batch.json",
+                ),
+                VerifierSpec(
+                    acceptance_id="verification_present",
+                    kind=VerifierKind.JSON_ASSERTIONS,
+                    evidence_ref="bounty-batch.json",
+                    assertions=(JsonAssertion(path="$.verified", expected=True),),
+                ),
+            ),
             closes_acceptance=("batch_processed", "batch_verified"),
         )
     )
@@ -375,10 +421,7 @@ def test_chainlove_portable_task_supports_status_context_and_certify(
             usage=_usage(),
         )
     )
-    orchestration.accept(
-        "bounty-batch",
-        verified_acceptance=("output_present", "verification_present"),
-    )
+    orchestration.accept("bounty-batch")
     assert evidence_store.load_state().status == RunStatus.COMPLETE
 
     script = Path("scripts/ops/agent_harness.py").resolve()
@@ -439,7 +482,7 @@ def test_accept_rejects_success_without_measured_usage(tmp_path: Path) -> None:
         )
     )
     with pytest.raises(ValueError, match="measured token usage"):
-        store.accept("inspect", verified_acceptance=("evidence_mapped",))
+        store.accept("inspect")
 
 
 def test_codex_session_usage_is_extracted_and_priced(tmp_path: Path) -> None:
@@ -458,3 +501,183 @@ def test_codex_session_usage_is_extracted_and_priced(tmp_path: Path) -> None:
     assert priced.estimated_cost_credits == pytest.approx(0.044)
     assert priced.baseline_cost_credits == pytest.approx(0.11)
     assert priced.savings_ratio == pytest.approx(0.6)
+
+
+def test_accept_cannot_trust_coordinator_strings_or_worker_claims(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    order = _orders()[0].model_copy(update={"verifiers": ()})
+    store.add_work_orders(order)
+    _, running, _ = store.start(
+        "inspect", thread_id="thread-unverified", observed_model="gpt-5.6-luna"
+    )
+    evidence = store.evidence_store.artifact_path("inspect.json")
+    evidence.write_text('{"claimed": true}\n', encoding="utf-8")
+    store.record_result(
+        WorkResult(
+            work_order_id="inspect",
+            attempt=running.attempt,
+            lease_id=running.lease_id or "",
+            status="succeeded",
+            summary="worker claims completion",
+            evidence_refs=(str(evidence),),
+            acceptance_claims=("evidence_mapped",),
+            observed_model="gpt-5.6-luna",
+            usage=_usage(),
+        )
+    )
+    with pytest.raises(ValueError, match="lacks machine verifiers"):
+        store.accept("inspect")
+
+
+def test_failed_json_verifier_is_persisted_and_releases_retry(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    order = _orders()[0].model_copy(update={
+        "verifiers": (
+            VerifierSpec(
+                acceptance_id="evidence_mapped",
+                kind=VerifierKind.JSON_ASSERTIONS,
+                evidence_ref="inspect.json",
+                assertions=(JsonAssertion(path="$.verified", expected=True),),
+            ),
+        )
+    })
+    store.add_work_orders(order)
+    _, running, _ = store.start(
+        "inspect", thread_id="thread-json-fail", observed_model="gpt-5.6-luna"
+    )
+    evidence = store.evidence_store.artifact_path("inspect.json")
+    evidence.write_text('{"verified": false}\n', encoding="utf-8")
+    store.record_result(
+        WorkResult(
+            work_order_id="inspect",
+            attempt=running.attempt,
+            lease_id=running.lease_id or "",
+            status="succeeded",
+            summary="bad artifact",
+            evidence_refs=(str(evidence),),
+            observed_model="gpt-5.6-luna",
+            usage=_usage(),
+        )
+    )
+    with pytest.raises(ValueError, match="machine verification failed"):
+        store.accept("inspect")
+    state = store.load()
+    assert state.work_orders[0].status == WorkStatus.READY
+    assert state.verifier_results[-1].passed is False
+
+
+def test_command_verifier_runs_in_coordinator_and_seals_output(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    order = _orders()[0].model_copy(update={
+        "verifiers": (
+            VerifierSpec(
+                acceptance_id="evidence_mapped",
+                kind=VerifierKind.COMMAND,
+                argv=(sys.executable, "-c", "print('machine-check-ok')"),
+            ),
+        )
+    })
+    store.add_work_orders(order)
+    _, running, _ = store.start(
+        "inspect", thread_id="thread-command", observed_model="gpt-5.6-luna"
+    )
+    evidence = store.evidence_store.artifact_path("inspect.json")
+    evidence.write_text("{}\n", encoding="utf-8")
+    store.record_result(
+        WorkResult(
+            work_order_id="inspect",
+            attempt=running.attempt,
+            lease_id=running.lease_id or "",
+            status="succeeded",
+            summary="ready for machine check",
+            evidence_refs=(str(evidence),),
+            observed_model="gpt-5.6-luna",
+            usage=_usage(),
+        )
+    )
+    state = store.accept("inspect")
+    verifier = state.verifier_results[-1]
+    assert verifier.passed is True
+    assert verifier.details["returncode"] == 0
+    assert len(verifier.evidence_records) == 2
+    assert all(verify_evidence_record(item)[0] for item in verifier.evidence_records)
+
+
+def test_evidence_is_snapshotted_and_hash_tampering_is_detected(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.add_work_orders(_orders()[0])
+    _, running, _ = store.start(
+        "inspect", thread_id="thread-snapshot", observed_model="gpt-5.6-luna"
+    )
+    evidence = store.evidence_store.artifact_path("inspect.json")
+    evidence.write_text('{"version": 1}\n', encoding="utf-8")
+    state, _ = store.record_result(
+        WorkResult(
+            work_order_id="inspect",
+            attempt=running.attempt,
+            lease_id=running.lease_id or "",
+            status="succeeded",
+            summary="captured",
+            evidence_refs=(str(evidence),),
+            observed_model="gpt-5.6-luna",
+            usage=_usage(),
+        )
+    )
+    record = state.results[-1].evidence_records[0]
+    assert record.snapshot_uri is not None
+    evidence.write_text('{"version": 2}\n', encoding="utf-8")
+    assert verify_evidence_record(record)[0] is True
+    Path(record.snapshot_uri).write_text('{"tampered": true}\n', encoding="utf-8")
+    assert verify_evidence_record(record)[0] is False
+    with pytest.raises(ValueError, match="evidence integrity failed"):
+        store.accept("inspect")
+
+
+def test_generic_domain_does_not_trust_completed_acceptance_alone(tmp_path: Path) -> None:
+    evidence = EvidenceStore(tmp_path / "generic-self-proof")
+    task = TaskSpec(
+        run_id="generic-self-proof",
+        task_type="generic.task",
+        objective="prove from machine evidence",
+        acceptance=("done",),
+        domain=DomainSpec(),
+    )
+    state = evidence.initialize(task, initial_phase="WORK")
+    state.completed_acceptance = ("done",)
+    decision = GenericDomain(task.domain).verify(task, state)
+    assert decision.state == CompletionState.CONTINUE
+    assert decision.unmet_acceptance == ("done",)
+
+
+def test_dispatch_profile_is_native_and_unenforceable_claims_fail_closed() -> None:
+    order = _orders()[0]
+    role = RoleSpec(
+        name="luna_verifier",
+        requested_model="gpt-5.6-luna",
+        sandbox="read-only",
+    )
+    profile = compile_execution_profile(role, order)
+    assert profile.agent_type == "luna_verifier"
+    assert profile.sandbox_mode == "read-only"
+    instruction = CodexDispatchAdapter().instruction(order, role)
+    assert instruction["agent_type"] == "luna_verifier"
+    with pytest.raises(ValueError, match="allowed_tools cannot be enforced"):
+        compile_execution_profile(
+            role.model_copy(update={"allowed_tools": ("exec",)}), order
+        )
+
+
+def test_controlled_work_order_requires_exact_hash_grant(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    order = _orders()[1].model_copy(
+        update={"depends_on": (), "risk": RiskLevel.PRODUCTION_CHANGE}
+    )
+    store.add_work_orders(order)
+    with pytest.raises(PermissionError, match="exact work_order_hash"):
+        CodexDispatchAdapter().prepare(store, order.work_order_id)
+    with pytest.raises(PermissionError, match="exact work_order_hash"):
+        store.start(
+            order.work_order_id,
+            thread_id="bypass",
+            observed_model="gpt-5.6-terra",
+        )

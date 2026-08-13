@@ -48,6 +48,7 @@ from src.weather_agent_harness.orchestration import (
     WorkOrder,
     WorkResult,
     build_run_receipt,
+    price_usage,
     usage_from_codex_session,
 )
 from src.weather_agent_harness.scenarios.market_prior_training import (
@@ -397,10 +398,7 @@ def record_work_result(args: argparse.Namespace) -> int:
 
 
 def accept_work_order(args: argparse.Namespace) -> int:
-    state = OrchestrationStore(EvidenceStore(args.run_dir)).accept(
-        args.work_order_id,
-        verified_acceptance=tuple(args.verified_acceptance),
-    )
+    state = OrchestrationStore(EvidenceStore(args.run_dir)).accept(args.work_order_id)
     print(json.dumps(state.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
@@ -446,7 +444,22 @@ def record_agent_terminal(args: argparse.Namespace) -> int:
 
 
 def write_receipt(args: argparse.Namespace) -> int:
-    receipt = build_run_receipt(OrchestrationStore(EvidenceStore(args.run_dir)))
+    coordinator_usage = None
+    if args.coordinator_session_jsonl:
+        usage, observed_model, _, _ = usage_from_codex_session(
+            args.coordinator_session_jsonl
+        )
+        coordinator_usage = price_usage(usage, model=observed_model).model_copy(
+            update={
+                "records_measured": 1,
+                "records_total": 1,
+                "usage_coverage_ratio": 1.0,
+            }
+        )
+    receipt = build_run_receipt(
+        OrchestrationStore(EvidenceStore(args.run_dir)),
+        usage=coordinator_usage,
+    )
     print(json.dumps(receipt.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
@@ -580,7 +593,6 @@ def parser() -> argparse.ArgumentParser:
     work_accept = sub.add_parser("accept-work-order")
     work_accept.add_argument("--run-dir", type=Path, required=True)
     work_accept.add_argument("--work-order-id", required=True)
-    work_accept.add_argument("--verified-acceptance", nargs="+", required=True)
     work_accept.set_defaults(func=accept_work_order)
 
     orchestration_show = sub.add_parser("orchestration-status")
@@ -613,6 +625,7 @@ def parser() -> argparse.ArgumentParser:
 
     receipt_cmd = sub.add_parser("write-receipt")
     receipt_cmd.add_argument("--run-dir", type=Path, required=True)
+    receipt_cmd.add_argument("--coordinator-session-jsonl", type=Path)
     receipt_cmd.set_defaults(func=write_receipt)
     return value
 

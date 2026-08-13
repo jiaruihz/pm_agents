@@ -52,9 +52,25 @@ class GenericDomain:
             state.phase = str(next_phase)
 
     def verify(self, task: TaskSpec, state: RunState) -> CompletionDecision:
-        unmet = tuple(
-            key for key in task.acceptance if key not in state.completed_acceptance
+        verified = state.metadata.get("machine_verified_acceptance") or {}
+        unmet = tuple(key for key in task.acceptance if key not in verified)
+        invalid = tuple(
+            key
+            for key, value in verified.items()
+            if key in task.acceptance
+            and (
+                not isinstance(value, dict)
+                or not value.get("work_order_id")
+                or not value.get("verifier_acceptance_ids")
+                or not value.get("evidence_hashes")
+            )
         )
+        if invalid:
+            return CompletionDecision(
+                state=CompletionState.CONTINUE,
+                reason="portable acceptance has incomplete machine-verifier provenance",
+                unmet_acceptance=invalid,
+            )
         if not unmet:
             return CompletionDecision(
                 state=self.spec.terminal_state,

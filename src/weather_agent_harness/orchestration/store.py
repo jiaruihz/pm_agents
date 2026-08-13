@@ -9,7 +9,7 @@ from pathlib import Path
 import uuid
 from typing import Iterator
 
-from ..contracts import RunStatus, utc_now
+from ..contracts import RiskLevel, RunStatus, utc_now
 from ..evidence import EvidenceStore
 from .contracts import (
     AgentRunRecord,
@@ -24,13 +24,25 @@ from .contracts import (
 )
 from .dependency import DependencyResolver
 from .pricing import models_match, price_usage
+from .verification import (
+    TrustedVerifierRunner,
+    capture_result_evidence,
+    verify_evidence_record,
+)
 
 
 class OrchestrationStore:
     """Single-coordinator state store with attempt/lease result fencing."""
 
-    def __init__(self, evidence_store: EvidenceStore):
+    def __init__(
+        self, evidence_store: EvidenceStore, *, repo_root: Path | None = None
+    ):
         self.evidence_store = evidence_store
+        self.repo_root = (
+            repo_root.resolve()
+            if repo_root is not None
+            else Path(__file__).resolve().parents[3]
+        )
         self.path = evidence_store.run_dir / "orchestration.json"
         self.lock_path = evidence_store.run_dir / ".orchestration.lock"
         self.resolver = DependencyResolver()
@@ -62,6 +74,20 @@ class OrchestrationStore:
         return OrchestrationState.model_validate_json(
             self.path.read_text(encoding="utf-8")
         )
+
+    def assert_dispatch_authority(self, order: WorkOrder) -> None:
+        if order.risk not in {
+            RiskLevel.PRODUCTION_CHANGE,
+            RiskLevel.LIVE_FUNDS,
+            RiskLevel.DESTRUCTIVE,
+        }:
+            return
+        grants = set(self.evidence_store.load_task().authority.explicit_action_grants)
+        if order.work_order_hash not in grants:
+            raise PermissionError(
+                "controlled WorkOrder requires its exact work_order_hash in "
+                "TaskSpec.authority.explicit_action_grants"
+            )
 
     def add_work_orders(self, *orders: WorkOrder) -> OrchestrationState:
         with self._lock():
@@ -109,6 +135,7 @@ class OrchestrationStore:
             state = self.load()
             state, _ = self._reap_expired_locked(state, now_utc=now_utc)
             order = self._order(state, work_order_id)
+            self.assert_dispatch_authority(order)
             if order.status != WorkStatus.READY:
                 raise RuntimeError(f"work order is not ready: {order.status.value}")
             if order.attempt >= order.max_attempts:
@@ -329,7 +356,7 @@ class OrchestrationStore:
                     f"{role.requested_model}, observed {observed_model}"
                 )
         usage = result.usage
-        if result.status == "succeeded" and usage is not None and usage.source != "unavailable":
+        if usage is not None and usage.source != "unavailable":
             if not observed_model:
                 raise ValueError("measured usage requires an observed model")
             usage = price_usage(
@@ -338,9 +365,14 @@ class OrchestrationStore:
                 baseline_model=role.baseline_model,
                 fast_mode=usage.service_tier == "fast",
             )
-        result = result.model_copy(
-            update={"observed_model": observed_model, "usage": usage}
-        )
+        evidence_records = capture_result_evidence(
+            self.evidence_store, order, result
+        ) if result.evidence_refs else ()
+        result = result.model_copy(update={
+            "observed_model": observed_model,
+            "usage": usage,
+            "evidence_records": evidence_records,
+        })
         if result.status == "succeeded":
             next_status = WorkStatus.REVIEW
         elif result.status == "blocked":
@@ -397,17 +429,12 @@ class OrchestrationStore:
         )
         return state, True
 
-    def accept(
-        self, work_order_id: str, *, verified_acceptance: tuple[str, ...]
-    ) -> OrchestrationState:
+    def accept(self, work_order_id: str) -> OrchestrationState:
         with self._lock():
             state = self.load()
             order = self._order(state, work_order_id)
             if order.status != WorkStatus.REVIEW:
                 raise RuntimeError("only a reviewed worker result can be accepted")
-            missing = sorted(set(order.acceptance) - set(verified_acceptance))
-            if missing:
-                raise ValueError(f"unverified acceptance conditions: {missing}")
             result = next(
                 item
                 for item in reversed(state.results)
@@ -427,12 +454,71 @@ class OrchestrationStore:
             ]
             if missing_refs:
                 raise ValueError(f"missing evidence refs: {missing_refs}")
+            evidence_failures = [
+                summary
+                for record in result.evidence_records
+                for passed, summary in (verify_evidence_record(record),)
+                if not passed
+            ]
+            if evidence_failures:
+                raise ValueError(
+                    f"captured evidence integrity failed: {evidence_failures}"
+                )
+            verifier_ids = {item.acceptance_id for item in order.verifiers}
+            missing_verifiers = sorted(set(order.acceptance) - verifier_ids)
+            if missing_verifiers:
+                raise ValueError(
+                    f"acceptance lacks machine verifiers: {missing_verifiers}"
+                )
+            runner = TrustedVerifierRunner(
+                repo_root=self.repo_root,
+                store=self.evidence_store,
+            )
+            verifier_results = tuple(
+                runner.run(order, result, spec) for spec in order.verifiers
+            )
+            combined_results = (*state.verifier_results, *verifier_results)
+            failed = [
+                item.acceptance_id for item in verifier_results if not item.passed
+            ]
+            if failed:
+                next_status = (
+                    WorkStatus.PENDING
+                    if order.attempt < order.max_attempts
+                    else WorkStatus.FAILED
+                )
+                rejected = order.model_copy(update={"status": next_status})
+                state = state.model_copy(
+                    update={
+                        "work_orders": self.resolver.refresh(
+                            self._replace(state.work_orders, rejected)
+                        ),
+                        "verifier_results": combined_results,
+                        "updated_at_utc": utc_now(),
+                    }
+                )
+                self._save(state)
+                self.evidence_store.append(
+                    "work_order_verification_failed",
+                    phase=self.evidence_store.load_state().phase,
+                    payload={
+                        "work_order_id": work_order_id,
+                        "attempt": order.attempt,
+                        "failed_acceptance": failed,
+                        "verifier_results": [
+                            item.model_dump(mode="json")
+                            for item in verifier_results
+                        ],
+                    },
+                )
+                raise ValueError(f"machine verification failed: {failed}")
             complete = order.model_copy(update={"status": WorkStatus.COMPLETE})
             state = state.model_copy(
                 update={
                     "work_orders": self.resolver.refresh(
                         self._replace(state.work_orders, complete)
                     ),
+                    "verifier_results": combined_results,
                     "updated_at_utc": utc_now(),
                 }
             )
@@ -443,10 +529,15 @@ class OrchestrationStore:
                 payload={
                     "work_order_id": work_order_id,
                     "attempt": order.attempt,
-                    "verified_acceptance": list(verified_acceptance),
+                    "verified_acceptance": [
+                        item.acceptance_id for item in verifier_results
+                    ],
+                    "verifier_results": [
+                        item.model_dump(mode="json") for item in verifier_results
+                    ],
                 },
             )
-            self._sync_parent_acceptance(complete)
+            self._sync_parent_acceptance(complete, verifier_results)
             return state
 
     def ready(self) -> tuple[WorkOrder, ...]:
@@ -499,12 +590,29 @@ class OrchestrationStore:
             )
         return state, expired_ids
 
-    def _sync_parent_acceptance(self, order: WorkOrder) -> None:
+    def _sync_parent_acceptance(self, order: WorkOrder, verifier_results: tuple) -> None:
         if not order.closes_acceptance:
             return
         task = self.evidence_store.load_task()
         run_state = self.evidence_store.load_state()
         run_state.mark_acceptance(*order.closes_acceptance)
+        verified = dict(run_state.metadata.get("machine_verified_acceptance") or {})
+        for parent_key in order.closes_acceptance:
+            verified[parent_key] = {
+                "work_order_id": order.work_order_id,
+                "attempt": order.attempt,
+                "verifier_acceptance_ids": [
+                    item.acceptance_id for item in verifier_results if item.passed
+                ],
+                "evidence_hashes": sorted(
+                    {
+                        record.sha256
+                        for item in verifier_results
+                        for record in item.evidence_records
+                    }
+                ),
+            }
+        run_state.metadata["machine_verified_acceptance"] = verified
         unmet = tuple(
             key for key in task.acceptance if key not in run_state.completed_acceptance
         )

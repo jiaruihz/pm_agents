@@ -20,12 +20,13 @@ from .contracts import (
 from .domains.base import DomainController
 from .evidence import EvidenceStore
 from .orchestration.contracts import OrchestrationState, WorkStatus
+from .orchestration.verification import verify_evidence_record
 from .tools import ToolRegistry
 
 
-CERTIFICATION_SCHEMA_VERSION = "weather_agent_harness_certification_v1"
-TRACE_SCHEMA_VERSION = "weather_agent_harness_trace_v1"
-MANIFEST_SCHEMA_VERSION = "weather_agent_harness_run_manifest_v1"
+CERTIFICATION_SCHEMA_VERSION = "agent_harness_certification_v2"
+TRACE_SCHEMA_VERSION = "agent_harness_trace_v2"
+MANIFEST_SCHEMA_VERSION = "agent_harness_run_manifest_v2"
 TERMINAL_STATES = {
     CompletionState.COMPLETE,
     CompletionState.COMPLETE_QUALIFIED,
@@ -67,6 +68,7 @@ class GradeResult(HarnessModel):
     grader: str
     passed: bool
     summary: str
+    axis: str = "process"
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -76,6 +78,9 @@ class RunCertification(HarnessModel):
     task_hash: str
     task_outcome: CompletionState
     harness_certified: bool
+    process_certified: bool
+    artifact_verified: bool
+    domain_outcome: str
     generated_at_utc: str = Field(default_factory=utc_now)
     grades: tuple[GradeResult, ...]
     trace_ref: str
@@ -94,6 +99,9 @@ class RunManifest(HarnessModel):
     task_type: str
     task_outcome: CompletionState
     harness_certified: bool
+    process_certified: bool
+    artifact_verified: bool
+    domain_outcome: str
     generated_at_utc: str = Field(default_factory=utc_now)
     trace_ref: str
     certification_ref: str
@@ -222,6 +230,7 @@ def _grade_acceptance(store: EvidenceStore) -> GradeResult:
     passed = state.completion_state not in TERMINAL_STATES or not unmet
     return GradeResult(
         grader="acceptance_coverage",
+        axis="artifact",
         passed=passed,
         summary="terminal acceptance contract is complete" if passed else "terminal run has unmet acceptance conditions",
         details={"unmet_acceptance": unmet},
@@ -257,6 +266,7 @@ def _grade_evidence_refs(store: EvidenceStore) -> GradeResult:
     passed = not missing
     return GradeResult(
         grader="evidence_reference_integrity",
+        axis="artifact",
         passed=passed,
         summary="all evidence references resolve" if passed else "one or more evidence references are missing",
         details={"checked": checked, "missing": missing},
@@ -298,6 +308,7 @@ def _grade_verifier(
     if domain is None:
         return GradeResult(
             grader="verifier_replay",
+            axis="domain",
             passed=False,
             summary="domain verifier was not supplied",
         )
@@ -307,6 +318,7 @@ def _grade_verifier(
     passed = decision.state == state.completion_state
     return GradeResult(
         grader="verifier_replay",
+        axis="domain",
         passed=passed,
         summary="independent verifier replay matches persisted outcome" if passed else "persisted outcome does not match verifier replay",
         details={"replayed_state": decision.state.value, "reason": decision.reason},
@@ -358,6 +370,97 @@ def _grade_orchestration(store: EvidenceStore) -> GradeResult:
     )
 
 
+def _grade_evidence_records(store: EvidenceStore) -> GradeResult:
+    path = store.run_dir / "orchestration.json"
+    if not path.is_file():
+        return GradeResult(
+            grader="evidence_record_integrity",
+            axis="artifact",
+            passed=True,
+            summary="run has no orchestration evidence records",
+        )
+    orchestration = OrchestrationState.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+    failures: list[dict[str, Any]] = []
+    checked = 0
+    records = [
+        record
+        for result in orchestration.results
+        for record in result.evidence_records
+    ] + [
+        record
+        for result in orchestration.verifier_results
+        for record in result.evidence_records
+    ]
+    for record in records:
+        checked += 1
+        passed, summary = verify_evidence_record(record)
+        if not passed:
+            failures.append({"uri": record.uri, "summary": summary})
+    return GradeResult(
+        grader="evidence_record_integrity",
+        axis="artifact",
+        passed=not failures,
+        summary=(
+            "all captured evidence hashes match"
+            if not failures
+            else "one or more captured evidence records changed"
+        ),
+        details={"checked": checked, "failures": failures},
+    )
+
+
+def _grade_machine_verifiers(store: EvidenceStore) -> GradeResult:
+    path = store.run_dir / "orchestration.json"
+    if not path.is_file():
+        return GradeResult(
+            grader="machine_acceptance_verifiers",
+            axis="artifact",
+            passed=True,
+            summary="run has no orchestration WorkOrders",
+        )
+    orchestration = OrchestrationState.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+    failures: list[dict[str, Any]] = []
+    for order in orchestration.work_orders:
+        if order.status != WorkStatus.COMPLETE:
+            continue
+        current = [
+            item
+            for item in orchestration.verifier_results
+            if item.work_order_id == order.work_order_id
+            and item.attempt == order.attempt
+            and item.passed
+        ]
+        passed_ids = {item.acceptance_id for item in current}
+        missing = sorted(set(order.acceptance) - passed_ids)
+        if missing:
+            failures.append(
+                {"work_order_id": order.work_order_id, "missing": missing}
+            )
+    return GradeResult(
+        grader="machine_acceptance_verifiers",
+        axis="artifact",
+        passed=not failures,
+        summary=(
+            "all completed WorkOrders have passing machine verifiers"
+            if not failures
+            else "completed WorkOrders lack passing machine verifiers"
+        ),
+        details={"failures": failures},
+    )
+
+
+def _domain_outcome(state: CompletionState) -> str:
+    return {
+        CompletionState.COMPLETE_QUALIFIED: "qualified",
+        CompletionState.COMPLETE_FALSIFIED: "falsified",
+        CompletionState.COMPLETE: "complete",
+    }.get(state, "inconclusive")
+
+
 def _inventory(store: EvidenceStore) -> tuple[ArtifactRecord, ...]:
     excluded = {"trace.json", "certification.json", "run_manifest.json"}
     records: list[ArtifactRecord] = []
@@ -397,12 +500,21 @@ def certify_run(
         _grade_verifier(store, domain),
         _grade_inflight(store, trace),
         _grade_orchestration(store),
+        _grade_evidence_records(store),
+        _grade_machine_verifiers(store),
     )
+    process_certified = all(item.passed for item in grades if item.axis == "process")
+    artifact_verified = all(item.passed for item in grades if item.axis == "artifact")
+    domain_replayed = all(item.passed for item in grades if item.axis == "domain")
+    domain_outcome = _domain_outcome(state.completion_state)
     certification = RunCertification(
         run_id=task.run_id,
         task_hash=task.task_hash,
         task_outcome=state.completion_state,
-        harness_certified=all(item.passed for item in grades),
+        harness_certified=process_certified and artifact_verified and domain_replayed,
+        process_certified=process_certified,
+        artifact_verified=artifact_verified,
+        domain_outcome=domain_outcome,
         grades=grades,
         trace_ref=str(trace_path),
     )
@@ -414,6 +526,9 @@ def certify_run(
         task_type=task.task_type,
         task_outcome=state.completion_state,
         harness_certified=certification.harness_certified,
+        process_certified=process_certified,
+        artifact_verified=artifact_verified,
+        domain_outcome=domain_outcome,
         trace_ref=str(trace_path),
         certification_ref=str(certification_path),
         artifact_inventory=_inventory(store),

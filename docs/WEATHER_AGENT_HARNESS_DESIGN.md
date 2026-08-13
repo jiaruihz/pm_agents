@@ -41,11 +41,12 @@ Harness 不负责替模型写策略，也不把工作固化为一条死流水线
 | `PolicyEngine` | 自动执行、需授权、禁止三类动作判定 |
 | `EvidenceLedger` | 单 writer + hash chain 的 append-only 记录，保存输入 identity、动作、结果、代码/config/data hash |
 | `CompletionVerifier` | 根据机器证据判终态，不接受 agent 自报“完成” |
-| `Certification` | 独立重放 verifier，并检查 ledger、evidence refs、authority、acceptance 与未收口 inflight action |
+| `TrustedVerifierRunner` | 在 coordinator 侧执行声明式 hash、JSON assertion 或有界 command verifier；worker 的 `acceptance_claims` 只作陈述 |
+| `Certification` | 独立重放 verifier，并检查 ledger、证据内容 hash、authority、acceptance 与未收口 inflight action |
 
 建议落盘：`production.yaml.research_artifact_root/agent_harness/<run_id>/`。canonical DB 继续只承载领域事实，不写 agent 过程状态。
 
-Harness certification 与策略结论是两根轴：`COMPLETE_FALSIFIED + certification PASS` 表示“策略假设失败，但执行过程可信”；不能把 certification PASS 解释为 alpha 通过。
+结果明确拆成三轴：`process_certified`（过程合同可信）、`artifact_verified`（证据内容和机器验收可信）、`domain_outcome`（业务结论）。兼容字段 `harness_certified` 只在三者都可重放时为真。比如 `COMPLETE_FALSIFIED + process/artifact PASS` 表示“策略假设失败，但执行过程和证据可信”，不能把 certification PASS 解释为 alpha 通过。
 
 ## 3. 业界设计映射
 
@@ -111,6 +112,7 @@ class WorkOrder:
     depends_on: list[str]
     scope: dict
     acceptance: list[str]
+    verifiers: list[dict]        # acceptance_id → hash / JSON assertion / command
     authority: str
     status: str                 # pending / ready / running / review / complete / blocked
 
@@ -119,6 +121,7 @@ class WorkResult:
     status: str
     summary: str
     evidence_refs: list[str]
+    evidence_records: list[dict] # captured URI/snapshot/SHA-256/size/producer
     mutations: list[dict]
     unresolved: list[str]
     observed_model: str
@@ -131,6 +134,8 @@ class RoleSpec:
     reasoning_effort: str
     sandbox: str
     allowed_tools: list[str]
+    writable_roots: list[str]
+    network_access: bool
     require_exact_model: bool
     require_usage: bool
     baseline_model: str
@@ -140,8 +145,15 @@ class RunReceipt:
     route_level: str
     outcome: str
     harness_certified: bool
+    process_certified: bool
+    artifact_verified: bool
+    domain_outcome: str
     agents: list[dict]
     usage: dict
+    worker_usage: dict
+    coordinator_usage: dict
+    retry_waste_credits: float
+    usage_coverage_ratio: float
     evidence_refs: list[str]
 ```
 
@@ -149,7 +161,7 @@ class RunReceipt:
 
 ### 4.4 执行记录
 
-L1–L3 每个 run 只生成一份最终 `run_receipt.json`，包含：实际/请求模型、reasoning、worker/thread 数、WorkOrder/重试数、wall time、tool calls、测试结果、文件/commit/artifact identity、并行峰值、终态和认证指针。成功 WorkOrder 默认必须从专属 Codex session JSONL 提取真实 input/cached/output token；缺 usage 或 requested/observed model 不一致时不得 accept。`coordinator_recovery` 是 execution mode，不是模型名；若 Sol 接管 Terra/Luna 任务，必须作为显式 fallback 重新派单并单独计费。
+L1–L3 每个 run 只生成一份最终 `run_receipt.json`，包含：实际/请求模型、reasoning、worker/thread 数、WorkOrder/重试数、wall time、tool calls、测试结果、文件/commit/artifact identity、终态和认证指针。成功 WorkOrder 默认必须从专属 Codex session JSONL 提取真实 input/cached/output token；缺 usage 或 requested/observed model 不一致时不得 accept。失败和重试 attempt 的可用 usage 同样计入 worker 总量，并单列 `retry_waste_credits`；`usage_coverage_ratio` 公开未测量 attempt，不能用部分 usage 冒充全成本。`coordinator_recovery` 是 execution mode，不是模型名；若 Sol 接管 Terra/Luna 任务，必须作为显式 fallback 重新派单并单独计费。
 
 成本使用 ChatGPT Codex credits 计量，不把 credits 伪装成 USD。当前 versioned rate card（访问于 2026-08-13）按每 1M tokens 记录：Sol `125 / 12.5 / 750`、Terra `50 / 5 / 300`、Luna `5 / 0.5 / 30`（input / cached input / output）；fast mode 乘 `2.5x`。每条 usage 同时计算实际模型 credits 与相同 token mix 的 Sol baseline，receipt 汇总 `estimated_cost_credits`、`baseline_cost_credits` 和 routing savings。这个 same-token baseline 只衡量模型路由折扣；要判断 Harness 是否真的比原单-agent 便宜，还必须与一个实测单-agent control receipt 比较总 credits，因为多 agent 会增加总 token。来源：[OpenAI Codex pricing](https://developers.openai.com/codex/pricing/) 与 [Codex multi-agents](https://developers.openai.com/codex/multi-agent/)。
 
@@ -157,9 +169,13 @@ L1–L3 每个 run 只生成一份最终 `run_receipt.json`，包含：实际/�
 
 ### 4.5 当前实现与下一边界
 
-已实现 L0–L3 router、WorkOrder dependency/write ownership、attempt/lease fencing、heartbeat 延租、expiry sweep、异常 runtime terminal callback、独立 accept、exact-model/usage gate 和 terminal RunReceipt。每次 `status/ready/dispatch/receipt` 先 sweep；Codex wait 返回 interrupted/cancelled/crashed/lost 时，dispatch integration 立即调用 terminal callback。长时间无回调的 worker 在 lease 到期后生成正式 failed `WorkResult`，未耗尽 attempt 时自动回到 ready，耗尽后进入 failed。每个 attempt 使用独立 thread，避免复用 thread 的累计 token 无法归因或重复计费。这里使用 bounded supervisor/tick，不建设长期 worker daemon、数据库队列或通用 workflow engine。
+已实现 L0–L3 router、WorkOrder dependency/write ownership、attempt/lease fencing、heartbeat 延租、expiry sweep、异常 runtime terminal callback、机器 verifier accept、exact-model/usage gate 和 terminal RunReceipt。每次 `status/ready/dispatch/receipt` 先 sweep；Codex wait 返回 interrupted/cancelled/crashed/lost 时，dispatch integration 立即调用 terminal callback。长时间无回调的 worker 在 lease 到期后生成正式 failed `WorkResult`，未耗尽 attempt 时自动回到 ready，耗尽后进入 failed。每个 attempt 使用独立 thread，避免复用 thread 的累计 token 无法归因或重复计费。当前是 bounded tick/sweep，不是后台常驻 supervisor：它能可靠回收超时 lease，但不能在没有 coordinator 调用时主动拉起新的 Codex thread。
 
-顶层 domain 由 `DomainRegistry` 解析：weather task type 命中代码插件；`chainlove.bounty_batch` 等其他类型走 portable `GenericDomain`。portable WorkOrder 通过 `closes_acceptance` 将已验收结果写回父 `RunState`，然后复用同一套 `status → context → certify → receipt`。回归测试已用 `chainlove.bounty_batch` task type 覆盖前三个顶层命令。
+dispatch 会把角色编译为可执行的 `EffectiveExecutionProfile`：`luna_verifier → read-only`、`terra_worker → workspace-write`，并把原生 `agent_type` 写入派工合同。当前 Codex spawn 边界不能逐 WorkOrder 动态实施 tool allowlist、任意 writable roots 或 network policy，因此这些声明一旦非空就 fail closed；`write_owners` 只负责调度互斥，不冒充 OS sandbox。需要更细权限时，应预先定义 Codex permissions profile 后再扩展 dispatcher。参考 [OpenAI Codex config reference](https://learn.chatgpt.com/docs/config-file/config-reference#configtoml)。
+
+L3 WorkOrder 还有独立的 authority gate：`production_change / live_funds / destructive` 只有当自身稳定 `work_order_hash` 精确出现在 `TaskSpec.authority.explicit_action_grants` 时才允许 prepare/start；两层都校验，不能绕过 dispatcher 直接启动。该 grant 只覆盖这一份不可变 WorkOrder，不扩散到同风险后续动作。
+
+顶层 domain 由 `DomainRegistry` 解析：weather task type 命中代码插件；`chainlove.bounty_batch` 等其他类型走 portable `GenericDomain`。portable WorkOrder 只有在 coordinator 侧 verifier 覆盖全部 acceptance 且通过后，才写入带 verifier id 与 evidence hash 的 `machine_verified_acceptance`，然后复用同一套 `status → context → certify → receipt`。单纯写 `completed_acceptance` 或 worker 自报 claims 不再能让 GenericDomain 完成。回归测试已覆盖 `chainlove.bounty_batch` 以及伪造验收、失败 assertion 和证据篡改攻击。
 
 2026-08-13 ChainLove pilot 暴露了一个控制面缺口：WorkOrder 写了 Terra，但 coordinator 调用原生 spawn 时漏传 model override，实际线程继承为 Sol；retry 又把 `coordinator-recovery` 写进 model 字段，implementation review 与 submission gate 还复用了累计 usage 的同一 thread。旧 receipt 因 usage 为空没有暴露成本失控。修复后的合同把 `model + fork_turns=none` 放进 dispatch payload，在 dispatch/result 两处校验实际模型，从 session 提取 usage，并要求每个 attempt 使用独立 thread；以上任一项缺失都不能完成验收。
 
@@ -333,7 +349,7 @@ src/weather_agent_harness/
 
 生产 E2E audit 的状态机与 agent-side adapters 也已经落地并由测试锁定，但在 production preflight critical 时不会冒充完成或越权恢复。多代理最小内核已经实现；通用工作流 DSL、Web UI 和自动生产部署不属于当前范围。
 
-每次完整运行额外生成三个机器合同：`trace.json`（逐 action span）、`certification.json`（8 个 grader 结果，新增 orchestration terminal consistency）和 `run_manifest.json`（输入/证据 artifact inventory 与 SHA-256）。
+每次完整运行额外生成三个机器合同：`trace.json`（逐 action span）、`certification.json`（10 个 grader，分别覆盖 process/artifact/domain）和 `run_manifest.json`（输入、sealed evidence snapshot 与 SHA-256 inventory）。小于等于 10 MiB 的 worker evidence 在 record 时复制到 run 内 immutable-by-contract snapshot；更大文件保留外部 URI，但固定 hash/size，并在 accept、certify、receipt 三处重验。
 
 ## 11. 使用方式
 
@@ -397,16 +413,16 @@ src/weather_agent_harness/
 # supervisor tick；status/ready/dispatch/receipt 也会自动执行同一 sweep
 .venv/bin/python scripts/ops/agent_harness.py reap-work-orders --run-dir RUN_DIR
 
-# worker 回传后由 Sol 记录、独立验收；terminal certification 后生成唯一 receipt
+# worker 回传后记录证据；accept 会执行 WorkOrder 中预声明的机器 verifier
 .venv/bin/python scripts/ops/weather_agent_harness.py record-work-result \
   --run-dir RUN_DIR --result-json WORK_RESULT.json \
   --codex-session-jsonl ~/.codex/sessions/YYYY/MM/DD/rollout-SESSION.jsonl
 .venv/bin/python scripts/ops/weather_agent_harness.py accept-work-order \
-  --run-dir RUN_DIR --work-order-id WORK_ORDER_ID \
-  --verified-acceptance ACCEPTANCE_KEY
-.venv/bin/python scripts/ops/weather_agent_harness.py write-receipt --run-dir RUN_DIR
+  --run-dir RUN_DIR --work-order-id WORK_ORDER_ID
+.venv/bin/python scripts/ops/weather_agent_harness.py write-receipt --run-dir RUN_DIR \
+  --coordinator-session-jsonl ~/.codex/sessions/YYYY/MM/DD/rollout-SOL-SESSION.jsonl
 ```
 
 生产审计领域工具标为 `agent_side`：现有 weather scripts/API 仍完成真实动作，Harness 只接受带 durable `evidence_refs` 的成功结果。完整 golden scenario 则注册了可直接执行的 typed tools，可在单进程内从 readiness 跑到 qualification。生产变更、live funds 和 destructive 动作不会自动执行；命中时状态转为 `REQUIRE_AUTHORITY`。`approve --reason ...` 只写入当前 pending action（tool + arguments）的 fingerprint，不会把同风险的后续动作一并放行。
 
-当前已实现并由测试锁定：checkpoint/resume、inflight crash recovery、阶段工具约束、失败预算、exact-action 权限、hash-chained ledger、trace、独立 certification、L0–L3 routing、WorkOrder dependencies、write ownership、heartbeat/expiry/runtime-exit recovery、attempt/lease stale-result fencing、worker-result 独立 accept、portable domain resolution、requested/observed exact-model gate、Codex session usage 抽取、versioned credit accounting、同 token Sol baseline、terminal RunReceipt，以及生产/研究领域原有完成门。
+当前已实现并由测试锁定：checkpoint/resume、inflight crash recovery、阶段工具约束、失败预算、exact-action 权限、hash-chained ledger、trace、三轴 certification、L0–L3 routing、WorkOrder dependencies、write ownership、heartbeat/expiry/runtime-exit recovery、attempt/lease stale-result fencing、sealed `EvidenceRecord`、trusted machine verifier、portable domain fail-closed completion、原生 agent sandbox mapping、requested/observed exact-model gate、Codex session usage 抽取、失败/重试成本与 coverage、versioned credit accounting、同 token Sol baseline、terminal RunReceipt，以及生产/研究领域原有完成门。

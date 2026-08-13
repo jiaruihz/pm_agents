@@ -10,8 +10,22 @@ from pydantic import Field, field_validator, model_validator
 from ..contracts import HarnessModel, RiskLevel, stable_hash, utc_now
 
 
-ORCHESTRATION_SCHEMA_VERSION = "weather_agent_orchestration_v3"
-RECEIPT_SCHEMA_VERSION = "weather_agent_run_receipt_v2"
+ORCHESTRATION_SCHEMA_VERSION = "agent_orchestration_v4"
+RECEIPT_SCHEMA_VERSION = "agent_run_receipt_v3"
+
+
+class VerifierKind(StrEnum):
+    EVIDENCE_HASH = "evidence_hash"
+    COMMAND = "command"
+    JSON_ASSERTIONS = "json_assertions"
+
+
+class AssertionOperator(StrEnum):
+    EQUALS = "equals"
+    NOT_EQUALS = "not_equals"
+    EXISTS = "exists"
+    TRUTHY = "truthy"
+    FALSEY = "falsey"
 
 
 class RouteLevel(StrEnum):
@@ -62,10 +76,89 @@ class RoleSpec(HarnessModel):
     reasoning_effort: str = "medium"
     sandbox: str = "read-only"
     allowed_tools: tuple[str, ...] = ()
+    writable_roots: tuple[str, ...] = ()
+    network_access: bool = False
     fallback_role: str | None = None
     require_exact_model: bool = True
     require_usage: bool = True
     baseline_model: str = "gpt-5.6-sol"
+
+
+class JsonAssertion(HarnessModel):
+    path: str
+    operator: AssertionOperator = AssertionOperator.EQUALS
+    expected: Any = None
+
+    @field_validator("path")
+    @classmethod
+    def path_is_bounded(cls, value: str) -> str:
+        value = value.strip()
+        if not value or not value.startswith("$."):
+            raise ValueError("JSON assertion path must start with $.")
+        return value
+
+
+class VerifierSpec(HarnessModel):
+    acceptance_id: str
+    kind: VerifierKind
+    evidence_ref: str | None = None
+    argv: tuple[str, ...] = ()
+    expected_exit_code: int = 0
+    assertions: tuple[JsonAssertion, ...] = ()
+    timeout_seconds: int = Field(default=300, ge=1, le=1800)
+
+    @field_validator("acceptance_id")
+    @classmethod
+    def acceptance_id_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("acceptance_id must not be blank")
+        return value.strip()
+
+    @model_validator(mode="after")
+    def kind_has_required_fields(self) -> "VerifierSpec":
+        if self.kind == VerifierKind.COMMAND and not self.argv:
+            raise ValueError("command verifier requires argv")
+        if self.kind == VerifierKind.JSON_ASSERTIONS:
+            if not self.evidence_ref or not self.assertions:
+                raise ValueError(
+                    "json_assertions verifier requires evidence_ref and assertions"
+                )
+        if self.kind == VerifierKind.EVIDENCE_HASH and not self.evidence_ref:
+            raise ValueError("evidence_hash verifier requires evidence_ref")
+        return self
+
+
+class EvidenceRecord(HarnessModel):
+    uri: str
+    snapshot_uri: str | None = None
+    sha256: str
+    size_bytes: int = Field(ge=0)
+    media_type: str
+    producer_work_order_id: str
+    producer_attempt: int = Field(ge=1)
+    created_at_utc: str = Field(default_factory=utc_now)
+
+
+class VerifierResult(HarnessModel):
+    work_order_id: str
+    attempt: int = Field(ge=1)
+    acceptance_id: str
+    kind: VerifierKind
+    passed: bool
+    summary: str
+    evidence_records: tuple[EvidenceRecord, ...] = ()
+    output_refs: tuple[str, ...] = ()
+    details: dict[str, Any] = Field(default_factory=dict)
+    verified_at_utc: str = Field(default_factory=utc_now)
+
+
+class EffectiveExecutionProfile(HarnessModel):
+    agent_type: str
+    sandbox_mode: str
+    network_access: bool
+    allowed_tools: tuple[str, ...] = ()
+    writable_roots: tuple[str, ...] = ()
+    enforcement: str = "codex_agent_config"
 
 
 class WorkOrder(HarnessModel):
@@ -76,6 +169,7 @@ class WorkOrder(HarnessModel):
     depends_on: tuple[str, ...] = ()
     scope: dict[str, Any] = Field(default_factory=dict)
     acceptance: tuple[str, ...]
+    verifiers: tuple[VerifierSpec, ...] = ()
     risk: RiskLevel = RiskLevel.READ_ONLY
     write_owners: tuple[str, ...] = ()
     status: WorkStatus = WorkStatus.PENDING
@@ -111,6 +205,16 @@ class WorkOrder(HarnessModel):
             raise ValueError("heartbeat interval must be shorter than lease timeout")
         return self
 
+    @model_validator(mode="after")
+    def verifier_ids_are_unique_and_known(self) -> "WorkOrder":
+        ids = [item.acceptance_id for item in self.verifiers]
+        if len(ids) != len(set(ids)):
+            raise ValueError("verifier acceptance ids must be unique")
+        unknown = sorted(set(ids) - set(self.acceptance))
+        if unknown:
+            raise ValueError(f"verifiers reference unknown acceptance ids: {unknown}")
+        return self
+
     @property
     def work_order_hash(self) -> str:
         return stable_hash(
@@ -143,6 +247,9 @@ class UsageRecord(HarnessModel):
     baseline_cost_credits: float | None = Field(default=None, ge=0)
     savings_credits: float | None = None
     savings_ratio: float | None = None
+    records_measured: int = Field(default=0, ge=0)
+    records_total: int = Field(default=0, ge=0)
+    usage_coverage_ratio: float = Field(default=0.0, ge=0, le=1)
 
     @model_validator(mode="after")
     def complete_runtime_usage(self) -> "UsageRecord":
@@ -165,6 +272,7 @@ class WorkResult(HarnessModel):
     status: str
     summary: str
     evidence_refs: tuple[str, ...] = ()
+    evidence_records: tuple[EvidenceRecord, ...] = ()
     mutations: tuple[dict[str, Any], ...] = ()
     acceptance_claims: tuple[str, ...] = ()
     unresolved: tuple[str, ...] = ()
@@ -216,6 +324,7 @@ class OrchestrationState(HarnessModel):
     roles: tuple[RoleSpec, ...]
     work_orders: tuple[WorkOrder, ...] = ()
     results: tuple[WorkResult, ...] = ()
+    verifier_results: tuple[VerifierResult, ...] = ()
     agent_runs: tuple[AgentRunRecord, ...] = ()
     created_at_utc: str = Field(default_factory=utc_now)
     updated_at_utc: str = Field(default_factory=utc_now)
@@ -227,6 +336,11 @@ class RunReceipt(HarnessModel):
     route_level: RouteLevel
     outcome: str
     harness_certified: bool | None
+    # Defaults let the reader load a v2 receipt long enough to reject its schema
+    # cleanly and regenerate it from current evidence.
+    process_certified: bool = False
+    artifact_verified: bool = False
+    domain_outcome: str = "unknown"
     task_hash: str
     ledger_head_hash: str
     ledger_sequence: int = Field(ge=1)
@@ -235,13 +349,21 @@ class RunReceipt(HarnessModel):
     work_orders: dict[str, int]
     agents: tuple[AgentRunRecord, ...]
     usage: UsageRecord
+    worker_usage: UsageRecord | None = None
+    coordinator_usage: UsageRecord | None = None
+    retry_waste_credits: float | None = Field(default=None, ge=0)
+    usage_coverage_ratio: float = Field(default=0.0, ge=0, le=1)
     evidence_refs: tuple[str, ...]
+    evidence_records: tuple[EvidenceRecord, ...] = ()
     certification_ref: str | None = None
     receipt_hash: str = ""
 
 
 __all__ = [
     "AgentRunRecord",
+    "AssertionOperator",
+    "EffectiveExecutionProfile",
+    "EvidenceRecord",
     "ORCHESTRATION_SCHEMA_VERSION",
     "OrchestrationState",
     "RECEIPT_SCHEMA_VERSION",
@@ -251,6 +373,10 @@ __all__ = [
     "RouteLevel",
     "RunReceipt",
     "UsageRecord",
+    "JsonAssertion",
+    "VerifierKind",
+    "VerifierResult",
+    "VerifierSpec",
     "WorkOrder",
     "WorkResult",
     "WorkStatus",
