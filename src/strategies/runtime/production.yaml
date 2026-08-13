@@ -27,7 +27,7 @@ production_releases:
     expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
   - release_id: wcir
     checkout_root: /Users/deepsleep/projects/pm_agents_wcir_prod
-    expected_repo_sha: 58a3dad0171d2b3deffae2cb455f508decad0876
+    expected_repo_sha: f32d813da9f4874c4e3084afd225e918e7a46f59
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
     expected_repo_sha: ddecbbd6a26a88ebe5b62b997f2bf9c50f160119
@@ -36,7 +36,7 @@ production_releases:
     expected_repo_sha: 1c8014f252a3e6e6762af522f803853eae4ba6f8
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/projects/pm_agents_fast_observation_prod
-    expected_repo_sha: 9bb6678b936464df94bdc7ab1de80d6ddf500ecd
+    expected_repo_sha: 331f309ebeea14fd6b61727584a8cf19b40dc6a0
   - release_id: tmin_cross_prev_no_shadow
     checkout_root: /Users/deepsleep/projects/pm_agents_tmin_cross_prev_no_prod
     expected_repo_sha: d3a439356f8346dded3af051df3216b44af9406e
