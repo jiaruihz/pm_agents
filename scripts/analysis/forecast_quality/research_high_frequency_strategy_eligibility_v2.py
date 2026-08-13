@@ -23,8 +23,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.jsonl_partitions import dated_jsonl_paths  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
-DEFAULT_RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
 FAST_SOURCES = {"noaa_madis_hfmetar", "fmi", "ims_lod", "mgm"}
 FAST_CITIES = {
     "Ankara", "Atlanta", "Austin", "Chicago", "Dallas", "Denver", "Houston", "LA", "Miami", "NYC",
@@ -790,16 +794,18 @@ def write_report(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runtime-root", default=str(DEFAULT_RUNTIME))
-    parser.add_argument("--db-path", default=str(ROOT / "runtime/weather.db"))
+    spec = load_production_spec()
+    parser.add_argument("--runtime-root", default=str(spec.data_feed_runtime_root))
+    parser.add_argument("--db-path", default=str(spec.canonical_db_path))
     parser.add_argument("--profiles", default=str(ROOT / "weather_data_feed/source_profiles.json"))
-    parser.add_argument("--out-dir", default=str(ROOT / "docs/analysis/2026-07/generated/high_frequency_strategy_eligibility_v2"))
-    parser.add_argument("--report", default=str(ROOT / "docs/analysis/2026-07/2026-07-15-high-frequency-strategy-eligibility-v2.md"))
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir")
+    parser.add_argument("--report", help="optional durable report path; defaults inside the run artifact")
     parser.add_argument("--max-fast-age-min", type=float, default=30.0)
     parser.add_argument("--max-next-metar-min", type=float, default=90.0)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     runtime = Path(args.runtime_root).expanduser()
     profiles = load_profiles(Path(args.profiles))
@@ -822,7 +828,12 @@ def main() -> int:
     new_us_speed = build_new_us_source_speed(synoptic, fast, {"Austin", "Dallas", "Houston"})
     city_summary = summarize(events, crosses, persistent, settlements, routes)
 
-    out_dir = Path(args.out_dir)
+    out_dir = resolve_run_output(
+        "high_frequency_strategy_eligibility_v2",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
     write_csv(out_dir / "event_comparison.csv", events)
     write_csv(out_dir / "first_cross_events.csv", crosses)
     write_csv(out_dir / "persistent_cross_events.csv", persistent)
@@ -836,7 +847,9 @@ def main() -> int:
         "persistent_rows": len(persistent),
         "settlement_rows": len(settlements), "route_rows": len(routes),
     }
-    write_report(Path(args.report), generated_at, city_summary, new_us_speed, counts)
+    report_path = Path(args.report) if args.report else out_dir / "report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    write_report(report_path, generated_at, city_summary, new_us_speed, counts)
     print(json.dumps({**counts, "summary_rows": len(city_summary)}, ensure_ascii=False, sort_keys=True))
     return 0
 

@@ -4,16 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import sqlite3
 import statistics
 import sys
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-
-from weather_data_feed.jsonl_partitions import dated_jsonl_paths
-
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -24,11 +23,12 @@ from scripts.analysis.forecast_quality.source_alignment_common import (  # noqa:
     parse_dt,
     write_csv,
 )
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
-DEFAULT_RUNTIME_ROOTS = [
-    Path("/Volumes/jrs/weather_data_feed_service_runtime"),
-    Path("~/projects/weather_data_feed_service_runtime").expanduser(),
-]
 METAR_LIKE_SOURCES = {
     "aviationweather_metar",
     "aviationweather_cache_csv",
@@ -50,30 +50,15 @@ def safe_float(value: Any) -> float | None:
         return None
 
 
-def default_runtime_root() -> Path:
-    for root in DEFAULT_RUNTIME_ROOTS:
-        if root.exists():
-            return root
-    return DEFAULT_RUNTIME_ROOTS[-1]
-
-
 def read_json_or_jsonl(
     path: Path,
     *,
     partition_filename: str = "high_frequency_observations.jsonl",
+    shard_dates: set[str] | None = None,
+    dedupe_observations: bool = False,
 ) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    if path.is_dir():
-        return [
-            row
-            for shard in dated_jsonl_paths(
-                path,
-                filename=partition_filename,
-                allow_missing=True,
-            )
-            for row in read_json_or_jsonl(shard, partition_filename=partition_filename)
-        ]
     if path.suffix == ".json":
         payload = json.loads(path.read_text(encoding="utf-8"))
         records = payload.get("records") if isinstance(payload, dict) else payload
@@ -81,13 +66,16 @@ def read_json_or_jsonl(
     paths = (
         dated_jsonl_paths(
             path,
-            filename="high_frequency_observations.jsonl",
+            filename=partition_filename,
             allow_missing=True,
         )
         if path.is_dir()
         else (path,)
     )
+    if shard_dates is not None:
+        paths = tuple(shard for shard in paths if shard.parent.name in shard_dates)
     rows: list[dict[str, Any]] = []
+    deduped: dict[tuple[Any, ...], dict[str, Any]] = {}
     for source_path in paths:
         with source_path.open(encoding="utf-8") as fh:
             for line in fh:
@@ -95,8 +83,38 @@ def read_json_or_jsonl(
                     continue
                 row = json.loads(line)
                 if isinstance(row, dict):
-                    rows.append(row)
-    return rows
+                    if not dedupe_observations:
+                        rows.append(row)
+                        continue
+                    temperature = row.get("temp_c")
+                    if temperature is None:
+                        temperature = row.get("point_temp_c")
+                    event_time = (
+                        row.get("observation_time_utc")
+                        or row.get("source_report_ts_utc")
+                        or row.get("last_obs_utc")
+                    )
+                    key = (
+                        row.get("city"),
+                        row.get("source"),
+                        row.get("station") or row.get("icao"),
+                        event_time,
+                        temperature,
+                    )
+                    deduped.setdefault(key, row)
+    return list(deduped.values()) if dedupe_observations else rows
+
+
+def source_shard_dates(high_freq_rows: list[dict[str, Any]]) -> set[str]:
+    """Return UTC partitions that can overlap the high-frequency events."""
+    dates: set[str] = set()
+    for row in high_freq_rows:
+        event_dt = parse_dt(row.get("observation_time_utc"))
+        if event_dt is None:
+            continue
+        for offset in (-1, 0, 1):
+            dates.add((event_dt + timedelta(days=offset)).date().isoformat())
+    return dates
 
 
 def source_type(source: str) -> str:
@@ -111,34 +129,50 @@ def source_event_time(row: dict[str, Any]) -> datetime | None:
     return parse_dt(row.get("source_report_ts_utc") or row.get("observation_time_utc") or row.get("last_obs_utc"))
 
 
+SourceIndex = dict[tuple[str, str], tuple[list[datetime], list[dict[str, Any]]]]
+
+
+def build_source_index(source_rows: list[dict[str, Any]]) -> SourceIndex:
+    grouped: dict[tuple[str, str], list[tuple[datetime, dict[str, Any]]]] = defaultdict(list)
+    for row in source_rows:
+        kind = source_type(str(row.get("source") or ""))
+        event_dt = source_event_time(row)
+        if kind == "other" or event_dt is None or safe_float(row.get("temp_c")) is None:
+            continue
+        grouped[(str(row.get("city") or ""), kind)].append((event_dt, row))
+    index: SourceIndex = {}
+    for key, pairs in grouped.items():
+        pairs.sort(key=lambda item: item[0])
+        index[key] = ([item[0] for item in pairs], [item[1] for item in pairs])
+    return index
+
+
 def nearest_source_event(
     obs: dict[str, Any],
     source_rows: list[dict[str, Any]],
     *,
     wanted_type: str,
     max_abs_lag_sec: float,
+    source_index: SourceIndex | None = None,
 ) -> dict[str, Any] | None:
     obs_dt = parse_dt(obs.get("observation_time_utc"))
     if obs_dt is None:
         return None
     city = str(obs.get("city") or "")
     station = str(obs.get("icao") or obs.get("station") or "").upper()
+    index = source_index if source_index is not None else build_source_index(source_rows)
+    times, rows = index.get((city, wanted_type), ([], []))
+    lower = obs_dt - timedelta(seconds=max_abs_lag_sec)
+    upper = obs_dt + timedelta(seconds=max_abs_lag_sec)
+    start = bisect.bisect_left(times, lower)
+    stop = bisect.bisect_right(times, upper)
     candidates: list[tuple[float, dict[str, Any]]] = []
-    for row in source_rows:
-        if str(row.get("city") or "") != city:
-            continue
+    for event_dt, row in zip(times[start:stop], rows[start:stop], strict=True):
         row_station = str(row.get("station") or "").upper()
         if station and row_station and row_station not in {station, str(obs.get("station") or "").upper()}:
             continue
-        if source_type(str(row.get("source") or "")) != wanted_type:
-            continue
-        temp_c = safe_float(row.get("temp_c"))
-        event_dt = source_event_time(row)
-        if temp_c is None or event_dt is None:
-            continue
         lag_sec = (obs_dt - event_dt).total_seconds()
-        if abs(lag_sec) <= max_abs_lag_sec:
-            candidates.append((abs(lag_sec), row))
+        candidates.append((abs(lag_sec), row))
     if not candidates:
         return None
     return sorted(candidates, key=lambda item: item[0])[0][1]
@@ -182,6 +216,7 @@ def build_alignment_rows(
     max_abs_lag_sec: float,
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    source_index = build_source_index(source_rows)
     for obs in high_freq_rows:
         obs_temp_c = safe_float(obs.get("temp_c") or obs.get("point_temp_c"))
         obs_dt = parse_dt(obs.get("observation_time_utc"))
@@ -190,7 +225,13 @@ def build_alignment_rows(
         settlement = settlements.get((str(obs.get("city") or ""), str(obs.get("target_date") or "")), {})
         matched_any = False
         for wanted in ("metar_like", "wu_like"):
-            source = nearest_source_event(obs, source_rows, wanted_type=wanted, max_abs_lag_sec=max_abs_lag_sec)
+            source = nearest_source_event(
+                obs,
+                source_rows,
+                wanted_type=wanted,
+                max_abs_lag_sec=max_abs_lag_sec,
+                source_index=source_index,
+            )
             if source is None:
                 continue
             source_temp_c = safe_float(source.get("temp_c"))
@@ -285,23 +326,30 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summary
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    runtime_root = default_runtime_root()
+    spec = load_production_spec()
+    runtime_root = spec.data_feed_runtime_root
     parser.add_argument(
         "--high-frequency-path",
         default=str(runtime_root / "output/high_frequency_observations"),
     )
     parser.add_argument("--source-events-path", default=str(runtime_root / "output/source_events"))
-    parser.add_argument("--db-path", default=str(ROOT / "runtime/weather.db"))
-    parser.add_argument("--out-dir", default=str(ROOT / "docs/analysis/2026-07/generated/high_frequency_settlement_alignment_v1"))
+    parser.add_argument("--db-path", default=str(spec.canonical_db_path))
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir")
     parser.add_argument("--max-abs-lag-min", type=float, default=45.0)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    high_freq_rows = read_json_or_jsonl(Path(args.high_frequency_path).expanduser())
+    high_freq_rows = read_json_or_jsonl(
+        Path(args.high_frequency_path).expanduser(),
+        dedupe_observations=True,
+    )
     source_rows = read_json_or_jsonl(
         Path(args.source_events_path).expanduser(),
         partition_filename="sources.jsonl",
+        shard_dates=source_shard_dates(high_freq_rows),
+        dedupe_observations=True,
     )
     settlements = load_settlement_outcomes(Path(args.db_path).expanduser())
     alignment = build_alignment_rows(
@@ -311,7 +359,12 @@ def main() -> int:
         max_abs_lag_sec=float(args.max_abs_lag_min) * 60.0,
     )
     summary = summarize(alignment)
-    out_dir = Path(args.out_dir)
+    out_dir = resolve_run_output(
+        "high_frequency_settlement_alignment_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
     write_csv(out_dir / "alignment_rows.csv", alignment)
     write_csv(out_dir / "summary_by_city_source.csv", summary)
     print(

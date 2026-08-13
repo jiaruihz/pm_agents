@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import sqlite3
 import statistics
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +16,15 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
-RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
+
 CITIES = {"Istanbul", "TelAviv", "Ankara"}
 METAR_SOURCES = {"aviationweather_metar", "synopticdata_timeseries"}
 
@@ -220,36 +230,57 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
     with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
 
 
-def main() -> int:
-    crosses = read_first_crosses(RUNTIME_ROOT / "output/fast_source_prev_no_trial/events.jsonl")
-    reports = read_metar_reports(RUNTIME_ROOT / "output/source_events")
-    settlements = read_settlements(ROOT / "runtime/weather.db")
+def main(argv: list[str] | None = None) -> int:
+    spec = load_production_spec()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runtime-root", default=str(spec.data_feed_runtime_root))
+    parser.add_argument("--db-path", default=str(spec.canonical_db_path))
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir")
+    args = parser.parse_args(argv)
+
+    runtime_root = Path(args.runtime_root)
+    crosses = read_first_crosses(runtime_root / "output/fast_source_prev_no_trial/events.jsonl")
+    reports = read_metar_reports(runtime_root / "output/source_events")
+    settlements = read_settlements(Path(args.db_path))
     rows = enrich(crosses, reports, settlements)
     summary = summarize(rows)
-    out_dir = ROOT / "docs/analysis/2026-07/generated/mgm_ims_cross_book_v1"
+    out_dir = resolve_run_output(
+        "mgm_ims_cross_book_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
     write_csv(out_dir / "first_crosses.csv", rows)
     write_csv(out_dir / "city_summary.csv", summary)
+    window = [
+        min(row["target_date"] for row in rows),
+        max(row["target_date"] for row in rows),
+    ] if rows else [None, None]
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "window": [min(row["target_date"] for row in rows), max(row["target_date"] for row in rows)],
+        "window": window,
         "grain": "first PIT cross per city/date/prior METAR max/candidate",
         "summary": summary,
         "rows": rows,
         "verdict": {"significance": "NA", "baseline": "NA", "forward": "NA", "conclusion": "inconclusive"},
     }
-    json_path = ROOT / "docs/analysis/2026-07/2026-07-14-mgm-ims-cross-book-v1.json"
+    json_path = out_dir / "summary.json"
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     lines = [
         "# MGM / IMS Cross and Book v1",
         "",
         f"Generated: `{payload['generated_at_utc']}`",
-        f"Window: `{payload['window'][0]}..{payload['window'][1]}`",
+        f"Window: `{payload['window'][0] or 'none'}..{payload['window'][1] or 'none'}`",
         "",
         "| city | days | crosses | next METAR hits | precision | eventual | books | <= cap | settled tradeable W/L | gross PnL (1 share/event) | gross ROI | source lag | METAR lead |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -275,7 +306,7 @@ def main() -> int:
             "",
         ]
     )
-    (ROOT / "docs/analysis/2026-07/2026-07-14-mgm-ims-cross-book-v1.md").write_text("\n".join(lines), encoding="utf-8")
+    (out_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
     print(json.dumps({"summary": summary, "rows": len(rows)}, ensure_ascii=False))
     return 0
 

@@ -1,6 +1,12 @@
 from datetime import datetime, timezone
 import json
 
+from scripts.analysis.forecast_quality.research_high_frequency_settlement_alignment_v1 import (
+    build_source_index,
+    nearest_source_event,
+    read_json_or_jsonl as read_alignment_rows,
+)
+
 from scripts.analysis.forecast_quality.research_high_frequency_strategy_eligibility_v2 import (
     ReferenceEvent,
     annotate_market_brackets,
@@ -16,6 +22,73 @@ from scripts.analysis.forecast_quality.research_high_frequency_strategy_eligibil
 
 def utc(hour: int, minute: int) -> datetime:
     return datetime(2026, 7, 15, hour, minute, tzinfo=timezone.utc)
+
+
+def test_settlement_alignment_index_preserves_nearest_station_match() -> None:
+    source_rows = [
+        {
+            "city": "Test",
+            "station": "OTHER",
+            "source": "aviationweather_metar",
+            "source_report_ts_utc": utc(10, 1).isoformat(),
+            "temp_c": 19.0,
+        },
+        {
+            "city": "Test",
+            "station": "TEST",
+            "source": "aviationweather_metar",
+            "source_report_ts_utc": utc(10, 2).isoformat(),
+            "temp_c": 20.0,
+        },
+        {
+            "city": "Test",
+            "station": "TEST",
+            "source": "aviationweather_metar",
+            "source_report_ts_utc": utc(10, 20).isoformat(),
+            "temp_c": 21.0,
+        },
+    ]
+    observation = {
+        "city": "Test",
+        "station": "TEST",
+        "observation_time_utc": utc(10, 3).isoformat(),
+    }
+
+    result = nearest_source_event(
+        observation,
+        source_rows,
+        wanted_type="metar_like",
+        max_abs_lag_sec=600,
+        source_index=build_source_index(source_rows),
+    )
+
+    assert result is source_rows[1]
+
+
+def test_settlement_alignment_reader_filters_shards_and_repeated_polls(tmp_path) -> None:
+    root = tmp_path / "source_events"
+    kept = root / "2026-07-15" / "sources.jsonl"
+    ignored = root / "2026-08-15" / "sources.jsonl"
+    kept.parent.mkdir(parents=True)
+    ignored.parent.mkdir(parents=True)
+    row = {
+        "city": "Test",
+        "source": "aviationweather_metar",
+        "station": "TEST",
+        "source_report_ts_utc": utc(10, 0).isoformat(),
+        "temp_c": 20.0,
+    }
+    kept.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n")
+    ignored.write_text(json.dumps({**row, "temp_c": 99.0}) + "\n")
+
+    rows = read_alignment_rows(
+        root,
+        partition_filename="sources.jsonl",
+        shard_dates={"2026-07-15"},
+        dedupe_observations=True,
+    )
+
+    assert rows == [row]
 
 
 def test_event_comparison_uses_later_report_not_another_route_copy() -> None:
