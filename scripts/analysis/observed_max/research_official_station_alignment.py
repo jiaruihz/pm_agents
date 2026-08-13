@@ -30,6 +30,11 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
+from scripts.analysis.observed_max.historical_artifacts import pm_history_winner  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 
 PROXIES = [None, production_market_proxy_url()]
 
@@ -142,7 +147,9 @@ def arith_round(x: float) -> int:
     return math.floor(x + 0.5)
 
 
-def load_winner(pm_history_dir: Path, city: str, day: str) -> tuple[str, str] | None:
+def load_winner(pm_history_dir: Path | None, city: str, day: str) -> tuple[str, str] | None:
+    if pm_history_dir is None:
+        return pm_history_winner(city, day)
     f = pm_history_dir / f"{city}_{day}.json"
     if not f.exists():
         return None
@@ -166,7 +173,7 @@ def validate_city(
     unit: str,
     data_col: str,
     tz: str,
-    pm_history_dir: Path,
+    pm_history_dir: Path | None,
     cache_dir: Path,
     start: str,
     end: str,
@@ -204,7 +211,7 @@ def validate_city(
     return pd.DataFrame(rows)
 
 
-def validate_hongkong(pm_history_dir: Path, cache_dir: Path) -> pd.DataFrame:
+def validate_hongkong(pm_history_dir: Path | None, cache_dir: Path) -> pd.DataFrame:
     """HKO open data: daily max temp (decimal) at HKO station."""
     cache = cache_dir / "hko_clmmaxt_2026.json"
     if cache.exists():
@@ -245,28 +252,27 @@ def validate_hongkong(pm_history_dir: Path, cache_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--start", default="2026-04-01")
     parser.add_argument("--end", default="2026-06-10")
     parser.add_argument(
         "--pm-history-dir",
-        default=str(REPO / "runtime/weather_edge_v1/market_data/cache/pm_history"),
+        help="explicit ad-hoc snapshot override; default is the pinned content-addressed manifest",
     )
-    parser.add_argument(
-        "--output-dir",
-        default=str(REPO / "docs/analysis/2026-06/generated/official_resolution_source_v0"),
-    )
-    parser.add_argument(
-        "--cache-dir",
-        default=str(REPO / "runtime/rule_source_research/obs_cache"),
-    )
-    args = parser.parse_args()
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir")
+    parser.add_argument("--cache-dir", help="optional reusable observation cache; defaults inside run artifact")
+    args = parser.parse_args(argv)
 
-    pm_history_dir = Path(args.pm_history_dir)
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cache_dir = Path(args.cache_dir)
+    pm_history_dir = Path(args.pm_history_dir) if args.pm_history_dir else None
+    out_dir = resolve_run_output(
+        "official_station_alignment_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
+    cache_dir = Path(args.cache_dir) if args.cache_dir else out_dir / "raw_observations"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     frames = []

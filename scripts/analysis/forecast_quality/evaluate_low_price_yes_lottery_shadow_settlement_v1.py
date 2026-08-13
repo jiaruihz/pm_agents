@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -21,22 +22,33 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-
 ROOT = Path(__file__).resolve().parents[3]
-JOURNAL_DEFAULT = ROOT / "runtime/weather_edge_v1/low_price_yes_lottery_reversal_v1/shadow_candidates.jsonl"
-OUT_DIR_DEFAULT = ROOT / "docs/analysis/2026-07/generated/low_price_yes_lottery_shadow_v1"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (
+    prepare_new_run_output,
+    resolve_run_output,
+)
+
+
 CLOB_BASE_DEFAULT = "https://clob.polymarket.com"
 RNG_SEED = 20260701
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--journal", default=str(JOURNAL_DEFAULT))
-    parser.add_argument("--out-dir", default=str(OUT_DIR_DEFAULT))
+    parser.add_argument(
+        "--journal",
+        required=True,
+        help="explicit shadow journal; schemas differ between strategy instances",
+    )
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir")
     parser.add_argument("--clob-base", default=CLOB_BASE_DEFAULT)
     parser.add_argument("--sleep-sec", type=float, default=0.15)
     parser.add_argument("--bootstrap-samples", type=int, default=20000)
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def rel(path: Path) -> str:
@@ -178,10 +190,15 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
             writer.writerow({key: row.get(key) for key in cols})
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     journal_path = Path(args.journal)
-    out_dir = Path(args.out_dir)
+    out_dir = resolve_run_output(
+        "low_price_yes_lottery_shadow_settlement_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
     rows = load_journal(journal_path)
     session = make_session()
 

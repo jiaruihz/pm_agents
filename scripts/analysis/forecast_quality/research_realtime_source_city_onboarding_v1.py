@@ -26,10 +26,12 @@ from weather_data_feed.high_frequency_observation_sources import (
     HIGH_FREQUENCY_CITY_SOURCES,
     fetch_high_frequency_observation,
 )
+from scripts.analysis.versioned_artifact_output import (
+    prepare_new_run_output,
+    resolve_run_output,
+)
+from src.strategies.runtime.production import load_production_spec
 
-
-DEFAULT_OUT = ROOT / "docs/analysis/2026-07/generated/realtime_source_city_onboarding_v1"
-DEFAULT_REPORT = ROOT / "docs/analysis/2026-07/2026-07-19-realtime-source-city-onboarding-v1.md"
 
 CANDIDATES = (
     {
@@ -164,13 +166,14 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db-path", default=str(ROOT / "runtime/weather.db"))
+    parser.add_argument("--db-path", default=str(load_production_spec().canonical_db_path))
     parser.add_argument("--profiles", default=str(ROOT / "weather_data_feed/source_profiles.json"))
-    parser.add_argument("--out-dir", default=str(DEFAULT_OUT))
-    parser.add_argument("--report", default=str(DEFAULT_REPORT))
-    args = parser.parse_args()
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir")
+    parser.add_argument("--report", help="optional durable report path; defaults inside the run artifact")
+    args = parser.parse_args(argv)
 
     profiles = read_profiles(Path(args.profiles))
     candidate_coverage, settlement_coverage = market_coverage(Path(args.db_path))
@@ -202,7 +205,12 @@ def main() -> int:
             **settlement_coverage.get(city, {"settled_days": 0, "settlement_latest": ""}),
         })
 
-    out_dir = Path(args.out_dir)
+    out_dir = resolve_run_output(
+        "realtime_source_city_onboarding_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
     write_csv(out_dir / "candidate_source_matrix.csv", rows)
 
     table = []
@@ -276,8 +284,10 @@ Evidence funnel (city-day/event grain): PIT first-seen → concurrent routine re
 
 significance=NA; baseline=same-time market + routine reference; forward=FAIL; conclusion=Paris/Amsterdam P1 collector candidates, no new live city
 """
-    Path(args.report).write_text(report, encoding="utf-8")
-    print(json.dumps({"rows": len(rows), "report": str(args.report), "matrix": str(out_dir / "candidate_source_matrix.csv")}, ensure_ascii=False))
+    report_path = Path(args.report) if args.report else out_dir / "report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    print(json.dumps({"rows": len(rows), "report": str(report_path), "matrix": str(out_dir / "candidate_source_matrix.csv")}, ensure_ascii=False))
     return 0
 
 

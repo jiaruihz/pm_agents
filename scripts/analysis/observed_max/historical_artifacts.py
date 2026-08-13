@@ -56,3 +56,23 @@ def pm_history_winner_label(city: str, target_date: str) -> str | None:
         if float(bracket.get("final_price") or 0) >= 0.99
     ]
     return winners[0] if len(winners) == 1 else None
+
+
+@lru_cache(maxsize=None)
+def pm_history_winner(city: str, target_date: str) -> tuple[str, str] | None:
+    """Return the pinned snapshot's single winning label and question."""
+    sha256 = _pm_history_index().get(f"{city}_{target_date}.json")
+    if sha256 is None:
+        return None
+    payload = json.loads(resolve_content_addressed_artifact(sha256).read_text())
+    if not isinstance(payload, dict):
+        return None
+    winners = [
+        bracket
+        for bracket in payload.get("brackets") or []
+        if float(bracket.get("final_price") or 0) >= 0.99
+    ]
+    if len(winners) != 1:
+        return None
+    winner = winners[0]
+    return str(winner.get("label") or ""), str(winner.get("question") or "")

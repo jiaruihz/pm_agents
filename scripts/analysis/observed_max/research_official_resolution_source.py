@@ -25,6 +25,10 @@ import httpx
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from scripts.ops.weather_market_proxy import production_market_proxy_url  # noqa: E402
+from scripts.analysis.versioned_artifact_output import (  # noqa: E402
+    prepare_new_run_output,
+    resolve_run_output,
+)
 from weather_data_feed_service.legacy_weather_predict.city_pools import (  # noqa: E402
     FULL_CITY_CONFIGS,
 )
@@ -97,23 +101,22 @@ def extract_rule_fields(description: str) -> dict:
     }
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--days", type=int, default=6, help="recent days to probe per city")
     parser.add_argument("--end-date", default=None, help="last event date to probe (YYYY-MM-DD)")
-    parser.add_argument(
-        "--output-dir",
-        default=str(REPO / "docs/analysis/2026-06/generated/official_resolution_source_v0"),
-    )
-    parser.add_argument(
-        "--cache-dir",
-        default=str(REPO / "runtime/rule_source_research/gamma_cache"),
-    )
-    args = parser.parse_args()
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir")
+    parser.add_argument("--cache-dir", help="optional reusable Gamma cache; defaults inside run artifact")
+    args = parser.parse_args(argv)
 
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cache_dir = Path(args.cache_dir)
+    out_dir = resolve_run_output(
+        "official_resolution_source_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
+    cache_dir = Path(args.cache_dir) if args.cache_dir else out_dir / "raw_gamma"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     end = date.fromisoformat(args.end_date) if args.end_date else date.today() - timedelta(days=1)
@@ -133,7 +136,7 @@ def main() -> None:
                     data = json.loads(cache_file.read_text())
                 else:
                     data = fetch_json(f"{GAMMA}/events?slug={es}")
-                    cache_file.write_text(json.dumps(data, ensure_ascii=False))
+                    cache_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
                 tried.append(es)
             except RuntimeError as e:
                 print(f"  ! {city} {es}: {e}", file=sys.stderr)
@@ -183,7 +186,7 @@ def main() -> None:
         )
 
     out_csv = out_dir / "official_resolution_source.csv"
-    with out_csv.open("w", newline="") as f:
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)

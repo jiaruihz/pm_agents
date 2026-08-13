@@ -16,21 +16,29 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-
 ROOT = Path(__file__).resolve().parents[3]
-DB_PATH = ROOT / "runtime/weather.db"
-OFFICIAL_SOURCE = ROOT / "docs/analysis/2026-06/generated/official_resolution_source_v0/official_resolution_source.csv"
-OFFICIAL_ALIGN = ROOT / "docs/analysis/2026-06/generated/official_resolution_source_v0/official_station_alignment_summary.csv"
-BATCH2_SUMMARY = ROOT / "docs/analysis/2026-06/generated/settlement_basis_batch2_v0/hypothesis_summary.csv"
-JAKARTA_RULES = ROOT / "docs/analysis/2026-06/generated/settlement_basis_batch2_v0/jakarta_rules_stations.csv"
-OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-14-settlement-source-registry-v0.json"
-OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-14-settlement-source-registry-v0.md"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.analysis.versioned_artifact_output import (
+    prepare_new_run_output,
+    resolve_content_addressed_artifact,
+    resolve_run_output,
+)
+from src.strategies.runtime.production import load_production_spec
+
+
+OFFICIAL_SOURCE_SHA256 = "9c15a6596edaf2feaaad57d1741e95874a26095f75611f65f35378718012320e"
+OFFICIAL_ALIGN_SHA256 = "043b2fb2865ad62225a4de19daed3a5c048e4971fb599498a2197d0b7f152ba5"
+BATCH2_SUMMARY_SHA256 = "d7f817fde1b765d33185b322b0a61f4d0f0da96ac7ec52613db7056fba1d4e99"
+JAKARTA_RULES_SHA256 = "d1b4a7c2f36e62ed80af99d827d2c08531e0f1287db2d4684c9b7352fec3fdb4"
 TARGET_METRIC = "settlement_source_reliability_gap"
 
 
@@ -169,10 +177,17 @@ def best_batch_hypotheses(batch: pd.DataFrame) -> dict[str, dict[str, Any]]:
     return best
 
 
-def build_registry() -> pd.DataFrame:
-    source = pd.read_csv(OFFICIAL_SOURCE)
-    align = pd.read_csv(OFFICIAL_ALIGN)
-    batch = pd.read_csv(BATCH2_SUMMARY)
+def build_registry(
+    official_source: Path | None = None,
+    official_align: Path | None = None,
+    batch2_summary: Path | None = None,
+) -> pd.DataFrame:
+    official_source = official_source or resolve_content_addressed_artifact(OFFICIAL_SOURCE_SHA256)
+    official_align = official_align or resolve_content_addressed_artifact(OFFICIAL_ALIGN_SHA256)
+    batch2_summary = batch2_summary or resolve_content_addressed_artifact(BATCH2_SUMMARY_SHA256)
+    source = pd.read_csv(official_source)
+    align = pd.read_csv(official_align)
+    batch = pd.read_csv(batch2_summary)
     best_batch = best_batch_hypotheses(batch)
     align_by_city = {str(r["city"]): r.to_dict() for _, r in align.iterrows()}
 
@@ -329,7 +344,7 @@ def render_md(payload: dict[str, Any]) -> str:
         "",
         "## 数据快照",
         "",
-        "- 数据源: `runtime/weather.db.fact_signal_candidates` for coverage counts; generated official-source CSVs for source evidence.",
+        "- 数据源: canonical `fact_signal_candidates` for coverage counts; content-addressed official-source CSVs for source evidence.",
         f"- DB last_modified: `{payload['db_last_modified_utc']}`.",
         f"- fact_signal_candidates rows: `{payload['self_check']['candidate_coverage']['rows']}`.",
         "- 本报告不发布 `live_real` PnL/ROI/rank/curve，因此不使用 CLOB coverage gate 作为结论来源。",
@@ -391,12 +406,43 @@ def render_md(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db-path", default=str(DB_PATH))
-    parser.add_argument("--out-json", default=str(OUT_JSON))
-    parser.add_argument("--out-md", default=str(OUT_MD))
-    args = parser.parse_args()
+    parser.add_argument("--db-path", default=str(load_production_spec().canonical_db_path))
+    parser.add_argument("--official-source")
+    parser.add_argument("--official-align")
+    parser.add_argument("--batch2-summary")
+    parser.add_argument("--jakarta-rules")
+    parser.add_argument("--run-id", help="stable immutable artifact run identity")
+    parser.add_argument("--output-dir")
+    args = parser.parse_args(argv)
+
+    official_source = (
+        Path(args.official_source)
+        if args.official_source
+        else resolve_content_addressed_artifact(OFFICIAL_SOURCE_SHA256)
+    )
+    official_align = (
+        Path(args.official_align)
+        if args.official_align
+        else resolve_content_addressed_artifact(OFFICIAL_ALIGN_SHA256)
+    )
+    batch2_summary = (
+        Path(args.batch2_summary)
+        if args.batch2_summary
+        else resolve_content_addressed_artifact(BATCH2_SUMMARY_SHA256)
+    )
+    jakarta_rules = (
+        Path(args.jakarta_rules)
+        if args.jakarta_rules
+        else resolve_content_addressed_artifact(JAKARTA_RULES_SHA256)
+    )
+    out_dir = resolve_run_output(
+        "settlement_source_registry_v1",
+        run_id=args.run_id,
+        explicit_output=Path(args.output_dir) if args.output_dir else None,
+    )
+    prepare_new_run_output(out_dir)
 
     db_path = Path(args.db_path)
     conn = connect_ro(db_path)
@@ -406,17 +452,20 @@ def main() -> None:
     finally:
         conn.close()
 
-    registry = add_fact_counts(build_registry(), counts)
+    registry = add_fact_counts(
+        build_registry(official_source, official_align, batch2_summary),
+        counts,
+    )
     payload = {
         "generated_at_utc": now_utc(),
         "target_metric": TARGET_METRIC,
         "db_path": str(db_path),
         "db_last_modified_utc": datetime.fromtimestamp(db_path.stat().st_mtime, timezone.utc).isoformat(),
         "inputs": {
-            "official_source": str(OFFICIAL_SOURCE),
-            "official_alignment": str(OFFICIAL_ALIGN),
-            "batch2_summary": str(BATCH2_SUMMARY),
-            "jakarta_rules": str(JAKARTA_RULES),
+            "official_source": str(official_source),
+            "official_alignment": str(official_align),
+            "batch2_summary": str(batch2_summary),
+            "jakarta_rules": str(jakarta_rules),
         },
         "self_check": self_check,
         "registry": registry.sort_values("city").to_dict("records"),
@@ -427,9 +476,8 @@ def main() -> None:
             "allowed_action": "research/shadow feature alignment only; no live config change",
         },
     }
-    out_json = Path(args.out_json)
-    out_md = Path(args.out_md)
-    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json = out_dir / "settlement_source_registry.json"
+    out_md = out_dir / "report.md"
     out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
     out_md.write_text(render_md(payload))
     print(json.dumps({"out_json": str(out_json), "out_md": str(out_md), "classes": payload["class_summary"]}, ensure_ascii=False, indent=2))
