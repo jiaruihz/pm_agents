@@ -126,6 +126,113 @@ def test_crypto_registry_and_data_freshness(tmp_path: Path) -> None:
     assert health["running_labels"] == 1
 
 
+def test_crypto_collector_idle_between_capture_windows_is_healthy(tmp_path: Path) -> None:
+    crypto_root = tmp_path / "crypto"
+    runtime_root = tmp_path / "runtime"
+    raw_root = tmp_path / "raw"
+    (crypto_root / "configs").mkdir(parents=True)
+    runtime_root.mkdir()
+    # Keep one active service so the registry is considered valid.
+    (crypto_root / "configs/pm5m-runtime.json").write_text(
+        json.dumps(
+            {
+                "profile_id": "test",
+                "services": [
+                    {
+                        "service_id": "one",
+                        "lifecycle": "active",
+                        "labels": ["com.cryptoquant.pm5mone"],
+                    }
+                ],
+            }
+        )
+    )
+    (runtime_root / "settlement-service.status.json").write_text("{}")
+    (runtime_root / "future-context.status.json").write_text("{}")
+    for symbol in ("btc", "eth"):
+        collector = raw_root / "2026-08-14" / f"session-{symbol}"
+        collector.mkdir(parents=True)
+        (collector / "collector.status.json").write_text(
+            json.dumps(
+                {
+                    "symbol": symbol,
+                    "connected": False,
+                    "transport_warm": False,
+                    "idle_until_capture_window": True,
+                    "next_capture_window_seconds": 60,
+                }
+            )
+        )
+    now_epoch = max(path.stat().st_mtime for path in runtime_root.iterdir())
+
+    def runner(
+        command: list[str], cwd: Path | None, timeout: float
+    ) -> supervisor.CommandResult:
+        return result(stdout="123\t0\tcom.cryptoquant.pm5mone\n")
+
+    health = supervisor.collect_crypto(
+        runner,
+        crypto_root=crypto_root,
+        runtime_root=runtime_root,
+        raw_root=raw_root,
+        now_epoch=now_epoch,
+    )
+    assert health["status"] == "healthy"
+    assert all(
+        row["idle_until_capture_window"] is True for row in health["artifacts"][-2:]
+    )
+
+
+def test_collect_weather_ignores_only_its_bounded_worker_session() -> None:
+    payload = {
+        "status": "warning",
+        "manifest_status": "warning",
+        "critical_manifest_findings": [],
+        "critical_runtimes": [],
+        "extra_sessions": ["weather_reliability_worker_123_456"],
+        "jrs_context_health": {"status": "healthy"},
+        "data_feed_semantic_health": {"status": "healthy"},
+        "runtimes": [],
+    }
+
+    def runner(
+        command: list[str], cwd: Path | None, timeout: float
+    ) -> supervisor.CommandResult:
+        return result(stdout=json.dumps(payload))
+
+    health = supervisor.collect_weather(runner)
+    assert health["status"] == "healthy"
+    assert health["health"]["extra_sessions"] == []
+
+
+def test_outer_supervisor_collects_snapshot_through_jrs_worker(tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "production_reliability_snapshot_v1",
+        "status": "healthy",
+        "findings": [],
+        "sections": {},
+    }
+    seen: list[str] = []
+
+    def runner(
+        command: list[str], cwd: Path | None, timeout: float
+    ) -> supervisor.CommandResult:
+        seen.extend(command)
+        return result(stdout=json.dumps(payload))
+
+    snapshot = supervisor.collect_snapshot_via_jrs(
+        crypto_root=tmp_path / "crypto",
+        crypto_runtime_root=tmp_path / "runtime",
+        crypto_raw_root=tmp_path / "raw",
+        maintain_weather_route=True,
+        runner=runner,
+    )
+    assert "--jrs-worker" in seen
+    assert "--maintain-weather-route" in seen
+    assert snapshot["status"] == "healthy"
+    assert snapshot["jrs_worker"]["returncode"] == 0
+
+
 def test_safe_repair_never_adds_live_confirmation(tmp_path: Path) -> None:
     state = {
         "issues": {

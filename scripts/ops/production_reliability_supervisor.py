@@ -14,6 +14,7 @@ import fcntl
 import json
 import os
 import plistlib
+import shlex
 import shutil
 import subprocess
 import sys
@@ -176,7 +177,24 @@ def collect_weather(runner: Runner = run_command) -> dict[str, Any]:
             "health": None,
         }
 
+    # A bounded reliability worker is itself visible while controller health is
+    # taking the tmux inventory.  It is not a persistent unmanaged runtime and
+    # must not make its own health cycle warn.  Other extra sessions remain
+    # visible (and therefore warning) until they are explicitly retired.
+    extra_sessions = [
+        str(value)
+        for value in (payload.get("extra_sessions") or [])
+        if not str(value).startswith("weather_reliability_worker_")
+    ]
+    payload["extra_sessions"] = extra_sessions
     manifest_status = payload.get("manifest_status")
+    if (
+        manifest_status == "warning"
+        and not extra_sessions
+        and not payload.get("critical_manifest_findings")
+        and not payload.get("critical_runtimes")
+    ):
+        manifest_status = "healthy"
     if manifest_status != "healthy":
         details = payload.get("critical_manifest_findings") or []
         findings.append(
@@ -660,14 +678,24 @@ def collect_crypto(
         latest = max(matching, key=lambda path: path.stat().st_mtime) if matching else (
             raw_root / f"missing-{symbol}-collector.status.json"
         )
+        payload = read_json(latest)
+        # Selective collectors intentionally close the market socket between
+        # bounded capture windows.  Fresh idle status is healthy; connectivity
+        # is required only while a capture window is active.
+        required_fields = None
+        if payload.get("idle_until_capture_window") is not True:
+            required_fields = {"connected": True, "transport_warm": True}
         artifact, finding = _fresh_json_check(
             f"crypto.data.collector.{symbol}",
             latest,
             30.0,
             now_epoch,
-            required_fields={"connected": True, "transport_warm": True},
+            required_fields=required_fields,
         )
         artifact["symbol"] = symbol
+        artifact["idle_until_capture_window"] = payload.get(
+            "idle_until_capture_window"
+        )
         artifacts.append(artifact)
         if finding:
             findings.append(finding)
@@ -929,6 +957,97 @@ def build_snapshot(
     }
 
 
+def run_jrs_command(
+    command: Sequence[str], cwd: Path | None = None, timeout: float = 30
+) -> CommandResult:
+    """Execute one command through the existing permission-bearing tmux host."""
+
+    from scripts.ops.weather_production_ctl import _run_tmux_checked
+
+    spec = load_production_spec()
+    working = cwd or ROOT
+    shell_command = f"cd {shlex.quote(str(working))} && {shlex.join(list(command))}"
+    started = time.monotonic()
+    result = _run_tmux_checked(
+        spec,
+        spec.canonical_tmux_socket,
+        "weather_reliability_worker",
+        shell_command,
+        timeout_sec=timeout,
+    )
+    return CommandResult(
+        returncode=result.returncode,
+        stdout=result.stdout,
+        stderr="" if result.returncode == 0 else result.stdout[-2000:],
+        elapsed_sec=round(time.monotonic() - started, 3),
+    )
+
+
+def collect_snapshot_via_jrs(
+    *,
+    crypto_root: Path,
+    crypto_runtime_root: Path,
+    crypto_raw_root: Path,
+    maintain_weather_route: bool,
+    runner: Runner = run_jrs_command,
+) -> dict[str, Any]:
+    command = [
+        str(ROOT / ".venv/bin/python"),
+        str(ROOT / "scripts/ops/production_reliability_supervisor.py"),
+        "--jrs-worker",
+        "--crypto-root",
+        str(crypto_root),
+        "--crypto-runtime-root",
+        str(crypto_runtime_root),
+        "--crypto-raw-root",
+        str(crypto_raw_root),
+    ]
+    if maintain_weather_route:
+        command.append("--maintain-weather-route")
+    result = runner(command, ROOT, 180)
+    payload = parse_json_output(result)
+    if payload is not None and result.returncode == 0:
+        payload["jrs_worker"] = {
+            "status": "healthy",
+            "returncode": result.returncode,
+            "elapsed_sec": result.elapsed_sec,
+        }
+        return payload
+
+    storage = collect_storage()
+    network = collect_network()
+    worker_finding = issue(
+        "weather.jrs_worker.unavailable",
+        "critical",
+        f"rc={result.returncode} error={(result.stderr or result.stdout)[-1000:]}",
+        component="jrs-context",
+    )
+    weather = {
+        "status": "critical",
+        "findings": [worker_finding],
+        "health": {"jrs_context_health": {"status": "critical"}},
+    }
+    sections = {
+        "weather": weather,
+        "weather_execution": {"status": "skipped", "findings": []},
+        "storage": storage,
+        "market_proxy": {"status": "skipped", "findings": []},
+        "network": network,
+        "crypto": {"status": "skipped", "findings": []},
+    }
+    findings = [worker_finding, *storage.get("findings", []), *network.get("findings", [])]
+    return {
+        "schema_version": "production_reliability_snapshot_v1",
+        "generated_at_utc": iso_utc(),
+        "status": "critical",
+        "findings": findings,
+        "sections": sections,
+        "jrs_worker": {
+            "status": "critical",
+            "returncode": result.returncode,
+            "elapsed_sec": result.elapsed_sec,
+        },
+    }
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-root", type=Path, default=DEFAULT_STATE_ROOT)
@@ -944,11 +1063,22 @@ def parse_args() -> argparse.Namespace:
         help="optional external dead-man-switch ping URL",
     )
     parser.add_argument("--fail-on-degraded", action="store_true")
+    parser.add_argument("--jrs-worker", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if args.jrs_worker:
+        snapshot = build_snapshot(
+            crypto_root=args.crypto_root,
+            crypto_runtime_root=args.crypto_runtime_root,
+            crypto_raw_root=args.crypto_raw_root,
+            maintain_weather_route=bool(args.maintain_weather_route),
+        )
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
+
     args.state_root.mkdir(parents=True, exist_ok=True)
     lock_path = args.state_root / "supervisor.lock"
     with lock_path.open("a+") as lock_handle:
@@ -958,7 +1088,7 @@ def main() -> int:
             print(json.dumps({"status": "already_running"}))
             return 0
 
-        snapshot = build_snapshot(
+        snapshot = collect_snapshot_via_jrs(
             crypto_root=args.crypto_root,
             crypto_runtime_root=args.crypto_runtime_root,
             crypto_raw_root=args.crypto_raw_root,
@@ -979,6 +1109,7 @@ def main() -> int:
             action = apply_one_safe_repair(
                 state,
                 runtime_storage_ok=jrs_healthy,
+                runner=run_jrs_command,
                 crypto_root=args.crypto_root,
             )
         pending_notifications = (
