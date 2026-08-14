@@ -241,7 +241,9 @@ managed_runtimes:
       actual_notional: 0.0
       model_sha256: 0f5f06798c91451b76b897eb0e882fafd50b80b1a4a831a1781360ec09910252
     dependencies: [weather_jrs_context_keeper, weather_market_books]
-    recovery_policy: safe
+    # User-paused pending Codex court token-usage review. Restart only through
+    # an explicit production-config change after the review is complete.
+    recovery_policy: manual
 
   - instance_id: polymarket_dispute_clarification_court_v1
     uses_market_proxy: true
@@ -261,7 +263,9 @@ managed_runtimes:
       actual_notional: 0.0
       worker: dispute_and_official_clarification_court
     dependencies: [weather_jrs_context_keeper, polymarket_dispute_repricing_zero_notional_v1]
-    recovery_policy: safe
+    # User-paused pending Codex court token-usage review. Restart only through
+    # an explicit production-config change after the review is complete.
+    recovery_policy: manual
 
   - instance_id: weather_forecast_run_capture_v1
     tmux_session: weather_forecast_run_capture_v1
