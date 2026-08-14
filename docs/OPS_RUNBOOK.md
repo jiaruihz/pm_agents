@@ -69,7 +69,7 @@ Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁
 `.env`、逐脚本改 `--market-proxy` 或恢复历史独立 failover 进程：
 
 ```bash
-# 只读检查 default/stable 命名 route、Clash group 与 Gamma/CLOB probe
+# 只读检查 default/stable 命名 route、Clash group、Gamma/CLOB 与 geoblock probe
 .venv/bin/python scripts/ops/weather_market_proxy_ctl.py status
 
 # 只读预览 Clash profile enhancement；apply 需在已确认的网络维护窗口
@@ -84,7 +84,7 @@ Market proxy endpoint 与 Clash 节点都只通过统一 controller 管理；禁
 `route_key=stable` 均解析到同一 Clash 进程的 `7896` 命名 listener。`PM-STABLE` fallback 组按
 TAG 本机 `7890` → Allblue 顺序自动探测切换，切换不修改业务参数、不重启 consumer。Allblue
 命名备选入口为 `7897 / allblue`；当前 selector 连续失败时，controller 从已有延迟证据中最多尝试 12 个候选，并对每个候选做
-Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit。controller
+Gamma+CLOB 与 Polymarket geoblock 实测；全部失败则恢复原节点，切换写 append-only audit。controller
 通过 Clash 既有 Unix socket `/tmp/verge/verge-mihomo.sock` 读取 group/current node，并分别对
 `7896/7897` 做 Gamma+CLOB probe；不启用 TCP external controller，不创建 API secret，所有上游
 失败时显式报错，不 fallback direct。
@@ -97,7 +97,8 @@ Gamma+CLOB 实测；全部失败则恢复原节点，切换写 append-only audit
 系统/Codex 的 TAG 节点维护与上述 weather route 分开：`tag_proxy_route_ctl.py` 只切 TAG 已有
 `🙂 TAGSS` selector 内的 `1x` 节点，不改 macOS 代理端口、`7896 / PM-STABLE`、`7897` 或任何 consumer。
 它用 OpenAI 实际端点而不是只用 `generate_204` 验收，连续两个 degraded cycle 后才在 JP/HK/SG/DE 的
-`1x` 候选中有界测速；切后连续验证，失败尝试下一个候选，全部失败恢复原节点，成功后冷却 15 分钟。
+`1x` 候选中有界测速；Polymarket `blocked=true` 则不等待第二个 cycle、不受冷却限制。每个候选切后必须同时通过
+OpenAI 与 `trading_allowed=true`，受限地区会继续尝试下一个候选，全部失败恢复原节点，成功后冷却 15 分钟。
 每次 bounded probe 追加到主机状态目录的月度 `probes-YYYY-MM.jsonl`，切换另写月度
 `switches-YYYY-MM.jsonl`；单次三探测允许一次偶发超时，只有多数失败或整体持续变慢才累计 degraded cycle，
 后续机场评测以这份长期可用率/尾延迟证据为准，不用单次测速图代替稳定性。
