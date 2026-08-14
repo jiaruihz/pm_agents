@@ -231,7 +231,7 @@ scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 
 ## 7. 主机级可用性监督
 
-`scripts/ops/production_reliability_supervisor.py` 补的是 controller 外层故障域：它从 Mac 内置盘执行，单次巡检 weather 全量
+`scripts/ops/production_reliability_supervisor.py` 是唯一周期可用性调度入口：它从 Mac 内置盘执行，单次巡检 weather 全量
 runtime/semantic health、JRS mount UUID 与容量、CLOB/Open-Meteo 代理出口，以及 crypto registry 的 45 个 retained jobs、BTC/ETH
 collector、context 和 settlement freshness。状态、影响窗口、恢复动作和通知失败均写到：
 
@@ -258,7 +258,11 @@ scripts/ops/install_production_reliability_launchagent.sh
 PRODUCTION_RELIABILITY_APPLY_SAFE=1 scripts/ops/install_production_reliability_launchagent.sh
 ```
 
-它不会重建 JRS permission host、修磁盘、切 guarded live、直接管理 tmux/launchd job 或绕开 controller。critical 连续 2 轮、
+业务级 executor failure、plan-without-order、guard block 等检查由只读
+`weather_execution_semantic_health.py` 作为 probe module 被 supervisor 调用；它不再自行 loop、写告警状态或发 Telegram。
+旧 `weather_runtime_monitor` tmux/LaunchAgent、`weather_live_runtime_patrol` 与 `weather_live_doctor` 不再是入口。
+
+supervisor 不会重建 JRS permission host、修磁盘、切 guarded live、直接管理 tmux/launchd job 或绕开 controller。critical 连续 2 轮、
 warning 连续 3 轮才开 incident；每项修复最多 3 次且至少间隔 15 分钟，恢复后主动发送影响窗口。Telegram 发送失败会保留待发
 队列并重试。若要覆盖整机断电/全网断开的“本机无法发消息”场景，在 `.env` 配置外部 dead-man switch 的
 `PRODUCTION_RELIABILITY_HEARTBEAT_URL`；没有外部心跳时，本机监控不能承诺发现本机完全离线。

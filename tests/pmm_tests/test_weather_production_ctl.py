@@ -235,7 +235,6 @@ def test_current_migrated_runtimes_remain_non_live_and_dormant_d1_is_not_desired
         "weather_market_books",
         "weather_helsinki_pre_cross_active_ladder_shadow",
         "weather_korea_first_seen_state_v1",
-        "weather_runtime_monitor",
         "weather_source_event_ladder_repricing_shadow",
         "weather_tokyo_current_break_active_ladder_shadow_v1",
     }

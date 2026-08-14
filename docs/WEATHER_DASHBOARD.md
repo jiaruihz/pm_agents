@@ -39,13 +39,12 @@ scripts/weather_dashboard/run_stack.sh                  # 启动/复用 API+FE�
 
 ## 3. 硬口径（踩坑换来的，违反就会误导）
 
-### 3.1 镜像新鲜度 ≠ 生产健康（最容易误判）
-本机是 N100 的**只读镜像**，可能滞后。看板任何"新鲜度"分两层，永不混：
-- **行情快照年龄 `snapshot_age_min`** / **镜像心跳 `heartbeat_age_min`**：本机镜像的同步年龄。
-- **生产是否断流**：**不**由镜像新旧推断。判断断流跑 N100 doctor：
-  `ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'`。
-- 镜像旧 → 先 `scripts/ops/sync_weather_remote.sh`。N100 不可达（`No route to host`）时镜像无法更新，
-  看板显示的是镜像里最后一份，**这不是看板 bug，是采集侧不可达**。
+### 3.1 分析 freshness ≠ 生产健康（最容易误判）
+看板任何“新鲜度”分两层，永不混：
+- **canonical/分析 freshness**：由 canonical refresh 与 `weather_analysis_freshness_monitor.py` 后验判断。
+- **生产是否断流**：只认 Mac production controller/manifest 与
+  `~/Library/Application Support/pm_agents/production_reliability/latest.json`；不得再引用 N100 doctor、旧 PID 或镜像年龄。
+- 分析层旧时先检查 canonical refresh 状态；raw producer/controller 同时健康时，不能把分析刷新滞后误报成采集死亡。
 
 ### 3.2 在险资金（绩效页 / 总览）
 - **在险资金 = 近期未结算持仓的开仓成本**（`open_recent_cost_usd`，target_date 在近 7 天内、待结算）。

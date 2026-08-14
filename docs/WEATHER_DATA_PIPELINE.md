@@ -34,7 +34,7 @@ Last updated: 2026-08-11
 >
 > 2026-07-11 更新: forecast producer persists immutable decision-time hourly forecast curves; the current canonical path is `forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. Corrected `forecast_hourly_curve_v3` rows separate source-response `forecast_detected_at_utc` from capture publication-boundary `available_at_utc`; a new exact hash first appears at detected time, or at available time only when no reliable detected time exists, and later captures preserve the earliest reliable first-seen. `available_at_utc` is sampled immediately before final serialization/fsync and atomic link, while file mtime is the external completion evidence. Rows also record explicit model fallback and an honest `forecast_run_lineage_status` when the upstream live API does not expose a run timestamp. `weather_data_feed_prod_health_check.py` fails when the latest curve capture is stale, misaligned with the latest snapshot, incomplete, missing lineage, or has impossible detected/first-seen/available ordering. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
 >
-> 2026-07-16 更新: 在线 runtime health 与分析派生层 freshness 已拆开。`weather_runtime_monitor.py` 只检查当前 live/shadow 进程及其 raw pulse；`weather_analysis_freshness_monitor.py` 只读检查 local mirror、`fact_signal_candidates` 和 `settlement_outcomes`。日常补数使用 `refresh_weather_analysis_incremental.sh`，按日期同步 settlement 并替换最近 event-date partition；它不会调用 `run_stack.sh --rebuild` 或 drop 全量 fact 表。
+> 2026-08-14 更新: 唯一周期调度入口为 Mac 内置盘 LaunchAgent 请求的 `production_reliability_supervisor.py`。它读取 controller 全量 runtime health，并调用只读 `weather_execution_semantic_health.py` 检查 executor failure、plan-without-order 等业务语义；旧 `weather_runtime_monitor` tmux/LaunchAgent 与 `weather_live_runtime_patrol` 已退场。`weather_analysis_freshness_monitor.py` 只由 canonical refresh 后验调用，检查 `fact_signal_candidates` 和 `settlement_outcomes`，不再另起常驻 monitor。
 >
 > 2026-07-18 更新: market snapshot 的交易截止时间以 Gamma event `endDate` 为第一权威口径，event 缺失时取最早的 child-market `endDate`；只有两者都不提供时才显式标记并使用城市当地 22:00 近似值。`settle_utc`、`settle_local`、`hours_to_settle`、window/time bucket 和 forecast lead 必须共用该时间，已过真实 `endDate` 的 event 不再发布可交易 snapshot rows。观察缓存仍可保留当天记录，因此“有 observation 但没有同 city/date book”在日内 roll 后属于市场日历差，不得解释成 collector 漏城。
 
@@ -62,7 +62,8 @@ Current production has four explicit ownership stages:
                               │   └── forecast/forecast_hourly_curves
                               └── production-declared strategy runtimes
                                   ├── health_path / live_order_path
-                                  └── runtime monitor
+                                  └── host reliability supervisor
+                                      ├── execution semantic health probe
                                       └── controller-owned proxy node recovery
                                        │
                      bounded canonical refresh one-shot
@@ -79,7 +80,7 @@ Ownership is strict:
 - every mutable raw/journal target has one production-declared owner;
 - sync copies raw only;
 - bounded canonical refresh is the registered analysis DB writer path;
-- monitors never repair or mutate data;
+- supervisor 只通过现有 controller/reconciler 做有界恢复，不直接修数据或管理业务进程；
 - `run_stack.sh --rebuild` remains an explicit full rebuild and is never a patrol action.
 
 Daily/current execution refresh:
@@ -91,7 +92,8 @@ scripts/ops/start_weather_canonical_refresh_tmux.sh
 Read-only checks:
 
 ```bash
-.venv/bin/python scripts/ops/weather_runtime_monitor.py
+.venv/bin/python scripts/ops/production_reliability_supervisor.py --fail-on-degraded
+.venv/bin/python scripts/ops/weather_execution_semantic_health.py --exit-nonzero-on-alert
 .venv/bin/python scripts/ops/weather_analysis_freshness_monitor.py
 .venv/bin/python scripts/ops/weather_storage_identity_audit.py
 ```
@@ -572,7 +574,6 @@ id directly.
 | `scripts/ops/weather_snapshot_signal_builder.py` | pm_agent | inside the cycle |
 | `scripts/ops/weather_trade_planner.py` | pm_agent | inside the cycle |
 | `scripts/ops/weather_order_executor.py` | pm_agent | inside the cycle |
-| `scripts/ops/weather_live_doctor.py` | pm_agent | manual / monitoring |
 | `scripts/ops/weather_live_status.py` | pm_agent | pause/resume control |
 | `scripts/ops/daily_pipeline.py` | weather-predict | daily timer |
 | `scripts/analysis/settle_t24_paper.py` | weather-predict | **manual** ⚠ |

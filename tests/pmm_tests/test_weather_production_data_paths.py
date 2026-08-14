@@ -210,7 +210,6 @@ def test_current_entrypoints_do_not_depend_on_retired_data_roots() -> None:
         "start_weather_korea_first_seen_collector.sh",
         "start_weather_fast_source_stale_book_production.sh",
         "start_weather_source_event_ladder_repricing_shadow.sh",
-        "start_weather_runtime_monitor.sh",
     ]
     for name in current_entrypoints:
         text = (ROOT / "scripts/ops" / name).read_text(encoding="utf-8")
@@ -284,11 +283,12 @@ def test_metar_reversal_entrypoint_passes_controller_runtime_dir() -> None:
     assert '$(printf \'%q\' "$RUNTIME_DIR")' in text
 
 
-def test_runtime_monitor_probes_controller_runtime_root() -> None:
-    text = (ROOT / "scripts/ops/start_weather_runtime_monitor.sh").read_text(
+def test_reliability_supervisor_includes_execution_semantic_health() -> None:
+    text = (ROOT / "scripts/ops/production_reliability_supervisor.py").read_text(
         encoding="utf-8"
     )
-    assert '--runtime-root "$PM_RUNTIME_ROOT/weather_edge_v1"' in text
+    assert "collect_weather_execution_semantics" in text
+    assert "weather_execution_semantic_health" in text
 
 
 def test_active_feature_writers_use_controller_feature_store() -> None:

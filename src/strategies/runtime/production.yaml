@@ -493,17 +493,6 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
     recovery_policy: safe
-  - instance_id: weather_runtime_monitor
-    tmux_session: weather_runtime_monitor
-    role: monitor
-    execution_mode: monitor
-    release_id: control_plane
-    start_script: scripts/ops/start_weather_runtime_monitor.sh
-    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/runtime_monitor/latest_summary.json
-    max_health_age_sec: 660
-    accepted_health_statuses: [healthy, warning]
-    dependencies: [weather_data_feed_jrs]
-    recovery_policy: safe
   - instance_id: weather_runtime_log_maintainer
     tmux_session: weather_runtime_log_maintainer
     role: monitor

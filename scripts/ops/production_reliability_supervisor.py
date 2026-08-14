@@ -390,7 +390,6 @@ def _curl_probe(name: str, url: str, proxy_url: str, runner: Runner) -> dict[str
 def collect_network(runner: Runner = run_command) -> dict[str, Any]:
     proxy_url = load_production_spec().market_proxy_default_url
     probes = [
-        _curl_probe("polymarket_clob", "https://clob.polymarket.com/time", proxy_url, runner),
         _curl_probe(
             "open_meteo",
             "https://api.open-meteo.com/v1/forecast?latitude=35&longitude=139&hourly=temperature_2m&forecast_days=1",
@@ -412,6 +411,117 @@ def collect_network(runner: Runner = run_command) -> dict[str, Any]:
         "status": "critical" if findings else "healthy",
         "proxy_url": proxy_url,
         "probes": probes,
+        "findings": findings,
+    }
+
+
+def maintain_market_proxy_control(runner: Runner = run_command) -> dict[str, Any]:
+    command = [
+        str(ROOT / ".venv/bin/python"),
+        str(ROOT / "scripts/ops/weather_market_proxy_ctl.py"),
+        "maintain",
+        "--apply",
+        "--confirm-live",
+        "--trigger",
+        "production_reliability_supervisor",
+        "--reason",
+        "automatic default route recovery",
+    ]
+    result = runner(command, ROOT, 120)
+    payload = parse_json_output(result)
+    findings: list[dict[str, Any]] = []
+    if payload is None:
+        findings.append(
+            issue(
+                "network.weather.market_proxy_control_unreadable",
+                "critical",
+                f"rc={result.returncode} error={result.stderr[-500:]}",
+                component="network-control",
+            )
+        )
+        return {
+            "status": "critical",
+            "elapsed_sec": result.elapsed_sec,
+            "findings": findings,
+        }
+    maintenance = payload.get("maintenance") or {}
+    route_control = payload.get("route_control") or {}
+    probe = payload.get("probe") or {}
+    acceptable = {
+        "healthy",
+        "recovered_before_switch",
+        "switched",
+        "already_running",
+    }
+    healthy = (
+        result.returncode == 0
+        and maintenance.get("status") in acceptable
+        and route_control.get("healthy") is True
+        and probe.get("ok") is True
+    )
+    if not healthy:
+        findings.append(
+            issue(
+                "network.weather.market_proxy_control_degraded",
+                "critical",
+                (
+                    f"rc={result.returncode} maintenance={maintenance.get('status')} "
+                    f"route_healthy={route_control.get('healthy')} probe_ok={probe.get('ok')}"
+                ),
+                component="network-control",
+            )
+        )
+    return {
+        "status": "healthy" if healthy else "critical",
+        "elapsed_sec": result.elapsed_sec,
+        "maintenance": maintenance,
+        "route_control": {
+            "healthy": route_control.get("healthy"),
+            "all_routes_healthy": route_control.get("all_routes_healthy"),
+            "reachable": route_control.get("reachable"),
+        },
+        "probe": probe,
+        "health_artifact": payload.get("health_artifact"),
+        "findings": findings,
+    }
+
+
+def collect_weather_execution_semantics() -> dict[str, Any]:
+    from scripts.ops.weather_execution_semantic_health import (
+        collect_probes,
+        summarize_probes,
+    )
+
+    summary = summarize_probes(collect_probes())
+    controller_owned_kinds = {
+        "missing_summary",
+        "summary_parse_error",
+        "stale_summary",
+        "aging_summary",
+    }
+    findings: list[dict[str, Any]] = []
+    for probe in summary.get("probes") or []:
+        for alert in probe.get("alerts") or []:
+            if alert.get("kind") in controller_owned_kinds:
+                continue
+            findings.append(
+                issue(
+                    (
+                        "weather.execution."
+                        f"{alert.get('strategy_instance')}.{alert.get('kind')}"
+                    ),
+                    str(alert.get("severity") or "warning"),
+                    str(alert.get("message") or alert.get("kind") or "semantic failure"),
+                    component="weather-execution",
+                )
+            )
+    status = "critical" if any(row["severity"] == "critical" for row in findings) else (
+        "warning" if findings else "healthy"
+    )
+    return {
+        "status": status,
+        "probe_count": len(summary.get("probes") or []),
+        "semantic_summary": summary,
         "findings": findings,
     }
 
@@ -768,17 +878,44 @@ def build_snapshot(
     crypto_root: Path = DEFAULT_CRYPTO_ROOT,
     crypto_runtime_root: Path = DEFAULT_CRYPTO_RUNTIME_ROOT,
     crypto_raw_root: Path = DEFAULT_CRYPTO_RAW_ROOT,
+    maintain_weather_route: bool = False,
 ) -> dict[str, Any]:
     weather = collect_weather(runner)
     storage = collect_storage(runner)
+    jrs_healthy = (
+        storage["status"] == "healthy"
+        and (weather.get("health") or {}).get("jrs_context_health", {}).get("status")
+        == "healthy"
+    )
+    market_proxy = (
+        maintain_market_proxy_control(runner)
+        if maintain_weather_route and jrs_healthy
+        else {
+            "status": "skipped",
+            "reason": (
+                "maintenance_disabled"
+                if not maintain_weather_route
+                else "jrs_or_storage_unhealthy"
+            ),
+            "findings": [],
+        }
+    )
     network = collect_network(runner)
+    weather_execution = collect_weather_execution_semantics()
     crypto = collect_crypto(
         runner,
         crypto_root=crypto_root,
         runtime_root=crypto_runtime_root,
         raw_root=crypto_raw_root,
     )
-    sections = {"weather": weather, "storage": storage, "network": network, "crypto": crypto}
+    sections = {
+        "weather": weather,
+        "weather_execution": weather_execution,
+        "storage": storage,
+        "market_proxy": market_proxy,
+        "network": network,
+        "crypto": crypto,
+    }
     findings = [row for section in sections.values() for row in section.get("findings", [])]
     status = "critical" if any(row["severity"] == "critical" for row in findings) else (
         "warning" if findings else "healthy"
@@ -799,6 +936,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--crypto-runtime-root", type=Path, default=DEFAULT_CRYPTO_RUNTIME_ROOT)
     parser.add_argument("--crypto-raw-root", type=Path, default=DEFAULT_CRYPTO_RAW_ROOT)
     parser.add_argument("--apply-safe", action="store_true")
+    parser.add_argument("--maintain-weather-route", action="store_true")
     parser.add_argument("--notify", action="store_true")
     parser.add_argument(
         "--heartbeat-url",
@@ -824,6 +962,7 @@ def main() -> int:
             crypto_root=args.crypto_root,
             crypto_runtime_root=args.crypto_runtime_root,
             crypto_raw_root=args.crypto_raw_root,
+            maintain_weather_route=bool(args.maintain_weather_route),
         )
         state_path = args.state_root / "state.json"
         previous = read_json(state_path, {})

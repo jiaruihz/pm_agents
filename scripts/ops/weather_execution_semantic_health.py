@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Monitor active weather live/shadow loops for data and execution failures.
+"""Evaluate weather execution semantics for the host reliability supervisor.
 
-The monitor is intentionally read-only. It does not change strategy decisions,
-place orders, or mutate runner state. It watches the runtime pulse files that
-the runners already produce and turns "quietly did nothing" into an explicit
-status that the dashboard, logs, and optional Telegram alerts can consume.
-Canonical DB and analysis-mirror freshness are owned by the separate
-weather_analysis_freshness_monitor.py process.
+This module is intentionally a read-only probe library plus a bounded one-shot
+CLI.  It does not loop, notify, repair, or own process lifecycle.  The single
+host-level scheduler is ``production_reliability_supervisor.py``.
 """
 
 from __future__ import annotations
@@ -14,9 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import sys
-import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -41,7 +36,6 @@ from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 _PRODUCTION_SPEC = load_production_spec()
 DEFAULT_RUNTIME_ROOT = _PRODUCTION_SPEC.pm_runtime_root / "weather_edge_v1"
-DEFAULT_RUNTIME_DIR = DEFAULT_RUNTIME_ROOT / "runtime_monitor"
 
 
 @dataclass(frozen=True)
@@ -815,90 +809,16 @@ def default_specs(root: Path) -> list[WatchSpec]:
     return [spec for spec in specs if spec.instance in managed_ids]
 
 
-def load_state(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {"active_alert_keys": {}}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {"active_alert_keys": {}}
-    return data if isinstance(data, dict) else {"active_alert_keys": {}}
-
-
-def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-
-
-def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def update_alert_journal(runtime_dir: Path, summary: dict[str, Any]) -> list[dict[str, Any]]:
-    now_text = summary["generated_at_utc"]
-    state_path = runtime_dir / "alert_state.json"
-    journal_path = runtime_dir / "alerts.jsonl"
-    state = load_state(state_path)
-    active_before = state.get("active_alert_keys") if isinstance(state.get("active_alert_keys"), dict) else {}
-    current_alerts = {
-        alert["alert_key"]: alert
-        for probe in summary.get("probes", [])
-        for alert in probe.get("alerts", [])
-    }
-    transitions: list[dict[str, Any]] = []
-    for key, alert in current_alerts.items():
-        if key not in active_before:
-            transitions.append({**alert, "event": "opened", "event_ts_utc": now_text})
-    for key, previous in active_before.items():
-        if key not in current_alerts:
-            transitions.append({**previous, "event": "resolved", "event_ts_utc": now_text})
-
-    append_jsonl(journal_path, transitions)
-    write_json(
-        state_path,
-        {
-            "updated_at_utc": now_text,
-            "active_alert_keys": current_alerts,
-        },
-    )
-    return transitions
-
-
-def send_telegram(transitions: list[dict[str, Any]], summary: dict[str, Any]) -> None:
-    if os.environ.get("WEATHER_RUNTIME_MONITOR_TELEGRAM") != "1":
-        return
-    opened = [a for a in transitions if a.get("event") == "opened" and a.get("severity") in {"critical", "warning"}]
-    if not opened:
-        return
-    try:
-        from src.platform.notification.telegram import send_telegram_message_sync
-    except Exception as exc:  # noqa: BLE001
-        print(f"[WARN] telegram helper unavailable: {type(exc).__name__}: {exc}", flush=True)
-        return
-    lines = [
-        "【Weather runtime monitor】",
-        f"status={summary.get('status')} critical={summary.get('critical_alerts')} warning={summary.get('warning_alerts')}",
-    ]
-    for alert in opened[:8]:
-        lines.append(f"- [{alert.get('severity')}] {alert.get('message')}")
-    try:
-        send_telegram_message_sync("\n".join(lines))
-    except Exception as exc:  # noqa: BLE001
-        print(f"[WARN] telegram send failed: {type(exc).__name__}: {exc}", flush=True)
-
-
-def run_once(args: argparse.Namespace) -> dict[str, Any]:
-    now = utc_now()
-    runtime_root = args.runtime_root
+def collect_probes(
+    runtime_root: Path = DEFAULT_RUNTIME_ROOT,
+    *,
+    instances: set[str] | None = None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    now = now or utc_now()
     specs = default_specs(runtime_root)
-    if args.instance:
-        requested = set(args.instance)
-        specs = [s for s in specs if s.instance in requested]
+    if instances:
+        specs = [spec for spec in specs if spec.instance in instances]
     probes = [evaluate_spec(spec, now) for spec in specs]
     probes.append(
         evaluate_market_proxy_health(
@@ -907,15 +827,18 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             now,
         )
     )
+    return probes
+
+
+def summarize_probes(probes: list[dict[str, Any]], now: datetime | None = None) -> dict[str, Any]:
+    now = now or utc_now()
     all_alerts = [alert for probe in probes for alert in probe["alerts"]]
     critical = sum(1 for alert in all_alerts if alert.get("severity") == "critical")
     warning = sum(1 for alert in all_alerts if alert.get("severity") == "warning")
     status = "critical" if critical else "warning" if warning else "healthy"
-    summary = {
+    return {
         "generated_at_utc": iso(now),
-        "strategy_instance": "weather_runtime_monitor",
-        "strategy_family": "data_quality.runtime_monitor",
-        "execution_mode": "monitor",
+        "schema_version": "weather_execution_semantic_health_v1",
         "status": status,
         "critical_alerts": critical,
         "warning_alerts": warning,
@@ -923,35 +846,23 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "probes": probes,
         "no_order_placed": True,
     }
-    transitions = update_alert_journal(args.runtime_dir, summary)
-    summary["alert_transitions_this_cycle"] = len(transitions)
-    summary["opened_alerts_this_cycle"] = sum(1 for row in transitions if row.get("event") == "opened")
-    summary["resolved_alerts_this_cycle"] = sum(1 for row in transitions if row.get("event") == "resolved")
-    write_json(args.runtime_dir / "latest_summary.json", summary)
-    append_jsonl(args.runtime_dir / "summary_history.jsonl", [summary])
-    send_telegram(transitions, summary)
-    return summary
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", type=Path, default=DEFAULT_RUNTIME_ROOT)
-    parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME_DIR)
     parser.add_argument("--instance", action="append", help="Limit monitoring to one strategy_instance; repeatable.")
-    parser.add_argument("--loop", action="store_true")
-    parser.add_argument("--interval-seconds", type=float, default=300.0)
     parser.add_argument("--exit-nonzero-on-alert", action="store_true")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    while True:
-        summary = run_once(args)
-        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True), flush=True)
-        if not args.loop:
-            return 2 if args.exit_nonzero_on_alert and summary["critical_alerts"] else 0
-        time.sleep(max(1.0, float(args.interval_seconds)))
+    summary = summarize_probes(
+        collect_probes(args.runtime_root, instances=set(args.instance or []))
+    )
+    print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+    return 2 if args.exit_nonzero_on_alert and summary["critical_alerts"] else 0
 
 
 if __name__ == "__main__":

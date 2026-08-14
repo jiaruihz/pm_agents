@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from scripts.ops import weather_runtime_monitor as monitor
+from scripts.ops import weather_execution_semantic_health as monitor
 from weather_dashboard import analysis_freshness
 
 

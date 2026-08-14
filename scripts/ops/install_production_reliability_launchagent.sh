@@ -31,6 +31,7 @@ cat >"$PLIST" <<EOF
     <string>--state-root</string>
     <string>$STATE_ROOT</string>
     <string>--notify</string>
+    <string>--maintain-weather-route</string>
 $APPLY_SAFE_XML
   </array>
   <key>WorkingDirectory</key>

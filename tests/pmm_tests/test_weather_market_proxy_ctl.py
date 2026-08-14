@@ -319,12 +319,16 @@ def test_publish_health_is_atomic_and_machine_readable(tmp_path, monkeypatch):
     assert payload["probe"]["ok"] is True
 
 
-def test_runtime_monitor_refreshes_proxy_health_matrix():
+def test_reliability_supervisor_owns_proxy_health_maintenance():
     root = Path(__file__).resolve().parents[2]
-    text = (root / "scripts/ops/start_weather_runtime_monitor.sh").read_text(encoding="utf-8")
-    assert 'weather_market_proxy_ctl.py" maintain' in text
-    assert "--apply --confirm-live" in text
-    assert "weather_runtime_monitor" in text
-    assert "market_proxy_health_failed_utc" in text
-    assert 'CONTROL_ROOT="$PROJECT_DIR"' in text
-    assert 'WEATHER_RUNTIME_MONITOR_INTERVAL_SECONDS:-60' in text
+    text = (root / "scripts/ops/production_reliability_supervisor.py").read_text(
+        encoding="utf-8"
+    )
+    installer = (
+        root / "scripts/ops/install_production_reliability_launchagent.sh"
+    ).read_text(encoding="utf-8")
+    assert '"maintain"' in text
+    assert '"--apply"' in text
+    assert '"--confirm-live"' in text
+    assert '"production_reliability_supervisor"' in text
+    assert "--maintain-weather-route" in installer
