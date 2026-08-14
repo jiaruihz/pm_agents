@@ -115,7 +115,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert dispute.expected_health_contract()["live_authority"] is False
     assert dispute.expected_health_contract()["actual_notional"] == 0.0
     assert spec.release("dispute_repricing").expected_repo_sha == (
-        "95fe0532413a6798287b4cb7d93b4655ea1967ba"
+        "3ed5e466e18895cccc08dff046ac4d1c4c339043"
     )
     assert spec.release("market_books").expected_repo_sha == (
         "269c1072fe0c5a464d6ec681db4805a1815dca2d"

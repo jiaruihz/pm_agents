@@ -229,13 +229,47 @@ scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
   备份合同若未在 canonical sources 中登记，就仍是运维缺口。
 - 非 production-contract 的个人工具不享受 weather controller 自动恢复；不得因此扩张 controller scope。
 
-## 7. 建议的后续升级顺序
+## 7. 主机级可用性监督
+
+`scripts/ops/production_reliability_supervisor.py` 补的是 controller 外层故障域：它从 Mac 内置盘执行，单次巡检 weather 全量
+runtime/semantic health、JRS mount UUID 与容量、CLOB/Open-Meteo 代理出口，以及 crypto registry 的 45 个 retained jobs、BTC/ETH
+collector、context 和 settlement freshness。状态、影响窗口、恢复动作和通知失败均写到：
+
+```text
+~/Library/Application Support/pm_agents/production_reliability/
+  latest.json
+  state.json
+  events.jsonl
+  repair_actions.jsonl
+  notification_failures.jsonl
+```
+
+只读实检：
+
+```bash
+.venv/bin/python scripts/ops/production_reliability_supervisor.py --fail-on-degraded
+```
+
+安装外层 LaunchAgent 属于生产行为变更，需经确认后执行。默认只监控和 Telegram 通知；只有显式设置
+`PRODUCTION_RELIABILITY_APPLY_SAFE=1` 才允许调用现有入口修复 weather safe/non-live runtime 与 crypto research/shadow/dry-run：
+
+```bash
+scripts/ops/install_production_reliability_launchagent.sh
+PRODUCTION_RELIABILITY_APPLY_SAFE=1 scripts/ops/install_production_reliability_launchagent.sh
+```
+
+它不会重建 JRS permission host、修磁盘、切 guarded live、直接管理 tmux/launchd job 或绕开 controller。critical 连续 2 轮、
+warning 连续 3 轮才开 incident；每项修复最多 3 次且至少间隔 15 分钟，恢复后主动发送影响窗口。Telegram 发送失败会保留待发
+队列并重试。若要覆盖整机断电/全网断开的“本机无法发消息”场景，在 `.env` 配置外部 dead-man switch 的
+`PRODUCTION_RELIABILITY_HEARTBEAT_URL`；没有外部心跳时，本机监控不能承诺发现本机完全离线。
+
+## 8. 建议的后续升级顺序
 
 1. 按事故 living doc 完成尚未覆盖的真实 Mac/JRS 恢复验收；
 2. 为 current JRS raw/canonical 建立独立介质、可校验、可恢复的备份合同；
 3. 新增 runtime 只扩展 production contract、controller 和一致性测试，不再增加平行 supervisor。
 
-## 8. 备份边界
+## 9. 备份边界
 
 历史 N100 tar 与同步脚本只覆盖旧 `weather-predict` cache/output，不能恢复当前 Mac/JRS production 全链路，也不能证明
 canonical DB、active raw/order journals 或 research artifact store 已备份。历史映射保留在

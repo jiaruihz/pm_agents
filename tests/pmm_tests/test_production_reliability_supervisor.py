@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from scripts.ops import production_reliability_supervisor as supervisor
+
+
+def result(returncode: int = 0, stdout: str = "", stderr: str = "") -> supervisor.CommandResult:
+    return supervisor.CommandResult(returncode, stdout, stderr, 0.01)
+
+
+def test_incident_debounce_and_resolution_preserve_impact_window() -> None:
+    start = datetime(2026, 8, 14, 1, 0, tzinfo=timezone.utc)
+    finding = supervisor.issue(
+        "weather.runtime.books",
+        "critical",
+        "stale",
+        component="weather-runtime",
+    )
+    state1, transitions1 = supervisor.update_incident_state({}, [finding], start)
+    assert transitions1 == []
+    assert state1["issues"][finding["key"]]["active"] is False
+
+    state2, transitions2 = supervisor.update_incident_state(
+        state1, [finding], start + timedelta(minutes=1)
+    )
+    assert [row["event"] for row in transitions2] == ["opened"]
+    assert state2["issues"][finding["key"]]["active"] is True
+
+    _, transitions3 = supervisor.update_incident_state(
+        state2, [], start + timedelta(minutes=2)
+    )
+    assert [row["event"] for row in transitions3] == ["resolved"]
+    assert transitions3[0]["impact_started_utc"] == supervisor.iso_utc(start)
+    assert transitions3[0]["impact_ended_utc"] == supervisor.iso_utc(
+        start + timedelta(minutes=2)
+    )
+
+
+def test_weather_health_classifies_live_and_safe_shadow() -> None:
+    payload = {
+        "status": "critical",
+        "manifest_status": "healthy",
+        "critical_manifest_findings": [],
+        "jrs_context_health": {"status": "healthy", "returncode": 0},
+        "data_feed_semantic_health": {"status": "healthy"},
+        "runtimes": [
+            {
+                "instance_id": "live-one",
+                "status": "critical",
+                "expected_live": True,
+                "role": "strategy",
+                "recovery_policy": "guarded_live",
+                "issues": ["health_artifact_stale"],
+            },
+            {
+                "instance_id": "shadow-one",
+                "status": "critical",
+                "expected_live": False,
+                "role": "shadow",
+                "recovery_policy": "safe",
+                "issues": ["health_artifact_stale"],
+            },
+        ],
+    }
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        return result(stdout=json.dumps(payload))
+
+    health = supervisor.collect_weather(runner)
+    by_key = {row["key"]: row for row in health["findings"]}
+    assert by_key["weather.runtime.live-one"]["severity"] == "critical"
+    assert "repair" not in by_key["weather.runtime.live-one"]
+    assert by_key["weather.runtime.shadow-one"]["severity"] == "warning"
+    assert by_key["weather.runtime.shadow-one"]["repair"] == {
+        "kind": "weather_restart",
+        "target": "shadow-one",
+    }
+
+
+def test_crypto_registry_and_data_freshness(tmp_path: Path) -> None:
+    crypto_root = tmp_path / "crypto"
+    runtime_root = tmp_path / "runtime"
+    raw_root = tmp_path / "raw"
+    (crypto_root / "configs").mkdir(parents=True)
+    runtime_root.mkdir()
+    collector_root = raw_root / "2026-08-14" / "session-btc"
+    collector_root.mkdir(parents=True)
+    eth_root = raw_root / "2026-08-14" / "session-eth"
+    eth_root.mkdir(parents=True)
+    registry = {
+        "profile_id": "test",
+        "services": [
+            {
+                "service_id": "one",
+                "lifecycle": "active",
+                "labels": ["com.cryptoquant.pm5mone"],
+            }
+        ],
+    }
+    (crypto_root / "configs/pm5m-runtime.json").write_text(json.dumps(registry))
+    (runtime_root / "settlement-service.status.json").write_text("{}")
+    (runtime_root / "future-context.status.json").write_text("{}")
+    (collector_root / "collector.status.json").write_text(
+        json.dumps({"symbol": "btc", "connected": True, "transport_warm": True})
+    )
+    (eth_root / "collector.status.json").write_text(
+        json.dumps({"symbol": "eth", "connected": True, "transport_warm": True})
+    )
+    now_epoch = max(path.stat().st_mtime for path in runtime_root.iterdir())
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        return result(stdout="123\t0\tcom.cryptoquant.pm5mone\n")
+
+    health = supervisor.collect_crypto(
+        runner,
+        crypto_root=crypto_root,
+        runtime_root=runtime_root,
+        raw_root=raw_root,
+        now_epoch=now_epoch,
+    )
+    assert health["status"] == "healthy"
+    assert health["expected_labels"] == 1
+    assert health["running_labels"] == 1
+
+
+def test_safe_repair_never_adds_live_confirmation(tmp_path: Path) -> None:
+    state = {
+        "issues": {
+            "weather.runtime.shadow": {
+                "key": "weather.runtime.shadow",
+                "active": True,
+                "repair": {"kind": "weather_restart", "target": "shadow"},
+                "repair_attempts": 0,
+                "last_repair_epoch": 0,
+                "first_seen_utc": "2026-08-14T00:00:00Z",
+            }
+        }
+    }
+    seen: list[str] = []
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        seen.extend(command)
+        return result(stdout="{}")
+
+    action = supervisor.apply_one_safe_repair(
+        state, runtime_storage_ok=True, runner=runner, crypto_root=tmp_path
+    )
+    assert action is not None
+    assert "--confirm-live" not in seen
+    assert seen[seen.index("--instance") + 1] == "shadow"
+
+
+def test_safe_repair_is_blocked_when_jrs_is_unhealthy(tmp_path: Path) -> None:
+    state = {
+        "issues": {
+            "weather.runtime.shadow": {
+                "key": "weather.runtime.shadow",
+                "active": True,
+                "repair": {"kind": "weather_restart", "target": "shadow"},
+                "repair_attempts": 0,
+                "last_repair_epoch": 0,
+                "first_seen_utc": "2026-08-14T00:00:00Z",
+            }
+        }
+    }
+    called = False
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        nonlocal called
+        called = True
+        return result()
+
+    assert (
+        supervisor.apply_one_safe_repair(
+            state, runtime_storage_ok=False, runner=runner, crypto_root=tmp_path
+        )
+        is None
+    )
+    assert called is False
