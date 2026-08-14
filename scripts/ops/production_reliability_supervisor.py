@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +47,7 @@ CRITICAL_DEBOUNCE_CYCLES = 2
 WARNING_DEBOUNCE_CYCLES = 3
 REPAIR_COOLDOWN_SECONDS = 15 * 60
 MAX_REPAIR_ATTEMPTS = 3
+DISPLAY_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass(frozen=True)
@@ -833,6 +835,21 @@ def apply_one_safe_repair(
             "elapsed_sec": result.elapsed_sec,
             "output": (result.stdout + "\n" + result.stderr)[-2000:].strip(),
         }
+        controller_payload = parse_json_output(result)
+        if controller_payload is not None:
+            target_runtime = next(
+                (
+                    runtime
+                    for runtime in controller_payload.get("runtimes") or []
+                    if isinstance(runtime, Mapping)
+                    and runtime.get("instance_id") == repair.get("target")
+                ),
+                None,
+            )
+            action["controller_status"] = controller_payload.get("status")
+            if target_runtime is not None:
+                action["target_status"] = target_runtime.get("status")
+                action["target_issues"] = list(target_runtime.get("issues") or [])
         row["repair_attempts"] = int(row.get("repair_attempts") or 0) + 1
         row["last_repair_epoch"] = now_epoch
         row["last_repair"] = action
@@ -840,24 +857,180 @@ def apply_one_safe_repair(
     return None
 
 
-def render_notification(transitions: Sequence[Mapping[str, Any]]) -> str:
-    opened = [row for row in transitions if row.get("event") == "opened"]
-    resolved = [row for row in transitions if row.get("event") == "resolved"]
-    repairs = [row for row in transitions if row.get("event") == "repair_attempt"]
-    lines = ["【生产链路稳定性告警】"]
-    for row in opened:
-        lines.append(
-            f"- 新增 {str(row.get('severity')).upper()} {row.get('key')}: {row.get('detail')}"
+def _local_time(raw: Any) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return "未知"
+    try:
+        value = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(DISPLAY_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return text
+
+
+def _human_detail(detail: Any) -> str:
+    raw = str(detail or "").strip()
+    if raw.startswith("manifest_status="):
+        return "生产拓扑清单处于警告状态；下方没有更具体故障时，需要检查缺失或额外进程"
+    if raw.startswith("snapshot_city_state_coverage:"):
+        cities = raw.split(":", 1)[1]
+        return f"部分城市缺少当前天气状态：{cities}"
+    labels = {
+        "tmux_session_missing": "进程会话不存在（进程已停止）",
+        "health_artifact_stale": "健康文件已过期（没有继续产出）",
+        "health_artifact_missing": "健康文件不存在",
+        "health_status_unaccepted": "进程上报了异常状态",
+        "observation_cache_not_ok": "天气观测缓存异常（关键观测为空或过期）",
+        "orderbook_snapshots_stale_or_missing": "盘口快照缺失或过期",
+    }
+    parts = [labels.get(part.strip(), part.strip()) for part in raw.split(",") if part.strip()]
+    return "；".join(parts) or "未提供具体原因"
+
+
+def _runtime_display(instance_id: str) -> tuple[str, str]:
+    known_name = {
+        "polymarket_weather_proposal_reward_shadow_v1": "天气 proposal reward 影子策略",
+    }.get(instance_id)
+    try:
+        runtime = next(
+            item
+            for item in load_production_spec().managed_runtimes
+            if item.instance_id == instance_id
         )
-        lines.append(f"  影响从 {row.get('impact_started_utc')} 开始")
+    except (StopIteration, OSError, ValueError):
+        return known_name or f"运行实例 {instance_id}", "影响范围未知，请按实例标识排查"
+    role_labels = {
+        "shadow": "影子策略",
+        "strategy": "策略执行",
+        "market_collector": "盘口采集",
+        "source_collector": "天气源采集",
+        "data_feed": "天气数据加工",
+        "dashboard_api": "看板 API",
+        "infrastructure": "基础设施",
+    }
+    friendly = known_name or f"{instance_id}（{role_labels.get(runtime.role, runtime.role)}）"
+    if runtime.expected_live:
+        scope = "实盘实例，可能影响真实下单"
+    elif runtime.execution_mode in {"shadow", "zero_notional_shadow"}:
+        scope = "仅 shadow 研究实例，不会真实下单"
+    elif runtime.role in {"collector", "source_collector", "market_collector", "data_feed"}:
+        scope = "数据采集实例，可能影响下游信号，但不会自行下单"
+    else:
+        scope = f"非实盘实例（{runtime.execution_mode}），不会自行真实下单"
+    return friendly, scope
+
+
+def _problem_summary(row: Mapping[str, Any]) -> tuple[str, str, str]:
+    key = str(row.get("key") or "unknown")
+    if key.startswith("weather.runtime."):
+        instance_id = key.removeprefix("weather.runtime.")
+        friendly, scope = _runtime_display(instance_id)
+        return f"{friendly}异常", scope, instance_id
+    if key == "weather.data_feed.semantic_critical":
+        return "天气数据语义检查失败", "可能影响依赖该数据的信号；不等于进程或盘口链路全部停止", key
+    if key == "weather.data_feed.semantic_warning":
+        return "天气数据覆盖不完整", "相关城市的策略证据可能缺失；其他城市不一定受影响", key
+    if key == "weather.manifest.degraded":
+        return "生产拓扑清单出现警告", "这是汇总状态；若同时存在具体进程故障，会合并到具体故障中", key
+    if key.startswith("network.weather."):
+        return "天气网络请求失败", "可能影响天气刷新；盘口与本地已有数据不一定受影响", key
+    if key.startswith("storage.jrs."):
+        return "JRS/NVMe 存储异常", "可能影响生产数据读写，系统不会自动操作实盘", key
+    if key == "weather.jrs_context.unhealthy":
+        return "JRS 生产运行上下文不可用", "可能影响所有读写 JRS 的天气生产进程", key
+    if key.startswith("crypto."):
+        return "加密数据或运行进程异常", "可能影响加密研究与 shadow 链路", key
+    return key, "请根据下方原因判断影响范围", key
+
+
+def _repair_succeeded(row: Mapping[str, Any]) -> bool:
+    target_status = row.get("target_status")
+    if target_status is not None:
+        return target_status == "healthy"
+    return int(row.get("returncode") or 0) == 0
+
+
+def render_notification(transitions: Sequence[Mapping[str, Any]]) -> str:
+    opened_all = [row for row in transitions if row.get("event") == "opened"]
+    resolved_all = [row for row in transitions if row.get("event") == "resolved"]
+    repairs = [row for row in transitions if row.get("event") == "repair_attempt"]
+    # manifest.degraded is normally the aggregate symptom of a concrete runtime
+    # finding in the same cycle. Keep it in state, but do not duplicate it in a
+    # human notification when the concrete fault is already present.
+    opened = [
+        row
+        for row in opened_all
+        if row.get("key") != "weather.manifest.degraded" or len(opened_all) == 1
+    ]
+    resolved = [
+        row
+        for row in resolved_all
+        if row.get("key") != "weather.manifest.degraded" or len(resolved_all) == 1
+    ]
+    failed_repairs = [row for row in repairs if not _repair_succeeded(row)]
+    successful_repairs = [row for row in repairs if _repair_succeeded(row)]
+    severity = "CRITICAL" if any(row.get("severity") == "critical" for row in opened) else "WARNING"
+    if failed_repairs:
+        title = f"【生产告警｜{severity}｜自动恢复失败】"
+    elif opened and successful_repairs:
+        title = f"【生产告警｜{severity}｜已执行自动恢复】"
+    elif opened:
+        title = f"【生产告警｜{severity}】"
+    else:
+        title = "【生产恢复通知｜已恢复】"
+    lines = [title]
+
+    for row in opened:
+        summary, scope, identifier = _problem_summary(row)
+        lines.extend(
+            [
+                "",
+                f"问题：{summary}",
+                f"原因：{_human_detail(row.get('detail'))}",
+                f"影响：{scope}",
+                f"开始：{_local_time(row.get('impact_started_utc'))}（北京时间）",
+                f"实例：{identifier}",
+            ]
+        )
     for row in resolved:
-        lines.append(f"- 已恢复 {row.get('key')}")
-        lines.append(
-            f"  影响窗口 {row.get('impact_started_utc')} → {row.get('impact_ended_utc')}"
+        summary, scope, identifier = _problem_summary(row)
+        lines.extend(
+            [
+                "",
+                f"恢复：{summary}",
+                (
+                    "影响窗口："
+                    f"{_local_time(row.get('impact_started_utc'))} → "
+                    f"{_local_time(row.get('impact_ended_utc'))}（北京时间）"
+                ),
+                f"影响：{scope}",
+                f"实例：{identifier}",
+            ]
         )
     for row in repairs:
-        lines.append(
-            f"- 自动恢复 {row.get('key')}: rc={row.get('returncode')} {row.get('detail')}"
+        rc = int(row.get("returncode") or 0)
+        target_issues = _human_detail(",".join(map(str, row.get("target_issues") or [])))
+        if row.get("target_status") == "healthy":
+            result_text = "重启已执行，目标即时后验正常；等待下一轮确认是否持续运行"
+            if rc != 0:
+                result_text += f"（controller 总体仍异常，rc={rc}，说明同时存在其他故障）"
+        elif rc == 0:
+            result_text = "重启命令成功，等待下一轮健康检查确认"
+        else:
+            result_text = f"失败（rc={rc}）"
+            if row.get("target_issues"):
+                result_text += f"；重启后仍异常：{target_issues}"
+        lines.extend(
+            [
+                "",
+                f"自动处理：{result_text}",
+                (
+                    f"后续：失败时每 {REPAIR_COOLDOWN_SECONDS // 60} 分钟重试，"
+                    f"最多 {MAX_REPAIR_ATTEMPTS} 次；不会自动操作实盘实例"
+                ),
+            ]
         )
     return "\n".join(lines)[:3900]
 
@@ -1152,6 +1325,9 @@ def main() -> int:
                     "returncode": action.get("returncode"),
                     "detail": f"kind={action.get('kind')} target={action.get('target')}",
                     "at_utc": action.get("at_utc"),
+                    "controller_status": action.get("controller_status"),
+                    "target_status": action.get("target_status"),
+                    "target_issues": action.get("target_issues") or [],
                 }
             )
         notification = (

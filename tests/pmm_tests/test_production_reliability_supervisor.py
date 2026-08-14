@@ -280,6 +280,106 @@ def test_telegram_notification_falls_back_to_next_route(monkeypatch) -> None:
     assert result == {"status": "sent", "response_ok": True, "route": "stable_upstream"}
 
 
+def test_notification_is_human_readable_and_collapses_manifest_duplicate() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.manifest.degraded",
+                "detail": "manifest_status=warning findings=[]",
+                "impact_started_utc": "2026-08-14T07:04:38.931949Z",
+            },
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "detail": "tmux_session_missing,health_artifact_stale",
+                "impact_started_utc": "2026-08-14T07:04:38.931949Z",
+            },
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "returncode": 2,
+                "target_status": "critical",
+                "target_issues": ["tmux_session_missing", "health_artifact_stale"],
+            },
+        ]
+    )
+    assert message.startswith("【生产告警｜WARNING｜自动恢复失败】")
+    assert "问题：天气 proposal reward 影子策略异常" in message
+    assert "进程会话不存在（进程已停止）" in message
+    assert "仅 shadow 研究实例，不会真实下单" in message
+    assert "2026-08-14 15:04:38（北京时间）" in message
+    assert "自动处理：失败（rc=2）" in message
+    assert "manifest_status" not in message
+
+
+def test_notification_marks_successful_target_recovery() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "detail": "tmux_session_missing",
+                "impact_started_utc": "2026-08-14T07:04:38Z",
+            },
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "returncode": 0,
+                "target_status": "healthy",
+                "target_issues": [],
+            },
+        ]
+    )
+    assert message.startswith("【生产告警｜WARNING｜已执行自动恢复】")
+    assert "自动处理：重启已执行，目标即时后验正常" in message
+
+
+def test_target_health_overrides_global_controller_return_code() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "detail": "tmux_session_missing,health_artifact_stale",
+                "impact_started_utc": "2026-08-14T07:04:38Z",
+            },
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "returncode": 2,
+                "target_status": "healthy",
+                "target_issues": [],
+            },
+        ]
+    )
+    assert message.startswith("【生产告警｜WARNING｜已执行自动恢复】")
+    assert "目标即时后验正常" in message
+    assert "controller 总体仍异常，rc=2" in message
+    assert "自动恢复失败" not in message
+
+
+def test_standalone_manifest_warning_is_translated() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.manifest.degraded",
+                "detail": "manifest_status=warning findings=[]",
+                "impact_started_utc": "2026-08-14T07:04:38Z",
+            }
+        ]
+    )
+    assert "问题：生产拓扑清单出现警告" in message
+    assert "生产拓扑清单处于警告状态" in message
+    assert "manifest_status=" not in message
+
+
 def test_safe_repair_never_adds_live_confirmation(tmp_path: Path) -> None:
     state = {
         "issues": {
