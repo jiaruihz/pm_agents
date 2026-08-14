@@ -57,3 +57,15 @@ async def test_get_updates_success():
     res = await tg.get_updates(offset=12, timeout=10)
     assert res["result"][0]["update_id"] == 12
     await async_client.aclose()
+
+
+def test_owned_client_accepts_explicit_proxy(monkeypatch):
+    seen = {}
+
+    class DummyAsyncClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", DummyAsyncClient)
+    TelegramClient(bot_token="token", proxy_url="http://127.0.0.1:7897")
+    assert seen["proxy"] == "http://127.0.0.1:7897"

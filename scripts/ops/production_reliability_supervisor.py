@@ -862,16 +862,44 @@ def render_notification(transitions: Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(lines)[:3900]
 
 
+def telegram_delivery_routes() -> list[tuple[str, str | None]]:
+    """Return independent notification paths without duplicating proxy config."""
+
+    spec = load_production_spec()
+    by_key = {route.route_key: route.proxy_url for route in spec.market_proxy_routes}
+    candidates = [
+        ("allblue", by_key.get("allblue")),
+        ("stable_upstream", spec.market_proxy_stable_upstream_url),
+        ("direct", None),
+    ]
+    routes: list[tuple[str, str | None]] = []
+    seen: set[str | None] = set()
+    for name, proxy_url in candidates:
+        if proxy_url in seen:
+            continue
+        seen.add(proxy_url)
+        routes.append((name, proxy_url))
+    return routes
+
+
 def notify_telegram(transitions: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if not transitions:
         return {"status": "not_needed"}
-    try:
-        from src.platform.notification.telegram import send_telegram_message_sync
+    from src.platform.notification.telegram import send_telegram_message_sync
 
-        response = send_telegram_message_sync(render_notification(transitions))
-        return {"status": "sent", "response_ok": bool(response.get("ok", True))}
-    except Exception as exc:  # notification failure must not hide the monitored fault
-        return {"status": "failed", "error": f"{type(exc).__name__}:{exc}"[:500]}
+    errors: list[str] = []
+    message = render_notification(transitions)
+    for route_name, proxy_url in telegram_delivery_routes():
+        try:
+            response = send_telegram_message_sync(message, proxy_url=proxy_url)
+            return {
+                "status": "sent",
+                "response_ok": bool(response.get("ok", True)),
+                "route": route_name,
+            }
+        except Exception as exc:  # notification failure must not hide monitored fault
+            errors.append(f"{route_name}:{type(exc).__name__}:{exc}"[:300])
+    return {"status": "failed", "errors": errors}
 
 
 def send_heartbeat(url: str, runner: Runner = run_command) -> dict[str, Any]:

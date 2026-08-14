@@ -13,6 +13,7 @@ class TelegramClient:
         bot_token: str,
         api_base_url: str = "https://api.telegram.org",
         timeout_seconds: float = 15.0,
+        proxy_url: Optional[str] = None,
         client: Optional[httpx.AsyncClient] = None,
     ) -> None:
         token = (bot_token or "").strip()
@@ -21,7 +22,10 @@ class TelegramClient:
         self._bot_token = token
         self._api_base_url = api_base_url.rstrip("/")
         self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
+        self._client = client or httpx.AsyncClient(
+            timeout=timeout_seconds,
+            proxy=(proxy_url or None),
+        )
 
     async def __aenter__(self) -> "TelegramClient":
         return self

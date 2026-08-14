@@ -233,6 +233,53 @@ def test_outer_supervisor_collects_snapshot_through_jrs_worker(tmp_path: Path) -
     assert snapshot["jrs_worker"]["returncode"] == 0
 
 
+def test_telegram_delivery_routes_are_deduplicated(monkeypatch) -> None:
+    class Route:
+        def __init__(self, route_key: str, proxy_url: str) -> None:
+            self.route_key = route_key
+            self.proxy_url = proxy_url
+
+    class Spec:
+        market_proxy_routes = (
+            Route("allblue", "http://127.0.0.1:7897"),
+            Route("stable", "http://127.0.0.1:7896"),
+        )
+        market_proxy_stable_upstream_url = "http://127.0.0.1:7897"
+
+    monkeypatch.setattr(supervisor, "load_production_spec", lambda: Spec())
+    assert supervisor.telegram_delivery_routes() == [
+        ("allblue", "http://127.0.0.1:7897"),
+        ("direct", None),
+    ]
+
+
+def test_telegram_notification_falls_back_to_next_route(monkeypatch) -> None:
+    attempts: list[str | None] = []
+
+    def send(message: str, *, proxy_url: str | None = None) -> dict:
+        attempts.append(proxy_url)
+        if proxy_url == "http://127.0.0.1:7897":
+            raise TimeoutError("first route unavailable")
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        supervisor,
+        "telegram_delivery_routes",
+        lambda: [
+            ("allblue", "http://127.0.0.1:7897"),
+            ("stable_upstream", "http://127.0.0.1:7890"),
+        ],
+    )
+    monkeypatch.setattr(
+        "src.platform.notification.telegram.send_telegram_message_sync", send
+    )
+    result = supervisor.notify_telegram(
+        [{"event": "opened", "severity": "critical", "key": "test"}]
+    )
+    assert attempts == ["http://127.0.0.1:7897", "http://127.0.0.1:7890"]
+    assert result == {"status": "sent", "response_ok": True, "route": "stable_upstream"}
+
+
 def test_safe_repair_never_adds_live_confirmation(tmp_path: Path) -> None:
     state = {
         "issues": {
