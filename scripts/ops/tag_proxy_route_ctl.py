@@ -33,6 +33,7 @@ DEFAULT_GROUP = "🙂 TAGSS"
 DEFAULT_PROXY_URL = "http://127.0.0.1:7890"
 DEFAULT_CONTROLLER_URL = "http://127.0.0.1:9090"
 DEFAULT_TEST_URL = "https://api.openai.com/v1/models"
+DEFAULT_POLYMARKET_GEOBLOCK_URL = "https://polymarket.com/api/geoblock"
 DEFAULT_TAG_CONFIG = (
     Path.home()
     / "Library/Application Support/com.tag.lab/mihomo/runtime.yaml"
@@ -200,6 +201,55 @@ def probe_openai(
     return rows
 
 
+def probe_polymarket_geoblock(
+    proxy_url: str = DEFAULT_PROXY_URL,
+    *,
+    timeout: float = 5.0,
+) -> dict[str, Any]:
+    """Return the venue's trading-region verdict for the effective TAG egress."""
+    command = [
+        "/usr/bin/curl",
+        "--proxy",
+        proxy_url,
+        "--connect-timeout",
+        "2",
+        "--max-time",
+        str(timeout),
+        "-fsS",
+        DEFAULT_POLYMARKET_GEOBLOCK_URL,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout + 2,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "ok": False,
+            "blocked": None,
+            "trading_allowed": False,
+            "country": None,
+            "region": None,
+            "error": f"TimeoutExpired:{exc.timeout}",
+        }
+    try:
+        payload = json.loads(result.stdout) if result.returncode == 0 else {}
+    except json.JSONDecodeError:
+        payload = {}
+    blocked = payload.get("blocked")
+    ok = result.returncode == 0 and isinstance(blocked, bool)
+    return {
+        "ok": ok,
+        "blocked": blocked if isinstance(blocked, bool) else None,
+        "trading_allowed": bool(ok and blocked is False),
+        "country": str(payload.get("country") or "") or None,
+        "region": str(payload.get("region") or "") or None,
+        "error": "" if ok else (result.stderr or "invalid geoblock response").strip()[:200],
+    }
+
+
 def probe_summary(rows: list[dict[str, Any]], *, slow_seconds: float) -> dict[str, Any]:
     successes = [float(row["total_sec"]) for row in rows if row["ok"]]
     failures = len(rows) - len(successes)
@@ -311,6 +361,8 @@ def maintain(
 
         group, current = group_snapshot(controller, group_name)
         probe = probe_summary(probe_openai(), slow_seconds=slow_seconds)
+        geoblock = probe_polymarket_geoblock()
+        blocked_region = geoblock.get("blocked") is True
         state = read_state(state_path)
         previous_node = str(state.get("current_node") or "")
         streak = int(state.get("failure_streak") or 0)
@@ -327,6 +379,7 @@ def maintain(
             "failure_streak": streak,
             "last_switch_epoch": int(state.get("last_switch_epoch") or 0),
             "probe": probe,
+            "polymarket_geoblock": geoblock,
         }
         if apply:
             atomic_write_json(state_path, latest)
@@ -343,6 +396,8 @@ def maintain(
                     "avg_total_sec": probe["avg_total_sec"],
                     "max_total_sec": probe["max_total_sec"],
                     "degraded": probe["degraded"],
+                    "polymarket_blocked": geoblock.get("blocked"),
+                    "polymarket_country": geoblock.get("country"),
                 },
             )
 
@@ -354,13 +409,19 @@ def maintain(
             "current_node": current,
             "failure_streak": streak,
             "probe": probe,
+            "polymarket_geoblock": geoblock,
         }
-        if not force_evaluate and not probe["degraded"]:
+        if not force_evaluate and not probe["degraded"] and not blocked_region:
             return preview
-        if not force_evaluate and streak < required_degraded_cycles:
+        if not force_evaluate and not blocked_region and streak < required_degraded_cycles:
             return {**preview, "status": "awaiting_confirmation_cycle"}
         elapsed = now_epoch - int(state.get("last_switch_epoch") or 0)
-        if not force_evaluate and elapsed < cooldown_seconds and probe["ok_count"] > 0:
+        if (
+            not force_evaluate
+            and not blocked_region
+            and elapsed < cooldown_seconds
+            and probe["ok_count"] > 0
+        ):
             return {**preview, "status": "cooldown", "cooldown_remaining_sec": cooldown_seconds - elapsed}
 
         candidates = eligible_nodes(group)
@@ -369,7 +430,7 @@ def maintain(
             row
             for row in benchmark
             if row["eligible"] and row["node"] != current
-        ][:3]
+        ][:12]
         decision = {**preview, "status": "switch_required", "benchmark": benchmark}
         if not selected_rows:
             return {**decision, "status": "no_healthy_candidate"}
@@ -384,15 +445,18 @@ def maintain(
             controller.switch(group_name, attempted)
             time.sleep(0.5)
             candidate_probe = probe_summary(probe_openai(), slow_seconds=slow_seconds)
+            candidate_geoblock = probe_polymarket_geoblock()
             accepted = (
                 candidate_probe["failure_count"] == 0
                 and not candidate_probe["degraded"]
+                and candidate_geoblock["trading_allowed"]
             )
             switch_attempts.append(
                 {
                     "node": attempted,
                     "accepted": accepted,
                     "probe": candidate_probe,
+                    "polymarket_geoblock": candidate_geoblock,
                 }
             )
             post_probe = candidate_probe
@@ -414,6 +478,7 @@ def maintain(
             "attempted_nodes": [row["node"] for row in switch_attempts],
             "rolled_back": rolled_back,
             "pre_probe": probe,
+            "pre_polymarket_geoblock": geoblock,
             "post_probe": post_probe,
             "switch_attempts": switch_attempts,
             "benchmark": benchmark,
@@ -426,6 +491,11 @@ def maintain(
                 "failure_streak": 0 if accepted else streak,
                 "last_switch_epoch": now_epoch if accepted else int(state.get("last_switch_epoch") or 0),
                 "last_switch": event,
+                "polymarket_geoblock": (
+                    switch_attempts[-1]["polymarket_geoblock"]
+                    if accepted
+                    else geoblock
+                ),
             }
         )
         atomic_write_json(state_path, latest)
@@ -436,6 +506,11 @@ def maintain(
             "selected_node": selected,
             "attempted_nodes": [row["node"] for row in switch_attempts],
             "post_probe": post_probe,
+            "post_polymarket_geoblock": (
+                switch_attempts[-1]["polymarket_geoblock"]
+                if accepted
+                else geoblock
+            ),
             "switch_attempts": switch_attempts,
             "audit_path": str(audit_path),
         }
@@ -465,6 +540,7 @@ def main() -> int:
             "current_node": current,
             "eligible_1x_nodes": eligible_nodes(group),
             "probe": probe_summary(probe_openai(), slow_seconds=1.5),
+            "polymarket_geoblock": probe_polymarket_geoblock(),
             "state": read_state(args.state_root / "latest.json"),
         }
     elif args.command == "benchmark":

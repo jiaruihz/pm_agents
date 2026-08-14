@@ -506,6 +506,28 @@ def probe(proxy_url: str, timeout: float = 8.0) -> dict:
             "returncode": result.returncode,
             "error": (result.stderr or "").strip()[:240],
         })
+    command = [
+        "curl", "-fsS", "--proxy", proxy_url, "--max-time", str(timeout),
+        "https://polymarket.com/api/geoblock",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    try:
+        payload = json.loads(result.stdout) if result.returncode == 0 else {}
+    except json.JSONDecodeError:
+        payload = {}
+    blocked = payload.get("blocked")
+    geoblock_ok = result.returncode == 0 and blocked is False
+    checks.append({
+        "name": "geoblock",
+        "url": "https://polymarket.com/api/geoblock",
+        "ok": geoblock_ok,
+        "blocked": blocked if isinstance(blocked, bool) else None,
+        "trading_allowed": geoblock_ok,
+        "country": str(payload.get("country") or "") or None,
+        "region": str(payload.get("region") or "") or None,
+        "returncode": result.returncode,
+        "error": "" if geoblock_ok else (result.stderr or "restricted or invalid geoblock response").strip()[:240],
+    })
     return {"ok": all(row["ok"] for row in checks), "checks": checks}
 
 

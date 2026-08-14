@@ -231,3 +231,68 @@ def test_settlement_stale_becomes_warning(tmp_path: Path) -> None:
     assert result["status"] == "warning"
     assert result["settlement_outcomes_max_target_date"] == "2026-06-30"
     assert any(alert["kind"] == "settlement_outcomes_stale" for alert in result["alerts"])
+
+
+def test_market_proxy_geoblock_becomes_critical_alert(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 14, 3, 30, tzinfo=timezone.utc)
+    path = tmp_path / "market_proxy_control" / "latest.json"
+    write_json(
+        path,
+        {
+            "generated_at_utc": (now - timedelta(seconds=30)).isoformat(),
+            "probe": {
+                "ok": False,
+                "checks": [
+                    {"name": "gamma", "ok": True},
+                    {"name": "clob", "ok": True},
+                    {
+                        "name": "geoblock",
+                        "ok": False,
+                        "blocked": True,
+                        "trading_allowed": False,
+                        "country": "SG",
+                    },
+                ],
+            },
+        },
+    )
+
+    result = monitor.evaluate_market_proxy_health(path, now)
+
+    assert result["status"] == "critical"
+    alert = next(
+        row
+        for row in result["alerts"]
+        if row["kind"] == "market_proxy_trading_region_blocked"
+    )
+    assert alert["detail"]["country"] == "SG"
+
+
+def test_market_proxy_unblocked_route_is_healthy(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 14, 3, 30, tzinfo=timezone.utc)
+    path = tmp_path / "market_proxy_control" / "latest.json"
+    write_json(
+        path,
+        {
+            "generated_at_utc": (now - timedelta(seconds=30)).isoformat(),
+            "probe": {
+                "ok": True,
+                "checks": [
+                    {"name": "gamma", "ok": True},
+                    {"name": "clob", "ok": True},
+                    {
+                        "name": "geoblock",
+                        "ok": True,
+                        "blocked": False,
+                        "trading_allowed": True,
+                        "country": "HK",
+                    },
+                ],
+            },
+        },
+    )
+
+    result = monitor.evaluate_market_proxy_health(path, now)
+
+    assert result["status"] == "healthy"
+    assert result["alerts"] == []

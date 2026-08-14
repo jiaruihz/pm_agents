@@ -642,6 +642,91 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
     }
 
 
+def evaluate_market_proxy_health(path: Path, now: datetime) -> dict[str, Any]:
+    payload = read_json(path)
+    alerts: list[dict[str, Any]] = []
+    generated = parse_dt(payload.get("generated_at_utc")) if payload else None
+    age_min = (now - generated).total_seconds() / 60 if generated else None
+    probe = payload.get("probe") if isinstance(payload.get("probe"), dict) else {}
+    checks = probe.get("checks") if isinstance(probe.get("checks"), list) else []
+    geoblock = next(
+        (row for row in checks if isinstance(row, dict) and row.get("name") == "geoblock"),
+        {},
+    )
+    if not payload:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_market_proxy_control",
+            kind="market_proxy_health_missing",
+            message="Weather market proxy: health artifact missing",
+            detail={"path": rel(path)},
+        )
+    elif payload.get("_parse_error"):
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_market_proxy_control",
+            kind="market_proxy_health_parse_error",
+            message="Weather market proxy: health artifact cannot be parsed",
+            detail={"path": rel(path), "error": payload.get("_parse_error")},
+        )
+    elif age_min is None or age_min > 5:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_market_proxy_control",
+            kind="market_proxy_health_stale",
+            message=(
+                f"Weather market proxy: heartbeat stale ({age_min:.1f} min)"
+                if age_min is not None
+                else "Weather market proxy: heartbeat timestamp missing"
+            ),
+            detail={"path": rel(path), "age_min": age_min},
+        )
+    if geoblock.get("blocked") is True:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_market_proxy_control",
+            kind="market_proxy_trading_region_blocked",
+            message=(
+                "Weather market proxy: Polymarket trading blocked for egress "
+                f"country={geoblock.get('country') or 'unknown'}"
+            ),
+            detail={
+                "country": geoblock.get("country"),
+                "region": geoblock.get("region"),
+                "route_control": payload.get("route_control"),
+            },
+        )
+    elif payload and (not probe.get("ok") or geoblock.get("trading_allowed") is not True):
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_market_proxy_control",
+            kind="market_proxy_execution_probe_failed",
+            message="Weather market proxy: execution-route probe failed",
+            detail={"checks": checks},
+        )
+    status = "critical" if alerts else "healthy"
+    return {
+        "strategy_instance": "weather_market_proxy_control",
+        "display_name": "Weather market proxy control",
+        "mode": "infrastructure",
+        "expected_live": True,
+        "status": status,
+        "summary_path": rel(path),
+        "generated_at_utc": payload.get("generated_at_utc") if payload else None,
+        "heartbeat_age_min": age_min,
+        "latest_summary_excerpt": {
+            "probe_ok": probe.get("ok"),
+            "geoblock": geoblock,
+        },
+        "alerts": alerts,
+    }
+
+
 def default_specs(root: Path) -> list[WatchSpec]:
     specs = [
         WatchSpec(
@@ -815,6 +900,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         requested = set(args.instance)
         specs = [s for s in specs if s.instance in requested]
     probes = [evaluate_spec(spec, now) for spec in specs]
+    probes.append(
+        evaluate_market_proxy_health(
+            _PRODUCTION_SPEC.data_feed_runtime_root
+            / "output/market_proxy_control/latest.json",
+            now,
+        )
+    )
     all_alerts = [alert for probe in probes for alert in probe["alerts"]]
     critical = sum(1 for alert in all_alerts if alert.get("severity") == "critical")
     warning = sum(1 for alert in all_alerts if alert.get("severity") == "warning")

@@ -1,7 +1,25 @@
 import json
 import sys
 
+import pytest
+
 from scripts.ops import tag_proxy_route_ctl as ctl
+
+
+@pytest.fixture(autouse=True)
+def _default_unblocked_polymarket_probe(monkeypatch):
+    monkeypatch.setattr(
+        ctl,
+        "probe_polymarket_geoblock",
+        lambda: {
+            "ok": True,
+            "blocked": False,
+            "trading_allowed": True,
+            "country": "HK",
+            "region": None,
+            "error": "",
+        },
+    )
 
 
 def test_host_tag_controller_owns_tag_canonical_ingress():
@@ -211,6 +229,64 @@ def test_maintain_tries_next_candidate_after_failed_post_switch_probe(
         "🇯🇵 日本 01丨1x JP",
         "🇸🇬 新加坡 01丨1x SG",
     ]
+
+
+def test_maintain_immediately_leaves_blocked_region_and_rejects_blocked_candidate(
+    tmp_path, monkeypatch
+):
+    selected = {"node": "🇸🇬 新加坡 01丨1x SG"}
+
+    class Controller:
+        def proxies(self):
+            return {
+                ctl.DEFAULT_GROUP: {
+                    "type": "Selector",
+                    "now": selected["node"],
+                    "all": [
+                        "🇸🇬 新加坡 01丨1x SG",
+                        "🇯🇵 日本 01丨1x JP",
+                        "🇭🇰 香港 01丨1x HK",
+                    ],
+                }
+            }
+
+        def delay(self, node):
+            return {
+                "🇸🇬 新加坡 01丨1x SG": 100,
+                "🇯🇵 日本 01丨1x JP": 200,
+                "🇭🇰 香港 01丨1x HK": 300,
+            }[node]
+
+        def switch(self, group, node):
+            selected["node"] = node
+
+    monkeypatch.setattr(
+        ctl,
+        "probe_openai",
+        lambda: [{"ok": True, "total_sec": 0.4}] * 3,
+    )
+    geoblocks = iter(
+        [
+            {"ok": True, "blocked": True, "trading_allowed": False, "country": "SG"},
+            {"ok": True, "blocked": True, "trading_allowed": False, "country": "JP"},
+            {"ok": True, "blocked": False, "trading_allowed": True, "country": "HK"},
+        ]
+    )
+    monkeypatch.setattr(ctl, "probe_polymarket_geoblock", lambda: next(geoblocks))
+    monkeypatch.setattr(ctl.time, "sleep", lambda _: None)
+
+    result = ctl.maintain(
+        Controller(), state_root=tmp_path, apply=True, reason="blocked region"
+    )
+
+    assert result["status"] == "switched"
+    assert selected["node"] == "🇭🇰 香港 01丨1x HK"
+    assert result["attempted_nodes"] == [
+        "🇯🇵 日本 01丨1x JP",
+        "🇭🇰 香港 01丨1x HK",
+    ]
+    assert result["switch_attempts"][0]["polymarket_geoblock"]["blocked"] is True
+    assert result["post_polymarket_geoblock"]["trading_allowed"] is True
 
 
 def test_quiet_maintenance_suppresses_failure_payload(monkeypatch, capsys):

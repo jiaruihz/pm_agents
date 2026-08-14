@@ -53,7 +53,7 @@ def test_control_state_surfaces_legacy_endpoint_drift_without_using_it(tmp_path,
 
 
 def test_proxy_probe_requires_gamma_and_clob(monkeypatch):
-    statuses = iter(("200", "503"))
+    statuses = iter(("200", "503", '{"blocked": false, "country": "HK"}'))
 
     class Result:
         returncode = 0
@@ -67,8 +67,29 @@ def test_proxy_probe_requires_gamma_and_clob(monkeypatch):
     result = ctl.probe("http://127.0.0.1:17897")
 
     assert result["ok"] is False
-    assert [row["name"] for row in result["checks"]] == ["gamma", "clob"]
+    assert [row["name"] for row in result["checks"]] == ["gamma", "clob", "geoblock"]
     assert result["checks"][1]["http_status"] == "503"
+
+
+def test_proxy_probe_rejects_restricted_trading_region(monkeypatch):
+    statuses = iter(("200", "200", '{"blocked": true, "country": "SG"}'))
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+        def __init__(self):
+            self.stdout = next(statuses)
+
+    monkeypatch.setattr(ctl.subprocess, "run", lambda *args, **kwargs: Result())
+
+    result = ctl.probe("http://127.0.0.1:17897")
+
+    assert result["ok"] is False
+    geoblock = result["checks"][-1]
+    assert geoblock["blocked"] is True
+    assert geoblock["trading_allowed"] is False
+    assert geoblock["country"] == "SG"
 
 
 def test_proxy_consumers_come_only_from_production_manifest():
