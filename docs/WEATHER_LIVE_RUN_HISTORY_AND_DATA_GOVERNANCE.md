@@ -329,6 +329,10 @@ current_yes_exclusion_window = 2026-07-16T04:39:14Z..2026-07-16T12:52:31Z
 fix_commits = e834311c,7182a13d,82d90bd
 ```
 
+Recurrence: `2026-08-19` — the canonical `weather-data-feed-jrs` tmux host again lost
+JRS writes (`EPERM`) while System Settings still showed the grant; recovered through the
+controller `recover-jrs-context` bounded transaction. Root cause not eliminated; see §26.
+
 ### Incident K: Fast-observation collector left on superseded JRS tmux context
 
 Incident date: `2026-07-18`
@@ -1705,7 +1709,73 @@ deleted.  The complete per-order and per-gap list is stored at
 Human summary:
 `analysis/2026-08/2026-08-13-weather-production-e2e-audit-v1.md`.
 
-## 26. Immediate Follow-Up Work
+## 26. 2026-08-19 JRS permission-host loss recurrence and raw coverage gap
+
+Recurrence of Incident J. The canonical `weather-data-feed-jrs` tmux server lost
+external-volume write permission progressively while System Settings still showed the
+Full Disk Access grant: `current_yes_core_carry_tiny_live_v2`,
+`current_yes_core_carry_event_rescore_shadow_v1`, and
+`weather_scheduled_informed_maker_shadow_v1` died first at `02:19Z` when their error
+reporting itself hit `PermissionError: [Errno 1] Operation not permitted`. Remaining
+sessions lost writes between `10:25Z` and `11:03Z`; the last successful JRS writes
+landed at `11:03Z` (canonical DB WAL, source events). The reliability supervisor
+restarted `weather_market_books` (`10:25Z`) and
+`weather_source_event_ladder_repricing_shadow` (`10:46Z`), but the restarted children
+still could not write. Twelve sessions exited in total during the day; surviving
+sessions ran read-only-blind until recovery.
+
+Recovery at `14:45Z` via `weather_production_ctl.py recover-jrs-context --apply`
+(prospective probe healthy → kill server → new canonical host → in-host write probe
+healthy → topology restored, 14 missing desired-state instances restarted in dependency
+order; dispute courts stayed `manual_recovery_required`). Pre/post session-set
+comparison: no findings. Recovery level: `recovery_improved` — this recurrence proves
+the 2026-07-16 root cause is not eliminated.
+
+### Raw coverage gaps (all 2026-08-19, UTC)
+
+| Layer | Gap window | Backfillable? |
+|---|---|---|
+| `output/observations/2026-08-19/observations.jsonl` | `10:58:29Z..14:46:29Z` | Upstream re-fetch would be late-backfill only; no registered tool |
+| `output/live_cross_observations/2026-08-19/high_frequency_observations.jsonl` | `10:57:27Z..14:46:25Z` | Same as above |
+| `output/source_events/2026-08-19/sources.jsonl` | `11:03:03Z..14:46:52Z` | Same as above |
+| `market_books/batches/2026-08-19/` | 34 five-minute batches, `11:00:07Z..14:46:10Z` | Not backfillable (pipeline contract) |
+| `forecast/forecast_hourly_curves/2026-08-19/` | last full capture `10:13Z`, partial `10:31Z`, next full `14:46Z` | PIT forecast runs not re-fetchable |
+| `strategy_snapshots/paper_snapshots/` | `10:59Z..14:46Z` (~21 snapshots) | Derived from the missing inputs above |
+| Canonical DB writes | `11:03Z..14:46Z` | Resumed on recovery |
+| Core-carry family runtime evidence | `02:19Z..14:46Z` | Runner died; decisions not reproducible as live evidence |
+
+Backfilled after recovery: bounded canonical refresh one-shot (`15:02Z`, exit 0), Gamma
+`pm_history` for `2026-08-18..19` (94 Tmax + 16 Tmin files), and
+`fact_signal_candidates` incremental from event date `2026-08-15` (today: 533 rows;
+`trade_class` distribution unchanged, `live_real = 1508`).
+
+Live orders during the window: none placed (operator-confirmed); `fact_trades`
+unchanged. `fast_source_prev_no_trial_v1` remained alive but journaled nothing from
+`10:53Z` to `14:45Z`; its `orders.jsonl` gap still requires authenticated exchange-side
+verification before closing.
+
+### Backtest handling
+
+- Exclude or explicitly flag `11:03Z..14:46Z` for decision-replay and execution-level
+  backtests; settlement-aligned analysis remains valid.
+- Core-carry-family decision evidence is absent from `02:19Z`; do not treat the missing
+  decisions as negative examples (same convention as Incident J).
+- Maker/ladder replay for the window is impossible (34 book batches permanently missing).
+
+Label:
+
+```text
+run_family = weather_jrs_runtime_host_permission_incident
+run_quality = coverage_gap_external_volume_permission
+recurrence_of = Incident J (2026-07-16)
+exclusion_window = 2026-08-19T11:03:00Z..2026-08-19T14:46:30Z
+core_carry_family_exclusion_window = 2026-08-19T02:19:00Z..2026-08-19T14:46:30Z
+affected_live_fills_confirmed_missed = 0 (no orders in window)
+recovery = controller recover-jrs-context --apply @ 2026-08-19T14:45Z
+fix_level = recovery_improved
+```
+
+## 27. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
@@ -1723,3 +1793,10 @@ Human summary:
 4. Add daily automated reconciliation:
    - alert when source order count, fill count, and account position count diverge beyond expected partial-fill cases
 5. Do not start, stop or restart local live execution without explicit confirmation.
+6. Schedule the `fact_signal_candidates` incremental build (daily, bounded), or extend the
+   registered canonical refresh one-shot to cover it; the table currently has no owner and
+   drifted 2026-08-14..19 until a manual incremental rebuild.
+7. Add an incremental materialization path for `fact_forecast_hourly_curves`; full-mode
+   `build_weather_signal_candidates.py` is currently its only writer
+   (DROP + recreate), so incremental candidates runs leave the curve fact frozen
+   (observed stale 2026-07-29..2026-08-19 until the manual full rebuild).
