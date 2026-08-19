@@ -210,7 +210,7 @@ def test_outside_frozen_training_support_is_visible_and_not_traded() -> None:
 
 
 def test_retained_model_edge_can_be_the_lower_maker_cap() -> None:
-    row = {**score_row(), "model_probability_hold": 0.875}
+    row = {**score_row(), "model_probability_hold": 0.915}
     plans = runner.build_entry_plans(
         row,
         live_enabled=False,
@@ -222,8 +222,8 @@ def test_retained_model_edge_can_be_the_lower_maker_cap() -> None:
     maker = next(
         plan for plan in plans if plan["child_order_role"] == "maker_staged"
     )
-    assert maker["maker_price_cap"] == pytest.approx(0.86)
-    assert maker["limit_price"] == pytest.approx(0.86)
+    assert maker["maker_price_cap"] == pytest.approx(0.90)
+    assert maker["limit_price"] == pytest.approx(0.90)
 
 
 def test_one_tick_spread_joins_best_bid_instead_of_dropping_maker() -> None:
@@ -807,7 +807,7 @@ def test_late_epoch_entry_records_terminal_live_maker_and_shadow_counterfactual(
     )
 
     assert [plan["child_order_role"] for plan in plans] == ["taker"]
-    assert runner.entry_plan_cost_reservation(plans) == pytest.approx(8.4)
+    assert runner.entry_plan_cost_reservation(plans) == pytest.approx(9.5)
     assert attempts[0]["status"] == "planned"
     assert attempts[0]["maker_clock_status"] == "pre_source_report_blackout"
     assert attempts[0]["maker_live_action"] == "defer_post_update_rearm"
@@ -870,12 +870,12 @@ def test_deferred_makers_rearm_on_new_positive_ev_weather_epoch(
         "fetch_full_book",
         lambda *_args, **_kwargs: {
             "status": "ok",
-            "bid": 0.82,
-            "ask": 0.86,
+            "bid": 0.88,
+            "ask": 0.92,
             "bid_size": 20,
             "ask_size": 20,
             "tick_size": 0.01,
-            "asks": [{"price": 0.86, "size": 20}],
+            "asks": [{"price": 0.92, "size": 20}],
             "fetched_at_utc": "2026-07-24T04:51:00Z",
         },
     )
@@ -885,7 +885,7 @@ def test_deferred_makers_rearm_on_new_positive_ev_weather_epoch(
         lambda enriched, _asks, _artifact: {
             "eligible": True,
             "reasons": [],
-            "model_probability_hold": 0.93,
+            "model_probability_hold": 0.95,
             "model_edge_after_fee_and_depth": 0.02,
         },
     )
@@ -900,7 +900,8 @@ def test_deferred_makers_rearm_on_new_positive_ev_weather_epoch(
         "maker_staged",
         "maker_pullback",
     ]
-    assert all(plan["limit_price"] == pytest.approx(0.83) for plan in plans)
+    assert all(plan["limit_price"] == pytest.approx(0.89) for plan in plans[:1])
+    assert all(plan["limit_price"] == pytest.approx(0.90) for plan in plans[1:])
     assert all(plan["limit_price"] < row["current_yes_ask"] for plan in plans)
     assert all(plan["maker_rearm_model_edge_after_fee_and_depth"] == 0.02 for plan in plans)
     assert attempts[0]["maker_live_action"] == "post"

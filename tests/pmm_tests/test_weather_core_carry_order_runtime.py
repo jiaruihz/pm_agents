@@ -60,8 +60,8 @@ class FakeTransport:
             "status": "ok",
             "fetched_at_utc": "2026-07-28T08:00:00Z",
             "sequence": "book-1",
-            "bids": [{"price": "0.80", "size": "20"}],
-            "asks": [{"price": "0.84", "size": "20"}],
+            "bids": [{"price": "0.90", "size": "20"}],
+            "asks": [{"price": "0.95", "size": "20"}],
         }
 
     def create_order(self, payload):
@@ -94,10 +94,10 @@ def _score():
         "token_id": "token-1",
         "condition_id": "condition-1",
         "current_bracket": "30",
-        "current_yes_bid": 0.80,
-        "current_yes_ask": 0.84,
+        "current_yes_bid": 0.90,
+        "current_yes_ask": 0.95,
         "current_yes_tick_size": 0.01,
-        "model_probability_hold": 0.91,
+        "model_probability_hold": 0.97,
         "checkpoint_key": "Busan|2026-07-28|13",
         "decision_snapshot_ts_utc": "2026-07-28T04:30:00Z",
         "source_report_ts_utc": "2026-07-28T04:20:00Z",
@@ -264,7 +264,7 @@ def test_core_carry_live_submits_each_child_once_through_shared_runtime(
 
 
 def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatch):
-    score = {**_score(), "current_yes_ask": 0.82}
+    score = {**_score(), "current_yes_ask": 0.93}
     maker_plan = next(
         plan
         for plan in runner.build_entry_plans(
@@ -277,7 +277,7 @@ def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatc
         )
         if plan["child_order_role"] == "maker_staged"
     )
-    assert maker_plan["limit_price"] == 0.81
+    assert maker_plan["limit_price"] == 0.91
     transport = FakeTransport()
 
     def narrow_book(_token_id):
@@ -285,8 +285,8 @@ def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatc
             "status": "ok",
             "fetched_at_utc": "2026-07-28T08:00:00Z",
             "sequence": "book-2",
-            "bids": [{"price": "0.80", "size": "20"}],
-            "asks": [{"price": "0.82", "size": "20"}],
+            "bids": [{"price": "0.90", "size": "20"}],
+            "asks": [{"price": "0.92", "size": "20"}],
         }
 
     transport.fetch_market_book = narrow_book
@@ -307,7 +307,7 @@ def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatc
     )
 
     assert result["live_errors"] == 0
-    assert str(transport.posts[0][0]["price"]) == "0.81"
+    assert str(transport.posts[0][0]["price"]) == "0.91"
 
 
 def test_pullback_maker_posts_planned_static_price_not_fresh_bid_plus_tick(
@@ -326,7 +326,7 @@ def test_pullback_maker_posts_planned_static_price_not_fresh_bid_plus_tick(
         )
         if plan["child_order_role"] == "maker_pullback"
     )
-    assert pullback_plan["limit_price"] == 0.82
+    assert pullback_plan["limit_price"] == 0.93
     transport = FakeTransport()
     monkeypatch.setattr(
         shared,
@@ -345,7 +345,7 @@ def test_pullback_maker_posts_planned_static_price_not_fresh_bid_plus_tick(
     )
 
     assert result["live_errors"] == 0
-    assert str(transport.posts[0][0]["price"]) == "0.82"
+    assert str(transport.posts[0][0]["price"]) == "0.93"
 
 
 def test_journaled_submit_is_projected_after_restart_without_resubmission(
@@ -505,7 +505,7 @@ def test_known_post_only_rejection_can_repost_without_a_retry_cap(
     repost_plan = runner.build_maker_lifecycle_plan(
         failed_row,
         action="core_carry_maker_repost",
-        limit_price=0.81,
+        limit_price=0.91,
         cancel_only=False,
         cancel_source_order=False,
         now=datetime(2026, 7, 28, 4, 32, tzinfo=timezone.utc),
