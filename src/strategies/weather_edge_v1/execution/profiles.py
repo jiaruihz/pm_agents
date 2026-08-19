@@ -364,6 +364,7 @@ _PROFILES = {
             "post_update_rearm_max_age_sec": 3600,
             "post_update_shadow_revalidation": True,
             "maker_experiment_id": "core_carry_staged_vs_pullback_maker_rearm_ab_20260813",
+            "low_price_band_halt_min_posted_price": "0.84",
         },
     ),
 }

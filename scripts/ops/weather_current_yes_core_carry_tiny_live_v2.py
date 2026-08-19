@@ -751,6 +751,13 @@ def maker_profile_parameter(name: str) -> float:
     return value
 
 
+def maker_low_price_band_halt_min() -> float:
+    try:
+        return maker_profile_parameter("low_price_band_halt_min_posted_price")
+    except RuntimeError:
+        return 0.0
+
+
 def maker_max_reprices(maker_arm: str = "staged") -> int:
     profile = get_execution_profile(EXECUTION_PROFILE)
     role = "maker_pullback" if maker_arm == "pullback" else "maker_staged"
@@ -983,6 +990,15 @@ def base_plan_fields(
         if maker
         else {}
     )
+    halt_min = maker_low_price_band_halt_min()
+    if maker and 0.0 < halt_min and 0.0 < limit < halt_min:
+        maker_clock = {
+            **maker_clock,
+            "maker_live_eligible": False,
+            "maker_live_skip_reason": "low_price_band_halt_shadow_only",
+            "maker_low_price_band_halt": True,
+            "maker_low_price_band_would_be_price": round(limit, 6),
+        }
     maker_timing = maker_clock if bool(maker_clock.get("maker_live_eligible")) else None
     expires = now + timedelta(minutes=order_ttl_min)
     return {

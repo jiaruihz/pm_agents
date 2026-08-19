@@ -25,10 +25,10 @@ def score_row() -> dict:
         "token_id": "yes-token",
         "condition_id": "condition",
         "current_bracket": "30",
-        "current_yes_bid": 0.80,
-        "current_yes_ask": 0.84,
+        "current_yes_bid": 0.90,
+        "current_yes_ask": 0.95,
         "current_yes_tick_size": 0.01,
-        "model_probability_hold": 0.91,
+        "model_probability_hold": 0.97,
         "checkpoint_key": "Busan|2026-07-24|13",
         "decision_snapshot_ts_utc": "2026-07-24T04:30:00Z",
         "source_report_ts_utc": "2026-07-24T04:20:00Z",
@@ -109,10 +109,10 @@ def test_entry_is_exactly_ten_taker_plus_two_five_share_makers() -> None:
     assert plans[0]["execution_policy"] == "current_yes_residual_carry_taker_v1"
     assert plans[1]["execution_policy"] == "current_yes_residual_carry_staged_maker_v3"
     assert plans[2]["execution_policy"] == "current_yes_residual_carry_pullback_maker_v1"
-    assert plans[1]["limit_price"] == pytest.approx(0.81)
-    assert plans[2]["limit_price"] == pytest.approx(0.82)
-    assert plans[1]["maker_price_cap"] == pytest.approx(0.83)
-    assert plans[1]["model_token_probability"] == pytest.approx(0.91)
+    assert plans[1]["limit_price"] == pytest.approx(0.91)
+    assert plans[2]["limit_price"] == pytest.approx(0.93)
+    assert plans[1]["maker_price_cap"] == pytest.approx(0.94)
+    assert plans[1]["model_token_probability"] == pytest.approx(0.97)
     assert plans[1]["cancel_before_data_update_utc"] == "2026-07-24T04:48:30+00:00"
     assert plans[1]["expires_at_utc"] == "2026-07-24T04:46:00+00:00"
     assert plans[1]["cancel_buffer_sec"] == 90
@@ -210,7 +210,7 @@ def test_outside_frozen_training_support_is_visible_and_not_traded() -> None:
 
 
 def test_retained_model_edge_can_be_the_lower_maker_cap() -> None:
-    row = {**score_row(), "model_probability_hold": 0.815}
+    row = {**score_row(), "model_probability_hold": 0.875}
     plans = runner.build_entry_plans(
         row,
         live_enabled=False,
@@ -222,8 +222,8 @@ def test_retained_model_edge_can_be_the_lower_maker_cap() -> None:
     maker = next(
         plan for plan in plans if plan["child_order_role"] == "maker_staged"
     )
-    assert maker["maker_price_cap"] == pytest.approx(0.80)
-    assert maker["limit_price"] == pytest.approx(0.80)
+    assert maker["maker_price_cap"] == pytest.approx(0.86)
+    assert maker["limit_price"] == pytest.approx(0.86)
 
 
 def test_one_tick_spread_joins_best_bid_instead_of_dropping_maker() -> None:
@@ -262,7 +262,7 @@ def test_pullback_maker_is_exactly_entry_ask_minus_two_cents() -> None:
         plan for plan in plans if plan["child_order_role"] == "maker_pullback"
     )
     assert pullback["maker_arm"] == "pullback"
-    assert pullback["limit_price"] == pytest.approx(0.82)
+    assert pullback["limit_price"] == pytest.approx(0.93)
     assert pullback["quote_mode"] == "entry_ask_minus_2c_static_post_only_edge_capped"
     assert pullback["maker_experiment_id"] == (
         "core_carry_staged_vs_pullback_maker_rearm_ab_20260813"
@@ -1423,3 +1423,69 @@ def test_loop_error_refreshes_latest_health_artifact(tmp_path, monkeypatch) -> N
     assert latest["status"] == "error"
     assert latest["live_enabled"] is True
     assert "CLOB handshake timed out" in latest["error"]
+
+
+def test_low_price_band_halt_skips_maker_keeps_taker_and_shadow() -> None:
+    row = {
+        **score_row(),
+        "current_yes_bid": 0.80,
+        "current_yes_ask": 0.84,
+        "model_probability_hold": 0.90,
+    }
+    plans = runner.build_entry_plans(
+        row,
+        live_enabled=True,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        taker_shares=10,
+        maker_shares=5,
+        pullback_maker_shares=5,
+        order_ttl_min=15,
+    )
+    assert [plan["child_order_role"] for plan in plans] == ["taker"]
+
+    now = datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+    staged = runner.base_plan_fields(
+        row,
+        child_order_role="maker_staged",
+        shares=5,
+        live_enabled=True,
+        now=now,
+        order_ttl_min=15,
+    )
+    pullback = runner.base_plan_fields(
+        row,
+        child_order_role="maker_pullback",
+        shares=5,
+        live_enabled=True,
+        now=now,
+        order_ttl_min=15,
+    )
+    for fields, would_be in ((staged, 0.81), (pullback, 0.82)):
+        assert fields["maker_live_eligible"] is False
+        assert fields["maker_live_skip_reason"] == "low_price_band_halt_shadow_only"
+        assert fields["maker_low_price_band_halt"] is True
+        assert fields["maker_low_price_band_would_be_price"] == pytest.approx(would_be)
+
+
+def test_low_price_band_halt_disabled_when_profile_min_is_zero(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "maker_low_price_band_halt_min", lambda: 0.0)
+    row = {
+        **score_row(),
+        "current_yes_bid": 0.80,
+        "current_yes_ask": 0.84,
+        "model_probability_hold": 0.90,
+    }
+    plans = runner.build_entry_plans(
+        row,
+        live_enabled=True,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        taker_shares=10,
+        maker_shares=5,
+        pullback_maker_shares=5,
+        order_ttl_min=15,
+    )
+    assert [plan["child_order_role"] for plan in plans] == [
+        "taker",
+        "maker_staged",
+        "maker_pullback",
+    ]
