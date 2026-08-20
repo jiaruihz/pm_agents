@@ -471,7 +471,7 @@ def test_failed_jrs_context_marks_keeper_critical(tmp_path):
     assert report["runtimes"][0]["issues"] == ["jrs_write_probe_failed"]
 
 
-def test_failed_jrs_context_marks_same_server_manual_runtime_critical(tmp_path):
+def test_failed_jrs_context_keeps_existing_runtime_running_but_degraded(tmp_path):
     shadow = WeatherManagedRuntimeSpec(
         instance_id="shadow",
         tmux_session="shadow",
@@ -488,7 +488,41 @@ def test_failed_jrs_context_marks_same_server_manual_runtime_critical(tmp_path):
     )
 
     assert report["runtimes"][0]["issues"] == ["jrs_context_unhealthy"]
-    assert report["runtimes"][0]["status"] == "critical"
+    assert report["runtimes"][0]["status"] == "warning"
+
+
+def test_transient_jrs_context_failure_is_warning_and_does_not_block_safe_start(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed_session",
+        role="data_feed",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    present = observed("feed_session")
+    present["tmux_sessions"][0]["panes"][0]["pane_current_path"] = str(tmp_path)
+    report = ctl.evaluate_production_health(spec, present, now_epoch=1000.0)
+    report = ctl.attach_jrs_context_health(
+        report,
+        {
+            "status": "warning",
+            "returncode": 0,
+            "successful_attempt_count": 2,
+        },
+    )
+
+    assert report["status"] == "warning"
+    assert report["runtimes"][0]["issues"][-1] == "jrs_context_degraded"
+    assert report["runtimes"][0]["status"] == "warning"
+
+    missing_report = ctl.evaluate_production_health(spec, observed(), now_epoch=1000.0)
+    missing_report = ctl.attach_jrs_context_health(
+        missing_report, {"status": "warning", "returncode": 0}
+    )
+    assert ctl.build_plan(spec, missing_report)[0]["action"] == "start"
 
 
 def test_start_order_respects_runtime_dependencies(tmp_path):
@@ -1511,3 +1545,24 @@ def test_jrs_context_health_timeout_returns_critical(tmp_path, monkeypatch):
     assert result["status"] == "critical"
     assert result["returncode"] == 124
     assert result["output"] == "jrs_context_probe_failed:TimeoutExpired"
+    assert result["attempt_count"] == 3
+    assert result["successful_attempt_count"] == 0
+
+
+def test_jrs_context_health_treats_one_failed_probe_as_degraded(tmp_path, monkeypatch):
+    results = iter(
+        [
+            subprocess.CompletedProcess(["tmux"], 1, "temporary write failure"),
+            subprocess.CompletedProcess(["tmux"], 0, ""),
+            subprocess.CompletedProcess(["tmux"], 0, ""),
+        ]
+    )
+    monkeypatch.setattr(ctl.subprocess, "run", lambda *_args, **_kwargs: next(results))
+    monkeypatch.setattr(ctl.time, "sleep", lambda _seconds: None)
+    spec = production_spec(tmp_path, ())
+
+    result = ctl.collect_jrs_context_health(spec)
+
+    assert result["status"] == "warning"
+    assert result["attempt_count"] == 3
+    assert result["successful_attempt_count"] == 2

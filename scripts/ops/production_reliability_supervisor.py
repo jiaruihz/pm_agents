@@ -209,12 +209,21 @@ def collect_weather(runner: Runner = run_command) -> dict[str, Any]:
         )
 
     jrs = payload.get("jrs_context_health") or {}
-    if jrs.get("status") != "healthy":
+    if jrs.get("status") == "critical":
         findings.append(
             issue(
                 "weather.jrs_context.unhealthy",
                 "critical",
                 f"status={jrs.get('status')} rc={jrs.get('returncode')} output={str(jrs.get('output') or '')[-500:]}",
+                component="jrs-context",
+            )
+        )
+    elif jrs.get("status") == "warning":
+        findings.append(
+            issue(
+                "weather.jrs_context.degraded",
+                "warning",
+                f"status={jrs.get('status')} successful_attempts={jrs.get('successful_attempt_count')} output={str(jrs.get('output') or '')[-500:]}",
                 component="jrs-context",
             )
         )
@@ -264,7 +273,19 @@ def collect_weather(runner: Runner = run_command) -> dict[str, Any]:
             str(value)
             for value in (row.get("issues") or [])
             if not str(value).startswith("dependency_unhealthy:")
+            and str(value)
+            not in {
+                "jrs_write_probe_failed",
+                "jrs_write_probe_degraded",
+                "jrs_context_unhealthy",
+                "jrs_context_degraded",
+            }
         ]
+        # The JRS context finding already describes this shared root cause.
+        # Do not page every dependent runtime as a separate outage or schedule
+        # a per-runtime restart while its common write host is unstable.
+        if not direct_issues:
+            continue
         repair = None
         if (
             direct_issues
@@ -940,6 +961,8 @@ def _problem_summary(row: Mapping[str, Any]) -> tuple[str, str, str]:
         return "JRS/NVMe 存储异常", "可能影响生产数据读写，系统不会自动操作实盘", key
     if key == "weather.jrs_context.unhealthy":
         return "JRS 生产运行上下文不可用", "可能影响所有读写 JRS 的天气生产进程", key
+    if key == "weather.jrs_context.degraded":
+        return "JRS 生产运行上下文短暂抖动", "已自动重试；现有策略继续运行，持续失败才进入恢复流程", key
     if key.startswith("crypto."):
         return "加密数据或运行进程异常", "可能影响加密研究与 shadow 链路", key
     return key, "请根据下方原因判断影响范围", key

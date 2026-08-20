@@ -16,6 +16,11 @@ proves that a fresh temporary tmux server can write JRS before touching the old
 server, rebuilds only the canonical server, restores the exact pane commands,
 and then uses the normal desired-state reconcile path for sessions that were
 already missing. It cannot grant or repair macOS TCC permissions.
+
+A single failed JRS probe is degraded, not a stack-wide outage. The controller
+retries the probe and keeps already-running runtimes running; only repeated
+failures make the permission host critical. ``recover-jrs-context`` remains a
+single bounded recovery transaction for that latter case.
 """
 
 from __future__ import annotations
@@ -267,6 +272,8 @@ def evaluate_production_health(
 
 
 JRS_CONTEXT_HEALTH_TIMEOUT_SEC = 15
+JRS_CONTEXT_HEALTH_ATTEMPTS = 3
+JRS_CONTEXT_HEALTH_RETRY_DELAY_SEC = 0.25
 DATA_FEED_SEMANTIC_TIMEOUT_SEC = 25
 
 
@@ -279,30 +286,55 @@ def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
         "weather_jrs_tmux_write_probe "
         f"{spec.canonical_tmux_socket!r} {str(spec.data_feed_runtime_root)!r}"
     )
-    try:
-        result = subprocess.run(
-            ["/bin/bash", "-lc", command],
-            cwd=ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=JRS_CONTEXT_HEALTH_TIMEOUT_SEC,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return {
-            "status": "critical",
-            "returncode": 124 if isinstance(exc, subprocess.TimeoutExpired) else None,
-            "socket": spec.canonical_tmux_socket,
-            "runtime_root": str(spec.data_feed_runtime_root),
-            "output": f"jrs_context_probe_failed:{type(exc).__name__}",
-        }
+    attempts: list[dict[str, Any]] = []
+    for attempt in range(1, JRS_CONTEXT_HEALTH_ATTEMPTS + 1):
+        try:
+            result = subprocess.run(
+                ["/bin/bash", "-lc", command],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=JRS_CONTEXT_HEALTH_TIMEOUT_SEC,
+                check=False,
+            )
+            attempts.append(
+                {
+                    "attempt": attempt,
+                    "returncode": result.returncode,
+                    "output": result.stdout[-2000:].strip(),
+                }
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            attempts.append(
+                {
+                    "attempt": attempt,
+                    "returncode": (
+                        124 if isinstance(exc, subprocess.TimeoutExpired) else None
+                    ),
+                    "output": f"jrs_context_probe_failed:{type(exc).__name__}",
+                }
+            )
+        if attempt < JRS_CONTEXT_HEALTH_ATTEMPTS:
+            time.sleep(JRS_CONTEXT_HEALTH_RETRY_DELAY_SEC)
+
+    successful = [row for row in attempts if row["returncode"] == 0]
+    if len(successful) == len(attempts):
+        status = "healthy"
+    elif successful:
+        status = "warning"
+    else:
+        status = "critical"
+    latest = attempts[-1]
     return {
-        "status": "healthy" if result.returncode == 0 else "critical",
-        "returncode": result.returncode,
+        "status": status,
+        "returncode": latest["returncode"],
         "socket": spec.canonical_tmux_socket,
         "runtime_root": str(spec.data_feed_runtime_root),
-        "output": result.stdout[-2000:].strip(),
+        "output": latest["output"],
+        "attempt_count": len(attempts),
+        "successful_attempt_count": len(successful),
+        "attempts": attempts,
     }
 
 
@@ -310,20 +342,29 @@ def attach_jrs_context_health(
     health: dict[str, Any], context: Mapping[str, Any]
 ) -> dict[str, Any]:
     health["jrs_context_health"] = dict(context)
-    if context.get("status") == "healthy":
+    context_status = context.get("status")
+    if context_status == "healthy":
         return health
-    health["status"] = "critical"
+    if context_status == "critical":
+        health["status"] = "critical"
+    elif health.get("status") == "healthy":
+        health["status"] = "warning"
     for row in health.get("runtimes", []):
         if row["instance_id"] == "weather_jrs_context_keeper":
             row["issues"] = list(row.get("issues") or []) + [
                 "jrs_write_probe_failed"
+                if context_status == "critical"
+                else "jrs_write_probe_degraded"
             ]
-            row["status"] = "critical"
+            row["status"] = "critical" if context_status == "critical" else "warning"
         else:
             row["issues"] = list(row.get("issues") or []) + [
                 "jrs_context_unhealthy"
+                if context_status == "critical"
+                else "jrs_context_degraded"
             ]
-            row["status"] = "critical"
+            if row.get("status") == "healthy":
+                row["status"] = "warning"
     health["critical_runtimes"] = [
         row["instance_id"]
         for row in health.get("runtimes", [])
@@ -1049,7 +1090,11 @@ def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> N
     context = payload.get("jrs_context_health") or {}
     print(f"jrs_context: {context.get('status', 'unknown')}")
     for row in payload.get("runtimes", []):
-        marker = "OK" if row["status"] == "healthy" else "CRITICAL"
+        marker = {
+            "healthy": "OK",
+            "warning": "WARNING",
+            "critical": "CRITICAL",
+        }.get(str(row.get("status")), "UNKNOWN")
         age = (
             f" age={row['health_age_sec']:.0f}s"
             if row.get("health_age_sec") is not None
@@ -1608,7 +1653,7 @@ def main() -> int:
         if args.apply:
             if not args.reason:
                 raise SystemExit("stop --apply requires --reason")
-            if (health.get("jrs_context_health") or {}).get("status") != "healthy":
+            if (health.get("jrs_context_health") or {}).get("status") == "critical":
                 raise SystemExit("stop blocked: jrs_context_unhealthy")
             action = _run_stop(
                 spec,
@@ -1664,7 +1709,7 @@ def main() -> int:
         if args.apply:
             if not args.reason:
                 raise SystemExit("restart --apply requires --reason")
-            if (health.get("jrs_context_health") or {}).get("status") != "healthy":
+            if (health.get("jrs_context_health") or {}).get("status") == "critical":
                 raise SystemExit("restart blocked: jrs_context_unhealthy")
             target_health = next(
                 row
