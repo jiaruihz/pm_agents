@@ -163,3 +163,31 @@ server recreation, full controller topology recovery, raw freshness,
 authenticated open-order evidence, and API/FE postconditions. It improves and
 validates recovery; it does not eliminate the architectural macOS TCC/GUI
 dependency or justify unattended restoration of live trading.
+
+## 2026-08-20 Recurrent JRS Write Failure: Contained
+
+At `2026-08-20T03:40:08Z`, the market-book REST and WebSocket collectors again
+received `Operation not permitted` while atomically writing under
+`/Volumes/jrs/weather_data_feed_service_runtime/market_books`. The stale
+WebSocket health artifact made the data-feed and live fast-source dependency
+chain fail closed. Controller-only recovery first restored the canonical JRS
+permission context, then restarted the safe `weather_market_books` collector
+and the telemetry-only source-event shadow. By `03:54Z`, the market-books,
+data-feed, live fast-source and source-event chain were healthy; canonical
+refresh subsequently completed with exit status `0`.
+
+During recovery, LA/KLAX emitted one incomplete `aviationweather_cache_csv`
+row at `03:51:52Z` that reset its running maximum from `26.7C` to `21.7C`.
+The next complete primary batch at `03:53:28Z` restored `26.7C`. The production
+health check now records that raw regression but only fails closed when the
+latest cache remains below the earlier maximum for the same city/date/station.
+This preserves the evidence without treating a repaired state as current
+corruption.
+
+Impact review: the affected LA target date had no live order journal rows in
+the `03:40Z–03:59Z` window. The two journal rows at `03:57Z` are the taker and
+maker legs of one Tokyo/JMA event, after recovery, with a fresh book; its taker
+leg matched `8` shares for `$7.20` and is unrelated to the LA cache row. No
+recovery duplicate execution identity or LA-derived fill is evidenced. This is
+contained/recovery-improved, not a claim that macOS TCC/JRS failures are
+permanently eliminated.

@@ -840,6 +840,38 @@ def check_observation_cache(
         if previous is None or running_max >= previous[0]:
             previous_by_station_day[key] = (running_max, row_ts_raw)
 
+    # A short-lived fallback row can be repaired by the next complete primary
+    # observation batch. Keep that raw incident visible, but don't keep the
+    # *current* runtime fail-closed once the cache has restored the exact prior
+    # maximum for the same station-day. A lower final value remains critical.
+    current_max_by_station_day: dict[tuple[str, str, str], float] = {}
+    for row in rows:
+        key = (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("station") or ""),
+        )
+        try:
+            current_max = float(row.get("running_max_c"))
+        except (TypeError, ValueError):
+            continue
+        if all(key) and math.isfinite(current_max):
+            current_max_by_station_day[key] = current_max
+
+    unresolved_regressions = []
+    for regression in regressions:
+        key = (
+            regression["city"],
+            regression["target_date"],
+            regression["station"],
+        )
+        current_max = current_max_by_station_day.get(key)
+        if (
+            current_max is None
+            or current_max + 1e-9 < float(regression["previous_running_max_c"])
+        ):
+            unresolved_regressions.append(regression)
+
     blocking_invalid_rows = [
         row
         for row in invalid_rows
@@ -851,7 +883,7 @@ def check_observation_cache(
         or cache_age_min < 0
         or cache_age_min > max_cache_age_min
         or bool(blocking_invalid_rows)
-        or bool(regressions)
+        or bool(unresolved_regressions)
         or not history_exists
         or bool(history_error)
         or not valid_history_rows
@@ -914,6 +946,8 @@ def check_observation_cache(
         "awaiting_first_observation_cities": sorted(awaiting_first_rows),
         "recent_running_max_regression_count": len(regressions),
         "recent_running_max_regressions": regressions[:10],
+        "unresolved_running_max_regression_count": len(unresolved_regressions),
+        "unresolved_running_max_regressions": unresolved_regressions[:10],
     }
 
 

@@ -200,6 +200,51 @@ def test_prod_health_check_fails_recent_running_max_regression(tmp_path):
     assert report["history_tail_rows"] == 1000
 
 
+def test_prod_health_check_reports_but_does_not_fail_repaired_running_max_regression(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    now = datetime(2026, 7, 19, 10, 20, tzinfo=timezone.utc)
+    row = {
+        "city": "Singapore",
+        "target_date": "2026-07-19",
+        "station": "WSSS",
+        "status": "ok",
+        "current_temp_c": 31.0,
+        "running_max_c": 32.0,
+        "age_min": 5.0,
+    }
+    cache_payload = {"generated_at_utc": "2026-07-19T10:19:00Z", "records": [row]}
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    fallback_cache = {
+        "generated_at_utc": "2026-07-19T10:15:00Z",
+        "records": [{**row, "running_max_c": 31.0}],
+    }
+    earlier_cache = {
+        "generated_at_utc": "2026-07-19T10:10:00Z",
+        "records": [{**row, "running_max_c": 32.0}],
+    }
+    _write_observation_history(
+        history,
+        cache_payload,
+        prefix_rows=[
+            *_history_rows(earlier_cache, "earlier-batch"),
+            *_history_rows(fallback_cache, "fallback-batch"),
+        ],
+    )
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=now,
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+    )
+
+    assert report["status"] == "ok"
+    assert report["recent_running_max_regression_count"] == 1
+    assert report["unresolved_running_max_regression_count"] == 0
+
+
 def test_prod_health_check_warns_on_fresh_reused_observation(tmp_path):
     cache = tmp_path / "latest.json"
     history = tmp_path / "observations.jsonl"
