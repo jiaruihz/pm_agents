@@ -17,10 +17,11 @@ server, rebuilds only the canonical server, restores the exact pane commands,
 and then uses the normal desired-state reconcile path for sessions that were
 already missing. It cannot grant or repair macOS TCC permissions.
 
-A single failed JRS probe is degraded, not a stack-wide outage. The controller
-retries the probe and keeps already-running runtimes running; only repeated
-failures make the permission host critical. ``recover-jrs-context`` remains a
-single bounded recovery transaction for that latter case.
+A JRS probe failure is observed across controller cycles, not immediately
+promoted to a stack-wide outage. The controller keeps already-running runtimes
+running until ten consecutive failed cycles span ten minutes. Only then does
+the permission host become critical. ``recover-jrs-context`` remains a single
+bounded recovery transaction for that latter case.
 """
 
 from __future__ import annotations
@@ -274,10 +275,42 @@ def evaluate_production_health(
 JRS_CONTEXT_HEALTH_TIMEOUT_SEC = 15
 JRS_CONTEXT_HEALTH_ATTEMPTS = 3
 JRS_CONTEXT_HEALTH_RETRY_DELAY_SEC = 0.25
+JRS_CONTEXT_FAILURE_STREAK_THRESHOLD = 10
+JRS_CONTEXT_FAILURE_DURATION_SEC = 10 * 60
+JRS_CONTEXT_FAILURE_MAX_GAP_SEC = 3 * 60
+JRS_CONTEXT_FAILURE_STATE_PATH = (
+    Path.home()
+    / "Library/Application Support/pm_agents/production_reliability"
+    / "jrs_context_failure_state.json"
+)
 DATA_FEED_SEMANTIC_TIMEOUT_SEC = 25
 
 
-def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
+def _load_jrs_context_failure_state(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _save_jrs_context_failure_state(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+        json.dump(dict(payload), handle, ensure_ascii=False, sort_keys=True)
+        handle.write("\n")
+        temporary = Path(handle.name)
+    os.replace(temporary, path)
+
+
+def collect_jrs_context_health(
+    spec: WeatherProductionSpec,
+    *,
+    now_epoch: float | None = None,
+    state_path: Path = JRS_CONTEXT_FAILURE_STATE_PATH,
+) -> dict[str, Any]:
     """Run the canonical helper's effective write probe, not a session check."""
 
     helper = ROOT / "scripts/ops/weather_jrs_tmux_env.sh"
@@ -318,13 +351,57 @@ def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
         if attempt < JRS_CONTEXT_HEALTH_ATTEMPTS:
             time.sleep(JRS_CONTEXT_HEALTH_RETRY_DELAY_SEC)
 
+    now_epoch = time.time() if now_epoch is None else now_epoch
     successful = [row for row in attempts if row["returncode"] == 0]
-    if len(successful) == len(attempts):
+    if successful:
+        # Any successful effective write proves this is not a continuous JRS
+        # outage. Reset the cross-cycle streak and keep all runtimes running.
+        state = {
+            "last_healthy_epoch": now_epoch,
+            "failure_streak": 0,
+            "first_failure_epoch": None,
+            "last_failure_epoch": None,
+        }
+        _save_jrs_context_failure_state(state_path, state)
         status = "healthy"
-    elif successful:
-        status = "warning"
+        failure_streak = 0
+        failure_duration_sec = 0.0
     else:
-        status = "critical"
+        previous = _load_jrs_context_failure_state(state_path)
+        try:
+            previous_streak = int(previous.get("failure_streak") or 0)
+            previous_first_failure = float(previous.get("first_failure_epoch"))
+            previous_last_failure = float(previous.get("last_failure_epoch"))
+        except (TypeError, ValueError):
+            previous_streak = 0
+            previous_first_failure = now_epoch
+            previous_last_failure = 0.0
+        if (
+            previous_streak <= 0
+            or now_epoch - previous_last_failure > JRS_CONTEXT_FAILURE_MAX_GAP_SEC
+        ):
+            failure_streak = 1
+            first_failure_epoch = now_epoch
+        else:
+            failure_streak = previous_streak + 1
+            first_failure_epoch = previous_first_failure
+        failure_duration_sec = max(0.0, now_epoch - first_failure_epoch)
+        _save_jrs_context_failure_state(
+            state_path,
+            {
+                "first_failure_epoch": first_failure_epoch,
+                "last_failure_epoch": now_epoch,
+                "failure_streak": failure_streak,
+            },
+        )
+        status = (
+            "critical"
+            if (
+                failure_streak >= JRS_CONTEXT_FAILURE_STREAK_THRESHOLD
+                and failure_duration_sec >= JRS_CONTEXT_FAILURE_DURATION_SEC
+            )
+            else "observing"
+        )
     latest = attempts[-1]
     return {
         "status": status,
@@ -335,6 +412,11 @@ def collect_jrs_context_health(spec: WeatherProductionSpec) -> dict[str, Any]:
         "attempt_count": len(attempts),
         "successful_attempt_count": len(successful),
         "attempts": attempts,
+        "failure_streak": failure_streak,
+        "failure_duration_sec": round(failure_duration_sec, 3),
+        "failure_streak_threshold": JRS_CONTEXT_FAILURE_STREAK_THRESHOLD,
+        "failure_duration_threshold_sec": JRS_CONTEXT_FAILURE_DURATION_SEC,
+        "failure_state_path": str(state_path),
     }
 
 
@@ -343,7 +425,7 @@ def attach_jrs_context_health(
 ) -> dict[str, Any]:
     health["jrs_context_health"] = dict(context)
     context_status = context.get("status")
-    if context_status == "healthy":
+    if context_status in {"healthy", "observing"}:
         return health
     if context_status == "critical":
         health["status"] = "critical"

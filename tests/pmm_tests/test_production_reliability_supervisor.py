@@ -80,25 +80,25 @@ def test_weather_health_classifies_live_and_safe_shadow() -> None:
     }
 
 
-def test_weather_health_reports_transient_jrs_probe_as_warning() -> None:
+def test_weather_health_does_not_page_observed_jrs_failure_before_threshold() -> None:
     payload = {
-        "status": "warning",
+        "status": "healthy",
         "manifest_status": "healthy",
         "critical_manifest_findings": [],
         "jrs_context_health": {
-            "status": "warning",
-            "returncode": 0,
-            "successful_attempt_count": 2,
+            "status": "observing",
+            "returncode": 1,
+            "failure_streak": 1,
         },
         "data_feed_semantic_health": {"status": "healthy"},
         "runtimes": [
             {
                 "instance_id": "feed",
-                "status": "warning",
+                "status": "healthy",
                 "expected_live": False,
                 "role": "data_feed",
                 "recovery_policy": "safe",
-                "issues": ["jrs_context_degraded"],
+                "issues": [],
             }
         ],
     }
@@ -108,15 +108,8 @@ def test_weather_health_reports_transient_jrs_probe_as_warning() -> None:
 
     health = supervisor.collect_weather(runner)
 
-    assert health["status"] == "warning"
-    assert health["findings"] == [
-        {
-            "key": "weather.jrs_context.degraded",
-            "severity": "warning",
-            "component": "jrs-context",
-            "detail": "status=warning successful_attempts=2 output=",
-        }
-    ]
+    assert health["status"] == "healthy"
+    assert health["findings"] == []
 
 
 def test_crypto_registry_and_data_freshness(tmp_path: Path) -> None:

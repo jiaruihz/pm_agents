@@ -491,7 +491,7 @@ def test_failed_jrs_context_keeps_existing_runtime_running_but_degraded(tmp_path
     assert report["runtimes"][0]["status"] == "warning"
 
 
-def test_transient_jrs_context_failure_is_warning_and_does_not_block_safe_start(tmp_path):
+def test_observed_jrs_failure_does_not_mark_running_or_missing_runtime_unhealthy(tmp_path):
     runtime = WeatherManagedRuntimeSpec(
         instance_id="feed",
         tmux_session="feed_session",
@@ -508,19 +508,19 @@ def test_transient_jrs_context_failure_is_warning_and_does_not_block_safe_start(
     report = ctl.attach_jrs_context_health(
         report,
         {
-            "status": "warning",
-            "returncode": 0,
-            "successful_attempt_count": 2,
+            "status": "observing",
+            "returncode": 1,
+            "failure_streak": 1,
         },
     )
 
-    assert report["status"] == "warning"
-    assert report["runtimes"][0]["issues"][-1] == "jrs_context_degraded"
-    assert report["runtimes"][0]["status"] == "warning"
+    assert report["status"] == "healthy"
+    assert report["runtimes"][0]["issues"] == []
+    assert report["runtimes"][0]["status"] == "healthy"
 
     missing_report = ctl.evaluate_production_health(spec, observed(), now_epoch=1000.0)
     missing_report = ctl.attach_jrs_context_health(
-        missing_report, {"status": "warning", "returncode": 0}
+        missing_report, {"status": "observing", "returncode": 1}
     )
     assert ctl.build_plan(spec, missing_report)[0]["action"] == "start"
 
@@ -1540,16 +1540,19 @@ def test_jrs_context_health_timeout_returns_critical(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl.subprocess, "run", fake_run)
     spec = production_spec(tmp_path, ())
 
-    result = ctl.collect_jrs_context_health(spec)
+    result = ctl.collect_jrs_context_health(
+        spec, now_epoch=1000.0, state_path=tmp_path / "jrs-state.json"
+    )
 
-    assert result["status"] == "critical"
+    assert result["status"] == "observing"
     assert result["returncode"] == 124
     assert result["output"] == "jrs_context_probe_failed:TimeoutExpired"
     assert result["attempt_count"] == 3
     assert result["successful_attempt_count"] == 0
+    assert result["failure_streak"] == 1
 
 
-def test_jrs_context_health_treats_one_failed_probe_as_degraded(tmp_path, monkeypatch):
+def test_jrs_context_health_resets_streak_when_any_probe_succeeds(tmp_path, monkeypatch):
     results = iter(
         [
             subprocess.CompletedProcess(["tmux"], 1, "temporary write failure"),
@@ -1561,8 +1564,39 @@ def test_jrs_context_health_treats_one_failed_probe_as_degraded(tmp_path, monkey
     monkeypatch.setattr(ctl.time, "sleep", lambda _seconds: None)
     spec = production_spec(tmp_path, ())
 
-    result = ctl.collect_jrs_context_health(spec)
+    result = ctl.collect_jrs_context_health(
+        spec, now_epoch=1000.0, state_path=tmp_path / "jrs-state.json"
+    )
 
-    assert result["status"] == "warning"
+    assert result["status"] == "healthy"
     assert result["attempt_count"] == 3
     assert result["successful_attempt_count"] == 2
+    assert result["failure_streak"] == 0
+
+
+def test_jrs_context_health_requires_ten_failed_cycles_and_ten_minutes(tmp_path, monkeypatch):
+    def fake_run(*_args, **_kwargs):
+        return subprocess.CompletedProcess(["tmux"], 1, "write failed")
+
+    state_path = tmp_path / "jrs-state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "first_failure_epoch": 399.0,
+                "last_failure_epoch": 940.0,
+                "failure_streak": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ctl.subprocess, "run", fake_run)
+    monkeypatch.setattr(ctl.time, "sleep", lambda _seconds: None)
+    spec = production_spec(tmp_path, ())
+
+    result = ctl.collect_jrs_context_health(
+        spec, now_epoch=1000.0, state_path=state_path
+    )
+
+    assert result["status"] == "critical"
+    assert result["failure_streak"] == 10
+    assert result["failure_duration_sec"] == 601.0
