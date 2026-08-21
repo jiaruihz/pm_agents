@@ -124,9 +124,52 @@ def preflight(
     checks["worktree_dirty"] = bool(status)
     report["dirty_paths"] = [line[3:] for line in status.splitlines() if line.strip()]
 
-    run_git(repo_path, "fetch", "origin", "main")
-    checks["origin_main_fetched"] = True
+    fetch_error = ""
+    fetch_variants = (
+        ("fetch", "origin", "main"),
+        ("fetch", "origin", "main"),
+        ("-c", "http.version=HTTP/1.1", "fetch", "origin", "main"),  # local HTTP/2 flake
+    )
+    for attempt, variant in enumerate(fetch_variants, start=1):
+        try:
+            run_git(repo_path, *variant)
+            fetch_error = ""
+            break
+        except RuntimeError as exc:
+            fetch_error = str(exc)
+            time.sleep(3 * attempt)
+    if fetch_error:
+        # git transport to github.com flaps locally while api.github.com is stable.
+        # Integrity-preserving fallback: if the local origin/main SHA equals the
+        # API-reported main SHA, the local ref IS current; otherwise fail closed.
+        api_sha = _api_branch_sha(expected_remote)
+        local_sha = run_git(repo_path, "rev-parse", "origin/main")
+        if api_sha and api_sha == local_sha:
+            checks["origin_main_fetched"] = True
+            checks["origin_main_freshness"] = "verified_via_api_equivalence"
+        else:
+            raise RuntimeError(
+                f"git fetch failed and local origin/main ({local_sha[:9]}) != API main "
+                f"({api_sha[:9] if api_sha else 'unavailable'}); re-freeze required: "
+                f"{fetch_error[:160]}"
+            )
+    else:
+        checks["origin_main_fetched"] = True
     return report
+
+
+def _api_branch_sha(repo: str) -> str | None:
+    owner, _, name = repo.partition("/")
+    proc = subprocess.run(
+        ["gh", "api", f"/repos/{owner}/{name}/branches/main"],
+        text=True, capture_output=True, check=False, timeout=60,
+    )
+    if proc.returncode:
+        return None
+    try:
+        return json.loads(proc.stdout)["commit"]["sha"]
+    except (json.JSONDecodeError, KeyError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -230,26 +273,16 @@ def build_manifest(
 # ---------------------------------------------------------------------------
 
 def gh_api_paginated(repo: str, path: str) -> Any:
-    parts: list[dict[str, Any]] = []
-    cursor: str | None = None
-    while True:
-        query = f"{path}{'&' if '?' in path else '?'}per_page=100"
-        if cursor:
-            query += f"&cursor={cursor}"
-        proc = subprocess.run(
-            ["gh", "api", "--paginate", f"/repos/{repo}/{query}"],
-            text=True, capture_output=True, check=False,
-        )
-        if proc.returncode:
-            raise RuntimeError(f"gh api failed: {proc.stderr.strip()[:200]}")
-        batch = json.loads(proc.stdout)
-        if not isinstance(batch, list):
-            return batch
-        parts.extend(batch)
-        if len(batch) < 100:
-            break
-        cursor = str(parts[-1].get("number", len(parts)))
-    return parts
+    """One `gh api --paginate` call returns the full list; never re-paginate manually
+    (a second full fetch loops forever once a page boundary is crossed)."""
+
+    proc = subprocess.run(
+        ["gh", "api", "--paginate", f"/repos/{repo}/{path}"],
+        text=True, capture_output=True, check=False, timeout=600,
+    )
+    if proc.returncode:
+        raise RuntimeError(f"gh api failed: {proc.stderr.strip()[:200]}")
+    return json.loads(proc.stdout)
 
 
 def capture_snapshot(repo: str) -> dict[str, Any]:
@@ -275,17 +308,36 @@ def capture_snapshot(repo: str) -> dict[str, Any]:
     return snapshot
 
 
-def capture_pr_diffs(repo: str, numbers: list[int]) -> dict[int, str]:
+def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3) -> dict[int, str]:
     diffs: dict[int, str] = {}
     for number in numbers:
-        proc = subprocess.run(
-            ["gh", "pr", "diff", str(number), "--repo", repo],
-            text=True, capture_output=True, check=False,
-        )
-        if proc.returncode == 0:
-            diffs[number] = proc.stdout
-        else:
-            raise RuntimeError(f"gh pr diff {number} failed: {proc.stderr.strip()[:200]}")
+        last_error = ""
+        for attempt in range(1, max_retries + 1):
+            proc = subprocess.run(
+                ["gh", "pr", "diff", str(number), "--repo", repo],
+                text=True, capture_output=True, check=False, timeout=120,
+            )
+            if proc.returncode == 0:
+                diffs[number] = proc.stdout
+                last_error = ""
+                break
+            last_error = proc.stderr.strip()[:200]
+            time.sleep(2 * attempt)  # transient HTTP/2 / rate-limit flakes
+        if last_error:
+            # Giant PRs kill `gh pr diff` streams; the REST diff endpoint on
+            # api.github.com paginates cleanly — fall back to it.
+            proc = subprocess.run(
+                ["gh", "api", "-H", "Accept: application/vnd.diff",
+                 f"/repos/{repo}/pulls/{number}"],
+                text=True, capture_output=True, check=False, timeout=300,
+            )
+            if proc.returncode == 0 and proc.stdout.startswith("diff"):
+                diffs[number] = proc.stdout
+                continue
+            raise RuntimeError(
+                f"gh pr diff {number} failed after {max_retries} attempts "
+                f"and REST fallback: {last_error} / {proc.stderr.strip()[:120]}"
+            )
     return diffs
 
 
