@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Generate a source-frozen Chain.Love bounty Harness run configuration."""
+"""Generate a source-frozen Chain.Love bounty Harness run configuration.
+
+Default submission_mode is review_required (READY_TO_SUBMIT terminal only).
+auto mode additionally requires a submit-grant file; the bundle wires a
+submit-grant COMMAND verifier that fails closed when the grant is absent,
+expired, or bound to another run/repo/user.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.weather_agent_harness.scenarios.chainlove_bounty import (
+from src.weather_agent_harness.scenarios.chainlove_bounty import (  # noqa: E402
     DEFAULT_CATEGORIES,
     DEFAULT_NETWORKS,
     build_bundle,
@@ -48,23 +54,36 @@ def main() -> int:
     parser.add_argument(
         "--extended",
         action="store_true",
-        help="Add the stale_sweep and deferred_recheck work orders (post-2026-08 seams).",
+        default=True,
+        help="Full DAG with stale_delta/deferred_recheck/noop/publish nodes (default).",
     )
     parser.add_argument(
-        "--category-modifiers",
-        help='JSON dict of current weekly category modifiers, e.g. \'{"security": 1.5}\'.',
+        "--legacy",
+        action="store_true",
+        help="Emit the reduced pre-freeze DAG for replaying old runs.",
     )
     parser.add_argument(
-        "--deferred-queue",
-        type=Path,
-        help="Path to the deferred-candidates queue JSON (read by deferred_recheck, written by evidence_review).",
+        "--submission-mode",
+        choices=("review_required", "auto"),
+        default="review_required",
     )
+    parser.add_argument("--grant", type=Path, help="submit-grant JSON (required for auto mode)")
+    parser.add_argument("--github-user", default="jiaruihz")
+    parser.add_argument("--json-tools-dir", type=Path)
+    parser.add_argument("--worktree-path", type=Path)
+    parser.add_argument("--precedents", type=Path)
+    parser.add_argument("--deferred-queue", type=Path)
+    parser.add_argument("--stale-inventory", type=Path)
     parser.add_argument(
         "--snapshot-json",
         type=Path,
         help="Reuse an existing open-PR snapshot instead of calling gh.",
     )
     args = parser.parse_args()
+
+    if args.submission_mode == "auto" and not args.grant:
+        print("--submission-mode auto requires --grant", file=sys.stderr)
+        return 2
 
     repo_path = args.repo_path.resolve()
     base_sha = _git(repo_path, "rev-parse", "origin/main")
@@ -88,24 +107,29 @@ def main() -> int:
         networks=tuple(args.networks or DEFAULT_NETWORKS),
         categories=tuple(args.categories or DEFAULT_CATEGORIES),
         reward_address=args.reward_address,
-        extended=args.extended,
-        category_modifiers=json.loads(args.category_modifiers) if args.category_modifiers else None,
+        extended=not args.legacy,
+        run_dir=args.output_dir,
+        worktree_path=args.worktree_path,
+        submission_mode=args.submission_mode,
+        grant_path=args.grant,
+        github_user=args.github_user,
+        json_tools_dir=args.json_tools_dir,
+        precedents_path=args.precedents,
         deferred_queue_path=args.deferred_queue,
+        stale_inventory_path=args.stale_inventory,
     )
     write_bundle(bundle, args.output_dir)
     print(
         json.dumps(
             {
-                "output_dir": str(args.output_dir.resolve()),
+                "output_dir": str(args.output_dir),
                 "base_sha": base_sha,
-                "open_pr_count": snapshot["open_pr_count"],
-                "models": {
-                    item.name: item.requested_model for item in bundle["roles"]
-                },
+                "open_pr_count": snapshot.get("open_pr_count"),
+                "models": {role.name: role.requested_model for role in bundle["roles"]},
                 "work_orders": [item.work_order_id for item in bundle["work_orders"]],
-                "usage_required": all(item.require_usage for item in bundle["roles"]),
+                "submission_mode": args.submission_mode,
+                "usage_required": True,
             },
-            ensure_ascii=False,
             indent=2,
         )
     )
