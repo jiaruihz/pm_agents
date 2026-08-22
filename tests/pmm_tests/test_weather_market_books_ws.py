@@ -430,6 +430,69 @@ def test_shared_direct_token_demand_uses_same_ws_owner(tmp_path) -> None:
     assert selected.token_rows["dispute-token"]["capture_universe"] == "shared_direct_token"
 
 
+def test_core_carry_full_ladder_demand_is_allowed_by_shared_ws_owner() -> None:
+    demand = CaptureDemand.create(
+        consumer_id="current_yes_core_carry_tiny_live_v2",
+        strategy_key="reheat_risk.current_yes",
+        condition_id="condition-30",
+        token_id="yes-30",
+        reason="core_carry_first_positive_full_ladder_tape",
+        priority="P0",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T03:29:00Z",
+        desired_transport="WS",
+        trigger_event_id="decision-packet-1",
+    ).to_dict()
+    selection = Selection(
+        tokens=set(), token_rows={}, city_token_counts={}, active_brackets={},
+        grace_brackets={}, scheduled_cities=[], research_cities=[], burst_cities=[],
+        missing_observation_cities=[], invalidation_state={},
+    )
+
+    selected = apply_market_capture_demands(
+        selection, market_payload={"records": []}, demands=[demand]
+    )
+
+    assert selected.tokens == {"yes-30"}
+    assert selected.capture_demands[0]["resolution_status"] == "resolved_direct_token"
+    assert selected.token_rows["yes-30"]["capture_universe"] == "shared_direct_token"
+
+
+def test_core_carry_full_ladder_group_is_rejected_atomically_when_over_budget() -> None:
+    demands = [
+        CaptureDemand.create(
+            consumer_id="current_yes_core_carry_tiny_live_v2",
+            strategy_key="reheat_risk.current_yes",
+            condition_id=f"condition-{index}",
+            token_id=f"yes-{index}",
+            reason="core_carry_first_positive_full_ladder_tape",
+            priority="P0",
+            requested_at_utc="2026-08-09T02:59:00Z",
+            expires_at_utc="2026-08-09T03:29:00Z",
+            desired_transport="WS",
+            trigger_event_id="decision-packet-1",
+        ).to_dict()
+        for index in range(3)
+    ]
+    selection = Selection(
+        tokens=set(), token_rows={}, city_token_counts={}, active_brackets={},
+        grace_brackets={}, scheduled_cities=[], research_cities=[], burst_cities=[],
+        missing_observation_cities=[], invalidation_state={},
+    )
+
+    selected = apply_market_capture_demands(
+        selection,
+        market_payload={"records": []},
+        demands=demands,
+        max_active_tokens=2,
+    )
+
+    assert selected.tokens == set()
+    assert {row["resolution_status"] for row in selected.capture_demands} == {
+        "global_active_token_budget_exceeded_atomic_group"
+    }
+
+
 def test_multiple_direct_demands_for_same_token_keep_all_lineage() -> None:
     base = CaptureDemand.create(
         consumer_id="rule_lawyer_dispute_forward",

@@ -467,6 +467,14 @@
     - entry_attempts.jsonl
   - - summary_history
     - summary_history.jsonl
+  - - decision_packets
+    - decision_packets.jsonl
+  - - decision_packet_alerts
+    - decision_packet_alerts.jsonl
+  - - capture_demands
+    - capture_demands.jsonl
+  - - capture_demand_alerts
+    - capture_demand_alerts.jsonl
 - strategy_instance: current_yes_heat_death_tiny_live_v1
   display_name: Current YES heat-death legacy single-head probe
   family: reheat_risk.current_yes

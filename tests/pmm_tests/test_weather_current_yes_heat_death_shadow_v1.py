@@ -48,6 +48,23 @@ def _snapshot() -> dict:
         "forecast_peak_delta_hours_local": 1.13,
         "market_id": "m1",
         "condition_id": "c1",
+        "snapshot_capture_id": "capture-1",
+        "book_snapshot_id": "book-snapshot-1",
+        "forecast_values_hash": "forecast-hash-1",
+        "forecast_curve_archive_path": "/raw/forecast-curves.jsonl",
+        "forecast_curve_evidence": "cached_durable_curve",
+        "forecast_source": "open_meteo",
+        "forecast_model": "ecmwf_ifs025",
+        "model_init_utc_estimated": "2026-07-14T00:00:00Z",
+        "forecast_run_lineage_status": "estimated_model_init",
+        "yes_book_exchange_ts_utc": "2026-07-14T04:07:58Z",
+        "yes_book_request_started_at_utc": "2026-07-14T04:07:59Z",
+        "yes_book_response_received_at_utc": "2026-07-14T04:08:00Z",
+        "yes_book_parsed_at_utc": "2026-07-14T04:08:00.100000Z",
+        "yes_book_archive_path": "/raw/books.jsonl",
+        "yes_book_batch_capture_id": "book-batch-1",
+        "yes_book_clock_lineage_status": "exchange_and_receive_clocks_available",
+        "yes_book_event_time_pit_scorable": True,
     }
     return {
         "ts_utc": "2026-07-14T04:08:00Z",
@@ -62,6 +79,7 @@ def _snapshot() -> dict:
                 "yes_bid_size": 15,
                 "yes_book_status": "ok",
                 "yes_token_id": "yes30",
+                "no_token_id": "no30",
                 "market_yes_price": 0.83,
             },
             {
@@ -74,6 +92,7 @@ def _snapshot() -> dict:
                 "no_bid_size": 12,
                 "no_book_status": "ok",
                 "no_token_id": "no31",
+                "yes_token_id": "yes31",
                 "market_yes_price": 0.17,
             },
             {
@@ -81,6 +100,7 @@ def _snapshot() -> dict:
                 "bracket": "32+",
                 "question": "Will the highest temperature in Busan be 32°C or above on July 14?",
                 "market_yes_price": 0.01,
+                "yes_token_id": "yes32plus",
             },
         ],
     }
@@ -197,6 +217,19 @@ def test_busan_like_state_is_strong_shadow_candidate_with_two_expressions(tmp_pa
     assert row["probability_status"] == "not_fitted_forward_collection"
     assert row["late_carry_action"] == "shadow_measure_only"
     assert row["late_carry_running_to_upper_boundary_native"] == 0.5
+    assert row["full_ladder_yes_token_count"] == 3
+    assert [token["token_id"] for token in row["full_ladder_yes_tokens"]] == [
+        "yes30",
+        "yes31",
+        "yes32plus",
+    ]
+    assert row["snapshot_capture_id"] == "capture-1"
+    assert row["book_snapshot_id"] == "book-snapshot-1"
+    assert row["forecast_values_hash"] == "forecast-hash-1"
+    assert row["forecast_curve_archive_path"] == "/raw/forecast-curves.jsonl"
+    assert row["forecast_run_lineage_status"] == "estimated_model_init"
+    assert row["current_yes_book_exchange_ts_utc"] == "2026-07-14T04:07:58Z"
+    assert row["current_yes_book_archive_path"] == "/raw/books.jsonl"
 
 
 def test_mechanism_confirmed_after_window_remains_in_denominator_not_candidate() -> None:

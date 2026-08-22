@@ -631,6 +631,16 @@ def build_decisions(
         )
         current_yes = _direct_quote(current, "yes")
         d1_no = _direct_quote(d1, "no")
+        full_ladder_yes_tokens = [
+            {
+                "bracket": str(record.get("bracket") or ""),
+                "condition_id": str(record.get("condition_id") or ""),
+                "market_id": str(record.get("market_id") or ""),
+                "token_id": str(_direct_quote(record, "yes").get("token_id") or ""),
+            }
+            for record in ladder
+            if _direct_quote(record, "yes").get("token_id")
+        ]
         profile = _physical_profile(state)
         decision_key = {
             "strategy_instance": STRATEGY_INSTANCE,
@@ -660,6 +670,8 @@ def build_decisions(
             "current_yes_fee_per_share": _fee_per_share(current_yes.get("ask")),
             "current_yes_effective_cost": _effective_cost(current_yes.get("ask")),
             "current_yes_indicative_price": finite(current.get("market_yes_price")),
+            "full_ladder_yes_tokens": full_ladder_yes_tokens,
+            "full_ladder_yes_token_count": len(full_ladder_yes_tokens),
             "d1_bracket": str(d1.get("bracket") or "") if d1 else "",
             "d1_question": str(d1.get("question") or "") if d1 else "",
             "d1_condition_id": str(d1.get("condition_id") or "") if d1 else "",
@@ -680,6 +692,43 @@ def build_decisions(
                 None if d1 is None or finite(d1.get("market_yes_price")) is None else 1.0 - finite(d1.get("market_yes_price"))  # type: ignore[operator]
             ),
             "direct_quote_pair_available": current_yes.get("ask") is not None and d1_no.get("ask") is not None,
+            # Preserve the exact raw snapshot lineage used at decision time.  The
+            # downstream core-carry score and immutable packet inherit these
+            # fields without another fetch or a point-in-time reconstruction.
+            "snapshot_capture_id": current.get("snapshot_capture_id") or snapshot.get("snapshot_capture_id"),
+            "snapshot_ts_utc": current.get("snapshot_ts_utc") or snapshot.get("ts_utc"),
+            "snapshot_available_at_utc": snapshot.get("available_at_utc") or snapshot.get("ts_utc"),
+            "snapshot_producer_build_id": current.get("producer_build_id") or snapshot.get("producer_build_id"),
+            "book_snapshot_id": current.get("book_snapshot_id"),
+            "forecast_values_hash": current.get("forecast_values_hash"),
+            "forecast_curve_archive_path": current.get("forecast_curve_archive_path"),
+            "forecast_curve_evidence": current.get("forecast_curve_evidence"),
+            "forecast_source": current.get("forecast_source"),
+            "forecast_model": current.get("forecast_model"),
+            "model_init_utc_estimated": current.get("model_init_utc_estimated"),
+            "model_init_basis": current.get("model_init_basis"),
+            "forecast_run_lineage_status": current.get("forecast_run_lineage_status") or (
+                "archive_hash_join_available"
+                if current.get("forecast_values_hash") and current.get("forecast_curve_archive_path")
+                else None
+            ),
+            "forecast_first_seen_utc": current.get("forecast_first_seen_utc"),
+            "forecast_first_seen_lookup_status": (
+                "available_in_snapshot"
+                if current.get("forecast_first_seen_utc")
+                else "requires_forecast_archive_hash_join"
+                if current.get("forecast_values_hash") and current.get("forecast_curve_archive_path")
+                else "unavailable"
+            ),
+            "forecast_issue_ts_utc": current.get("forecast_issue_ts_utc"),
+            "current_yes_book_exchange_ts_utc": current.get("yes_book_exchange_ts_utc"),
+            "current_yes_book_request_started_at_utc": current.get("yes_book_request_started_at_utc"),
+            "current_yes_book_response_received_at_utc": current.get("yes_book_response_received_at_utc"),
+            "current_yes_book_parsed_at_utc": current.get("yes_book_parsed_at_utc"),
+            "current_yes_book_archive_path": current.get("yes_book_archive_path"),
+            "current_yes_book_batch_capture_id": current.get("yes_book_batch_capture_id"),
+            "current_yes_book_clock_lineage_status": current.get("yes_book_clock_lineage_status"),
+            "current_yes_book_event_time_pit_scorable": current.get("yes_book_event_time_pit_scorable"),
         }
         transition_profile = _transition_carry_profile({**state, **profile}, market_fields)
         decisions.append(

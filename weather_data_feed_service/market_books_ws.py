@@ -33,7 +33,7 @@ from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "tiered_hot_strip_plus_shared_capture_demand_v6"
+SELECTOR_VERSION = "tiered_hot_strip_plus_atomic_full_ladder_demand_v7"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -394,6 +394,7 @@ def apply_market_capture_demands(
     max_active_tokens: int = 12,
     allowed_shared_strategy_keys: Iterable[str] = (
         "rule_lawyer.dispute_repricing",
+        "reheat_risk.current_yes",
     ),
 ) -> Selection:
     """Union a revision-centered local strip into the selective WS set.
@@ -413,6 +414,21 @@ def apply_market_capture_demands(
     resolved: list[dict[str, Any]] = []
     active_demand_tokens: set[str] = set()
     allowed_shared = set(allowed_shared_strategy_keys)
+    # Core-carry declares one trigger as an atomic full-ladder group.  Reserve
+    # the entire group before selecting any rung so a global budget collision
+    # cannot silently degrade "full ladder" into an arbitrary prefix.
+    atomic_group_tokens: dict[str, set[str]] = defaultdict(set)
+    for source in demands:
+        if (
+            source.get("schema_version") == "polymarket_capture_demand_v1"
+            and source.get("strategy_key") == "reheat_risk.current_yes"
+            and source.get("trigger_event_id")
+        ):
+            group_id = str(source["trigger_event_id"])
+            if source.get("token_id"):
+                atomic_group_tokens[group_id].add(str(source["token_id"]))
+    rejected_atomic_groups: set[str] = set()
+    evaluated_atomic_groups: set[str] = set()
     for source in demands:
         demand = dict(source)
         if demand.get("schema_version") == "polymarket_capture_demand_v1":
@@ -424,6 +440,11 @@ def apply_market_capture_demands(
                 else None
             )
             token_id = str(demand.get("token_id") or "")
+            atomic_group_id = (
+                str(demand.get("trigger_event_id") or "")
+                if demand.get("strategy_key") == "reheat_risk.current_yes"
+                else ""
+            )
             valid = (
                 str(demand.get("strategy_key") or "") in allowed_shared
                 and str(demand.get("desired_transport") or "") in {"WS", "REST_WS"}
@@ -432,8 +453,15 @@ def apply_market_capture_demands(
                 and ttl_minutes is not None
                 and 0 < ttl_minutes <= max_ttl_minutes
             )
+            if atomic_group_id and atomic_group_id not in evaluated_atomic_groups:
+                if len(active_demand_tokens | atomic_group_tokens[atomic_group_id]) > max_active_tokens:
+                    rejected_atomic_groups.add(atomic_group_id)
+                evaluated_atomic_groups.add(atomic_group_id)
             if not valid:
                 demand["resolution_status"] = "invalid_shared_capture_demand_contract"
+                demand["resolved_token_count"] = 0
+            elif atomic_group_id in rejected_atomic_groups:
+                demand["resolution_status"] = "global_active_token_budget_exceeded_atomic_group"
                 demand["resolved_token_count"] = 0
             elif len(active_demand_tokens | {token_id}) > max_active_tokens:
                 demand["resolution_status"] = "global_active_token_budget_exceeded"
