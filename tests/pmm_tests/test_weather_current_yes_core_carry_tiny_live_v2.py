@@ -1633,8 +1633,9 @@ def test_candidate_capture_is_bounded_and_gives_full_ladder_only_to_top_edge(tmp
         },
     )
 
-    result = runner.write_candidate_capture_demands(tmp_path)
-    repeat = runner.write_candidate_capture_demands(tmp_path)
+    now = datetime(2026, 8, 22, 10, 10, tzinfo=timezone.utc)
+    result = runner.write_candidate_capture_demands(tmp_path, now=now)
+    repeat = runner.write_candidate_capture_demands(tmp_path, now=now)
     rows = list(runner.iter_jsonl(tmp_path / "capture_demands.jsonl"))
     current = [row for row in rows if row["reason"] == "core_carry_candidate_current_token_tape"]
     ladder = [row for row in rows if row["reason"] == "core_carry_candidate_full_ladder_tape"]
@@ -1647,3 +1648,24 @@ def test_candidate_capture_is_bounded_and_gives_full_ladder_only_to_top_edge(tmp
     assert {row["metadata"]["research_only"] for row in rows} == {True}
     assert {row["metadata"]["city"] for row in ladder} == {"City9"}
     assert len({row["trigger_event_id"] for row in ladder}) == 1
+
+
+def test_candidate_capture_does_not_declare_expired_historical_window(tmp_path) -> None:
+    runner.append_jsonl(
+        tmp_path / "pre_live_scores.jsonl",
+        {
+            "created_at_utc": "2026-08-22T09:00:00Z",
+            "checkpoint_key": "Expired|2026-08-22|14",
+            "current_condition_id": "expired-condition",
+            "current_yes_token_id": "expired-token",
+            "model_edge_after_fee_and_depth": -0.001,
+            "reasons": ["non_positive_taker_ev"],
+        },
+    )
+
+    result = runner.write_candidate_capture_demands(
+        tmp_path, now=datetime(2026, 8, 22, 10, 0, tzinfo=timezone.utc)
+    )
+
+    assert result == {"written": 0, "alerts": [], "candidate_count": 0}
+    assert not (tmp_path / "capture_demands.jsonl").exists()

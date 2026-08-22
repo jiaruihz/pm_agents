@@ -687,7 +687,9 @@ def write_capture_demands(
     return {"written": written, "alerts": alerts}
 
 
-def write_candidate_capture_demands(output_dir: Path) -> dict[str, Any]:
+def write_candidate_capture_demands(
+    output_dir: Path, *, now: datetime | None = None
+) -> dict[str, Any]:
     """Declare bounded pre-trigger tape for structurally valid near-core candidates.
 
     A row is a candidate only when the frozen selector's sole blocker is
@@ -697,6 +699,7 @@ def write_candidate_capture_demands(output_dir: Path) -> dict[str, Any]:
     atomic full-ladder request.
     """
 
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     journal = output_dir / "capture_demands.jsonl"
     existing = {str(row.get("demand_id") or "") for row in iter_jsonl(journal)}
     latest_by_token: dict[str, dict[str, Any]] = {}
@@ -706,6 +709,13 @@ def write_candidate_capture_demands(output_dir: Path) -> dict[str, Any]:
         if not token_id or set(row.get("reasons") or ()) != {"non_positive_taker_ev"}:
             continue
         edge = row.get("model_edge_after_fee_and_depth")
+        requested = parse_utc(row.get("created_at_utc"))
+        if (
+            requested is None
+            or requested > current
+            or requested + timedelta(minutes=CANDIDATE_CAPTURE_TTL_MINUTES) <= current
+        ):
+            continue
         try:
             edge_value = float(edge)
         except (TypeError, ValueError):
@@ -814,8 +824,11 @@ def write_candidate_capture_demands(output_dir: Path) -> dict[str, Any]:
             group=f"candidate-current|{checkpoint}|{created}",
         )
 
-    if candidates:
-        top = candidates[0]
+    ladder_candidate = next(
+        (row for row in candidates if row.get("full_ladder_yes_tokens")), None
+    )
+    if ladder_candidate is not None:
+        top = ladder_candidate
         ladder = [
             dict(row)
             for row in top.get("full_ladder_yes_tokens") or ()
