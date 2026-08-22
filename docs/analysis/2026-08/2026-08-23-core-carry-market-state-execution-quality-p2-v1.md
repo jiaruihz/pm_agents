@@ -157,7 +157,12 @@ maker 只有在同分母净 surplus 为正时才是 execution alpha；“成交�
 | priority-safe WS allocation | live selector v8 |
 | Shanghai current quote/fills | complete |
 | Shanghai trade side/full ladder/actor | unavailable；当时未订阅 |
-| market-state router | preregistered only；未进入 live |
+| market-state router | zero-notional 已部署；release `682b0084`，controller health healthy |
+| deterministic reconstruction | 复用 `ws_incremental_book` 唯一 truth；epoch/gap/reconnect/parity fail closed |
+| 同分母 action replay | immediate taker / actual shared maker / 120s confirm / next hedge / skip 已冻结 |
+| performance gate | 0 first-positive / 0 target dates；gate fail，正 notional 禁止 |
 
-下一次有效 candidate/trigger 到来后，应先冻结 capture receipt 与完整窗口，再运行 feature extraction；
-在此之前不能声称已识别出稳定状态 alpha。
+生产 runtime 每60秒自动刷新 feature、真实 maker order/fill join、1800秒 fee-adjusted implementation
+surplus、target-date block CI 与 promotion gate。晋升仍要求至少30个独立 forward target dates、coverage
+不低于95%、同分母 paired surplus 完整且CI下界大于0；在此之前不能声称已识别出稳定状态 alpha，
+也不会创建 TradeIntent、plan、order 或 venue call。
