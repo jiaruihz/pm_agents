@@ -4,15 +4,14 @@
 The signal/checkpoint contract remains owned by
 ``weather_current_yes_core_carry_pre_live_v1.py`` and the no-age/no-peak-clock
 v3 artifact.
-For each first positive-EV city-day signal this adapter submits three separately
+For each first positive-EV city-day signal this adapter submits two separately
 attributed children:
 
 * taker: fresh full-ladder ten-share EV is revalidated immediately before send;
-* staged maker: five shares at best bid + one tick, held in queue for five minutes,
-  then repriced at most once at the midpoint stage and once at the near-ask
-  stage while retaining one cent of model edge.
-* pullback maker: five shares at the entry ask minus two cents, held without
-  repricing for at most 15 minutes.
+* shared maker: one five-share order at best bid + one tick.  If it remains
+  unfilled for five minutes, it is cancelled first and only then replaced once
+  at the static pullback price (entry ask minus two cents).  The two phases
+  share one exposure budget and can never coexist.
 
 Maker replacements never cross the ask and never convert to taker. They are
 cancelled 90 seconds before the next expected source report, when an unexpected
@@ -74,13 +73,13 @@ from weather_data_feed.observation_cache import index_observation_cache  # noqa:
 
 STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
-CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_staged_5_pullback_rearm_v6"
-EXECUTION_PROFILE = "split_taker_two_maker_event_rearmed_no_fallback_v6"
-DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_rearm_v6"
+CONFIG_ID = "current_yes_core_carry_model_v3_10_taker_5_shared_maker_v7"
+EXECUTION_PROFILE = "split_taker_shared_maker_staged_to_pullback_v7"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_10t5m_shared_staged_pullback_v7"
 MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
 FROZEN_TAKER_SHARES = 10.0
 FROZEN_MAKER_SHARES = 5.0
-FROZEN_PULLBACK_MAKER_SHARES = 5.0
+FROZEN_PULLBACK_MAKER_SHARES = 0.0
 OUTPUT_DIR = ROOT / "runtime/weather_edge_v1" / STRATEGY_INSTANCE
 ARTIFACT_PATH = ROOT / "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v3.json"
 LEGACY_FAMILY_LIVE_ORDER_FILES = (
@@ -1080,7 +1079,7 @@ def daily_family_usage(paths: Iterable[Path], now: datetime) -> tuple[int, float
 
 
 def entry_cost_reservation(args: argparse.Namespace, row: Mapping[str, Any]) -> float:
-    """Conservatively reserve both children at the current taker ask."""
+    """Reserve the taker plus the one shared maker exposure budget."""
 
     ask = finite(row.get("current_yes_ask")) or 1.0
     return (
@@ -1329,6 +1328,13 @@ def base_plan_fields(
     )
     sid = signal_id(row)
     maker = child_order_role == "maker" or child_order_role.startswith("maker_")
+    profile = get_execution_profile(EXECUTION_PROFILE)
+    profile_leg = next(
+        (leg for leg in profile.legs if leg.role == child_order_role),
+        None,
+    )
+    if profile_leg is None:
+        raise RuntimeError(f"execution profile missing child role: {child_order_role}")
     maker_arm = (
         "pullback" if child_order_role == "maker_pullback" else "staged"
     ) if maker else ""
@@ -1371,7 +1377,7 @@ def base_plan_fields(
         "config_id": CONFIG_ID,
         "strategy_family": "reheat_risk.current_yes",
         "decision_mode": "frozen_core_v3_first_positive_ten_share_taker_ev",
-        "execution_mode": "tiny_live_split_10_taker_5_staged_5_pullback",
+        "execution_mode": "tiny_live_10_taker_5_shared_maker",
         "execution_profile": EXECUTION_PROFILE,
         "comparison_group_id": stable_hash({"signal_id": sid, "token_id": row.get("token_id")}),
         "city": str(row.get("city") or ""),
@@ -1392,20 +1398,11 @@ def base_plan_fields(
             )
             or ""
         ) if maker else "",
-        "execution_policy": (
-            "current_yes_residual_carry_pullback_maker_v1"
-            if maker_arm == "pullback"
-            else "current_yes_residual_carry_staged_maker_v3"
-            if maker
-            else "current_yes_residual_carry_taker_v1"
-        ),
-        "order_lifecycle_policy": (
-            "maker_event_validated_static_pullback_until_update_or_ttl_v1"
-            if maker_arm == "pullback"
-            else "maker_event_validated_staged_until_update_or_ttl_v3"
-            if maker
-            else "taker_now"
-        ),
+        "maker_budget_mode": str(
+            profile.fixed_parameters.get("maker_budget_mode") or ""
+        ) if maker else "",
+        "execution_policy": profile_leg.execution_policy,
+        "order_lifecycle_policy": profile_leg.order_lifecycle_policy,
         "maker_only": maker,
         "allow_duplicate_signal_id": True,
         "market_price": round(ask, 6),
@@ -1491,14 +1488,14 @@ def build_entry_plans(
     plans: list[dict[str, Any]] = []
     sid = signal_id(row)
     profile = get_execution_profile(EXECUTION_PROFILE)
+    leg_overrides = {
+        "taker": taker_shares,
+        "maker_staged": maker_shares,
+    }
     allocation = allocate_profile_shares(
         profile=profile,
         total_shares=taker_shares + maker_shares + pullback_maker_shares,
-        leg_share_overrides={
-            "taker": taker_shares,
-            "maker_staged": maker_shares,
-            "maker_pullback": pullback_maker_shares,
-        },
+        leg_share_overrides=leg_overrides,
     )
     for role, allocated_shares in allocation:
         shares = float(allocated_shares)
@@ -1645,6 +1642,7 @@ def maker_lifecycle_plans(
     *,
     now: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    profile = get_execution_profile(EXECUTION_PROFILE)
     live_orders = output_dir / "live_orders.jsonl"
     epochs = latest_weather_epochs(output_dir / "state_decisions.jsonl")
     candidates: list[tuple[dict[str, Any], bool]] = []
@@ -1662,6 +1660,7 @@ def maker_lifecycle_plans(
     decisions: list[dict[str, Any]] = []
     with market_httpx_client(args.book_proxy, timeout=float(args.book_timeout_sec)) as client:
         for order, active_order in candidates:
+            order_created = parse_utc(order.get("created_at_utc"))
             city_day = (str(order.get("city") or ""), str(order.get("target_date") or ""))
             latest = epochs.get(city_day)
             source_epoch = str(order.get("source_report_ts_utc") or "")
@@ -1731,7 +1730,7 @@ def maker_lifecycle_plans(
                     action = "core_carry_maker_cancel_new_observation"
                     cancel_only = True
             elif maker_arm == "pullback":
-                blocker = "pullback_static_resting_no_reprice"
+                blocker = "legacy_pullback_static_resting_no_reprice"
             else:
                 quote = weather_state._fetch_token_book(client, str(order.get("token_id") or ""))  # noqa: SLF001
                 best_bid = finite(quote.get("bid")) or 0.0
@@ -1744,6 +1743,41 @@ def maker_lifecycle_plans(
                 posted = finite(order.get("posted_price")) or finite(order.get("limit_price")) or 0.0
                 if str(quote.get("book_status") or "") != "ok" or best_bid <= 0 or best_ask <= best_bid:
                     blocker = "bad_fresh_book"
+                elif str(profile.fixed_parameters.get("maker_budget_mode") or "") == "single_active_order_staged_then_pullback":
+                    age_sec = (
+                        max(0.0, (now - order_created).total_seconds())
+                        if order_created
+                        else 0.0
+                    )
+                    handoff_after = maker_profile_parameter("shared_maker_handoff_after_sec")
+                    if not active_order:
+                        next_price = finite(order.get("limit_price")) or finite(order.get("posted_price")) or 0.0
+                        reprice_stage = last_reprice_stage
+                        if next_price > 0:
+                            action = "core_carry_maker_repost"
+                        else:
+                            blocker = "detached_maker_retry_missing_price"
+                    elif age_sec < handoff_after:
+                        blocker = "shared_maker_staged_queue_window"
+                    elif reprice_count >= max_reprices or last_reprice_stage == "pullback_handoff":
+                        blocker = "shared_maker_pullback_handoff_already_used"
+                    else:
+                        next_price = pullback_maker_resting_price(
+                            best_ask=best_ask,
+                            tick_size=tick,
+                            price_cap=cap,
+                        )
+                        reprice_stage = "pullback_handoff"
+                        if next_price <= 0:
+                            blocker = "shared_maker_no_pullback_price"
+                        elif next_price < maker_low_price_band_halt_min():
+                            action = "core_carry_maker_cancel_low_price_handoff"
+                            cancel_only = True
+                            blocker = "low_price_band_halt_shadow_only"
+                        elif active_order:
+                            action = "core_carry_maker_reprice"
+                        else:
+                            action = "core_carry_maker_repost"
                 else:
                     next_price, reprice_stage = staged_maker_resting_price(
                         order,
@@ -2004,15 +2038,12 @@ def new_entry_plans(
         sid = signal_id(row)
         city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
         existing_roles = attempted_roles.get(sid, set())
-        expected_roles = {"taker", "maker_staged", "maker_pullback"}
+        expected_roles = {"taker", "maker_staged"}
         if expected_roles.issubset(existing_roles):
             continue
         planning_row: Mapping[str, Any] = row
         rearm_meta: dict[str, Any] = {}
-        missing_maker_roles = {
-            "maker_staged",
-            "maker_pullback",
-        } - existing_roles
+        missing_maker_roles = {"maker_staged"} - existing_roles
         if "taker" in existing_roles and missing_maker_roles:
             history = rearm_attempts.get(sid, {})
             deferred = history.get("deferred")
@@ -2170,7 +2201,7 @@ def new_entry_plans(
             maker_clock.get("maker_post_update_live_rearm")
         ) and maker_clock.get("maker_clock_status") == "pre_source_report_blackout"
         if not reason and not defer_missing_makers:
-            for maker_role in {"maker_staged", "maker_pullback"} - maker_planned_roles:
+            for maker_role in {"maker_staged"} - maker_planned_roles:
                 attempted_roles[sid].add(maker_role)
         if entry_plans:
             plans.extend(entry_plans)
@@ -2198,7 +2229,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         or float(args.pullback_maker_shares) != FROZEN_PULLBACK_MAKER_SHARES
     ):
         raise RuntimeError(
-            "frozen tiny-live split requires exactly 10 taker + 5 staged maker + 5 pullback maker shares"
+            "frozen tiny-live split requires exactly 10 taker + one shared 5-share maker budget"
         )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2250,6 +2281,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             + float(args.maker_shares)
             + float(args.pullback_maker_shares)
         ),
+        "maker_budget_mode": "single_active_order_staged_then_pullback",
+        "shared_maker_budget_shares": float(args.maker_shares),
         "maker_refresh_sec": float(args.maker_refresh_sec),
         "maker_reprice_limit": maker_max_reprices(),
         "maker_cancel_buffer_sec": get_execution_profile(

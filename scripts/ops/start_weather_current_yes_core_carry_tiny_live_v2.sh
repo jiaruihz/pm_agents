@@ -28,7 +28,7 @@ session_cmd="cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u scripts/op
     --output-dir '$OUTPUT_DIR' \
     --taker-shares 10 \
     --maker-shares 5 \
-    --pullback-maker-shares 5 \
+    --pullback-maker-shares 0 \
     --maker-refresh-sec 15 \
     --order-ttl-min 15 \
     --max-city-days-per-bj-day 10 \

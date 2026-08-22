@@ -367,6 +367,53 @@ _PROFILES = {
             "low_price_band_halt_min_posted_price": "0.84",
         },
     ),
+    "split_taker_shared_maker_staged_to_pullback_v7": ExecutionProfile(
+        name="split_taker_shared_maker_staged_to_pullback_v7",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="current_yes_residual_carry_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+            ),
+            ExecutionLegProfile(
+                role="maker_staged",
+                execution_policy="current_yes_residual_carry_shared_maker_v1",
+                order_lifecycle_policy="maker_shared_staged_then_pullback_until_update_or_ttl_v1",
+                maker_only=True,
+                reprice_policy="single_cancel_confirmed_pullback_handoff",
+                price_cap_policy="model_probability_retained_edge_and_taker_improvement",
+                max_reprices=1,
+            ),
+        ),
+        cancel_buffer_sec=90,
+        planner_supported=False,
+        allocation_policy="explicit_leg_shares",
+        refresh_sec=15,
+        ttl_sec=900,
+        data_epoch_policy="cancel",
+        fixed_parameters={
+            "minimum_taker_improvement_ticks": 1,
+            "retained_edge": "0.01",
+            "pullback_offset": "0.02",
+            "shared_maker_budget_shares": "5",
+            "shared_maker_handoff_after_sec": 300,
+            "stage_midpoint_after_sec": 300,
+            "stage_near_ask_after_sec": 600,
+            "maker_budget_mode": "single_active_order_staged_then_pullback",
+            "clock_basis": "next_source_report_not_collector_availability",
+            "state_epoch_components": (
+                "observation+forecast_curve+exact_bracket_token"
+            ),
+            "replacement_price_policy": "cancel_confirmed_then_static_pullback_once",
+            "replacement_max_quote_drift_ticks": 1,
+            "post_update_live_rearm": True,
+            "post_update_rearm_max_age_sec": 3600,
+            "post_update_shadow_revalidation": True,
+            "maker_experiment_id": "core_carry_shared_maker_staged_to_pullback_20260823",
+            "low_price_band_halt_min_posted_price": "0.84",
+        },
+    ),
 }
 
 # Alias values are (resolved profile name, fixture identity). Keep this empty

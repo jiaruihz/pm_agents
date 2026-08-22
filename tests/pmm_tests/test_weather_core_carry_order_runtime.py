@@ -208,6 +208,44 @@ def test_lifecycle_replacement_never_reposts_lower_after_book_drops():
         _replacement_request(bid="0.63", ask="0.86")
 
 
+def test_shared_maker_pullback_handoff_can_replace_lower_after_confirmed_cancel():
+    original = runner.build_entry_plans(
+        _score(),
+        live_enabled=True,
+        now=datetime(2026, 7, 28, 4, 31, tzinfo=timezone.utc),
+        taker_shares=5,
+        maker_shares=5,
+        order_ttl_min=15,
+    )[1]
+    lifecycle = runner.build_maker_lifecycle_plan(
+        {**original, "posted_price": 0.91, "venue_order_id": "source-order"},
+        action="core_carry_maker_reprice",
+        limit_price=0.85,
+        cancel_only=False,
+        cancel_source_order=True,
+        reprice_stage="pullback_handoff",
+        decision_best_bid=0.82,
+        decision_best_ask=0.87,
+        decision_tick_size=0.01,
+        now=datetime(2026, 7, 28, 4, 37, tzinfo=timezone.utc),
+        live_enabled=True,
+    )
+    entry_like = shared._entry_like_lifecycle_plan(lifecycle)
+    compatibility = shared.build_core_carry_legacy_plan_compatibility(
+        legacy_plans=[entry_like]
+    )
+    request = shared.CoreCarryRequestBuilder([lifecycle])(
+        compatibility.intents[0],
+        compatibility.children[0],
+        _book(bid="0.82", ask="0.87"),
+        None,
+        None,
+        _replacement_state(posted_price="0.91"),
+    )
+
+    assert request.price == Decimal("0.85")
+
+
 def test_core_carry_live_submits_each_child_once_through_shared_runtime(
     tmp_path,
     monkeypatch,
@@ -239,19 +277,18 @@ def test_core_carry_live_submits_each_child_once_through_shared_runtime(
 
     assert result["execution_runtime"] == "OrderRuntime"
     assert result["venue_adapter"] == "PolymarketVenueAdapter"
-    assert result["live_written"] == 3
+    assert result["live_written"] == 2
     assert result["live_errors"] == 0
-    assert len(transport.posts) == 3
+    assert len(transport.posts) == 2
     assert [post_only for _signed, _kind, post_only in transport.posts] == [
         False,
-        True,
         True,
     ]
     live_rows = [
         json.loads(line)
         for line in (tmp_path / "live_orders.jsonl").read_text().splitlines()
     ]
-    assert len(live_rows) == 3
+    assert len(live_rows) == 2
     assert all(row["execution_schema_version"] for row in live_rows)
     assert all(row["client_order_id"] for row in live_rows)
     journal_rows = [
@@ -260,7 +297,7 @@ def test_core_carry_live_submits_each_child_once_through_shared_runtime(
     ]
     assert [row["event_type"] for row in journal_rows].count(
         "attempt_before_side_effect"
-    ) == 3
+    ) == 2
 
 
 def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatch):
@@ -308,44 +345,6 @@ def test_maker_exact_tick_and_lifecycle_limit_are_preserved(tmp_path, monkeypatc
 
     assert result["live_errors"] == 0
     assert str(transport.posts[0][0]["price"]) == "0.91"
-
-
-def test_pullback_maker_posts_planned_static_price_not_fresh_bid_plus_tick(
-    tmp_path, monkeypatch
-):
-    pullback_plan = next(
-        plan
-        for plan in runner.build_entry_plans(
-            _score(),
-            live_enabled=True,
-            now=datetime(2026, 7, 28, 4, 31, tzinfo=timezone.utc),
-            taker_shares=5,
-            maker_shares=5,
-            pullback_maker_shares=5,
-            order_ttl_min=15,
-        )
-        if plan["child_order_role"] == "maker_pullback"
-    )
-    assert pullback_plan["limit_price"] == 0.93
-    transport = FakeTransport()
-    monkeypatch.setattr(
-        shared,
-        "build_live_transport",
-        lambda **_kwargs: (transport, {"mode": "test"}),
-    )
-
-    result = shared.execute_core_carry_plans(
-        plans=[pullback_plan],
-        output_dir=tmp_path,
-        live=True,
-        market_proxy=None,
-        max_child_shares=5,
-        max_batch_cost_usd=100,
-        code_commit="test-sha",
-    )
-
-    assert result["live_errors"] == 0
-    assert str(transport.posts[0][0]["price"]) == "0.93"
 
 
 def test_journaled_submit_is_projected_after_restart_without_resubmission(

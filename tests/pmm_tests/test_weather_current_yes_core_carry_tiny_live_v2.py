@@ -48,7 +48,7 @@ def test_runtime_contract_proves_pit_clock_and_clean_deployment() -> None:
     assert runner.DEPLOYMENT_METADATA["critical_source_dirty"] is False
     assert (
         runner.DEPLOYMENT_METADATA["deployment_contract_version"]
-        == "core_carry_v3_shared_order_runtime_10t5m5m_dual_maker_rearm_v6"
+        == "core_carry_v3_10t5m_shared_staged_pullback_v7"
     )
 
 
@@ -92,7 +92,7 @@ def test_chengdu_midnight_peak_alias_no_longer_creates_positive_ev() -> None:
     assert result["reasons"] == ["non_positive_taker_ev"]
 
 
-def test_entry_is_exactly_ten_taker_plus_two_five_share_makers() -> None:
+def test_entry_is_exactly_ten_taker_plus_one_shared_five_share_maker() -> None:
     plans = runner.build_entry_plans(
         score_row(),
         live_enabled=True,
@@ -104,13 +104,10 @@ def test_entry_is_exactly_ten_taker_plus_two_five_share_makers() -> None:
     assert [(row["child_order_role"], row["size"]) for row in plans] == [
         ("taker", 10.0),
         ("maker_staged", 5.0),
-        ("maker_pullback", 5.0),
     ]
     assert plans[0]["execution_policy"] == "current_yes_residual_carry_taker_v1"
-    assert plans[1]["execution_policy"] == "current_yes_residual_carry_staged_maker_v3"
-    assert plans[2]["execution_policy"] == "current_yes_residual_carry_pullback_maker_v1"
+    assert plans[1]["execution_policy"] == "current_yes_residual_carry_shared_maker_v1"
     assert plans[1]["limit_price"] == pytest.approx(0.91)
-    assert plans[2]["limit_price"] == pytest.approx(0.93)
     assert plans[1]["maker_price_cap"] == pytest.approx(0.94)
     assert plans[1]["model_token_probability"] == pytest.approx(0.97)
     assert plans[1]["cancel_before_data_update_utc"] == "2026-07-24T04:48:30+00:00"
@@ -121,15 +118,15 @@ def test_entry_is_exactly_ten_taker_plus_two_five_share_makers() -> None:
     assert plans[1]["post_update_reprice_required"] is False
     assert all(
         plan["resolved_execution_profile"]
-        == "split_taker_two_maker_event_rearmed_no_fallback_v6"
+        == "split_taker_shared_maker_staged_to_pullback_v7"
         for plan in plans
     )
     assert len({plan["execution_config_id"] for plan in plans}) == 1
     assert len({plan["live_exposure_key"] for plan in plans}) == 1
-    assert len({plan["plan_dedupe_key"] for plan in plans}) == 3
+    assert len({plan["plan_dedupe_key"] for plan in plans}) == 2
 
 
-def test_live_parser_defaults_match_frozen_ten_plus_five_plus_five_contract() -> None:
+def test_live_parser_defaults_match_frozen_ten_plus_shared_five_contract() -> None:
     args = runner.parser().parse_args(["run"])
 
     assert args.taker_shares == runner.FROZEN_TAKER_SHARES == 10
@@ -137,11 +134,11 @@ def test_live_parser_defaults_match_frozen_ten_plus_five_plus_five_contract() ->
     assert (
         args.pullback_maker_shares
         == runner.FROZEN_PULLBACK_MAKER_SHARES
-        == 5
+        == 0
     )
     assert args.summary_filename == "signal_latest_summary.json"
     assert args.summary_history_filename == "signal_summary_history.jsonl"
-    assert runner.CONFIG_ID.endswith("split_10_taker_5_staged_5_pullback_rearm_v6")
+    assert runner.CONFIG_ID.endswith("10_taker_5_shared_maker_v7")
 
 
 def test_market_above_frozen_training_support_is_not_eligible() -> None:
@@ -248,39 +245,19 @@ def test_one_tick_spread_joins_best_bid_instead_of_dropping_maker() -> None:
     assert maker["maker_price_cap"] == pytest.approx(0.93)
 
 
-def test_pullback_maker_is_exactly_entry_ask_minus_two_cents() -> None:
+def test_shared_maker_has_one_lifecycle_root_and_five_share_budget() -> None:
     plans = runner.build_entry_plans(
         score_row(),
         live_enabled=True,
         now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
         taker_shares=10,
         maker_shares=5,
-        pullback_maker_shares=5,
-        order_ttl_min=15,
-    )
-    pullback = next(
-        plan for plan in plans if plan["child_order_role"] == "maker_pullback"
-    )
-    assert pullback["maker_arm"] == "pullback"
-    assert pullback["limit_price"] == pytest.approx(0.93)
-    assert pullback["quote_mode"] == "entry_ask_minus_2c_static_post_only_edge_capped"
-    assert pullback["maker_experiment_id"] == (
-        "core_carry_staged_vs_pullback_maker_rearm_ab_20260813"
-    )
-
-
-def test_two_maker_arms_have_independent_lifecycle_roots() -> None:
-    plans = runner.build_entry_plans(
-        score_row(),
-        live_enabled=True,
-        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
-        taker_shares=10,
-        maker_shares=5,
-        pullback_maker_shares=5,
         order_ttl_min=15,
     )
     makers = [plan for plan in plans if plan["maker_only"]]
-    assert len({runner.maker_lifecycle_root(plan) for plan in makers}) == 2
+    assert len(makers) == 1
+    assert makers[0]["size"] == 5.0
+    assert len({runner.maker_lifecycle_root(plan) for plan in makers}) == 1
 
 
 def test_live_order_preserves_observation_and_snapshot_lineage() -> None:
@@ -398,7 +375,7 @@ def test_same_observation_keeps_queue_when_own_order_is_best_bid(
 
     assert plans == []
     assert decisions[0]["action"] == ""
-    assert decisions[0]["blocker"] == "queue_preserving_stage"
+    assert decisions[0]["blocker"] == "shared_maker_staged_queue_window"
 
 
 def test_queue_stage_does_not_reprice_after_external_bid_moves_above_order(
@@ -429,7 +406,7 @@ def test_queue_stage_does_not_reprice_after_external_bid_moves_above_order(
 
     assert plans == []
     assert decisions[0]["action"] == ""
-    assert decisions[0]["blocker"] == "queue_preserving_stage"
+    assert decisions[0]["blocker"] == "shared_maker_staged_queue_window"
 
 
 def test_true_new_observation_cancels_even_when_same_bracket(
@@ -596,7 +573,7 @@ def test_true_new_observation_cancels_when_freshness_is_invalid(tmp_path) -> Non
     assert plans[0]["cancel_only"] is True
 
 
-def test_maker_reprices_to_midpoint_after_five_minutes(
+def test_shared_maker_hands_off_to_pullback_after_five_minutes(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -615,7 +592,7 @@ def test_maker_reprices_to_midpoint_after_five_minutes(
         lambda *_args, **_kwargs: {
             "book_status": "ok",
             "bid": 0.81,
-            "ask": 0.84,
+            "ask": 0.87,
             "tick_size": 0.01,
         },
     )
@@ -626,19 +603,21 @@ def test_maker_reprices_to_midpoint_after_five_minutes(
         now=now,
     )
 
-    assert decisions[0]["reprice_stage"] == "midpoint"
-    assert decisions[0]["next_price"] == pytest.approx(0.82)
-    assert plans[0]["limit_price"] == pytest.approx(0.82)
+    assert decisions[0]["reprice_stage"] == "pullback_handoff"
+    assert decisions[0]["next_price"] == pytest.approx(0.85)
+    assert plans[0]["limit_price"] == pytest.approx(0.85)
+    assert plans[0]["cancel_before_order_id"] == "maker-order-1"
+    assert plans[0]["replacement_requires_order_state"] is True
     assert plans[0]["maker_lifecycle_reprice_count"] == 1
-    assert plans[0]["maker_last_reprice_stage"] == "midpoint"
+    assert plans[0]["maker_last_reprice_stage"] == "pullback_handoff"
 
 
-def test_maker_reprices_at_most_once_per_stage(tmp_path, monkeypatch) -> None:
+def test_shared_maker_handoff_occurs_at_most_once(tmp_path, monkeypatch) -> None:
     now = datetime(2026, 7, 24, 4, 38, tzinfo=timezone.utc)
     order = _live_maker_order(created=now - timedelta(minutes=6))
     order["posted_price"] = 0.82
     order["maker_lifecycle_reprice_count"] = 1
-    order["maker_last_reprice_stage"] = "midpoint"
+    order["maker_last_reprice_stage"] = "pullback_handoff"
     runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
     _write_lifecycle_state(tmp_path, source_epoch="2026-07-24T04:20:00Z")
     monkeypatch.setattr(
@@ -662,10 +641,10 @@ def test_maker_reprices_at_most_once_per_stage(tmp_path, monkeypatch) -> None:
     )
 
     assert plans == []
-    assert decisions[0]["blocker"] == "maker_reprice_stage_already_used"
+    assert decisions[0]["blocker"] == "shared_maker_pullback_handoff_already_used"
 
 
-def test_maker_reprices_to_one_tick_below_ask_after_ten_minutes(
+def test_shared_maker_still_uses_static_pullback_price_after_ten_minutes(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -684,7 +663,7 @@ def test_maker_reprices_to_one_tick_below_ask_after_ten_minutes(
         lambda *_args, **_kwargs: {
             "book_status": "ok",
             "bid": 0.81,
-            "ask": 0.84,
+            "ask": 0.87,
             "tick_size": 0.01,
         },
     )
@@ -695,17 +674,17 @@ def test_maker_reprices_to_one_tick_below_ask_after_ten_minutes(
         now=now,
     )
 
-    assert decisions[0]["reprice_stage"] == "near_ask"
-    assert decisions[0]["next_price"] == pytest.approx(0.83)
-    assert plans[0]["limit_price"] == pytest.approx(0.83)
+    assert decisions[0]["reprice_stage"] == "pullback_handoff"
+    assert decisions[0]["next_price"] == pytest.approx(0.85)
+    assert plans[0]["limit_price"] == pytest.approx(0.85)
 
 
-def test_maker_stops_after_two_reprices(tmp_path, monkeypatch) -> None:
+def test_shared_maker_stops_after_one_handoff(tmp_path, monkeypatch) -> None:
     now = datetime(2026, 7, 24, 4, 42, tzinfo=timezone.utc)
     order = _live_maker_order(created=now - timedelta(minutes=11))
     order["posted_price"] = 0.82
-    order["maker_lifecycle_reprice_count"] = 2
-    order["maker_last_reprice_stage"] = "midpoint"
+    order["maker_lifecycle_reprice_count"] = 1
+    order["maker_last_reprice_stage"] = "pullback_handoff"
     runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
     _write_lifecycle_state(tmp_path, source_epoch="2026-07-24T04:20:00Z")
     monkeypatch.setattr(
@@ -729,8 +708,8 @@ def test_maker_stops_after_two_reprices(tmp_path, monkeypatch) -> None:
     )
 
     assert plans == []
-    assert decisions[0]["maker_max_reprices"] == 2
-    assert decisions[0]["blocker"] == "maker_reprice_limit_reached"
+    assert decisions[0]["maker_max_reprices"] == 1
+    assert decisions[0]["blocker"] == "shared_maker_pullback_handoff_already_used"
 
 
 def test_maker_is_not_created_inside_pre_update_blackout() -> None:
@@ -812,7 +791,7 @@ def test_late_epoch_entry_records_terminal_live_maker_and_shadow_counterfactual(
     assert attempts[0]["maker_clock_status"] == "pre_source_report_blackout"
     assert attempts[0]["maker_live_action"] == "defer_post_update_rearm"
     assert attempts[0]["maker_planned_shares"] == 0.0
-    assert attempts[0]["maker_shadow_revalidation_shares"] == 10.0
+    assert attempts[0]["maker_shadow_revalidation_shares"] == 5.0
     assert attempts[0]["maker_post_update_live_rearm"] is True
 
 
@@ -898,10 +877,8 @@ def test_deferred_makers_rearm_on_new_positive_ev_weather_epoch(
 
     assert [plan["child_order_role"] for plan in plans] == [
         "maker_staged",
-        "maker_pullback",
     ]
-    assert all(plan["limit_price"] == pytest.approx(0.89) for plan in plans[:1])
-    assert all(plan["limit_price"] == pytest.approx(0.90) for plan in plans[1:])
+    assert plans[0]["limit_price"] == pytest.approx(0.89)
     assert all(plan["limit_price"] < row["current_yes_ask"] for plan in plans)
     assert all(plan["maker_rearm_model_edge_after_fee_and_depth"] == 0.02 for plan in plans)
     assert attempts[0]["maker_live_action"] == "post"
@@ -1036,44 +1013,6 @@ def test_maker_cancels_at_pre_update_deadline(tmp_path) -> None:
     assert plans[0]["cancel_before_order_id"] == "maker-order-1"
 
 
-def test_pullback_maker_never_reprices_before_ttl(tmp_path, monkeypatch) -> None:
-    now = datetime(2026, 7, 24, 4, 37, tzinfo=timezone.utc)
-    order = runner.build_entry_plans(
-        score_row(),
-        live_enabled=True,
-        now=now - timedelta(minutes=6),
-        taker_shares=10,
-        maker_shares=5,
-        pullback_maker_shares=5,
-        order_ttl_min=15,
-    )[2]
-    order.update(
-        {
-            "status": "submitted",
-            "created_at_utc": (now - timedelta(minutes=6)).isoformat(),
-            "posted_price": order["limit_price"],
-            "venue_order_id": "pullback-order-1",
-            "exchange_response": {"place": {"orderID": "pullback-order-1"}},
-        }
-    )
-    runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
-    _write_lifecycle_state(tmp_path, source_epoch="2026-07-24T04:20:00Z")
-    monkeypatch.setattr(
-        runner,
-        "market_httpx_client",
-        lambda *_args, **_kwargs: nullcontext(object()),
-    )
-
-    plans, decisions = runner.maker_lifecycle_plans(
-        _lifecycle_args(tmp_path), tmp_path, now=now
-    )
-
-    assert plans == []
-    assert decisions[0]["maker_arm"] == "pullback"
-    assert decisions[0]["maker_max_reprices"] == 0
-    assert decisions[0]["blocker"] == "pullback_static_resting_no_reprice"
-
-
 def test_definitive_post_failure_retries_without_recancelling(tmp_path, monkeypatch) -> None:
     now = datetime(2026, 7, 24, 4, 32, tzinfo=timezone.utc)
     failed = _live_maker_order(created=now - timedelta(minutes=1))
@@ -1139,17 +1078,17 @@ def test_frozen_split_rejects_other_size(tmp_path, monkeypatch) -> None:
     )
     with pytest.raises(
         RuntimeError,
-        match=r"exactly 10 taker \+ 5 staged maker \+ 5 pullback maker",
+        match=r"exactly 10 taker \+ one shared 5-share maker budget",
     ):
         runner.run_once(args)
 
 
-def test_default_split_and_cost_caps_track_ten_plus_five_plus_five() -> None:
+def test_default_split_and_cost_caps_track_ten_plus_shared_five() -> None:
     args = runner.parser().parse_args(["run"])
     assert args.taker_shares == 10.0
     assert args.maker_shares == 5.0
-    assert args.pullback_maker_shares == 5.0
-    assert runner.entry_cost_reservation(args, {"current_yes_ask": 0.84}) == pytest.approx(16.8)
+    assert args.pullback_maker_shares == 0.0
+    assert runner.entry_cost_reservation(args, {"current_yes_ask": 0.84}) == pytest.approx(12.6)
     assert runner.entry_plan_cost_reservation(
         [
             {"order_notional_cap": 8.4},
@@ -1348,10 +1287,9 @@ def test_completed_taker_only_recovers_missing_maker_child(tmp_path) -> None:
 
     assert [plan["child_order_role"] for plan in plans] == [
         "maker_staged",
-        "maker_pullback",
     ]
     assert attempts[0]["maker_live_action"] == "post"
-    assert attempts[0]["maker_planned_shares"] == 10.0
+    assert attempts[0]["maker_planned_shares"] == 5.0
 
 
 def test_executor_rechecks_full_taker_ladder_and_fee() -> None:
@@ -1439,7 +1377,6 @@ def test_low_price_band_halt_skips_maker_keeps_taker_and_shadow() -> None:
         now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
         taker_shares=10,
         maker_shares=5,
-        pullback_maker_shares=5,
         order_ttl_min=15,
     )
     assert [plan["child_order_role"] for plan in plans] == ["taker"]
@@ -1453,15 +1390,7 @@ def test_low_price_band_halt_skips_maker_keeps_taker_and_shadow() -> None:
         now=now,
         order_ttl_min=15,
     )
-    pullback = runner.base_plan_fields(
-        row,
-        child_order_role="maker_pullback",
-        shares=5,
-        live_enabled=True,
-        now=now,
-        order_ttl_min=15,
-    )
-    for fields, would_be in ((staged, 0.81), (pullback, 0.82)):
+    for fields, would_be in ((staged, 0.81),):
         assert fields["maker_live_eligible"] is False
         assert fields["maker_live_skip_reason"] == "low_price_band_halt_shadow_only"
         assert fields["maker_low_price_band_halt"] is True
@@ -1482,13 +1411,11 @@ def test_low_price_band_halt_disabled_when_profile_min_is_zero(monkeypatch) -> N
         now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
         taker_shares=10,
         maker_shares=5,
-        pullback_maker_shares=5,
         order_ttl_min=15,
     )
     assert [plan["child_order_role"] for plan in plans] == [
         "taker",
         "maker_staged",
-        "maker_pullback",
     ]
 def _write_positive_taker_ev_signal(tmp_path, *, trigger_patch=None, prior_rows=()):
     trigger = {

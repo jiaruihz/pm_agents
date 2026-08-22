@@ -225,34 +225,59 @@ class CoreCarryRequestBuilder:
                     raise ValueError(
                         "fresh maker book drifted beyond replacement decision"
                     )
-                fresh_competitive = Decimal(
-                    str(
-                        maker_resting_price(
-                            best_bid=float(book.bids[0].price),
-                            best_ask=float(book.asks[0].price),
-                            tick_size=float(book.tick_size),
-                            price_cap=float(strategy_cap),
+                shared_pullback_handoff = (
+                    str(plan.get("maker_budget_mode") or "")
+                    == "single_active_order_staged_then_pullback"
+                    and str(plan.get("maker_last_reprice_stage") or "")
+                    == "pullback_handoff"
+                )
+                if shared_pullback_handoff:
+                    if not replacement.cancel_confirmed:
+                        raise ValueError(
+                            "shared maker pullback handoff requires confirmed cancel"
+                        )
+                    price = round_price_to_tick(
+                        min(
+                            planned_limit,
+                            strategy_cap,
+                            book.asks[0].price - book.tick_size,
+                        ),
+                        book.tick_size,
+                        venue_side="BUY",
+                    )
+                    if price <= 0 or price >= book.asks[0].price:
+                        raise ValueError(
+                            "shared maker pullback handoff would cross fresh ask"
+                        )
+                else:
+                    fresh_competitive = Decimal(
+                        str(
+                            maker_resting_price(
+                                best_bid=float(book.bids[0].price),
+                                best_ask=float(book.asks[0].price),
+                                tick_size=float(book.tick_size),
+                                price_cap=float(strategy_cap),
+                            )
                         )
                     )
-                )
-                source_price = replacement.posted_price
-                if fresh_competitive <= source_price:
-                    raise ValueError(
-                        "fresh maker book no longer supports an improving replacement"
+                    source_price = replacement.posted_price
+                    if fresh_competitive <= source_price:
+                        raise ValueError(
+                            "fresh maker book no longer supports an improving replacement"
+                        )
+                    fresh_ceiling = min(
+                        strategy_cap,
+                        book.asks[0].price - book.tick_size,
                     )
-                fresh_ceiling = min(
-                    strategy_cap,
-                    book.asks[0].price - book.tick_size,
-                )
-                price = round_price_to_tick(
-                    min(planned_limit, fresh_ceiling),
-                    book.tick_size,
-                    venue_side="BUY",
-                )
-                if price <= source_price:
-                    raise ValueError(
-                        "replacement maker price does not improve source order"
+                    price = round_price_to_tick(
+                        min(planned_limit, fresh_ceiling),
+                        book.tick_size,
+                        venue_side="BUY",
                     )
+                    if price <= source_price:
+                        raise ValueError(
+                            "replacement maker price does not improve source order"
+                        )
             else:
                 cap = min(strategy_cap, planned_limit)
                 price = Decimal(
