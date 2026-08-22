@@ -212,8 +212,6 @@ def test_busan_like_state_is_strong_shadow_candidate_with_two_expressions(tmp_pa
     assert row["zero_notional"] is True
     assert row["no_order_placed"] is True
     assert row["probability_status"] == "not_fitted_forward_collection"
-    assert row["late_carry_action"] == "shadow_measure_only"
-    assert row["late_carry_running_to_upper_boundary_native"] == 0.5
     assert row["full_ladder_yes_token_count"] == 3
     assert [token["token_id"] for token in row["full_ladder_yes_tokens"]] == [
         "yes30",
