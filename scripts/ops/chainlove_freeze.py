@@ -61,8 +61,9 @@ def atomic_write_json(path: Path, payload: Any) -> None:
             os.unlink(tmp)
 
 
-def append_decision(path: Path, entry: dict[str, Any]) -> None:
+def append_decision(path: Path | str, entry: dict[str, Any]) -> None:
     """Append-only decision ledger entry with fsync durability."""
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     entry = {"recorded_at_utc": utc_now(), **entry}
     with path.open("a", encoding="utf-8") as handle:
@@ -117,7 +118,7 @@ def preflight(
         raise RuntimeError(f"repo path is not a git repository: {repo_path}")
     checks["repo_path_exists"] = True
 
-    remote_url = run_git(repo_path, "remote", "get-url", "origin")
+    remote_url = run_git(repo_path, "config", "remote.origin.url")
     if expected_remote.rstrip("/") not in remote_url and remote_url.rstrip("/") != expected_remote.rstrip("/"):
         raise RuntimeError(f"origin remote mismatch: {remote_url} != {expected_remote}")
     checks["origin_remote"] = remote_url
@@ -159,7 +160,12 @@ def preflight(
         checks["origin_main_fetched"] = True
 
     if github_user:
-        own = _own_open_prs(expected_remote, github_user)
+        own, gh_error = _own_open_prs(expected_remote, github_user)
+        if gh_error:
+            report["gh_query_failed"] = True
+            report["gh_query_error"] = gh_error[:200]
+            # fail closed: a failed/empty own-PR query is NOT "no open PRs"
+            return report
         changes_requested = [pr for pr in own if pr.get("active_changes_requested")]
         report["own_open_prs"] = [
             {"number": pr["number"], "title": pr.get("title", "")[:80],
@@ -174,7 +180,7 @@ def preflight(
     return report
 
 
-def _own_open_prs(repo: str, github_user: str) -> list[dict[str, Any]]:
+def _own_open_prs(repo: str, github_user: str) -> tuple[list[dict[str, Any]], str]:
     """Own open PRs with review decisions; read-only, feeds feedback-first/WIP policy."""
 
     proc = subprocess.run(
@@ -183,9 +189,14 @@ def _own_open_prs(repo: str, github_user: str) -> list[dict[str, Any]]:
          "--limit", "30"],
         text=True, capture_output=True, check=False, timeout=60,
     )
-    if proc.returncode or not (proc.stdout or "").strip():
-        return []
-    rows = json.loads(proc.stdout)
+    if proc.returncode:
+        return [], f"gh pr list failed: {proc.stderr.strip()[:160]}"
+    if not (proc.stdout or "").strip():
+        return [], "gh pr list returned an empty response (not '[]') — treat as query failure"
+    try:
+        rows = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        return [], f"gh pr list unparseable: {exc}"
     own = []
     for row in rows:
         reviews: list[dict[str, Any]] = []
@@ -196,6 +207,10 @@ def _own_open_prs(repo: str, github_user: str) -> list[dict[str, Any]]:
         )
         if view.returncode == 0:
             reviews = json.loads(view.stdout or "{}").get("reviews", [])
+        if view.returncode == 0 and not (view.stdout or "").strip():
+            return [], f"gh pr view {row['number']} empty response"
+        if view.returncode != 0:
+            return [], f"gh pr view {row['number']} failed"
         own.append({
             "number": row["number"],
             "title": row.get("title", ""),
@@ -206,7 +221,7 @@ def _own_open_prs(repo: str, github_user: str) -> list[dict[str, Any]]:
             "active_changes_requested": _latest_substantive_state(reviews)
             == "CHANGES_REQUESTED",
         })
-    return own
+    return own, ""
 
 
 def _latest_substantive_state(reviews: list[dict[str, Any]]) -> str | None:
@@ -217,6 +232,33 @@ def _latest_substantive_state(reviews: list[dict[str, Any]]) -> str | None:
     if not substantive:
         return None
     return max(substantive, key=lambda r: r.get("submittedAt", ""))["state"]
+
+
+def _api_branch_sha_expected(repo_path: Path) -> str:
+    url = run_git(repo_path, "remote", "get-url", "origin")
+    repo = normalize_repo_slug(url)
+    sha = _api_branch_sha(repo)
+    if sha is None:
+        raise RuntimeError("cannot read live main SHA via API (drift probe required)")
+    return sha
+
+
+def _drift_probe(repo_path: Path) -> str | None:
+    try:
+        return _api_branch_sha_expected(repo_path)
+    except RuntimeError:
+        return None
+
+
+def base_sha_or_none(sha: str | None) -> str:
+    return sha or "0" * 40
+
+
+def normalize_repo_slug(url: str) -> str:
+    text = url.strip().removesuffix(".git")
+    text = re.sub(r"^https?://", "", text).removesuffix("/")
+    parts = [p for p in text.split("/") if p]
+    return "/".join(parts[-2:])
 
 
 def _api_branch_sha(repo: str) -> str | None:
@@ -278,7 +320,11 @@ def build_manifest(
     category_modifiers: dict[str, float] | None,
     generator_commit: str,
     base_sha_before_fetch: str | None = None,
+    policy: dict[str, Any] | None = None,
+    api_begin_sha: str | None = None,
+    api_end_sha: str | None = None,
 ) -> dict[str, Any]:
+    api_begin = api_begin_sha if api_begin_sha is not None else base_sha_or_none(_drift_probe(repo_path))
     base_sha = run_git(repo_path, "rev-parse", "origin/main")
     if base_sha_before_fetch and base_sha_before_fetch != base_sha:
         raise RuntimeError(
@@ -302,10 +348,24 @@ def build_manifest(
             raise RuntimeError(f"context ref missing: {name} -> {path}")
         contexts[name] = {"path": str(path), "sha256": sha256_file(path)}
 
+    api_end = api_end_sha if api_end_sha is not None else base_sha_or_none(_drift_probe(repo_path))
+    cat_file = subprocess.run(
+        ["git", "-C", str(repo_path), "cat-file", "-t", base_sha],
+        text=True, capture_output=True, check=False)
+    if cat_file.stdout.strip() != "commit":
+        raise RuntimeError(f"local commit object for base {base_sha[:9]} missing")
+    if api_begin and api_end and api_begin != api_end:
+        raise RuntimeError(
+            f"main moved DURING freeze (api begin {api_begin[:9]} != end {api_end[:9]}); re-freeze"
+        )
     manifest = {
         "schema_version": FREEZE_SCHEMA_VERSION,
         "created_at_utc": utc_now(),
-        "repo": {"path": str(repo_path), "base_sha": base_sha},
+        "repo": {"path": str(repo_path), "base_sha": base_sha,
+                 "api_begin_sha": api_begin or base_sha,
+                 "api_end_sha": api_end or base_sha,
+                 "local_sha": base_sha},
+        "policy": policy or {"template_sha256": "unknown"},
         "snapshot": {
             "captured_at_utc": snapshot.get("captured_at_utc"),
             "open_pr_count": snapshot.get("open_pr_count", len(snapshot.get("pull_requests", []))),
@@ -357,6 +417,7 @@ def capture_snapshot(repo: str) -> dict[str, Any]:
             {
                 "number": pr["number"],
                 "headRefName": pr["head"]["ref"],
+                "headRefOid": pr["head"]["sha"],
                 "updatedAt": pr["updated_at"],
                 "files": [
                     {"path": f["filename"]}
@@ -369,9 +430,18 @@ def capture_snapshot(repo: str) -> dict[str, Any]:
     return snapshot
 
 
-def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3) -> dict[int, str]:
+def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3,
+                     cache_dir: Path | None = None, head_shas: dict[int, str] | None = None) -> dict[int, str]:
     diffs: dict[int, str] = {}
+    cache_dir = cache_dir or (Path("/tmp") / "chainlove-diff-cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    head_shas = head_shas or {}
     for number in numbers:
+        head = head_shas.get(number, "")
+        cached = cache_dir / f"{number}-{head[:12] or 'unknown'}.diff"
+        if head and cached.is_file() and cached.stat().st_size > 0:
+            diffs[number] = cached.read_text(encoding="utf-8")
+            continue
         last_error = ""
         for attempt in range(1, max_retries + 1):
             proc = subprocess.run(
@@ -380,6 +450,7 @@ def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3) -> 
             )
             if proc.returncode == 0:
                 diffs[number] = proc.stdout
+                cached.write_text(proc.stdout, encoding="utf-8")
                 last_error = ""
                 break
             last_error = proc.stderr.strip()[:200]
@@ -394,12 +465,52 @@ def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3) -> 
             )
             if proc.returncode == 0 and proc.stdout.startswith("diff"):
                 diffs[number] = proc.stdout
+                cached.write_text(proc.stdout, encoding="utf-8")
                 continue
             raise RuntimeError(
                 f"gh pr diff {number} failed after {max_retries} attempts "
                 f"and REST fallback: {last_error} / {proc.stderr.strip()[:120]}"
             )
     return diffs
+
+
+def fetch_policy_snapshot(repo_path: Path, base_sha: str) -> dict[str, Any]:
+    """Hash the upstream contract surfaces: PR template, validate workflow,
+    discussions #41 (bounty program) and #839 (weekly modifiers). Fail closed."""
+
+    def blob(path: str) -> str:
+        proc = subprocess.run(["git", "-C", str(repo_path), "show", f"{base_sha}:{path}"],
+                              text=True, capture_output=True, check=False)
+        if proc.returncode:
+            return "missing"
+        return hashlib.sha256(proc.stdout.encode("utf-8")).hexdigest()
+
+    def discussion(number: int) -> dict[str, Any]:
+        proc = subprocess.run(
+            ["gh", "api", f"/repos/Chain-Love/chain-love/discussions/{number}"],
+            text=True, capture_output=True, check=False, timeout=60)
+        # discussions live under the REST preview; fall back to graphql
+        if proc.returncode or not (proc.stdout or "").strip():
+            gql = subprocess.run(
+                ["gh", "api", "graphql", "-f", f"query={{repository(owner:\"Chain-Love\",name:\"chain-love\"){{discussion(number:{number}){{updatedAt body}}}}}}"],
+                text=True, capture_output=True, check=False, timeout=60)
+            if gql.returncode:
+                raise RuntimeError(f"policy discussion #{number} unreadable: {gql.stderr[:120]}")
+            data = json.loads(gql.stdout)["data"]["repository"]["discussion"]
+            return {"updated_at": data["updatedAt"],
+                    "body_sha256": hashlib.sha256(data["body"].encode("utf-8")).hexdigest()}
+        data = json.loads(proc.stdout)
+        return {"updated_at": data.get("updated_at", ""),
+                "body_sha256": hashlib.sha256((data.get("body") or "").encode("utf-8")).hexdigest()}
+
+    return {
+        "template_sha256": blob(".github/PULL_REQUEST_TEMPLATE.md"),
+        "validate_workflow_sha256": blob(".github/workflows/validate.yaml"),
+        "link_check_workflow_sha256": blob(".github/workflows/link-check-analysis.yaml"),
+        "discussion_41": discussion(41),
+        "discussion_839": discussion(839),
+        "fetched_at_utc": utc_now(),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -418,6 +529,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="name=path context ref (precedents, deferred queue, stale inventory)")
     parser.add_argument("--snapshot-json", type=Path,
                         help="reuse an existing snapshot file instead of calling gh")
+    parser.add_argument("--preflight-only", action="store_true",
+                        help="stop after writing preflight_report.json (runner stage 1)")
+    parser.add_argument("--policy-json", type=Path,
+                        help="pre-fetched policy snapshot (offline tests); live runs fetch fresh")
     args = parser.parse_args(argv)
 
     started = time.time()
@@ -427,6 +542,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args.run_dir.mkdir(parents=True, exist_ok=True)
     atomic_write_json(args.run_dir / "preflight_report.json", preflight_report)
+    if args.preflight_only:
+        return 0
 
     paths = target_paths(tuple(args.networks), tuple(args.categories))
     if args.snapshot_json:
@@ -439,7 +556,10 @@ def main(argv: list[str] | None = None) -> int:
         pr["number"] for pr in snapshot["pull_requests"]
         if any(f["path"] in paths for f in pr["files"])
     ]
-    diffs = capture_pr_diffs(args.repo, touching)
+    head_shas = {pr["number"]: pr.get("headRefOid", "")
+                 for pr in snapshot.get("pull_requests", [])}
+    diffs = capture_pr_diffs(args.repo, touching,
+                             cache_dir=args.run_dir / ".diff_cache", head_shas=head_shas)
     claimed_paths, err = extract_claimed_slugs(diffs, paths)
     claimed_index = {
         "schema_version": CLAIMED_INDEX_SCHEMA_VERSION,
@@ -455,6 +575,11 @@ def main(argv: list[str] | None = None) -> int:
         context_refs[name] = Path(raw)
 
     generator_commit = run_git(Path(__file__).resolve().parents[2], "rev-parse", "HEAD")
+    if args.policy_json:
+        policy = json.loads(args.policy_json.read_text(encoding="utf-8"))
+    else:
+        policy = fetch_policy_snapshot(args.repo_path, run_git(args.repo_path, "rev-parse", "origin/main"))
+    probe = _drift_probe(args.repo_path)
     manifest = build_manifest(
         repo_path=args.repo_path,
         run_dir=args.run_dir,
@@ -465,6 +590,9 @@ def main(argv: list[str] | None = None) -> int:
         categories=tuple(args.categories),
         category_modifiers=json.loads(args.category_modifiers) if args.category_modifiers else None,
         generator_commit=generator_commit,
+        policy=policy,
+        api_begin_sha=probe,
+        api_end_sha=probe,
     )
     elapsed = round(time.time() - started, 1)
     print(json.dumps({

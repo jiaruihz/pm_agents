@@ -6,7 +6,21 @@
 可信 COMMAND verifier（`scripts/ops/chainlove_verify.py`），发布阶段独立为
 PRODUCTION_CHANGE 风险、显式 submit-grant 放行。
 
-## 生成运行配置
+## 运行入口（2026-08-23 最终形态）
+
+```bash
+python3 scripts/ops/chainlove_run.py --mode shadow \
+  --run-id <run-id> \
+  --repo-path /Users/deepsleep/projects/chain-love/repo \
+  --run-dir /Users/deepsleep/projects/chain-love/harness-runs/<run-dir>
+```
+
+- 机械阶段全自动（preflight/freeze/构建/验证/碰撞/回执）；四个判断 worker 按暂停-派发协议执行。
+- `--resume` 幂等续跑（checkpoint 输入哈希不匹配则下游失效重跑；publish 完成后短路）。
+- `--worker-cmd` 供离线测试注入确定性 fixture worker。
+- supervised_submit 需一次性 grant（max_prs==1、绑定 spec 哈希+reviewed SHA+地址+人工核验时间）。
+
+## 生成运行配置（bundle 层，冻结合同用）
 
 ```bash
 .venv/bin/python scripts/ops/chainlove_bounty_harness.py \

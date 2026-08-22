@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Fixture gh: branches/main, PR lists/states/diffs, actions runs, create logging."""
+import json, os, sys
+from pathlib import Path
+
+cfg_path = os.environ.get("FAKE_GH_CONFIG")
+cfg = json.loads(Path(cfg_path).read_text()) if cfg_path else {}
+argv = sys.argv[1:]
+joined = " ".join(argv)
+log = os.environ.get("FAKE_GH_LOG")
+if log:
+    with open(log, "a") as fh:
+        fh.write(joined[:120] + "\n")
+
+def emit(obj, code=0):
+    print(json.dumps(obj)); sys.exit(code)
+
+if argv[0] == "api":
+    if "actions/runs" in joined:
+        emit({"workflow_runs": [{"name": "Validate JSON",
+                                  "head_sha": cfg.get("ci_sha", "0" * 40),
+                                  "conclusion": cfg.get("ci_conclusion", "success")}]})
+    if "branches/main" in joined:
+        emit({"commit": {"sha": cfg.get("main_sha", "0" * 40)}})
+    if "/files" in joined:
+        number = joined.split("/pulls/")[1].split("/")[0]
+        emit(cfg.get("pr_files", {}).get(number, []))
+    if "/pulls/" in joined and "files" not in joined and "?" not in joined.split("/pulls/")[-1]:
+        number = joined.split("/pulls/")[1].split()[0]
+        emit({"state": "open", "mergedAt": None, "closedAt": None,
+              "head": {"sha": cfg.get("pr_head_sha", "0" * 40)},
+              "base": {"ref": "main"}})
+    if "pulls?state=open" in joined:
+        emit(cfg.get("snapshot_prs", [{"number": 1, "head": {"ref": "b", "sha": "a" * 40},
+                                        "updated_at": "2026-08-01T00:00:00Z",
+                                        "files": []}]))
+    sys.stderr.write("fixture gh api unsupported: " + joined[:80]); sys.exit(1)
+if argv[0] == "pr":
+    if "list" in argv and "--head" in argv:
+        emit(cfg.get("head_prs", []))
+    if "list" in argv and "--limit" in argv:
+        emit(cfg.get("live_prs", []))
+    if "list" in argv:
+        emit(cfg.get("own_prs", []))
+    if "view" in argv:
+        number = str(argv[argv.index("view") + 1])
+        emit(cfg.get("pr_states", {}).get(number, {"state": "OPEN"}))
+    if "diff" in argv[:4]:
+        number = str(argv[argv.index("diff") + 1])
+        diffs = cfg.get("pr_diffs", {})
+        if number in diffs:
+            sys.stdout.write(diffs[number]); sys.exit(0)
+        sys.stderr.write("fixture: no diff for PR " + number); sys.exit(1)
+    if "create" in argv:
+        number = cfg.get("created_pr", 4242)
+        print(f"https://github.com/Chain-Love/chain-love/pull/{number}"); sys.exit(0)
+sys.stderr.write("fixture gh unsupported: " + joined[:80]); sys.exit(1)

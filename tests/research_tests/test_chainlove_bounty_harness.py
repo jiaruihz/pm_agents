@@ -274,50 +274,77 @@ def test_verifier_claimed_index_rejects_header_slug(tmp_path: Path) -> None:
     assert run_gate(verify_mod.gate_claimed_index, index=str(index)) == 0
 
 
-def test_verifier_outcome_contract_branches(tmp_path: Path) -> None:
+def _gate_evidence(tmp_path: Path, gates: list[str]) -> dict:
+    """Build structured gate evidence: each satisfied gate needs a REAL artifact + hash."""
+
+    evidence = {}
+    for gate in gates:
+        artifact = tmp_path / f"gate-{gate}.txt"
+        artifact.write_text(f"PASS: {gate}\n")
+        evidence[gate] = {"verifier_record": str(artifact),
+                          "verifier_record_sha256": freeze_mod.sha256_file(artifact)}
+    return evidence
+
+
+def test_verifier_outcome_contract_structured_evidence_only(tmp_path: Path) -> None:
     receipt = tmp_path / "run_receipt.json"
+    ledger = tmp_path / "decision_ledger.jsonl"
+    ledger.write_text(json.dumps({"kind": "rejection", "slug": "x"}) + "\n")
 
     def check(payload: dict) -> int:
         receipt.write_text(json.dumps(payload))
         return run_gate(verify_mod.gate_outcome_contract, receipt=str(receipt))
 
+    good_gates = ["scan_coverage_verified", "rejection_ledger_written"]
+    # hand-written string gates (no verifier records) must FAIL
     assert check({"outcome": "NOOP_VERIFIED", "candidate_count": 0,
-                  "gates_satisfied": []}) == 1
-    assert check({"outcome": "NOOP_VERIFIED", "candidate_count": 0,
-                  "gates_satisfied": ["scan_coverage_verified",
-                                      "rejection_ledger_written"]}) == 0
-    assert check({"outcome": "NOOP_VERIFIED", "candidate_count": 2,
-                  "gates_satisfied": ["scan_coverage_verified",
-                                      "rejection_ledger_written"]}) == 1
-    ready = {
-        "outcome": "READY_TO_SUBMIT",
-        "candidate_count": 1,
-        "gates_satisfied": [
-            "schema_pipeline_passed",
-            "adversarial_review_approved",
-            "final_collision_scan_zero",
-        ],
-        "override": {"outcome": "SUBMITTED"},
-    }
+                  "gates_satisfied": good_gates}) == 1
+    # structured evidence but missing ledger artifact
+    payload = {"outcome": "NOOP_VERIFIED", "candidate_count": 0,
+               "gates": _gate_evidence(tmp_path, good_gates),
+               "gates_satisfied": good_gates,
+               "decision_ledger": str(tmp_path / "missing.jsonl")}
+    assert check(payload) == 1
+    # complete NOOP
+    payload["decision_ledger"] = str(ledger)
+    assert check(payload) == 0
+    # forged gate (hash drift)
+    forged = dict(payload)
+    artifact = tmp_path / "gate-scan_coverage_verified.txt"
+    artifact.write_text("PASS: tampered\n")
+    assert check(forged) == 1
+    # READY requires spec+SHA binding and all four hard gates
+    spec = tmp_path / "approved_patch_spec.json"
+    spec.write_text(json.dumps({"candidates": [{"slug": "a"}]}))
+    ready_gates = ["schema_pipeline_passed", "adversarial_review_approved",
+                   "final_collision_scan_zero", "submission_template_valid"]
+    ready = {"outcome": "READY_TO_SUBMIT", "candidate_count": 1,
+             "gates": _gate_evidence(tmp_path, ready_gates),
+             "gates_satisfied": ready_gates,
+             "approved_spec_sha256": freeze_mod.sha256_file(spec),
+             "approved_spec_path": str(spec),
+             "reviewed_commit_sha": "a" * 40}
     assert check(ready) == 0
-    ready["gates_satisfied"] = ready["gates_satisfied"][:2]
+    ready["gates_satisfied"] = ready_gates[:3]
     assert check(ready) == 1
-    assert check({"outcome": "REJECTED",
-                  "gates_satisfied": ["rejection_ledger_written"]}) == 1
-    assert check({"outcome": "REJECTED", "reason": "weak provider evidence",
-                  "gates_satisfied": ["rejection_ledger_written"]}) == 0
+    # non-success outcomes need blocker evidence
+    assert check({"outcome": "REJECTED", "reason": "x", "gates": {},
+                  "gates_satisfied": []}) == 1
+    assert check({"outcome": "REJECTED", "reason": "x",
+                  "gates": _gate_evidence(tmp_path, ["some_failed_gate"]),
+                  "gates_satisfied": [], "decision_ledger": str(ledger)}) == 0
 
 
-def test_verifier_submit_grant_validation(tmp_path: Path) -> None:
+def test_verifier_submit_grant_full_binding(tmp_path: Path) -> None:
+    spec = tmp_path / "approved_patch_spec.json"
+    spec.write_text(json.dumps({"candidates": [{"slug": "a"}]}))
     valid = {
-        "grant_id": "g1",
-        "action": "submit_pr",
-        "repo": "Chain-Love/chain-love",
-        "github_user": "jiaruihz",
-        "reward_address": "0x4B68",
-        "max_prs": 1,
-        "expires_at_utc": "2999-01-01T00:00:00Z",
-        "run_id": "r1",
+        "grant_id": "g1", "action": "submit_pr", "repo": "Chain-Love/chain-love",
+        "github_user": "jiaruihz", "reward_address": "0x4B68",
+        "max_prs": 1, "expires_at_utc": "2999-01-01T00:00:00Z", "run_id": "r1",
+        "approved_spec_sha256": freeze_mod.sha256_file(spec),
+        "reviewed_commit_sha": "d" * 40,
+        "human_verified_at_utc": "2998-01-01T00:00:00Z",
     }
     path = tmp_path / "grant.json"
 
@@ -325,28 +352,25 @@ def test_verifier_submit_grant_validation(tmp_path: Path) -> None:
         payload = {**valid, **overrides}
         path.write_text(json.dumps(payload))
         return run_gate(
-            verify_mod.gate_submit_grant,
-            grant=str(path),
-            run_id="r1",
-            repo="Chain-Love/chain-love",
-            github_user="jiaruihz",
+            verify_mod.gate_submit_grant, grant=str(path), run_id="r1",
+            repo="Chain-Love/chain-love", github_user="jiaruihz",
+            approved_spec=str(spec), reviewed_sha="d" * 40, expect_address="0x4B68",
         )
 
     assert check() == 0
     assert check(expires_at_utc="2000-01-01T00:00:00Z") == 1
     assert check(run_id="other-run") == 1
-    assert check(repo="Other/Repo") == 1
-    assert check(github_user="someone-else") == 1
-    assert check(action="merge_pr") == 1
-    incomplete = {k: v for k, v in valid.items() if k != "max_prs"}
-    path.write_text(json.dumps(incomplete))
-    assert run_gate(
-        verify_mod.gate_submit_grant,
-        grant=str(path),
-        run_id="r1",
-        repo="Chain-Love/chain-love",
-        github_user="jiaruihz",
-    ) == 1
+    assert check(max_prs=3) == 1                      # only one-shot grants allowed
+    assert check(approved_spec_sha256="0" * 64) == 1  # spec drift
+    assert check(reviewed_commit_sha="e" * 40) == 1
+    assert check(reward_address="0xBAD") == 1
+    assert check(human_verified_at_utc="") == 1        # user verification required
+    # consumed by a different run -> refuse; same run -> reusable (resume)
+    consumed = tmp_path / "grant_consumed.json"
+    consumed.write_text(json.dumps({"grant_id": "g1", "run_id": "other-run"}))
+    assert check() == 1
+    consumed.write_text(json.dumps({"grant_id": "g1", "run_id": "r1"}))
+    assert check() == 0
 
 
 def test_verifier_commit_identity_and_diff_minimal(tmp_path: Path) -> None:
@@ -400,56 +424,81 @@ def test_verifier_zwsp_count(tmp_path: Path) -> None:
 
 def test_verifier_ci_head_treats_fork_gate_as_blocked(monkeypatch) -> None:
     def runs(conclusion: str):
-        return lambda *a, **kw: {"workflow_runs": [
+        return lambda *a, **kw: ({"workflow_runs": [
             {"name": "Validate JSON", "head_sha": "s" * 40, "conclusion": conclusion}
-        ]}
+        ]}, "")
 
-    monkeypatch.setattr(verify_mod, "gh_json", runs("skipped"))
+    monkeypatch.setattr(verify_mod, "gh_api", runs("skipped"))
     assert run_gate(verify_mod.gate_ci_head, repo="R", pr="1",
-                    expect_sha="s" * 40) == 1
-    monkeypatch.setattr(verify_mod, "gh_json", runs("action_required"))
+                    expect_sha="s" * 40) == 2  # BLOCKED, not pass
+    monkeypatch.setattr(verify_mod, "gh_api", runs("action_required"))
     assert run_gate(verify_mod.gate_ci_head, repo="R", pr="1",
-                    expect_sha="s" * 40) == 1
-    monkeypatch.setattr(verify_mod, "gh_json", runs("success"))
+                    expect_sha="s" * 40) == 2
+    monkeypatch.setattr(verify_mod, "gh_api", runs("success"))
     assert run_gate(verify_mod.gate_ci_head, repo="R", pr="1",
                     expect_sha="s" * 40) == 0
 
 
-def test_verifier_final_collision_detects_claim(monkeypatch) -> None:
+def test_verifier_final_collision_enumerates_diffs(tmp_path: Path, monkeypatch) -> None:
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(json.dumps({
+        "captured_at_utc": "2026-08-22T00:00:00Z",
+        "pull_requests": [],
+    }))
+
     def fake_run(argv, **kw):
         class P:
             pass
 
         p = P()
-        if any("search" in part for part in argv):
+        joined = " ".join(argv)
+        if "pr" in argv[:2] and "list" in argv and "--limit" in argv:
             p.returncode = 0
-            p.stdout = json.dumps([{"number": 3125, "title": "x"}])
-        elif any("diff" in part for part in argv):
+            p.stdout = json.dumps([
+                {"number": 3125, "updatedAt": "2026-08-22T01:00:00Z"},
+                {"number": 3126, "updatedAt": "2026-08-22T02:00:00Z"},
+                {"number": 3000, "updatedAt": "2026-08-21T00:00:00Z"},  # pre-snapshot: skip
+            ])
+            return p
+        if "diff" in argv[:4]:
+            number = argv[argv.index("diff") + 1]
+            if number == "3126":
+                p.returncode = 1
+                p.stdout = ""
+                p.stderr = "boom"
+                return p
             p.returncode = 0
-            p.stdout = (
-                "+++ b/listings/specific-networks/somnia/services.csv\n"
-                "+scaffold-eth,,!offer:scaffold-eth,,,,,,,,\n"
-            )
-        else:
-            p.returncode = 0
-            p.stdout = ""
+            p.stdout = ("+++ b/listings/specific-networks/somnia/services.csv\n"
+                        "+scaffold-eth,,!offer:scaffold-eth,,,,,,,,\n")
+            return p
+        p.returncode = 0
+        p.stdout = ""
         return p
 
     monkeypatch.setattr(verify_mod.subprocess, "run", fake_run)
-    assert run_gate(verify_mod.gate_final_collision, repo="R",
+    # slug only in diff rows (not in list output) -> caught
+    assert run_gate(verify_mod.gate_final_collision, repo="R", snapshot=str(snapshot),
                     slugs=["scaffold-eth"]) == 1
-    # clean PR set -> zero collisions
-    def fake_clean(argv, **kw):
+    # un-fetchable diff on a post-snapshot PR -> BLOCKED (2), never pass
+    assert run_gate(verify_mod.gate_final_collision, repo="R", snapshot=str(snapshot),
+                    slugs=["unrelated-slug"]) == 2
+    # clean diffs -> pass with enumeration count
+    def fake_run_clean(argv, **kw):
         class P:
             pass
 
         p = P()
+        joined = " ".join(argv)
+        if "list" in argv:
+            p.returncode = 0
+            p.stdout = json.dumps([{"number": 3125, "updatedAt": "2026-08-22T01:00:00Z"}])
+            return p
         p.returncode = 0
-        p.stdout = json.dumps([]) if any("search" in part for part in argv) else ""
+        p.stdout = "+++ b/x.csv\n+other,,!offer:other\n"
         return p
 
-    monkeypatch.setattr(verify_mod.subprocess, "run", fake_clean)
-    assert run_gate(verify_mod.gate_final_collision, repo="R",
+    monkeypatch.setattr(verify_mod.subprocess, "run", fake_run_clean)
+    assert run_gate(verify_mod.gate_final_collision, repo="R", snapshot=str(snapshot),
                     slugs=["scaffold-eth"]) == 0
 
 
@@ -499,92 +548,10 @@ def test_context_refs_are_hashed_never_executed_as_instructions(tmp_path: Path) 
 # ---------------------------------------------------------------------------
 
 
-def test_offline_e2e_freeze_to_ready_to_submit(tmp_path: Path) -> None:
-    repo = _git_repo(tmp_path / "repo")
-    (repo / "listings").mkdir()
-    (repo / "listings" / "security.csv").write_text("slug,provider,offer\n")
-    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(repo), "-c", "user.name=jiaruihz",
-         "-c", "user.email=jiaruihz@users.noreply.github.com",
-         "commit", "-qm", "csv"],
-        check=True, capture_output=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", "HEAD"],
-        check=True, capture_output=True,
-    )
-
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    context = tmp_path / "precedents.md"
-    context.write_text("rules\n")
-    snapshot = {
-        "captured_at_utc": "2026-08-22T00:00:00Z",
-        "pull_requests": [{"number": 1, "files": [{"path": "listings/security.csv"}]}],
-    }
-    paths = freeze_mod.target_paths(("somnia",), ("security",))
-    diffs = {1: "+++ b/listings/security.csv\n+slug,provider,offer\n+certik,,!offer:certik\n"}
-    claimed, err = freeze_mod.extract_claimed_slugs(diffs, paths)
-    index = {"paths": claimed, "parse_errors": err["parse_errors"], "touching_prs": [1]}
-    manifest = freeze_mod.build_manifest(
-        repo_path=repo,
-        run_dir=run_dir,
-        snapshot=snapshot,
-        claimed_index=index,
-        context_refs={"precedents": context},
-        networks=("somnia",),
-        categories=("security",),
-        category_modifiers={"security": 1.5},
-        generator_commit="c" * 40,
-    )
-
-    assert run_gate(
-        verify_mod.gate_freeze_manifest,
-        manifest=str(run_dir / "freeze_manifest.json"),
-    ) == 0
-    assert run_gate(
-        verify_mod.gate_claimed_index, index=str(run_dir / "claimed_slugs.json")
-    ) == 0
-    assert run_gate(
-        verify_mod.gate_context_hashes,
-        manifest=str(run_dir / "freeze_manifest.json"),
-    ) == 0
-    assert run_gate(
-        verify_mod.gate_base_current, repo_path=str(repo),
-        base_sha=manifest["repo"]["base_sha"],
-    ) == 0
-    live_index = json.loads((run_dir / "claimed_slugs.json").read_text())
-    assert "slug" not in live_index["paths"].get("listings/security.csv", [])
-
-    receipt = {
-        "outcome": "READY_TO_SUBMIT",
-        "candidate_count": 1,
-        "gates_satisfied": [
-            "schema_pipeline_passed",
-            "adversarial_review_approved",
-            "final_collision_scan_zero",
-        ],
-    }
-    (run_dir / "run_receipt.json").write_text(json.dumps(receipt))
-    assert run_gate(
-        verify_mod.gate_outcome_contract, receipt=str(run_dir / "run_receipt.json")
-    ) == 0
-    assert run_gate(
-        verify_mod.gate_submit_grant, grant=str(run_dir / "no-grant.json"),
-        run_id="r", repo="R", github_user="u",
-    ) == 1
-
-
-def test_offline_e2e_noop_verified(tmp_path: Path) -> None:
-    receipt = {
-        "outcome": "NOOP_VERIFIED",
-        "candidate_count": 0,
-        "gates_satisfied": ["scan_coverage_verified", "rejection_ledger_written"],
-    }
-    path = tmp_path / "run_receipt.json"
-    path.write_text(json.dumps(receipt))
-    assert run_gate(verify_mod.gate_outcome_contract, receipt=str(path)) == 0
+def manifest_probe_sha(repo: Path) -> str:
+    import subprocess as sp
+    return sp.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                  capture_output=True, text=True, check=True).stdout.strip()
 
 
 # ---------------------------------------------------------------------------
