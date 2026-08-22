@@ -157,7 +157,7 @@ maker 只有在同分母净 surplus 为正时才是 execution alpha；“成交�
 | priority-safe WS allocation | live selector v8 |
 | Shanghai current quote/fills | complete |
 | Shanghai trade side/full ladder/actor | unavailable；当时未订阅 |
-| market-state router | zero-notional 已部署；release `123bed36`，controller health healthy |
+| market-state router | zero-notional 已部署；release `56c04c05`，controller health healthy |
 | deterministic reconstruction | 复用 `ws_incremental_book` 唯一 truth；epoch/gap/reconnect/parity fail closed |
 | 同分母 action replay | immediate taker / actual shared maker / 120s confirm / next hedge / skip 已冻结 |
 | performance gate | 0 first-positive / 0 target dates；gate fail，正 notional 禁止 |
