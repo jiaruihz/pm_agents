@@ -1592,3 +1592,58 @@ def test_full_ladder_capture_demand_fails_closed_above_token_budget(tmp_path) ->
     assert result["written"] == 0
     assert result["alerts"][0]["reason"] == "capture_demand_full_ladder_token_budget_exceeded"
     assert not (tmp_path / "capture_demands.jsonl").exists()
+
+
+def test_candidate_capture_is_bounded_and_gives_full_ladder_only_to_top_edge(tmp_path) -> None:
+    for index in range(10):
+        runner.append_jsonl(
+            tmp_path / "pre_live_scores.jsonl",
+            {
+                "created_at_utc": f"2026-08-22T10:{index:02d}:00Z",
+                "checkpoint_key": f"City{index}|2026-08-22|15",
+                "city": f"City{index}",
+                "target_date": "2026-08-22",
+                "current_bracket": "30",
+                "current_condition_id": f"current-condition-{index}",
+                "current_market_id": f"current-market-{index}",
+                "current_yes_token_id": f"current-token-{index}",
+                "model_edge_after_fee_and_depth": -0.010 + index * 0.001,
+                "decision_status": "not_eligible",
+                "reasons": ["non_positive_taker_ev"],
+                "full_ladder_yes_tokens": [
+                    {
+                        "bracket": str(bracket),
+                        "condition_id": f"ladder-condition-{index}-{bracket}",
+                        "market_id": f"ladder-market-{index}-{bracket}",
+                        "token_id": f"ladder-token-{index}-{bracket}",
+                    }
+                    for bracket in range(3)
+                ],
+            },
+        )
+    runner.append_jsonl(
+        tmp_path / "pre_live_scores.jsonl",
+        {
+            "created_at_utc": "2026-08-22T10:59:00Z",
+            "checkpoint_key": "Blocked|2026-08-22|15",
+            "current_condition_id": "blocked-condition",
+            "current_yes_token_id": "blocked-token",
+            "model_edge_after_fee_and_depth": -0.0001,
+            "reasons": ["non_positive_taker_ev", "outside_carry_market_mid_domain"],
+        },
+    )
+
+    result = runner.write_candidate_capture_demands(tmp_path)
+    repeat = runner.write_candidate_capture_demands(tmp_path)
+    rows = list(runner.iter_jsonl(tmp_path / "capture_demands.jsonl"))
+    current = [row for row in rows if row["reason"] == "core_carry_candidate_current_token_tape"]
+    ladder = [row for row in rows if row["reason"] == "core_carry_candidate_full_ladder_tape"]
+
+    assert result == {"written": 11, "alerts": [], "candidate_count": 8}
+    assert repeat == {"written": 0, "alerts": [], "candidate_count": 8}
+    assert len(current) == runner.CANDIDATE_CAPTURE_MAX_CURRENT_TOKENS
+    assert "blocked-token" not in {row["token_id"] for row in rows}
+    assert {row["priority"] for row in rows} == {"P1"}
+    assert {row["metadata"]["research_only"] for row in rows} == {True}
+    assert {row["metadata"]["city"] for row in ladder} == {"City9"}
+    assert len({row["trigger_event_id"] for row in ladder}) == 1

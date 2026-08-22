@@ -328,6 +328,8 @@ DECISION_PACKET_SCHEMA_VERSION = "current_yes_core_carry_decision_packet_v1"
 CAPTURE_DEMAND_TTL_MINUTES = 30
 CAPTURE_DEMAND_MAX_LADDER_TOKENS = 24
 CAPTURE_DEMAND_STRATEGY_KEY = "reheat_risk.current_yes"
+CANDIDATE_CAPTURE_MAX_CURRENT_TOKENS = 8
+CANDIDATE_CAPTURE_TTL_MINUTES = 30
 
 
 def _decision_packet_json_default(value: Any) -> str:
@@ -683,6 +685,171 @@ def write_capture_demands(
         except OSError:
             pass
     return {"written": written, "alerts": alerts}
+
+
+def write_candidate_capture_demands(output_dir: Path) -> dict[str, Any]:
+    """Declare bounded pre-trigger tape for structurally valid near-core candidates.
+
+    A row is a candidate only when the frozen selector's sole blocker is
+    ``non_positive_taker_ev``.  This creates research evidence and never changes
+    signal eligibility or order planning.  Current-token coverage is capped at
+    eight distinct candidates; only the highest-edge candidate receives an
+    atomic full-ladder request.
+    """
+
+    journal = output_dir / "capture_demands.jsonl"
+    existing = {str(row.get("demand_id") or "") for row in iter_jsonl(journal)}
+    latest_by_token: dict[str, dict[str, Any]] = {}
+    for source in iter_jsonl(output_dir / "pre_live_scores.jsonl"):
+        row = dict(source)
+        token_id = str(row.get("current_yes_token_id") or "")
+        if not token_id or set(row.get("reasons") or ()) != {"non_positive_taker_ev"}:
+            continue
+        edge = row.get("model_edge_after_fee_and_depth")
+        try:
+            edge_value = float(edge)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(edge_value) or edge_value > 0:
+            continue
+        prior = latest_by_token.get(token_id)
+        if prior is None or str(row.get("created_at_utc") or "") > str(
+            prior.get("created_at_utc") or ""
+        ):
+            latest_by_token[token_id] = row
+
+    candidates = sorted(
+        latest_by_token.values(),
+        key=lambda row: (
+            float(row["model_edge_after_fee_and_depth"]),
+            str(row.get("created_at_utc") or ""),
+        ),
+        reverse=True,
+    )[:CANDIDATE_CAPTURE_MAX_CURRENT_TOKENS]
+    written = 0
+    alerts: list[dict[str, Any]] = []
+
+    def declare(row: Mapping[str, Any], rung: Mapping[str, Any], *, reason: str, group: str) -> None:
+        nonlocal written
+        token_id = str(rung.get("token_id") or "")
+        condition_id = str(rung.get("condition_id") or "")
+        requested = parse_utc(row.get("created_at_utc"))
+        if requested is None or not token_id or not condition_id:
+            alerts.append(
+                {
+                    "status": "alert",
+                    "reason": "candidate_capture_identity_or_clock_missing",
+                    "checkpoint_key": row.get("checkpoint_key"),
+                    "token_id": token_id or None,
+                }
+            )
+            return
+        try:
+            demand = CaptureDemand.create(
+                consumer_id=STRATEGY_INSTANCE,
+                strategy_key=CAPTURE_DEMAND_STRATEGY_KEY,
+                condition_id=condition_id,
+                token_id=token_id,
+                reason=reason,
+                priority="P1",
+                requested_at_utc=requested.isoformat(),
+                expires_at_utc=(
+                    requested + timedelta(minutes=CANDIDATE_CAPTURE_TTL_MINUTES)
+                ).isoformat(),
+                desired_transport="WS",
+                requested_checkpoints_seconds=(0, 30, 60, 120, 300, 900, 1800),
+                trigger_event_id=group,
+                metadata={
+                    "city": row.get("city"),
+                    "target_date": row.get("target_date"),
+                    "bracket": rung.get("bracket") or row.get("current_bracket"),
+                    "market_id": rung.get("market_id") or row.get("current_market_id"),
+                    "checkpoint_key": row.get("checkpoint_key"),
+                    "candidate_edge": row.get("model_edge_after_fee_and_depth"),
+                    "candidate_definition": "sole_blocker_non_positive_taker_ev",
+                    "research_only": True,
+                    "active_token_budget": CAPTURE_DEMAND_MAX_LADDER_TOKENS,
+                    "retention_owner": "canonical_market_books_ws_raw",
+                },
+            )
+        except ValueError as exc:
+            alerts.append(
+                {
+                    "status": "alert",
+                    "reason": "candidate_capture_demand_contract_invalid",
+                    "checkpoint_key": row.get("checkpoint_key"),
+                    "error": str(exc),
+                }
+            )
+            return
+        if demand.demand_id in existing:
+            return
+        try:
+            append_jsonl(journal, demand.to_dict())
+        except OSError as exc:
+            alerts.append(
+                {
+                    "status": "alert",
+                    "reason": "candidate_capture_demand_write_failed",
+                    "checkpoint_key": row.get("checkpoint_key"),
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            return
+        existing.add(demand.demand_id)
+        written += 1
+
+    for row in candidates:
+        checkpoint = str(row.get("checkpoint_key") or "")
+        created = str(row.get("created_at_utc") or "")
+        declare(
+            row,
+            {
+                "token_id": row.get("current_yes_token_id"),
+                "condition_id": row.get("current_condition_id"),
+                "market_id": row.get("current_market_id"),
+                "bracket": row.get("current_bracket"),
+            },
+            reason="core_carry_candidate_current_token_tape",
+            group=f"candidate-current|{checkpoint}|{created}",
+        )
+
+    if candidates:
+        top = candidates[0]
+        ladder = [
+            dict(row)
+            for row in top.get("full_ladder_yes_tokens") or ()
+            if isinstance(row, Mapping)
+        ]
+        if ladder and len(ladder) <= CAPTURE_DEMAND_MAX_LADDER_TOKENS:
+            group = (
+                f"candidate-ladder|{top.get('checkpoint_key')}|"
+                f"{top.get('created_at_utc')}"
+            )
+            for rung in ladder:
+                declare(
+                    top,
+                    rung,
+                    reason="core_carry_candidate_full_ladder_tape",
+                    group=group,
+                )
+        elif ladder:
+            alerts.append(
+                {
+                    "status": "alert",
+                    "reason": "candidate_capture_full_ladder_token_budget_exceeded",
+                    "checkpoint_key": top.get("checkpoint_key"),
+                    "token_count": len(ladder),
+                    "max_tokens": CAPTURE_DEMAND_MAX_LADDER_TOKENS,
+                }
+            )
+
+    for alert in alerts:
+        try:
+            append_jsonl(output_dir / "capture_demand_alerts.jsonl", alert)
+        except OSError:
+            pass
+    return {"written": written, "alerts": alerts, "candidate_count": len(candidates)}
 
 
 def line_count(path: Path) -> int:
@@ -2241,6 +2408,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         output_dir,
         packets=decision_packets["written_packets"],
     )
+    candidate_capture_demands = write_candidate_capture_demands(output_dir)
     journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
     entry_plans, attempts = new_entry_plans(args, output_dir, now=now)
     lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(args, output_dir, now=now)
@@ -2268,6 +2436,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "decision_packet_alerts": decision_packets["alerts"],
         "capture_demands_written": capture_demands["written"],
         "capture_demand_alerts": capture_demands["alerts"],
+        "candidate_capture_demands_written": candidate_capture_demands["written"],
+        "candidate_capture_demand_alerts": candidate_capture_demands["alerts"],
+        "candidate_capture_count": candidate_capture_demands["candidate_count"],
         "entry_attempts": len(attempts),
         "entry_plans": len(entry_plans),
         "maker_lifecycle_plans": len(lifecycle_plans),
