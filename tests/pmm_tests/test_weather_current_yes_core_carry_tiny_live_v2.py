@@ -1490,3 +1490,178 @@ def test_low_price_band_halt_disabled_when_profile_min_is_zero(monkeypatch) -> N
         "maker_staged",
         "maker_pullback",
     ]
+def _write_positive_taker_ev_signal(tmp_path, *, trigger_patch=None, prior_rows=()):
+    trigger = {
+        **score_row(),
+        "eligible": True,
+        "created_at_utc": "2026-07-24T04:30:01Z",
+        "as_of_ts_utc": "2026-07-24T04:30:00Z",
+        "current_bracket": "30",
+        "current_condition_id": "condition",
+        "current_yes_token_id": "yes-token",
+        "artifact_hash": "artifact-hash",
+        **(trigger_patch or {}),
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [*prior_rows, trigger])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [{"checkpoint_key": trigger["checkpoint_key"]}],
+    )
+    return trigger
+
+
+def test_decision_packet_writes_self_contained_first_positive_signal(tmp_path) -> None:
+    prior = {
+        **score_row(),
+        "checkpoint_key": "Busan|2026-07-24|12",
+        "decision_snapshot_ts_utc": "2026-07-24T03:30:00Z",
+        "created_at_utc": "2026-07-24T03:30:01Z",
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "current_yes_bid": 0.77,
+        "current_yes_ask": 0.81,
+        "model_probability_hold": 0.80,
+    }
+    trigger = _write_positive_taker_ev_signal(
+        tmp_path,
+        prior_rows=[prior],
+        trigger_patch={
+            "observation_history_id": "obs-1",
+            "obs_ingested_at_utc": "2026-07-24T04:21:00Z",
+            "current_yes_book_exchange_ts_utc": "2026-07-24T04:29:58Z",
+            "book_capture_id": "book-1",
+            "forecast_values_hash": "forecast-hash",
+            "forecast_run_lineage_status": "ok",
+            "forecast_curve_archive_path": "/raw/forecast.jsonl",
+            "book_snapshot_id": "book-snapshot-1",
+            "snapshot_capture_id": "snapshot-capture-1",
+        },
+    )
+
+    result = runner.write_new_decision_packets(tmp_path)
+
+    packet = list(runner.iter_jsonl(tmp_path / "decision_packets.jsonl"))[0]
+    assert result["written"] == 1
+    assert result["alerts"] == []
+    assert [row["packet_id"] for row in result["written_packets"]] == [packet["packet_id"]]
+    assert packet["schema_version"] == runner.DECISION_PACKET_SCHEMA_VERSION
+    assert packet["packet_id"] == runner.decision_packet_id(trigger)
+    assert packet["trigger"]["payload"] == trigger
+    assert packet["prior_checkpoints"]["last_checkpoint"]["checkpoint"]["checkpoint_key"] == prior["checkpoint_key"]
+    assert packet["prior_checkpoints"]["last_informative_quote_usable_negative_checkpoint"]["status"] == "available"
+    assert packet["event_references"]["observation"]["row_id"]["value"] == "obs-1"
+    assert packet["event_references"]["book"]["capture_id"]["value"] == "book-1"
+    assert packet["event_references"]["book"]["snapshot_id"]["value"] == "book-snapshot-1"
+    assert packet["event_references"]["forecast"]["archive_path"]["value"] == "/raw/forecast.jsonl"
+    assert packet["event_references"]["forecast"]["lineage_status"]["value"] == "ok"
+    assert packet["snapshot_references"]["snapshot_capture_id"]["value"] == "snapshot-capture-1"
+    assert packet["order_linkage"]["execution_ids"] == []
+
+
+def test_decision_packet_is_idempotent_across_repeat_checkpoint_or_restart(tmp_path) -> None:
+    _write_positive_taker_ev_signal(tmp_path)
+
+    assert runner.write_new_decision_packets(tmp_path)["written"] == 1
+    assert runner.write_new_decision_packets(tmp_path)["written"] == 0
+    assert len(list(runner.iter_jsonl(tmp_path / "decision_packets.jsonl"))) == 1
+
+
+def test_decision_packet_marks_degraded_last_negative_and_missing_lineage(tmp_path) -> None:
+    degenerate_negative = {
+        **score_row(),
+        "checkpoint_key": "Busan|2026-07-24|12",
+        "decision_snapshot_ts_utc": "2026-07-24T03:30:00Z",
+        "eligible": False,
+        "current_yes_ask": None,
+        "model_probability_hold": 0.80,
+    }
+    _write_positive_taker_ev_signal(tmp_path, prior_rows=[degenerate_negative])
+
+    runner.write_new_decision_packets(tmp_path)
+
+    packet = list(runner.iter_jsonl(tmp_path / "decision_packets.jsonl"))[0]
+    assert packet["prior_checkpoints"]["last_negative_checkpoint"]["checkpoint"]["quote_usable"] is False
+    usable = packet["prior_checkpoints"]["last_informative_quote_usable_negative_checkpoint"]
+    assert usable["status"] == "unavailable"
+    assert usable["reason"] == "no_prior_informative_quote_usable_negative_checkpoint"
+    assert packet["event_references"]["forecast"]["values_hash"] == {
+        "status": "unavailable",
+        "source_field": None,
+        "value": None,
+        "reason": "missing_in_decision_row",
+    }
+
+
+def test_decision_packet_write_failure_records_alert_without_changing_entry_decision(
+    tmp_path, monkeypatch
+) -> None:
+    _write_positive_taker_ev_signal(tmp_path)
+    args = runner.parser().parse_args(["run", "--output-dir", str(tmp_path)])
+    expected_plans, expected_attempts = runner.new_entry_plans(
+        args, tmp_path, now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+    )
+    original_append = runner.append_decision_packet
+
+    def fail_packet(path, row):
+        if path.name == "decision_packets.jsonl":
+            raise OSError("journal read-only")
+        return original_append(path, row)
+
+    monkeypatch.setattr(runner, "append_decision_packet", fail_packet)
+    result = runner.write_new_decision_packets(tmp_path)
+    actual_plans, actual_attempts = runner.new_entry_plans(
+        args, tmp_path, now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+    )
+
+    assert result["written"] == 0
+    assert result["alerts"][0]["reason"] == "decision_packet_write_failed"
+    assert actual_plans == expected_plans
+    assert actual_attempts == expected_attempts
+
+
+def test_first_positive_signal_requests_bounded_full_ladder_ws_tape(tmp_path) -> None:
+    _write_positive_taker_ev_signal(
+        tmp_path,
+        trigger_patch={
+            "full_ladder_yes_tokens": [
+                {"bracket": "29", "condition_id": "c29", "market_id": "m29", "token_id": "yes29"},
+                {"bracket": "30", "condition_id": "c30", "market_id": "m30", "token_id": "yes30"},
+                {"bracket": "31+", "condition_id": "c31", "market_id": "m31", "token_id": "yes31"},
+            ],
+        },
+    )
+    packets = runner.write_new_decision_packets(tmp_path)["written_packets"]
+
+    result = runner.write_capture_demands(tmp_path, packets=packets)
+    repeat = runner.write_capture_demands(tmp_path, packets=packets)
+    rows = list(runner.iter_jsonl(tmp_path / "capture_demands.jsonl"))
+
+    assert result == {"written": 3, "alerts": []}
+    assert repeat == {"written": 0, "alerts": []}
+    assert {row["token_id"] for row in rows} == {"yes29", "yes30", "yes31"}
+    assert {row["priority"] for row in rows} == {"P0"}
+    assert {row["desired_transport"] for row in rows} == {"WS"}
+    assert {row["strategy_key"] for row in rows} == {"reheat_risk.current_yes"}
+    assert {row["metadata"]["ladder_scope"] for row in rows} == {"all_yes_outcome_tokens"}
+    requested = datetime.fromisoformat(rows[0]["requested_at_utc"])
+    expires = datetime.fromisoformat(rows[0]["expires_at_utc"])
+    assert expires - requested == timedelta(minutes=30)
+
+
+def test_full_ladder_capture_demand_fails_closed_above_token_budget(tmp_path) -> None:
+    _write_positive_taker_ev_signal(
+        tmp_path,
+        trigger_patch={
+            "full_ladder_yes_tokens": [
+                {"bracket": str(i), "condition_id": f"c{i}", "token_id": f"yes{i}"}
+                for i in range(runner.CAPTURE_DEMAND_MAX_LADDER_TOKENS + 1)
+            ]
+        },
+    )
+    packets = runner.write_new_decision_packets(tmp_path)["written_packets"]
+
+    result = runner.write_capture_demands(tmp_path, packets=packets)
+
+    assert result["written"] == 0
+    assert result["alerts"][0]["reason"] == "capture_demand_full_ladder_token_budget_exceeded"
+    assert not (tmp_path / "capture_demands.jsonl").exists()

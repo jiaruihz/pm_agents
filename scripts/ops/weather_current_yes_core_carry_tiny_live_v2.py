@@ -37,6 +37,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -53,6 +54,7 @@ from scripts.ops.weather_core_carry_order_runtime import (  # noqa: E402
     execute_core_carry_plans,
 )
 from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
+from src.platform.market_data.capture_demand import CaptureDemand  # noqa: E402
 from src.strategies.runtime import runtime_state  # noqa: E402
 from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
     allocate_profile_shares,
@@ -321,6 +323,367 @@ def append_jsonl(path: Path, row: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
+
+
+DECISION_PACKET_SCHEMA_VERSION = "current_yes_core_carry_decision_packet_v1"
+CAPTURE_DEMAND_TTL_MINUTES = 30
+CAPTURE_DEMAND_MAX_LADDER_TOKENS = 24
+CAPTURE_DEMAND_STRATEGY_KEY = "reheat_risk.current_yes"
+
+
+def _decision_packet_json_default(value: Any) -> str:
+    """Preserve Decimal values losslessly in the immutable journal."""
+
+    if isinstance(value, Decimal):
+        return str(value)
+    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+
+
+def append_decision_packet(path: Path, packet: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                dict(packet),
+                ensure_ascii=False,
+                sort_keys=True,
+                default=_decision_packet_json_default,
+            )
+            + "\n"
+        )
+
+
+def _packet_value(
+    row: Mapping[str, Any],
+    *fields: str,
+) -> dict[str, Any]:
+    """Return only an already-loaded value, with missing lineage explicit."""
+
+    for field in fields:
+        value = row.get(field)
+        if value is not None and value != "":
+            return {"status": "available", "source_field": field, "value": value}
+    return {
+        "status": "unavailable",
+        "source_field": None,
+        "value": None,
+        "reason": "missing_in_decision_row",
+    }
+
+
+def _quote_usable(row: Mapping[str, Any]) -> bool:
+    ask = finite(row.get("current_yes_ask"))
+    return ask is not None and ask >= 0.01
+
+
+def _checkpoint_packet_ref(row: Mapping[str, Any] | None, *, reason: str) -> dict[str, Any]:
+    if row is None:
+        return {"status": "unavailable", "reason": reason, "checkpoint": None}
+    return {
+        "status": "available",
+        "reason": None,
+        "checkpoint": {
+            "checkpoint_key": row.get("checkpoint_key"),
+            "created_at_utc": row.get("created_at_utc"),
+            "decision_snapshot_ts_utc": row.get("decision_snapshot_ts_utc"),
+            "as_of_ts_utc": row.get("as_of_ts_utc"),
+            "model_probability_hold": row.get("model_probability_hold"),
+            "current_yes_bid": row.get("current_yes_bid"),
+            "current_yes_ask": row.get("current_yes_ask"),
+            "eligible": row.get("eligible"),
+            "reasons": row.get("reasons"),
+            "quote_usable": _quote_usable(row),
+        },
+    }
+
+
+def decision_packet_id(row: Mapping[str, Any]) -> str:
+    """Stable first-signal identity; it deliberately excludes mutable book data."""
+
+    return "decision-packet-" + stable_hash(
+        {
+            "schema_version": DECISION_PACKET_SCHEMA_VERSION,
+            "strategy_instance": STRATEGY_INSTANCE,
+            "config_id": CONFIG_ID,
+            "city": str(row.get("city") or ""),
+            "target_date": str(row.get("target_date") or ""),
+        }
+    )
+
+
+def _prior_checkpoints(trigger: Mapping[str, Any], scores: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Use persisted decision rows only; never reconstruct or fetch evidence."""
+
+    city_day = (str(trigger.get("city") or ""), str(trigger.get("target_date") or ""))
+    trigger_clock = parse_utc(
+        trigger.get("decision_snapshot_ts_utc") or trigger.get("as_of_ts_utc") or trigger.get("created_at_utc")
+    )
+    result: list[dict[str, Any]] = []
+    for candidate in scores:
+        if (str(candidate.get("city") or ""), str(candidate.get("target_date") or "")) != city_day:
+            continue
+        candidate_clock = parse_utc(
+            candidate.get("decision_snapshot_ts_utc")
+            or candidate.get("as_of_ts_utc")
+            or candidate.get("created_at_utc")
+        )
+        if candidate_clock is None or (trigger_clock is not None and candidate_clock >= trigger_clock):
+            continue
+        result.append(dict(candidate))
+    return result
+
+
+def build_decision_packet(
+    trigger: Mapping[str, Any],
+    *,
+    historical_scores: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Create a self-contained immutable record from decision-time state only."""
+
+    prior = _prior_checkpoints(trigger, historical_scores)
+    last_checkpoint = prior[-1] if prior else None
+    negatives = [row for row in prior if not bool(row.get("eligible"))]
+    last_negative = negatives[-1] if negatives else None
+    informative_quote_usable = [
+        row
+        for row in negatives
+        if finite(row.get("model_probability_hold")) is not None and _quote_usable(row)
+    ]
+    last_usable_negative = informative_quote_usable[-1] if informative_quote_usable else None
+    snapshot_clock = _packet_value(
+        trigger, "decision_snapshot_ts_utc", "snapshot_available_at_utc", "snapshot_ts_utc"
+    )
+    return {
+        "schema_version": DECISION_PACKET_SCHEMA_VERSION,
+        "packet_id": decision_packet_id(trigger),
+        "record_type": "current_yes_core_carry_decision_packet",
+        "strategy_identity": {
+            "strategy_id": STRATEGY_ID,
+            "strategy_instance": STRATEGY_INSTANCE,
+            "config_id": CONFIG_ID,
+            "model_version": MODEL_VERSION,
+            "artifact_hash": trigger.get("artifact_hash"),
+            "deployment_contract_version": DEPLOYMENT_CONTRACT_VERSION,
+        },
+        "signal": {
+            "signal_id": signal_id(trigger),
+            "city": trigger.get("city"),
+            "target_date": trigger.get("target_date"),
+            "bracket": trigger.get("current_bracket"),
+            "condition_id": trigger.get("condition_id") or trigger.get("current_condition_id"),
+            "token_id": trigger.get("token_id") or trigger.get("current_yes_token_id"),
+            "positive_taker_ev": True,
+        },
+        "decision_clocks": {
+            "created_at_utc": _packet_value(trigger, "created_at_utc"),
+            "as_of_ts_utc": _packet_value(trigger, "as_of_ts_utc", "decision_as_of_utc"),
+            "snapshot_ts_utc": snapshot_clock,
+        },
+        "trigger": {"status": "available", "payload": dict(trigger)},
+        "prior_checkpoints": {
+            "last_checkpoint": _checkpoint_packet_ref(
+                last_checkpoint, reason="no_prior_checkpoint_in_decision_history"
+            ),
+            "last_negative_checkpoint": _checkpoint_packet_ref(
+                last_negative, reason="no_prior_negative_checkpoint_in_decision_history"
+            ),
+            "last_informative_quote_usable_negative_checkpoint": _checkpoint_packet_ref(
+                last_usable_negative,
+                reason="no_prior_informative_quote_usable_negative_checkpoint",
+            ),
+        },
+        "event_references": {
+            "observation": {
+                "event_ts_utc": _packet_value(trigger, "source_report_ts_utc", "obs_last_obs_utc"),
+                "available_at_utc": _packet_value(trigger, "obs_ingested_at_utc", "observation_available_at_utc", "available_at_utc"),
+                "receive_at_utc": _packet_value(trigger, "obs_received_at_utc"),
+                "row_id": _packet_value(trigger, "observation_history_id", "obs_row_id"),
+            },
+            "book": {
+                "exchange_ts_utc": _packet_value(trigger, "book_exchange_ts_utc", "current_yes_book_exchange_ts_utc"),
+                "available_at_utc": _packet_value(trigger, "book_available_at_utc", "current_yes_book_parsed_at_utc"),
+                "receive_at_utc": _packet_value(trigger, "book_received_at_utc", "current_yes_book_response_received_at_utc"),
+                "request_started_at_utc": _packet_value(trigger, "current_yes_book_request_started_at_utc"),
+                "capture_id": _packet_value(trigger, "book_capture_id", "current_yes_book_batch_capture_id"),
+                "snapshot_id": _packet_value(trigger, "book_snapshot_id"),
+                "archive_path": _packet_value(trigger, "current_yes_book_archive_path"),
+                "clock_lineage_status": _packet_value(trigger, "current_yes_book_clock_lineage_status"),
+            },
+            "forecast": {
+                "values_hash": _packet_value(trigger, "forecast_values_hash"),
+                "first_seen_utc": _packet_value(trigger, "forecast_first_seen_utc"),
+                "receive_source": _packet_value(trigger, "forecast_receive_source", "forecast_curve_evidence"),
+                "source": _packet_value(trigger, "forecast_source"),
+                "model": _packet_value(trigger, "forecast_model"),
+                "archive_path": _packet_value(trigger, "forecast_curve_archive_path"),
+                "model_init_utc_estimated": _packet_value(trigger, "model_init_utc_estimated"),
+                "model_init_basis": _packet_value(trigger, "model_init_basis"),
+                "valid_from_local": _packet_value(trigger, "forecast_valid_from_local"),
+                "valid_to_local": _packet_value(trigger, "forecast_valid_to_local"),
+                "lineage_status": _packet_value(trigger, "forecast_lineage_status", "forecast_run_lineage_status"),
+                "first_seen_lookup_status": _packet_value(trigger, "forecast_first_seen_lookup_status"),
+                "issue_ts_utc": _packet_value(trigger, "forecast_issue_ts_utc"),
+            },
+        },
+        "snapshot_references": {
+            "feature_row_id": _packet_value(trigger, "fact_signal_candidate_id", "feature_row_id"),
+            "snapshot_file": _packet_value(trigger, "snapshot_file"),
+            "data_epoch_refs_json": _packet_value(trigger, "data_epoch_refs_json"),
+            "snapshot_capture_id": _packet_value(trigger, "snapshot_capture_id"),
+            "snapshot_producer_build_id": _packet_value(trigger, "snapshot_producer_build_id"),
+            "book_snapshot": _packet_value(trigger, "book_snapshot_id", "book_snapshot_file", "current_yes_book_archive_path"),
+        },
+        "order_linkage": {
+            "status": "unavailable_at_decision",
+            "reason": "packet_is_written_before_order_planning_and_execution",
+            "execution_ids": [],
+            "order_ids": [],
+        },
+    }
+
+
+def write_new_decision_packets(output_dir: Path) -> dict[str, Any]:
+    """Append first positive signals, while preserving the execution path on failure."""
+
+    journal = output_dir / "decision_packets.jsonl"
+    existing = {str(row.get("packet_id") or "") for row in iter_jsonl(journal)}
+    scores = list(iter_jsonl(output_dir / "pre_live_scores.jsonl"))
+    written = 0
+    written_packets: list[dict[str, Any]] = []
+    alerts: list[dict[str, Any]] = []
+    for would in iter_jsonl(output_dir / "would_orders.jsonl"):
+        checkpoint_key = str(would.get("checkpoint_key") or "")
+        trigger = next(
+            (row for row in reversed(scores) if str(row.get("checkpoint_key") or "") == checkpoint_key),
+            None,
+        )
+        if trigger is None:
+            alerts.append({"status": "alert", "reason": "decision_packet_trigger_score_missing", "checkpoint_key": checkpoint_key})
+            continue
+        packet = build_decision_packet(trigger, historical_scores=scores)
+        if packet["packet_id"] in existing:
+            continue
+        try:
+            append_decision_packet(journal, packet)
+        except OSError as exc:
+            alerts.append(
+                {
+                    "status": "alert",
+                    "reason": "decision_packet_write_failed",
+                    "packet_id": packet["packet_id"],
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            continue
+        existing.add(packet["packet_id"])
+        written += 1
+        written_packets.append(packet)
+    for alert in alerts:
+        try:
+            append_jsonl(output_dir / "decision_packet_alerts.jsonl", alert)
+        except OSError:
+            pass
+    return {"written": written, "alerts": alerts, "written_packets": written_packets}
+
+
+def write_capture_demands(
+    output_dir: Path,
+    *,
+    packets: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Request a bounded full-ladder YES tape window for newly written packets."""
+
+    journal = output_dir / "capture_demands.jsonl"
+    existing = {str(row.get("demand_id") or "") for row in iter_jsonl(journal)}
+    written = 0
+    alerts: list[dict[str, Any]] = []
+    for packet in packets:
+        trigger = dict((packet.get("trigger") or {}).get("payload") or {})
+        ladder = [dict(row) for row in trigger.get("full_ladder_yes_tokens") or [] if isinstance(row, Mapping)]
+        if not ladder:
+            alerts.append({
+                "status": "alert",
+                "reason": "capture_demand_full_ladder_tokens_missing",
+                "packet_id": packet.get("packet_id"),
+            })
+            continue
+        if len(ladder) > CAPTURE_DEMAND_MAX_LADDER_TOKENS:
+            alerts.append({
+                "status": "alert",
+                "reason": "capture_demand_full_ladder_token_budget_exceeded",
+                "packet_id": packet.get("packet_id"),
+                "token_count": len(ladder),
+                "max_tokens": CAPTURE_DEMAND_MAX_LADDER_TOKENS,
+            })
+            continue
+        requested = parse_utc(trigger.get("created_at_utc")) or datetime.now(timezone.utc)
+        expires = requested + timedelta(minutes=CAPTURE_DEMAND_TTL_MINUTES)
+        for rung in ladder:
+            token_id = str(rung.get("token_id") or "")
+            condition_id = str(rung.get("condition_id") or "")
+            if not token_id or not condition_id:
+                alerts.append({
+                    "status": "alert",
+                    "reason": "capture_demand_ladder_identity_missing",
+                    "packet_id": packet.get("packet_id"),
+                    "bracket": rung.get("bracket"),
+                })
+                continue
+            try:
+                demand = CaptureDemand.create(
+                    consumer_id=STRATEGY_INSTANCE,
+                    strategy_key=CAPTURE_DEMAND_STRATEGY_KEY,
+                    condition_id=condition_id,
+                    token_id=token_id,
+                    reason="core_carry_first_positive_full_ladder_tape",
+                    priority="P0",
+                    requested_at_utc=requested.isoformat(),
+                    expires_at_utc=expires.isoformat(),
+                    desired_transport="WS",
+                    requested_checkpoints_seconds=(0, 60, 300, 900, 1800),
+                    trigger_event_id=str(packet.get("packet_id") or ""),
+                    metadata={
+                        "city": trigger.get("city"),
+                        "target_date": trigger.get("target_date"),
+                        "bracket": rung.get("bracket"),
+                        "market_id": rung.get("market_id"),
+                        "ladder_scope": "all_yes_outcome_tokens",
+                        "requested_window_seconds": CAPTURE_DEMAND_TTL_MINUTES * 60,
+                        "stop_condition": "demand_expiry",
+                        "active_token_budget": CAPTURE_DEMAND_MAX_LADDER_TOKENS,
+                        "retention_owner": "canonical_market_books_ws_raw",
+                    },
+                )
+            except ValueError as exc:
+                alerts.append({
+                    "status": "alert",
+                    "reason": "capture_demand_contract_invalid",
+                    "packet_id": packet.get("packet_id"),
+                    "bracket": rung.get("bracket"),
+                    "error": str(exc),
+                })
+                continue
+            if demand.demand_id in existing:
+                continue
+            try:
+                append_jsonl(journal, demand.to_dict())
+            except OSError as exc:
+                alerts.append({
+                    "status": "alert",
+                    "reason": "capture_demand_write_failed",
+                    "packet_id": packet.get("packet_id"),
+                    "demand_id": demand.demand_id,
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+                continue
+            existing.add(demand.demand_id)
+            written += 1
+    for alert in alerts:
+        try:
+            append_jsonl(output_dir / "capture_demand_alerts.jsonl", alert)
+        except OSError:
+            pass
+    return {"written": written, "alerts": alerts}
 
 
 def line_count(path: Path) -> int:
@@ -1842,6 +2205,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     configure_signal_runner(output_dir)
     signal_summary = signal_runner.run_once(args)
     now = datetime.now(timezone.utc)
+    decision_packets = write_new_decision_packets(output_dir)
+    capture_demands = write_capture_demands(
+        output_dir,
+        packets=decision_packets["written_packets"],
+    )
     journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
     entry_plans, attempts = new_entry_plans(args, output_dir, now=now)
     lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(args, output_dir, now=now)
@@ -1865,6 +2233,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "artifact_hash": load_artifact(ARTIFACT_PATH)["artifact_hash"],
         "signal_status": signal_summary.get("status"),
         "signal_snapshot_file": signal_summary.get("snapshot_file"),
+        "decision_packets_written": decision_packets["written"],
+        "decision_packet_alerts": decision_packets["alerts"],
+        "capture_demands_written": capture_demands["written"],
+        "capture_demand_alerts": capture_demands["alerts"],
         "entry_attempts": len(attempts),
         "entry_plans": len(entry_plans),
         "maker_lifecycle_plans": len(lifecycle_plans),
