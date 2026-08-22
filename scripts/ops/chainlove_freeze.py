@@ -104,6 +104,8 @@ def preflight(
     repo_path: Path,
     expected_remote: str,
     runner: Callable[[list[str]], str] | None = None,
+    github_user: str | None = None,
+    wip_limit: int = 2,
 ) -> dict[str, Any]:
     runner = runner or (lambda argv: subprocess.run(
         argv, text=True, capture_output=True, check=True
@@ -155,7 +157,66 @@ def preflight(
             )
     else:
         checks["origin_main_fetched"] = True
+
+    if github_user:
+        own = _own_open_prs(expected_remote, github_user)
+        changes_requested = [pr for pr in own if pr.get("active_changes_requested")]
+        report["own_open_prs"] = [
+            {"number": pr["number"], "title": pr.get("title", "")[:80],
+             "review_decision": pr.get("review_decision")}
+            for pr in own
+        ]
+        report["feedback_first_mode"] = bool(changes_requested)
+        report["changes_requested_prs"] = [pr["number"] for pr in changes_requested]
+        report["wip_unmerged_prs"] = len(own)
+        report["wip_limit"] = wip_limit
+        report["wip_exceeded"] = len(own) > wip_limit
     return report
+
+
+def _own_open_prs(repo: str, github_user: str) -> list[dict[str, Any]]:
+    """Own open PRs with review decisions; read-only, feeds feedback-first/WIP policy."""
+
+    proc = subprocess.run(
+        ["gh", "pr", "list", "--repo", repo, "--author", github_user,
+         "--state", "open", "--json", "number,title,reviewDecision",
+         "--limit", "30"],
+        text=True, capture_output=True, check=False, timeout=60,
+    )
+    if proc.returncode or not (proc.stdout or "").strip():
+        return []
+    rows = json.loads(proc.stdout)
+    own = []
+    for row in rows:
+        reviews: list[dict[str, Any]] = []
+        view = subprocess.run(
+            ["gh", "pr", "view", str(row["number"]), "--repo", repo,
+             "--json", "reviews"],
+            text=True, capture_output=True, check=False, timeout=60,
+        )
+        if view.returncode == 0:
+            reviews = json.loads(view.stdout or "{}").get("reviews", [])
+        own.append({
+            "number": row["number"],
+            "title": row.get("title", ""),
+            "review_decision": row.get("reviewDecision"),
+            "reviews": reviews,
+            # only the LATEST substantive review counts; a resolved
+            # CHANGES_REQUESTED in history is not active feedback
+            "active_changes_requested": _latest_substantive_state(reviews)
+            == "CHANGES_REQUESTED",
+        })
+    return own
+
+
+def _latest_substantive_state(reviews: list[dict[str, Any]]) -> str | None:
+    substantive = [
+        r for r in reviews
+        if r.get("state") in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
+    ]
+    if not substantive:
+        return None
+    return max(substantive, key=lambda r: r.get("submittedAt", ""))["state"]
 
 
 def _api_branch_sha(repo: str) -> str | None:
@@ -346,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-path", type=Path, required=True)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--repo", default="Chain-Love/chain-love")
+    parser.add_argument("--github-user", default="jiaruihz")
+    parser.add_argument("--wip-limit", type=int, default=2)
     parser.add_argument("--network", action="append", dest="networks",
                         default=["algorand", "filecoin", "somnia"])
     parser.add_argument("--category", action="append", dest="categories",
@@ -358,7 +421,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     started = time.time()
-    preflight_report = preflight(repo_path=args.repo_path, expected_remote=args.repo)
+    preflight_report = preflight(
+        repo_path=args.repo_path, expected_remote=args.repo,
+        github_user=args.github_user, wip_limit=args.wip_limit,
+    )
     args.run_dir.mkdir(parents=True, exist_ok=True)
     atomic_write_json(args.run_dir / "preflight_report.json", preflight_report)
 
