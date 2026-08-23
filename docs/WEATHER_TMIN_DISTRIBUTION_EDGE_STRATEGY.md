@@ -389,6 +389,58 @@ logloss/RPS CI 均胜 market，且没有由单城、单季或单个 cooling wind
 
 当前 `SignalCandidate`、`TradeIntent`、plan、order、fill 均为 `none`。
 
+## 2026-08-24 no-further-cooling frozen-forward 复核
+
+本节 supersedes 上述 2026-08-17 同期快照用于当前决策。只取当前 artifact `969bbbf…`，固定分母为
+495 checkpoints / 12 target dates，91 rows 有 model、market 与 exact condition settlement，15 个
+first-positive-edge city-date selected / 9 active dates，当前 artifact 内无重复。5-share
+direct-ask+官方fee假设为 15胜0负、cost `$70.2541`、PnL `+$4.7459`、ROI `+6.76%`；但 Tokyo
+8/21 `YES@0.49` 单笔贡献 52.4% PnL，任一 win 改为 loss 后组合 ROI 为 `-0.36%`。
+
+更关键的是同 rows model-minus-market logloss/Brier delta 为 `+0.02779/+0.01555`，CI 均跨0，
+模型点估输 market；forward 仅12/30 dates，且0 recorded depth、0 intent/order/fill。结论
+`INCONCLUSIVE / keep zero-notional shadow / not live-ready`。
+
+数据快照：Mac raw journal SHA `f852fa8c…`（501 total rows，2026-08-24 01:26 北京），canonical DB
+`/Volumes/jrs/pm_agents/runtime/weather.db` device/inode `16777244/54444`，settlement 覆盖至 8/23。
+本轮定向补抓 Shanghai 8/12、Seoul 8/17 Tmin event，append-only ingest 新增12个settlements；其中2个
+condition补齐本评测5个checkpoint，scored settlement coverage从86/91到91/91，selected/PnL不变，
+model-minus-market logloss delta从`+0.02488`变为`+0.02779`，结论不变。
+
+signal/evidence 双漏斗：
+
+| funnel | rows | dates | 说明 |
+|---|---:|---:|---|
+| artifact checkpoints | 495 | 12 | 8城；Miami/NYC coverage-only |
+| model+market scored | 91 | 12 | 404为coverage/model/quote blockers |
+| first positive edge selected | 15 | 9 active | 当前artifact内0重复city-date |
+| PIT observation+forecast refs | 433 | 12 | 62 missing PIT observation |
+| exact settlement / direct ask / recorded depth / fill | 91 / 15 / 0 / 0 | 12 / 9 / 0 / 0 | 只是假设direct-ask taker成本 |
+
+同分母 proper score：market/model logloss=`0.30409/0.31310`，Brier=`0.10013/0.10869`；
+date-equal model-minus-market logloss delta `+0.02779` CI `[-0.05414,+0.13478]`，Brier delta
+`+0.01555` CI `[-0.01373,+0.05336]`。baseline gate FAIL。
+
+入场归因（切片仅描述、未做多重检验、不得选 gate）：
+
+| slice | entries | wins | fee-adjusted ROI |
+|---|---:|---:|---:|
+| local 06 / 09 / 12 / 18 / 21 | 4 / 5 / 1 / 4 / 1 | 全胜 | +6.61% / +1.53% / +7.15% / +1.57% / +99.01% |
+| Tokyo / Seoul / London / Paris | 7 / 6 / 1 / 1 | 全胜 | +12.29% / +2.99% / +0.77% / +0.10% |
+| ask `<=.60` / `(.60,.95]` / `>.98` | 1 / 7 / 7 | 全胜 | +99.01% / +6.22% / +0.60% |
+
+北京时间 entries 为05点4、08点3、11点1、15点1、16点1、17点4、20点1。Tokyo 8/21 当地21点
+`YES@0.49` 单笔贡献总PnL 52.4%，所以不能解释为21点或Tokyo已形成稳定edge。15/15胜率的Wilson
+95%下界仅79.61%；去最大赢家ROI仍`+3.33%`，但任一binary win改成loss会令5-share组合从
+`+$4.7459`变`-$0.2541`。当前entry是连续`p_model-ask-fee>0`，不是`.7/.6`阈值；不从本slice新增
+价格gate。
+
+三门：significance 仅为all-win退化样本下的provisional pass；same-denominator baseline FAIL；
+forward FAIL（12/30 dates，且无depth/fill）。8环中描述性、date-block统计、概率、日期相关性与market
+基准已覆盖；signal discrimination仅间接覆盖，执行微结构、capacity、actual fill缺失。机器结果唯一格式：
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_no_further_cooling_shadow_performance_v1/2026-08-24/summary.json`；
+复跑器 `scripts/analysis/tmin/evaluate_tmin_no_further_cooling_shadow_v1.py`。
+
 ## 血缘与落地边界
 
 正式实现必须复用 WCIR：
