@@ -10,6 +10,7 @@ compact package instead of re-reading full snapshot/history. No model calls.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -19,6 +20,14 @@ from typing import Any
 # NO caps: every delta PR and every added target row must be processed.
 # Truncation is a defect (BLOCKED), never a silent optimization.
 TRUNCATION_MARKER = "... (trimmed)"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def target_path_filter(categories: list[str]) -> set[str]:
@@ -55,9 +64,42 @@ def added_target_rows(diff: str, targets: set[str]) -> tuple[list[str], bool]:
     return rows, parsed_ok and saw_header
 
 
+def _guard_result(reason: str) -> dict[str, Any]:
+    return {"briefs": {}, "coverage": {
+        "schema_version": "chainlove_compact_coverage_v1",
+        "complete": False, "guard_reason": reason,
+        "delta_pr_count": 0, "total_added_target_rows": 0, "prs": [],
+        "truncation_detected": False,
+        "prior_snapshot_sha256": None, "prior_captured_at": None,
+        "current_captured_at": None,
+    }}
+
+
 def build_briefs(run_dir: Path, categories: list[str],
-                 prior_capture: str = "", prior_run_dir: Path | None = None) -> dict[str, str]:
+                 prior_capture: str = "", prior_run_dir: Path | None = None) -> dict[str, Any]:
     snapshot = json.loads((run_dir / "open_pr_snapshot.json").read_text(encoding="utf-8"))
+    current_captured = str(snapshot.get("captured_at_utc", ""))
+
+    # Baseline guard: compact REQUIRES a valid prior snapshot. A missing,
+    # unparseable, or future-dated baseline yields an empty-but-"complete"
+    # delta by accident — that must BLOCK, never pass silently.
+    prior_path = (prior_run_dir / "open_pr_snapshot.json") if prior_run_dir else None
+    if not prior_capture or prior_path is None or not prior_path.is_file():
+        return _guard_result(
+            "compact baseline guard: missing prior_run_dir/prior snapshot "
+            "(compact mode cannot run without a valid baseline; BLOCKED, "
+            "no silent full-scan fallback)")
+    try:
+        prior_payload = json.loads(prior_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return _guard_result(f"compact baseline guard: prior snapshot unreadable: {exc}")
+    prior_captured = str(prior_payload.get("captured_at_utc", ""))
+    if not prior_captured:
+        return _guard_result("compact baseline guard: prior snapshot lacks captured_at_utc")
+    if prior_captured > current_captured:
+        return _guard_result(
+            f"compact baseline guard: prior captured_at ({prior_captured}) is LATER "
+            f"than current ({current_captured}) — misconfigured baseline order")
     index = json.loads((run_dir / "claimed_slugs.json").read_text(encoding="utf-8"))
     stale = {}
     if (run_dir / "stale_delta.json").is_file():
@@ -129,6 +171,9 @@ def build_briefs(run_dir: Path, categories: list[str],
     }
     coverage = {
         "schema_version": "chainlove_compact_coverage_v1",
+        "prior_snapshot_sha256": _sha256(prior_path),
+        "prior_captured_at": prior_captured,
+        "current_captured_at": current_captured,
         "delta_pr_count": len(delta_prs),
         "total_added_target_rows": sum(r["added_row_count"] for r in coverage_rows),
         "prs": coverage_rows,

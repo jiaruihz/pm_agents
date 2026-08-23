@@ -754,3 +754,79 @@ def test_worker_usage_sidecar_missing_blocks(tmp_path: Path) -> None:
     assert proc3.returncode == 0, proc3.stderr[-400:]
     assert receipt_of(env)["outcome"] == "NOOP_VERIFIED"
     assert "candidate_mcp" in receipt_of(env).get("usage", {})
+
+
+# ===========================================================================
+# Round-3.1: compact baseline guard (pre-unattended gate)
+# ===========================================================================
+
+
+def test_compact_without_prior_blocks(tmp_path: Path) -> None:
+    env = make_fixture_env(tmp_path, viable=False)
+    proc = run_runner(env, "--compact")  # no --prior-run-dir
+    receipt = receipt_of(env)
+    assert proc.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "compact baseline guard" in receipt["outcome_reason"]
+    assert "--prior-run-dir" in receipt["outcome_reason"]
+    # no worker was dispatched under a silently-empty delta
+    assert worker_calls(env) == []
+
+
+def test_compact_invalid_prior_blocks(tmp_path, monkeypatch) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cb", REPO_ROOT / "scripts/ops/chainlove_brief.py")
+    cb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cb)
+
+    env = _compact_env(tmp_path)  # valid 13-PR baseline fixture
+    run_dir = env["paths"]["run_dir"]
+    prior = env["prior_dir"]
+    # direct-unit mode: synthesize the CURRENT snapshot (freeze not executed)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "open_pr_snapshot.json").write_text(json.dumps(
+        {"captured_at_utc": "2026-08-23T01:00:00Z", "pull_requests": []}))
+    (run_dir / "claimed_slugs.json").write_text(json.dumps(
+        {"paths": {}, "parse_errors": 0, "touching_prs": []}))
+
+    # sanity: the valid baseline still builds a complete manifest with the
+    # new provenance fields
+    good = cb.build_briefs(run_dir, ["services"], "2026-08-22T00:00:00Z", prior)
+    assert good["coverage"]["complete"] is True
+    assert good["coverage"]["prior_captured_at"] == "2026-08-22T00:00:00Z"
+    assert good["coverage"]["current_captured_at"] == "2026-08-23T01:00:00Z"
+    assert len(good["coverage"]["prior_snapshot_sha256"]) == 64
+
+    # (a) prior snapshot file missing
+    missing = tmp_path / "prior_missing"
+    missing.mkdir()
+    result = cb.build_briefs(run_dir, ["services"], "", missing)
+    assert result["coverage"]["complete"] is False
+    assert "missing prior_run_dir" in result["coverage"]["guard_reason"]
+
+    # (b) prior captured_at LATER than current
+    future = tmp_path / "prior_future"
+    future.mkdir()
+    (future / "open_pr_snapshot.json").write_text(json.dumps(
+        {"captured_at_utc": "2027-01-01T00:00:00Z", "pull_requests": []}))
+    result = cb.build_briefs(run_dir, ["services"], "2027-01-01T00:00:00Z", future)
+    assert result["coverage"]["complete"] is False
+    assert "LATER" in result["coverage"]["guard_reason"]
+
+    # (c) prior snapshot tampered to unparseable (hash recorded path also fails parse)
+    tampered = tmp_path / "prior_tampered"
+    tampered.mkdir()
+    (tampered / "open_pr_snapshot.json").write_text("{not json")
+    result = cb.build_briefs(run_dir, ["services"], "2026-08-22T00:00:00Z", tampered)
+    assert result["coverage"]["complete"] is False
+    assert "unreadable" in result["coverage"]["guard_reason"]
+
+    # (d) empty captured_at in prior payload
+    empty = tmp_path / "prior_empty"
+    empty.mkdir()
+    (empty / "open_pr_snapshot.json").write_text(json.dumps({"pull_requests": []}))
+    result = cb.build_briefs(run_dir, ["services"], "2026-08-22T00:00:00Z", empty)
+    assert result["coverage"]["complete"] is False
+    assert "lacks captured_at_utc" in result["coverage"]["guard_reason"]

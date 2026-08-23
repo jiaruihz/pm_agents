@@ -454,6 +454,11 @@ class Orchestrator:
             ),
         }
         if self.args.compact:
+            if not self.args.prior_run_dir or not (self.args.prior_run_dir / "open_pr_snapshot.json").is_file():
+                self.finish("BLOCKED", reason=(
+                    "compact baseline guard: --compact requires a valid --prior-run-dir "
+                    "with open_pr_snapshot.json (BLOCKED by design; no silent fallback)"))
+                raise SystemExit(2)
             brief = self._brief_for(stage, ["mcpservers", "security", "storages", "services"])
             task["compact_brief"] = brief
             task["brief_rule"] = (
