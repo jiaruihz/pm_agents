@@ -191,3 +191,57 @@ leg matched `8` shares for `$7.20` and is unrelated to the LA cache row. No
 recovery duplicate execution identity or LA-derived fill is evidenced. This is
 contained/recovery-improved, not a claim that macOS TCC/JRS failures are
 permanently eliminated.
+
+## 2026-08-24 Host Reboot And Full Runtime Recovery
+
+The Mac rebooted at `2026-08-24 00:48:52 +0800`. After login the production
+NVMe and canonical DB identity were healthy, but the canonical
+`weather-data-feed-jrs` tmux permission host and every registered session were
+absent. A strict manifest was saved on the internal disk, then the controller
+performed the authorized bounded recovery:
+
+```text
+recover-jrs-context --apply --confirm-live --restore-manifest <saved-manifest>
+```
+
+The prospective host passed JRS write and canonical DB read probes before the
+controller created the new canonical server. Dependency-ordered recovery
+restored every runtime that had been active at reboot, including both guarded
+live instances. The two dispute/court zero-notional runtimes remained stopped:
+their production contract had already marked them `manual` and user-paused
+since `2026-08-14`, so the reboot recovery did not override that decision. The
+market-state zero-notional shadow was restored and its process is alive; its
+stale artifact incident also predates the reboot and remains a separate health
+issue.
+
+### Impact and acceptance evidence
+
+- The last completed market-book batch before failure was
+  `2026-08-23T16:38:30Z`; the `16:43:21Z` batch was interrupted. The first
+  recovered batch completed at `16:54:45Z` with `2,178/2,178` books and zero
+  failures. The durable-batch gap was `975s`, covering three nominal
+  five-minute epochs.
+- Strategy snapshots advanced from `2026-08-23T16:40:53Z` to
+  `16:55:35Z`, a `882s` gap and one missing nominal snapshot epoch. Both
+  adjacent snapshots contain `1,053` records. Missing PIT epochs remain a
+  coverage gap and must not be relabelled as strategy-filtered zero signals.
+- Both active live journals added zero rows after the reboot, and the canonical
+  fill cache contains zero fills after the reboot. An authenticated CLOB read
+  found `30` open orders; all were created between `2026-08-19T03:36:10Z` and
+  `2026-08-22T22:44:54Z`, before the reboot. Recovery therefore created zero
+  new or duplicate order and zero fill/notional delta.
+- The fill coverage gate passed: `1,544/1,544` effective live fills, zero
+  DB/raw mismatch, zero missing-order rows, zero over-order keys and zero
+  unknown fee lineage.
+- Post-recovery JRS context, storage identity and data-feed semantics are
+  healthy. The strict manifest has only two warnings for unrelated research
+  processes that were already running from a temporary checkout; production
+  DB/session/release identity is healthy. Both live summaries are fresh with
+  `status=ok`; API `:8000` and FE `:5174` are listening. The separate crypto
+  PM5M registry was also reconciled to `45/45` retained LaunchAgents, with
+  fresh BTC/ETH collector, settlement and context artifacts.
+
+This is a successful post-reboot recovery and additional real reboot/login
+acceptance evidence. It remains `recovery improved`; it does not eliminate the
+architectural macOS TCC/GUI permission-host dependency or authorize unattended
+live restoration.
