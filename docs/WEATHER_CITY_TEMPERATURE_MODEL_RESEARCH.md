@@ -53,8 +53,8 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
   `8/12 28 NO→YES`、`8/13 32 NO→YES`、`8/14 33 NO→YES`、`8/14 34 YES→NO`、
   `8/16 23 NO→YES`、`8/18 21 NO→YES`、`8/19 21 NO→YES`、`8/20 20 NO→YES`、
   `8/20 21 NO→YES`、`8/21 20 YES→NO`、`8/23 20 NO→YES`。canonical 已有 settlement 的
-  6个受影响后到 intents 合计 counterfactual PnL 为 `-$3.5429`，所以移除它们使该已覆盖切片改善
-  `+$3.5429`；其余5个仍是 label coverage gap，不能补成0。全窗口实际 orders/fills/notional 均为0。
+  6个受影响后到 intents 合计 counterfactual PnL 为 `-$3.5428`，所以移除它们使该已覆盖切片改善
+  `+$3.5428`；其余5个仍是 label coverage gap，不能补成0。全窗口实际 orders/fills/notional 均为0。
 - 生产 zero-notional runtime 已加载 release `fb40f669bc2153ec37d0c2cca137cee785cb89e5`，
   loaded core SHA256=`ca71d177…f9b`、runtime config hash=`120fea57…258`；首轮
   `status=ok / errors=0 / new_paper_intents=0 / orders_submitted=0`。
