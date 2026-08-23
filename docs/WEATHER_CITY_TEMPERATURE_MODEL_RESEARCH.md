@@ -38,6 +38,33 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 | Tokyo V3 | `weather.city_intraday_probability.tokyo_continuous_full_probability`；完整conditional market ladder + `coherent_multigrain_hgb_v3` weather head，连续输出`P(stay/+1/+2/+3+)` | 7/24–29 reused validation曾优于market；后发现研究入口仍指向7月 artifact，且canonical materializer错误丢弃缺单侧互补token的同日ladder。修复后8/1–12有581 strict expressions/12日，8/1–11形成430 causal settled joins/11日；V3/market multiclass Brier=`0.68576/0.62922`，delta=`+0.05654`、CI=`[+0.01170,+0.10701]`，主概率门FAIL。5-share研究表达19笔12胜，fee PnL`+$13.73155`、ROI`+29.68%`，但该窗已看过且概率输market | `inconclusive / August probability FAIL / trade-expression positive / clean-forward required / research-only / no-live-change`；保留7月正结果为历史evidence，冻结参数未用8月refit，8/13起收clean forward；不替换Tokyo V2、不接intent/order/fill · [V2/V3 report](analysis/2026-08/2026-08-12-tokyo-pre-cross-market-sharpening-v1.md) · artifact `tokyo_continuous_full_probability/august_replay_20260813_v3` |
 | Seoul | Korea source-event adapter + research-only `seoul_intraday_remaining_heat_distribution`；production仍是coverage-only | v3已把每份完整ladder设为decision clock，严格取此前5分钟内AMOS state，并用下一份独立ladder的direct ask回放。7/22–8/11有1,649 market-grain rows、582 scorable rows/20日；8/7–11 frozen为22 state entries/5日。冻结posterior相对market的Brier/logloss/RPS delta=`+0.00320/+0.01204/+0.00366`，三项均未胜且CI跨0。12笔5-share fee后回放PnL`+$5.2337`、ROI`+26.48%`，date CI`[-54.92%,+103.50%]`，不能覆盖概率门失败 | `inconclusive / market gate FAIL / historical PnL positive but LOW_SAMPLE / coverage-only / no-live-change`。v2的full-post coverage blocker已解除；下一步不调8/7–11，直接从8/12后累计至少30个新settled clean-forward dates，再要求proper-score全胜market且fee-uplift CI为正 · 见下方三版训练账 |
 
+### WCIR canonical 与 Amsterdam 双边 expression 修复（2026-08-23）
+
+- canonical 根因是 legacy adapter 对同一 immutable source event 从不同模型轮次/rollover shard
+  生成不同 delivery header，以及同一 state checkpoint 携带 model/profile alias。修复后 bridge 仍严格拒绝
+  immutable identity 冲突，只把同 ID 的 delivery 取最早完整 header，并把 legacy checkpoint ref 归一到
+  feature-state identity。对 18,068 bundles 的 canonical apply 得到 17,920 unique candidates，
+  `candidate_delta=0`；首次新增 15,120 candidates / 11,017 checkpoints / 9,588 events，第二次 apply
+  三类新增均为0。历史 12 个 conflict event IDs、45 个非winning deliveries被显式计入 reconciliation。
+- Amsterdam V9 的 expression dedupe 从 `city_date_bracket_side_model` 改为
+  `city_date_bracket_model`，并兼容 append-only journal 中旧的 YES/NO side-scoped key；同一
+  date×bracket 以后只保留第一次被选中的方向。审计开始时有10组；部署前 8/23 又形成第11组。
+  当前42个旧 policy selections重放后保留31、压掉11个后到方向：
+  `8/12 28 NO→YES`、`8/13 32 NO→YES`、`8/14 33 NO→YES`、`8/14 34 YES→NO`、
+  `8/16 23 NO→YES`、`8/18 21 NO→YES`、`8/19 21 NO→YES`、`8/20 20 NO→YES`、
+  `8/20 21 NO→YES`、`8/21 20 YES→NO`、`8/23 20 NO→YES`。canonical 已有 settlement 的
+  6个受影响后到 intents 合计 counterfactual PnL 为 `-$3.5429`，所以移除它们使该已覆盖切片改善
+  `+$3.5429`；其余5个仍是 label coverage gap，不能补成0。全窗口实际 orders/fills/notional 均为0。
+- 生产 zero-notional runtime 已加载 release `fb40f669bc2153ec37d0c2cca137cee785cb89e5`，
+  loaded core SHA256=`ca71d177…f9b`、runtime config hash=`120fea57…258`；首轮
+  `status=ok / errors=0 / new_paper_intents=0 / orders_submitted=0`。
+- 这批数据本来就是 admission forward，不能因数据层修复另起一套：各模型的 probability forward
+  boundary 与原始 ModelOutput 全部保留。只有 Amsterdam V9 的交易表达 policy 发生了改变，因此
+  `2026-08-23T15:25:27Z` 起是 bracket-scoped expression 的 untouched forward；此前窗口继续作为
+  probability forward 和固定规则 counterfactual replay，旧双边 expression 版本单独分层，不删除。
+  这次修复只恢复可分析血缘和正确 expression denominator，不代表 proper-score、market baseline、
+  significance 或30个独立 settled dates admission gate 已通过。
+
 跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
 
 ### Seoul WCIR exact-NO 首版训练（2026-08-13）
