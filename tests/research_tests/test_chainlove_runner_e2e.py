@@ -20,7 +20,7 @@ RUNNER = REPO_ROOT / "scripts" / "ops" / "chainlove_run.py"
 
 CSV_PATH = "listings/specific-networks/somnia/services.csv"
 CSV_HEADER = "slug,provider,offer,actionButtons,toolType,tag,price,planName,planType,description,starred"
-POSITIVE_ROW = "fixture-svc,,!offer:fixture-svc,,,,,,,,,"
+POSITIVE_ROW = "fixture-svc,,!offer:fixture-svc,,,,,,,,"
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -36,7 +36,7 @@ def make_fixture_env(tmp_path: Path, *, viable: bool) -> dict[str, str]:
     _git(repo, "config", "user.name", "t")
     target = repo / CSV_PATH
     target.parent.mkdir(parents=True)
-    target.write_text(f"{CSV_HEADER}\nagent-kit,,!offer:agent-kit,,,,,,,,,\n")
+    target.write_text(f"{CSV_HEADER}\nagent-kit,,!offer:agent-kit,,,,,,,,\n")
     template = repo / ".github" / "PULL_REQUEST_TEMPLATE.md"
     template.parent.mkdir(parents=True)
     template.write_text("## Summary\n")
@@ -63,8 +63,48 @@ def make_fixture_env(tmp_path: Path, *, viable: bool) -> dict[str, str]:
 
     json_tools = tmp_path / "json-tools"
     (json_tools / "meta").mkdir(parents=True)
-    for script in ("validate_csv.py", "csv_to_json.py", "validate.py"):
-        (json_tools / script).write_text("print('fixture-ok')\n")
+    # REAL mini implementations: csv validation, JSON generation, JSON validation
+    (json_tools / "validate_csv.py").write_text(
+        "import csv, glob, sys\n"
+        "bad = 0\n"
+        "for path in glob.glob('listings/**/*.csv', recursive=True) + glob.glob('references/**/*.csv', recursive=True):\n"
+        "    with open(path, newline='') as fh:\n"
+        "        rows = list(csv.reader(fh))\n"
+        "    widths = {len(r) for r in rows if r}\n"
+        "    if len(widths) > 1:\n"
+        "        print(f'ragged rows in {path}: {sorted(widths)}'); bad += 1\n"
+        "sys.exit(1 if bad else 0)\n")
+    (json_tools / "csv_to_json.py").write_text(
+        "import csv, json, os\n"
+        "from pathlib import Path\n"
+        "os.makedirs('json', exist_ok=True)\n"
+        "for net_dir in Path('listings/specific-networks').glob('*'):\n"
+        "    if not net_dir.is_dir():\n"
+        "        continue\n"
+        "    out = {}\n"
+        "    for csv_path in sorted(net_dir.glob('*.csv')):\n"
+        "        category = csv_path.stem\n"
+        "        with csv_path.open(newline='') as fh:\n"
+        "            rows = list(csv.DictReader(fh))\n"
+        "        hydrated = []\n"
+        "        for row in rows:\n"
+        "            ref = row.get('offer', '')\n"
+        "            item = dict(row)\n"
+        "            if ref.startswith('!offer:'):\n"
+        "                item['offer'] = ref[len('!offer:'):]\n"
+        "            hydrated.append({k: v for k, v in item.items() if k not in ('provider',)})\n"
+        "        out[category] = hydrated\n"
+        "    (Path('json') / f'{net_dir.name}.json').write_text(json.dumps(out, indent=1))\n"
+        "print('generated', len(list(Path('json').glob('*.json'))), 'network files')\n")
+    (json_tools / "validate.py").write_text(
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "files = list(Path('json').glob('*.json'))\n"
+        "assert files, 'no generated json'\n"
+        "for f in files:\n"
+        "    data = json.loads(f.read_text())\n"
+        "    assert isinstance(data, dict)\n"
+        "print('validated', len(files), 'network files')\n")
 
     state = tmp_path / "state"
     state.mkdir()
@@ -360,3 +400,188 @@ def test_ledger_multiprocess_appends(tmp_path: Path) -> None:
     lines = [json.loads(l) for l in (tmp_path / "led.jsonl").read_text().splitlines() if l.strip()]
     assert len(lines) == 120
     assert all(json.dumps(l).count("recorded_at_utc") == 1 for l in lines)
+
+
+# ===========================================================================
+# Gap-regression battery (acceptance round 2): every former fail-open path
+# must now BLOCK (or FAIL), and CI-pending resume must re-check.
+# ===========================================================================
+
+
+def _ready_env(tmp_path: Path) -> dict:
+    env = make_fixture_env(tmp_path, viable=True)
+    assert run_runner(env).returncode == 0
+    receipt = receipt_of(env)
+    assert receipt["outcome"] == "READY_TO_SUBMIT"
+    return env
+
+
+def test_resume_blocked_on_tampered_freeze_manifest(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    manifest = env["paths"]["run_dir"] / "freeze_manifest.json"
+    payload = json.loads(manifest.read_text())
+    payload["repo"]["base_sha"] = "0" * 40  # tamper
+    manifest.write_text(json.dumps(payload, indent=2))
+    proc = run_runner(env, "--resume")
+    assert proc.returncode == 2
+    receipt = receipt_of(env)
+    assert receipt["outcome"] == "BLOCKED"
+    assert "freeze" in receipt["outcome_reason"] and "tampered" in receipt["outcome_reason"]
+
+
+def test_resume_blocked_on_tampered_worker_output(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    output = env["paths"]["run_dir"] / "worker_outputs" / "candidate_services.json"
+    payload = json.loads(output.read_text())
+    payload["viable"] = [{"slug": "forged"}]
+    output.write_text(json.dumps(payload, indent=2))
+    proc = run_runner(env, "--resume")
+    assert proc.returncode == 2
+    receipt = receipt_of(env)
+    assert receipt["outcome"] == "BLOCKED"
+    assert "candidate_services" in receipt["outcome_reason"]
+
+
+def test_resume_blocked_on_changed_repo_or_run_or_context(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    # different run-id on the same run-dir -> identity drift
+    proc = subprocess.run(
+        [sys.executable, str(RUNNER), "--mode", "review_required",
+         "--run-id", "other-run", "--repo-path", str(env["paths"]["repo"]),
+         "--run-dir", str(env["paths"]["run_dir"]),
+         "--worker-cmd", str(FIXTURES / "fake_worker.py"),
+         "--json-tools-dir", str(env["paths"]["json_tools"]),
+         "--policy-json", str(env["paths"]["policy"]),
+         "--resume"],
+        env=env["env"], capture_output=True, text=True)
+    assert proc.returncode == 2
+    assert receipt_of(env)["outcome"] == "BLOCKED"
+    assert "run_id" in receipt_of(env)["outcome_reason"]
+
+    (tmp_path / "second").mkdir()
+    env2 = _ready_env(tmp_path / "second")
+    # changed context (precedents rewritten) -> drift
+    (env2["paths"]["state"] / "reviewer_precedents.md").write_text("# changed rules\n")
+    proc2 = run_runner(env2, "--resume")
+    assert proc2.returncode == 2
+    assert receipt_of(env2)["outcome"] == "BLOCKED"
+    assert "context drift: precedents" in receipt_of(env2)["outcome_reason"]
+
+
+def test_ci_pending_resume_rechecks_and_submits(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    state = json.loads((env["paths"]["run_dir"] / "run_state.json").read_text())
+    cfg = json.loads(env["paths"]["cfg"].read_text())
+    cfg["ci_sha"] = state["reviewed_commit_sha"]
+    cfg["pr_head_sha"] = state["reviewed_commit_sha"]
+    env["paths"]["cfg"].write_text(json.dumps(cfg))
+    seq = tmp_path / "ci_seq.txt"
+    seq.write_text("skipped\nsuccess\n")  # first check pending, resume sees success
+    env["env"]["FAKE_GH_CI_SEQ"] = str(seq)
+
+    grant = _grant_file(env)
+    first = run_runner(env, "--mode", "supervised_submit", "--grant", str(grant), "--resume")
+    receipt = receipt_of(env)
+    assert first.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "CI" in receipt["outcome_reason"] and "pending" in receipt["outcome_reason"]
+    # NOT terminal-submitted: remote_pr_created exists, post_publish does not
+    completed = json.loads((env["paths"]["run_dir"] / "run_state.json").read_text())["completed_steps"]
+    assert "remote_pr_created" in completed
+    assert "post_publish_verified" not in completed
+
+    second = run_runner(env, "--mode", "supervised_submit", "--grant", str(grant), "--resume")
+    receipt = receipt_of(env)
+    assert second.returncode == 0
+    assert receipt["outcome"] == "SUBMITTED"
+    gh_log = Path(env["env"]["FAKE_GH_LOG"]).read_text()
+    assert gh_log.count("pr create") == 1  # resume re-checked CI, never re-created
+
+
+def test_publish_blocked_when_head_list_query_fails(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    cfg = json.loads(env["paths"]["cfg"].read_text())
+    cfg["fail_head_list"] = True
+    env["paths"]["cfg"].write_text(json.dumps(cfg))
+    grant = _grant_file(env)
+    proc = run_runner(env, "--mode", "supervised_submit", "--grant", str(grant), "--resume")
+    receipt = receipt_of(env)
+    assert proc.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "gh pr list" in receipt["outcome_reason"]
+    # fail-open would have treated the failure as "no existing PR" and created one
+    assert Path(env["env"]["FAKE_GH_LOG"]).read_text().count("pr create") == 0
+
+
+def test_publish_blocked_when_push_fails(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    worktree = env["paths"]["run_dir"] / "worktree"
+    subprocess.run(["git", "-C", str(worktree), "remote", "set-url", "fork",
+                    "/nonexistent-remote/repo.git"], check=True, capture_output=True)
+    grant = _grant_file(env)
+    proc = run_runner(env, "--mode", "supervised_submit", "--grant", str(grant), "--resume")
+    receipt = receipt_of(env)
+    assert proc.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "git push" in receipt["outcome_reason"]
+    assert Path(env["env"]["FAKE_GH_LOG"]).read_text().count("pr create") == 0
+
+
+def test_submission_blocked_on_missing_template_sha(tmp_path: Path) -> None:
+    env = make_fixture_env(tmp_path, viable=True)
+    policy = env["paths"]["policy"]
+    payload = json.loads(policy.read_text())
+    payload["template_sha256"] = "missing"
+    policy.write_text(json.dumps(payload))
+    proc = run_runner(env)
+    receipt = receipt_of(env)
+    assert proc.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "template" in receipt["outcome_reason"]
+
+
+def test_hydration_mismatch_fails_positive_chain(tmp_path: Path) -> None:
+    env = make_fixture_env(tmp_path, viable=True)
+    # spec claims algorand but the CSV row lands in somnia -> hydration absent
+    spec = env["paths"]["spec"]
+    payload = json.loads(spec.read_text())
+    payload["candidates"][0]["network"] = "algorand"
+    spec.write_text(json.dumps(payload, indent=2))
+    proc = run_runner(env)
+    receipt = receipt_of(env)
+    assert proc.returncode in (1, 2)
+    assert receipt["outcome"] == "FAILED"
+    assert "hydration" in receipt["outcome_reason"]
+    # never reached submission/publish
+    completed = json.loads((env["paths"]["run_dir"] / "run_state.json").read_text())["completed_steps"]
+    assert "submission_bundle" not in completed and "remote_pr_created" not in completed
+
+
+def test_driver_single_command_no_manual_reentry(tmp_path: Path) -> None:
+    """Acceptance: one task command handles every AWAIT_WORKER automatically."""
+
+    env = make_fixture_env(tmp_path, viable=True)
+    driver = REPO_ROOT / "scripts/ops/chainlove_drive.py"
+    args = ["--mode", "review_required", "--run-id", "e2e-run",
+            "--repo-path", str(env["paths"]["repo"]),
+            "--run-dir", str(env["paths"]["run_dir"]),
+            "--json-tools-dir", str(env["paths"]["json_tools"]),
+            "--reward-address", "0x4B689c62992FCcC63525d32D70696E45190d260A",
+            "--policy-json", str(env["paths"]["policy"]),
+            "--precedents", str(env["paths"]["state"] / "reviewer_precedents.md"),
+            "--deferred-queue", str(env["paths"]["state"] / "deferred_candidates.json"),
+            "--stale-inventory", str(env["paths"]["state"] / "stale_inventory.json")]
+    proc = subprocess.run(
+        [sys.executable, str(driver),
+         "--worker-cmd", str(FIXTURES / "fake_worker.py"), "--", *args],
+        env=env["env"], capture_output=True, text=True, timeout=600)
+    assert proc.returncode == 0, proc.stderr[-500:]
+    receipt = receipt_of(env)
+    assert receipt["outcome"] == "READY_TO_SUBMIT"
+    # every worker dispatched exactly once by the driver loop
+    calls = worker_calls(env)
+    for stage in ("candidate_mcp", "candidate_services", "evidence_review",
+                  "adversarial_review"):
+        assert calls.count(stage) == 1
+    # usage recorded into state and surfaced in the receipt
+    assert set(receipt.get("usage", {})) >= {"candidate_mcp", "evidence_review"}

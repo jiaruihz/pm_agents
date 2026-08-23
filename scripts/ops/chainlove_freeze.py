@@ -393,21 +393,72 @@ def build_manifest(
 # CLI
 # ---------------------------------------------------------------------------
 
-def gh_api_paginated(repo: str, path: str) -> Any:
+def gh_api_paginated(
+    repo: str,
+    path: str,
+    *,
+    max_retries: int = 3,
+    retry_delay_seconds: float = 5.0,
+) -> Any:
     """One `gh api --paginate` call returns the full list; never re-paginate manually
-    (a second full fetch loops forever once a page boundary is crossed)."""
+    (a second full fetch loops forever once a page boundary is crossed).
 
-    proc = subprocess.run(
-        ["gh", "api", "--paginate", f"/repos/{repo}/{path}"],
-        text=True, capture_output=True, check=False, timeout=600,
-    )
-    if proc.returncode:
-        raise RuntimeError(f"gh api failed: {proc.stderr.strip()[:200]}")
-    return json.loads(proc.stdout)
+    Transient GitHub transport failures are retried per endpoint so one EOF near
+    the end of a 500+ PR freeze does not discard the entire snapshot. The caller
+    still fails closed after the bounded retry budget is exhausted.
+    """
+
+    if max_retries < 1:
+        raise ValueError("max_retries must be >= 1")
+
+    last_error = "unknown error"
+    for attempt in range(max_retries):
+        try:
+            proc = subprocess.run(
+                ["gh", "api", "--paginate", f"/repos/{repo}/{path}"],
+                text=True, capture_output=True, check=False, timeout=600,
+            )
+            if proc.returncode == 0:
+                try:
+                    return json.loads(proc.stdout)
+                except json.JSONDecodeError as exc:
+                    last_error = f"invalid JSON: {exc}"
+            else:
+                last_error = proc.stderr.strip()[:200] or f"exit {proc.returncode}"
+        except subprocess.TimeoutExpired as exc:
+            last_error = f"timeout after {exc.timeout}s"
+
+        if attempt + 1 < max_retries:
+            time.sleep(retry_delay_seconds * (2 ** attempt))
+
+    raise RuntimeError(f"gh api failed after {max_retries} attempts: {last_error}")
 
 
-def capture_snapshot(repo: str) -> dict[str, Any]:
+def capture_snapshot(repo: str, *, cache_dir: Path | None = None) -> dict[str, Any]:
     prs = gh_api_paginated(repo, "pulls?state=open")
+    if cache_dir:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def files_for(pr: dict[str, Any]) -> list[dict[str, str]]:
+        number = int(pr["number"])
+        head_sha = str(pr["head"]["sha"])
+        cache_path = cache_dir / f"{number}-{head_sha}.json" if cache_dir else None
+        if cache_path and cache_path.exists():
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(cached, list) and all(
+                isinstance(item, dict) and isinstance(item.get("path"), str)
+                for item in cached
+            ):
+                return cached
+
+        files = [
+            {"path": item["filename"]}
+            for item in gh_api_paginated(repo, f"pulls/{number}/files")
+        ]
+        if cache_path:
+            atomic_write_json(cache_path, files)
+        return files
+
     snapshot = {
         "schema_version": "chainlove_open_pr_snapshot_v1",
         "repository": repo,
@@ -419,10 +470,7 @@ def capture_snapshot(repo: str) -> dict[str, Any]:
                 "headRefName": pr["head"]["ref"],
                 "headRefOid": pr["head"]["sha"],
                 "updatedAt": pr["updated_at"],
-                "files": [
-                    {"path": f["filename"]}
-                    for f in gh_api_paginated(repo, f"pulls/{pr['number']}/files")
-                ],
+                "files": files_for(pr),
             }
             for pr in prs
         ],
@@ -431,46 +479,67 @@ def capture_snapshot(repo: str) -> dict[str, Any]:
 
 
 def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3,
-                     cache_dir: Path | None = None, head_shas: dict[int, str] | None = None) -> dict[int, str]:
+                     cache_dir: Path | None = None, head_shas: dict[int, str] | None = None,
+                     target_paths: set[str] | None = None,
+                     changed_file_counts: dict[int, int] | None = None) -> dict[int, str]:
     diffs: dict[int, str] = {}
     cache_dir = cache_dir or (Path("/tmp") / "chainlove-diff-cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
     head_shas = head_shas or {}
+    changed_file_counts = changed_file_counts or {}
     for number in numbers:
         head = head_shas.get(number, "")
         cached = cache_dir / f"{number}-{head[:12] or 'unknown'}.diff"
         if head and cached.is_file() and cached.stat().st_size > 0:
             diffs[number] = cached.read_text(encoding="utf-8")
             continue
-        last_error = ""
-        for attempt in range(1, max_retries + 1):
-            proc = subprocess.run(
-                ["gh", "pr", "diff", str(number), "--repo", repo],
-                text=True, capture_output=True, check=False, timeout=120,
-            )
-            if proc.returncode == 0:
-                diffs[number] = proc.stdout
-                cached.write_text(proc.stdout, encoding="utf-8")
-                last_error = ""
-                break
-            last_error = proc.stderr.strip()[:200]
-            time.sleep(2 * attempt)  # transient HTTP/2 / rate-limit flakes
+        prefer_files_fallback = changed_file_counts.get(number, 0) > 100
+        last_error = "large PR uses paginated files fallback" if prefer_files_fallback else ""
+        if not prefer_files_fallback:
+            for attempt in range(1, max_retries + 1):
+                proc = subprocess.run(
+                    ["gh", "pr", "diff", str(number), "--repo", repo],
+                    text=True, capture_output=True, check=False, timeout=120,
+                )
+                if proc.returncode == 0:
+                    diffs[number] = proc.stdout
+                    cached.write_text(proc.stdout, encoding="utf-8")
+                    last_error = ""
+                    break
+                last_error = proc.stderr.strip()[:200]
+                time.sleep(2 * attempt)  # transient HTTP/2 / rate-limit flakes
         if last_error:
-            # Giant PRs kill `gh pr diff` streams; the REST diff endpoint on
-            # api.github.com paginates cleanly — fall back to it.
-            proc = subprocess.run(
-                ["gh", "api", "-H", "Accept: application/vnd.diff",
-                 f"/repos/{repo}/pulls/{number}"],
-                text=True, capture_output=True, check=False, timeout=300,
-            )
-            if proc.returncode == 0 and proc.stdout.startswith("diff"):
-                diffs[number] = proc.stdout
-                cached.write_text(proc.stdout, encoding="utf-8")
-                continue
-            raise RuntimeError(
-                f"gh pr diff {number} failed after {max_retries} attempts "
-                f"and REST fallback: {last_error} / {proc.stderr.strip()[:120]}"
-            )
+            # Giant PRs can repeatedly cancel both GraphQL and whole-response
+            # REST diff streams. The paginated files endpoint returns each
+            # textual patch independently, so reconstruct only the target CSV
+            # fragments needed by extract_claimed_slugs. Missing target patches
+            # remain a hard failure; silently dropping a claim is forbidden.
+            if target_paths is None:
+                raise RuntimeError(
+                    f"gh pr diff {number} failed after {max_retries} attempts: {last_error}"
+                )
+            file_rows = gh_api_paginated(repo, f"pulls/{number}/files")
+            fragments: list[str] = []
+            missing: list[str] = []
+            for item in file_rows:
+                filename = item.get("filename")
+                if filename not in target_paths:
+                    continue
+                patch = item.get("patch")
+                if not isinstance(patch, str):
+                    missing.append(str(filename))
+                    continue
+                fragments.append(
+                    f"diff --git a/{filename} b/{filename}\n"
+                    f"+++ b/{filename}\n{patch}\n"
+                )
+            if missing:
+                raise RuntimeError(
+                    f"PR {number} files fallback missing target patches: {missing[:5]}"
+                )
+            reconstructed = "".join(fragments)
+            diffs[number] = reconstructed
+            cached.write_text(reconstructed, encoding="utf-8")
     return diffs
 
 
@@ -531,25 +600,30 @@ def main(argv: list[str] | None = None) -> int:
                         help="reuse an existing snapshot file instead of calling gh")
     parser.add_argument("--preflight-only", action="store_true",
                         help="stop after writing preflight_report.json (runner stage 1)")
+    parser.add_argument("--skip-preflight", action="store_true",
+                        help="runner already executed the preflight stage; do not rewrite its report")
     parser.add_argument("--policy-json", type=Path,
                         help="pre-fetched policy snapshot (offline tests); live runs fetch fresh")
     args = parser.parse_args(argv)
 
     started = time.time()
-    preflight_report = preflight(
-        repo_path=args.repo_path, expected_remote=args.repo,
-        github_user=args.github_user, wip_limit=args.wip_limit,
-    )
-    args.run_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(args.run_dir / "preflight_report.json", preflight_report)
-    if args.preflight_only:
-        return 0
+    if not args.skip_preflight:
+        preflight_report = preflight(
+            repo_path=args.repo_path, expected_remote=args.repo,
+            github_user=args.github_user, wip_limit=args.wip_limit,
+        )
+        args.run_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(args.run_dir / "preflight_report.json", preflight_report)
+        if args.preflight_only:
+            return 0
+    else:
+        args.run_dir.mkdir(parents=True, exist_ok=True)
 
     paths = target_paths(tuple(args.networks), tuple(args.categories))
     if args.snapshot_json:
         snapshot = json.loads(args.snapshot_json.read_text(encoding="utf-8"))
     else:
-        snapshot = capture_snapshot(args.repo)
+        snapshot = capture_snapshot(args.repo, cache_dir=args.run_dir / ".files_cache")
         atomic_write_json(args.run_dir / "open_pr_snapshot.json", snapshot)
 
     touching = [
@@ -558,8 +632,11 @@ def main(argv: list[str] | None = None) -> int:
     ]
     head_shas = {pr["number"]: pr.get("headRefOid", "")
                  for pr in snapshot.get("pull_requests", [])}
+    changed_file_counts = {pr["number"]: len(pr.get("files", []))
+                           for pr in snapshot.get("pull_requests", [])}
     diffs = capture_pr_diffs(args.repo, touching,
-                             cache_dir=args.run_dir / ".diff_cache", head_shas=head_shas)
+                             cache_dir=args.run_dir / ".diff_cache", head_shas=head_shas,
+                             target_paths=paths, changed_file_counts=changed_file_counts)
     claimed_paths, err = extract_claimed_slugs(diffs, paths)
     claimed_index = {
         "schema_version": CLAIMED_INDEX_SCHEMA_VERSION,

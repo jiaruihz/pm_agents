@@ -34,6 +34,7 @@ def _load_script(name: str):
 
 freeze_mod = _load_script("chainlove_freeze.py")
 verify_mod = _load_script("chainlove_verify.py")
+run_mod = _load_script("chainlove_run.py")
 
 
 def make_bundle(tmp_path: Path, **overrides) -> dict:
@@ -117,6 +118,26 @@ def test_bundle_rejects_role_model_family_mismatch() -> None:
         RoleSpec(name="luna_scanner", requested_model="gpt-5.6-terra")
 
 
+def test_successful_finish_clears_stale_failure_reason(tmp_path: Path) -> None:
+    orchestrator = run_mod.Orchestrator.__new__(run_mod.Orchestrator)
+    orchestrator.run_dir = tmp_path
+    orchestrator.state = run_mod.RunState(tmp_path / "run_state.json")
+    orchestrator.state.data.update({
+        "run_id": "resume-test",
+        "mode": "shadow",
+        "outcome": "BLOCKED",
+        "outcome_reason": "old transport failure",
+    })
+    orchestrator.run_gate = lambda *_args, **_kwargs: 0
+
+    orchestrator.finish("NOOP_VERIFIED")
+
+    receipt = json.loads((tmp_path / "run_receipt.json").read_text(encoding="utf-8"))
+    assert "outcome_reason" not in orchestrator.state.data
+    assert receipt["outcome"] == "NOOP_VERIFIED"
+    assert receipt["outcome_reason"] is None
+
+
 # ---------------------------------------------------------------------------
 # Freeze: fail-fast, header-safe claimed index, manifest consistency
 # ---------------------------------------------------------------------------
@@ -152,6 +173,139 @@ def test_claimed_index_counts_unparseable_rows() -> None:
         {1: bad}, {"listings/specific-networks/somnia/mcpservers.csv"}
     )
     assert err["parse_errors"] == 1
+
+
+def test_gh_api_paginated_retries_transient_transport_failure(monkeypatch) -> None:
+    responses = iter([
+        subprocess.CompletedProcess([], 1, stdout="", stderr="EOF"),
+        subprocess.CompletedProcess([], 0, stdout='[{"number": 1}]', stderr=""),
+    ])
+    sleeps: list[float] = []
+    monkeypatch.setattr(freeze_mod.subprocess, "run", lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(freeze_mod.time, "sleep", sleeps.append)
+
+    result = freeze_mod.gh_api_paginated(
+        "Chain-Love/chain-love", "pulls/1/files",
+        max_retries=3, retry_delay_seconds=0.25,
+    )
+
+    assert result == [{"number": 1}]
+    assert sleeps == [0.25]
+
+
+def test_gh_api_paginated_fails_closed_after_retry_budget(monkeypatch) -> None:
+    monkeypatch.setattr(
+        freeze_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="connection reset"
+        ),
+    )
+    monkeypatch.setattr(freeze_mod.time, "sleep", lambda _seconds: None)
+
+    with pytest.raises(RuntimeError, match="failed after 2 attempts: connection reset"):
+        freeze_mod.gh_api_paginated(
+            "Chain-Love/chain-love", "pulls/1/files",
+            max_retries=2, retry_delay_seconds=0,
+        )
+
+
+def test_capture_snapshot_reuses_files_cache_by_pr_head(monkeypatch, tmp_path: Path) -> None:
+    pr = {
+        "number": 7,
+        "head": {"ref": "feature", "sha": "a" * 40},
+        "updated_at": "2026-08-23T00:00:00Z",
+    }
+    calls: list[str] = []
+
+    def first_fetch(_repo: str, path: str):
+        calls.append(path)
+        if path == "pulls?state=open":
+            return [pr]
+        assert path == "pulls/7/files"
+        return [{"filename": "references/offers/security.csv"}]
+
+    monkeypatch.setattr(freeze_mod, "gh_api_paginated", first_fetch)
+    first = freeze_mod.capture_snapshot("Chain-Love/chain-love", cache_dir=tmp_path)
+    assert calls == ["pulls?state=open", "pulls/7/files"]
+    assert first["pull_requests"][0]["files"] == [
+        {"path": "references/offers/security.csv"}
+    ]
+
+    calls.clear()
+
+    def cached_fetch(_repo: str, path: str):
+        calls.append(path)
+        assert path == "pulls?state=open"
+        return [pr]
+
+    monkeypatch.setattr(freeze_mod, "gh_api_paginated", cached_fetch)
+    second = freeze_mod.capture_snapshot("Chain-Love/chain-love", cache_dir=tmp_path)
+    assert calls == ["pulls?state=open"]
+    assert second["pull_requests"][0]["files"] == first["pull_requests"][0]["files"]
+
+
+def test_capture_pr_diffs_reconstructs_target_patches_from_files_fallback(
+    monkeypatch, tmp_path: Path
+) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        if command[:3] == ["gh", "pr", "diff"]:
+            return subprocess.CompletedProcess(
+                command, 1, stdout="", stderr="stream cancelled"
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    def fake_paginated(_repo: str, path: str):
+        assert path == "pulls/99/files"
+        return [
+            {"filename": "references/offers/security.csv", "patch": "@@ -1 +1,2 @@\n slug\n+new-slug"},
+            {"filename": "README.md", "patch": "@@ -1 +1 @@\n-old\n+new"},
+        ]
+
+    monkeypatch.setattr(freeze_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(freeze_mod.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(freeze_mod, "gh_api_paginated", fake_paginated)
+
+    result = freeze_mod.capture_pr_diffs(
+        "Chain-Love/chain-love", [99], max_retries=2,
+        cache_dir=tmp_path, head_shas={99: "b" * 40},
+        target_paths={"references/offers/security.csv"},
+        changed_file_counts={99: 101},
+    )
+
+    assert commands == []
+    assert result[99].startswith("diff --git")
+    assert "+++ b/references/offers/security.csv" in result[99]
+    assert "+new-slug" in result[99]
+    assert "README.md" not in result[99]
+
+
+def test_capture_pr_diffs_fails_closed_when_target_patch_is_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        freeze_mod.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 1, stdout="", stderr="stream cancelled"
+        ),
+    )
+    monkeypatch.setattr(freeze_mod.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        freeze_mod,
+        "gh_api_paginated",
+        lambda _repo, _path: [{"filename": "references/offers/security.csv"}],
+    )
+
+    with pytest.raises(RuntimeError, match="missing target patches"):
+        freeze_mod.capture_pr_diffs(
+            "Chain-Love/chain-love", [99], max_retries=1,
+            cache_dir=tmp_path, head_shas={99: "c" * 40},
+            target_paths={"references/offers/security.csv"},
+        )
 
 
 def _git_repo(tmp_path: Path) -> Path:

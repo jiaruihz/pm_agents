@@ -226,6 +226,7 @@ def gate_schema_pipeline(args: argparse.Namespace) -> int:
     import tempfile
 
     repo = Path(args.repo_path)
+    json_out = Path(getattr(args, "json_out", "") or "")
     with tempfile.TemporaryDirectory(prefix="cl-verify-") as tmp:
         work = Path(tmp) / "repo"
         shutil.copytree(repo, work, symlinks=True)
@@ -242,7 +243,12 @@ def gate_schema_pipeline(args: argparse.Namespace) -> int:
             print((proc.stdout or "")[-500:])
             if proc.returncode:
                 return fail(f"{script} exited {proc.returncode}")
-    return ok("json-tools three-step pipeline passed on patched tree")
+        if json_out:
+            generated = work / "json"
+            if not generated.is_dir() or not any(generated.glob("*.json")):
+                return fail("csv_to_json produced no network JSON outputs")
+            shutil.copytree(generated, json_out, dirs_exist_ok=True)
+    return ok("json-tools three-step pipeline passed; generated JSON captured")
 
 
 def gate_hydration(args: argparse.Namespace) -> int:
@@ -499,7 +505,16 @@ def gate_submission_bundle(args: argparse.Namespace) -> int:
     for key in ("run_id", "reviewed_commit_sha", "base_sha", "pr_body",
                 "pr_template_sha256", "reward_address", "slugs"):
         if not bundle.get(key):
-            return fail(f"bundle missing {key}")
+            return blocked(f"bundle missing {key}")
+    expected_template = getattr(args, "expect_template_sha", "")
+    if expected_template:
+        if bundle["pr_template_sha256"] in ("unknown", "missing"):
+            return blocked("bundle template SHA is unknown/missing")
+        if bundle["pr_template_sha256"] != expected_template:
+            return blocked(
+                f"template SHA drift: bundle {bundle['pr_template_sha256'][:12]} != "
+                f"freeze manifest {expected_template[:12]}"
+            )
     body = Path(bundle["pr_body"]).read_text(encoding="utf-8")
     for needle in ("## Summary", "## Type of change", "## Validation checklist",
                    "AI disclosure", bundle["reward_address"]):
@@ -581,7 +596,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("commit-identity"); p.add_argument("--repo-path", required=True); p.add_argument("--sha", required=True); p.add_argument("--expect-name", required=True); p.add_argument("--expect-email", required=True); p.set_defaults(func=gate_commit_identity)
     p = sub.add_parser("changed-paths"); p.add_argument("--repo-path", required=True); p.add_argument("--sha", required=True); p.add_argument("--allowlist", required=True); p.set_defaults(func=gate_changed_paths)
     p = sub.add_parser("diff-minimal"); p.add_argument("--repo-path", required=True); p.add_argument("--sha", required=True); p.add_argument("--max-additions", type=int, default=50); p.add_argument("--max-deletions", type=int, default=10); p.set_defaults(func=gate_diff_minimal)
-    p = sub.add_parser("schema-pipeline"); p.add_argument("--repo-path", required=True); p.add_argument("--json-tools-dir", required=True); p.set_defaults(func=gate_schema_pipeline)
+    p = sub.add_parser("schema-pipeline"); p.add_argument("--repo-path", required=True); p.add_argument("--json-tools-dir", required=True); p.add_argument("--json-out"); p.set_defaults(func=gate_schema_pipeline)
     p = sub.add_parser("hydration"); p.add_argument("--json-dir", required=True); p.add_argument("--check", dest="checks", action="append", required=True); p.set_defaults(func=gate_hydration)
     p = sub.add_parser("zwsp-count"); p.add_argument("--file", required=True); p.add_argument("--expect", type=int, default=10); p.set_defaults(func=gate_zwsp_count)
     p = sub.add_parser("final-collision"); p.add_argument("--repo", required=True); p.add_argument("--snapshot", required=True); p.add_argument("--slug", dest="slugs", action="append", required=True); p.set_argument = None; p.set_defaults(func=gate_final_collision)
@@ -592,7 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("scan-coverage"); p.add_argument("--run-dir", required=True); p.set_defaults(func=gate_scan_coverage)
     p = sub.add_parser("rejection-ledger"); p.add_argument("--ledger", required=True); p.set_defaults(func=gate_rejection_ledger)
     p = sub.add_parser("adversarial-approved"); p.add_argument("--result", required=True); p.add_argument("--expect-sha", required=True); p.set_defaults(func=gate_adversarial_approved)
-    p = sub.add_parser("submission-bundle"); p.add_argument("--bundle", required=True); p.add_argument("--repo-path", required=True); p.add_argument("--reviewed-sha"); p.add_argument("--expect-address"); p.set_defaults(func=gate_submission_bundle)
+    p = sub.add_parser("submission-bundle"); p.add_argument("--bundle", required=True); p.add_argument("--repo-path", required=True); p.add_argument("--reviewed-sha"); p.add_argument("--expect-address"); p.add_argument("--expect-template-sha"); p.set_defaults(func=gate_submission_bundle)
     return parser
 
 
