@@ -138,12 +138,17 @@ class RunState:
             if stored.get(key) != identity.get(key):
                 problems.append(
                     f"identity drift: {key} {stored.get(key)!r} != {identity.get(key)!r}")
-        # mode is a LEGAL lifecycle escalation (plan §2.1: same immutable run,
-        # user-signed grant): review_required -> supervised_submit only.
-        allowed_modes = {stored.get("mode"), "supervised_submit"}
-        if identity.get("mode") not in allowed_modes:
+        # Mode transitions: same-mode resume, or the single legal escalation
+        # review_required -> supervised_submit (plan §2.1). shadow -> supervised
+        # and every downgrade are rejected.
+        stored_mode = stored.get("mode")
+        new_mode = identity.get("mode")
+        legal = (new_mode == stored_mode) or (
+            stored_mode == "review_required" and new_mode == "supervised_submit")
+        if not legal:
             problems.append(
-                f"illegal mode transition: {stored.get('mode')!r} -> {identity.get('mode')!r}")
+                f"illegal mode transition: {stored_mode!r} -> {new_mode!r} "
+                "(allowed: same mode, or review_required -> supervised_submit)")
         for name, ref in (stored.get("context") or {}).items():
             live = identity.get("context", {}).get(name)
             if not live or live["sha256"] != ref["sha256"]:
@@ -285,8 +290,11 @@ class Orchestrator:
             "approved_spec_path": str(self.run_dir / "approved_patch_spec.json"),
             "pr_number": self.state.data.get("pr_number"),
             "outcome_reason": self.state.data.get("outcome_reason"),
-            "pushed": self.state.data.get("stage") in ("publish", "post_publish"),
-            "pr_created": bool(self.state.data.get("pr_number")),
+            "pushed": "remote_pr_created" in self.state.data.get("completed_steps", {}),
+            "pr_created": "remote_pr_created" in self.state.data.get("completed_steps", {}),
+            "pr_branch": (f"agent/run-{self.state.data['run_id']}"
+                          if "remote_pr_created" in self.state.data.get("completed_steps", {})
+                          else None),
         }
         if reason:
             receipt["reason"] = reason
@@ -336,6 +344,11 @@ class Orchestrator:
                 self.state.save()
         elif output_path.exists():
             usage_path = output_path.with_suffix(".usage.json")
+            if not usage_path.exists():
+                self.finish("BLOCKED", reason=(
+                    f"worker {stage} output present but usage sidecar missing — "
+                    "usage accounting is mandatory"))
+                raise SystemExit(2)
             if usage_path.exists():
                 self.state.data["worker_calls"].append({
                     "stage": stage, "task": str(task_path), "output": str(output_path),
@@ -461,9 +474,17 @@ class Orchestrator:
             prior = self.args.prior_run_dir / "open_pr_snapshot.json"
             if prior.is_file():
                 prior_capture = json.loads(prior.read_text(encoding="utf-8")).get("captured_at_utc", "")
-        briefs = mod.build_briefs(self.run_dir, categories, prior_capture,
+        result = mod.build_briefs(self.run_dir, categories, prior_capture,
                                   self.args.prior_run_dir)
-        return briefs.get(stage, "")
+        manifest_path = self.run_dir / "compact_coverage_manifest.json"
+        atomic_write_json(manifest_path, result["coverage"])
+        if not result["coverage"].get("complete"):
+            self.finish("BLOCKED", reason=(
+                "compact coverage incomplete: truncation/missing-diff/parse-error "
+                f"(delta_prs={result['coverage']['delta_pr_count']}, "
+                f"rows={result['coverage']['total_added_target_rows']})"))
+            raise SystemExit(2)
+        return result["briefs"].get(stage, "")
 
     def stage_scan(self, stage: str) -> None:
         if self.state.step_done(stage):
@@ -925,16 +946,16 @@ class Orchestrator:
     # -- main loop -----------------------------------------------------------
 
     def execute(self) -> None:
+        # Identity is WRITE-ONCE: it is stored only on the first successful
+        # start and is NEVER overwritten — a failed validation keeps the
+        # original identity so repeat offender resumes keep failing.
         if self.state.data.get("completed_steps"):
             problems = self.state.validate_resume(self.identity)
             if problems:
-                self.state.data["identity"] = self.identity
-                self.state.save()
                 self.finish("BLOCKED", reason="resume checkpoint drift: " + "; ".join(problems[:4]))
                 raise SystemExit(2)
-        first_run = not self.state.data.get("identity")
-        self.state.data["identity"] = self.identity
-        if first_run:
+        if not self.state.data.get("identity"):
+            self.state.data["identity"] = self.identity
             self.state.save()
         self.stage_preflight()
         self.stage_freeze()

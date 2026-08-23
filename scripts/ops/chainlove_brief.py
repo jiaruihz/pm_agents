@@ -16,8 +16,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-MAX_HUNK_LINES = 40
-MAX_DIFF_PRS = 12
+# NO caps: every delta PR and every added target row must be processed.
+# Truncation is a defect (BLOCKED), never a silent optimization.
+TRUNCATION_MARKER = "... (trimmed)"
 
 
 def target_path_filter(categories: list[str]) -> set[str]:
@@ -30,22 +31,28 @@ def target_path_filter(categories: list[str]) -> set[str]:
     return paths
 
 
-def trim_diff(diff: str, targets: set[str], max_lines: int = MAX_HUNK_LINES) -> str:
-    kept: list[str] = []
+def added_target_rows(diff: str, targets: set[str]) -> tuple[list[str], bool]:
+    """All added rows on target paths. Returns (rows, parsed_ok); any parse
+    anomaly (missing +++ header first, empty hunks on a touched target) is
+    reported so the caller can BLOCK."""
+
+    rows: list[str] = []
     current: str | None = None
-    keep = False
+    parsed_ok = True
+    saw_header = False
     for line in diff.splitlines():
         if line.startswith("+++ b/"):
             current = line[6:]
-            keep = current in targets
+            saw_header = True
             continue
-        if not keep:
+        if current is None:
+            if line.startswith(("diff ", "index ", "--- ")):
+                continue
+            parsed_ok = False  # body before any +++ header
             continue
-        kept.append(line)
-        if len(kept) >= max_lines:
-            kept.append("... (trimmed)")
-            break
-    return "\n".join(kept)
+        if current in targets and line.startswith("+") and not line.startswith("+++"):
+            rows.append(line[1:])
+    return rows, parsed_ok and saw_header
 
 
 def build_briefs(run_dir: Path, categories: list[str],
@@ -67,18 +74,33 @@ def build_briefs(run_dir: Path, categories: list[str],
         pr for pr in snapshot.get("pull_requests", [])
         if (prior_capture and str(pr.get("updatedAt", "")) > prior_capture)
         and any(f.get("path") in targets for f in pr.get("files", []))
-    ][:MAX_DIFF_PRS]
+    ]
     delta_digest = []
+    coverage_rows = []
     cache = run_dir / ".diff_cache"
+    truncated = False
     for pr in delta_prs:
-        hunks = ""
+        target_files = [f["path"] for f in pr.get("files", []) if f["path"] in targets]
         cached = sorted(cache.glob(f"{pr['number']}-*.diff"))
-        if cached:
-            hunks = trim_diff(cached[0].read_text(encoding="utf-8"), targets)
-        delta_digest.append({
+        rows: list[str] = []
+        parsed_ok = True
+        if target_files:
+            if not cached:
+                truncated = True  # diff required for a target-touching delta PR
+            else:
+                rows, parsed_ok = added_target_rows(
+                    cached[0].read_text(encoding="utf-8"), targets)
+                if not parsed_ok:
+                    truncated = True
+        entry = {
             "pr": pr["number"], "updated": pr.get("updatedAt"),
-            "files": [f["path"] for f in pr.get("files", []) if f["path"] in targets],
-            "target_hunks": hunks,
+            "files": target_files, "added_target_rows": rows,
+        }
+        delta_digest.append(entry)
+        coverage_rows.append({
+            "pr": pr["number"], "target_files": target_files,
+            "added_row_count": len(rows), "diff_cached": bool(cached),
+            "parsed_ok": parsed_ok,
         })
 
     prior_digest = ""
@@ -105,18 +127,28 @@ def build_briefs(run_dir: Path, categories: list[str],
         "deferred_states": ready,
         "stale_seams_open": [f.get("name") for f in stale.get("seams_opened", [])],
     }
+    coverage = {
+        "schema_version": "chainlove_compact_coverage_v1",
+        "delta_pr_count": len(delta_prs),
+        "total_added_target_rows": sum(r["added_row_count"] for r in coverage_rows),
+        "prs": coverage_rows,
+        "complete": (not truncated) and all(
+            r["parsed_ok"] and (r["diff_cached"] or not r["target_files"])
+            for r in coverage_rows),
+        "truncation_detected": truncated,
+    }
     briefs = {}
     for stage, cats in (("candidate_mcp", ["mcpservers"]),
                         ("candidate_services", categories)):
         briefs[stage] = header + json.dumps(
             {**common, "categories": cats}, ensure_ascii=False, indent=1
-        )[:20000] + prior_digest
+        )
     briefs["evidence_review"] = header + (
         "Adjudicate ONLY from the two scanner outputs, the deferred states above "
         "and the precedents file; produce the approved patch spec per the task "
         "card schema (run_id must match). Do not re-scan."
-    )
-    return briefs
+    ) + prior_digest
+    return {"briefs": briefs, "coverage": coverage}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -126,14 +158,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prior-capture", default="")
     parser.add_argument("--prior-run-dir", type=Path)
     args = parser.parse_args(argv)
-    briefs = build_briefs(args.run_dir, args.categories.split(","),
+    result = build_briefs(args.run_dir, args.categories.split(","),
                           args.prior_capture, args.prior_run_dir)
     out = args.run_dir / "worker_tasks"
     out.mkdir(parents=True, exist_ok=True)
-    for stage, text in briefs.items():
+    for stage, text in result["briefs"].items():
         (out / f"{stage}.brief.md").write_text(text, encoding="utf-8")
-    print(json.dumps({k: len(v) for k, v in briefs.items()}, indent=2))
-    return 0
+    (args.run_dir / "compact_coverage_manifest.json").write_text(
+        json.dumps(result["coverage"], ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps({"brief_chars": {k: len(v) for k, v in result["briefs"].items()},
+                       "coverage_complete": result["coverage"]["complete"],
+                       "delta_prs": result["coverage"]["delta_pr_count"],
+                       "added_rows": result["coverage"]["total_added_target_rows"]}, indent=2))
+    return 0 if result["coverage"]["complete"] else 2
 
 
 if __name__ == "__main__":

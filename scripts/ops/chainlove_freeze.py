@@ -9,6 +9,7 @@ proven by chainlove_verify.py, not self-asserted.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -279,6 +280,17 @@ def _api_branch_sha(repo: str) -> str | None:
 # Freeze inputs
 # ---------------------------------------------------------------------------
 
+def _first_csv_cell(added_line: str) -> str | None:
+    """First CSV cell of an added row, honoring quoted-field style
+    (upstream mixes bare and fully-quoted rows). None on csv parse failure."""
+
+    try:
+        cells = next(csv.reader([added_line]), [])
+    except csv.Error:
+        return None
+    return cells[0].strip() if cells else ""
+
+
 def extract_claimed_slugs(
     diffs: dict[int, str], paths: set[str]
 ) -> tuple[dict[str, list[str]], dict[str, int]]:
@@ -298,7 +310,10 @@ def extract_claimed_slugs(
                 continue
             if current is None or not line.startswith("+") or line.startswith("+++"):
                 continue
-            slug = line[1:].split(",", 1)[0].strip()
+            slug = _first_csv_cell(line[1:])
+            if slug is None:
+                parse_errors += 1
+                continue
             if slug in RESERVED_SLUGS or slug == "":
                 continue
             if not SLUG_RE.fullmatch(slug):

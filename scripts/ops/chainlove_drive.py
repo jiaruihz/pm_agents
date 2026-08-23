@@ -64,15 +64,22 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"driver: worker {stage} failed", file=sys.stderr)
                 return 5
         elif args.session_bridge:
-            print(f"driver: session-bridge waiting for {output}", flush=True)
+            usage = str(Path(output).with_suffix(".usage.json"))
+            print(f"driver: session-bridge waiting for {output} AND {usage}", flush=True)
             deadline = time.time() + args.bridge_timeout
             while time.time() < deadline:
-                if Path(output).exists():
-                    time.sleep(1)  # let the usage sidecar land too
-                    break
+                if Path(output).is_file() and Path(usage).is_file():
+                    out_size, usage_size = Path(output).stat().st_size, Path(usage).stat().st_size
+                    time.sleep(2)  # stability window: both must remain present/growing-done
+                    if (Path(output).is_file() and Path(usage).is_file()
+                            and Path(output).stat().st_size == out_size
+                            and Path(usage).stat().st_size == usage_size
+                            and out_size > 0 and usage_size > 0):
+                        break
                 time.sleep(3)
             else:
-                print("driver: session-bridge timed out", file=sys.stderr)
+                print("driver: session-bridge timed out (output+usage must both land)",
+                      file=sys.stderr)
                 return 6
         else:
             print("driver: AWAIT_WORKER without --worker-cmd/--session-bridge",

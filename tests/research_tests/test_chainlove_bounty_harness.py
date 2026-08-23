@@ -788,3 +788,20 @@ def test_snapshot_hash_matches_persisted_pretty_json() -> None:
     snapshot = {"captured_at_utc": "2026-08-22T00:00:00Z", "pull_requests": []}
     persisted = json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n"
     assert snapshot_sha256(snapshot) == hashlib.sha256(persisted.encode()).hexdigest()
+
+
+def test_claimed_index_parses_quoted_csv_rows() -> None:
+    """Live finding 2026-08-23 (PR #3154): upstream mixes fully-quoted rows."""
+
+    diff = (
+        "+++ b/listings/specific-networks/somnia/apis.csv\n"
+        '+"somnia-mainnet-free-recent-state","","!offer:somnia-free-recent-state",'
+        '"[""[Website](https://browser.somnia.network)""]"\n'
+    )
+    claimed, err = freeze_mod.extract_claimed_slugs(
+        {3154: diff}, {"listings/specific-networks/somnia/apis.csv"}
+    )
+    assert err["parse_errors"] == 0
+    assert claimed["listings/specific-networks/somnia/apis.csv"] == [
+        "somnia-mainnet-free-recent-state"
+    ]

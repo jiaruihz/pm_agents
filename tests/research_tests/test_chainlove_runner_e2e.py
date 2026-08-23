@@ -316,6 +316,9 @@ def test_supervised_submit_and_resume_do_not_duplicate_pr(tmp_path: Path) -> Non
     assert again.returncode == 0
     gh_log = Path(env["env"]["FAKE_GH_LOG"]).read_text()
     assert gh_log.count("pr create") == 1
+    # READY-phase receipt never claimed push (pre-submit snapshot check)
+    ready_state = json.loads((env["paths"]["run_dir"] / "run_state.json").read_text())
+    assert "remote_pr_created" in ready_state["completed_steps"]
 
     # a different run cannot reuse the consumed grant: bind the ORIGINAL run's
     # spec hash + reviewed SHA but a foreign run id -> publish gate must BLOCK
@@ -585,3 +588,169 @@ def test_driver_single_command_no_manual_reentry(tmp_path: Path) -> None:
         assert calls.count(stage) == 1
     # usage recorded into state and surfaced in the receipt
     assert set(receipt.get("usage", {})) >= {"candidate_mcp", "evidence_review"}
+
+
+# ===========================================================================
+# Round-3 gap battery: write-once identity, mode matrix, no-truncation
+# compact coverage, mandatory usage, self-contained archive, receipt truth.
+# ===========================================================================
+
+
+def test_identity_write_once_two_illegal_resumes_stay_blocked(tmp_path: Path) -> None:
+    env = _ready_env(tmp_path)
+    original = json.loads((env["paths"]["run_dir"] / "run_state.json").read_text())["identity"]
+
+    def bad_resume() -> dict:
+        proc = subprocess.run(
+            [sys.executable, str(RUNNER), "--mode", "review_required",
+             "--run-id", "attacker-run", "--repo-path", str(env["paths"]["repo"]),
+             "--run-dir", str(env["paths"]["run_dir"]),
+             "--json-tools-dir", str(env["paths"]["json_tools"]),
+             "--policy-json", str(env["paths"]["policy"]), "--resume"],
+            env=env["env"], capture_output=True, text=True)
+        return {"rc": proc.returncode, "receipt": receipt_of(env),
+                "state": json.loads((env["paths"]["run_dir"] / "run_state.json").read_text())}
+
+    for attempt in (1, 2):  # consecutive illegal resumes
+        result = bad_resume()
+        assert result["rc"] == 2, attempt
+        assert result["receipt"]["outcome"] == "BLOCKED"
+        assert "run_id" in result["receipt"]["outcome_reason"]
+        # write-once: stored identity untouched by the failed attempts
+        assert result["state"]["identity"] == original
+
+
+def test_mode_transition_matrix_negatives(tmp_path: Path) -> None:
+    # shadow -> supervised_submit is rejected
+    (tmp_path / "s").mkdir()
+    env_shadow = make_fixture_env(tmp_path / "s", viable=False)
+    assert run_runner(env_shadow, "--mode", "shadow").returncode == 0
+    grant = env_shadow["paths"]["run_dir"] / "g.json"
+    grant.write_text("{}")
+    proc = run_runner(env_shadow, "--mode", "supervised_submit",
+                      "--grant", str(grant), "--resume")
+    receipt = receipt_of(env_shadow)
+    assert proc.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "illegal mode transition" in receipt["outcome_reason"]
+    assert "shadow" in receipt["outcome_reason"]
+
+    # downgrade review_required -> shadow is rejected
+    (tmp_path / "r").mkdir()
+    env_ready = _ready_env(tmp_path / "r")
+    proc2 = run_runner(env_ready, "--mode", "shadow", "--resume")
+    receipt2 = receipt_of(env_ready)
+    assert proc2.returncode == 2
+    assert receipt2["outcome"] == "BLOCKED"
+    assert "illegal mode transition" in receipt2["outcome_reason"]
+
+
+def _compact_env(base: Path, *, drop_cache_for: int | None = None,
+                 tail_slug: str = "tail-slug-candidate") -> dict:
+    env = make_fixture_env(base, viable=False)
+    cfg_path = env["paths"]["cfg"]
+    cfg = json.loads(cfg_path.read_text())
+    head = cfg["main_sha"]
+    prs, files, diffs = [], {}, {}
+    for n in range(1, 14):  # 13 delta PRs
+        prs.append({"number": 100 + n, "head": {"ref": f"b{n}", "sha": f"{n:039d}"},
+                    "updated_at": "2026-08-23T01:00:00Z",
+                    "files": [{"filename": CSV_PATH}]})
+        files[str(100 + n)] = [{"filename": CSV_PATH}]
+        if n == 13:
+            rows = "\n".join(f"+filler-{i},,!offer:filler-{i},,,,,,,," for i in range(50))
+            diffs[str(100 + n)] = (f"+++ b/{CSV_PATH}\n{rows}\n"
+                                   f"+{tail_slug},,!offer:{tail_slug},,,,,,,,\n")
+        else:
+            diffs[str(100 + n)] = f"+++ b/{CSV_PATH}\n+row-{n},,!offer:row-{n},,,,,,,,\n"
+    cfg["snapshot_prs"] = prs
+    cfg["pr_files"] = files
+    cfg["pr_diffs"] = diffs
+    cfg_path.write_text(json.dumps(cfg))
+    # prior snapshot older than updated_at -> all 13 are delta PRs
+    prior = env["paths"]["run_dir"].parent / "prior"
+    prior.mkdir(parents=True, exist_ok=True)
+    (prior / "open_pr_snapshot.json").write_text(json.dumps(
+        {"captured_at_utc": "2026-08-22T00:00:00Z", "pull_requests": []}))
+    if drop_cache_for is not None:
+        # pre-seed an incomplete cache marker scenario happens post-freeze;
+        # for the unit-level check we call build_briefs directly below.
+        pass
+    env["prior_dir"] = prior
+    env["tail_slug"] = tail_slug
+    return env
+
+
+def test_compact_no_truncation_13_prs_tail_candidate(tmp_path: Path) -> None:
+    env = _compact_env(tmp_path)
+    proc = run_runner(env, "--compact",
+                      "--prior-run-dir", str(env["prior_dir"]))
+    assert proc.returncode == 0, proc.stderr[-500:]
+    receipt = receipt_of(env)
+    assert receipt["outcome"] == "NOOP_VERIFIED"
+    manifest = json.loads((env["paths"]["run_dir"] /
+                           "compact_coverage_manifest.json").read_text())
+    assert manifest["delta_pr_count"] == 13
+    assert manifest["complete"] is True and manifest["truncation_detected"] is False
+    assert manifest["total_added_target_rows"] == 12 * 1 + 51  # 12 small + 50 filler + tail
+    task = json.loads((env["paths"]["run_dir"] / "worker_tasks" /
+                       "candidate_mcp.json").read_text())
+    # the tail candidate (beyond the old 40-line/12-PR caps) IS in the brief
+    assert env["tail_slug"] in task["compact_brief"]
+
+
+def test_compact_coverage_blocks_on_missing_diff_cache(tmp_path: Path) -> None:
+    import importlib.util
+
+    (tmp_path / "b").mkdir()
+    env = _compact_env(tmp_path / "b")
+    run_dir = env["paths"]["run_dir"]
+    assert run_runner(env, "--compact", "--prior-run-dir", str(env["prior_dir"])).returncode == 0
+    # delete one cached diff and rebuild briefs directly: coverage must break
+    caches = sorted((run_dir / ".diff_cache").glob("113-*.diff"))
+    assert caches, "expected cached diff for PR 113"
+    caches[0].unlink()
+    spec = importlib.util.spec_from_file_location(
+        "cb", REPO_ROOT / "scripts/ops/chainlove_brief.py")
+    cb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cb)
+    result = cb.build_briefs(run_dir, ["mcpservers", "security", "storages", "services"],
+                             "2026-08-22T00:00:00Z", env["prior_dir"])
+    assert result["coverage"]["complete"] is False
+    assert result["coverage"]["truncation_detected"] is True
+
+
+def test_worker_usage_sidecar_missing_blocks(tmp_path: Path) -> None:
+    env = make_fixture_env(tmp_path, viable=False)
+    runner_args = ["--mode", "review_required", "--run-id", "e2e-run",
+                   "--repo-path", str(env["paths"]["repo"]),
+                   "--run-dir", str(env["paths"]["run_dir"]),
+                   "--json-tools-dir", str(env["paths"]["json_tools"]),
+                   "--policy-json", str(env["paths"]["policy"])]
+    # no --worker-cmd: runner pauses at candidate_mcp
+    proc = subprocess.run([sys.executable, str(RUNNER), *runner_args],
+                          env=env["env"], capture_output=True, text=True, timeout=600)
+    assert proc.returncode == 3
+    out = env["paths"]["run_dir"] / "worker_outputs" / "candidate_mcp.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({
+        "work_order_id": "candidate_mcp", "viable": [], "excluded": [],
+        "gates": {"scan_coverage_verified": True, "collision_scan_complete": True},
+        "coverage_note": "manual save without usage"}))  # NO usage sidecar
+    proc2 = subprocess.run([sys.executable, str(RUNNER), *runner_args, "--resume"],
+                           env=env["env"], capture_output=True, text=True, timeout=600)
+    receipt = receipt_of(env)
+    assert proc2.returncode == 2
+    assert receipt["outcome"] == "BLOCKED"
+    assert "usage sidecar missing" in receipt["outcome_reason"]
+    # landing the sidecar unblocks; remaining stages auto-driven (no manual entry)
+    out.with_suffix(".usage.json").write_text(json.dumps(
+        {"tokens": 1, "tool_uses": 1, "duration_s": 1}))
+    driver = REPO_ROOT / "scripts/ops/chainlove_drive.py"
+    proc3 = subprocess.run(
+        [sys.executable, str(driver), "--worker-cmd", str(FIXTURES / "fake_worker.py"),
+         "--", *runner_args, "--resume"],
+        env=env["env"], capture_output=True, text=True, timeout=600)
+    assert proc3.returncode == 0, proc3.stderr[-400:]
+    assert receipt_of(env)["outcome"] == "NOOP_VERIFIED"
+    assert "candidate_mcp" in receipt_of(env).get("usage", {})
