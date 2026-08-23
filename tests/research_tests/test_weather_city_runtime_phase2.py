@@ -96,6 +96,22 @@ def test_legacy_adapter_emits_versioned_model_candidate_and_stable_identity() ->
     assert "pnl" not in json.dumps(first.signal_candidate.to_dict()).lower()
 
 
+def test_legacy_checkpoint_reference_is_feature_state_not_model_profile() -> None:
+    first = legacy_bundle_from_evaluation(_evaluation())
+    second = legacy_bundle_from_evaluation(_evaluation(
+        model_id="another-model-alias",
+        lineage={
+            **_evaluation()["lineage"],
+            "profile_id": "another-profile-alias",
+        },
+    ))
+
+    assert first.state_checkpoint == second.state_checkpoint
+    stable_ref = f"legacy:{first.model_output.feature_set_id}"
+    assert first.state_checkpoint["feature_store_frame_id"] == stable_ref
+    assert first.state_checkpoint["source_profile_id"] == stable_ref
+
+
 def test_legacy_market_outcome_recovery_requires_exact_raw_token_match(
     tmp_path: Path,
 ) -> None:
@@ -233,6 +249,75 @@ def test_bridge_accepts_legacy_vnext_and_mixed_without_duplicate_facts(
     assert result["input_duplicate_candidates"] == 1
     assert result["canonical_candidates"] == 1
     assert result["candidate_delta"] == 0
+
+
+def test_bridge_coalesces_legacy_event_delivery_headers_without_hiding_identity_conflicts(
+    tmp_path: Path,
+) -> None:
+    later = legacy_bundle_from_evaluation(_evaluation())
+    earlier_event = {
+        **later.information_event,
+        "detected_at_utc": "2026-08-01T05:40:30Z",
+        "first_seen_at_utc": "2026-08-01T05:40:30Z",
+        "available_at_utc": "2026-08-01T05:40:30Z",
+        "raw_source_path": "observations/2026-08-01/observations.jsonl",
+    }
+    earlier = LegacyDecisionBundle(
+        information_event=earlier_event,
+        state_checkpoint=later.state_checkpoint,
+        model_output=later.model_output,
+        signal_candidate=later.signal_candidate,
+    )
+    bridge = TemporaryCanonicalBridge(tmp_path / "coalesced.db")
+
+    result = bridge.append([later, earlier])
+
+    assert result["input_duplicate_events"] == 1
+    assert result["input_coalesced_event_ids"] == 1
+    assert result["input_coalesced_event_deliveries"] == 1
+    conn = sqlite3.connect(tmp_path / "coalesced.db")
+    try:
+        stored = conn.execute(
+            "SELECT first_seen_at_utc, raw_source_path "
+            "FROM weather_information_events"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert stored == (
+        "2026-08-01T05:40:30Z",
+        "observations/2026-08-01/observations.jsonl",
+    )
+
+    old_checkpoint = {
+        **later.state_checkpoint,
+        "feature_store_frame_id": "legacy:old-model-alias",
+        "source_profile_id": "old-profile-alias",
+    }
+    historical = LegacyDecisionBundle(
+        information_event=later.information_event,
+        state_checkpoint=old_checkpoint,
+        model_output=later.model_output,
+        signal_candidate=later.signal_candidate,
+    )
+    normalized_result = TemporaryCanonicalBridge(
+        tmp_path / "normalized-checkpoint.db"
+    ).append([later, historical])
+    assert normalized_result["input_duplicate_checkpoints"] == 1
+    assert (
+        normalized_result["input_normalized_legacy_checkpoint_deliveries"] == 1
+    )
+
+    conflicting_event = {**later.information_event, "city": "Tokyo"}
+    conflicting = LegacyDecisionBundle(
+        information_event=conflicting_event,
+        state_checkpoint=later.state_checkpoint,
+        model_output=later.model_output,
+        signal_candidate=later.signal_candidate,
+    )
+    with pytest.raises(ValueError, match="conflicting immutable information_event_id"):
+        TemporaryCanonicalBridge(tmp_path / "conflict.db").append(
+            [later, conflicting]
+        )
 
 
 def test_bridge_rejects_production_canonical_path() -> None:

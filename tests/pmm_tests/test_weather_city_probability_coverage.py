@@ -66,6 +66,14 @@ def test_amsterdam_production_profile_uses_notification_journal() -> None:
     assert contract["schema_fingerprint"] == (
         "401ae97fea4cd0f75399a50944949e658b5b17df80a06ac6d6056531b254c883"
     )
+    remaining_heat = next(
+        row
+        for row in config["profiles"]
+        if row["profile_id"]
+        == "amsterdam_knmi_remaining_heat_v9_ecmwf_day1_clean_forward"
+    )
+    assert remaining_heat["expression_sides"] == ["YES", "NO"]
+    assert remaining_heat["position_scope"] == "city_date_bracket_model"
     offset = next(
         row
         for row in config["profiles"]

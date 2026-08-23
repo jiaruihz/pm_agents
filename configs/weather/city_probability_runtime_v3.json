@@ -60,7 +60,7 @@
       "expression_sides": ["YES", "NO"],
       "material_state_change_only": true,
       "edge_threshold": 0.02,
-      "position_scope": "city_date_bracket_side_model",
+      "position_scope": "city_date_bracket_model",
       "emit_paper_intents": true,
       "artifacts": {
         "weather": {

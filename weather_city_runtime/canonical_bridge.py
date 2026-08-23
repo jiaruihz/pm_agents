@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -59,6 +60,121 @@ def _unique_by_id(
             continue
         unique[identity] = row
     return [unique[key] for key in sorted(unique)], duplicates
+
+
+_EVENT_IDENTITY_FIELDS = (
+    "information_event_id",
+    "event_kind",
+    "event_role",
+    "source",
+    "city",
+    "station_id",
+    "provider_item_id",
+    "content_key",
+    "payload_hash",
+    "revision_of_event_id",
+    "source_event_ts_utc",
+    "issued_at_utc",
+    "valid_from_utc",
+    "valid_to_utc",
+    "pit_lineage_class",
+    "original_first_seen_unknown",
+    "material_state_change",
+)
+
+
+def _event_delivery_rank(row: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    """Rank duplicate legacy deliveries without mixing their clock tuple.
+
+    Legacy city adapters can rediscover one immutable source observation from
+    multiple model profiles or rollover shards.  The event identity remains
+    stable, while the adapter-derived delivery header may differ.  Canonical
+    lineage keeps the earliest complete delivery as the immutable header.
+    """
+
+    fallback = "9999-12-31T23:59:59.999999Z"
+    return (
+        str(row.get("first_seen_at_utc") or fallback),
+        str(row.get("available_at_utc") or fallback),
+        str(row.get("detected_at_utc") or fallback),
+        str(row.get("raw_source_path") or "\uffff"),
+        canonical_json_hash(row),
+    )
+
+
+def _coalesce_information_events(
+    rows: Iterable[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int, int, int]:
+    """Coalesce duplicate deliveries while rejecting identity conflicts.
+
+    Returns unique events, duplicate deliveries, IDs whose delivery headers
+    differed, and the number of non-winning conflicting deliveries.
+    """
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(str(row["information_event_id"]), []).append(row)
+
+    unique: list[dict[str, Any]] = []
+    duplicate_deliveries = 0
+    coalesced_ids = 0
+    coalesced_deliveries = 0
+    for identity in sorted(grouped):
+        deliveries = grouped[identity]
+        baseline_identity = {
+            field: deliveries[0].get(field) for field in _EVENT_IDENTITY_FIELDS
+        }
+        for row in deliveries[1:]:
+            current_identity = {
+                field: row.get(field) for field in _EVENT_IDENTITY_FIELDS
+            }
+            if canonical_json_hash(baseline_identity) != canonical_json_hash(
+                current_identity
+            ):
+                raise ValueError(
+                    f"conflicting immutable information_event_id: {identity}"
+                )
+        winner = min(deliveries, key=_event_delivery_rank)
+        duplicate_deliveries += len(deliveries) - 1
+        distinct_headers = {
+            canonical_json_hash(row) for row in deliveries
+        }
+        if len(distinct_headers) > 1:
+            coalesced_ids += 1
+            coalesced_deliveries += len(deliveries) - 1
+        unique.append(winner)
+    return unique, duplicate_deliveries, coalesced_ids, coalesced_deliveries
+
+
+def _normalize_legacy_checkpoint_ref(
+    row: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Remove model/profile aliases from legacy shared state checkpoints."""
+
+    if row.get("feature_schema_version") != "legacy_city_score_features_v1":
+        return row, False
+    raw_manifest = row.get("feature_version_manifest")
+    try:
+        manifest = (
+            json.loads(raw_manifest)
+            if isinstance(raw_manifest, str)
+            else dict(raw_manifest or {})
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return row, False
+    if manifest.get("adapter") != "CityScore" or not manifest.get("feature_set_id"):
+        return row, False
+    stable_ref = f"legacy:{manifest['feature_set_id']}"
+    if (
+        row.get("feature_store_frame_id") == stable_ref
+        and row.get("source_profile_id") == stable_ref
+    ):
+        return row, False
+    return {
+        **row,
+        "feature_store_frame_id": stable_ref,
+        "source_profile_id": stable_ref,
+    }, True
 
 
 def _unique_candidate_rows(
@@ -177,12 +293,24 @@ class _CandidateCanonicalBridge:
         values = list(bundles)
         for bundle in values:
             _validate_bundle(bundle)
-        events, duplicate_events = _unique_by_id(
+        (
+            events,
+            duplicate_events,
+            coalesced_event_ids,
+            coalesced_event_deliveries,
+        ) = _coalesce_information_events(
             [dict(bundle.information_event) for bundle in values],
-            "information_event_id",
         )
+        checkpoint_rows = []
+        normalized_checkpoint_deliveries = 0
+        for bundle in values:
+            checkpoint, normalized = _normalize_legacy_checkpoint_ref(
+                dict(bundle.state_checkpoint)
+            )
+            checkpoint_rows.append(checkpoint)
+            normalized_checkpoint_deliveries += int(normalized)
         checkpoints, duplicate_checkpoints = _unique_by_id(
-            [dict(bundle.state_checkpoint) for bundle in values],
+            checkpoint_rows,
             "state_checkpoint_id",
         )
         candidates, duplicate_candidates_in_input = _unique_candidate_rows(
@@ -235,8 +363,13 @@ class _CandidateCanonicalBridge:
             "inserted_events": event_result["inserted"],
             "existing_events": event_result["duplicates"],
             "input_duplicate_events": duplicate_events,
+            "input_coalesced_event_ids": coalesced_event_ids,
+            "input_coalesced_event_deliveries": coalesced_event_deliveries,
             "inserted_checkpoints": inserted_checkpoints,
             "input_duplicate_checkpoints": duplicate_checkpoints,
+            "input_normalized_legacy_checkpoint_deliveries": (
+                normalized_checkpoint_deliveries
+            ),
         }
 
     def candidate_funnels(

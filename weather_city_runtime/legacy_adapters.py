@@ -117,7 +117,10 @@ def _legacy_event_and_checkpoint(
         trigger_event=event,
         as_of_ts_utc=score.decision_ts_utc,
         feature_frame_ref={
-            "store_frame_id": f"legacy:{score.model_id}",
+            # A state checkpoint belongs to the PIT feature state, not to one
+            # consuming model/profile.  Model-specific aliases made identical
+            # checkpoint IDs carry conflicting canonical headers.
+            "store_frame_id": f"legacy:{feature_set_id}",
             "feature_row_id": canonical_json_hash(
                 {
                     "city": score.city,
@@ -132,7 +135,7 @@ def _legacy_event_and_checkpoint(
                 "model_artifact_id": artifact_id,
                 "adapter": "CityScore",
             },
-            "source_profile_id": lineage.get("profile_id"),
+            "source_profile_id": f"legacy:{feature_set_id}",
         },
         input_events=[event],
         pit_provenance=(
