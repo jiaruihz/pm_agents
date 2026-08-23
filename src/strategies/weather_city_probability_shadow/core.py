@@ -675,6 +675,22 @@ class ShadowRuntime:
                     raise ValueError(f"unsupported position_scope: {position_scope}")
                 position_parts.append(score.model_id)
                 position_key = "|".join(position_parts)
+                if position_scope == "city_date_bracket_model":
+                    # A live shadow may migrate from side-scoped to
+                    # bracket-scoped dedupe without rewriting append-only
+                    # intent journals.  Either historical side occupies the
+                    # new bracket-level position for the rest of that day.
+                    legacy_position_prefix = "|".join((
+                        score.city,
+                        score.target_date,
+                        str(score.current_bracket),
+                    ))
+                    if any(
+                        f"{legacy_position_prefix}|{side}|{score.model_id}"
+                        in first_intents
+                        for side in ("YES", "NO")
+                    ):
+                        first_intents.add(position_key)
                 profile_rows.append((row, position_key))
             # YES and NO are competing expressions of the same exact bracket.
             # Select the best net edge for each configured position before

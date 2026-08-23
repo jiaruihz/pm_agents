@@ -211,10 +211,19 @@ def test_committed_v2_config_matches_runtime_schema_contract() -> None:
     assert challenger["probability_policy"] == "overshoot_market_residual_v2"
 
 
-def test_runtime_deduplicates_positions_across_legacy_journal_catalog(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "position_key",
+    [
+        "Tokyo|2026-08-01|35|model",
+        "Tokyo|2026-08-01|35|NO|model",
+    ],
+)
+def test_runtime_deduplicates_positions_across_legacy_journal_catalog(
+    tmp_path: Path,
+    position_key: str,
+) -> None:
     output = tmp_path / "v2"
     legacy = tmp_path / "v1" / "paper_intents.jsonl"
-    position_key = "Tokyo|2026-08-01|35|model"
     _write_jsonl(legacy, [{"position_key": position_key}])
     config = _config(output, [{
         "adapter": "fixed",
