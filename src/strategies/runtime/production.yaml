@@ -57,7 +57,7 @@ production_releases:
     expected_repo_sha: 1757aca697acc3190272057558e4d5819197317a
   - release_id: core_carry_market_state_shadow
     checkout_root: /Users/deepsleep/projects/pm_agents_core_market_state_prod
-    expected_repo_sha: 56c04c0532842de23853e3095889cf31bb2bb1b1
+    expected_repo_sha: c8b27349e0ecb6dfc87962426a172ef9ead74200
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/projects/pm_agents_scheduled_informed_maker_prod
     expected_repo_sha: 93d6c0214a63a8807e802e42387c0a5509b70641
@@ -352,13 +352,13 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
     recovery_policy: safe
 
-  - instance_id: current_yes_core_carry_market_state_shadow_v1
-    tmux_session: weather_current_yes_core_carry_market_state_shadow_v1
+  - instance_id: current_yes_core_carry_market_state_shadow_v2
+    tmux_session: weather_current_yes_core_carry_market_state_shadow_v2
     role: shadow
     execution_mode: zero_notional_shadow
     release_id: core_carry_market_state_shadow
-    start_script: scripts/ops/start_weather_current_yes_core_carry_market_state_shadow_v1.sh
-    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v1/latest.json
+    start_script: scripts/ops/start_weather_current_yes_core_carry_market_state_shadow_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v2/latest.json
     max_health_age_sec: 120
     accepted_health_statuses: [warming, ok]
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
