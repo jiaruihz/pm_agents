@@ -195,6 +195,39 @@ class Orchestrator:
             },
         }
 
+    def _full_discovery_state_path(self) -> Path:
+        return self.args.stale_inventory.parent / "last_full_discovery.json"
+
+    def _enforce_full_discovery_freshness(self, max_age_hours: int = 72) -> None:
+        """Compact deltas only prove 'no new CLAIMS'; they cannot prove the
+        external ecosystem has no new projects. At least one full external
+        discovery every 72h is mandatory — overdue compact runs BLOCK."""
+
+        from datetime import datetime as _dt
+        state_path = self._full_discovery_state_path()
+        if not state_path.is_file():
+            self.finish("BLOCKED", reason=(
+                "72h full-discovery gate: no full external discovery has ever been "
+                "recorded; run once WITHOUT --compact to establish the baseline"))
+            raise SystemExit(2)
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        last = _dt.fromisoformat(state["completed_at_utc"].replace("Z", "+00:00"))
+        age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600
+        if age_hours > max_age_hours:
+            self.finish("BLOCKED", reason=(
+                f"72h full-discovery gate: last full external discovery "
+                f"{state['completed_at_utc']} ({age_hours:.0f}h ago); rerun today "
+                f"WITHOUT --compact (full mode refreshes the clock)"))
+            raise SystemExit(2)
+
+    def _record_full_discovery(self) -> None:
+        state_path = self._full_discovery_state_path()
+        atomic_write_json(state_path, {
+            "completed_at_utc": utc_now(),
+            "run_id": self.state.data["run_id"],
+            "mode": self.state.data["mode"],
+        })
+
     def _identity_scratch(self) -> Path:
         """Small identity file (remote url + repo path) hashed as preflight input."""
 
@@ -246,6 +279,14 @@ class Orchestrator:
         if getattr(self, "_finishing", False):
             return
         self._finishing = True
+        run_args = getattr(self, "args", None)
+        if (run_args is not None
+                and not getattr(run_args, "compact", False)
+                and outcome in ("NOOP_VERIFIED", "READY_TO_SUBMIT", "SUBMITTED")):
+            try:
+                self._record_full_discovery()
+            except (OSError, AttributeError):
+                pass
         self.state.data["outcome"] = outcome
         if reason:
             self.state.data["outcome_reason"] = reason
@@ -454,6 +495,7 @@ class Orchestrator:
             ),
         }
         if self.args.compact:
+            self._enforce_full_discovery_freshness()
             if not self.args.prior_run_dir or not (self.args.prior_run_dir / "open_pr_snapshot.json").is_file():
                 self.finish("BLOCKED", reason=(
                     "compact baseline guard: --compact requires a valid --prior-run-dir "
@@ -599,6 +641,36 @@ class Orchestrator:
              "stale": self.run_dir / "stale_delta.json",
              "ready": self.run_dir / "deferred_ready.json"},
             {"spec": str(spec_path)})
+
+    def _merge_deferred_to_queue(self, review: dict[str, Any]) -> None:
+        """Atomic upsert of worker-reported deferrals into the long-term queue
+        (live finding 2026-08-24: somnia-dreamdex-mcp was found but never
+        persisted, so the daily recheck never watched its trigger)."""
+
+        queue_path = Path(self.args.deferred_queue)
+        if not queue_path.is_file():
+            return
+        queue = json.loads(queue_path.read_text(encoding="utf-8"))
+        known = {item.get("slug") for item in queue.get("items", [])}
+        added = False
+        for item in review.get("deferred", []):
+            slug = item.get("slug")
+            if not slug or slug in known:
+                continue
+            queue.setdefault("items", []).append({
+                "slug": slug,
+                "provider": item.get("provider", ""),
+                "network": item.get("network", ""),
+                "category": item.get("category", ""),
+                "evidence": item.get("reason", item.get("evidence", "")),
+                "defer_reason": item.get("reason", "deferred by evidence review"),
+                "trigger": item.get("trigger", "manual recheck"),
+                "deferred_at_utc": utc_now(),
+            })
+            known.add(slug)
+            added = True
+        if added:
+            atomic_write_json(queue_path, queue)
 
     def append_decisions(self, review: dict[str, Any]) -> None:
         ledger = self.run_dir / "decision_ledger.jsonl"
@@ -964,10 +1036,13 @@ class Orchestrator:
             self.state.save()
         self.stage_preflight()
         self.stage_freeze()
-        self.stage_scan("candidate_mcp")
-        self.stage_scan("candidate_services")
+        # deterministic context stages FIRST so scanner briefs consume fresh
+        # deferred states (live finding 2026-08-24: workers reported deferred
+        # "absent from brief" because recheck ran after task-card creation)
         self.stage_stale_delta()
         self.stage_deferred_recheck()
+        self.stage_scan("candidate_mcp")
+        self.stage_scan("candidate_services")
         self.stage_evidence_review()
         if self.stage_branch() == "noop":
             return

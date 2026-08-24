@@ -115,6 +115,9 @@ def make_fixture_env(tmp_path: Path, *, viable: bool) -> dict[str, str]:
         "genuinely_stale": [{"name": "FixtureStale", "claiming_prs": [999],
                               "collision": "claimed"}],
         "redirects_confirmed_all_claimed": []}))
+    (state / "last_full_discovery.json").write_text(json.dumps({
+        "completed_at_utc": "2026-08-24T00:00:00Z",
+        "run_id": "fixture-seed", "mode": "shadow"}))
 
     policy = tmp_path / "policy.json"
     policy.write_text(json.dumps({
@@ -830,3 +833,109 @@ def test_compact_invalid_prior_blocks(tmp_path, monkeypatch) -> None:
     result = cb.build_briefs(run_dir, ["services"], "2026-08-22T00:00:00Z", empty)
     assert result["coverage"]["complete"] is False
     assert "lacks captured_at_utc" in result["coverage"]["guard_reason"]
+
+
+# ===========================================================================
+# Round-3.2: headRefOid binding, deferred recheck ordering + queue writeback,
+# 72h full-discovery gate (user-identified live defects 2026-08-24)
+# ===========================================================================
+
+
+def test_brief_binds_headrefoid_not_lexicographic(tmp_path: Path) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cb", REPO_ROOT / "scripts/ops/chainlove_brief.py")
+    cb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cb)
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    head = "aaaa1111bbbb2222cccc3333dddd4444eeee5"
+    stale_head = "0000zzzz0000zzzz0000zzzz0000zzzz0000"
+    (run_dir / "open_pr_snapshot.json").write_text(json.dumps({
+        "captured_at_utc": "2026-08-24T02:00:00Z",
+        "pull_requests": [{
+            "number": 3009, "headRefOid": head, "updatedAt": "2026-08-24T01:00:00Z",
+            "files": [{"path": CSV_PATH}]}]}))
+    (run_dir / "claimed_slugs.json").write_text(json.dumps(
+        {"paths": {}, "parse_errors": 0, "touching_prs": [3009]}))
+    cache = run_dir / ".diff_cache"
+    cache.mkdir()
+    # stale (pre-force-push) diff sorts BEFORE the head-bound one
+    (cache / f"3009-{stale_head[:12]}.diff").write_text(
+        f"+++ b/{CSV_PATH}\n" + "\n".join(f"+stale-{i},,!offer:stale-{i},,,,,,,," for i in range(713)) + "\n")
+    (cache / f"3009-{head[:12]}.diff").write_text(
+        f"+++ b/{CSV_PATH}\n+fresh-head-row,,!offer:fresh-head-row,,,,,,,,")
+
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    (prior / "open_pr_snapshot.json").write_text(json.dumps(
+        {"captured_at_utc": "2026-08-22T00:00:00Z", "pull_requests": []}))
+    result = cb.build_briefs(run_dir, ["services"], "2026-08-22T00:00:00Z", prior)
+    assert result["coverage"]["complete"] is True
+    row = result["coverage"]["prs"][0]
+    assert row["headRefOid"] == head
+    assert row["head_bound_diff"] is True
+    assert row["added_row_count"] == 1  # fresh 1-row diff, NOT the 713-row stale one
+    assert "fresh-head-row" in result["briefs"]["candidate_services"]
+    assert "stale-712" not in result["briefs"]["candidate_services"]
+
+    # only the stale diff exists -> frozen-head binding missing -> BLOCKED-class
+    (cache / f"3009-{head[:12]}.diff").unlink()
+    result2 = cb.build_briefs(run_dir, ["services"], "2026-08-22T00:00:00Z", prior)
+    assert result2["coverage"]["complete"] is False
+    assert result2["coverage"]["prs"][0]["head_bound_diff"] is False
+
+
+def test_deferred_recheck_precedes_scans_and_queue_writeback(tmp_path: Path) -> None:
+    env = _compact_env(tmp_path)
+    proc = run_runner(env, "--compact", "--prior-run-dir", str(env["prior_dir"]))
+    assert proc.returncode == 0, proc.stderr[-400:]
+    # recheck ran BEFORE the scanner task cards were created: the brief carries
+    # the live deferred state (fixture trigger PR #999 -> state OPEN)
+    task = json.loads((env["paths"]["run_dir"] / "worker_tasks" /
+                       "candidate_mcp.json").read_text())
+    brief = task.get("compact_brief", "")
+    assert "fixture-deferred" in brief
+    assert '"state": "open"' in brief
+    # worker-reported deferrals are written back into the LONG-TERM queue
+    queue = json.loads((env["paths"]["state"] / "deferred_candidates.json").read_text())
+    slugs = {item["slug"] for item in queue["items"]}
+    assert "fixture-deferred" in slugs  # from the positive-spec deferred[] list
+
+
+def test_full_discovery_72h_gate(tmp_path: Path) -> None:
+    env = make_fixture_env(tmp_path, viable=False)
+    state_dir = env["paths"]["state"]
+    clock = state_dir / "last_full_discovery.json"
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    (prior / "open_pr_snapshot.json").write_text(json.dumps(
+        {"captured_at_utc": "2026-08-22T00:00:00Z", "pull_requests": []}))
+
+    # no clock file at all -> compact BLOCKS
+    clock.unlink(missing_ok=True)
+    proc = run_runner(env, "--compact", "--prior-run-dir", str(prior))
+    assert proc.returncode == 2
+    assert "full-discovery gate" in receipt_of(env)["outcome_reason"]
+    assert "WITHOUT --compact" in receipt_of(env)["outcome_reason"]
+
+    # stale clock (>72h) -> compact BLOCKS
+    clock.write_text(json.dumps({"completed_at_utc": "2020-01-01T00:00:00Z",
+                                  "run_id": "x", "mode": "shadow"}))
+    proc = run_runner(env, "--compact", "--prior-run-dir", str(prior))
+    assert proc.returncode == 2
+    assert "72h full-discovery gate" in receipt_of(env)["outcome_reason"]
+
+    # fresh non-compact run refreshes the clock and terminates legally
+    clock.write_text(json.dumps({"completed_at_utc": "2020-01-01T00:00:00Z",
+                                  "run_id": "x", "mode": "shadow"}))
+    fresh_dir = tmp_path / "run-fresh"
+    fresh = dict(env)
+    fresh["paths"] = {**env["paths"], "run_dir": fresh_dir}
+    proc = run_runner(fresh)  # non-compact
+    assert proc.returncode == 0
+    refreshed = json.loads(clock.read_text())
+    assert refreshed["completed_at_utc"] > "2026-0"
+    assert refreshed["run_id"] == "e2e-run"

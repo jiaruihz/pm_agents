@@ -123,25 +123,34 @@ def build_briefs(run_dir: Path, categories: list[str],
     truncated = False
     for pr in delta_prs:
         target_files = [f["path"] for f in pr.get("files", []) if f["path"] in targets]
-        cached = sorted(cache.glob(f"{pr['number']}-*.diff"))
+        # BIND to the frozen snapshot's headRefOid — a lexicographic glob can
+        # pick a stale pre-force-push diff (live finding 2026-08-24: #3009
+        # scanned 713-line old diff while the frozen head had 719; #2996 old
+        # 9-line vs new 3-line). Exact binding or BLOCKED.
+        head_oid = str(pr.get("headRefOid") or "")
+        bound = cache / f"{pr['number']}-{head_oid[:12]}.diff" if head_oid else None
         rows: list[str] = []
         parsed_ok = True
+        binding_ok = True
         if target_files:
-            if not cached:
-                truncated = True  # diff required for a target-touching delta PR
+            if bound is None or not bound.is_file():
+                truncated = True  # diff for the FROZEN head is required
+                binding_ok = False
             else:
                 rows, parsed_ok = added_target_rows(
-                    cached[0].read_text(encoding="utf-8"), targets)
+                    bound.read_text(encoding="utf-8"), targets)
                 if not parsed_ok:
                     truncated = True
         entry = {
             "pr": pr["number"], "updated": pr.get("updatedAt"),
-            "files": target_files, "added_target_rows": rows,
+            "headRefOid": head_oid, "added_target_rows": rows,
+            "files": target_files,
         }
         delta_digest.append(entry)
         coverage_rows.append({
             "pr": pr["number"], "target_files": target_files,
-            "added_row_count": len(rows), "diff_cached": bool(cached),
+            "headRefOid": head_oid, "head_bound_diff": bool(bound and bound.is_file()),
+            "added_row_count": len(rows), "diff_cached": bool(bound and bound.is_file()),
             "parsed_ok": parsed_ok,
         })
 
@@ -178,9 +187,10 @@ def build_briefs(run_dir: Path, categories: list[str],
         "total_added_target_rows": sum(r["added_row_count"] for r in coverage_rows),
         "prs": coverage_rows,
         "complete": (not truncated) and all(
-            r["parsed_ok"] and (r["diff_cached"] or not r["target_files"])
+            r["parsed_ok"] and (r.get("head_bound_diff") or not r["target_files"])
             for r in coverage_rows),
         "truncation_detected": truncated,
+        "head_binding": "snapshot headRefOid-exact; stale/missing -> BLOCKED",
     }
     briefs = {}
     for stage, cats in (("candidate_mcp", ["mcpservers"]),
