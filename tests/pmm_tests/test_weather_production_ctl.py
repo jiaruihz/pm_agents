@@ -451,6 +451,52 @@ def test_failed_jrs_context_blocks_all_missing_starts(tmp_path):
     }
 
 
+def test_paused_runtime_is_healthy_when_absent_and_never_planned_to_start(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="costly_shadow",
+        tmux_session="costly_shadow",
+        role="shadow",
+        execution_mode="zero_notional_shadow",
+        desired_state="paused",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        health_path=tmp_path / "stale.json",
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+
+    report = ctl.evaluate_production_health(spec, observed(), now_epoch=1000.0)
+
+    assert report["status"] == "healthy"
+    assert report["runtimes"][0]["status"] == "paused"
+    assert report["runtimes"][0]["issues"] == []
+    assert ctl.build_plan(spec, report)[0]["action"] == "none"
+    assert ctl.build_plan(spec, report)[0]["reason"] == "desired_state_paused"
+    assert ctl._run_start(spec, runtime, confirm_live=False)["reason"] == "desired_state_paused"
+
+
+def test_paused_runtime_is_critical_when_still_present(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="costly_shadow",
+        tmux_session="costly_shadow",
+        role="shadow",
+        execution_mode="zero_notional_shadow",
+        desired_state="paused",
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+
+    report = ctl.evaluate_production_health(
+        spec, observed("costly_shadow"), now_epoch=1000.0
+    )
+
+    assert report["status"] == "critical"
+    assert report["runtimes"][0]["issues"] == [
+        "tmux_session_present_while_paused"
+    ]
+    assert ctl.build_plan(spec, report)[0]["action"] == "inspect"
+
+
 def test_failed_jrs_context_marks_keeper_critical(tmp_path):
     keeper = WeatherManagedRuntimeSpec(
         instance_id="weather_jrs_context_keeper",

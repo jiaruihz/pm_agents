@@ -566,7 +566,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"{missing_release_ids}"
             )
     for item in spec.managed_runtimes:
-        if item.desired_state != "running":
+        if item.desired_state not in {"running", "paused"}:
             raise ValueError(
                 f"unsupported managed runtime desired_state for {item.instance_id}: "
                 f"{item.desired_state}"

@@ -246,7 +246,8 @@ managed_runtimes:
     dependencies: [weather_jrs_context_keeper, weather_market_books]
     # User-paused pending Codex court token-usage review. Restart only through
     # an explicit production-config change after the review is complete.
-    recovery_policy: manual
+    desired_state: paused
+    recovery_policy: safe
 
   - instance_id: polymarket_dispute_clarification_court_v1
     uses_market_proxy: true
@@ -268,7 +269,8 @@ managed_runtimes:
     dependencies: [weather_jrs_context_keeper, polymarket_dispute_repricing_zero_notional_v1]
     # User-paused pending Codex court token-usage review. Restart only through
     # an explicit production-config change after the review is complete.
-    recovery_policy: manual
+    desired_state: paused
+    recovery_policy: safe
 
   - instance_id: weather_forecast_run_capture_v1
     tmux_session: weather_forecast_run_capture_v1

@@ -138,6 +138,37 @@ def evaluate_production_health(
         health_age_sec: float | None = None
         health_payload: dict[str, Any] | None = None
         contract_mismatches: list[dict[str, Any]] = []
+        if runtime.desired_state == "paused":
+            if session_row is not None:
+                issues.append("tmux_session_present_while_paused")
+            row = {
+                "instance_id": runtime.instance_id,
+                "tmux_session": runtime.tmux_session,
+                "role": runtime.role,
+                "execution_mode": runtime.execution_mode,
+                "desired_state": runtime.desired_state,
+                "present": session_row is not None,
+                "status": "critical" if issues else "paused",
+                "issues": issues,
+                "health_path": str(runtime.health_path) if runtime.health_path else None,
+                "health_url": runtime.health_url,
+                "health_format": runtime.health_format,
+                "health_age_sec": None,
+                "health_generated_at_utc": None,
+                "health_contract_mismatches": [],
+                "checkout_root": str(runtime.checkout_root) if runtime.checkout_root else None,
+                "start_script": (
+                    str(runtime.resolved_start_script())
+                    if runtime.resolved_start_script()
+                    else None
+                ),
+                "recovery_policy": runtime.recovery_policy,
+                "expected_live": runtime.expected_live,
+                "dependencies": list(runtime.dependencies),
+            }
+            runtime_rows.append(row)
+            by_instance[runtime.instance_id] = row
+            continue
         if session_row is None:
             issues.append("tmux_session_missing")
         pane_text = _pane_text(session_row)
@@ -228,6 +259,8 @@ def evaluate_production_health(
 
     for runtime in spec.managed_runtimes:
         row = by_instance[runtime.instance_id]
+        if runtime.desired_state == "paused":
+            continue
         unhealthy_dependencies = [
             dependency
             for dependency in runtime.dependencies
@@ -464,6 +497,22 @@ def build_plan(
         (health.get("jrs_context_health") or {}).get("status") != "critical"
     )
     for row in health.get("runtimes", []):
+        if row.get("desired_state") == "paused":
+            actions.append(
+                {
+                    "instance_id": row["instance_id"],
+                    "action": "inspect" if row.get("present") else "none",
+                    "reason": (
+                        "tmux_session_present_while_paused"
+                        if row.get("present")
+                        else "desired_state_paused"
+                    ),
+                    "recovery_policy": row["recovery_policy"],
+                    "expected_live": row["expected_live"],
+                    "start_script": row["start_script"],
+                }
+            )
+            continue
         if row.get("present"):
             action = "inspect" if row.get("status") == "critical" else "none"
             reason = ",".join(row.get("issues") or []) or "healthy"
@@ -1366,6 +1415,8 @@ def _run_start(
     confirm_live: bool,
     launch_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    if runtime.desired_state != "running":
+        return {"instance_id": runtime.instance_id, "status": "blocked", "reason": "desired_state_paused"}
     script = runtime.resolved_start_script()
     if script is None:
         return {"instance_id": runtime.instance_id, "status": "blocked", "reason": "start_contract_missing"}
