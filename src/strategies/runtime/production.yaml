@@ -12,7 +12,7 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
   - release_id: data_feed
     checkout_root: /Users/deepsleep/projects/pm_agents_data_feed_v2_prod
-    expected_repo_sha: b3804f838128f2d2645a54802d92bdc86f9e39b7
+    expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
   - release_id: forecast_collector
     checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
     expected_repo_sha: 03691ebb36579f8a604936af19924c5123022439
