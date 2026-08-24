@@ -34,6 +34,7 @@ from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (  # noq
 )
 from weather_data_feed.city_calendar import CITY_TIMEZONE  # noqa: E402
 from weather_data_feed.observation_cache import parse_utc  # noqa: E402
+from src.platform.storage.jsonl_index import JsonlFieldRangeIndex  # noqa: E402
 
 
 STRATEGY_ID = "current_yes_core_carry_v1"
@@ -155,25 +156,24 @@ def fetch_full_book(
 
 
 def read_snapshot_decisions(path: Path, snapshot_file: str) -> list[dict[str, Any]]:
+    index = JsonlFieldRangeIndex.load(
+        path,
+        path.parent / ".indexes" / f"{path.name}.snapshot_file.sqlite3",
+        "snapshot_file",
+    )
     rows_by_id: dict[str, dict[str, Any]] = {}
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                row = json.loads(line)
-                if str(row.get("snapshot_file") or "") == snapshot_file:
-                    decision_id = str(row.get("shadow_decision_id") or "")
-                    if not decision_id:
-                        decision_id = "|".join(
-                            [
-                                str(row.get("city") or ""),
-                                str(row.get("target_date") or ""),
-                                str(row.get("current_bracket") or ""),
-                                snapshot_file,
-                            ]
-                        )
-                    rows_by_id[decision_id] = row
+    for row in index.rows_for(snapshot_file):
+        decision_id = str(row.get("shadow_decision_id") or "")
+        if not decision_id:
+            decision_id = "|".join(
+                [
+                    str(row.get("city") or ""),
+                    str(row.get("target_date") or ""),
+                    str(row.get("current_bracket") or ""),
+                    snapshot_file,
+                ]
+            )
+        rows_by_id[decision_id] = row
     return list(rows_by_id.values())
 
 

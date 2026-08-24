@@ -269,6 +269,12 @@ Practical examples:
 - `Seattle 58-59 No`, bid/ask `0.44/0.54`, snapshot entry `0.485`: treat as wide spread. Prefer `0.45` with a short TTL; do not chase toward ask.
 - `Sao Paulo 25 No`, snapshot entry `0.74`, current bid/ask `0.81/0.87`: the original edge has likely been consumed by price drift. Recompute against current bid/ask; pass if edge at current maker price is too thin.
 
+Runtime journal access follows an append-only raw plus derived-index contract.
+Raw JSONL remains authoritative; hot consumers keep crash-safe byte offsets in
+small SQLite sidecars under the instance `.indexes/` directory and seek only
+the required logical key. Inode change, truncation, or index-version drift
+forces a deterministic rebuild without rewriting or deleting raw evidence.
+
 ## Rollout Plan
 
 Completed baseline:
