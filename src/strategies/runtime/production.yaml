@@ -27,7 +27,7 @@ production_releases:
     expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
   - release_id: wcir
     checkout_root: /Users/deepsleep/projects/pm_agents_wcir_prod
-    expected_repo_sha: f32d813da9f4874c4e3084afd225e918e7a46f59
+    expected_repo_sha: 64c5805dc8253c928a6dedfbe71c50f2d8e641c4
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
     expected_repo_sha: ddecbbd6a26a88ebe5b62b997f2bf9c50f160119
