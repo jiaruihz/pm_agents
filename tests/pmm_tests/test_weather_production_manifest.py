@@ -442,6 +442,29 @@ def test_prechange_comparison_requires_explicit_allowance_for_intended_stop():
     assert payload["prechange_comparison"]["missing_sessions"] == []
 
 
+def test_prechange_comparison_ignores_bounded_reliability_worker_session():
+    baseline = {
+        "generated_at_utc": "2026-08-02T06:00:00Z",
+        "tmux_sessions": [
+            {"session": "weather_data_feed_jrs"},
+            {"session": "weather_reliability_worker_123_456"},
+        ],
+    }
+    current = {
+        "status": "healthy",
+        "findings": [],
+        "tmux_sessions": [{"session": "weather_data_feed_jrs"}],
+    }
+
+    payload = manifest.compare_prechange_manifest(current, baseline)
+
+    assert payload["status"] == "healthy"
+    assert payload["prechange_comparison"]["baseline_sessions"] == [
+        "weather_data_feed_jrs"
+    ]
+    assert payload["prechange_comparison"]["missing_sessions"] == []
+
+
 def test_weather_prompts_and_analysis_skills_require_manifest_preflight():
     paths = [
         ROOT / "AGENTS.md",

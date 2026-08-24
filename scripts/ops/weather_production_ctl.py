@@ -274,7 +274,11 @@ def evaluate_production_health(
 
     desired_sessions = {item.tmux_session for item in spec.managed_runtimes}
     extra_sessions = sorted(
-        set(session_rows)
+        {
+            session
+            for session in session_rows
+            if not session.startswith("weather_reliability_worker_")
+        }
         - desired_sessions
         - set(spec.allowed_unmanaged_sessions)
     )

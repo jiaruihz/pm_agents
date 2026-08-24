@@ -1101,15 +1101,25 @@ def compare_prechange_manifest(
     as present-state truth.
     """
 
+    def persistent_session(name: str) -> bool:
+        # The reliability supervisor creates one bounded tmux worker per cycle
+        # and removes it on completion.  It is not a persistent production
+        # runtime and must not contaminate a deployment's session-set baseline.
+        return not name.startswith("weather_reliability_worker_")
+
     baseline_sessions = {
         str(row.get("session"))
         for row in baseline.get("tmux_sessions", [])
-        if isinstance(row, Mapping) and row.get("session")
+        if isinstance(row, Mapping)
+        and row.get("session")
+        and persistent_session(str(row.get("session")))
     }
     current_sessions = {
         str(row.get("session"))
         for row in payload.get("tmux_sessions", [])
-        if isinstance(row, Mapping) and row.get("session")
+        if isinstance(row, Mapping)
+        and row.get("session")
+        and persistent_session(str(row.get("session")))
     }
     allowed = {str(item) for item in allow_missing_sessions}
     missing = sorted(baseline_sessions - current_sessions - allowed)
