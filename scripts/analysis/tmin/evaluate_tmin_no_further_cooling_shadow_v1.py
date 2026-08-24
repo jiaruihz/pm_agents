@@ -9,6 +9,7 @@ weather DB; city/date/bracket joins are deliberately not supported.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -35,14 +36,17 @@ from weather_model_evaluation.probability import (
 )
 
 
-SCHEMA_VERSION = "weather_tmin_no_further_cooling_shadow_performance_v1"
+SCHEMA_VERSION = "weather_tmin_no_further_cooling_shadow_performance_v2"
 FEE_RATE = 0.05
 BOOTSTRAP_DRAWS = 20_000
 BOOTSTRAP_SEED = 20260824
 
 
-def _snapshot_jsonl(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    size = path.stat().st_size
+def _snapshot_jsonl(
+    path: Path, *, snapshot_size_bytes: int | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    source_size = path.stat().st_size
+    size = source_size if snapshot_size_bytes is None else min(source_size, snapshot_size_bytes)
     with path.open("rb") as handle:
         payload = handle.read(size)
     complete_size = len(payload) if payload.endswith(b"\n") else payload.rfind(b"\n") + 1
@@ -50,6 +54,7 @@ def _snapshot_jsonl(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rows = [json.loads(line) for line in complete.decode("utf-8").splitlines() if line]
     return rows, {
         "path": str(path),
+        "source_size_at_read_bytes": source_size,
         "snapshot_size_bytes": size,
         "complete_size_bytes": complete_size,
         "complete_sha256": hashlib.sha256(complete).hexdigest(),
@@ -99,6 +104,93 @@ def _settlement_map(
 
 def _fee(price: float) -> float:
     return FEE_RATE * price * (1.0 - price)
+
+
+def _execution_book_evidence(row: pd.Series, shares: float = 5.0) -> dict[str, Any]:
+    """Reconstruct the exact PIT YES book referenced by one candidate."""
+
+    references = [
+        item
+        for item in (row.get("input_refs") or [])
+        if str(item.get("kind") or "") == "market_book_batch"
+    ]
+    if not references:
+        return {"book_evidence_status": "missing_market_book_ref"}
+    path = Path(str(references[-1].get("path") or ""))
+    if not path.exists():
+        return {"book_evidence_status": "missing_market_book_file", "book_path": str(path)}
+
+    decision = pd.Timestamp(row["decision_ts_utc"])
+    matches: list[tuple[pd.Timestamp, dict[str, Any]]] = []
+    with gzip.open(path, mode="rt", encoding="utf-8") as handle:
+        for line in handle:
+            candidate = json.loads(line)
+            if (
+                str(candidate.get("condition_id") or "") != str(row.get("condition_id") or "")
+                or str(candidate.get("outcome") or "").lower() != "yes"
+            ):
+                continue
+            available_raw = candidate.get("available_at_utc") or candidate.get("fetched_at_utc")
+            if not available_raw:
+                continue
+            available = pd.Timestamp(available_raw)
+            if available.tzinfo is None:
+                available = available.tz_localize("UTC")
+            else:
+                available = available.tz_convert("UTC")
+            if available <= decision:
+                matches.append((available, candidate))
+    if not matches:
+        return {"book_evidence_status": "no_pit_yes_book_match", "book_path": str(path)}
+
+    available, source = max(matches, key=lambda item: item[0])
+    summary = source.get("summary") or {}
+    levels = summary.get("asks") or (source.get("raw") or {}).get("asks") or []
+    asks = sorted(
+        (
+            {"price": float(level["price"]), "size": float(level["size"])}
+            for level in levels
+            if level.get("price") is not None and level.get("size") is not None
+        ),
+        key=lambda level: level["price"],
+    )
+    remaining = float(shares)
+    notional = 0.0
+    fees = 0.0
+    for level in asks:
+        take = min(remaining, level["size"])
+        notional += take * level["price"]
+        fees += take * _fee(level["price"])
+        remaining -= take
+        if remaining <= 1e-12:
+            break
+    fillable = remaining <= 1e-12
+    best_ask = None if not asks else asks[0]["price"]
+    candidate_ask = float(row["executable_cost"])
+    top_matches_candidate = best_ask is not None and abs(best_ask - candidate_ask) <= 1e-12
+    return {
+        "book_evidence_status": "available",
+        "book_path": str(path),
+        "book_capture_id": source.get("book_capture_id"),
+        "execution_snapshot_id_matches_book_capture_id": (
+            str(row.get("execution_book_snapshot_id") or "")
+            == str(source.get("book_capture_id") or "")
+        ),
+        "book_available_at_utc": available.isoformat(),
+        "book_age_minutes": float((decision - available).total_seconds() / 60.0),
+        "best_ask": best_ask,
+        "best_ask_size": None if not asks else asks[0]["size"],
+        "depth_ask_5c": summary.get("depth_ask_5c"),
+        "depth_ask_10c": summary.get("depth_ask_10c"),
+        "spread": summary.get("spread"),
+        "candidate_ask_matches_book": top_matches_candidate,
+        "five_share_fillable": fillable,
+        "five_share_vwap": notional / shares if fillable else None,
+        "five_share_fee_per_share": fees / shares if fillable else None,
+        "five_share_slippage_vs_candidate_ask": (
+            notional / shares - candidate_ask if fillable else None
+        ),
+    }
 
 
 def _local_hour(row: pd.Series) -> int:
@@ -167,9 +259,15 @@ def _breakdown(frame: pd.DataFrame, column: str) -> list[dict[str, Any]]:
 
 
 def evaluate(
-    *, candidates_path: Path, db_path: Path, artifact_id: str
+    *,
+    candidates_path: Path,
+    db_path: Path,
+    artifact_id: str,
+    snapshot_size_bytes: int | None = None,
 ) -> dict[str, Any]:
-    raw_rows, snapshot = _snapshot_jsonl(candidates_path)
+    raw_rows, snapshot = _snapshot_jsonl(
+        candidates_path, snapshot_size_bytes=snapshot_size_bytes
+    )
     rows = [row for row in raw_rows if str(row.get("model_artifact_id") or "") == artifact_id]
     frame = pd.DataFrame(rows)
     if frame.empty:
@@ -228,40 +326,78 @@ def evaluate(
 
     selected = paired[paired["selected"].eq(True)].copy()
     selected["ask"] = selected["executable_cost"].astype(float)
-    selected["fee_per_share"] = selected.apply(
-        lambda row: float((row.get("metadata") or {}).get("official_weather_fee_per_share") or _fee(row["ask"])),
-        axis=1,
+    book_evidence = pd.DataFrame(
+        [_execution_book_evidence(row) for _, row in selected.iterrows()], index=selected.index
     )
-    selected["cost_per_share"] = selected["ask"] + selected["fee_per_share"]
-    selected["pnl_per_share"] = selected["label"] - selected["cost_per_share"]
-    selected["price_bucket"] = pd.cut(
-        selected["ask"],
+    selected = selected.join(book_evidence)
+    executable_selected = selected[
+        selected["book_evidence_status"].eq("available")
+        & selected["candidate_ask_matches_book"].eq(True)
+        & selected["five_share_fillable"].eq(True)
+    ].copy()
+    executable_selected["fee_per_share"] = executable_selected["five_share_fee_per_share"].astype(float)
+    executable_selected["cost_per_share"] = (
+        executable_selected["five_share_vwap"].astype(float)
+        + executable_selected["fee_per_share"]
+    )
+    executable_selected["pnl_per_share"] = (
+        executable_selected["label"] - executable_selected["cost_per_share"]
+    )
+    executable_selected["price_bucket"] = pd.cut(
+        executable_selected["ask"],
         bins=[-np.inf, 0.60, 0.95, 0.98, 1.0 + 1e-9],
         labels=["<=0.60", "0.60-0.95", "0.95-0.98", ">0.98"],
         right=True,
     )
-    trade = _roi_summary(selected)
-    if not selected.empty:
-        top = selected.sort_values("pnl_per_share", ascending=False).iloc[0]
-        without_top = selected.drop(index=top.name)
+    trade = _roi_summary(executable_selected)
+    trade["execution_evidence_class"] = "pit_rest_full_book_static_snapshot"
+    trade["selected_with_reconstructable_book"] = int(
+        selected["book_evidence_status"].eq("available").sum()
+    )
+    trade["selected_with_raw_book_capture_id_persisted_as_execution_snapshot_id"] = int(
+        selected["execution_snapshot_id_matches_book_capture_id"].eq(True).sum()
+    )
+    trade["selected_five_share_fillable_at_snapshot"] = int(len(executable_selected))
+    trade["selected_five_share_at_best_ask_without_slippage"] = int(
+        executable_selected["five_share_slippage_vs_candidate_ask"].abs().le(1e-12).sum()
+    )
+    trade["min_best_ask_size"] = (
+        None if executable_selected.empty else float(executable_selected["best_ask_size"].min())
+    )
+    trade["median_best_ask_size"] = (
+        None if executable_selected.empty else float(executable_selected["best_ask_size"].median())
+    )
+    trade["max_book_age_minutes"] = (
+        None if executable_selected.empty else float(executable_selected["book_age_minutes"].max())
+    )
+    trade["actual_fills"] = 0
+    trade["execution_limit"] = (
+        "static PIT depth supports the hypothetical 5-share sweep; zero-notional shadow does not "
+        "establish post-decision liquidity, queue, latency, or an actual fill"
+    )
+    if not executable_selected.empty:
+        top = executable_selected.sort_values("pnl_per_share", ascending=False).iloc[0]
+        without_top = executable_selected.drop(index=top.name)
         trade["largest_winner"] = {
             "city": str(top["city"]),
             "target_date": str(top["target_date"]),
             "local_hour": int(top["local_hour"]),
             "ask": float(top["ask"]),
             "pnl_per_share": float(top["pnl_per_share"]),
-            "share_of_total_pnl": float(top["pnl_per_share"] / selected["pnl_per_share"].sum()),
+            "share_of_total_pnl": float(
+                top["pnl_per_share"] / executable_selected["pnl_per_share"].sum()
+            ),
         }
         trade["top_winner_removed"] = _roi_summary(without_top)
-        stressed_pnl = float(selected["pnl_per_share"].sum()) - 1.0
+        stressed_pnl = float(executable_selected["pnl_per_share"].sum()) - 1.0
         trade["one_additional_loss_stress"] = {
             "pnl_per_share": stressed_pnl,
-            "roi": stressed_pnl / float(selected["cost_per_share"].sum()),
+            "roi": stressed_pnl / float(executable_selected["cost_per_share"].sum()),
             "note": "changing any one binary win to a loss reduces portfolio PnL by exactly $1/share",
         }
 
     selected_entries = []
-    for _, row in selected.sort_values(["decision_ts_utc", "candidate_id"]).iterrows():
+    for _, row in executable_selected.sort_values(["decision_ts_utc", "candidate_id"]).iterrows():
         selected_entries.append(
             {
                 "city": str(row["city"]),
@@ -274,6 +410,20 @@ def evaluate(
                 "market_p": float(row["market_p"]),
                 "p_model": float(row["p_model"]),
                 "ask": float(row["ask"]),
+                "best_ask_size": float(row["best_ask_size"]),
+                "depth_ask_5c": float(row["depth_ask_5c"]),
+                "book_capture_id": str(row["book_capture_id"]),
+                "candidate_execution_book_snapshot_id": str(
+                    row["execution_book_snapshot_id"]
+                ),
+                "execution_snapshot_id_matches_book_capture_id": bool(
+                    row["execution_snapshot_id_matches_book_capture_id"]
+                ),
+                "book_age_minutes": float(row["book_age_minutes"]),
+                "five_share_vwap": float(row["five_share_vwap"]),
+                "five_share_slippage_vs_candidate_ask": float(
+                    row["five_share_slippage_vs_candidate_ask"]
+                ),
                 "fee_per_share": float(row["fee_per_share"]),
                 "label": int(row["label"]),
                 "pnl_per_share": float(row["pnl_per_share"]),
@@ -333,7 +483,13 @@ def evaluate(
             "market_evidence_available": int(market_available.sum()),
             "scored_with_binary_settlement": int(len(paired)),
             "selected_with_direct_ask": int(selected["ask"].notna().sum()),
-            "selected_with_recorded_depth": 0,
+            "selected_with_reconstructable_full_book": int(
+                selected["book_evidence_status"].eq("available").sum()
+            ),
+            "selected_with_recorded_depth": int(
+                selected["best_ask_size"].notna().sum()
+            ),
+            "selected_five_share_fillable_at_snapshot": int(len(executable_selected)),
             "actual_fills": 0,
             "unsettled_scored_rows": int(len(scored) - len(paired)),
         },
@@ -341,15 +497,20 @@ def evaluate(
         "probability_quality": probability,
         "fee_adjusted_trade_performance": trade,
         "entry_breakdown": {
-            "by_city": _breakdown(selected, "city"),
-            "by_local_hour": _breakdown(selected, "local_hour"),
-            "by_beijing_hour": _breakdown(selected, "beijing_hour"),
-            "by_ask_bucket": _breakdown(selected, "price_bucket"),
+            "by_city": _breakdown(executable_selected, "city"),
+            "by_local_hour": _breakdown(executable_selected, "local_hour"),
+            "by_beijing_hour": _breakdown(executable_selected, "beijing_hour"),
+            "by_ask_bucket": _breakdown(executable_selected, "price_bucket"),
         },
         "selected_entries": selected_entries,
         "multiple_testing": {
             "policy_variants_tested_in_this_review": 1,
-            "descriptive_slices": int(selected["city"].nunique() + selected["local_hour"].nunique() + selected["beijing_hour"].nunique() + selected["price_bucket"].nunique()),
+            "descriptive_slices": int(
+                executable_selected["city"].nunique()
+                + executable_selected["local_hour"].nunique()
+                + executable_selected["beijing_hour"].nunique()
+                + executable_selected["price_bucket"].nunique()
+            ),
             "correction": "none; slices are attribution only and are not promotion selectors",
         },
         "gates": {
@@ -365,7 +526,17 @@ def evaluate(
             "frozen_forward_min_30_target_dates": (
                 "PASS" if len(all_dates) >= 30 else f"FAIL_{len(all_dates)}_OF_30_TARGET_DATES"
             ),
-            "direct_execution_depth": "FAIL_NO_RECORDED_ASK_DEPTH_OR_ACTUAL_FILLS",
+            "direct_execution_depth": (
+                f"PASS_STATIC_PIT_5_SHARE_DEPTH_{len(executable_selected)}_OF_{len(selected)}"
+                if len(executable_selected) == len(selected) and len(selected) > 0
+                else f"FAIL_STATIC_PIT_5_SHARE_DEPTH_{len(executable_selected)}_OF_{len(selected)}"
+            ),
+            "actual_fill_or_post_decision_execution": (
+                "FAIL_ZERO_NOTIONAL_NO_ACTUAL_FILL_OR_POST_DECISION_EXECUTION_BOOK"
+            ),
+            "execution_book_lineage_identity": (
+                "PARTIAL_BATCH_HASH_AND_INPUT_REF_RESOLVE_RAW_BOOK_BUT_BOOK_CAPTURE_ID_NOT_PERSISTED"
+            ),
         },
         "decision": "inconclusive_keep_zero_notional_shadow_do_not_promote_live",
     }
@@ -376,12 +547,18 @@ def main() -> int:
     parser.add_argument("--candidates", type=Path, required=True)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--artifact-id", required=True)
+    parser.add_argument(
+        "--snapshot-size-bytes",
+        type=int,
+        help="Freeze an append-only journal at an already recorded byte boundary.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     payload = evaluate(
         candidates_path=args.candidates,
         db_path=args.db,
         artifact_id=args.artifact_id,
+        snapshot_size_bytes=args.snapshot_size_bytes,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

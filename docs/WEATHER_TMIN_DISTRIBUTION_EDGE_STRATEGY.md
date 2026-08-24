@@ -398,7 +398,8 @@ direct-ask+官方fee假设为 15胜0负、cost `$70.2541`、PnL `+$4.7459`、ROI
 8/21 `YES@0.49` 单笔贡献 52.4% PnL，任一 win 改为 loss 后组合 ROI 为 `-0.36%`。
 
 更关键的是同 rows model-minus-market logloss/Brier delta 为 `+0.02779/+0.01555`，CI 均跨0，
-模型点估输 market；forward 仅12/30 dates，且0 recorded depth、0 intent/order/fill。结论
+模型点估输 market；forward 仅12/30 dates，且0 intent/order/fill。15个 selected 的 raw PIT full book
+均可由 candidate input ref + condition_id 精确还原，15/15 在快照时可用best ask无滑点扫5股；结论仍为
 `INCONCLUSIVE / keep zero-notional shadow / not live-ready`。
 
 数据快照：Mac raw journal SHA `f852fa8c…`（501 total rows，2026-08-24 01:26 北京），canonical DB
@@ -406,6 +407,14 @@ direct-ask+官方fee假设为 15胜0负、cost `$70.2541`、PnL `+$4.7459`、ROI
 本轮定向补抓 Shanghai 8/12、Seoul 8/17 Tmin event，append-only ingest 新增12个settlements；其中2个
 condition补齐本评测5个checkpoint，scored settlement coverage从86/91到91/91，selected/PnL不变，
 model-minus-market logloss delta从`+0.02488`变为`+0.02779`，结论不变。
+
+执行证据勘误：初版 evaluator 只检查 candidate 是否内嵌 depth，误报 `0 recorded depth`。中央
+`market_books` 实际保存了完整 bids/asks、`book_capture_id`、best-ask size 与5c/10c depth；按原始
+SHA/byte boundary 重放后，15/15 selected 都有可重建 full book，best-ask size 最小5、median 50，
+book age 最大4.73分钟，5-share VWAP均等于 candidate ask。历史数据没有丢失；但这是静态PIT快照，
+zero-notional仍没有post-decision execution book或actual fill，不能声称真实成交。另一个仍需修的
+lineage gap 是 candidate 当前把 batch-level hash 写入 `execution_book_snapshot_id`，而不是原始
+`book_capture_id`；虽可由 input ref + condition_id 确定性还原，但在升 live 前应直接持久化精确book identity。
 
 signal/evidence 双漏斗：
 
@@ -415,7 +424,7 @@ signal/evidence 双漏斗：
 | model+market scored | 91 | 12 | 404为coverage/model/quote blockers |
 | first positive edge selected | 15 | 9 active | 当前artifact内0重复city-date |
 | PIT observation+forecast refs | 433 | 12 | 62 missing PIT observation |
-| exact settlement / direct ask / recorded depth / fill | 91 / 15 / 0 / 0 | 12 / 9 / 0 / 0 | 只是假设direct-ask taker成本 |
+| exact settlement / direct ask / reconstructed depth / fill | 91 / 15 / 15 / 0 | 12 / 9 / 9 / 0 | 15/15静态快照可扫5股；无actual fill |
 
 同分母 proper score：market/model logloss=`0.30409/0.31310`，Brier=`0.10013/0.10869`；
 date-equal model-minus-market logloss delta `+0.02779` CI `[-0.05414,+0.13478]`，Brier delta
@@ -436,8 +445,9 @@ date-equal model-minus-market logloss delta `+0.02779` CI `[-0.05414,+0.13478]`�
 价格gate。
 
 三门：significance 仅为all-win退化样本下的provisional pass；same-denominator baseline FAIL；
-forward FAIL（12/30 dates，且无depth/fill）。8环中描述性、date-block统计、概率、日期相关性与market
-基准已覆盖；signal discrimination仅间接覆盖，执行微结构、capacity、actual fill缺失。机器结果唯一格式：
+forward FAIL（12/30 dates）。静态PIT 5-share depth为15/15 PASS，但actual fill/post-decision execution
+仍缺失。8环中描述性、date-block统计、概率、日期相关性与market基准已覆盖；signal discrimination仅
+间接覆盖，执行微结构/capacity有静态快照证据，actual fill缺失。机器结果唯一格式：
 `/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_no_further_cooling_shadow_performance_v1/2026-08-24/summary.json`；
 复跑器 `scripts/analysis/tmin/evaluate_tmin_no_further_cooling_shadow_v1.py`。
 
