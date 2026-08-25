@@ -1669,3 +1669,96 @@ def test_candidate_capture_does_not_declare_expired_historical_window(tmp_path) 
 
     assert result == {"written": 0, "alerts": [], "candidate_count": 0}
     assert not (tmp_path / "capture_demands.jsonl").exists()
+
+
+def test_latest_weather_epochs_uses_incremental_persistent_index(tmp_path) -> None:
+    source = tmp_path / "state_decisions.jsonl"
+    first = {
+        "city": "Busan",
+        "target_date": "2026-08-26",
+        "decision_snapshot_ts_utc": "2026-08-25T16:00:00Z",
+        "marker": "first",
+    }
+    newer = {
+        **first,
+        "decision_snapshot_ts_utc": "2026-08-25T16:05:00Z",
+        "marker": "newer",
+    }
+    older = {
+        **first,
+        "decision_snapshot_ts_utc": "2026-08-25T15:55:00Z",
+        "marker": "older",
+    }
+    runner.write_jsonl(source, [first])
+
+    assert runner.latest_weather_epochs(source)[("Busan", "2026-08-26")]["marker"] == "first"
+    index_path = runner.weather_epoch_index_path(source)
+    assert index_path.exists()
+    with sqlite3.connect(index_path) as conn:
+        offset_before = int(
+            conn.execute(
+                "SELECT value FROM index_metadata WHERE key = 'indexed_offset'"
+            ).fetchone()[0]
+        )
+    assert offset_before == source.stat().st_size
+
+    runner.append_jsonl(source, newer)
+    runner.append_jsonl(source, older)
+    latest = runner.latest_weather_epochs(source)
+    assert latest[("Busan", "2026-08-26")]["marker"] == "newer"
+
+
+def test_latest_weather_epochs_waits_for_complete_jsonl_record(tmp_path) -> None:
+    source = tmp_path / "state_decisions.jsonl"
+    first = {
+        "city": "Busan",
+        "target_date": "2026-08-26",
+        "decision_snapshot_ts_utc": "2026-08-25T16:00:00Z",
+        "marker": "first",
+    }
+    partial = {
+        **first,
+        "decision_snapshot_ts_utc": "2026-08-25T16:05:00Z",
+        "marker": "complete-after-newline",
+    }
+    runner.write_jsonl(source, [first])
+    runner.latest_weather_epochs(source)
+    encoded = json.dumps(partial).encode("utf-8")
+    with source.open("ab") as handle:
+        handle.write(encoded)
+
+    assert runner.latest_weather_epochs(source)[("Busan", "2026-08-26")]["marker"] == "first"
+    with source.open("ab") as handle:
+        handle.write(b"\n")
+    assert (
+        runner.latest_weather_epochs(source)[("Busan", "2026-08-26")]["marker"]
+        == "complete-after-newline"
+    )
+
+
+def test_latest_weather_epochs_rebuilds_after_source_truncation(tmp_path) -> None:
+    source = tmp_path / "state_decisions.jsonl"
+    runner.write_jsonl(
+        source,
+        [
+            {
+                "city": "Busan",
+                "target_date": "2026-08-26",
+                "decision_snapshot_ts_utc": "2026-08-25T16:00:00Z",
+                "padding": "x" * 500,
+            }
+        ],
+    )
+    runner.latest_weather_epochs(source)
+    runner.write_jsonl(
+        source,
+        [
+            {
+                "city": "Tokyo",
+                "target_date": "2026-08-26",
+                "decision_snapshot_ts_utc": "2026-08-25T16:10:00Z",
+            }
+        ],
+    )
+
+    assert set(runner.latest_weather_epochs(source)) == {("Tokyo", "2026-08-26")}

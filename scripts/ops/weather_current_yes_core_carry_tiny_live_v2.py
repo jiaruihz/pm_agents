@@ -989,18 +989,144 @@ def latest_rows_by_checkpoint(path: Path) -> dict[str, dict[str, Any]]:
     return latest
 
 
+WEATHER_EPOCH_INDEX_SCHEMA_VERSION = "weather_epoch_index_v1"
+
+
+def weather_epoch_index_path(source_path: Path) -> Path:
+    return source_path.with_name("runtime_state_index.sqlite3")
+
+
+def _weather_epoch_index_metadata(conn: sqlite3.Connection) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in conn.execute("SELECT key, value FROM index_metadata")
+    }
+
+
+def _prepare_weather_epoch_index(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS index_metadata "
+        "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS latest_weather_epochs (
+            city TEXT NOT NULL,
+            target_date TEXT NOT NULL,
+            decision_snapshot_ts_utc TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            PRIMARY KEY (city, target_date)
+        )
+        """
+    )
+
+
+def _set_weather_epoch_index_metadata(
+    conn: sqlite3.Connection, values: Mapping[str, Any]
+) -> None:
+    conn.executemany(
+        """
+        INSERT INTO index_metadata(key, value) VALUES(?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        ((str(key), str(value)) for key, value in values.items()),
+    )
+
+
+def _refresh_weather_epoch_index(
+    source_path: Path, conn: sqlite3.Connection
+) -> None:
+    try:
+        stat = source_path.stat()
+    except FileNotFoundError:
+        conn.execute("DELETE FROM latest_weather_epochs")
+        conn.execute("DELETE FROM index_metadata")
+        conn.commit()
+        return
+
+    metadata = _weather_epoch_index_metadata(conn)
+    source_identity = f"{stat.st_dev}:{stat.st_ino}"
+    try:
+        indexed_offset = int(metadata.get("indexed_offset", "0"))
+    except ValueError:
+        indexed_offset = 0
+    reset_required = (
+        metadata.get("schema_version") != WEATHER_EPOCH_INDEX_SCHEMA_VERSION
+        or metadata.get("source_identity") != source_identity
+        or stat.st_size < indexed_offset
+    )
+    if reset_required:
+        conn.execute("DELETE FROM latest_weather_epochs")
+        conn.execute("DELETE FROM index_metadata")
+        indexed_offset = 0
+
+    complete_offset = indexed_offset
+    with source_path.open("rb") as handle:
+        handle.seek(indexed_offset)
+        while True:
+            raw = handle.readline()
+            if not raw:
+                break
+            if not raw.endswith(b"\n"):
+                break
+            complete_offset = handle.tell()
+            try:
+                row = json.loads(raw)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if not isinstance(row, dict):
+                continue
+            city = str(row.get("city") or "")
+            target_date = str(row.get("target_date") or "")
+            stamp = parse_utc(row.get("decision_snapshot_ts_utc"))
+            if not city or not target_date or stamp is None:
+                continue
+            stamp_text = stamp.isoformat()
+            conn.execute(
+                """
+                INSERT INTO latest_weather_epochs(
+                    city, target_date, decision_snapshot_ts_utc, payload_json
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(city, target_date) DO UPDATE SET
+                    decision_snapshot_ts_utc = excluded.decision_snapshot_ts_utc,
+                    payload_json = excluded.payload_json
+                WHERE excluded.decision_snapshot_ts_utc
+                    > latest_weather_epochs.decision_snapshot_ts_utc
+                """,
+                (
+                    city,
+                    target_date,
+                    stamp_text,
+                    json.dumps(row, ensure_ascii=False, sort_keys=True),
+                ),
+            )
+
+    _set_weather_epoch_index_metadata(
+        conn,
+        {
+            "schema_version": WEATHER_EPOCH_INDEX_SCHEMA_VERSION,
+            "source_path": str(source_path.resolve()),
+            "source_identity": source_identity,
+            "indexed_offset": complete_offset,
+        },
+    )
+    conn.commit()
+
+
 def latest_weather_epochs(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
-    latest: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
-    for row in iter_jsonl(path):
-        city = str(row.get("city") or "")
-        target_date = str(row.get("target_date") or "")
-        stamp = parse_utc(row.get("decision_snapshot_ts_utc"))
-        if not city or not target_date or stamp is None:
-            continue
-        key = (city, target_date)
-        if key not in latest or stamp > latest[key][0]:
-            latest[key] = (stamp, row)
-    return {key: row for key, (_stamp, row) in latest.items()}
+    index_path = weather_epoch_index_path(path)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(index_path, timeout=30.0) as conn:
+        _prepare_weather_epoch_index(conn)
+        _refresh_weather_epoch_index(path, conn)
+        return {
+            (str(city), str(target_date)): json.loads(payload_json)
+            for city, target_date, payload_json in conn.execute(
+                "SELECT city, target_date, payload_json FROM latest_weather_epochs"
+            )
+        }
 
 
 def maker_lifecycle_root(row: Mapping[str, Any]) -> str:
