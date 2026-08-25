@@ -55,9 +55,16 @@ def added_target_rows(diff: str, targets: set[str]) -> tuple[list[str], bool]:
             saw_header = True
             continue
         if current is None:
-            if line.startswith(("diff ", "index ", "--- ")):
+            if line.startswith((
+                    "diff ", "index ", "--- ",
+                    "new file mode", "old mode", "deleted file mode",
+                    "similarity index", "rename from", "rename to",
+                    "copy from", "copy to", "Binary files", "GIT binary patch")):
                 continue
-            parsed_ok = False  # body before any +++ header
+            # git extension headers between files; blank line separators too
+            if not line.strip():
+                continue
+            parsed_ok = False  # genuine body before any +++ header
             continue
         if current in targets and line.startswith("+") and not line.startswith("+++"):
             rows.append(line[1:])

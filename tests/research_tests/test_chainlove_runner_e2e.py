@@ -966,3 +966,33 @@ def test_full_discovery_72h_gate(tmp_path: Path) -> None:
     refreshed = json.loads(clock.read_text())
     assert refreshed["completed_at_utc"] > "2026-0"
     assert refreshed["run_id"] == "e2e-run"
+
+
+def test_added_rows_parse_new_file_mode_diffs(tmp_path: Path) -> None:
+    """Live finding 2026-08-26: 'new file mode'/'Binary files' git headers were
+    misread as parse failures, blocking 6 legitimate delta PRs."""
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cb", REPO_ROOT / "scripts/ops/chainlove_brief.py")
+    cb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cb)
+    diff = (
+        "diff --git a/references/providers/images/x.png b/references/providers/images/x.png\n"
+        "new file mode 100644\n"
+        "Binary files /dev/null and b/references/providers/images/x.png differ\n"
+        f"diff --git a/{CSV_PATH} b/{CSV_PATH}\n"
+        "new file mode 100644\n"
+        "index 000000000..111111111\n"
+        "--- /dev/null\n"
+        f"+++ b/{CSV_PATH}\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+slug,provider,offer,toolType,tag,price,planName,planType,description,starred\n"
+        "+brand-new-svc,,!offer:brand-new-svc,Tool,Tag,Custom,,,,FALSE\n"
+    )
+    rows, parsed_ok = cb.added_target_rows(
+        diff, {CSV_PATH, "references/providers/images/x.png"})
+    assert parsed_ok is True
+    assert rows == ["slug,provider,offer,toolType,tag,price,planName,planType,description,starred",
+                    "brand-new-svc,,!offer:brand-new-svc,Tool,Tag,Custom,,,,FALSE"]
