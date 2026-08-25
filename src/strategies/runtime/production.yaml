@@ -57,7 +57,7 @@ production_releases:
     expected_repo_sha: 1757aca697acc3190272057558e4d5819197317a
   - release_id: core_carry_market_state_shadow
     checkout_root: /Users/deepsleep/projects/pm_agents_core_market_state_prod
-    expected_repo_sha: d2beec2c1b9f7b9d73741158e4a029c1293cb2ee
+    expected_repo_sha: a9b6f83641aec31d0f2a0c353478a9d3c3585cd0
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/projects/pm_agents_scheduled_informed_maker_prod
     expected_repo_sha: 93d6c0214a63a8807e802e42387c0a5509b70641
