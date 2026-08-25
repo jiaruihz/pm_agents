@@ -431,6 +431,7 @@ def evaluate(
         )
 
     all_dates = sorted(str(value) for value in frame["target_date"].unique())
+    settled_scored_dates = sorted(str(value) for value in paired["target_date"].unique())
     selected_dates = sorted(str(value) for value in selected["target_date"].unique())
     blocker_counts = Counter(str(value) for value in frame.loc[frame["candidate_status"].eq("blocked"), "blocker_reason"])
     market_available = frame["market_evidence_status"].eq("available")
@@ -461,6 +462,7 @@ def evaluate(
             "end_target_date": max(all_dates),
             "rows": int(len(frame)),
             "target_dates": len(all_dates),
+            "settled_scored_target_dates": len(settled_scored_dates),
             "cities": sorted(str(value) for value in frame["city"].unique()),
             "active_trade_dates": len(selected_dates),
             "trade_class": "zero_notional_shadow_hypothetical",
@@ -523,8 +525,10 @@ def evaluate(
                 and trade["target_date_bootstrap_ci95"][0] > 0
                 else "FAIL"
             ),
-            "frozen_forward_min_30_target_dates": (
-                "PASS" if len(all_dates) >= 30 else f"FAIL_{len(all_dates)}_OF_30_TARGET_DATES"
+            "frozen_forward_min_30_settled_target_dates": (
+                "PASS"
+                if len(settled_scored_dates) >= 30
+                else f"FAIL_{len(settled_scored_dates)}_OF_30_SETTLED_TARGET_DATES"
             ),
             "direct_execution_depth": (
                 f"PASS_STATIC_PIT_5_SHARE_DEPTH_{len(executable_selected)}_OF_{len(selected)}"

@@ -451,6 +451,25 @@ forward FAIL（12/30 dates）。静态PIT 5-share depth为15/15 PASS，但actual
 `/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_no_further_cooling_shadow_performance_v1/2026-08-24/summary.json`；
 复跑器 `scripts/analysis/tmin/evaluate_tmin_no_further_cooling_shadow_v1.py`。
 
+### 2026-08-25 frozen-forward 更新
+
+定向补齐并入库 Seoul/Tokyo 8/24 Tmin settlement 后，当前 raw artifact 为587 checkpoints / 14
+observed target dates，其中13日已有scored settlement；104 scored、98 same-row settled scores，18个
+policy selected 中17个已结算、分布于10个active dates，8/25 Tokyo `YES@0.94` 仍open。已结算17笔
+全部win；按5-share full-book VWAP+官方fee，cost `$80.1923`、PnL `+$4.8077`、ROI `+6.00%`，
+target-date bootstrap CI `[+2.03%,+16.11%]`。17/17都有静态PIT full-book depth并可在best ask扫5股。
+
+这支持“当前expression很有希望”，但还不能升级为confirmed alpha：Tokyo 8/21 `YES@0.49` 仍贡献
+51.7%总PnL；任一额外binary loss会把组合变为 `-$0.1923/-0.24%`。selected-only诊断上 model/market
+logloss=`0.0572/0.0770`，model选出的tail目前确实更准；但完整98-row同分母上model仍点估输market，
+logloss/Brier delta=`+0.02628/+0.01505`，两项CI跨0。forward只有13/30 settled dates，且无actual
+fill/post-decision execution。结论维持 `INCONCLUSIVE / promising zero-notional shadow / not live-ready`。
+
+运行态另有独立数据连续性问题：`weather_forecast_curve_collector_v1` tmux缺失且health陈旧约10.3小时，
+使本runner被controller标为dependency critical；已产出的历史结果不受影响，但恢复前新增checkpoint可能缺
+forecast evidence。机器结果更新为
+`/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_no_further_cooling_shadow_performance_v1/2026-08-25/summary.json`。
+
 ## 血缘与落地边界
 
 正式实现必须复用 WCIR：
