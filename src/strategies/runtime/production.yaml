@@ -15,7 +15,7 @@ production_releases:
     expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
   - release_id: forecast_collector
     checkout_root: /Users/deepsleep/projects/pm_agents_forecast_collector_prod
-    expected_repo_sha: 03691ebb36579f8a604936af19924c5123022439
+    expected_repo_sha: 48a3cf5c02ff46098fb8b9b30b4b29d169dc2f93
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v3_prod
     expected_repo_sha: 34eb44c702a9538dd85ef1a179bd5ba2d4ad7c41
@@ -69,7 +69,7 @@ production_releases:
     expected_repo_sha: b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/projects/pm_agents_proposal_reward_prod
-    expected_repo_sha: 68056035ec324305c3e60a88fb06dce1a63f2c11
+    expected_repo_sha: d60e1455664890c4b4baccd97271865f3afb38a0
   - release_id: paired_bid_mm
     checkout_root: /Users/deepsleep/projects/pm_agents_paired_bid_mm_prod
     expected_repo_sha: d07f9e0a336a417a843700850f48cb4ff6f59184
@@ -150,7 +150,7 @@ managed_runtimes:
     start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
     max_health_age_sec: 1800
-    dependencies: [weather_market_books]
+    dependencies: [weather_market_books, weather_forecast_curve_collector_v1]
     recovery_policy: safe
 
   - instance_id: weather_forecast_curve_collector_v1
@@ -165,6 +165,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
+    launch_environment:
+      WEATHER_DATA_FEED_FORECAST_PROXY: http://127.0.0.1:7896
 
   - instance_id: polymarket_weather_proposal_reward_shadow_v1
     uses_market_proxy: true

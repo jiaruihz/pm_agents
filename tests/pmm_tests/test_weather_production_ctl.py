@@ -78,6 +78,13 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert by_id["weather_dashboard_api"].health_format == "http_json"
     assert by_id["weather_dashboard_api"].health_url == "http://127.0.0.1:8000/health"
+    assert by_id["weather_data_feed_jrs"].dependencies == (
+        "weather_market_books",
+        "weather_forecast_curve_collector_v1",
+    )
+    assert dict(by_id["weather_forecast_curve_collector_v1"].launch_environment) == {
+        "WEATHER_DATA_FEED_FORECAST_PROXY": "http://127.0.0.1:7896",
+    }
     assert by_id["weather_market_books"].expected_health_contract() == {
         "configured_cities": ["Amsterdam", "Tokyo", "Helsinki", "Busan"],
         "active_bracket_count": 2,
@@ -99,10 +106,11 @@ def test_committed_production_spec_declares_current_live_control_plane():
         ),
         "WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS": (
             "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/"
-            "capture_demands.jsonl"
+            "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
+            "current_yes_core_carry_tiny_live_v2/capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
-        "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "12",
+        "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "24",
     }
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"
@@ -118,7 +126,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "3ed5e466e18895cccc08dff046ac4d1c4c339043"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "269c1072fe0c5a464d6ec681db4805a1815dca2d"
+        "34eb44c702a9538dd85ef1a179bd5ba2d4ad7c41"
     )
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (
