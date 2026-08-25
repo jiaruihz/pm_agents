@@ -191,6 +191,30 @@ def worker_calls(env: dict) -> list[str]:
     return [line for line in log.read_text().splitlines() if line.strip()]
 
 
+REAL_STATE_CLOCK = Path(
+    "/Users/deepsleep/projects/chain-love/harness-runs/state/last_full_discovery.json"
+)
+
+
+@pytest.fixture(autouse=True)
+def _protect_real_state_clock():
+    """Isolation guard (2026-08-25 incident: a test wrote its terminal into
+    the REAL full-discovery clock by omitting --stale-inventory)."""
+
+    before = REAL_STATE_CLOCK.read_bytes() if REAL_STATE_CLOCK.is_file() else None
+    yield
+    after = REAL_STATE_CLOCK.read_bytes() if REAL_STATE_CLOCK.is_file() else None
+    if before != after:
+        # restore + fail loudly
+        if before is None:
+            REAL_STATE_CLOCK.unlink(missing_ok=True)
+        else:
+            REAL_STATE_CLOCK.write_bytes(before)
+        raise AssertionError(
+            "test mutated the real last_full_discovery.json — pass the fixture "
+            "state trio (--precedents/--deferred-queue/--stale-inventory)")
+
+
 # ---------------------------------------------------------------------------
 # A. Offline NOOP E2E — runner-driven, builder/publisher must never start
 # ---------------------------------------------------------------------------
@@ -729,7 +753,10 @@ def test_worker_usage_sidecar_missing_blocks(tmp_path: Path) -> None:
                    "--repo-path", str(env["paths"]["repo"]),
                    "--run-dir", str(env["paths"]["run_dir"]),
                    "--json-tools-dir", str(env["paths"]["json_tools"]),
-                   "--policy-json", str(env["paths"]["policy"])]
+                   "--policy-json", str(env["paths"]["policy"]),
+                   "--precedents", str(env["paths"]["state"] / "reviewer_precedents.md"),
+                   "--deferred-queue", str(env["paths"]["state"] / "deferred_candidates.json"),
+                   "--stale-inventory", str(env["paths"]["state"] / "stale_inventory.json")]
     # no --worker-cmd: runner pauses at candidate_mcp
     proc = subprocess.run([sys.executable, str(RUNNER), *runner_args],
                           env=env["env"], capture_output=True, text=True, timeout=600)
