@@ -1775,7 +1775,39 @@ recovery = controller recover-jrs-context --apply @ 2026-08-19T14:45Z
 fix_level = recovery_improved
 ```
 
-## 27. Immediate Follow-Up Work
+## 27. 2026-08-25 forecast collector proxy outage and bounded cache window
+
+The dedicated forecast collector inherited the `Allblue` market proxy and stopped
+producing durable Open-Meteo captures after `2026-08-25T04:55:47Z`.  A controller
+restart with the stable forecast route restored the first full 52-city capture at
+`2026-08-25T17:13:26Z` (`12h17m39s`).  The last publishable strategy snapshot was
+`15:48:36Z`; the next was `17:25:41Z`, leaving eight rejected partial cycles and a
+`1h37m05s` decision-evidence coverage gap.
+
+Lineage review found four `current_yes_core_carry_tiny_live_v2` fills during the
+collector outage: Shanghai 31 YES (10 @ 0.81), Manila 31 YES (10 @ 0.94 and 5 @
+0.92), and London 24 YES (10 @ 0.83), total 35 shares / $30.40 notional.  Their
+forecast curves were 6h52m, 7h46m, and 10h26m old at decision time respectively,
+inside the frozen 12-hour `FORECAST_CURVE_CACHE_MAX_AGE_SEC=43200` contract, and all
+used snapshots published before the coverage gap.  They are therefore retained as
+valid live evidence, not tagged as polluted.  No live orders or fills occurred after
+the last publishable snapshot and before forecast recovery; the correct fail-closed
+counterfactual changes zero orders and zero fills.
+
+Backtest handling:
+
+- Retain the four listed fills in execution and PnL denominators.
+- Exclude `2026-08-25T15:48:36Z..2026-08-25T17:25:41Z` from decision-coverage
+  denominators; do not treat the eight missing snapshot cycles as negative signals.
+- The raw forecast capture gap itself is
+  `2026-08-25T04:55:47Z..2026-08-25T17:13:26Z`; cached-curve decisions inside the
+  declared 12-hour freshness window remain valid.
+
+Fixes: isolate the forecast proxy route, propagate per-runtime launch environment
+into canonical tmux sessions, and make data-feed semantic health depend on the
+forecast collector so the outage is no longer reported green.
+
+## 28. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
