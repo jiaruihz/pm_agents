@@ -1371,8 +1371,12 @@ def _runtime_launch_env(
             f"{update_environment.stdout[-500:].strip()}"
         )
     update_keys = shlex.split(update_environment.stdout.strip())
-    if "WEATHER_PRODUCTION_CONFIG" not in update_keys:
-        update_keys.append("WEATHER_PRODUCTION_CONFIG")
+    required_update_keys = [
+        "WEATHER_PRODUCTION_CONFIG",
+        *dict(runtime.launch_environment),
+    ]
+    if any(key not in update_keys for key in required_update_keys):
+        update_keys.extend(key for key in required_update_keys if key not in update_keys)
         update_result = _tmux(
             spec,
             "set-option",

@@ -1016,8 +1016,8 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
     marker = tmp_path / "proxy.txt"
     script = tmp_path / "start.sh"
     script.write_text(
-        f"#!/bin/sh\nprintf '%s|%s' \"$WEATHER_DATA_FEED_MARKET_PROXY\" "
-        f"\"$HTTPS_PROXY\" > {marker}\n",
+        f"#!/bin/sh\nprintf '%s|%s|%s' \"$WEATHER_DATA_FEED_MARKET_PROXY\" "
+        f"\"$HTTPS_PROXY\" \"$WEATHER_DATA_FEED_FORECAST_PROXY\" > {marker}\n",
         encoding="utf-8",
     )
     script.chmod(0o755)
@@ -1030,6 +1030,7 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
         start_script=Path("start.sh"),
         recovery_policy="safe",
         uses_market_proxy=True,
+        launch_environment=(("WEATHER_DATA_FEED_FORECAST_PROXY", "http://127.0.0.1:7896"),),
     )
     spec = production_spec(tmp_path, (runtime,))
     calls = []
@@ -1044,7 +1045,7 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
 
     assert result["status"] == "started"
     assert marker.read_text(encoding="utf-8") == (
-        "http://127.0.0.1:7897|http://127.0.0.1:7897"
+        "http://127.0.0.1:7897|http://127.0.0.1:7897|http://127.0.0.1:7896"
     )
     assert (
         "set-environment",
@@ -1061,6 +1062,7 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
     assert any(
         call[:3] == ("set-option", "-g", "update-environment")
         and "WEATHER_PRODUCTION_CONFIG" in call[3]
+        and "WEATHER_DATA_FEED_FORECAST_PROXY" in call[3]
         for call in calls
     )
 
