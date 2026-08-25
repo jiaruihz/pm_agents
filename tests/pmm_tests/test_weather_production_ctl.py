@@ -126,7 +126,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "34eb44c702a9538dd85ef1a179bd5ba2d4ad7c41"
+        "7048a2df096f6032dea4fcc87906fa302a98bec1"
     )
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (
