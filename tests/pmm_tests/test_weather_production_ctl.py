@@ -109,10 +109,13 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
             "current_yes_core_carry_tiny_live_v2/capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
+            "current_yes_core_carry_market_state_shadow_v3_forward_20260824a/"
+            "pretrigger_capture_demands.jsonl "
+            "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
             "scheduled_informed_maker_shadow_v1/capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
-        "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "24",
+        "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "96",
     }
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"
