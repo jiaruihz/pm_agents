@@ -1,0 +1,32 @@
+2026-08-26 discovery commands (read-only unless noted as design-file creation)
+
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+
+.venv/bin/pytest -q tests/test_platform_market_data_contracts.py tests/research_tests/test_gamma_normalize_models.py tests/research_tests/test_gamma_pagination.py tests/research_tests/polymarket/test_market_resolver.py tests/research_tests/polymarket/test_clob_orderbook_sorting.py tests/research_tests/polymarket/test_rule_analysis_adapter.py tests/research_tests/polymarket/test_market_analysis.py tests/research_tests/test_dispute_contract_corpus.py tests/research_tests/test_dispute_canonical.py tests/research_tests/test_dispute_trade_intents.py tests/research_tests/test_dispute_artifacts.py tests/research_tests/test_external_wallet_history_collector.py tests/research_tests/test_external_wallet_full_ladder_conversion.py tests/research_tests/test_weather_agent_harness_orchestration.py
+result: 58 passed in 4.11s
+
+PYTHONPATH=. .venv/bin/pytest -q tests/research_tests/test_weather_agent_harness_orchestration.py tests/research_tests/test_external_wallet_persist.py tests/research_tests/test_external_wallet_history_collector.py tests/research_tests/test_external_wallet_full_ladder_conversion.py
+result: 23 passed in 3.02s
+
+DB evidence: sqlite read-only schema/count/max-time queries against runtime/db/research.db, runtime/wallets.db, canonical /Volumes/jrs/pm_agents/runtime/dispute_repricing/dispute.db, and canonical weather.db identity.
+
+Validation: CSV parsed for 15 columns and allowed dispositions; 12 work packages checked for every required task-template section and allowed completion status; eight required files checked non-empty; git diff --check run on the design directory.
+
+No migration, deployment, service restart, external write, live order, or current runtime DB mutation was executed.
+
+2026-08-26 GPT Pro review revision
+
+Accepted BF-1: split pre-book Recall and optional book-anomaly routes; expanded P0-06 into P0-06A through P0-06E.
+Accepted BF-2: added allowlist-only BlindCandidateProjection, Polymarket source exclusion, semantic leakage fixtures, and claim-level EvidenceItem.
+Accepted BF-3: replaced module-only denylist with offline network deny, precise read-only transport/env allowlists, generic transport/dynamic import/subprocess guards, and Wave-0/per-merge/final capability proof.
+
+Validation: 16 task contracts contain all required template sections; required design terms and BF closures are present; no legacy global P0-05-to-all-Recall dependency remains; canonical artifact hashes and Gate 2 seal were regenerated.
+
+No implementation code, network request, migration, deployment, service restart, external write, or order operation was executed during the revision.
+
+2026-08-26 second-review non-blocking hardening
+
+Applied D1 through D6: aligned P0-09 dependencies; added BlindResearchQuestion provenance and recursive string scanning; froze source_artifact/capture_scope/hash_scope semantics; hardened redirect/proxy/URL/query/body/header/DNS transport rules; clarified P0-11 Wave-0 parallel boundary; added SENSING operational budgets.
+
+Created P0_WORK_ALLOCATION_GLM_CODEX.md. Implementation remains on owner hold; no code, network, migration, deployment, service or order action was performed.
