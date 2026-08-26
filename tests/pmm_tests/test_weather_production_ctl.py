@@ -107,7 +107,9 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS": (
             "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/"
             "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
-            "current_yes_core_carry_tiny_live_v2/capture_demands.jsonl"
+            "current_yes_core_carry_tiny_live_v2/capture_demands.jsonl "
+            "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
+            "scheduled_informed_maker_shadow_v1/capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "24",
@@ -126,7 +128,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "7048a2df096f6032dea4fcc87906fa302a98bec1"
+        "4db76556e65f7d066a0ef23c1cd4a0d34a6e755e"
     )
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (

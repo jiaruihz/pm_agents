@@ -18,7 +18,7 @@ production_releases:
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
   - release_id: market_books
     checkout_root: /Users/deepsleep/projects/pm_agents_market_books_ws_v3_prod
-    expected_repo_sha: 7048a2df096f6032dea4fcc87906fa302a98bec1
+    expected_repo_sha: 4db76556e65f7d066a0ef23c1cd4a0d34a6e755e
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/projects/pm_agents_dispute_repricing_prod
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
@@ -60,7 +60,7 @@ production_releases:
     expected_repo_sha: a9b6f83641aec31d0f2a0c353478a9d3c3585cd0
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/projects/pm_agents_scheduled_informed_maker_prod
-    expected_repo_sha: b419e20864557ef4f9064edffa208b40c9a5cfff
+    expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
   - release_id: knmi
     checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
     expected_repo_sha: ef64a2d0b14230d21e3544161dbf95a097eeca9c
@@ -224,7 +224,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS: "6"
       WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES: "3000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "24"
 
