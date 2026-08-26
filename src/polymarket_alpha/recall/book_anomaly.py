@@ -26,6 +26,7 @@ from ..contracts import (
 )
 from ..contracts.base import ensure_utc
 from ..contracts.base import validate_sha256
+from .registry import ProviderDescriptor
 
 
 BOOK_ANOMALY_RECALLER_VERSION = "p0_06e_v1"
@@ -256,6 +257,17 @@ class BookAnomalyRecallProvider:
 
     def __init__(self, config: BookAnomalyRecallConfig | None = None) -> None:
         self.config = config or BookAnomalyRecallConfig()
+
+    @property
+    def descriptor(self) -> ProviderDescriptor:
+        """Expose this optional branch to the shared provider registry."""
+
+        return ProviderDescriptor(
+            provider_id=self.config.provider_id,
+            recaller=RecallerType.BOOK_ANOMALY,
+            recaller_version=self.config.provider_version,
+            requires_book=True,
+        )
 
     def recall(self, request: BookAnomalyRecallRequest) -> BookAnomalyRecallOutcome:
         input_sha256 = content_sha256(
