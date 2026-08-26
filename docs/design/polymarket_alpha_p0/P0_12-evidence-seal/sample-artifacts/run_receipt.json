@@ -1,0 +1,17 @@
+{
+  "certification_sha256": "4e70f22ad26ae17181ea853c1f00c9fb0cb4f9fcf6cac3f242bb7bf3116facb2",
+  "completion_status": "CERTIFIED_OFFLINE",
+  "coordinator_certified": true,
+  "created_at": "2026-08-27T12:00:00Z",
+  "extensions": {},
+  "manifest_sha256": "0b039069dd3ebfb1e7c94655f598421ec4f9590d6c10ae72708d34f4bedfa447",
+  "provenance": [],
+  "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY",
+  "receipt_sha256": "bfdefe72673f76c941e3a5d671be23e0d8f75854c64882d4f0b33ac048fadb65",
+  "receipt_version": "alpha_p0_governance_receipt_v1",
+  "record_id": "governance_receipt:bfdefe72673f76c941e3a5d671be23e0d8f75854c64882d4f0b33ac048fadb65",
+  "run_id": "alpha-p0-12-offline-20260827",
+  "schema_version": "alpha_p0_v1.0",
+  "source": "polymarket_alpha.governance",
+  "source_version": "p0_10_v1"
+}

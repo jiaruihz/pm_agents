@@ -1,0 +1,16 @@
+{
+  "entrypoint": "src.polymarket_alpha.pilot.run_offline_fixture_pilot",
+  "execution_or_signing_modules": [],
+  "network_modules": [],
+  "source_audit_passed": true,
+  "stages": [
+    "change",
+    "recall",
+    "rules",
+    "research",
+    "books",
+    "protocol",
+    "decision",
+    "storage"
+  ]
+}

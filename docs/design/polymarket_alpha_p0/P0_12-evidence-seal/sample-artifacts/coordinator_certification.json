@@ -1,0 +1,16 @@
+{
+  "certified": true,
+  "certified_at": "2026-08-27T12:00:00Z",
+  "certifier_work_order_id": "P0-12",
+  "coordinator_principal": "codex-root",
+  "created_at": "2026-08-27T12:00:00Z",
+  "extensions": {},
+  "manifest_sha256": "0b039069dd3ebfb1e7c94655f598421ec4f9590d6c10ae72708d34f4bedfa447",
+  "provenance": [],
+  "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY",
+  "record_id": "governance_certification:7c1e0385b876759c618877cf4961010b2aa32568e7b947084a8d4ba5e5264bcf",
+  "run_id": "alpha-p0-12-offline-20260827",
+  "schema_version": "alpha_p0_v1.0",
+  "source": "codex_integration_coordinator",
+  "source_version": "p0_12_v1"
+}

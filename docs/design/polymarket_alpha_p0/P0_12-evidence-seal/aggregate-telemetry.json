@@ -1,0 +1,8 @@
+{
+  "coordinator_test_count": 399,
+  "live_orders": 0,
+  "network_requests": 0,
+  "production_database_migrations": 0,
+  "schedulers_created": 0,
+  "worker_usage_telemetry": "unavailable in delegated execution environment"
+}

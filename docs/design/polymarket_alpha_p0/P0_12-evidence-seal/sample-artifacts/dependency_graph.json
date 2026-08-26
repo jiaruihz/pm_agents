@@ -1,0 +1,18 @@
+{
+  "coordinator": "P0-12",
+  "cycle_free": true,
+  "direct_dependencies": [
+    "P0-01",
+    "P0-02",
+    "P0-03",
+    "P0-04",
+    "P0-05",
+    "P0-06",
+    "P0-07",
+    "P0-08",
+    "P0-09",
+    "P0-10",
+    "P0-11"
+  ],
+  "write_owner_overlap": false
+}

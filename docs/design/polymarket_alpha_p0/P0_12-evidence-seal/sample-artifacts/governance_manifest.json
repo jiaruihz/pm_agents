@@ -1,0 +1,693 @@
+{
+  "created_at": "2026-08-27T12:00:00Z",
+  "domain_artifact_ids": [
+    "prediction_record:f68630dc63fe0a25c670728c20ab00febd87e6bf2988bef639673100850e75cc",
+    "review_decision:a0703cd10c80f44b051b1c40e03fc0bcf8bf9666f6bc792514be89b5ea650605"
+  ],
+  "evidence_records": [
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-01",
+      "sha256": "e0f92b85b37abbcbd9718b6f9728df0f215409815df01be90553a7baf7c46dbd",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-01",
+      "uri": "artifact://alpha-p0/P0-01.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-02",
+      "sha256": "e2200f9ec8cbfa2a10355b7231530f9f8902d59222ee525abd26af00434cdb6e",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-02",
+      "uri": "artifact://alpha-p0/P0-02.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-03",
+      "sha256": "1ad5617bd3722da7ff9f409616982e329ef1b7c06a92192907249fbba715e474",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-03",
+      "uri": "artifact://alpha-p0/P0-03.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-04",
+      "sha256": "96b3bafea52750a1cff2a40ee8836a6e59d8d088f8c425b1f08a6816aa480671",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-04",
+      "uri": "artifact://alpha-p0/P0-04.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-05",
+      "sha256": "f89706b79f5ed45ca134aba9d76b23c39799c4e5b25c1d59434e12b1af2194e0",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-05",
+      "uri": "artifact://alpha-p0/P0-05.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-06",
+      "sha256": "8cb70ad67e251d1a980aa0d89b18bbff323da38384c8fe920dfd7b3bc88319c8",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-06",
+      "uri": "artifact://alpha-p0/P0-06.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-07",
+      "sha256": "d1865f94c0b17400a211883c2bde8b3ce75f6886fe104484c141e0036e6d6836",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-07",
+      "uri": "artifact://alpha-p0/P0-07.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-08",
+      "sha256": "6d0e72f7df762bb01079b8f62115c3cff865fdaa7848749b18ba70fe1a792616",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-08",
+      "uri": "artifact://alpha-p0/P0-08.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-09",
+      "sha256": "18f6a6e7734f1dd94c967c9c15ca644fc67be701129132610e6beea98e80f817",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-09",
+      "uri": "artifact://alpha-p0/P0-09.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-10",
+      "sha256": "0673dc04147d240cf59313e592fcbfc790ab493b8d7d71d86c7a39676a34d3fb",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-10",
+      "uri": "artifact://alpha-p0/P0-10.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-11",
+      "sha256": "931f44b005e9a6c36e91ae6aafb31e9a04a0922a1603942661030d8b1d1df120",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-11",
+      "uri": "artifact://alpha-p0/P0-11.json"
+    },
+    {
+      "created_at_utc": "2026-08-27T12:00:00Z",
+      "media_type": "application/json",
+      "producer_attempt": 1,
+      "producer_work_order_id": "P0-12",
+      "sha256": "e556057954de3dd015f2e534bcc1913944408166636a381f7a93358db25e84c1",
+      "size_bytes": 100,
+      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-12",
+      "uri": "artifact://alpha-p0/P0-12.json"
+    }
+  ],
+  "extensions": {},
+  "manifest_sha256": "0b039069dd3ebfb1e7c94655f598421ec4f9590d6c10ae72708d34f4bedfa447",
+  "provenance": [],
+  "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY",
+  "record_id": "governance_manifest:0b039069dd3ebfb1e7c94655f598421ec4f9590d6c10ae72708d34f4bedfa447",
+  "run_id": "alpha-p0-12-offline-20260827",
+  "schema_version": "alpha_p0_v1.0",
+  "seal_version": "alpha_p0_governance_v1",
+  "source": "polymarket_alpha.governance",
+  "source_version": "p0_10_v1",
+  "telemetry": {
+    "evidence_record_count": 12,
+    "network_requests": 0,
+    "schedulers_created": 0,
+    "unique_write_owner_count": 12,
+    "work_order_count": 12
+  },
+  "work_orders": [
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "93d1622f8dc7ce8530d42939c3144963c1e734872c585ada50f054da99d2984b",
+      "work_order_id": "P0-01",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-01_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-01",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-01 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-01",
+        "write_owners": [
+          "src/polymarket_alpha/contracts"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/contracts"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "761c9918a911419df90fea119381e3c88de2a2f25187cb70a4598f1821b5a2cb",
+      "work_order_id": "P0-02",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-02_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-02",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-02 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-02",
+        "write_owners": [
+          "src/polymarket_alpha/storage"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/storage"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "362a0b688c217dab17c671cca4c841a26dcd13399378d3b60dc119f9121939ff",
+      "work_order_id": "P0-03",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-03_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-03",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-03 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-03",
+        "write_owners": [
+          "src/polymarket_alpha/adapters+census"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/adapters+census"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "2cf76ca5db53de66691e0a860fe37d56cd97fb6463eeace8f456813090711237",
+      "work_order_id": "P0-04",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-04_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-04",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-04 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-04",
+        "write_owners": [
+          "src/polymarket_alpha/change"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/change"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "4051650e6d2e993f5110fa883b31cf0500969f2d46dff8cc0b6fa761eaa623c0",
+      "work_order_id": "P0-05",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-05_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-05",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-05 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-05",
+        "write_owners": [
+          "src/polymarket_alpha/books"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/books"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "d0e6bb4eefa84f8316a38a50dc5df556fb864cf91c594cf3eb0e125f695c5dc7",
+      "work_order_id": "P0-06",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-06_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-06",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-06 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-06",
+        "write_owners": [
+          "src/polymarket_alpha/recall"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/recall"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "f9c3649593bebe80f5d3f63d595b575c0ff994c51c949115258eb1825eb3a12d",
+      "work_order_id": "P0-07",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-07_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-07",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-07 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-07",
+        "write_owners": [
+          "src/polymarket_alpha/rules"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/rules"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "7cfd0cecd9321057668b6fc71e94839126db77214f26840b9168a5dd77165b5b",
+      "work_order_id": "P0-08",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-08_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-08",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-08 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-08",
+        "write_owners": [
+          "src/polymarket_alpha/research"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/research"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "45fc2a5b535199f52db048717687610d50d31880e8639b8557cf5c30c43f2f5a",
+      "work_order_id": "P0-09",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-09_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-09",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-09 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-09",
+        "write_owners": [
+          "src/polymarket_alpha/protocol+decision"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/protocol+decision"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "fe5f8e420db7cf9a6b8e6a3e9d8bdd154c41d2ae0825263a6e062a39db6599af",
+      "work_order_id": "P0-10",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-10_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-10",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-10 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-10",
+        "write_owners": [
+          "src/polymarket_alpha/governance"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/governance"
+      ]
+    },
+    {
+      "depends_on": [],
+      "risk": "read_only",
+      "role": "bounded_component_owner",
+      "status": "complete",
+      "work_order_hash": "19b720df61ce8a21212cf7479729284b6ecf0e2b36533af44b47daba9034e36c",
+      "work_order_id": "P0-11",
+      "work_order_payload": {
+        "acceptance": [
+          "P0-11_PASS"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-11",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Complete and verify P0-11 offline implementation",
+        "owner": "codex-coordinated",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "bounded_component_owner",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-11",
+        "write_owners": [
+          "src/polymarket_alpha/security"
+        ]
+      },
+      "write_owners": [
+        "src/polymarket_alpha/security"
+      ]
+    },
+    {
+      "depends_on": [
+        "P0-01",
+        "P0-02",
+        "P0-03",
+        "P0-04",
+        "P0-05",
+        "P0-06",
+        "P0-07",
+        "P0-08",
+        "P0-09",
+        "P0-10",
+        "P0-11"
+      ],
+      "risk": "read_only",
+      "role": "integration_coordinator",
+      "status": "complete",
+      "work_order_hash": "97d2f522c7e8cae75791460d032abc39889cb9a31139f651d40fbe06641bb99e",
+      "work_order_id": "P0-12",
+      "work_order_payload": {
+        "acceptance": [
+          "A01",
+          "A02",
+          "A03",
+          "A04",
+          "A05",
+          "A06",
+          "A07",
+          "A08",
+          "A09",
+          "A10",
+          "A11",
+          "A12",
+          "A13",
+          "A14",
+          "A15",
+          "A16",
+          "A17",
+          "A18"
+        ],
+        "attempt": 1,
+        "closes_acceptance": [],
+        "created_at_utc": "2026-08-27T12:00:00Z",
+        "depends_on": [
+          "P0-01",
+          "P0-02",
+          "P0-03",
+          "P0-04",
+          "P0-05",
+          "P0-06",
+          "P0-07",
+          "P0-08",
+          "P0-09",
+          "P0-10",
+          "P0-11"
+        ],
+        "heartbeat_interval_seconds": 60,
+        "last_heartbeat_at_utc": null,
+        "lease_expires_at_utc": null,
+        "lease_id": "sealed-p0-12",
+        "lease_timeout_seconds": 900,
+        "max_attempts": 2,
+        "objective": "Certify the complete offline fixture implementation and evidence",
+        "owner": "codex-coordinator",
+        "parent_run_id": null,
+        "result_ref": null,
+        "risk": "read_only",
+        "role": "integration_coordinator",
+        "scope": {
+          "network_access": false,
+          "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+        },
+        "status": "complete",
+        "verifiers": [],
+        "work_order_id": "P0-12",
+        "write_owners": [
+          "docs/design/polymarket_alpha_p0/P0_12-evidence-seal"
+        ]
+      },
+      "write_owners": [
+        "docs/design/polymarket_alpha_p0/P0_12-evidence-seal"
+      ]
+    }
+  ]
+}

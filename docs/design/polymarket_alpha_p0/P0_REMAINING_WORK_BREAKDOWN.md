@@ -4,7 +4,9 @@ Status date: 2026-08-27
 
 ```text
 PROGRAM_PHASE=P0_OFFLINE_IMPLEMENTATION
-P0_COMPLETE=NO
+P0_COMPLETE=YES
+P0_COMPLETION_STATUS=CERTIFIED_OFFLINE
+SOURCE_COMMIT=83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 ```
@@ -13,30 +15,29 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 
 | Workstream | Status | Evidence / remaining boundary |
 |---|---|---|
-| P0-01 core contracts | COMPLETE_WITH_LIMITATIONS | Core identity, Candidate, Rule, Blind/Market packet, evidence and ledger shapes exist. A bounded R2 addendum is still required for ChangeEvent, book demand/receipt and imported ResearchResult receipts. |
-| P0-02 storage | COMPLETE_WITH_LIMITATIONS | Additive migrations 0001–0004 and repositories pass fixture/copy tests. R2 projections/tables must follow the P0-01R2 types. Current `research.db` is not migrated. |
-| P0-03 Gamma catalog | COMPLETE | Accepted at source commit `fe5598ca`; BF-P003-01..07 closed. |
-| P0-04 Change Events | NOT_STARTED | Blocked only by P0-01R2 ChangeEvent release. |
-| P0-05 Book adapter | NOT_STARTED | Policy facade exists under P0-11, but no Alpha demand/receipt adapter or existing-owner integration exists. |
-| P0-06A aggregator | COMPLETE_WITH_LIMITATIONS | Provider-neutral Candidate merge/refresh and no-book route isolation pass. |
-| P0-06B structural recall | NOT_STARTED | Waits for P0-04. |
-| P0-06C controversy recall | READY_TO_START | Existing RecallHit interface is sufficient; use frozen/read-only dispute fixtures only. |
-| P0-06D wallet recall | READY_TO_START | Existing RecallHit interface is sufficient; current stale data must produce historical/no-current-hit outcomes. |
-| P0-06E book anomaly recall | NOT_STARTED | Waits for P0-05. |
-| P0-07 Rule A/B | COMPLETE | P0-03 integration and cross-run instance/revision semantics are accepted by the integrated seal. |
-| P0-08 research roundtrip | PARTIALLY_READY | Blind projection/packet builder can start from existing contracts; result/import receipts need P0-01R2; Market stage waits for P0-05. |
-| P0-09 decision ledger | PARTIALLY_READY | Lifecycle reducer can start from existing CandidateTransition types; final protocol/ranker/ledger waits for P0-08. |
-| P0-10 harness adapter | NOT_STARTED | Waits for P0-09 stable domain events. |
-| P0-11 security | PARTIAL_PASS | Wave-0, policy facade and offline OS tests pass; final whole-entrypoint proof waits for all adapters and P0-09. |
-| P0-12 offline E2E | NOT_STARTED | Final coordinator-only integration after P0-03..P0-11. |
+| P0-01 core contracts | COMPLETE | Base and R2 additive contracts, Blind question provenance, source-artifact semantics and golden schemas pass. |
+| P0-02 storage | COMPLETE | Additive migrations 0001–0005, atomic research/ledger writes, copy/replay and rollback pass. No current DB was migrated. |
+| P0-03 Gamma catalog | COMPLETE | Multi-market identity, YES/NO mapping, revisions, aliases, drift receipts and idempotence pass. |
+| P0-04 Change Events | COMPLETE | Append-only NEW/rule/lifecycle/closed/metadata/family changes and cross-run identity pass. |
+| P0-05 Book adapter | COMPLETE | Existing-owner SENSING/FORMAL_REVIEW demand, paired receipt, staleness and depth contracts pass offline. |
+| P0-06A aggregator | COMPLETE | Provider-neutral dedupe, Candidate aggregation, late-hit refresh and no-book isolation pass. |
+| P0-06B structural recall | COMPLETE | New/changed and structural metadata recall pass without book dependency. |
+| P0-06C controversy recall | COMPLETE | Frozen source identity, PIT revision/hash/offset and provider isolation tests pass. |
+| P0-06D wallet recall | COMPLETE | Staleness, address/entity separation, private direction and Blind exclusion tests pass. |
+| P0-06E book anomaly recall | COMPLETE | Optional structural book route and shared provider-registry integration pass. |
+| P0-07 Rule A/B | COMPLETE | Single compiler and exact same-hash/revision/compiler Gate A/B invariant pass. |
+| P0-08 research roundtrip | COMPLETE | Blind allowlist, manual result import, source hash replay, formal book demand and Market packet pass. |
+| P0-09 decision ledger | COMPLETE | Append-only lifecycle reaches SIMULATION_RECORDED; ranker emits only NO_ORDER and atomic ledger passes. |
+| P0-10 harness adapter | COMPLETE | One coordinator, unique owners, complete evidence and hash-bound offline completion receipt pass. |
+| P0-11 security | COMPLETE | Static, transport, dynamic canary and macOS process/network capability proofs pass for offline scope. |
+| P0-12 offline E2E | COMPLETE | A01-A18, 369 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
 
-P0 currently has its foundation, not its end-to-end research product. The
-implemented code can normalize markets, persist immutable catalog facts,
-aggregate generic RecallHits, compile rules and enforce offline capability
-boundaries. It cannot yet run the complete Change → Recall providers → Blind
-research → fresh book → Market research → rank/ledger workflow.
+P0 now has a complete deterministic offline fixture path from Change → Recall
+→ Candidate → Rule A → Blind import → formal paired book → Market import →
+Rule B → rank/ledger → `SIMULATION_RECORDED`. This is not evidence that daily
+network operation, production capture expansion, or live execution is ready.
 
-## 2. Remaining implementation DAG
+## 2. Implemented sequence (historical work breakdown)
 
 ```text
 Immediate, independent:

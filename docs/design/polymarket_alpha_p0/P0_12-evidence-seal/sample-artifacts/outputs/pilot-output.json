@@ -1,0 +1,19 @@
+{
+  "blind_packet_id": "blind_packet:30b56b21175150c08e16fd8bc3310dcad210c5a1d11e896a96009867bdf6c665",
+  "candidate_id": "candidate:8c814b56bb6c06131fbdcde8606c8520fbc90b4392f4c72066090c504cd82348",
+  "change_event_id": "market_change:b3e1bb1927657bfea8205534c64021cf953fc9062b4c1e7ec8a916c4b01b428b",
+  "decision_action": "SIMULATE",
+  "decision_execution": "NO_ORDER",
+  "decision_id": "review_decision:a0703cd10c80f44b051b1c40e03fc0bcf8bf9666f6bc792514be89b5ea650605",
+  "decision_sha256": "8f19971ee5ff68b38db5ccac64ccc55de7c73fb267d21042b40583580adf395f",
+  "lifecycle_state": "SIMULATION_RECORDED",
+  "market_packet_id": "market_packet:bd943b85455fbfcc0d9569d85f57e8ee0890e8817ab50782a32a0e7baf82cdbb",
+  "persisted_ids_sha256": "3b8a0f6decc51151e6352b9c1d35dc2e0e5c47bd893d67189952ca52980bcb83",
+  "persisted_record_count": 32,
+  "position_state": "SIMULATED",
+  "prediction_id": "prediction_record:f68630dc63fe0a25c670728c20ab00febd87e6bf2988bef639673100850e75cc",
+  "prediction_sha256": "bc0e324850fc1384fe6aebe79bc2a96cd7df6c24c51fdaa125fce6333b3260e3",
+  "rank_score": "0.5135",
+  "snapshot_id": "gamma_market_snapshot:beeb3d14655238845a8b0da41434807efed3712860237d5c726319f32a844b18",
+  "snapshot_sha256": "85131ba717d6ed6bde0c422a29f5bb2bbfb7f3bc5d8f4e057d849f6d2693d600"
+}

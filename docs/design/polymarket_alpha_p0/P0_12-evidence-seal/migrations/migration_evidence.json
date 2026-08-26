@@ -1,0 +1,36 @@
+{
+  "applied_migrations": [
+    {
+      "migration_id": "alpha_p0_0001",
+      "schema_version": "alpha_p0_v1.0",
+      "sql_sha256": "52d960e9c270f62f05c536ae2bd97c256e106eb9893b55dd4c111afe101bf7ab"
+    },
+    {
+      "migration_id": "alpha_p0_0002_rule_corpus_revision",
+      "schema_version": "alpha_p0_v1.0",
+      "sql_sha256": "a0b383597f594a02141d4f9f48610a436ea15d937ea80022b237fdbd74e4b3b0"
+    },
+    {
+      "migration_id": "alpha_p0_0003_catalog_integrity",
+      "schema_version": "alpha_p0_v1.0",
+      "sql_sha256": "938995ae3bdeee18853aff215d966270833c658b6b42dfce11ee194d4e5c8432"
+    },
+    {
+      "migration_id": "alpha_p0_0004_rule_contract_instances",
+      "schema_version": "alpha_p0_v1.0",
+      "sql_sha256": "06cbaea52d53a1a50a2063bf8dbeb317de98ba54c1ff5266a26bc709e0852e98"
+    },
+    {
+      "migration_id": "alpha_p0_0005_p0_01r2_projections",
+      "schema_version": "alpha_p0_v1.0",
+      "sql_sha256": "d18bd4e6c5e6213606f25e538ea9d1851c4d86c16dcb9850238eda1a0aae9bf1"
+    }
+  ],
+  "current_runtime_db_migrated": false,
+  "integrity_check": "ok",
+  "repository_manifest": {
+    "migration_id": "alpha_p0_0001",
+    "schema_version": "alpha_p0_v1.0",
+    "sql_sha256": "52d960e9c270f62f05c536ae2bd97c256e106eb9893b55dd4c111afe101bf7ab"
+  }
+}

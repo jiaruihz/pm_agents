@@ -1,0 +1,32 @@
+{
+  "disposition": "PASS",
+  "suites": [
+    {
+      "errors": 0,
+      "failures": 0,
+      "path": "test-results/alpha-full.xml",
+      "skipped": 0,
+      "tests": 369,
+      "time_seconds": 4.433
+    },
+    {
+      "errors": 0,
+      "failures": 0,
+      "path": "test-results/legacy-regression.xml",
+      "skipped": 0,
+      "tests": 12,
+      "time_seconds": 0.245
+    },
+    {
+      "errors": 0,
+      "failures": 0,
+      "path": "test-results/harness-regression.xml",
+      "skipped": 0,
+      "tests": 18,
+      "time_seconds": 3.433
+    }
+  ],
+  "total_errors": 0,
+  "total_failures": 0,
+  "total_tests": 399
+}

@@ -1,0 +1,145 @@
+{
+  "scenarios": [
+    {
+      "executed_modules": [
+        "test_gamma_catalog_p0_03"
+      ],
+      "scenario": "A01",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_gamma_catalog_p0_03"
+      ],
+      "scenario": "A02",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_change_events_p0_04",
+        "test_gamma_catalog_p0_03"
+      ],
+      "scenario": "A03",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_change_events_p0_04",
+        "test_candidate_lifecycle_p0_09a"
+      ],
+      "scenario": "A04",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_recall_aggregator_p0_06a",
+        "test_offline_pilot_p0_12"
+      ],
+      "scenario": "A05",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_wallet_recall_p0_06d"
+      ],
+      "scenario": "A06",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_controversy_recall_p0_06c"
+      ],
+      "scenario": "A07",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_blind_research_p0_08a",
+        "test_contracts_p0_01"
+      ],
+      "scenario": "A08",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_rule_gates_p0_07"
+      ],
+      "scenario": "A09",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_book_adapter_p0_05a",
+        "test_market_research_p0_08c"
+      ],
+      "scenario": "A10",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_research_importer_p0_08b",
+        "test_market_research_p0_08c"
+      ],
+      "scenario": "A11",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_rule_gates_p0_07",
+        "test_decision_ledger_p0_09b"
+      ],
+      "scenario": "A12",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_decision_ledger_p0_09b",
+        "test_storage_p0_02"
+      ],
+      "scenario": "A13",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_security_wave0",
+        "test_security_final_p0_11",
+        "test_security_os_sandbox_p0_11"
+      ],
+      "scenario": "A14",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_blind_research_p0_08a",
+        "test_research_importer_p0_08b"
+      ],
+      "scenario": "A15",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_candidate_lifecycle_p0_09a",
+        "test_decision_ledger_p0_09b"
+      ],
+      "scenario": "A16",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_research_importer_p0_08b",
+        "test_contracts_p0_01r2"
+      ],
+      "scenario": "A17",
+      "status": "PASS"
+    },
+    {
+      "executed_modules": [
+        "test_security_transport_p0_11",
+        "test_security_final_p0_11"
+      ],
+      "scenario": "A18",
+      "status": "PASS"
+    }
+  ],
+  "status": "PASS"
+}
