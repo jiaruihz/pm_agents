@@ -43,18 +43,19 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 - canonical 根因是 legacy adapter 对同一 immutable source event 从不同模型轮次/rollover shard
   生成不同 delivery header，以及同一 state checkpoint 携带 model/profile alias。修复后 bridge 仍严格拒绝
   immutable identity 冲突，只把同 ID 的 delivery 取最早完整 header，并把 legacy checkpoint ref 归一到
-  feature-state identity。对 18,068 bundles 的 canonical apply 得到 17,920 unique candidates，
-  `candidate_delta=0`；首次新增 15,120 candidates / 11,017 checkpoints / 9,588 events，第二次 apply
-  三类新增均为0。历史 12 个 conflict event IDs、45 个非winning deliveries被显式计入 reconciliation。
+  feature-state identity。最终复盘快照对 18,080 bundles 的 canonical apply 得到 17,932 unique candidates，
+  `candidate_delta=0`；首次修复新增 15,120 candidates / 11,017 checkpoints / 9,588 events，随后仅增量
+  吸收 runtime 新写入。历史 12 个 conflict event IDs、45 个非winning deliveries被显式计入 reconciliation。
 - Amsterdam V9 的 expression dedupe 从 `city_date_bracket_side_model` 改为
   `city_date_bracket_model`，并兼容 append-only journal 中旧的 YES/NO side-scoped key；同一
   date×bracket 以后只保留第一次被选中的方向。审计开始时有10组；部署前 8/23 又形成第11组。
   当前42个旧 policy selections重放后保留31、压掉11个后到方向：
   `8/12 28 NO→YES`、`8/13 32 NO→YES`、`8/14 33 NO→YES`、`8/14 34 YES→NO`、
   `8/16 23 NO→YES`、`8/18 21 NO→YES`、`8/19 21 NO→YES`、`8/20 20 NO→YES`、
-  `8/20 21 NO→YES`、`8/21 20 YES→NO`、`8/23 20 NO→YES`。canonical 已有 settlement 的
-  6个受影响后到 intents 合计 counterfactual PnL 为 `-$3.5428`，所以移除它们使该已覆盖切片改善
-  `+$3.5428`；其余5个仍是 label coverage gap，不能补成0。全窗口实际 orders/fills/notional 均为0。
+  `8/20 21 NO→YES`、`8/21 20 YES→NO`、`8/23 20 NO→YES`。旧的 city/date/bracket 近似 settlement
+  join 已 superseded-for-decision-use；按 exact `market_id + condition_id` 后，前10个已结算晚到方向为
+  4胜6负、unit PnL `-$1.3739`，所以移除它们使已结算切片改善 `+$1.3739`；8/23 一条仍 open。
+  全窗口实际 orders/fills/notional 均为0。
 - 生产 zero-notional runtime 已加载 release `fb40f669bc2153ec37d0c2cca137cee785cb89e5`，
   loaded core SHA256=`ca71d177…f9b`、runtime config hash=`120fea57…258`；首轮
   `status=ok / errors=0 / new_paper_intents=0 / orders_submitted=0`。
@@ -64,6 +65,64 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
   probability forward 和固定规则 counterfactual replay，旧双边 expression 版本单独分层，不删除。
   这次修复只恢复可分析血缘和正确 expression denominator，不代表 proper-score、market baseline、
   significance 或30个独立 settled dates admission gate 已通过。
+
+### Admission-forward 首次全 active-profile exact-market 复盘（2026-08-23）
+
+固定各 profile 原 frozen boundary 至 `2026-08-23T15:43:41Z`：8 个 active profiles 共15,596个
+expression-checkpoint candidates，3,848个scored，85个真实zero-notional intents；80个exact settled为
+44胜36负，unit fee-adjusted ROI `+1.08%`、target-date block CI `[-20.36%,+19.89%]`。
+按当前 bracket policy 重放保留74 intents，70个settled的ROI为`+4.83%`、CI
+`[-19.45%,+23.50%]`，仍不显著。概率层同rows合计model/market Brier=`.09356/.09048`、
+logloss=`.30229/.27655`，market仍好；Helsinki与Amsterdam market-offset只有微弱Brier点估改善且CI跨0。
+Tokyo三个head与Amsterdam cross-.7均为0 selections；Busan 12个、Helsinki 16个、Amsterdam V9/offset
+为42/15个。当前结论统一为`inconclusive / continue zero-notional / no-live-change`。完整双漏斗、赔率带、
+side拆分与逐条 selection/outcome 见
+[admission-forward exact-market review](analysis/wcir_admission_forward_market_trigger_review.md)。
+
+Tokyo的0必须分层解释：唯一开启`emit_paper_intents`的pre-cross V2只有3条可评分候选，扣5-share成本、
+fee和reserve后的edge均为负；state-entry/overshoot虽分别有27/2条scored `would_enter`，但配置明确禁止
+发intent，且全分母proper score仍输market，不能补入实际forward headline。执行层也尚未过live门：85个intent
+均无真实order/fill；Amsterdam 57/57条t0盘口可扫5股，但+15s后只有54/57仍满足原edge，Busan/Helsinki
+又有22/28条edge不超过2c且缺统一post-decision tape。任何tiny-live评估前都必须在submit前重新抓盘口、
+重算5-share sweep+fee，并用不追价的限价/FOK/FAK记录真实fill denominator；Helsinki现行900s book-age
+上限不能直接作为live授权。
+
+补充分层判断：Helsinki目前是active profiles中最值得继续验证的潜在residual，但不是confirmed alpha。
+其732个settled expression rows/11日的Brier delta为`-.00117`、CI仍跨0；15个settled intents的
+ROI`+16.57%`也由NO侧贡献98.3%净PnL，移除两笔最大赢家后ROI只剩`+.24%`，且16/16 edge≤2c。
+Amsterdam则不能混称“模型不行”：V9全分母Brier/logloss均输market，适合保留为dormant weather
+comparator；market-offset V3全分母Brier点估较好但selected tail过度自信（model/market/realized
+`.848/.698/.667`），应研究state-entry/date×bracket等权的bounded residual calibration，而不是加事后gate。
+
+### Amsterdam market-offset 第一性原理 retraining（2026-08-26）
+
+已完成首轮训练与同分母重放。4/3–7/29固定11,800 checkpoints/112日，6/1–7/29 nested OOF为
+6,136 rows/57日。保持market logit系数1，并把checkpoint、V5 path-regime transition、state-entry各
+按日期等权再各占1/3；24组预定候选中，balanced模型在June、July均选`weather_path_mechanism / L2=.01 /
+无cap`，multigrain Brier/logloss=`.06211/.19998`，优于incumbent `.06448/.20901`和market
+`.07080/.22386`。去掉V9 disagreement的physical-only为`.06329/.20192`。
+
+已看过的8/12–23只作reused diagnostic：484同rows/11日上，incumbent、balanced、physical-only相对t0
+market的ΔBrier分别`+.00556/+.00488/+.00326`，Δlogloss分别`+.02304/+.02036/+.01200`，CI均跨0；
+edge02 replay ROI分别`-8.95%/-8.36%/-20.80%`。因此challenger只证明相对incumbent有点改善，没有通过
+market、fee或significance门；均为v2 research-only artifact、`live_eligible=false`，不替换当前WCIR。
+开发中曾发现并修复“price join后重算grain覆盖canonical membership”的新实现bug，作废错误run后以
+pre-evidence reference membership重跑；production未受影响。当前forecast collector stale，修复前不延伸
+新forward。完整数字见[admission-forward living review](analysis/wcir_admission_forward_market_trigger_review.md#amsterdam-第一性原理-retraining-首轮2026-08-26)，artifact摘要为
+`amsterdam_knmi_market_offset_balanced_bounded_v1/run=20260826_first_principles/comparison_summary.json`。
+
+随后在同一固定分母完成了部署前封闭tournament：8个feature sets × 3个L2 × 2个caps × 5个correction
+scales，共240候选/fold，同时包含raw/calibrated market和各weather residual。选模只看三grain date-equal
+logloss（Brier tie-break），不看ROI；最终仍选择`weather_path_mechanism / L2=.01 / 无cap / scale=1`。
+其6–7月expanding OOF multigrain Brier/logloss=`.06273/.20120`，market=`.07080/.22386`；但已见的
+8/12–23 outer audit相对t0 market仍为`+.00488/+.02036`，edge02 12笔7胜、ROI`-8.36%`。所以当前
+decision-probability champion是raw pre-event market，balanced residual只是当前weather champion。
+最终refit并入8月498个PIT rows后为12,298 rows/123日，artifact SHA
+`9e337219…1b20f6`，clean boundary=`2026-08-26T12:00:15.867834Z`；只允许zero-notional完整分母A/B。
+v2 adapter兼容代码已补并保留v1，release `da87d3c1…befa0`已部署到既有Mac zero-notional runtime。
+首条12:10 UTC KNMI event输出bracket 24双边，coverage 100%、missing=0；YES/NO概率
+`2.4076%/97.5924%`，两侧fee后edge均负而skip，`errors=0 / orders=0`。collector当前health已恢复，前述
+stale只描述首轮运行时刻。机器身份见`amsterdam_knmi_market_offset_champion_tournament/run=20260826_current_best/champion_manifest.json`。
 
 跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
 

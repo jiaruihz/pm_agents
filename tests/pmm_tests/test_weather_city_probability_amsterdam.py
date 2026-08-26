@@ -416,7 +416,7 @@ def test_amsterdam_market_offset_uses_direct_no_mid_and_weather_correction(
         "calibrator": None,
     }
     offset_artifact = {
-        "schema_version": "fixed_market_logit_offset_v1",
+        "schema_version": "fixed_market_logit_offset_v2",
         "model_id": "amsterdam-offset",
         "base_weather_model_id": "base-weather",
         "base_weather_artifact_sha256": "base-sha",

@@ -103,14 +103,14 @@
       "adapter": "amsterdam_knmi_market_offset_probability_v3",
       "framework_id": "weather_city_intraday_runtime_v1",
       "strategy_family": "weather.city_intraday_probability",
-      "profile_id": "amsterdam_knmi_market_offset_probability_v3_clean_forward",
+      "profile_id": "amsterdam_knmi_market_offset_current_best_20260826_clean_forward",
       "source": "knmi",
       "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
       "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
       "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
       "pre_event_reference_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/pre_event_references.jsonl",
       "forecast_previous_day1_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/previous_day1/forecast_hourly_curves",
-      "forward_start_utc": "2026-08-12T08:24:21.919654+00:00",
+      "forward_start_utc": "2026-08-26T12:00:15.867834+00:00",
       "max_source_age_seconds": 900,
       "allowed_source_minutes": [10, 40],
       "allowed_local_hours": [10, 16],
@@ -123,8 +123,8 @@
       "emit_paper_intents": true,
       "artifacts": {
         "weather": {
-          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_market_offset_probability/run=development_20260812_v5_post_firstseen_stress/market_offset.pkl",
-          "sha256": "93b525fd752bc5bbb1068469c6d8e428de176c89114b3e3d2efc335e44534881"
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/model_artifacts/city_probability_runtime_v3/amsterdam_knmi_market_offset_current_best_20260826.pkl",
+          "sha256": "9e337219995b548e075021ea9ec7cb1404bd2ce876393b8a9f9ceb055b1b20f6"
         },
         "base_weather": {
           "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_remaining_heat_v9_ecmwf_day1/run=61b8cde77f5320a4/model_v9.pkl",

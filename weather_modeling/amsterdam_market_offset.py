@@ -6,6 +6,61 @@ import numpy as np
 import pandas as pd
 
 from weather_model_evaluation.market_offset_probability import logit
+from weather_model_evaluation.probability import (
+    build_state_entry_grain,
+    build_transition_grain,
+)
+
+
+def amsterdam_path_regime(frame: pd.DataFrame) -> pd.Series:
+    """Return the frozen Amsterdam remaining-heat path state."""
+
+    conditions = [
+        frame["decline_from_running_max_c"].le(0.1)
+        & frame["ta_delta_30m_c"].ge(0.2),
+        frame["decline_from_running_max_c"].le(0.2)
+        & frame["ta_delta_30m_c"].abs().lt(0.2),
+        frame["decline_from_running_max_c"].ge(0.2)
+        & frame["is_rebounding_after_pullback"].eq(1),
+        frame["decline_from_running_max_c"].ge(0.2)
+        & frame["ta_delta_30m_c"].le(0),
+    ]
+    return pd.Series(
+        np.select(
+            conditions,
+            ["fresh_high", "plateau", "pullback_rebound", "fade_pullback"],
+            default="other",
+        ),
+        index=frame.index,
+        dtype="string",
+    )
+
+
+def add_amsterdam_evaluation_grains(frame: pd.DataFrame) -> pd.DataFrame:
+    """Mark V5-compatible grains before any market-evidence filtering."""
+
+    output = frame.reset_index(drop=True).copy()
+    output["_evaluation_row_id"] = np.arange(len(output), dtype=int)
+    output["path_regime"] = amsterdam_path_regime(output)
+    transition = build_transition_grain(
+        output,
+        group_columns=["target_date"],
+        state_columns=["current_bracket_c", "path_regime"],
+        time_column="observed_at_utc",
+    )
+    state_entry = build_state_entry_grain(
+        output,
+        group_columns=["target_date"],
+        state_columns=["current_bracket_c"],
+        time_column="observed_at_utc",
+    )
+    output["is_transition"] = output["_evaluation_row_id"].isin(
+        set(transition["_evaluation_row_id"].astype(int))
+    )
+    output["is_state_entry"] = output["_evaluation_row_id"].isin(
+        set(state_entry["_evaluation_row_id"].astype(int))
+    )
+    return output.drop(columns="_evaluation_row_id")
 
 
 def add_amsterdam_market_offset_features(
@@ -28,6 +83,8 @@ def add_amsterdam_market_offset_features(
         output["weather_market_logit_disagreement"] = (
             logit(output["p_model"]) - logit(output["market_p"])
         )
+    if needs("market_logit_level"):
+        output["market_logit_level"] = logit(output["market_p"])
     if needs("ta_margin_current_c"):
         output["ta_margin_current_c"] = output["ta_c"] - output["current_bracket_c"]
     if needs("tx_margin_current_c"):

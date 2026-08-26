@@ -580,7 +580,10 @@ class AmsterdamKnmiRemainingHeatV7Adapter:
         artifact_path = Path(profile["artifacts"]["weather"]["path"])
         artifact = joblib.load(artifact_path)
         artifact_schema = artifact.get("schema_version")
-        market_offset_mode = artifact_schema == "fixed_market_logit_offset_v1"
+        market_offset_mode = artifact_schema in {
+            "fixed_market_logit_offset_v1",
+            "fixed_market_logit_offset_v2",
+        }
         if market_offset_mode:
             base_declaration = profile["artifacts"].get("base_weather")
             if not base_declaration:

@@ -37,6 +37,7 @@ from weather_modeling.forecast_path import (
     add_fixed_lead_forecast_path_features,
 )
 from weather_modeling.amsterdam_market_offset import (
+    add_amsterdam_evaluation_grains,
     add_amsterdam_market_offset_features,
 )
 from weather_model_evaluation.market_offset_probability import (
@@ -44,6 +45,7 @@ from weather_model_evaluation.market_offset_probability import (
     date_equal_binary_score,
     fit_fixed_market_offset,
     logit as market_logit,
+    multi_grain_binary_score,
     predict_fixed_market_offset,
     select_market_offset_model,
 )
@@ -133,6 +135,47 @@ MARKET_OFFSET_FEATURE_SETS = {
     ],
 }
 MARKET_OFFSET_L2_GRID = (0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0)
+BALANCED_BOUNDED_FEATURE_SETS = {
+    key: MARKET_OFFSET_FEATURE_SETS[key]
+    for key in ("weather_disagreement", "weather_path_mechanism")
+}
+PHYSICAL_ONLY_FEATURE_SETS = {
+    "physical_path_without_weather_head": [
+        feature
+        for feature in MARKET_OFFSET_FEATURE_SETS["weather_path_mechanism"]
+        if feature != "weather_market_logit_disagreement"
+    ],
+    "compact_remaining_heat": [
+        "ta_margin_current_c", "tx_margin_current_c",
+        "ta_delta_30m_c", "ta_delta_60m_c",
+        "plateau_duration_minutes", "knmi_drawdown_from_high_c",
+        "rebound_from_60m_low_c", "remaining_clear_sky_integral_h",
+        "forecast_remaining_max_minus_d1_c", "forecast_peak_passed",
+        "time_sin", "time_cos",
+    ],
+}
+TRANSPORT_TOURNAMENT_FEATURE_SETS = {
+    "calibrated_market": ["market_logit_level"],
+    "calibrated_market_weather_disagreement": [
+        "market_logit_level",
+        "weather_market_logit_disagreement",
+    ],
+    "calibrated_market_weather_path": [
+        "market_logit_level",
+        *MARKET_OFFSET_FEATURE_SETS["weather_path_mechanism"],
+    ],
+    "calibrated_market_physical_path": [
+        "market_logit_level",
+        *PHYSICAL_ONLY_FEATURE_SETS["physical_path_without_weather_head"],
+    ],
+    **BALANCED_BOUNDED_FEATURE_SETS,
+    **PHYSICAL_ONLY_FEATURE_SETS,
+}
+BALANCED_BOUNDED_L2_GRID = (0.01, 0.1, 1.0)
+BALANCED_BOUNDED_CAP_GRID = (0.0, 0.15, 0.30, None)
+TRANSPORT_TOURNAMENT_CAP_GRID = (0.30, None)
+TRANSPORT_TOURNAMENT_SCALE_GRID = (0.0, 0.25, 0.50, 0.75, 1.0)
+BALANCED_GRAIN_MEMBERSHIPS = ("is_transition", "is_state_entry")
 MARKET_POSTERIOR_POLICIES = [
     {"id": "market_posterior_preofficial10_edge02_p55", "minutes": {10, 40}, "edge": 0.02, "p_min": 0.55},
     {"id": "market_posterior_preofficial10_edge01_p55", "minutes": {10, 40}, "edge": 0.01, "p_min": 0.55},
@@ -943,6 +986,8 @@ def fit_amsterdam_market_offset(
     market_reference_git_spec: str | None,
     market_history_dir: Path | None,
     output_path: Path,
+    training_contract: str = "incumbent_checkpoint_v3",
+    refit_augmentation_path: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     history = pd.read_csv(historical_dataset)
     history = history[
@@ -979,38 +1024,156 @@ def fit_amsterdam_market_offset(
         joined["label_d1_cross_eod"], errors="raise"
     ).astype(int)
     joined = add_amsterdam_market_offset_features(joined)
+    # Preserve the reference memberships.  They were built on the full
+    # checkpoint universe before the market evidence join; recomputing here
+    # silently changes the denominator when an earlier row lacks price evidence.
+    for membership in BALANCED_GRAIN_MEMBERSHIPS:
+        if membership not in joined:
+            raise ValueError(f"market reference missing {membership}")
+        if joined[membership].isna().any():
+            raise ValueError(f"market reference has null {membership}")
+        joined[membership] = joined[membership].astype(bool)
     if market_history_dir is not None:
         joined = add_delayed_price_history_reference(joined, market_history_dir)
+    if training_contract == "incumbent_checkpoint_v3":
+        feature_sets = MARKET_OFFSET_FEATURE_SETS
+        l2_grid = MARKET_OFFSET_L2_GRID
+        memberships: tuple[str, ...] = ()
+        correction_caps: tuple[float | None, ...] = (None,)
+        correction_scales = (1.0,)
+    elif training_contract == "balanced_bounded_v1":
+        feature_sets = BALANCED_BOUNDED_FEATURE_SETS
+        l2_grid = BALANCED_BOUNDED_L2_GRID
+        memberships = BALANCED_GRAIN_MEMBERSHIPS
+        correction_caps = BALANCED_BOUNDED_CAP_GRID
+        correction_scales = (1.0,)
+    elif training_contract == "physical_only_balanced_v1":
+        feature_sets = PHYSICAL_ONLY_FEATURE_SETS
+        l2_grid = BALANCED_BOUNDED_L2_GRID
+        memberships = BALANCED_GRAIN_MEMBERSHIPS
+        correction_caps = BALANCED_BOUNDED_CAP_GRID
+        correction_scales = (1.0,)
+    elif training_contract == "transport_shrink_tournament_v1":
+        feature_sets = TRANSPORT_TOURNAMENT_FEATURE_SETS
+        l2_grid = BALANCED_BOUNDED_L2_GRID
+        memberships = BALANCED_GRAIN_MEMBERSHIPS
+        correction_caps = TRANSPORT_TOURNAMENT_CAP_GRID
+        correction_scales = TRANSPORT_TOURNAMENT_SCALE_GRID
+    else:
+        raise ValueError(f"unknown market-offset training contract: {training_contract}")
     june_model, june_selection = select_market_offset_model(
         joined,
-        feature_sets=MARKET_OFFSET_FEATURE_SETS,
-        l2_grid=MARKET_OFFSET_L2_GRID,
+        feature_sets=feature_sets,
+        l2_grid=l2_grid,
         fit_window=("2026-04-03", "2026-04-30"),
         validation_window=("2026-05-01", "2026-05-31"),
         refit_window=("2026-04-03", "2026-05-31"),
         market_probability_column="market_p",
         label_column="label_leave",
+        membership_columns=memberships,
+        correction_cap_grid=correction_caps,
+        correction_scale_grid=correction_scales,
     )
     july_model, july_selection = select_market_offset_model(
         joined,
-        feature_sets=MARKET_OFFSET_FEATURE_SETS,
-        l2_grid=MARKET_OFFSET_L2_GRID,
+        feature_sets=feature_sets,
+        l2_grid=l2_grid,
         fit_window=("2026-04-03", "2026-05-31"),
         validation_window=("2026-06-01", "2026-06-30"),
         refit_window=("2026-04-03", "2026-06-30"),
         market_probability_column="market_p",
         label_column="label_leave",
+        membership_columns=memberships,
+        correction_cap_grid=correction_caps,
+        correction_scale_grid=correction_scales,
     )
     fitted, deployment_selection = select_market_offset_model(
         joined,
-        feature_sets=MARKET_OFFSET_FEATURE_SETS,
-        l2_grid=MARKET_OFFSET_L2_GRID,
+        feature_sets=feature_sets,
+        l2_grid=l2_grid,
         fit_window=("2026-04-03", "2026-06-30"),
         validation_window=("2026-07-01", "2026-07-29"),
         refit_window=("2026-04-03", "2026-07-29"),
         market_probability_column="market_p",
         label_column="label_leave",
+        membership_columns=memberships,
+        correction_cap_grid=correction_caps,
+        correction_scale_grid=correction_scales,
     )
+    refit_augmentation = None
+    if refit_augmentation_path is not None:
+        augmentation = pd.read_csv(refit_augmentation_path)
+        selected = deployment_selection["selected"]
+        required = {
+            "target_date",
+            "market_prior_p",
+            "label_leave",
+            *selected["features"],
+            *memberships,
+        }
+        missing = sorted(required - set(augmentation.columns))
+        if missing:
+            raise ValueError(f"market-offset refit augmentation missing: {missing}")
+        augmentation = augmentation[
+            augmentation["market_prior_p"].notna()
+        ].copy()
+        if augmentation.empty:
+            raise ValueError("market-offset refit augmentation has no PIT prior rows")
+        augmentation["target_date"] = augmentation["target_date"].astype(str)
+        overlap = sorted(
+            set(augmentation["target_date"]) & set(joined["target_date"])
+        )
+        if overlap:
+            raise ValueError(
+                f"market-offset refit augmentation overlaps historical dates: {overlap}"
+            )
+        augmentation["market_p"] = pd.to_numeric(
+            augmentation["market_prior_p"], errors="raise"
+        )
+        augmentation["label_leave"] = pd.to_numeric(
+            augmentation["label_leave"], errors="raise"
+        ).astype(int)
+        for membership in memberships:
+            augmentation[membership] = augmentation[membership].astype(bool)
+        refit_frame = pd.concat(
+            [joined, augmentation], ignore_index=True, sort=False
+        )
+        fitted = fit_fixed_market_offset(
+            refit_frame,
+            feature_columns=selected["features"],
+            market_probability_column="market_p",
+            label_column="label_leave",
+            date_column="target_date",
+            l2_strength=float(selected["l2_strength"]),
+            membership_columns=memberships,
+        )
+        fitted.update(
+            {
+                "schema_version": "fixed_market_logit_offset_v2",
+                "feature_set_id": selected["feature_set_id"],
+                "correction_cap_logit": selected["correction_cap_logit"],
+                "correction_scale": selected["correction_scale"],
+                "selection_fit_window": ["2026-04-03", "2026-06-30"],
+                "selection_validation_window": ["2026-07-01", "2026-07-29"],
+                "selection_refit_window": ["2026-04-03", "2026-07-29"],
+                "refit_window": [
+                    "2026-04-03",
+                    augmentation["target_date"].max(),
+                ],
+                "candidate_count": int(len(deployment_selection["candidates"])),
+            }
+        )
+        refit_augmentation = {
+            "path": str(refit_augmentation_path),
+            "sha256": sha256(refit_augmentation_path),
+            "rows": int(len(augmentation)),
+            "target_dates": int(augmentation["target_date"].nunique()),
+            "target_date_range": [
+                augmentation["target_date"].min(),
+                augmentation["target_date"].max(),
+            ],
+            "role": "seen_outer_development_refit_only_not_forward_evidence",
+        }
     fitted.update(
         {
             "model_id": "amsterdam_knmi_market_offset_probability_v3",
@@ -1027,9 +1190,24 @@ def fit_amsterdam_market_offset(
             "forecast_path": str(forecast_path.resolve()),
             "forecast_path_sha256": sha256(forecast_path),
             "market_reference": reference_identity,
+            "refit_augmentation": refit_augmentation,
+            "training_date_range": (
+                fitted.get("refit_window")
+                if refit_augmentation is not None
+                else [
+                    joined["target_date"].min(),
+                    joined["target_date"].max(),
+                ]
+            ),
             "clean_forward_start_utc": datetime.now(UTC).isoformat(),
             "research_only_zero_notional": True,
             "live_eligible": False,
+            "training_contract_id": training_contract,
+            "candidate_grain_version": (
+                "checkpoint_transition_state_entry_date_equal_v1"
+                if memberships
+                else "checkpoint_date_equal_v1"
+            ),
         }
     )
     scores: dict[str, Any] = {}
@@ -1041,6 +1219,18 @@ def fit_amsterdam_market_offset(
     ):
         subset = joined[joined["target_date"].between(start, end)].copy()
         posterior = predict_fixed_market_offset(scoring_model, subset)
+        posterior_multigrain = multi_grain_binary_score(
+            subset,
+            posterior,
+            label_column="label_leave",
+            membership_columns=BALANCED_GRAIN_MEMBERSHIPS,
+        )
+        market_multigrain = multi_grain_binary_score(
+            subset,
+            subset["market_p"],
+            label_column="label_leave",
+            membership_columns=BALANCED_GRAIN_MEMBERSHIPS,
+        )
         scores[split] = {
             "window": [start, end],
             "market": date_equal_binary_score(
@@ -1058,6 +1248,25 @@ def fit_amsterdam_market_offset(
                 subset["market_p"],
                 label_column="label_leave",
             ),
+            "multigrain": {
+                "posterior": posterior_multigrain,
+                "market": market_multigrain,
+                "posterior_minus_market": {
+                    grain: date_block_score_delta(
+                        subset if grain == "checkpoint" else subset[
+                            subset[grain].astype(bool)
+                        ],
+                        posterior if grain == "checkpoint" else posterior[
+                            subset[grain].astype(bool).to_numpy()
+                        ],
+                        subset["market_p"] if grain == "checkpoint" else subset.loc[
+                            subset[grain].astype(bool), "market_p"
+                        ],
+                        label_column="label_leave",
+                    )
+                    for grain in ("checkpoint", *BALANCED_GRAIN_MEMBERSHIPS)
+                },
+            },
             "price_reference_policy": replay_historical_price_reference(
                 subset,
                 posterior,
@@ -1115,6 +1324,20 @@ def fit_amsterdam_market_offset(
             expanding_oof["market_p"],
             label_column="label_leave",
         ),
+        "multigrain": {
+            "posterior": multi_grain_binary_score(
+                expanding_oof,
+                expanding_oof["p_expanding_oof"],
+                label_column="label_leave",
+                membership_columns=BALANCED_GRAIN_MEMBERSHIPS,
+            ),
+            "market": multi_grain_binary_score(
+                expanding_oof,
+                expanding_oof["market_p"],
+                label_column="label_leave",
+                membership_columns=BALANCED_GRAIN_MEMBERSHIPS,
+            ),
+        },
         "price_reference_policy": replay_historical_price_reference(
             expanding_oof,
             expanding_oof["p_expanding_oof"].to_numpy(float),
@@ -1143,8 +1366,9 @@ def fit_amsterdam_market_offset(
         ),
     }
     summary = {
-        "schema_version": "amsterdam_knmi_market_offset_training_v3",
+        "schema_version": "amsterdam_knmi_market_offset_training_v4",
         "model_id": fitted["model_id"],
+        "training_contract_id": training_contract,
         "denominator_scope": (
             "Amsterdam 10-minute archive-reconstructed weather checkpoints joined "
             "to timestamped Polymarket price references; sampled prices are not books"
@@ -1159,11 +1383,21 @@ def fit_amsterdam_market_offset(
             "deployment_clean_forward": deployment_selection,
         },
         "selection": deployment_selection,
+        "refit_augmentation": refit_augmentation,
         "multiple_test_candidates": int(
             deployment_selection["selected"]
             and len(deployment_selection["candidates"])
         ),
         "multiple_test_adjustment": "none_development_selection_only",
+        "research_hypothesis": (
+            "the base weather head is unstable under large forward market disagreement; "
+            "a market-offset residual using only PIT physical/path features should be "
+            "more transportable"
+            if training_contract == "physical_only_balanced_v1"
+            else "checkpoint-weighted unbounded residuals overstate first-entry tail; "
+            "date-equal checkpoint/transition/state-entry weighting plus a bounded "
+            "logit correction should improve the fixed multigrain objective"
+        ),
         "market_probability_contract": (
             "direct current-bracket NO price; q_market_0 full-ladder normalization "
             "is not used as the binary prior"
@@ -1386,6 +1620,18 @@ def main() -> int:
         default=DEFAULT_MARKET_REFERENCE_GIT_SPEC,
     )
     parser.add_argument("--fit-market-prior-output", type=Path, default=None)
+    parser.add_argument("--market-prior-refit-augmentation", type=Path, default=None)
+    parser.add_argument("--fit-market-prior-only", action="store_true")
+    parser.add_argument(
+        "--market-prior-training-contract",
+        choices=(
+            "incumbent_checkpoint_v3",
+            "balanced_bounded_v1",
+            "physical_only_balanced_v1",
+            "transport_shrink_tournament_v1",
+        ),
+        default="incumbent_checkpoint_v3",
+    )
     parser.add_argument("--market-prior-artifact", type=Path, default=None)
     parser.add_argument(
         "--evaluation-role",
@@ -1412,8 +1658,15 @@ def main() -> int:
             market_reference_git_spec=args.market_reference_git_spec,
             market_history_dir=args.market_history_dir,
             output_path=args.fit_market_prior_output,
+            training_contract=args.market_prior_training_contract,
+            refit_augmentation_path=args.market_prior_refit_augmentation,
         )
         args.market_prior_artifact = args.fit_market_prior_output
+    if args.fit_market_prior_only:
+        if market_prior_training is None:
+            raise ValueError("--fit-market-prior-only requires --fit-market-prior-output")
+        print(json.dumps(market_prior_training, indent=2, sort_keys=True))
+        return 0
     sources = source_rows(args.runtime_root, args.start, args.end)
     frame = feature_frame(args.runtime_root, sources)
     if any(name in artifact["features"] for name in FORECAST_PATH_FEATURES):
@@ -1448,12 +1701,7 @@ def main() -> int:
     frame = frame[frame["target_date"].isin(outcomes)].copy()
     frame["settlement_bracket"] = frame["target_date"].map(outcomes)
     frame["label_leave"] = frame["settlement_bracket"].ne(frame["current_bracket_c"]).astype(int)
-    frame["is_transition"] = frame.groupby("target_date")[
-        "current_bracket_c"
-    ].transform(lambda values: values.ne(values.shift()).astype(int))
-    frame["is_state_entry"] = (~frame.duplicated(
-        ["target_date", "current_bracket_c"], keep="first"
-    )).astype(int)
+    frame = add_amsterdam_evaluation_grains(frame)
     books = book_map(args.runtime_root)
     pre_event_books = pre_event_book_map(args.runtime_root)
     quote_rows = []
@@ -1650,7 +1898,11 @@ def main() -> int:
         "market_prior_training": market_prior_training,
         "crossno_policies": crossno,
         "crossno_policy_contract": CROSSNO_POLICIES,
-        "market_prior_contract": {
+        "market_offset_prior_contract": {
+            "probability": "strictly_pre_first_seen_direct_current_no_midpoint",
+            "execution_baseline": "first_seen_t0_direct_current_no_midpoint",
+        },
+        "legacy_crossno_market_prior_contract": {
             "intercept": MARKET_PRIOR_INTERCEPT,
             "weather_logit_weight": MARKET_PRIOR_WEATHER_WEIGHT,
             "source": "2026-04-03..06-30 train; 2026-07-01..29 historical holdout",

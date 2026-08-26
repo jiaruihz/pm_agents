@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
+from weather_model_evaluation.probability import composite_grain_weights
+
 
 EPSILON = 1e-6
 
@@ -42,6 +44,7 @@ def fit_fixed_market_offset(
     label_column: str,
     date_column: str = "target_date",
     l2_strength: float,
+    membership_columns: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Fit ``logit(p)=logit(p_market)+intercept+X beta`` with L2 shrinkage."""
 
@@ -68,7 +71,16 @@ def fit_fixed_market_offset(
     if not set(np.unique(labels)).issubset({0.0, 1.0}):
         raise ValueError("market-offset label must be binary")
     offset = logit(frame[market_probability_column])
-    weights = _date_equal_weights(frame, date_column)
+    memberships = list(membership_columns)
+    weights = (
+        composite_grain_weights(
+            frame,
+            membership_columns=memberships,
+            date_column=date_column,
+        )
+        if memberships
+        else _date_equal_weights(frame, date_column)
+    )
 
     def objective(theta: np.ndarray) -> tuple[float, np.ndarray]:
         linear = offset + design @ theta
@@ -106,15 +118,15 @@ def fit_fixed_market_offset(
         "training_rows": int(len(frame)),
         "training_dates": int(frame[date_column].astype(str).nunique()),
         "optimizer_objective": float(fitted.fun),
+        "training_membership_columns": memberships,
     }
 
 
-def predict_fixed_market_offset(
-    artifact: Mapping[str, Any],
-    frame: pd.DataFrame,
-    *,
-    market_probability: pd.Series | np.ndarray | None = None,
+def _market_offset_correction(
+    artifact: Mapping[str, Any], frame: pd.DataFrame
 ) -> np.ndarray:
+    """Return the fitted logit correction before the market offset is added."""
+
     features = list(artifact["feature_columns"])
     missing = sorted(set(features) - set(frame.columns))
     if missing:
@@ -127,9 +139,76 @@ def predict_fixed_market_offset(
     correction = float(artifact["intercept"]) + design @ np.asarray(
         artifact["coefficients"], dtype=float
     )
+    correction *= float(artifact.get("correction_scale", 1.0))
+    cap = artifact.get("correction_cap_logit")
+    if cap is None:
+        return correction
+    cap_value = float(cap)
+    if cap_value < 0:
+        raise ValueError("correction_cap_logit must be non-negative")
+    if cap_value == 0:
+        return np.zeros(len(correction), dtype=float)
+    return cap_value * np.tanh(correction / cap_value)
+
+
+def predict_fixed_market_offset(
+    artifact: Mapping[str, Any],
+    frame: pd.DataFrame,
+    *,
+    market_probability: pd.Series | np.ndarray | None = None,
+) -> np.ndarray:
+    correction = _market_offset_correction(artifact, frame)
     if market_probability is None:
         market_probability = frame[str(artifact["market_probability_column"])]
     return expit(logit(market_probability) + correction)
+
+
+def multi_grain_binary_score(
+    frame: pd.DataFrame,
+    probability: pd.Series | np.ndarray,
+    *,
+    label_column: str,
+    membership_columns: Sequence[str],
+    date_column: str = "target_date",
+) -> dict[str, Any]:
+    """Score checkpoint and structural grains with a fixed equal-weight objective."""
+
+    values = np.asarray(probability, dtype=float)
+    if len(values) != len(frame):
+        raise ValueError("probability length does not match scoring frame")
+    missing = sorted(set(membership_columns) - set(frame.columns))
+    if missing:
+        raise ValueError(f"multi-grain frame missing columns: {missing}")
+    by_grain: dict[str, dict[str, float | int]] = {
+        "checkpoint": date_equal_binary_score(
+            frame,
+            values,
+            label_column=label_column,
+            date_column=date_column,
+        )
+    }
+    for column in membership_columns:
+        mask = frame[column].astype(bool).to_numpy()
+        if not mask.any():
+            raise ValueError(f"multi-grain membership has no rows: {column}")
+        by_grain[column] = date_equal_binary_score(
+            frame.loc[mask],
+            values[mask],
+            label_column=label_column,
+            date_column=date_column,
+        )
+    return {
+        "objective_logloss": float(
+            np.mean([float(score["logloss"]) for score in by_grain.values()])
+        ),
+        "objective_brier": float(
+            np.mean([float(score["brier"]) for score in by_grain.values()])
+        ),
+        "grain_weights": {
+            grain: 1.0 / len(by_grain) for grain in by_grain
+        },
+        "by_grain": by_grain,
+    }
 
 
 def date_equal_binary_score(
@@ -217,6 +296,9 @@ def select_market_offset_model(
     market_probability_column: str,
     label_column: str,
     date_column: str = "target_date",
+    membership_columns: Sequence[str] = (),
+    correction_cap_grid: Sequence[float | None] = (None,),
+    correction_scale_grid: Sequence[float] = (1.0,),
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     dates = frame[date_column].astype(str)
     fit_rows = frame.loc[dates.between(*fit_window)].copy()
@@ -228,36 +310,68 @@ def select_market_offset_model(
     candidates: list[dict[str, Any]] = []
     for feature_set_id, features in feature_sets.items():
         for l2_strength in l2_grid:
-            fitted = fit_fixed_market_offset(
+            base_fitted = fit_fixed_market_offset(
                 fit_rows,
                 feature_columns=features,
                 market_probability_column=market_probability_column,
                 label_column=label_column,
                 date_column=date_column,
                 l2_strength=float(l2_strength),
+                membership_columns=membership_columns,
             )
-            probability = predict_fixed_market_offset(fitted, validation)
-            score = date_equal_binary_score(
-                validation,
-                probability,
-                label_column=label_column,
-                date_column=date_column,
-            )
-            candidates.append(
-                {
-                    "feature_set_id": feature_set_id,
-                    "features": list(features),
-                    "l2_strength": float(l2_strength),
-                    "validation": score,
-                }
-            )
+            for correction_cap in correction_cap_grid:
+                for correction_scale in correction_scale_grid:
+                    if float(correction_scale) < 0:
+                        raise ValueError("correction scale must be non-negative")
+                    fitted = dict(base_fitted)
+                    fitted["correction_cap_logit"] = correction_cap
+                    fitted["correction_scale"] = float(correction_scale)
+                    probability = predict_fixed_market_offset(fitted, validation)
+                    score = (
+                        multi_grain_binary_score(
+                            validation,
+                            probability,
+                            label_column=label_column,
+                            membership_columns=membership_columns,
+                            date_column=date_column,
+                        )
+                        if membership_columns
+                        else date_equal_binary_score(
+                            validation,
+                            probability,
+                            label_column=label_column,
+                            date_column=date_column,
+                        )
+                    )
+                    candidates.append(
+                        {
+                            "feature_set_id": feature_set_id,
+                            "features": list(features),
+                            "l2_strength": float(l2_strength),
+                            "correction_cap_logit": correction_cap,
+                            "correction_scale": float(correction_scale),
+                            "validation": score,
+                        }
+                    )
     selected = min(
         candidates,
         key=lambda row: (
-            float(row["validation"]["logloss"]),
-            float(row["validation"]["brier"]),
+            float(
+                row["validation"].get(
+                    "objective_logloss", row["validation"].get("logloss")
+                )
+            ),
+            float(
+                row["validation"].get(
+                    "objective_brier", row["validation"].get("brier")
+                )
+            ),
             len(row["features"]),
             float(row["l2_strength"]),
+            float("inf")
+            if row["correction_cap_logit"] is None
+            else float(row["correction_cap_logit"]),
+            float(row["correction_scale"]),
         ),
     )
     artifact = fit_fixed_market_offset(
@@ -267,10 +381,18 @@ def select_market_offset_model(
         label_column=label_column,
         date_column=date_column,
         l2_strength=float(selected["l2_strength"]),
+        membership_columns=membership_columns,
     )
     artifact.update(
         {
+            "schema_version": (
+                "fixed_market_logit_offset_v2"
+                if membership_columns or selected["correction_cap_logit"] is not None
+                else artifact["schema_version"]
+            ),
             "feature_set_id": selected["feature_set_id"],
+            "correction_cap_logit": selected["correction_cap_logit"],
+            "correction_scale": selected["correction_scale"],
             "selection_fit_window": list(fit_window),
             "selection_validation_window": list(validation_window),
             "refit_window": list(refit_window),
@@ -286,4 +408,7 @@ def select_market_offset_model(
         "validation_dates": int(validation[date_column].astype(str).nunique()),
         "refit_rows": int(len(refit)),
         "refit_dates": int(refit[date_column].astype(str).nunique()),
+        "membership_columns": list(membership_columns),
+        "correction_cap_grid": list(correction_cap_grid),
+        "correction_scale_grid": [float(value) for value in correction_scale_grid],
     }
