@@ -1,6 +1,6 @@
 {
   "schema_version": "alpha_p0_v1.0",
-  "contract_schema_sha256": "011015df25b35d844c2bfbe6b0453aca22526f9c19c9a76fe35a970b3e63211c",
+  "contract_schema_sha256": "25dc4cb3a82430b95cd557e5f632e3c2c48c7aaaa7d663ed8d94885b84edeed3",
   "canonical_datetime": "2026-08-26T04:05:06.12Z",
   "canonical_decimal": "1.23",
   "compatibility": {

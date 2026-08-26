@@ -128,6 +128,114 @@ class MarketSnapshot(CommonEnvelope):
         return self
 
 
+class MarketChangeType(StrEnum):
+    NEW = "NEW"
+    RULE_CHANGED = "RULE_CHANGED"
+    LIFECYCLE_CHANGED = "LIFECYCLE_CHANGED"
+    CLOSED = "CLOSED"
+    RESOLVED = "RESOLVED"
+    METADATA_CHANGED = "METADATA_CHANGED"
+    FAMILY_CHANGED = "FAMILY_CHANGED"
+
+
+class MarketChangeEvent(CommonEnvelope):
+    change_event_id: str
+    market_id: str
+    previous_snapshot_id: str | None = None
+    current_snapshot_id: str
+    previous_snapshot_sha256: str | None = None
+    current_snapshot_sha256: str
+    previous_status: MarketStatus | None = None
+    current_status: MarketStatus
+    previous_rule_hash: str | None = None
+    current_rule_hash: str
+    change_types: tuple[MarketChangeType, ...]
+    changed_fields: tuple[str, ...]
+    effective_at: datetime
+    detected_at: datetime
+
+    @field_validator(
+        "previous_snapshot_sha256",
+        "current_snapshot_sha256",
+        "previous_rule_hash",
+        "current_rule_hash",
+    )
+    @classmethod
+    def hashes_are_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("effective_at", "detected_at")
+    @classmethod
+    def times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("change_types")
+    @classmethod
+    def change_types_are_canonical(
+        cls, value: tuple[MarketChangeType, ...]
+    ) -> tuple[MarketChangeType, ...]:
+        if not value or len(value) != len(set(value)):
+            raise ValueError("change_types must be non-empty and unique")
+        if value != tuple(sorted(value, key=lambda item: item.value)):
+            raise ValueError("change_types must use canonical lexical ordering")
+        return value
+
+    @field_validator("changed_fields")
+    @classmethod
+    def changed_fields_are_canonical(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(item.strip() for item in value)
+        if not normalized or any(not item for item in normalized):
+            raise ValueError("changed_fields must be non-empty")
+        if len(normalized) != len(set(normalized)) or normalized != tuple(sorted(normalized)):
+            raise ValueError("changed_fields must be unique and lexically sorted")
+        return normalized
+
+    @model_validator(mode="after")
+    def change_lineage_is_consistent(self) -> "MarketChangeEvent":
+        if self.change_event_id != self.record_id:
+            raise ValueError("change_event_id must equal record_id")
+        if not re.fullmatch(r"market_change:[0-9a-f]{64}", self.record_id):
+            raise ValueError("MarketChangeEvent id must use market_change namespace")
+        if self.detected_at < self.effective_at:
+            raise ValueError("detected_at cannot precede effective_at")
+        previous_values = (
+            self.previous_snapshot_id,
+            self.previous_snapshot_sha256,
+            self.previous_status,
+            self.previous_rule_hash,
+        )
+        is_new = MarketChangeType.NEW in self.change_types
+        if is_new:
+            if self.change_types != (MarketChangeType.NEW,):
+                raise ValueError("NEW must be emitted as a standalone first-observation event")
+            if any(item is not None for item in previous_values):
+                raise ValueError("NEW event cannot claim a previous snapshot")
+        elif any(item is None for item in previous_values):
+            raise ValueError("non-NEW event requires complete previous snapshot lineage")
+        if self.previous_snapshot_id == self.current_snapshot_id:
+            raise ValueError("a logical change requires a new snapshot revision")
+        if MarketChangeType.CLOSED in self.change_types and self.current_status != MarketStatus.CLOSED:
+            raise ValueError("CLOSED change requires CLOSED current_status")
+        if MarketChangeType.RESOLVED in self.change_types and self.current_status != MarketStatus.RESOLVED:
+            raise ValueError("RESOLVED change requires RESOLVED current_status")
+        lifecycle_changed = MarketChangeType.LIFECYCLE_CHANGED in self.change_types
+        if not is_new and (self.previous_status != self.current_status) != lifecycle_changed:
+            raise ValueError("status change and LIFECYCLE_CHANGED must be emitted together")
+        if (
+            MarketChangeType.CLOSED in self.change_types
+            or MarketChangeType.RESOLVED in self.change_types
+        ) and not lifecycle_changed:
+            raise ValueError("CLOSED/RESOLVED requires LIFECYCLE_CHANGED")
+        if self.current_status == MarketStatus.SUPERSEDED:
+            raise ValueError("SUPERSEDED is unreachable until a source-of-truth is released")
+        if MarketChangeType.RULE_CHANGED in self.change_types:
+            if self.previous_rule_hash == self.current_rule_hash:
+                raise ValueError("RULE_CHANGED requires a changed normalized rule hash")
+        elif self.previous_rule_hash is not None and self.previous_rule_hash != self.current_rule_hash:
+            raise ValueError("changed rule hash requires RULE_CHANGED")
+        return self
+
+
 class BookLevel(AlphaContract):
     price: Decimal = Field(ge=0, le=1)
     size: Decimal = Field(gt=0)
@@ -185,6 +293,125 @@ class OrderbookSnapshot(CommonEnvelope):
             raise ValueError("NO leg does not match canonical token mapping")
         if not self.raw_artifact_ids:
             raise ValueError("paired book requires raw artifact lineage")
+        return self
+
+
+class BookCapturePurpose(StrEnum):
+    SENSING = "SENSING"
+    FORMAL_REVIEW = "FORMAL_REVIEW"
+
+
+class BookCaptureStatus(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    STALE = "STALE"
+    SKIPPED = "SKIPPED"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+
+
+class BookCaptureDemand(CommonEnvelope):
+    demand_id: str
+    identity: MarketIdentity
+    purpose: BookCapturePurpose
+    trigger_artifact_id: str
+    trigger_artifact_sha256: str
+    blind_result_id: str | None = None
+    requested_at: datetime
+    valid_until: datetime
+    max_staleness_seconds: int = Field(gt=0)
+    target_sizes: tuple[Decimal, ...]
+
+    @field_validator("trigger_artifact_sha256")
+    @classmethod
+    def trigger_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("requested_at", "valid_until")
+    @classmethod
+    def times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("target_sizes")
+    @classmethod
+    def target_sizes_are_canonical(cls, value: tuple[Decimal, ...]) -> tuple[Decimal, ...]:
+        if not value or any(item <= 0 for item in value):
+            raise ValueError("target_sizes must be non-empty and positive")
+        if len(value) != len(set(value)) or value != tuple(sorted(value)):
+            raise ValueError("target_sizes must be unique and sorted ascending")
+        return value
+
+    @model_validator(mode="after")
+    def demand_purpose_and_lineage_are_consistent(self) -> "BookCaptureDemand":
+        if self.demand_id != self.record_id:
+            raise ValueError("demand_id must equal record_id")
+        if not re.fullmatch(r"book_demand:[0-9a-f]{64}", self.record_id):
+            raise ValueError("BookCaptureDemand id must use book_demand namespace")
+        if self.valid_until <= self.requested_at:
+            raise ValueError("valid_until must be after requested_at")
+        if self.purpose == BookCapturePurpose.FORMAL_REVIEW:
+            if self.blind_result_id is None:
+                raise ValueError("FORMAL_REVIEW demand requires an accepted blind_result_id")
+            if not re.fullmatch(r"research_result:[0-9a-f]{64}", self.blind_result_id):
+                raise ValueError("blind_result_id must use research_result namespace")
+            if self.trigger_artifact_id != self.blind_result_id:
+                raise ValueError("FORMAL_REVIEW trigger must be the accepted blind result")
+        elif self.blind_result_id is not None:
+            raise ValueError("SENSING demand cannot be triggered by a blind result")
+        elif not re.fullmatch(r"market_change:[0-9a-f]{64}", self.trigger_artifact_id):
+            raise ValueError("SENSING trigger must be a MarketChangeEvent")
+        return self
+
+
+class BookCaptureReceipt(CommonEnvelope):
+    receipt_id: str
+    demand_id: str
+    demand_sha256: str
+    market_id: str
+    purpose: BookCapturePurpose
+    status: BookCaptureStatus
+    capture_owner: str
+    received_at: datetime
+    orderbook_snapshot_id: str | None = None
+    orderbook_snapshot_sha256: str | None = None
+    capture_group_id: str | None = None
+    source_observed_at: datetime | None = None
+    error_code: str | None = None
+
+    @field_validator("demand_sha256", "orderbook_snapshot_sha256")
+    @classmethod
+    def hashes_are_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("received_at", "source_observed_at")
+    @classmethod
+    def times_are_utc(cls, value: datetime | None) -> datetime | None:
+        return ensure_utc(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def receipt_state_is_consistent(self) -> "BookCaptureReceipt":
+        if self.receipt_id != self.record_id:
+            raise ValueError("receipt_id must equal record_id")
+        if not re.fullmatch(r"book_receipt:[0-9a-f]{64}", self.record_id):
+            raise ValueError("BookCaptureReceipt id must use book_receipt namespace")
+        snapshot_fields = (
+            self.orderbook_snapshot_id,
+            self.orderbook_snapshot_sha256,
+            self.capture_group_id,
+            self.source_observed_at,
+        )
+        if self.status == BookCaptureStatus.ACCEPTED:
+            if any(item is None for item in snapshot_fields):
+                raise ValueError("ACCEPTED receipt requires complete paired-book lineage")
+            if self.error_code is not None:
+                raise ValueError("ACCEPTED receipt cannot contain an error_code")
+        elif self.status == BookCaptureStatus.STALE:
+            if any(item is None for item in snapshot_fields) or not self.error_code:
+                raise ValueError("STALE receipt requires book lineage and an error_code")
+        else:
+            if any(item is not None for item in snapshot_fields):
+                raise ValueError("non-capture receipt cannot claim book lineage")
+            if not self.error_code or not self.error_code.strip():
+                raise ValueError("non-accepted receipt requires an error_code")
         return self
 
 
@@ -432,6 +659,79 @@ class Replayability(StrEnum):
     FULL = "FULL"
     EXCERPT = "EXCERPT"
     REFERENCE_ONLY = "REFERENCE_ONLY"
+
+
+class SourceArtifact(CommonEnvelope):
+    artifact_id: str
+    source_name: str
+    source_url_or_source_id: str
+    media_type: str
+    captured_at: datetime
+    effective_as_of: datetime
+    capture_scope: CaptureScope
+    hash_scope: HashScope | None = None
+    content_sha256: str | None = None
+    content_length_bytes: int | None = Field(default=None, gt=0)
+    artifact_locator: str | None = None
+    replayability: Replayability
+
+    @field_validator("captured_at", "effective_as_of")
+    @classmethod
+    def times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("content_sha256")
+    @classmethod
+    def content_hash_is_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("source_name", "source_url_or_source_id", "media_type")
+    @classmethod
+    def required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("source artifact text fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def capture_semantics_are_consistent(self) -> "SourceArtifact":
+        if self.artifact_id != self.record_id:
+            raise ValueError("artifact_id must equal record_id")
+        if not re.fullmatch(r"source_artifact:[0-9a-f]{64}", self.record_id):
+            raise ValueError("SourceArtifact id must use source_artifact namespace")
+        if self.effective_as_of > self.captured_at:
+            raise ValueError("effective_as_of cannot be after captured_at")
+        if self.capture_scope == CaptureScope.REFERENCE_ONLY:
+            if any(
+                item is not None
+                for item in (
+                    self.hash_scope,
+                    self.content_sha256,
+                    self.content_length_bytes,
+                    self.artifact_locator,
+                )
+            ):
+                raise ValueError("REFERENCE_ONLY cannot claim captured content")
+            if self.replayability != Replayability.REFERENCE_ONLY:
+                raise ValueError("REFERENCE_ONLY artifact is not content-replayable")
+        else:
+            if self.hash_scope is None or self.content_sha256 is None:
+                raise ValueError("captured artifact requires hash_scope and content_sha256")
+            if self.content_length_bytes is None:
+                raise ValueError("captured artifact requires positive content_length_bytes")
+            if self.artifact_locator is None or not self.artifact_locator.strip():
+                raise ValueError("captured artifact requires immutable artifact_locator")
+            if self.capture_scope == CaptureScope.FULL_DOCUMENT:
+                if self.hash_scope == HashScope.CLAIM_EXCERPT:
+                    raise ValueError("FULL_DOCUMENT cannot use CLAIM_EXCERPT hash scope")
+                if self.replayability != Replayability.FULL:
+                    raise ValueError("FULL_DOCUMENT must be fully replayable")
+            elif self.capture_scope == CaptureScope.EXCERPT_ONLY:
+                if self.hash_scope not in {HashScope.CLAIM_EXCERPT, HashScope.NORMALIZED_TEXT}:
+                    raise ValueError("EXCERPT_ONLY requires excerpt/text hash scope")
+                if self.replayability != Replayability.EXCERPT:
+                    raise ValueError("EXCERPT_ONLY replayability must be EXCERPT")
+        return self
 
 
 class ClaimEvidence(CommonEnvelope):
@@ -812,6 +1112,173 @@ class ProbabilityEstimate(CommonEnvelope):
         return self
 
 
+class ResearchResultEnvelope(CommonEnvelope):
+    result_id: str
+    packet_stage: PacketStage
+    packet_id: str
+    packet_sha256: str
+    probability_estimate: ProbabilityEstimate
+    evidence: tuple[ClaimEvidence, ...]
+    source_artifacts: tuple[SourceArtifact, ...]
+    completed_at: datetime
+    producer: str
+    producer_version: str
+
+    @field_validator("packet_sha256")
+    @classmethod
+    def packet_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("completed_at")
+    @classmethod
+    def completed_at_is_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("producer", "producer_version")
+    @classmethod
+    def required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("research producer fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def research_result_is_bound_and_replayable(self) -> "ResearchResultEnvelope":
+        if self.result_id != self.record_id:
+            raise ValueError("result_id must equal record_id")
+        if not re.fullmatch(r"research_result:[0-9a-f]{64}", self.record_id):
+            raise ValueError("ResearchResultEnvelope id must use research_result namespace")
+        if not self.evidence or not self.source_artifacts:
+            raise ValueError("research result requires claim evidence and source artifacts")
+        evidence_ids = tuple(item.evidence_id for item in self.evidence)
+        artifact_ids = tuple(item.artifact_id for item in self.source_artifacts)
+        if evidence_ids != tuple(sorted(evidence_ids)) or len(evidence_ids) != len(set(evidence_ids)):
+            raise ValueError("evidence must be unique and sorted by evidence_id")
+        if artifact_ids != tuple(sorted(artifact_ids)) or len(artifact_ids) != len(set(artifact_ids)):
+            raise ValueError("source_artifacts must be unique and sorted by artifact_id")
+        if self.probability_estimate.run_id != self.run_id:
+            raise ValueError("probability estimate and result run_id must match")
+        if any(item.run_id != self.run_id for item in self.evidence):
+            raise ValueError("claim evidence and result run_id must match")
+        artifact_by_id = {item.artifact_id: item for item in self.source_artifacts}
+        if set(artifact_by_id) != {item.source_artifact_id for item in self.evidence}:
+            raise ValueError("source_artifacts must exactly cover referenced claim artifacts")
+        for item in self.evidence:
+            artifact = artifact_by_id.get(item.source_artifact_id)
+            if artifact is None:
+                raise ValueError("every claim must reference an included immutable source artifact")
+            if (
+                item.source_url_or_source_id != artifact.source_url_or_source_id
+                or item.capture_scope != artifact.capture_scope
+                or item.hash_scope != artifact.hash_scope
+                or item.content_sha256 != artifact.content_sha256
+                or item.replayability != artifact.replayability
+            ):
+                raise ValueError("claim capture semantics must match its SourceArtifact")
+        if self.packet_stage == PacketStage.BLIND:
+            if not re.fullmatch(r"blind_packet:[0-9a-f]{64}", self.packet_id):
+                raise ValueError("BLIND result requires a blind_packet id")
+            if self.probability_estimate.estimate_stage != EstimateStage.BLIND:
+                raise ValueError("BLIND result requires a BLIND probability estimate")
+            forbidden_origins = {
+                EvidenceOrigin.WALLET,
+                EvidenceOrigin.MARKET,
+                EvidenceOrigin.OPERATOR_COMMENTARY,
+            }
+            if any(item.origin in forbidden_origins for item in self.evidence):
+                raise ValueError("market, wallet and operator evidence cannot enter BLIND result")
+            leaks = blind_leak_reasons(self.model_dump(mode="python"))
+            if leaks:
+                raise ValueError(f"BLIND result contains market-derived semantics: {leaks}")
+        else:
+            if not re.fullmatch(r"market_packet:[0-9a-f]{64}", self.packet_id):
+                raise ValueError("MARKET_AWARE result requires a market_packet id")
+            if self.probability_estimate.estimate_stage == EstimateStage.BLIND:
+                raise ValueError("MARKET_AWARE result requires a market-aware probability estimate")
+        return self
+
+
+class ResearchImportStatus(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    QUARANTINED = "QUARANTINED"
+
+
+class ResearchImportReason(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    SCHEMA_VERSION_MISMATCH = "SCHEMA_VERSION_MISMATCH"
+    PACKET_STAGE_MISMATCH = "PACKET_STAGE_MISMATCH"
+    PACKET_ID_MISMATCH = "PACKET_ID_MISMATCH"
+    PACKET_HASH_MISMATCH = "PACKET_HASH_MISMATCH"
+    RESULT_HASH_MISMATCH = "RESULT_HASH_MISMATCH"
+    SOURCE_ARTIFACT_MISSING = "SOURCE_ARTIFACT_MISSING"
+    SOURCE_ARTIFACT_HASH_MISMATCH = "SOURCE_ARTIFACT_HASH_MISMATCH"
+    BLIND_SEMANTIC_LEAK = "BLIND_SEMANTIC_LEAK"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
+
+class ResearchImportReceipt(CommonEnvelope):
+    import_receipt_id: str
+    packet_stage: PacketStage
+    packet_id: str
+    packet_sha256: str
+    submitted_artifact_id: str
+    submitted_result_sha256: str
+    status: ResearchImportStatus
+    reasons: tuple[ResearchImportReason, ...]
+    imported_at: datetime
+    importer_version: str
+    accepted_result_id: str | None = None
+    accepted_result_sha256: str | None = None
+    quarantine_artifact_id: str | None = None
+
+    @field_validator("packet_sha256", "submitted_result_sha256", "accepted_result_sha256")
+    @classmethod
+    def hashes_are_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("imported_at")
+    @classmethod
+    def imported_at_is_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def import_disposition_is_consistent(self) -> "ResearchImportReceipt":
+        if self.import_receipt_id != self.record_id:
+            raise ValueError("import_receipt_id must equal record_id")
+        if not re.fullmatch(r"research_import_receipt:[0-9a-f]{64}", self.record_id):
+            raise ValueError("ResearchImportReceipt id must use research_import_receipt namespace")
+        if not self.reasons or len(self.reasons) != len(set(self.reasons)):
+            raise ValueError("import reasons must be non-empty and unique")
+        packet_namespace = "blind_packet" if self.packet_stage == PacketStage.BLIND else "market_packet"
+        if not re.fullmatch(rf"{packet_namespace}:[0-9a-f]{{64}}", self.packet_id):
+            raise ValueError("packet_id namespace must match packet_stage")
+        if not re.fullmatch(r"source_artifact:[0-9a-f]{64}", self.submitted_artifact_id):
+            raise ValueError("submitted_artifact_id must use source_artifact namespace")
+        if self.reasons != tuple(sorted(self.reasons, key=lambda item: item.value)):
+            raise ValueError("import reasons must use canonical lexical ordering")
+        if self.status == ResearchImportStatus.ACCEPTED:
+            if self.reasons != (ResearchImportReason.ACCEPTED,):
+                raise ValueError("ACCEPTED receipt requires only the ACCEPTED reason")
+            if self.accepted_result_id is None or self.accepted_result_sha256 is None:
+                raise ValueError("ACCEPTED receipt requires accepted result id and hash")
+            if not re.fullmatch(r"research_result:[0-9a-f]{64}", self.accepted_result_id):
+                raise ValueError("accepted_result_id must use research_result namespace")
+            if self.quarantine_artifact_id is not None:
+                raise ValueError("ACCEPTED receipt cannot reference quarantine")
+        else:
+            if ResearchImportReason.ACCEPTED in self.reasons:
+                raise ValueError("non-accepted receipt cannot contain ACCEPTED reason")
+            if self.accepted_result_id is not None or self.accepted_result_sha256 is not None:
+                raise ValueError("non-accepted receipt cannot claim an accepted result")
+            if self.status == ResearchImportStatus.QUARANTINED:
+                if self.quarantine_artifact_id is None:
+                    raise ValueError("QUARANTINED receipt requires quarantine_artifact_id")
+            elif self.quarantine_artifact_id is not None:
+                raise ValueError("REJECTED receipt cannot claim a quarantine artifact")
+        return self
+
+
 class RuleGateB(StrEnum):
     PASS = "PASS"
     PASS_WITH_RULE_RISK = "PASS_WITH_RULE_RISK"
@@ -894,15 +1361,19 @@ CONTRACT_MODELS = (
     MarketIdentity,
     MarketAlias,
     MarketSnapshot,
+    MarketChangeEvent,
     BookLevel,
     BookLeg,
     TargetDepthMetrics,
     OrderbookSnapshot,
+    BookCaptureDemand,
+    BookCaptureReceipt,
     RecallHit,
     CandidateCard,
     CandidateTransition,
     ThresholdSpec,
     RuleContract,
+    SourceArtifact,
     ClaimEvidence,
     BlindResearchQuestion,
     BlindCandidateProjection,
@@ -910,6 +1381,8 @@ CONTRACT_MODELS = (
     BlindResearchPacket,
     MarketResearchPacket,
     ProbabilityEstimate,
+    ResearchResultEnvelope,
+    ResearchImportReceipt,
     ReviewDecision,
     PredictionRecord,
 )
