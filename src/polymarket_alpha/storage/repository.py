@@ -220,6 +220,48 @@ class AlphaRepository:
             if owns:
                 conn.close()
 
+    def save_contracts_atomic(
+        self, contracts: Sequence[CommonEnvelope]
+    ) -> tuple[str, ...]:
+        """Persist an ordered contract group in one repository transaction.
+
+        This is the public boundary for domain facts that are only meaningful
+        together, such as a ReviewDecision and its PredictionRecord.  Exact
+        replay remains idempotent; any content conflict or projection failure
+        rolls the entire group back.
+        """
+
+        contracts = tuple(contracts)
+        if not contracts:
+            raise ValueError("atomic contract group must not be empty")
+        if any(item.schema_version != ALPHA_CONTRACT_VERSION for item in contracts):
+            raise ValueError("unsupported contract schema version")
+        record_ids = [item.record_id for item in contracts]
+        if len(record_ids) != len(set(record_ids)):
+            raise ValueError("atomic contract group record ids must be unique")
+        self.migrate()
+        conn, owns = self._conn()
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("BEGIN IMMEDIATE")
+            for contract in contracts:
+                if isinstance(contract, ResearchResultEnvelope):
+                    for artifact in contract.source_artifacts:
+                        self._insert_contract_row(conn, artifact)
+                    for evidence in contract.evidence:
+                        self._insert_contract_row(conn, evidence)
+                    self._insert_contract_row(conn, contract.probability_estimate)
+                self._insert_contract_row(conn, contract)
+            conn.execute("COMMIT")
+            return tuple(item.canonical_sha256 for item in contracts)
+        except Exception:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        finally:
+            if owns:
+                conn.close()
+
     def _insert_contract_row(self, conn: sqlite3.Connection, contract: CommonEnvelope) -> None:
         """Insert/replay one sealed row within a caller-owned transaction."""
         payload = canonical_json(contract)
