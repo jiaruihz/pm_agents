@@ -1,0 +1,62 @@
+{
+  "aliases": [
+    {
+      "alias_type": "SLUG",
+      "alias_value": "multi-a",
+      "market_id": "20001"
+    },
+    {
+      "alias_type": "SLUG",
+      "alias_value": "multi-b",
+      "market_id": "20002"
+    },
+    {
+      "alias_type": "SLUG",
+      "alias_value": "multi-c",
+      "market_id": "20003"
+    },
+    {
+      "alias_type": "SLUG",
+      "alias_value": "will-x-happen",
+      "market_id": "12345"
+    }
+  ],
+  "counts": {
+    "aliases": 4,
+    "drift_receipts": 0,
+    "error_receipts": 0,
+    "pages": 2,
+    "raw_market_artifacts": 4,
+    "snapshots": 4
+  },
+  "error_receipts": [],
+  "page_artifact_ids": [
+    "gamma_page:ae096131734f5233563aee434d4c3985bfa8c178ae804e3d9310c0a8026dc78b",
+    "gamma_page:8234b6e34bc5535a54443798066d9658e235d20175f0344ce0f8ad309f6edc96"
+  ],
+  "raw_artifact_ids": [
+    "gamma_market_payload:22a9f452672f3f1920dfda932e64bc58adda6c1ca91e567a171f05bff3e01be9",
+    "gamma_market_payload:88f169781d82d1f251ae7055789408760e13335177a604a41eb608c266d8c51c",
+    "gamma_market_payload:cc91dabd5b622ceb1d7e1ac8bb514e00b67ab6663bcf3619586bda7c97834642",
+    "gamma_market_payload:ed878a26bb1b3d4d3a4fccb77fb4852377cdae4a3fd5bc23426ec5ef246645a4"
+  ],
+  "run_id": "p0-03-offline-20260826",
+  "snapshot_canonical_sha256": {
+    "gamma_market_snapshot:04a30616ac777f8c2c6a817afe9f8792980f7755cebd570eb7029279010adead": "8c393ba66314a745266ad5ee483817eccef86a2c0d0c25ae5a29f035e4e1000a",
+    "gamma_market_snapshot:183dab61ab1b3ed78a5fd586f05fa29fbbf87aef392495a3b763fb6ca204ef78": "222c50dce7ff20118a14e8956ad8e74e1423f15f3ce584959a3bbe970e3f0d59",
+    "gamma_market_snapshot:36c951aeb724d4488c664fc1a4a4ca721aa1df6ff02e7669d4d7ae809c365884": "f7b79f7110b83c0e97a3d8ae72dd59e56875c2d56c255dd0fa7053e47ababb16",
+    "gamma_market_snapshot:c1336b2d6101acfd4a347e615b54eba5a03c89bf9ba7d87b24f6af0547aad367": "9ea9dac78053fc5e06c1525357d0ab7a1f28e42c3bfca0481cdfb56b03616512"
+  },
+  "snapshot_ids": [
+    "gamma_market_snapshot:c1336b2d6101acfd4a347e615b54eba5a03c89bf9ba7d87b24f6af0547aad367",
+    "gamma_market_snapshot:36c951aeb724d4488c664fc1a4a4ca721aa1df6ff02e7669d4d7ae809c365884",
+    "gamma_market_snapshot:183dab61ab1b3ed78a5fd586f05fa29fbbf87aef392495a3b763fb6ca204ef78",
+    "gamma_market_snapshot:04a30616ac777f8c2c6a817afe9f8792980f7755cebd570eb7029279010adead"
+  ],
+  "snapshot_rule_hashes": {
+    "gamma_market_snapshot:04a30616ac777f8c2c6a817afe9f8792980f7755cebd570eb7029279010adead": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c",
+    "gamma_market_snapshot:183dab61ab1b3ed78a5fd586f05fa29fbbf87aef392495a3b763fb6ca204ef78": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c",
+    "gamma_market_snapshot:36c951aeb724d4488c664fc1a4a4ca721aa1df6ff02e7669d4d7ae809c365884": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c",
+    "gamma_market_snapshot:c1336b2d6101acfd4a347e615b54eba5a03c89bf9ba7d87b24f6af0547aad367": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c"
+  }
+}

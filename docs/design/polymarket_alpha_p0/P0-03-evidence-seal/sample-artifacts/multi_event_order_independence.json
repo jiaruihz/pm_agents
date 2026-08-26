@@ -1,0 +1,11 @@
+{
+  "canonical_sha256": "49acdf81ba6d63b534ce2dc804c196418c779796cdf6655c1b55f3dc5bf85b4c",
+  "canonical_sha256_identical": true,
+  "full_event_set": [
+    "E1",
+    "E2"
+  ],
+  "primary_event_id": "E1",
+  "raw_artifact_ids_identical": true,
+  "snapshot_ids_identical": true
+}
