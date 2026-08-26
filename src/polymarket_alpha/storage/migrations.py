@@ -18,6 +18,7 @@ MIGRATION_ID = "alpha_p0_0001"
 RULE_CORPUS_REVISION_MIGRATION_ID = "alpha_p0_0002_rule_corpus_revision"
 CATALOG_INTEGRITY_MIGRATION_ID = "alpha_p0_0003_catalog_integrity"
 RULE_CONTRACT_INSTANCE_MIGRATION_ID = "alpha_p0_0004_rule_contract_instances"
+P0_01R2_PROJECTION_MIGRATION_ID = "alpha_p0_0005_p0_01r2_projections"
 
 # Every object is alpha-namespaced so a shared legacy research database is never
 # altered.  This migration is intentionally additive; rollback is a reader pin,
@@ -235,6 +236,140 @@ CREATE TABLE IF NOT EXISTS alpha_rule_gate_decision_v3 (
 );
 """
 
+# P0-01R2 introduced append-only change, capture and research-import contracts.
+# Keep their projections separate from the sealed 0001--0004 schema.  In
+# particular, this does not retrofit mutable state into alpha_research_result.
+P0_01R2_PROJECTION_MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS alpha_market_change_event_v2 (
+    change_event_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    previous_snapshot_id TEXT REFERENCES alpha_market_snapshot_revision(snapshot_id),
+    current_snapshot_id TEXT NOT NULL REFERENCES alpha_market_snapshot_revision(snapshot_id),
+    previous_snapshot_sha256 TEXT CHECK(previous_snapshot_sha256 IS NULL OR length(previous_snapshot_sha256)=64),
+    current_snapshot_sha256 TEXT NOT NULL CHECK(length(current_snapshot_sha256)=64),
+    previous_status TEXT CHECK(previous_status IS NULL OR previous_status IN ('ACTIVE','CLOSED','RESOLVED','SUPERSEDED')),
+    current_status TEXT NOT NULL CHECK(current_status IN ('ACTIVE','CLOSED','RESOLVED','SUPERSEDED')),
+    previous_rule_hash TEXT CHECK(previous_rule_hash IS NULL OR length(previous_rule_hash)=64),
+    current_rule_hash TEXT NOT NULL CHECK(length(current_rule_hash)=64),
+    effective_at_utc TEXT NOT NULL,
+    detected_at_utc TEXT NOT NULL,
+    CHECK(previous_snapshot_id IS NULL OR previous_snapshot_id <> current_snapshot_id),
+    CHECK(detected_at_utc >= effective_at_utc)
+);
+CREATE TABLE IF NOT EXISTS alpha_market_change_type_v2 (
+    change_event_id TEXT NOT NULL REFERENCES alpha_market_change_event_v2(change_event_id),
+    change_type TEXT NOT NULL CHECK(change_type IN ('NEW','RULE_CHANGED','LIFECYCLE_CHANGED','CLOSED','RESOLVED','METADATA_CHANGED','FAMILY_CHANGED')),
+    PRIMARY KEY(change_event_id, change_type)
+);
+CREATE TABLE IF NOT EXISTS alpha_market_change_field_v2 (
+    change_event_id TEXT NOT NULL REFERENCES alpha_market_change_event_v2(change_event_id),
+    field_name TEXT NOT NULL CHECK(length(trim(field_name)) > 0),
+    PRIMARY KEY(change_event_id, field_name)
+);
+CREATE TABLE IF NOT EXISTS alpha_book_capture_demand_v2 (
+    demand_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    yes_token_id TEXT NOT NULL,
+    no_token_id TEXT NOT NULL,
+    purpose TEXT NOT NULL CHECK(purpose IN ('SENSING','FORMAL_REVIEW')),
+    trigger_artifact_id TEXT NOT NULL REFERENCES alpha_contract_record(record_id),
+    trigger_artifact_sha256 TEXT NOT NULL CHECK(length(trigger_artifact_sha256)=64),
+    blind_result_id TEXT REFERENCES alpha_contract_record(record_id),
+    requested_at_utc TEXT NOT NULL,
+    valid_until_utc TEXT NOT NULL,
+    max_staleness_seconds INTEGER NOT NULL CHECK(max_staleness_seconds > 0),
+    CHECK(yes_token_id <> no_token_id),
+    CHECK(valid_until_utc > requested_at_utc),
+    CHECK((purpose='FORMAL_REVIEW' AND blind_result_id IS NOT NULL) OR (purpose='SENSING' AND blind_result_id IS NULL)),
+    FOREIGN KEY(market_id, yes_token_id) REFERENCES alpha_market_token_map(market_id, token_id),
+    FOREIGN KEY(market_id, no_token_id) REFERENCES alpha_market_token_map(market_id, token_id)
+);
+CREATE TABLE IF NOT EXISTS alpha_book_capture_demand_target_v2 (
+    demand_id TEXT NOT NULL REFERENCES alpha_book_capture_demand_v2(demand_id),
+    target_size TEXT NOT NULL CHECK(length(trim(target_size)) > 0 AND CAST(target_size AS REAL) > 0),
+    PRIMARY KEY(demand_id, target_size)
+);
+CREATE TABLE IF NOT EXISTS alpha_book_capture_receipt_v2 (
+    receipt_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    demand_id TEXT NOT NULL REFERENCES alpha_book_capture_demand_v2(demand_id),
+    demand_sha256 TEXT NOT NULL CHECK(length(demand_sha256)=64),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    purpose TEXT NOT NULL CHECK(purpose IN ('SENSING','FORMAL_REVIEW')),
+    status TEXT NOT NULL CHECK(status IN ('ACCEPTED','STALE','SKIPPED','FAILED','EXPIRED')),
+    capture_owner TEXT NOT NULL,
+    received_at_utc TEXT NOT NULL,
+    orderbook_snapshot_id TEXT REFERENCES alpha_orderbook_snapshot(snapshot_id),
+    orderbook_snapshot_sha256 TEXT CHECK(orderbook_snapshot_sha256 IS NULL OR length(orderbook_snapshot_sha256)=64),
+    capture_group_id TEXT,
+    source_observed_at_utc TEXT,
+    error_code TEXT,
+    CHECK((status='ACCEPTED' AND orderbook_snapshot_id IS NOT NULL AND orderbook_snapshot_sha256 IS NOT NULL AND capture_group_id IS NOT NULL AND source_observed_at_utc IS NOT NULL AND error_code IS NULL)
+       OR (status='STALE' AND orderbook_snapshot_id IS NOT NULL AND orderbook_snapshot_sha256 IS NOT NULL AND capture_group_id IS NOT NULL AND source_observed_at_utc IS NOT NULL AND error_code IS NOT NULL)
+       OR (status IN ('SKIPPED','FAILED','EXPIRED') AND orderbook_snapshot_id IS NULL AND orderbook_snapshot_sha256 IS NULL AND capture_group_id IS NULL AND source_observed_at_utc IS NULL AND error_code IS NOT NULL))
+);
+CREATE TABLE IF NOT EXISTS alpha_source_artifact_v2 (
+    artifact_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    source_name TEXT NOT NULL,
+    source_url_or_source_id TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    captured_at_utc TEXT NOT NULL,
+    effective_as_of_utc TEXT NOT NULL,
+    capture_scope TEXT NOT NULL CHECK(capture_scope IN ('FULL_DOCUMENT','EXCERPT_ONLY','REFERENCE_ONLY')),
+    hash_scope TEXT CHECK(hash_scope IS NULL OR hash_scope IN ('RAW_BYTES','NORMALIZED_TEXT','CLAIM_EXCERPT')),
+    content_sha256 TEXT CHECK(content_sha256 IS NULL OR length(content_sha256)=64),
+    content_length_bytes INTEGER CHECK(content_length_bytes IS NULL OR content_length_bytes > 0),
+    artifact_locator TEXT,
+    replayability TEXT NOT NULL CHECK(replayability IN ('FULL','EXCERPT','REFERENCE_ONLY')),
+    CHECK(effective_as_of_utc <= captured_at_utc),
+    CHECK((capture_scope='REFERENCE_ONLY' AND hash_scope IS NULL AND content_sha256 IS NULL AND content_length_bytes IS NULL AND artifact_locator IS NULL AND replayability='REFERENCE_ONLY')
+       OR (capture_scope <> 'REFERENCE_ONLY' AND hash_scope IS NOT NULL AND content_sha256 IS NOT NULL AND content_length_bytes IS NOT NULL AND artifact_locator IS NOT NULL))
+);
+CREATE TABLE IF NOT EXISTS alpha_research_result_envelope_v2 (
+    result_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    packet_stage TEXT NOT NULL CHECK(packet_stage IN ('BLIND','MARKET_AWARE')),
+    packet_id TEXT NOT NULL REFERENCES alpha_research_packet(packet_id),
+    packet_sha256 TEXT NOT NULL CHECK(length(packet_sha256)=64),
+    probability_estimate_id TEXT NOT NULL REFERENCES alpha_contract_record(record_id),
+    completed_at_utc TEXT NOT NULL,
+    producer TEXT NOT NULL,
+    producer_version TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS alpha_research_result_artifact_v2 (
+    result_id TEXT NOT NULL REFERENCES alpha_research_result_envelope_v2(result_id),
+    artifact_id TEXT NOT NULL REFERENCES alpha_source_artifact_v2(artifact_id),
+    PRIMARY KEY(result_id, artifact_id)
+);
+CREATE TABLE IF NOT EXISTS alpha_research_result_evidence_v2 (
+    result_id TEXT NOT NULL REFERENCES alpha_research_result_envelope_v2(result_id),
+    evidence_id TEXT NOT NULL REFERENCES alpha_evidence_item(evidence_id),
+    source_artifact_id TEXT NOT NULL REFERENCES alpha_source_artifact_v2(artifact_id),
+    PRIMARY KEY(result_id, evidence_id),
+    UNIQUE(result_id, source_artifact_id, evidence_id)
+);
+CREATE TABLE IF NOT EXISTS alpha_research_import_receipt_v2 (
+    import_receipt_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    packet_stage TEXT NOT NULL CHECK(packet_stage IN ('BLIND','MARKET_AWARE')),
+    packet_id TEXT NOT NULL REFERENCES alpha_research_packet(packet_id),
+    packet_sha256 TEXT NOT NULL CHECK(length(packet_sha256)=64),
+    submitted_artifact_id TEXT NOT NULL REFERENCES alpha_source_artifact_v2(artifact_id),
+    submitted_result_sha256 TEXT NOT NULL CHECK(length(submitted_result_sha256)=64),
+    status TEXT NOT NULL CHECK(status IN ('ACCEPTED','REJECTED','QUARANTINED')),
+    imported_at_utc TEXT NOT NULL,
+    importer_version TEXT NOT NULL,
+    accepted_result_id TEXT REFERENCES alpha_research_result_envelope_v2(result_id),
+    accepted_result_sha256 TEXT CHECK(accepted_result_sha256 IS NULL OR length(accepted_result_sha256)=64),
+    quarantine_artifact_id TEXT REFERENCES alpha_source_artifact_v2(artifact_id),
+    CHECK((status='ACCEPTED' AND accepted_result_id IS NOT NULL AND accepted_result_sha256 IS NOT NULL AND quarantine_artifact_id IS NULL)
+       OR (status='REJECTED' AND accepted_result_id IS NULL AND accepted_result_sha256 IS NULL AND quarantine_artifact_id IS NULL)
+       OR (status='QUARANTINED' AND accepted_result_id IS NULL AND accepted_result_sha256 IS NULL AND quarantine_artifact_id IS NOT NULL))
+);
+CREATE TABLE IF NOT EXISTS alpha_research_import_reason_v2 (
+    import_receipt_id TEXT NOT NULL REFERENCES alpha_research_import_receipt_v2(import_receipt_id),
+    reason TEXT NOT NULL CHECK(reason IN ('ACCEPTED','SCHEMA_VERSION_MISMATCH','PACKET_STAGE_MISMATCH','PACKET_ID_MISMATCH','PACKET_HASH_MISMATCH','RESULT_HASH_MISMATCH','SOURCE_ARTIFACT_MISSING','SOURCE_ARTIFACT_HASH_MISMATCH','BLIND_SEMANTIC_LEAK','VALIDATION_FAILED')),
+    PRIMARY KEY(import_receipt_id, reason)
+);
+"""
+
 
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -272,6 +407,16 @@ def rule_contract_instance_manifest() -> dict[str, str]:
         "schema_version": ALPHA_SCHEMA_VERSION,
         "migration_id": RULE_CONTRACT_INSTANCE_MIGRATION_ID,
         "sql_sha256": _sha(RULE_CONTRACT_INSTANCE_MIGRATION_SQL),
+    }
+
+
+def p0_01r2_projection_manifest() -> dict[str, str]:
+    """Return the additive storage manifest for released P0-01R2 contracts."""
+
+    return {
+        "schema_version": ALPHA_SCHEMA_VERSION,
+        "migration_id": P0_01R2_PROJECTION_MIGRATION_ID,
+        "sql_sha256": _sha(P0_01R2_PROJECTION_MIGRATION_SQL),
     }
 
 
@@ -345,6 +490,7 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
     rule_revision_manifest = rule_corpus_revision_manifest()
     catalog_integrity = catalog_integrity_manifest()
     rule_instances = rule_contract_instance_manifest()
+    p0_01r2_projections = p0_01r2_projection_manifest()
     with _connection(target) as (conn, _owned):
         conn.execute("PRAGMA foreign_keys = ON")
         try:
@@ -363,6 +509,9 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
             for statement in RULE_CONTRACT_INSTANCE_MIGRATION_SQL.split(";\n"):
                 if statement.strip():
                     conn.execute(statement)
+            for statement in P0_01R2_PROJECTION_MIGRATION_SQL.split(";\n"):
+                if statement.strip():
+                    conn.execute(statement)
             _backfill_rule_contract_revisions(conn)
             _backfill_rule_contract_instances(conn)
             now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -376,6 +525,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                     RULE_CORPUS_REVISION_MIGRATION_ID,
                     ALPHA_SCHEMA_VERSION,
                     rule_revision_manifest["sql_sha256"],
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
+                (
+                    P0_01R2_PROJECTION_MIGRATION_ID,
+                    ALPHA_SCHEMA_VERSION,
+                    p0_01r2_projections["sql_sha256"],
                     now,
                 ),
             )
@@ -435,6 +593,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                 rule_instances["sql_sha256"],
             ):
                 raise RuntimeError("incompatible Alpha rule contract instance migration already recorded")
+            p0_01r2_row = conn.execute(
+                "SELECT schema_version, sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+                (P0_01R2_PROJECTION_MIGRATION_ID,),
+            ).fetchone()
+            if p0_01r2_row is None or tuple(p0_01r2_row) != (
+                ALPHA_SCHEMA_VERSION,
+                p0_01r2_projections["sql_sha256"],
+            ):
+                raise RuntimeError("incompatible Alpha P0-01R2 projection migration already recorded")
             manifest_row = conn.execute(
                 "SELECT migration_id, contract_version, manifest_sha256 FROM alpha_schema_manifest WHERE schema_version = ?",
                 (ALPHA_SCHEMA_VERSION,),

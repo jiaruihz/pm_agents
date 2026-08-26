@@ -17,7 +17,8 @@ from ..contracts import (
 from ..contracts.models import (
     CandidateCard, CandidateTransition, ClaimEvidence, MarketAlias, MarketSnapshot,
     OrderbookSnapshot, RecallHit, ReviewDecision, RuleContract, PredictionRecord,
-    BlindResearchPacket, MarketResearchPacket,
+    BlindResearchPacket, MarketResearchPacket, MarketChangeEvent, BookCaptureDemand,
+    BookCaptureReceipt, SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt,
 )
 from ..rules.models import RuleGateDecision
 from .migrations import migrate
@@ -151,6 +152,8 @@ class AlphaRepository:
     def save_contract(self, contract: CommonEnvelope) -> str:
         if contract.schema_version != ALPHA_CONTRACT_VERSION:
             raise ValueError("unsupported contract schema version")
+        if isinstance(contract, ResearchResultEnvelope):
+            return self.save_research_result(contract)
         self.migrate()
         payload = canonical_json(contract)
         digest = contract.canonical_sha256
@@ -189,6 +192,61 @@ class AlphaRepository:
         finally:
             if owns:
                 conn.close()
+
+    def save_research_result(self, result: ResearchResultEnvelope) -> str:
+        """Atomically persist a result plus immutable evidence/artifact children."""
+        if result.schema_version != ALPHA_CONTRACT_VERSION:
+            raise ValueError("unsupported contract schema version")
+        self.migrate()
+        conn, owns = self._conn()
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("BEGIN IMMEDIATE")
+            # Child records are exact contract objects, not JSON fragments. This
+            # permits standalone replay and makes the result transaction all-or-nothing.
+            for artifact in result.source_artifacts:
+                self._insert_contract_row(conn, artifact)
+            for evidence in result.evidence:
+                self._insert_contract_row(conn, evidence)
+            self._insert_contract_row(conn, result.probability_estimate)
+            self._insert_contract_row(conn, result)
+            conn.execute("COMMIT")
+            return result.canonical_sha256
+        except Exception:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        finally:
+            if owns:
+                conn.close()
+
+    def _insert_contract_row(self, conn: sqlite3.Connection, contract: CommonEnvelope) -> None:
+        """Insert/replay one sealed row within a caller-owned transaction."""
+        payload = canonical_json(contract)
+        digest = contract.canonical_sha256
+        existing = conn.execute(
+            "SELECT canonical_sha256 FROM alpha_contract_record WHERE record_id = ?",
+            (contract.record_id,),
+        ).fetchone()
+        if existing is not None:
+            if str(existing[0]) != digest:
+                raise ContractConflictError(
+                    f"record_id {contract.record_id} has different canonical content"
+                )
+            self._save_existing_projection(conn, contract)
+            return
+        conn.execute(
+            "INSERT INTO alpha_contract_record VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                contract.record_id,
+                type(contract).__name__,
+                contract.schema_version,
+                payload,
+                digest,
+                canonical_datetime(contract.created_at),
+            ),
+        )
+        self._save_projection(conn, contract, digest)
 
     def get_contract_json(self, record_id: str) -> str | None:
         self.migrate()
@@ -258,6 +316,81 @@ class AlphaRepository:
                 (i.market_id, i.no_token_id),
             )
             conn.execute("INSERT INTO alpha_market_snapshot_revision VALUES (?, ?, ?)", (c.record_id, i.market_id, digest))
+        elif isinstance(c, MarketChangeEvent):
+            self._require_contract_hash(conn, c.current_snapshot_id, c.current_snapshot_sha256)
+            if c.previous_snapshot_id is not None:
+                assert c.previous_snapshot_sha256 is not None
+                self._require_contract_hash(conn, c.previous_snapshot_id, c.previous_snapshot_sha256)
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_market_change_event_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (c.change_event_id, c.market_id, c.previous_snapshot_id, c.current_snapshot_id,
+                 c.previous_snapshot_sha256, c.current_snapshot_sha256,
+                 None if c.previous_status is None else c.previous_status.value, c.current_status.value,
+                 c.previous_rule_hash, c.current_rule_hash, canonical_datetime(c.effective_at),
+                 canonical_datetime(c.detected_at)),
+            )
+            for change_type in c.change_types:
+                conn.execute("INSERT OR IGNORE INTO alpha_market_change_type_v2 VALUES (?, ?)", (c.change_event_id, change_type.value))
+            for field_name in c.changed_fields:
+                conn.execute("INSERT OR IGNORE INTO alpha_market_change_field_v2 VALUES (?, ?)", (c.change_event_id, field_name))
+        elif isinstance(c, BookCaptureDemand):
+            i = c.identity
+            stored = conn.execute("SELECT yes_token_id, no_token_id FROM alpha_market WHERE market_id=?", (i.market_id,)).fetchone()
+            if stored is None or tuple(stored) != (i.yes_token_id, i.no_token_id):
+                raise ContractConflictError("book demand identity is not the frozen catalog identity")
+            self._require_contract_hash(conn, c.trigger_artifact_id, c.trigger_artifact_sha256)
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_book_capture_demand_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (c.demand_id, i.market_id, i.yes_token_id, i.no_token_id, c.purpose.value,
+                 c.trigger_artifact_id, c.trigger_artifact_sha256, c.blind_result_id,
+                 canonical_datetime(c.requested_at), canonical_datetime(c.valid_until), c.max_staleness_seconds),
+            )
+            for target_size in c.target_sizes:
+                conn.execute("INSERT OR IGNORE INTO alpha_book_capture_demand_target_v2 VALUES (?, ?)", (c.demand_id, str(target_size)))
+        elif isinstance(c, BookCaptureReceipt):
+            self._require_contract_hash(conn, c.demand_id, c.demand_sha256)
+            demand = conn.execute("SELECT market_id, purpose FROM alpha_book_capture_demand_v2 WHERE demand_id=?", (c.demand_id,)).fetchone()
+            if demand is None or tuple(demand) != (c.market_id, c.purpose.value):
+                raise ContractConflictError("book receipt does not match its frozen capture demand")
+            if c.orderbook_snapshot_id is not None:
+                assert c.orderbook_snapshot_sha256 is not None
+                assert c.source_observed_at is not None
+                self._require_contract_hash(conn, c.orderbook_snapshot_id, c.orderbook_snapshot_sha256)
+                snapshot_row = conn.execute(
+                    "SELECT s.market_id, r.canonical_json "
+                    "FROM alpha_orderbook_snapshot s "
+                    "JOIN alpha_contract_record r ON r.record_id=s.snapshot_id "
+                    "WHERE s.snapshot_id=?",
+                    (c.orderbook_snapshot_id,),
+                ).fetchone()
+                if snapshot_row is None or str(snapshot_row[0]) != c.market_id:
+                    raise ContractConflictError(
+                        "book receipt snapshot is absent or belongs to another market"
+                    )
+                snapshot_payload = json.loads(str(snapshot_row[1]))
+                if (
+                    snapshot_payload.get("capture_group_id") != c.capture_group_id
+                    or snapshot_payload.get("source_observed_at")
+                    != canonical_datetime(c.source_observed_at)
+                ):
+                    raise ContractConflictError(
+                        "book receipt does not match snapshot capture lineage"
+                    )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_book_capture_receipt_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (c.receipt_id, c.demand_id, c.demand_sha256, c.market_id, c.purpose.value,
+                 c.status.value, c.capture_owner, canonical_datetime(c.received_at),
+                 c.orderbook_snapshot_id, c.orderbook_snapshot_sha256, c.capture_group_id,
+                 None if c.source_observed_at is None else canonical_datetime(c.source_observed_at), c.error_code),
+            )
+        elif isinstance(c, SourceArtifact):
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_source_artifact_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (c.artifact_id, c.source_name, c.source_url_or_source_id, c.media_type,
+                 canonical_datetime(c.captured_at), canonical_datetime(c.effective_as_of), c.capture_scope.value,
+                 None if c.hash_scope is None else c.hash_scope.value, c.content_sha256,
+                 c.content_length_bytes, c.artifact_locator, c.replayability.value),
+            )
         elif isinstance(c, RecallHit):
             conn.execute("INSERT INTO alpha_recall_hit VALUES (?, ?, ?, ?, ?)", (c.record_id, c.market_id, c.recaller.value, c.recaller_version, digest))
         elif isinstance(c, CandidateCard):
@@ -331,6 +464,60 @@ class AlphaRepository:
             )
         elif isinstance(c, (BlindResearchPacket, MarketResearchPacket)):
             conn.execute("INSERT INTO alpha_research_packet VALUES (?, ?)", (c.record_id, c.packet_stage.value))
+        elif isinstance(c, ResearchResultEnvelope):
+            packet = conn.execute("SELECT packet_stage FROM alpha_research_packet WHERE packet_id=?", (c.packet_id,)).fetchone()
+            if packet is None or str(packet[0]) != c.packet_stage.value:
+                raise ContractConflictError("research result packet is absent or has a mismatched stage")
+            self._require_contract_hash(conn, c.packet_id, c.packet_sha256)
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_research_result_envelope_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (c.result_id, c.packet_stage.value, c.packet_id, c.packet_sha256,
+                 c.probability_estimate.record_id, canonical_datetime(c.completed_at), c.producer, c.producer_version),
+            )
+            for artifact in c.source_artifacts:
+                conn.execute("INSERT OR IGNORE INTO alpha_research_result_artifact_v2 VALUES (?, ?)", (c.result_id, artifact.artifact_id))
+            for evidence in c.evidence:
+                conn.execute("INSERT OR IGNORE INTO alpha_research_result_evidence_v2 VALUES (?, ?, ?)", (c.result_id, evidence.evidence_id, evidence.source_artifact_id))
+        elif isinstance(c, ResearchImportReceipt):
+            packet = conn.execute("SELECT packet_stage FROM alpha_research_packet WHERE packet_id=?", (c.packet_id,)).fetchone()
+            if packet is None or str(packet[0]) != c.packet_stage.value:
+                raise ContractConflictError("research import packet is absent or has a mismatched stage")
+            self._require_contract_hash(conn, c.packet_id, c.packet_sha256)
+            if conn.execute(
+                "SELECT 1 FROM alpha_source_artifact_v2 WHERE artifact_id=?",
+                (c.submitted_artifact_id,),
+            ).fetchone() is None:
+                raise ContractConflictError("submitted research artifact is absent")
+            if c.quarantine_artifact_id is not None and conn.execute(
+                "SELECT 1 FROM alpha_source_artifact_v2 WHERE artifact_id=?",
+                (c.quarantine_artifact_id,),
+            ).fetchone() is None:
+                raise ContractConflictError("quarantine research artifact is absent")
+            if c.status.value == "ACCEPTED":
+                assert c.accepted_result_id is not None and c.accepted_result_sha256 is not None
+                self._require_contract_hash(conn, c.accepted_result_id, c.accepted_result_sha256)
+                accepted_result = conn.execute(
+                    "SELECT packet_stage, packet_id, packet_sha256 "
+                    "FROM alpha_research_result_envelope_v2 WHERE result_id=?",
+                    (c.accepted_result_id,),
+                ).fetchone()
+                if accepted_result is None or tuple(accepted_result) != (
+                    c.packet_stage.value,
+                    c.packet_id,
+                    c.packet_sha256,
+                ):
+                    raise ContractConflictError(
+                        "accepted research result is bound to another packet"
+                    )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_research_import_receipt_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (c.import_receipt_id, c.packet_stage.value, c.packet_id, c.packet_sha256,
+                 c.submitted_artifact_id, c.submitted_result_sha256, c.status.value,
+                 canonical_datetime(c.imported_at), c.importer_version, c.accepted_result_id,
+                 c.accepted_result_sha256, c.quarantine_artifact_id),
+            )
+            for reason in c.reasons:
+                conn.execute("INSERT OR IGNORE INTO alpha_research_import_reason_v2 VALUES (?, ?)", (c.import_receipt_id, reason.value))
         elif isinstance(c, ClaimEvidence):
             conn.execute("INSERT INTO alpha_evidence_item VALUES (?, ?)", (c.evidence_id, c.content_sha256))
         elif isinstance(c, ReviewDecision):
@@ -346,7 +533,17 @@ class AlphaRepository:
     ) -> None:
         """Repair only projections whose replay is independently idempotent."""
 
-        self._save_raw_artifact_projection(conn, contract)
+        if self._save_raw_artifact_projection(conn, contract):
+            return
+        if isinstance(contract, (MarketChangeEvent, BookCaptureDemand, BookCaptureReceipt,
+                                 SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt)):
+            self._save_projection(conn, contract, contract.canonical_sha256)
+
+    @staticmethod
+    def _require_contract_hash(conn: sqlite3.Connection, record_id: str, digest: str) -> None:
+        row = conn.execute("SELECT canonical_sha256 FROM alpha_contract_record WHERE record_id=?", (record_id,)).fetchone()
+        if row is None or str(row[0]) != digest:
+            raise ContractConflictError(f"referenced contract {record_id} is absent or hash-mismatched")
 
     @staticmethod
     def _save_raw_artifact_projection(
