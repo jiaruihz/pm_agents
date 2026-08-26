@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
+import json
 import sqlite3
 from typing import Iterator
 
@@ -14,6 +15,7 @@ from ..contracts import ALPHA_CONTRACT_VERSION, content_sha256
 
 ALPHA_SCHEMA_VERSION = ALPHA_CONTRACT_VERSION
 MIGRATION_ID = "alpha_p0_0001"
+RULE_CORPUS_REVISION_MIGRATION_ID = "alpha_p0_0002_rule_corpus_revision"
 
 # Every object is alpha-namespaced so a shared legacy research database is never
 # altered.  This migration is intentionally additive; rollback is a reader pin,
@@ -157,6 +159,36 @@ CREATE TABLE IF NOT EXISTS alpha_run_artifact_link (
 );
 """
 
+# P0-07 requires rule text and the point-in-time contract corpus to carry
+# independent revisions.  The original table's UNIQUE(market_id, rule_hash)
+# cannot represent a corpus-only change, so this additive replacement keeps the
+# v1 table readable and backfills it into a corpus-aware projection.  No legacy
+# or v1 Alpha object is dropped or rewritten.
+RULE_CORPUS_REVISION_MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS alpha_rule_contract_revision_v2 (
+    rule_contract_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    rule_hash TEXT NOT NULL CHECK(length(rule_hash) = 64),
+    contract_corpus_sha256 TEXT CHECK(
+        contract_corpus_sha256 IS NULL OR length(contract_corpus_sha256) = 64
+    ),
+    corpus_revision_key TEXT NOT NULL,
+    contract_revision_id TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    compiler_version TEXT NOT NULL,
+    UNIQUE(market_id, contract_revision_id)
+);
+CREATE TABLE IF NOT EXISTS alpha_rule_gate_decision_v2 (
+    gate_decision_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    rule_contract_id TEXT NOT NULL REFERENCES alpha_rule_contract_revision_v2(rule_contract_id),
+    stage TEXT NOT NULL CHECK(stage IN ('A','B')),
+    decision TEXT NOT NULL,
+    rule_hash TEXT NOT NULL CHECK(length(rule_hash) = 64),
+    contract_revision_id TEXT NOT NULL,
+    compiler_version TEXT NOT NULL
+);
+"""
+
 
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -165,6 +197,50 @@ def _sha(value: str) -> str:
 def schema_manifest() -> dict[str, str]:
     """Return the pinned manifest used by readers and migrations."""
     return {"schema_version": ALPHA_SCHEMA_VERSION, "migration_id": MIGRATION_ID, "sql_sha256": _sha(MIGRATION_SQL)}
+
+
+def rule_corpus_revision_manifest() -> dict[str, str]:
+    """Return the additive P0-07 storage repair manifest."""
+
+    return {
+        "schema_version": ALPHA_SCHEMA_VERSION,
+        "migration_id": RULE_CORPUS_REVISION_MIGRATION_ID,
+        "sql_sha256": _sha(RULE_CORPUS_REVISION_MIGRATION_SQL),
+    }
+
+
+def _backfill_rule_contract_revisions(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        "SELECT r.rule_contract_id, r.market_id, r.rule_hash, c.canonical_json "
+        "FROM alpha_rule_contract_revision r "
+        "JOIN alpha_contract_record c ON c.record_id = r.rule_contract_id"
+    ).fetchall()
+    for rule_contract_id, market_id, rule_hash, payload in rows:
+        try:
+            contract = json.loads(str(payload))
+            contract_corpus_sha256 = contract.get("contract_corpus_sha256")
+            contract_revision_id = contract["contract_revision_id"]
+            parser_version = contract["parser_version"]
+            compiler_version = contract["source_version"]
+        except (AttributeError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("cannot backfill invalid RuleContract canonical JSON") from exc
+        except KeyError as exc:
+            raise RuntimeError("cannot backfill incomplete RuleContract canonical JSON") from exc
+        corpus_revision_key = contract_corpus_sha256 or "NO_CORPUS"
+        conn.execute(
+            "INSERT OR IGNORE INTO alpha_rule_contract_revision_v2 "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                rule_contract_id,
+                market_id,
+                rule_hash,
+                contract_corpus_sha256,
+                corpus_revision_key,
+                contract_revision_id,
+                parser_version,
+                compiler_version,
+            ),
+        )
 
 
 @contextmanager
@@ -184,8 +260,9 @@ def _connection(target: str | Path | sqlite3.Connection) -> Iterator[tuple[sqlit
 
 
 def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
-    """Apply the sole Alpha migration to *target*, atomically and idempotently."""
+    """Apply the owned Alpha migrations atomically and idempotently."""
     manifest = schema_manifest()
+    rule_revision_manifest = rule_corpus_revision_manifest()
     with _connection(target) as (conn, _owned):
         conn.execute("PRAGMA foreign_keys = ON")
         try:
@@ -195,10 +272,23 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
             for statement in MIGRATION_SQL.split(";\n"):
                 if statement.strip():
                     conn.execute(statement)
+            for statement in RULE_CORPUS_REVISION_MIGRATION_SQL.split(";\n"):
+                if statement.strip():
+                    conn.execute(statement)
+            _backfill_rule_contract_revisions(conn)
             now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             conn.execute(
                 "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
                 (MIGRATION_ID, ALPHA_SCHEMA_VERSION, manifest["sql_sha256"], now),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
+                (
+                    RULE_CORPUS_REVISION_MIGRATION_ID,
+                    ALPHA_SCHEMA_VERSION,
+                    rule_revision_manifest["sql_sha256"],
+                    now,
+                ),
             )
             manifest_sha256 = content_sha256(manifest)
             conn.execute(
@@ -211,6 +301,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
             ).fetchone()
             if row is None or tuple(row) != (ALPHA_SCHEMA_VERSION, manifest["sql_sha256"]):
                 raise RuntimeError("incompatible Alpha migration already recorded")
+            rule_revision_row = conn.execute(
+                "SELECT schema_version, sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+                (RULE_CORPUS_REVISION_MIGRATION_ID,),
+            ).fetchone()
+            if rule_revision_row is None or tuple(rule_revision_row) != (
+                ALPHA_SCHEMA_VERSION,
+                rule_revision_manifest["sql_sha256"],
+            ):
+                raise RuntimeError("incompatible Alpha rule/corpus revision migration already recorded")
             manifest_row = conn.execute(
                 "SELECT migration_id, contract_version, manifest_sha256 FROM alpha_schema_manifest WHERE schema_version = ?",
                 (ALPHA_SCHEMA_VERSION,),

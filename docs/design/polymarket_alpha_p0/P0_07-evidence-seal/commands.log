@@ -1,0 +1,14 @@
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_rule_gates_p0_07.py tests/polymarket_alpha/test_storage_p0_02.py --junitxml=docs/design/polymarket_alpha_p0/P0_07-evidence-seal/junit.xml
+RESULT: 16 passed in 0.12s
+
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha
+RESULT: 109 passed in 0.39s
+
+PYTHONPATH=. .venv/bin/pytest -q tests/research_tests/test_dispute_contract_corpus.py tests/research_tests/test_clarification_adjudicator.py tests/research_tests/polymarket/test_rule_analysis_adapter.py
+RESULT: 12 passed in 0.14s
+
+PYTHONPATH=. .venv/bin/python -c "audit src/polymarket_alpha/rules and src/polymarket_alpha"
+RESULT: both passed, zero violations
+
+python3 -m compileall -q src/polymarket_alpha/rules src/polymarket_alpha/storage
+RESULT: exit 0

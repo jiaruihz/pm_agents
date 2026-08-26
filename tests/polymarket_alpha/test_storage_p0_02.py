@@ -20,8 +20,10 @@ from src.polymarket_alpha.contracts import (
 from src.polymarket_alpha.storage import (
     AlphaRepository,
     ContractConflictError,
+    RULE_CORPUS_REVISION_MIGRATION_ID,
     StoredContractCorruptionError,
     migrate,
+    rule_corpus_revision_manifest,
     schema_manifest,
 )
 
@@ -91,6 +93,13 @@ def test_additive_migration_preserves_legacy_and_is_idempotent(tmp_path):
     assert _legacy_schema(conn) == schema_before
     assert conn.execute("SELECT count(*) FROM legacy_fixture").fetchone()[0] == 2
     assert conn.execute("SELECT schema_version FROM alpha_schema_manifest").fetchone()[0] == "alpha_p0_v1.0"
+    assert conn.execute(
+        "SELECT sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+        (RULE_CORPUS_REVISION_MIGRATION_ID,),
+    ).fetchone()[0] == rule_corpus_revision_manifest()["sql_sha256"]
+    assert conn.execute(
+        "SELECT name FROM sqlite_master WHERE name='alpha_rule_contract_revision_v2'"
+    ).fetchone()[0] == "alpha_rule_contract_revision_v2"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
 

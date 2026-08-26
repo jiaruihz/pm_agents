@@ -19,6 +19,7 @@ from ..contracts.models import (
     OrderbookSnapshot, RecallHit, ReviewDecision, RuleContract, PredictionRecord,
     BlindResearchPacket, MarketResearchPacket,
 )
+from ..rules.models import RuleGateDecision
 from .migrations import migrate
 
 
@@ -168,7 +169,34 @@ class AlphaRepository:
         elif isinstance(c, CandidateTransition):
             conn.execute("INSERT INTO alpha_candidate_transition VALUES (?, ?, ?, ?, ?)", (c.record_id, c.candidate_id, c.from_state.value, c.to_state.value, c.event_type.value))
         elif isinstance(c, RuleContract):
-            conn.execute("INSERT INTO alpha_rule_contract_revision VALUES (?, ?, ?)", (c.record_id, c.market_id, c.rule_hash))
+            corpus_revision_key = c.contract_corpus_sha256 or "NO_CORPUS"
+            conn.execute(
+                "INSERT INTO alpha_rule_contract_revision_v2 "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.record_id,
+                    c.market_id,
+                    c.rule_hash,
+                    c.contract_corpus_sha256,
+                    corpus_revision_key,
+                    c.contract_revision_id,
+                    c.parser_version,
+                    c.source_version,
+                ),
+            )
+        elif isinstance(c, RuleGateDecision):
+            conn.execute(
+                "INSERT INTO alpha_rule_gate_decision_v2 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.record_id,
+                    c.rule_contract_id,
+                    c.stage.value,
+                    c.decision,
+                    c.rule_hash,
+                    c.contract_revision_id,
+                    c.compiler_version,
+                ),
+            )
         elif isinstance(c, OrderbookSnapshot):
             conn.execute("INSERT INTO alpha_orderbook_snapshot VALUES (?, ?)", (c.record_id, c.identity.market_id))
             conn.execute(
