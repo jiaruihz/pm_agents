@@ -10,12 +10,20 @@ from .importer import (
     ResearchImportOutcome,
     import_research_result,
 )
+from .market import (
+    MARKET_PACKET_BUILDER_VERSION,
+    build_market_formal_review_demand,
+    freeze_market_research_packet,
+)
 
 __all__ = [
     "BLIND_QUESTION_TEMPLATES",
     "BlindPacketBuild",
     "RESEARCH_IMPORTER_VERSION",
     "ResearchImportOutcome",
+    "MARKET_PACKET_BUILDER_VERSION",
+    "build_market_formal_review_demand",
     "build_blind_research_packet",
+    "freeze_market_research_packet",
     "import_research_result",
 ]

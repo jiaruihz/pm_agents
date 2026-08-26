@@ -260,6 +260,17 @@ def test_formal_review_demand_requires_the_exact_accepted_blind_result() -> None
     )
     assert demand.purpose == BookCapturePurpose.FORMAL_REVIEW
     assert demand.blind_result_id == result.result_id
+    later_run = build_formal_review_demand(
+        blind_result=result,
+        import_receipt=receipt,
+        identity=_identity(),
+        requested_at=NOW,
+        valid_until=NOW + timedelta(minutes=2),
+        max_staleness_seconds=10,
+        target_sizes=(Decimal("10"),),
+        run_id="formal-run-2",
+    )
+    assert later_run.record_id != demand.record_id
     bad_receipt = ResearchImportReceipt.model_validate(
         {
             **receipt.model_dump(),

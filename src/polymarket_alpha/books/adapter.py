@@ -130,6 +130,7 @@ def _demand_id(
     valid_until: datetime,
     max_staleness_seconds: int,
     target_sizes: tuple[Decimal, ...],
+    run_id: str,
 ) -> str:
     return stable_record_id(
         "book_demand",
@@ -141,6 +142,7 @@ def _demand_id(
         ensure_utc(valid_until),
         max_staleness_seconds,
         target_sizes,
+        run_id,
     )
 
 
@@ -168,6 +170,7 @@ def build_sensing_demand(
         valid_until=valid_until,
         max_staleness_seconds=max_staleness_seconds,
         target_sizes=sizes,
+        run_id=run_id,
     )
     return BookCaptureDemand(
         record_id=record_id,
@@ -218,6 +221,11 @@ def build_formal_review_demand(
         raise ValueError("receipt does not accept this Blind result id")
     if import_receipt.accepted_result_sha256 != blind_result.canonical_sha256:
         raise ValueError("receipt does not accept these Blind result bytes")
+    requested_at = ensure_utc(requested_at)
+    if blind_result.completed_at > import_receipt.imported_at:
+        raise ValueError("Blind import receipt cannot precede result completion")
+    if import_receipt.imported_at > requested_at:
+        raise ValueError("formal-review demand cannot precede Blind acceptance")
     sizes = _canonical_target_sizes(target_sizes)
     record_id = _demand_id(
         identity=identity,
@@ -228,6 +236,7 @@ def build_formal_review_demand(
         valid_until=valid_until,
         max_staleness_seconds=max_staleness_seconds,
         target_sizes=sizes,
+        run_id=run_id,
     )
     return BookCaptureDemand(
         record_id=record_id,
