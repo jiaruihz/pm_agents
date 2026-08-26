@@ -6,20 +6,28 @@ SQLite connection or path they own.
 
 from .migrations import (
     ALPHA_SCHEMA_VERSION,
+    CATALOG_INTEGRITY_MIGRATION_ID,
+    RULE_CONTRACT_INSTANCE_MIGRATION_ID,
     RULE_CORPUS_REVISION_MIGRATION_ID,
+    catalog_integrity_manifest,
     migrate,
     rule_corpus_revision_manifest,
+    rule_contract_instance_manifest,
     schema_manifest,
 )
 from .repository import AlphaRepository, ContractConflictError, StoredContractCorruptionError
 
 __all__ = [
     "ALPHA_SCHEMA_VERSION",
+    "CATALOG_INTEGRITY_MIGRATION_ID",
+    "RULE_CONTRACT_INSTANCE_MIGRATION_ID",
     "RULE_CORPUS_REVISION_MIGRATION_ID",
     "AlphaRepository",
     "ContractConflictError",
     "StoredContractCorruptionError",
     "migrate",
+    "catalog_integrity_manifest",
     "rule_corpus_revision_manifest",
+    "rule_contract_instance_manifest",
     "schema_manifest",
 ]

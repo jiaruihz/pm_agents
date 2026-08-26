@@ -210,6 +210,65 @@ def test_compiler_emits_deterministic_contract_and_exact_quote_trace() -> None:
     )
 
 
+def test_cross_run_compilation_keeps_logical_revision_but_revises_instances() -> None:
+    compiler = RuleContractCompiler()
+    first = compiler.compile(_request(run_id="rule-run-1", compiled_at=NOW))
+    replay = compiler.compile(_request(run_id="rule-run-1", compiled_at=NOW))
+    later = compiler.compile(
+        _request(run_id="rule-run-2", compiled_at=NOW + timedelta(minutes=5))
+    )
+
+    assert first == replay
+    assert first.contract is not None and later.contract is not None
+    assert first.contract.contract_revision_id == later.contract.contract_revision_id
+    assert first.contract.record_id != later.contract.record_id
+    assert first.contract.canonical_sha256 != later.contract.canonical_sha256
+    assert first.receipt.record_id != later.receipt.record_id
+
+    gate_a_first = evaluate_gate_a(
+        first.contract,
+        first.receipt,
+        run_id="gate-run-1",
+        evaluated_at=NOW,
+    )
+    gate_a_later = evaluate_gate_a(
+        later.contract,
+        later.receipt,
+        run_id="gate-run-2",
+        evaluated_at=NOW + timedelta(minutes=6),
+    )
+    assert gate_a_first.contract_revision_id == gate_a_later.contract_revision_id
+    assert gate_a_first.record_id != gate_a_later.record_id
+
+
+def test_cross_run_contract_instances_persist_under_one_semantic_revision(
+    tmp_path,
+) -> None:
+    compiler = RuleContractCompiler()
+    first = compiler.compile(_request(run_id="rule-run-1", compiled_at=NOW))
+    later = compiler.compile(
+        _request(run_id="rule-run-2", compiled_at=NOW + timedelta(minutes=5))
+    )
+    assert first.contract is not None and later.contract is not None
+
+    repo = AlphaRepository(tmp_path / "cross-run-rules.db")
+    repo.save_contract(_market())
+    repo.save_contract(first.contract)
+    repo.save_contract(later.contract)
+    conn = sqlite3.connect(tmp_path / "cross-run-rules.db")
+    rows = conn.execute(
+        "SELECT rule_contract_id, contract_revision_id "
+        "FROM alpha_rule_contract_instance_v3 ORDER BY rule_contract_id"
+    ).fetchall()
+    assert len(rows) == 2
+    assert {row[0] for row in rows} == {
+        first.contract.record_id,
+        later.contract.record_id,
+    }
+    assert {row[1] for row in rows} == {first.contract.contract_revision_id}
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
 def test_rule_contract_and_gate_golden_hashes_are_stable() -> None:
     golden = json.loads(
         (FIXTURES / "p0_07_rule_gate_golden.json").read_text(encoding="utf-8")
@@ -340,6 +399,10 @@ def test_rule_hash_and_corpus_hash_revision_independently_and_persist(tmp_path) 
         "DELETE FROM alpha_rule_contract_revision_v2 WHERE rule_contract_id = ?",
         (first.contract.record_id,),
     )
+    conn.execute(
+        "DELETE FROM alpha_rule_contract_instance_v3 WHERE rule_contract_id = ?",
+        (first.contract.record_id,),
+    )
     conn.commit()
     conn.close()
 
@@ -351,7 +414,7 @@ def test_rule_hash_and_corpus_hash_revision_independently_and_persist(tmp_path) 
     conn = sqlite3.connect(tmp_path / "rule-revisions.db")
     rows = conn.execute(
         "SELECT rule_hash, contract_corpus_sha256, compiler_version "
-        "FROM alpha_rule_contract_revision_v2 ORDER BY contract_revision_id"
+        "FROM alpha_rule_contract_instance_v3 ORDER BY contract_revision_id"
     ).fetchall()
     assert len(rows) == 3
     assert {row[0] for row in rows} == {RULE_HASH}
@@ -418,7 +481,7 @@ def test_gate_b_enforces_same_hash_revision_compiler_and_gate_a(tmp_path) -> Non
     repo.save_contract(passed)
     conn = sqlite3.connect(tmp_path / "gate-decisions.db")
     assert conn.execute(
-        "SELECT stage, decision FROM alpha_rule_gate_decision_v2 ORDER BY stage"
+        "SELECT stage, decision FROM alpha_rule_gate_decision_v3 ORDER BY stage"
     ).fetchall() == [("A", "PASS"), ("B", "PASS")]
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 

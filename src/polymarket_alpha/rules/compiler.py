@@ -13,6 +13,7 @@ from src.polymarket_alpha.contracts import (
     RuleContract,
     RuleGate,
     ThresholdSpec,
+    content_sha256,
     rule_sha256,
     stable_record_id,
 )
@@ -268,7 +269,6 @@ class RuleContractCompiler:
             self.version,
         )
         contract_revision_id = stable_record_id("rule_revision", *revision_parts)
-        record_id = stable_record_id("rule_contract", *revision_parts)
         provenance_items = [
             ProvenanceRef(
                 source_artifact_id=evidence.source_artifact_id,
@@ -291,37 +291,43 @@ class RuleContractCompiler:
                 )
             )
         provenance = tuple(provenance_items)
-        contract = RuleContract(
-            record_id=record_id,
-            run_id=request.run_id,
-            created_at=request.compiled_at,
-            source="polymarket_alpha.rule_contract_compiler",
-            source_version=self.version,
-            provenance=provenance,
-            extensions={
+        contract_fields = {
+            "run_id": request.run_id,
+            "created_at": request.compiled_at,
+            "source": "polymarket_alpha.rule_contract_compiler",
+            "source_version": self.version,
+            "provenance": provenance,
+            "extensions": {
                 "market_snapshot_id": request.market_snapshot_id,
                 "review_reasons": tuple(dict.fromkeys(review_reasons)),
             },
-            market_id=request.market_id,
-            rule_hash=request.expected_rule_hash,
-            contract_revision_id=contract_revision_id,
-            contract_corpus_sha256=corpus_hash,
-            subject_entity=parsed.subject_entity,
-            entity_match_rule=parsed.entity_match_rule,
-            yes_trigger=parsed.yes_trigger,
-            threshold=parsed.threshold,
-            deadline=parsed.deadline,
-            timezone=parsed.timezone,
-            resolution_sources=parsed.resolution_sources,
-            source_precedence=parsed.source_precedence,
-            initial_or_final=parsed.initial_or_final,
-            qualifying_examples=parsed.qualifying_examples,
-            non_qualifying_examples=parsed.non_qualifying_examples,
-            ambiguities=parsed.ambiguities,
-            clarity_score=parsed.clarity_score,
-            rule_gate=rule_gate,
-            parser_version=request.parser_version,
-        )
+            "market_id": request.market_id,
+            "rule_hash": request.expected_rule_hash,
+            "contract_revision_id": contract_revision_id,
+            "contract_corpus_sha256": corpus_hash,
+            "subject_entity": parsed.subject_entity,
+            "entity_match_rule": parsed.entity_match_rule,
+            "yes_trigger": parsed.yes_trigger,
+            "threshold": parsed.threshold,
+            "deadline": parsed.deadline,
+            "timezone": parsed.timezone,
+            "resolution_sources": parsed.resolution_sources,
+            "source_precedence": parsed.source_precedence,
+            "initial_or_final": parsed.initial_or_final,
+            "qualifying_examples": parsed.qualifying_examples,
+            "non_qualifying_examples": parsed.non_qualifying_examples,
+            "ambiguities": parsed.ambiguities,
+            "clarity_score": parsed.clarity_score,
+            "rule_gate": rule_gate,
+            "parser_version": request.parser_version,
+        }
+        # ``contract_revision_id`` is the stable semantic rule revision.  The
+        # concrete RuleContract is an immutable compilation instance, so its
+        # id must cover run/clock/snapshot/provenance fields as well.  This
+        # prevents a later run from reusing an id with different canonical
+        # content while preserving stable Rule A/B revision comparison.
+        record_id = stable_record_id("rule_contract", content_sha256(contract_fields))
+        contract = RuleContract(record_id=record_id, **contract_fields)
         receipt_reasons = [f"RULE_GATE:{rule_gate.value}"]
         receipt_reasons.extend(review_reasons)
         receipt = self._receipt(
@@ -351,40 +357,32 @@ class RuleContractCompiler:
         rule_contract_id: str | None,
     ) -> RuleCompilationReceipt:
         corpus_hash = request.corpus.contract_corpus_sha256 if request.corpus else None
-        record_id = stable_record_id(
-            "rule_compilation_receipt",
-            request.market_id,
-            request.market_snapshot_id,
-            request.expected_rule_hash,
-            corpus_hash or "NO_CORPUS",
-            self.version,
-            status,
-            reasons,
-            rule_contract_id,
-        )
-        return RuleCompilationReceipt(
-            record_id=record_id,
-            run_id=request.run_id,
-            created_at=request.compiled_at,
-            source="polymarket_alpha.rule_contract_compiler",
-            source_version=self.version,
-            provenance=(),
-            extensions={},
-            market_id=request.market_id,
-            market_snapshot_id=request.market_snapshot_id,
-            input_rule_hash=request.expected_rule_hash,
-            contract_corpus_sha256=corpus_hash,
-            compiler_version=self.version,
-            status=status,
-            rule_contract_id=rule_contract_id,
-            reasons=reasons,
-            source_evidence_ids=tuple(
+        receipt_fields = {
+            "run_id": request.run_id,
+            "created_at": request.compiled_at,
+            "source": "polymarket_alpha.rule_contract_compiler",
+            "source_version": self.version,
+            "provenance": (),
+            "extensions": {},
+            "market_id": request.market_id,
+            "market_snapshot_id": request.market_snapshot_id,
+            "input_rule_hash": request.expected_rule_hash,
+            "contract_corpus_sha256": corpus_hash,
+            "compiler_version": self.version,
+            "status": status,
+            "rule_contract_id": rule_contract_id,
+            "reasons": reasons,
+            "source_evidence_ids": tuple(
                 sorted({item.source_artifact_id for item in request.source_evidence})
             ),
-            source_evidence=tuple(
+            "source_evidence": tuple(
                 sorted(
                     request.source_evidence,
                     key=lambda item: (item.source_artifact_id, item.quote_start, item.quote_end),
                 )
             ),
+        }
+        record_id = stable_record_id(
+            "rule_compilation_receipt", content_sha256(receipt_fields)
         )
+        return RuleCompilationReceipt(record_id=record_id, **receipt_fields)

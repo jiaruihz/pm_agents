@@ -5,7 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Sequence
 
-from src.polymarket_alpha.contracts import RuleContract, RuleGate, stable_record_id
+from src.polymarket_alpha.contracts import (
+    RuleContract,
+    RuleGate,
+    content_sha256,
+    stable_record_id,
+)
 
 from .models import CompilationStatus, RuleCompilationReceipt, RuleGateDecision, RuleGateStage
 
@@ -31,35 +36,28 @@ def evaluate_gate_a(
         RuleGate.REJECT_RULE: "RULE_CONTRACT_REJECTED",
     }[contract.rule_gate]
     decision = contract.rule_gate.value
+    decision_fields = {
+        "run_id": run_id,
+        "created_at": evaluated_at,
+        "source": "polymarket_alpha.rule_gate_a",
+        "source_version": contract.source_version,
+        "provenance": contract.provenance,
+        "extensions": {},
+        "stage": RuleGateStage.A,
+        "market_id": contract.market_id,
+        "rule_contract_id": contract.record_id,
+        "rule_hash": contract.rule_hash,
+        "contract_revision_id": contract.contract_revision_id,
+        "compiler_version": contract.source_version,
+        "decision": decision,
+        "reasons": (reason,),
+        "input_artifact_ids": (contract.record_id, compilation_receipt.record_id),
+        "evaluated_at": evaluated_at,
+    }
     record_id = stable_record_id(
-        "rule_gate_decision",
-        "A",
-        contract.record_id,
-        contract.rule_hash,
-        contract.contract_revision_id,
-        contract.source_version,
-        compilation_receipt.record_id,
-        decision,
+        "rule_gate_decision", content_sha256(decision_fields)
     )
-    return RuleGateDecision(
-        record_id=record_id,
-        run_id=run_id,
-        created_at=evaluated_at,
-        source="polymarket_alpha.rule_gate_a",
-        source_version=contract.source_version,
-        provenance=contract.provenance,
-        extensions={},
-        stage=RuleGateStage.A,
-        market_id=contract.market_id,
-        rule_contract_id=contract.record_id,
-        rule_hash=contract.rule_hash,
-        contract_revision_id=contract.contract_revision_id,
-        compiler_version=contract.source_version,
-        decision=decision,
-        reasons=(reason,),
-        input_artifact_ids=(contract.record_id, compilation_receipt.record_id),
-        evaluated_at=evaluated_at,
-    )
+    return RuleGateDecision(record_id=record_id, **decision_fields)
 
 
 def evaluate_gate_b(
@@ -105,34 +103,26 @@ def evaluate_gate_b(
     else:
         decision = "PASS"
         reasons = ("RULE_A_B_SAME_HASH_INVARIANT_PASSED",)
+    decision_fields = {
+        "run_id": run_id,
+        "created_at": evaluated_at,
+        "source": "polymarket_alpha.rule_gate_b",
+        "source_version": contract.source_version,
+        "provenance": contract.provenance,
+        "extensions": {},
+        "stage": RuleGateStage.B,
+        "market_id": contract.market_id,
+        "rule_contract_id": contract.record_id,
+        "rule_hash": contract.rule_hash,
+        "contract_revision_id": contract.contract_revision_id,
+        "compiler_version": contract.source_version,
+        "decision": decision,
+        "reasons": reasons,
+        "input_artifact_ids": (contract.record_id, gate_a.record_id, market_packet_id),
+        "evaluated_at": evaluated_at,
+        "gate_a_decision_id": gate_a.record_id,
+    }
     record_id = stable_record_id(
-        "rule_gate_decision",
-        "B",
-        contract.record_id,
-        gate_a.record_id,
-        market_packet_id,
-        market_packet_rule_hash,
-        market_packet_contract_revision_id,
-        decision,
-        reasons,
+        "rule_gate_decision", content_sha256(decision_fields)
     )
-    return RuleGateDecision(
-        record_id=record_id,
-        run_id=run_id,
-        created_at=evaluated_at,
-        source="polymarket_alpha.rule_gate_b",
-        source_version=contract.source_version,
-        provenance=contract.provenance,
-        extensions={},
-        stage=RuleGateStage.B,
-        market_id=contract.market_id,
-        rule_contract_id=contract.record_id,
-        rule_hash=contract.rule_hash,
-        contract_revision_id=contract.contract_revision_id,
-        compiler_version=contract.source_version,
-        decision=decision,
-        reasons=reasons,
-        input_artifact_ids=(contract.record_id, gate_a.record_id, market_packet_id),
-        evaluated_at=evaluated_at,
-        gate_a_decision_id=gate_a.record_id,
-    )
+    return RuleGateDecision(record_id=record_id, **decision_fields)

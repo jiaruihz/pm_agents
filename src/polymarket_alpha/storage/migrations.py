@@ -16,6 +16,8 @@ from ..contracts import ALPHA_CONTRACT_VERSION, content_sha256
 ALPHA_SCHEMA_VERSION = ALPHA_CONTRACT_VERSION
 MIGRATION_ID = "alpha_p0_0001"
 RULE_CORPUS_REVISION_MIGRATION_ID = "alpha_p0_0002_rule_corpus_revision"
+CATALOG_INTEGRITY_MIGRATION_ID = "alpha_p0_0003_catalog_integrity"
+RULE_CONTRACT_INSTANCE_MIGRATION_ID = "alpha_p0_0004_rule_contract_instances"
 
 # Every object is alpha-namespaced so a shared legacy research database is never
 # altered.  This migration is intentionally additive; rollback is a reader pin,
@@ -189,6 +191,50 @@ CREATE TABLE IF NOT EXISTS alpha_rule_gate_decision_v2 (
 );
 """
 
+# This is deliberately a separate, additive migration.  In particular, do not
+# fold this index into 0001: its sealed SQL hash is already an evidence input.
+# SQLite validates all existing rows while building the index, so a legacy
+# duplicate aborts the surrounding migration transaction rather than leaving a
+# partially upgraded catalog.
+CATALOG_INTEGRITY_MIGRATION_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS alpha_market_condition_uidx
+ON alpha_market(condition_id) WHERE condition_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS alpha_market_alias_active_uidx
+ON alpha_market_alias(market_id, source, alias_type)
+WHERE effective_to_utc IS NULL;
+"""
+
+# A RuleContract revision is a stable semantic identity, while each compiler
+# run emits an immutable instance carrying its own run/clock/snapshot lineage.
+# The sealed v2 projection made the semantic revision unique and therefore
+# could not store more than one concrete instance.  V3 is additive and keeps
+# the v2 tables readable while separating these two grains correctly.
+RULE_CONTRACT_INSTANCE_MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS alpha_rule_contract_instance_v3 (
+    rule_contract_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    rule_hash TEXT NOT NULL CHECK(length(rule_hash) = 64),
+    contract_corpus_sha256 TEXT CHECK(
+        contract_corpus_sha256 IS NULL OR length(contract_corpus_sha256) = 64
+    ),
+    corpus_revision_key TEXT NOT NULL,
+    contract_revision_id TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    compiler_version TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS alpha_rule_contract_instance_revision_idx
+ON alpha_rule_contract_instance_v3(market_id, contract_revision_id);
+CREATE TABLE IF NOT EXISTS alpha_rule_gate_decision_v3 (
+    gate_decision_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    rule_contract_id TEXT NOT NULL REFERENCES alpha_rule_contract_instance_v3(rule_contract_id),
+    stage TEXT NOT NULL CHECK(stage IN ('A','B')),
+    decision TEXT NOT NULL,
+    rule_hash TEXT NOT NULL CHECK(length(rule_hash) = 64),
+    contract_revision_id TEXT NOT NULL,
+    compiler_version TEXT NOT NULL
+);
+"""
+
 
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -206,6 +252,26 @@ def rule_corpus_revision_manifest() -> dict[str, str]:
         "schema_version": ALPHA_SCHEMA_VERSION,
         "migration_id": RULE_CORPUS_REVISION_MIGRATION_ID,
         "sql_sha256": _sha(RULE_CORPUS_REVISION_MIGRATION_SQL),
+    }
+
+
+def catalog_integrity_manifest() -> dict[str, str]:
+    """Return the additive catalog identity/alias integrity manifest."""
+
+    return {
+        "schema_version": ALPHA_SCHEMA_VERSION,
+        "migration_id": CATALOG_INTEGRITY_MIGRATION_ID,
+        "sql_sha256": _sha(CATALOG_INTEGRITY_MIGRATION_SQL),
+    }
+
+
+def rule_contract_instance_manifest() -> dict[str, str]:
+    """Return the additive semantic-revision/concrete-instance manifest."""
+
+    return {
+        "schema_version": ALPHA_SCHEMA_VERSION,
+        "migration_id": RULE_CONTRACT_INSTANCE_MIGRATION_ID,
+        "sql_sha256": _sha(RULE_CONTRACT_INSTANCE_MIGRATION_SQL),
     }
 
 
@@ -243,6 +309,20 @@ def _backfill_rule_contract_revisions(conn: sqlite3.Connection) -> None:
         )
 
 
+def _backfill_rule_contract_instances(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO alpha_rule_contract_instance_v3 "
+        "SELECT rule_contract_id, market_id, rule_hash, contract_corpus_sha256, "
+        "corpus_revision_key, contract_revision_id, parser_version, compiler_version "
+        "FROM alpha_rule_contract_revision_v2"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO alpha_rule_gate_decision_v3 "
+        "SELECT gate_decision_id, rule_contract_id, stage, decision, rule_hash, "
+        "contract_revision_id, compiler_version FROM alpha_rule_gate_decision_v2"
+    )
+
+
 @contextmanager
 def _connection(target: str | Path | sqlite3.Connection) -> Iterator[tuple[sqlite3.Connection, bool]]:
     if isinstance(target, sqlite3.Connection):
@@ -263,6 +343,8 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
     """Apply the owned Alpha migrations atomically and idempotently."""
     manifest = schema_manifest()
     rule_revision_manifest = rule_corpus_revision_manifest()
+    catalog_integrity = catalog_integrity_manifest()
+    rule_instances = rule_contract_instance_manifest()
     with _connection(target) as (conn, _owned):
         conn.execute("PRAGMA foreign_keys = ON")
         try:
@@ -275,7 +357,14 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
             for statement in RULE_CORPUS_REVISION_MIGRATION_SQL.split(";\n"):
                 if statement.strip():
                     conn.execute(statement)
+            for statement in CATALOG_INTEGRITY_MIGRATION_SQL.split(";\n"):
+                if statement.strip():
+                    conn.execute(statement)
+            for statement in RULE_CONTRACT_INSTANCE_MIGRATION_SQL.split(";\n"):
+                if statement.strip():
+                    conn.execute(statement)
             _backfill_rule_contract_revisions(conn)
+            _backfill_rule_contract_instances(conn)
             now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             conn.execute(
                 "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
@@ -287,6 +376,24 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                     RULE_CORPUS_REVISION_MIGRATION_ID,
                     ALPHA_SCHEMA_VERSION,
                     rule_revision_manifest["sql_sha256"],
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
+                (
+                    RULE_CONTRACT_INSTANCE_MIGRATION_ID,
+                    ALPHA_SCHEMA_VERSION,
+                    rule_instances["sql_sha256"],
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
+                (
+                    CATALOG_INTEGRITY_MIGRATION_ID,
+                    ALPHA_SCHEMA_VERSION,
+                    catalog_integrity["sql_sha256"],
                     now,
                 ),
             )
@@ -310,6 +417,24 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                 rule_revision_manifest["sql_sha256"],
             ):
                 raise RuntimeError("incompatible Alpha rule/corpus revision migration already recorded")
+            catalog_integrity_row = conn.execute(
+                "SELECT schema_version, sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+                (CATALOG_INTEGRITY_MIGRATION_ID,),
+            ).fetchone()
+            if catalog_integrity_row is None or tuple(catalog_integrity_row) != (
+                ALPHA_SCHEMA_VERSION,
+                catalog_integrity["sql_sha256"],
+            ):
+                raise RuntimeError("incompatible Alpha catalog integrity migration already recorded")
+            rule_instance_row = conn.execute(
+                "SELECT schema_version, sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+                (RULE_CONTRACT_INSTANCE_MIGRATION_ID,),
+            ).fetchone()
+            if rule_instance_row is None or tuple(rule_instance_row) != (
+                ALPHA_SCHEMA_VERSION,
+                rule_instances["sql_sha256"],
+            ):
+                raise RuntimeError("incompatible Alpha rule contract instance migration already recorded")
             manifest_row = conn.execute(
                 "SELECT migration_id, contract_version, manifest_sha256 FROM alpha_schema_manifest WHERE schema_version = ?",
                 (ALPHA_SCHEMA_VERSION,),

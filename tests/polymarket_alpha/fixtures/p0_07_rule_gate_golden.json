@@ -1,24 +1,24 @@
 {
   "contract": {
-    "canonical_sha256": "70483c4bccf124b6a0c3fba78526511de8ed528ca7a79b66245cdecff0039db0",
+    "canonical_sha256": "d3a31e02818d8e494bb7d3357eb74b78b399444f8e8216300308edce7e360ca1",
     "contract_revision_id": "rule_revision:e7a58626ed5bba230550d9e2972c7275e813f24a0d25fdef0159e0cf103d8c28",
-    "record_id": "rule_contract:3cd08d872a746bb5eb7ec32cdcdeff7024c73e40fe4d8ead2ebf003bbbf3b62b",
+    "record_id": "rule_contract:6c208799cf5e1d42739756d3d6be123706b9d2fbb933ceb9398090b32511423a",
     "rule_gate": "PASS",
     "rule_hash": "f8540cd5e2ad6daf7d65804c43b09235072069d0f9a8299c970a68dbef567ddc"
   },
   "gate_a": {
-    "canonical_sha256": "4993b4b294f63d5d53cb64ccd85e2c9c16ed37018cf043c99376be9bdb6da931",
+    "canonical_sha256": "04eae117a555e8724ede3453bbc65e59401e0949b1075b1e0dc9d634990bd1bb",
     "decision": "PASS",
-    "record_id": "rule_gate_decision:379ec816e5600e267aba64492eb507d4020e4a081290e398e84bb4ef3d052d01"
+    "record_id": "rule_gate_decision:d23c6a7f1379f9f30ca819c7e6e6f8084ee9c7408921b304b4e1ca7ceaea4e75"
   },
   "gate_b": {
-    "canonical_sha256": "64ecd8e170e2c9edabe154e2bbfca19be0e13b9830afb1e4a65fa8b8b589ad6d",
+    "canonical_sha256": "4d39de804b4e6ce3e79477b4133d928cd0fa2505e175e9e42073b379c5576dc4",
     "decision": "PASS",
-    "record_id": "rule_gate_decision:1b163ec54257c4e06f0d430091f7d6d82944f0d269999411a389e82cb41a7a4e"
+    "record_id": "rule_gate_decision:f3443bfb3f0eaec30d830268a1521904ab92d85ca0d130de5a8c49530fc7b3cf"
   },
   "receipt": {
-    "canonical_sha256": "d8d071a82be0d52c97d637b1bcafdad36aacf2ad6f9a70a705ff77c6f803caf8",
-    "record_id": "rule_compilation_receipt:53a042970cec75e03a9c3c9ff1a6cd2f84ec95f46805b9265ef154109299e61f",
+    "canonical_sha256": "00e12223b0346147805e6a72ecac00d62b4260ac91aba6adf8318a887d066e96",
+    "record_id": "rule_compilation_receipt:24d781097240e5053018316c636fdae993bd1ffa722b29520c591d9970ced004",
     "status": "COMPILED"
   }
 }
