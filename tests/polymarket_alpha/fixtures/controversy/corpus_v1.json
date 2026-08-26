@@ -1,0 +1,46 @@
+{
+  "identity": {
+    "source_path": "/frozen/polymarket_alpha/controversy/corpus_v1",
+    "device": null,
+    "inode": null,
+    "fixture_id": "controversy-fixture:corpus-v1",
+    "schema_sha256": "4765c01c5d8db4af5d466877041df39f866c32b4bb2f28f2d41c1a6d5722fdfb"
+  },
+  "source_artifact_id": "controversy-artifact:corpus-v1",
+  "artifact_sha256": "47ea498ce9fdf3d8a93f64322700c690c5af3cd4d2a1afec3ed69dc583c1c77a",
+  "artifact_text": "POLYMARKET DISPUTE CORPUS (FROZEN FIXTURE corpus-v1)\nschema: polymarket_alpha.controversy.corpus.v1\n\n[case-001] market_ref=fed-rate-cut recorded=2026-08-20T14:02:00Z\nfinding=RULE_CONTESTED\nThe YES trigger wording is contested by two counterparties; the dispute committee has opened a review of the rule text.\n\n[case-002] market_ref=fed-rate-cut recorded=2026-08-21T09:15:00Z\nfinding=CLARIFICATION_PENDING\nAn oracle clarification request is pending on which published series qualifies as the official settlement source.\n\n[case-003] market_ref=nyc-mayor-special recorded=2026-08-22T18:44:00Z\nfinding=RESOLUTION_DISPUTED\nThe resolved outcome is disputed; a challenge window remains open and the committee has not issued a final ruling.\n\n[case-004] market_ref=unlisted-index recorded=2026-08-23T08:00:00Z\nfinding=AMBIGUITY_RAISED\nAn ambiguity in the threshold boundary has been formally raised for review.\n",
+  "cases": [
+    {
+      "case_id": "case-001",
+      "market_ref": "fed-rate-cut",
+      "finding": "RULE_CONTESTED",
+      "effective_at": "2026-08-20T14:02:00Z",
+      "quote_start": 189,
+      "quote_end": 308
+    },
+    {
+      "case_id": "case-002",
+      "market_ref": "fed-rate-cut",
+      "finding": "CLARIFICATION_PENDING",
+      "effective_at": "2026-08-21T09:15:00Z",
+      "quote_start": 405,
+      "quote_end": 518
+    },
+    {
+      "case_id": "case-003",
+      "market_ref": "nyc-mayor-special",
+      "finding": "RESOLUTION_DISPUTED",
+      "effective_at": "2026-08-22T18:44:00Z",
+      "quote_start": 618,
+      "quote_end": 732
+    },
+    {
+      "case_id": "case-004",
+      "market_ref": "unlisted-index",
+      "finding": "AMBIGUITY_RAISED",
+      "effective_at": "2026-08-23T08:00:00Z",
+      "quote_start": 826,
+      "quote_end": 901
+    }
+  ]
+}

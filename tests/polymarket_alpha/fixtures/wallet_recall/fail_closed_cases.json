@@ -1,0 +1,532 @@
+{
+  "description": "Fail-closed receipt, mapping and alias cases. Each case is a self-contained request; expect.fact_rejections maps fact_id to the required rejection reason, and current/historical market ids assert that unaffected routes stay isolated.",
+  "cases": [
+    {
+      "name": "source_identity_mismatch",
+      "request": {
+        "run_id": "case-source-mismatch",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "other_wallet_store",
+          "snapshot_id": "snapshot-foreign",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [{"token_id": "tok-1", "market_id": "market-1"}]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "SOURCE_IDENTITY_MISMATCH"},
+        "current_market_ids": [],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "pagination_truncated",
+      "request": {
+        "run_id": "case-truncated",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-truncated",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 2,
+          "pages_received": 2,
+          "truncated": true,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [{"token_id": "tok-1", "market_id": "market-1"}]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "PAGINATION_TRUNCATED"},
+        "current_market_ids": [],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "pagination_incomplete_pages",
+      "request": {
+        "run_id": "case-incomplete",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-incomplete",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 3,
+          "pages_received": 2,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [{"token_id": "tok-1", "market_id": "market-1"}]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "PAGINATION_INCOMPLETE"},
+        "current_market_ids": [],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "window_coverage_missing_end",
+      "request": {
+        "run_id": "case-window-end",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-window-end",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T06:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T05:00:00Z",
+            "side": "BUY"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [{"token_id": "tok-1", "market_id": "market-1"}]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "WINDOW_COVERAGE_MISSING"},
+        "current_market_ids": [],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "window_coverage_missing_start",
+      "request": {
+        "run_id": "case-window-start",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-window-start",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-26T05:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [{"token_id": "tok-1", "market_id": "market-1"}]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "WINDOW_COVERAGE_MISSING"},
+        "current_market_ids": [],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "token_market_unmapped",
+      "request": {
+        "run_id": "case-token-unmapped",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-unmapped",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-unknown",
+            "observed_at": "2026-08-26T05:30:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [{"token_id": "tok-1", "market_id": "market-1"}]
+      },
+      "expect": {
+        "fact_rejections": {"fact-2": "TOKEN_MARKET_UNMAPPED"},
+        "current_market_ids": ["market-1"],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "token_market_ambiguous",
+      "request": {
+        "run_id": "case-token-ambiguous",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-token-ambiguous",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-2",
+            "observed_at": "2026-08-26T05:30:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [
+          {"token_id": "tok-1", "market_id": "market-1"},
+          {"token_id": "tok-1", "market_id": "market-1-alt"},
+          {"token_id": "tok-2", "market_id": "market-2"}
+        ]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "AMBIGUOUS_TOKEN_MARKET"},
+        "current_market_ids": ["market-2"],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "alias_ambiguous_two_entities",
+      "request": {
+        "run_id": "case-alias-ambiguous",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-alias-ambiguous",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-2",
+            "observed_at": "2026-08-26T05:30:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [
+          {
+            "address": "0x1111111111111111111111111111111111111111",
+            "entity_id": "ent-one",
+            "provenance": "curated analyst mapping",
+            "confidence": "0.9"
+          },
+          {
+            "address": "0x1111111111111111111111111111111111111111",
+            "entity_id": "ent-two",
+            "provenance": "exchange clustering review",
+            "confidence": "0.9"
+          }
+        ],
+        "token_markets": [
+          {"token_id": "tok-1", "market_id": "market-1"},
+          {"token_id": "tok-2", "market_id": "market-2"}
+        ]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "AMBIGUOUS_ADDRESS_ALIAS"},
+        "current_market_ids": ["market-2"],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "alias_confidence_below_threshold",
+      "request": {
+        "run_id": "case-alias-low-confidence",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-alias-low-conf",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-2",
+            "observed_at": "2026-08-26T05:30:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [
+          {
+            "address": "0x1111111111111111111111111111111111111111",
+            "entity_id": "ent-one",
+            "provenance": "weak heuristic guess",
+            "confidence": "0.5"
+          }
+        ],
+        "token_markets": [
+          {"token_id": "tok-1", "market_id": "market-1"},
+          {"token_id": "tok-2", "market_id": "market-2"}
+        ]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "ALIAS_CONFIDENCE_BELOW_THRESHOLD"},
+        "current_market_ids": ["market-2"],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "alias_public_text_unsafe",
+      "request": {
+        "run_id": "case-alias-unsafe-text",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-alias-unsafe",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-2",
+            "observed_at": "2026-08-26T05:30:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [
+          {
+            "address": "0x1111111111111111111111111111111111111111",
+            "entity_id": "flow-desk-buys",
+            "provenance": "curated analyst mapping",
+            "confidence": "0.95"
+          }
+        ],
+        "token_markets": [
+          {"token_id": "tok-1", "market_id": "market-1"},
+          {"token_id": "tok-2", "market_id": "market-2"}
+        ]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "ALIAS_PUBLIC_TEXT_UNSAFE"},
+        "current_market_ids": ["market-2"],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "fact_observed_after_as_of",
+      "request": {
+        "run_id": "case-future-fact",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-future",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-24T00:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T07:01:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-2",
+            "observed_at": "2026-08-26T05:30:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [
+          {"token_id": "tok-1", "market_id": "market-1"},
+          {"token_id": "tok-2", "market_id": "market-2"}
+        ]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "FACT_OBSERVED_AFTER_AS_OF"},
+        "current_market_ids": ["market-2"],
+        "historical_market_ids": []
+      }
+    },
+    {
+      "name": "fact_outside_snapshot_window",
+      "request": {
+        "run_id": "case-fact-outside-window",
+        "clock": {"as_of": "2026-08-26T07:00:00Z"},
+        "source": {
+          "source_id": "specialist_wallet_store",
+          "snapshot_id": "snapshot-outside-window",
+          "snapshot_sha256": null,
+          "captured_at": "2026-08-26T06:55:00Z"
+        },
+        "pagination": {
+          "pages_expected": 1,
+          "pages_received": 1,
+          "truncated": false,
+          "window_start": "2026-08-26T01:00:00Z",
+          "window_end": "2026-08-26T07:00:00Z"
+        },
+        "facts": [
+          {
+            "fact_id": "fact-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "token_id": "tok-1",
+            "observed_at": "2026-08-26T00:30:00Z",
+            "side": "BUY"
+          },
+          {
+            "fact_id": "fact-2",
+            "address": "0x2222222222222222222222222222222222222222",
+            "token_id": "tok-2",
+            "observed_at": "2026-08-26T06:00:00Z",
+            "side": "SELL"
+          }
+        ],
+        "aliases": [],
+        "token_markets": [
+          {"token_id": "tok-1", "market_id": "market-1"},
+          {"token_id": "tok-2", "market_id": "market-2"}
+        ]
+      },
+      "expect": {
+        "fact_rejections": {"fact-1": "FACT_OUTSIDE_SNAPSHOT_WINDOW"},
+        "current_market_ids": ["market-2"],
+        "historical_market_ids": []
+      }
+    }
+  ]
+}
