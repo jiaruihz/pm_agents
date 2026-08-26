@@ -1,0 +1,17 @@
+PYTHONPATH="$PWD" .venv/bin/pytest -q tests/polymarket_alpha/test_contracts_p0_01.py tests/polymarket_alpha/test_contracts_p0_01r2.py
+36 passed
+
+PYTHONPATH="$PWD" .venv/bin/pytest -q $(git ls-files 'tests/polymarket_alpha/test*.py')
+176 passed
+
+PYTHONPATH="$PWD" .venv/bin/python - <<'PY'
+from pathlib import Path
+from src.polymarket_alpha.security import audit_source_tree
+result = audit_source_tree(Path('src/polymarket_alpha/contracts'))
+print(result.passed, len(result.violations))
+assert result.passed
+PY
+True 0
+
+git diff --check -- src/polymarket_alpha/contracts tests/polymarket_alpha/fixtures/p0_01_golden.json tests/polymarket_alpha/fixtures/p0_01r2_golden.json tests/polymarket_alpha/test_contracts_p0_01r2.py
+PASS

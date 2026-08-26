@@ -1,0 +1,4 @@
+audit_root=src/polymarket_alpha/contracts
+policy=p0_11_wave0
+passed=true
+violations=0
