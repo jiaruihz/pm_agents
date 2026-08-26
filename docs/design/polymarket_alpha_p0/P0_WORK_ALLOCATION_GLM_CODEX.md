@@ -4,11 +4,14 @@
 
 ```text
 DESIGN_APPROVED
-IMPLEMENTATION_HOLD_BY_OWNER
+IMPLEMENTATION_ACTIVE
+P0_COMPLETE=NO
 readiness_scope=OFFLINE_IMPLEMENTATION_ONLY
 ```
 
-本文件只拆工，不授权开始编码。owner解除hold后，按下述依赖启动。
+2026-08-27后的实际完成状态、剩余DAG和可直接执行的任务合同以
+`P0_REMAINING_WORK_BREAKDOWN.md`为准。本文件下方保留最初分工基线，不能
+再把其中的`BLOCKED_BY_DEPENDENCY`文字当作当前运行状态。
 
 ## 分工原则
 

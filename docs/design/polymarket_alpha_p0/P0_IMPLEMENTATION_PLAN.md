@@ -17,6 +17,13 @@ P0 不交付：自动下单、真实 position、复杂前端、微服务拆分�
 
 ## 2. 实施批次
 
+### 2.1 Current status (2026-08-27)
+
+P0-01 core、P0-02 core、P0-03、P0-06A、P0-07以及P0-11
+Wave-0/concrete offline policy已有实现证据；P0仍未完成。P0-04/05、
+P0-06B～E、P0-08/09/10/12和P0-11 final仍在剩余DAG中。后续唯一当前状态源
+为`P0_REMAINING_WORK_BREAKDOWN.md`。
+
 | Batch | 范围 | Entry criteria | Exit evidence |
 |---|---|---|---|
 | P0.0 | contracts、migration、capability sandbox scaffold | 本设计 Gate 1/2 PASS | schema snapshot、contract fixtures、offline network-deny/import graph |

@@ -1,5 +1,10 @@
 # Subagent Work Packages
 
+> Status note (2026-08-27): 本文件保留完整原始任务合同；当前已完成项、
+> remaining DAG和新拆分的R2/08A-C/09A-C任务以
+> `P0_REMAINING_WORK_BREAKDOWN.md`为准。下方历史 `Completion Status` 未逐项
+> 改写，不应作为当前状态源。
+
 ## 使用规则
 
 - 每个包是单一窄任务、单一执行 turn、单一 owner；worker 不得再派生 subagent。
