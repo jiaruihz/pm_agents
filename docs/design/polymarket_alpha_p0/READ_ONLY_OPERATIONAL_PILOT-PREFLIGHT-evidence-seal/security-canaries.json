@@ -1,0 +1,15 @@
+{
+  "alpha_clob_books": {
+    "outcome": "DENIED",
+    "reason": "host/path/method is not precisely allowlisted",
+    "request": "POST https://clob.polymarket.com/books"
+  },
+  "gamma_unbounded_query": {
+    "outcome": "DENIED",
+    "reason": "query value is outside the allowed range: limit",
+    "request": "GET https://gamma-api.polymarket.com/events?closed=false&limit=999999999&offset=999999999"
+  },
+  "redirects": "DISABLED",
+  "proxy_environment": "CLEARED_AND_DENIED",
+  "production_network_requests": 0
+}

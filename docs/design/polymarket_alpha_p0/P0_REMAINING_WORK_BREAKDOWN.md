@@ -9,6 +9,7 @@ P0_COMPLETION_STATUS=CERTIFIED_OFFLINE
 SOURCE_COMMIT=3335cbaa3196adf46e7ef284fcd094515ca89e37
 NEXT_GATE=READ_ONLY_OPERATIONAL_PILOT_GATE
 NEXT_GATE_STATUS=PREPARED_NOT_AUTHORIZED
+NEXT_GATE_OFFLINE_PREFLIGHT=IMPLEMENTED_AND_TESTED
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 ```
@@ -38,6 +39,14 @@ P0 now has a complete deterministic offline fixture path from Change → Recall
 → Candidate → Rule A → Blind import → formal paired book → Market import →
 Rule B → rank/ledger → `SIMULATION_RECORDED`. This is not evidence that daily
 network operation, production capture expansion, or live execution is ready.
+
+The next-gate offline preflight is also implemented at source commit
+`ef82da8844562c63eacc5d16a73b17fe5b98abbb`: four synthetic Gamma-shaped binary fixtures, exact canonical
+identity bindings, a bounded Gamma-only Alpha transport policy, existing-owner
+book-demand reservations, budget accounting, and caller-supplied weather
+isolation/rollback contracts. Alpha cannot authorize CLOB `/books`; no network,
+owner demand, runtime DB write, production observation, deploy, or restart was
+performed. Actual OP-02/OP-03/OP-06 execution remains unapproved.
 
 ## 2. Implemented sequence (historical work breakdown)
 

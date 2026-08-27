@@ -1,0 +1,55 @@
+{
+  "endpoint_policy_sha256": "14a26b1b5f56c53586e6066b831dcbe93b0c68059ac37a34723b313ac1a1b558",
+  "fixture_set_id": "op01_synthetic_frozen_gamma_v1",
+  "fixture_set_sha256": "5c334aa51598148758308317cf61b8055a23f5c0d6c478c95f420c4d788f26f8",
+  "manifest_raw_bytes_sha256": "cd86dcd96821b8b23a83d74462e509a39ddf61f12c98a52ab481c6f3198b91b8",
+  "fixtures": [
+    {
+      "fixture_id": "storm_landfall_binary",
+      "identity_sha256": "e87047853654530851c469b964146df16b6ea00af042fec42b77974e9620847c",
+      "market_id": "op01-1001",
+      "raw_bytes_sha256": "d7207ef508220bbe09313265969b689e4b47fd733a48ca0579a995634bbfa6c6",
+      "semantic_payload_sha256": "8f3530396172ea23a47b0ea22ef6c45f2f46edd8309132aef315492a0003b22b"
+    },
+    {
+      "fixture_id": "election_turnout_binary",
+      "identity_sha256": "ff37c521a6853d2949455cfad2816d043fe1d976377d4add7db31030dfd4eb2e",
+      "market_id": "op01-1002",
+      "raw_bytes_sha256": "af1b4b70c70b3a97530fdf04a2d67e73bd89fad59d94f65e56d8526051946cbd",
+      "semantic_payload_sha256": "eb20ae380658194c7cca2a84f5871486c7e4e81a992345e3f29350693a954065"
+    },
+    {
+      "fixture_id": "space_launch_binary",
+      "identity_sha256": "79383f61a6f660177855736f1336e8256af0a43650bb4d00196ed06c6f4381a9",
+      "market_id": "op01-1003",
+      "raw_bytes_sha256": "ecff7324b0da46236456be6546fa6a4fef7e33035352d5df86f966e852d18c41",
+      "semantic_payload_sha256": "c8ba681de743631d10d72ec84a98077d3552cc08508ad7b86e47a91649a02d46"
+    },
+    {
+      "fixture_id": "court_ruling_binary",
+      "identity_sha256": "9655a05d416e460aecbc151e608e3382596e8a46a192967cf6f66f54f40ee3d5",
+      "market_id": "op01-1004",
+      "raw_bytes_sha256": "132ffed24b090143a54bfd1c7169b08e0948d7814ed10416824f03438e2cb0c6",
+      "semantic_payload_sha256": "fbf4ec1802991299d003a81677c54fe55344af8ff5e378a5150dd4adbc08588b"
+    }
+  ],
+  "network_io_performed": false,
+  "owner_demand_submitted": false,
+  "planned_alpha_authorizations": [
+    {
+      "host": "gamma-api.polymarket.com",
+      "path": "/events",
+      "request_sha256": "e83817a0d59be2d7c86963c3007dd397d6b8176beb656752282924c9eff7ae7b",
+      "rule_id": "gamma_events_public_bounded"
+    }
+  ],
+  "planned_owner_demand_sha256s": [
+    "45851da67deef1ffb9e6dee139494b5d09aa2a5fdd398fecc6278d9c8b77b169",
+    "6687fe997c96ed14c8d65b98418b3665431b013ca3d364558e137034b7797970",
+    "743e993cde0c8544fedcf5edaa3020fd7ff367486cbd75debec63e7a6c8ddf30",
+    "cc17104811217617cd19c7c4a0e240c1fd8043aacdf0cae890bd5b820ae4c83f"
+  ],
+  "preflight_manifest_id": "operational_manifest:de2c21f5da67ba72fd3611f14c7341a4c3be3192c8868f38502b0128ca47021c",
+  "preflight_manifest_sha256": "f84d03c28ba9af89e39eebd542fb4a589ef48922b78e575d6607115f75390f90",
+  "production_state_mutated": false
+}
