@@ -24,8 +24,9 @@ def _workspace(tmp_path: Path) -> Path:
         shutil.copy2(REPO_ROOT / "tasks" / name, destination)
     shutil.copytree(REPO_ROOT / "tasks" / "projects", root / "tasks" / "projects")
     shutil.copytree(REPO_ROOT / "tasks" / "templates", root / "tasks" / "templates")
-    for name in ("queue", "active", "archive", "handoffs", "packets"):
-        (root / "tasks" / name).mkdir(parents=True, exist_ok=True)
+    for project in ("WEATHER", "WCIR", "PMALPHA"):
+        for name in ("queue", "active", "archive", "handoffs", "packets"):
+            (root / "tasks" / project / name).mkdir(parents=True, exist_ok=True)
     return root
 
 
@@ -70,6 +71,9 @@ def test_end_to_end_packet_and_attachment_bundle(tmp_path: Path) -> None:
     ).stdout.splitlines()
     packet, bundle = map(Path, packed)
 
+    assert task.parent == root / "tasks" / "WCIR" / "queue"
+    assert handoff.parent == root / "tasks" / "WCIR" / "handoffs"
+    assert packet.parent == root / "tasks" / "WCIR" / "packets"
     assert packet.is_file()
     assert bundle.is_file()
     with zipfile.ZipFile(bundle) as archive:
@@ -118,7 +122,20 @@ def test_rejects_unsafe_paths_bad_workstream_and_duplicate_ids(tmp_path: Path) -
     )
     assert escaped.returncode != 0
 
-    shutil.copy2(task, root / "tasks" / "active" / task.name)
+    wrong_project = root / "tasks" / "WEATHER" / "queue" / task.name
+    shutil.copy2(task, wrong_project)
+    mismatched = _run(root, "pack", "--role", "glm", "--task", str(wrong_project), check=False)
+    assert mismatched.returncode != 0
+    wrong_project.unlink()
+
+    shutil.copy2(task, root / "tasks" / "WCIR" / "active" / task.name)
     duplicate = _run(root, "check", check=False)
     assert duplicate.returncode == 1
     assert "duplicate TASK_ID" in duplicate.stdout
+
+    orphan = root / "tasks" / "UNKNOWN" / "active"
+    orphan.mkdir(parents=True)
+    shutil.copy2(task, orphan / task.name)
+    unknown = _run(root, "check", check=False)
+    assert unknown.returncode == 1
+    assert "unregistered project task directory: tasks/UNKNOWN" in unknown.stdout

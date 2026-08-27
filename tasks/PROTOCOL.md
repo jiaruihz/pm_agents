@@ -31,13 +31,13 @@ Task ID：`<PROJECT>-<WORKSTREAM>-<NN>`，例如 `WCIR-ORACLE-01`。
 ## 文件流转
 
 ```text
-tasks/queue/<TASK_ID>.md
-  -> tasks/active/<TASK_ID>.md
-  -> tasks/handoffs/<TASK_ID>.md
-  -> tasks/archive/<TASK_ID>.md
+tasks/<PROJECT_ID>/queue/<TASK_ID>.md
+  -> tasks/<PROJECT_ID>/active/<TASK_ID>.md
+  -> tasks/<PROJECT_ID>/handoffs/<TASK_ID>.md
+  -> tasks/<PROJECT_ID>/archive/<TASK_ID>.md
 ```
 
-外部模型 packet 生成到 `tasks/packets/`。外部原始回复与 packet 一起保留，但 reviewer opinion 不等于 owner decision。
+外部模型 packet 生成到 `tasks/<PROJECT_ID>/packets/`。每个项目独立保存 task、handoff 和 packet；`tasks/projects/` 只保存项目 current state。外部原始回复与 packet 一起保留，但 reviewer opinion 不等于 owner decision。
 
 ## 安全边界
 

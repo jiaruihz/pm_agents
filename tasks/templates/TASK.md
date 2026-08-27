@@ -9,7 +9,7 @@ REPO_ROOT: /Users/deepsleep/projects/pm_agents
 BASE_COMMIT: <FULL_COMMIT>
 OWNER: owner
 CREATED_AT: <ISO8601>
-HANDOFF_PATH: tasks/handoffs/<TASK_ID>.md
+HANDOFF_PATH: tasks/<PROJECT>/handoffs/<TASK_ID>.md
 
 ## Objective
 

@@ -7,6 +7,7 @@
 - 项目索引：`tasks/PROJECTS.md`
 - 长期协议：`tasks/PROTOCOL.md`
 - 项目状态：`tasks/projects/<PROJECT_ID>.md`
+- 项目任务：`tasks/<PROJECT_ID>/{queue,active,archive,handoffs,packets}/`
 - 当前任务索引：`tasks/current_task.md`
 - 工具：`scripts/ops/ai_task_ctl.py`
 
@@ -19,10 +20,10 @@ python scripts/ops/ai_task_ctl.py new \
   --title "一句话任务"
 ```
 
-补齐生成的 `tasks/queue/<TASK_ID>.md` 后，把状态改成 `ACTIVE` 并移到 `tasks/active/`。新线程只需说：
+补齐生成的 `tasks/<PROJECT_ID>/queue/<TASK_ID>.md` 后，把状态改成 `ACTIVE` 并移到同项目的 `active/`。新线程只需说：
 
 ```text
-执行 tasks/active/<TASK_ID>.md；按 tasks/PROTOCOL.md 工作，完成后生成 handoff。
+执行 tasks/<PROJECT_ID>/active/<TASK_ID>.md；按 tasks/PROTOCOL.md 工作，完成后生成 handoff。
 ```
 
 ## GLM 执行包
@@ -30,18 +31,18 @@ python scripts/ops/ai_task_ctl.py new \
 ```bash
 python scripts/ops/ai_task_ctl.py pack \
   --role glm \
-  --task tasks/active/<TASK_ID>.md
+  --task tasks/<PROJECT_ID>/active/<TASK_ID>.md
 ```
 
 ## GPT Pro 审阅包
 
 ```bash
-python scripts/ops/ai_task_ctl.py handoff --task tasks/active/<TASK_ID>.md
+python scripts/ops/ai_task_ctl.py handoff --task tasks/<PROJECT_ID>/active/<TASK_ID>.md
 
 python scripts/ops/ai_task_ctl.py pack \
   --role gptpro \
-  --task tasks/active/<TASK_ID>.md \
-  --handoff tasks/handoffs/<TASK_ID>.md \
+  --task tasks/<PROJECT_ID>/active/<TASK_ID>.md \
+  --handoff tasks/<PROJECT_ID>/handoffs/<TASK_ID>.md \
   --attachment path/to/review-artifact.json
 ```
 

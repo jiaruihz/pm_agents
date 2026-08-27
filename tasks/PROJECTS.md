@@ -5,7 +5,7 @@ PROTOCOL_INSTALL_COMMIT: 0f18eb409466b1af13cb44690fa06b004ec63197
 
 | Project ID | Scope | Current disposition | Active tasks | State file |
 |---|---|---|---|---|
-| WEATHER | weather research/runtime/execution system | `ACTIVE_MAINLINE` | `NONE` | `tasks/projects/WEATHER.md` |
+| WEATHER | weather research/runtime/execution system | `ACTIVE_MAINLINE` | `WEATHER-RELEASE-ROOT-01` | `tasks/projects/WEATHER.md` |
 | WCIR | next-print / reaction research | `READY_FOR_OWNER_RECONCILIATION` | `NONE` | `tasks/projects/WCIR.md` |
 | PMALPHA | polymarket alpha research platform | `UNKNOWN_REQUIRES_RECONCILIATION` | `NONE` | `tasks/projects/PMALPHA.md` |
 

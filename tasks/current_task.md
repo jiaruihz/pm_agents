@@ -1,5 +1,5 @@
 # Active Task Index
 
-当前没有由本协议登记的 ACTIVE task。
+- `WEATHER-RELEASE-ROOT-01`：`tasks/WEATHER/active/WEATHER-RELEASE-ROOT-01.md`
 
-权威任务文件位于 `tasks/active/`；不要把旧 `tasks/archive/` 内容当成当前指令。
+权威任务文件位于 `tasks/<PROJECT_ID>/active/`；不要把项目 `archive/` 中的历史内容当成当前指令。
