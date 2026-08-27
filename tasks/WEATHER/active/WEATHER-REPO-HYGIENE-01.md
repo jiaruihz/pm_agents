@@ -96,3 +96,8 @@ HANDOFF_PATH: tasks/WEATHER/handoffs/WEATHER-REPO-HYGIENE-01.md
   `reviews`, `tmp`, proposal-reward/dispute/analysis evidence, N100 historical
   backup, nested external-research repos, harness runs, canonical DB and every
   managed/Codex/data-feed worktree.
+- Eleven small Python cache directories (`732 KiB`) were regenerated within
+  minutes by the registered canonical/reliability control-plane entrypoints.
+  They are active rebuildable intermediates rather than abandoned files and
+  were intentionally left in place; the other 49 original cache directories
+  did not return.
