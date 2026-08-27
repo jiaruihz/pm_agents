@@ -303,6 +303,9 @@ managed_runtimes:
     max_health_age_sec: 180
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    launch_environment:
+      PYTHON_BIN: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4/.venv/bin/python
+      WEATHER_ENV_FILE: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4/.env
 
   - instance_id: weather_city_probability_runtime_v3
     tmux_session: weather_city_probability_runtime_v3
@@ -505,6 +508,10 @@ managed_runtimes:
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/state.json
     max_health_age_sec: 900
     recovery_policy: safe
+    launch_environment:
+      WEATHER_DATA_FEED_SERVICE_DIR: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
+      KNMI_PYTHON_BIN: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c/.venv/bin/python
+      KNMI_ENV_FILE: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi
   - instance_id: weather_korea_first_seen_state_v1
     uses_market_proxy: true
     tmux_session: weather_korea_first_seen_state_v1

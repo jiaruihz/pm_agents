@@ -159,6 +159,20 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "start_mac_knmi_open_data_jrs_tmux.sh"
     )
     assert by_id["weather_knmi_open_data_jrs"].max_health_age_sec == 900
+    assert dict(by_id["weather_knmi_open_data_jrs"].launch_environment) == {
+        "KNMI_ENV_FILE": (
+            "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
+            "588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi"
+        ),
+        "KNMI_PYTHON_BIN": (
+            "/Users/deepsleep/.local/share/pm_agents/releases/knmi/"
+            "ef64a2d0b14230d21e3544161dbf95a097eeca9c/.venv/bin/python"
+        ),
+        "WEATHER_DATA_FEED_SERVICE_DIR": (
+            "/Users/deepsleep/.local/share/pm_agents/releases/knmi/"
+            "ef64a2d0b14230d21e3544161dbf95a097eeca9c"
+        ),
+    }
     assert by_id["weather_city_probability_runtime_v3"].max_health_age_sec == 1200
     assert by_id["weather_city_probability_runtime_v3"].accepted_health_statuses == ("ok",)
     assert by_id[
@@ -180,6 +194,16 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "/Users/deepsleep/.local/share/pm_agents/releases/fast_observation/"
         "331f309ebeea14fd6b61727584a8cf19b40dc6a0"
     )
+    assert dict(by_id["weather_live_cross_observations"].launch_environment) == {
+        "PYTHON_BIN": (
+            "/Users/deepsleep/.local/share/pm_agents/releases/wcir/"
+            "64c5805dc8253c928a6dedfbe71c50f2d8e641c4/.venv/bin/python"
+        ),
+        "WEATHER_ENV_FILE": (
+            "/Users/deepsleep/.local/share/pm_agents/releases/wcir/"
+            "64c5805dc8253c928a6dedfbe71c50f2d8e641c4/.env"
+        ),
+    }
     assert by_id[
         "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1"
     ].checkout_root == observation_checkout
