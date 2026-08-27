@@ -287,3 +287,24 @@ same 32-open-order payload (SHA-256
 The pre-existing JRS permission-host failure observed before the cutover was
 recovered through the controller; the migration does not claim to eliminate
 the underlying macOS TCC dependency.
+
+## 2026-08-28 Canonical Refresh Log Growth Contained
+
+The registered five-minute canonical refresh one-shot appended every run to
+`runtime/weather_edge_v1/canonical_refresh/tmux.log` without a retention
+contract.  The log reached `83,450,763` bytes even though no persistent process
+consumed it.  The one-shot helper now supports opt-in compaction, and the
+canonical wrapper opts in at `64 MiB`, retaining the most recent `8 MiB` before
+the next append.  Compaction runs inside the successfully created named tmux
+session, so tmux session-name uniqueness atomically prevents a concurrent
+caller from replacing a log that another refresh is writing.  Other one-shot
+callers remain unchanged unless they explicitly opt in.
+
+The first scheduled run after commit compacted the old log to `8,421,700`
+bytes.  That retained tail was moved to the recoverable cleanup set, and a
+reinstalled registered LaunchAgent completed with exit status `0`; its new log
+was `16,763` bytes.  The post-change manifest was `healthy` with the same 32
+pre-change sessions, controller and storage identity were healthy, and the
+fill coverage gate passed with `1,567/1,567` DB/raw fills and zero cost delta.
+No strategy configuration, release pin, runtime root, order journal, fill,
+position or execution mode changed; order/fill impact is zero.
