@@ -1,6 +1,7 @@
 # PM Agents Project Index
 
-LAST_RECONCILED_AT: 2026-08-27T21:39:56+08:00
+LAST_RECONCILED_AT: 2026-08-27T22:01:38+08:00
+PROTOCOL_INSTALL_COMMIT: 0f18eb409466b1af13cb44690fa06b004ec63197
 
 | Project ID | Scope | Current disposition | Active tasks | State file |
 |---|---|---|---|---|
