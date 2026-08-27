@@ -613,6 +613,30 @@ def test_observed_jrs_failure_does_not_mark_running_or_missing_runtime_unhealthy
     assert ctl.build_plan(spec, missing_report)[0]["action"] == "start"
 
 
+def test_checkout_health_accepts_symlinked_release_root(tmp_path):
+    physical = tmp_path / "physical/releases/collector"
+    physical.mkdir(parents=True)
+    logical_parent = tmp_path / "logical"
+    logical_parent.symlink_to(tmp_path / "physical", target_is_directory=True)
+    logical = logical_parent / "releases/collector"
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="collector",
+        tmux_session="collector",
+        role="collector",
+        execution_mode="collector",
+        checkout_root=logical,
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    present = observed("collector")
+    present["tmux_sessions"][0]["panes"][0]["pane_current_path"] = str(physical)
+
+    report = ctl.evaluate_production_health(spec, present, now_epoch=1000.0)
+
+    assert report["runtimes"][0]["issues"] == []
+    assert report["runtimes"][0]["status"] == "healthy"
+
+
 def test_start_order_respects_runtime_dependencies(tmp_path):
     feed = WeatherManagedRuntimeSpec(
         instance_id="feed",

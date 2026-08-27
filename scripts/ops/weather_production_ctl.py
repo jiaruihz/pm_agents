@@ -174,11 +174,14 @@ def evaluate_production_health(
         pane_text = _pane_text(session_row)
         if runtime.checkout_root is not None and session_row is not None:
             current_paths = {
-                str(pane.get("pane_current_path") or "")
+                str(Path(str(pane.get("pane_current_path"))).resolve(strict=False))
                 for pane in session_row.get("panes", [])
-                if isinstance(pane, Mapping)
+                if isinstance(pane, Mapping) and pane.get("pane_current_path")
             }
-            if str(runtime.checkout_root) not in current_paths:
+            expected_checkout_root = str(
+                runtime.checkout_root.resolve(strict=False)
+            )
+            if expected_checkout_root not in current_paths:
                 issues.append("checkout_root_mismatch")
         if runtime.expected_live and session_row is not None:
             if "--live" not in pane_text or "--confirm-live" not in pane_text:
