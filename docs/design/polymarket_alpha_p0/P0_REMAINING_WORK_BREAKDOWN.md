@@ -19,6 +19,7 @@ P1_CORRECTION_BACKFILL_OFFLINE_PLANNER=COMPLETE
 P1_RESOLUTION_SOURCE_INTAKE_OFFLINE=COMPLETE
 P1_LIVE_RESOLUTION_BACKFILL=NOT_IMPLEMENTED
 RESEARCH_BRIEF_RENDERER=COMPLETE
+RESEARCH_DRAFT_COMPILER=COMPLETE
 BLIND_RESEARCH_EXECUTION=MANUAL_IMMUTABLE_HANDOFF_ONLY
 MARKET_RESEARCH_EXECUTION=MANUAL_IMMUTABLE_HANDOFF_ONLY
 DAILY_SCAN_SCHEDULER=NOT_IMPLEMENTED
@@ -53,6 +54,7 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P1 captured resolution intake | COMPLETE_OFFLINE | Caller-supplied source bytes, exact RuleContract source/precedence labels and parser assertion are hash-bound into replayable resolution facts under `P1_INTAKE_AND_RESEARCH_BRIEF-evidence-seal`. No online source fetcher exists. |
 | Blind/Market research execution | MANUAL_HANDOFF_ONLY | Packet export, immutable result intake and validation are complete; no model/API/browser executor is owned by Alpha. A human or separately authorized agent must currently return the structured result artifact. |
 | Research brief renderer | COMPLETE | Deterministic Blind/Market briefs are copyable to GPT Pro or another authorized provider; Market briefs include the exact accepted Blind baseline, and Blind briefs keep venue data out. This improves the manual seam but is not autonomous execution. |
+| Research draft compiler | COMPLETE | Provider-friendly claims/probabilities plus actual source bytes compile into canonical, importer-accepted Alpha results under `P1_RESEARCH_DRAFT_COMPILER-evidence-seal`; external providers no longer manufacture IDs/hashes. Model/browser execution remains external. |
 | Daily scan scheduler | NOT_IMPLEMENTED | The coordinator is resumable and stage-bounded but intentionally has no polling loop or autonomous scheduler. Operational activation requires its own owner, budgets and rollback gate. |
 
 P0 now has a complete deterministic offline path from multi-route Recall →
