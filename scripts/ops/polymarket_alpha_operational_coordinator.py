@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import sys
 from datetime import datetime
 from decimal import Decimal
@@ -60,6 +61,54 @@ ALLOWED_ROOT_PREFIXES = (
 )
 
 
+def _allowed_pilot_root(path: Path) -> Path | None:
+    for raw in ALLOWED_ROOT_PREFIXES:
+        try:
+            root = Path(raw.rstrip("/")).resolve(strict=True)
+        except FileNotFoundError:
+            continue
+        try:
+            path.relative_to(root)
+        except ValueError:
+            continue
+        return root
+    return None
+
+
+def _reject_symlink_components(path: Path, *, label: str) -> None:
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(metadata.st_mode):
+            if current == Path("/tmp") and current.resolve() == Path("/private/tmp"):
+                continue
+            raise SystemExit(f"{label} must not contain symlink components: {current}")
+
+
+def _canonical_pilot_path(value: str, *, label: str, must_exist: bool) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise SystemExit(f"{label} must be an absolute path")
+    if any(marker in str(path) for marker in FORBIDDEN_PATH_MARKERS):
+        raise SystemExit(f"{label} must not reference production locations: {path}")
+    _reject_symlink_components(path, label=label)
+    try:
+        resolved = path.resolve(strict=must_exist)
+    except OSError as error:
+        raise SystemExit(f"{label} cannot be resolved safely: {error}") from error
+    if _allowed_pilot_root(resolved) is None:
+        raise SystemExit(
+            f"{label} must live under {' or '.join(ALLOWED_ROOT_PREFIXES)}: {resolved}"
+        )
+    if any(marker in str(resolved) for marker in FORBIDDEN_PATH_MARKERS):
+        raise SystemExit(f"{label} must not reference production locations: {resolved}")
+    return resolved
+
+
 def refuse_unsafe_environment() -> None:
     active = [key for key in PROXY_ENV_KEYS if os.environ.get(key)]
     if active:
@@ -69,33 +118,72 @@ def refuse_unsafe_environment() -> None:
 
 
 def require_pilot_path(value: str, *, label: str, must_exist: bool) -> Path:
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        raise SystemExit(f"{label} must be an absolute path")
-    resolved = str(path)
-    if any(marker in resolved for marker in FORBIDDEN_PATH_MARKERS):
-        raise SystemExit(f"{label} must not reference production locations: {resolved}")
-    if not any(resolved.startswith(prefix) for prefix in ALLOWED_ROOT_PREFIXES):
-        raise SystemExit(
-            f"{label} must live under {' or '.join(ALLOWED_ROOT_PREFIXES)}: {resolved}"
-        )
+    path = _canonical_pilot_path(value, label=label, must_exist=must_exist)
     if must_exist and not path.is_dir():
-        raise SystemExit(f"{label} must be an existing directory: {resolved}")
+        raise SystemExit(f"{label} must be an existing directory: {path}")
+    root = _allowed_pilot_root(path)
+    if root is None or path.parent != root:
+        raise SystemExit(f"{label} must be a direct child of the fixed pilot root: {path}")
+    return path
+
+
+def _require_alpha_db_path(value: str, *, artifact_root: Path) -> Path:
+    path = _canonical_pilot_path(value, label="--alpha-db", must_exist=False)
+    if path.parent != artifact_root:
+        raise SystemExit("--alpha-db must be a direct child of --artifact-root")
+    if path.exists():
+        metadata = path.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise SystemExit("--alpha-db must be absent or an existing non-symlink regular file")
     return path
 
 
 def _require_readable_input_path(value: str, *, label: str) -> Path:
-    """Caller-supplied input files may live anywhere except production trees."""
+    """Return one canonical, non-symlink input inside the fixed pilot root."""
 
-    path = Path(str(value)).expanduser()
-    if not path.is_absolute():
-        raise SystemExit(f"{label} must be an absolute path")
-    resolved = str(path)
-    if any(marker in resolved for marker in FORBIDDEN_PATH_MARKERS):
-        raise SystemExit(f"{label} must not reference production locations: {resolved}")
-    if not path.is_file():
-        raise SystemExit(f"{label} must be an existing file: {resolved}")
+    path = _canonical_pilot_path(str(value), label=label, must_exist=True)
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise SystemExit(f"{label} must be an existing non-symlink regular file: {path}")
     return path
+
+
+def _read_input_bytes(value: str, *, label: str) -> bytes:
+    """Read through an allowlisted dirfd chain without following symlinks."""
+
+    path = _require_readable_input_path(value, label=label)
+    root = _allowed_pilot_root(path)
+    if root is None:
+        raise SystemExit(f"{label} is outside the pilot root")
+    relative = path.relative_to(root)
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    current_fd = os.open(root, directory_flags)
+    file_fd = -1
+    try:
+        for part in relative.parts[:-1]:
+            next_fd = os.open(part, directory_flags, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        file_fd = os.open(
+            relative.name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=current_fd,
+        )
+        metadata = os.fstat(file_fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SystemExit(f"{label} must be a regular file")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(file_fd, 1 << 20)
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+    except OSError as error:
+        raise SystemExit(f"cannot read {label} safely: {error}") from error
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
+        os.close(current_fd)
 
 
 def _parse_datetime(value: Any, field: str) -> datetime:
@@ -107,8 +195,8 @@ def _parse_datetime(value: Any, field: str) -> datetime:
 
 def _json_file(path: str) -> Mapping[str, Any]:
     try:
-        payload = json.loads(_require_readable_input_path(path, label="--manifest").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        payload = json.loads(_read_input_bytes(path, label="--manifest").decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise SystemExit(f"cannot read manifest {path}: {error}") from error
     if not isinstance(payload, Mapping):
         raise SystemExit(f"manifest {path} must be a JSON object")
@@ -118,9 +206,10 @@ def _json_file(path: str) -> Mapping[str, Any]:
 def _source_contents(entries: Mapping[str, str]) -> dict[str, bytes]:
     contents: dict[str, bytes] = {}
     for name, path in dict(entries).items():
-        source = _require_readable_input_path(str(path), label=f"source artifact {name}")
         try:
-            contents[str(name)] = source.read_bytes()
+            contents[str(name)] = _read_input_bytes(
+                str(path), label=f"source artifact {name}"
+            )
         except OSError as error:
             raise SystemExit(f"cannot read source artifact {name}={path}: {error}") from error
     return contents
@@ -138,11 +227,10 @@ def _emit(payload: Mapping[str, Any]) -> None:
 
 def _stage_ingest_gamma(args: argparse.Namespace) -> None:
     manifest = _json_file(args.manifest)
-    response_path = _require_readable_input_path(
-        str(manifest["response_path"]), label="captured response"
-    )
     try:
-        raw = response_path.read_bytes()
+        raw = _read_input_bytes(
+            str(manifest["response_path"]), label="captured response"
+        )
     except OSError as error:
         raise SystemExit(f"cannot read captured response: {error}") from error
     receipt_payload = manifest["receipt"]
@@ -248,11 +336,10 @@ def _stage_blind_resume(args: argparse.Namespace) -> None:
 
 
 def _leg_submission(payload: Mapping[str, Any]) -> OwnerBookLegSubmission:
-    raw_path = _require_readable_input_path(
-        str(payload["raw_book_path"]), label="owner raw book bytes"
-    )
     try:
-        raw = raw_path.read_bytes()
+        raw = _read_input_bytes(
+            str(payload["raw_book_path"]), label="owner raw book bytes"
+        )
     except OSError as error:
         raise SystemExit(f"cannot read owner raw book bytes: {error}") from error
     return OwnerBookLegSubmission(
@@ -356,14 +443,7 @@ def main(argv: list[str] | None = None) -> int:
     refuse_unsafe_environment()
     args = build_parser().parse_args(argv)
     artifact_root = require_pilot_path(args.artifact_root, label="--artifact-root", must_exist=True)
-    alpha_db_path = Path(args.alpha_db).expanduser()
-    alpha_resolved = str(alpha_db_path)
-    if any(marker in alpha_resolved for marker in FORBIDDEN_PATH_MARKERS) or not any(
-        alpha_resolved.startswith(prefix) for prefix in ALLOWED_ROOT_PREFIXES
-    ):
-        raise SystemExit(
-            f"--alpha-db must live under {' or '.join(ALLOWED_ROOT_PREFIXES)}: {alpha_resolved}"
-        )
+    alpha_db_path = _require_alpha_db_path(args.alpha_db, artifact_root=artifact_root)
     args.artifact_root = artifact_root
     args.alpha_db = alpha_db_path
     try:

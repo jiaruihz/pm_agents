@@ -46,6 +46,7 @@ class GammaIngestFailureCode(StrEnum):
     MARKETS_FIELD_INVALID = "MARKETS_FIELD_INVALID"
     NESTED_MARKET_NOT_MAPPING = "NESTED_MARKET_NOT_MAPPING"
     MARKET_COUNT_OVER_BUDGET = "MARKET_COUNT_OVER_BUDGET"
+    MARKET_COUNT_OVER_CALLER_LIMIT = "MARKET_COUNT_OVER_CALLER_LIMIT"
 
 
 @dataclass(frozen=True)
@@ -197,6 +198,7 @@ def ingest_captured_events_response(
     page_budget: int,
     requested_offset: int = 0,
     requested_limit: int | None = None,
+    max_flattened_markets: int | None = None,
 ) -> GammaOperationalIngestResult:
     """Verify, flatten and ingest one captured ``/events`` response page.
 
@@ -212,6 +214,8 @@ def ingest_captured_events_response(
         raise ValueError("page_budget must be positive")
     if requested_offset < 0:
         raise ValueError("requested_offset must be non-negative")
+    if max_flattened_markets is not None and max_flattened_markets <= 0:
+        raise ValueError("max_flattened_markets must be positive when supplied")
     observed_at = ensure_utc(observed_at)
     ingested_at = ensure_utc(ingested_at)
     raw_hash = bytes_sha256(raw_response)
@@ -285,6 +289,13 @@ def ingest_captured_events_response(
             response_byte_length=len(raw_response),
             event_ids=(),
             flattened_market_count=0,
+        )
+
+    if max_flattened_markets is not None and len(markets) > max_flattened_markets:
+        return _fail(
+            GammaIngestFailureCode.MARKET_COUNT_OVER_CALLER_LIMIT,
+            f"response flattens to {len(markets)} markets over the caller limit "
+            f"{max_flattened_markets}",
         )
 
     termination = None

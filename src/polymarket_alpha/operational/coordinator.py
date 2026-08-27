@@ -441,6 +441,7 @@ def run_gamma_ingest_stage(
         page_budget=inputs.page_budget,
         requested_offset=inputs.requested_offset,
         requested_limit=inputs.requested_limit,
+        max_flattened_markets=1,
     )
     if not result.accepted or result.catalog is None:
         failure = result.failure

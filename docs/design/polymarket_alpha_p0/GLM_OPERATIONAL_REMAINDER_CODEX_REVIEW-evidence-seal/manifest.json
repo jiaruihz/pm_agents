@@ -1,0 +1,18 @@
+{
+  "run_id": "glm-operational-codex-review-2026-08-27",
+  "base_commit": "3aa821850d9c1b954f57f591e91be9c95793fae1",
+  "branch": "codex/market-ladder-kink-v1",
+  "scope": "OFFLINE_OPERATIONAL_BRIDGE_REVIEW_AND_HARDENING_ONLY",
+  "disposition": "ACCEPTED_AFTER_FIXES_OFFLINE_ONLY",
+  "findings": {"major_fixed": 2, "minor_fixed": 1, "open": 0},
+  "tests": {
+    "operational_focused": {"passed": 48, "failed": 0},
+    "full_alpha": {"passed": 559, "failed": 0},
+    "operational_security_violations": 0,
+    "cli_security_violations": 0
+  },
+  "network_used": false,
+  "production_db_mutated": false,
+  "live_execution_reachable": false,
+  "read_only_operational_pilot_approved": false
+}

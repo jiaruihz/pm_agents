@@ -179,6 +179,24 @@ def test_expired_demand_is_rejected_before_writes(tmp_path: Path) -> None:
     assert not _outbox_path(tmp_path).exists()
 
 
+def test_future_request_clock_is_rejected_and_cannot_evade_rate_budget(tmp_path: Path) -> None:
+    future = _bundle(requested_offset=timedelta(minutes=1))
+    with pytest.raises(DemandOutboxBudgetError, match="future"):
+        _append(
+            tmp_path,
+            future,
+            now=future.alpha_demand.requested_at - timedelta(minutes=1),
+        )
+    assert not _outbox_path(tmp_path).exists()
+
+    current = _bundle()
+    _append(tmp_path, current)
+    earlier = _bundle(requested_offset=timedelta(seconds=-30))
+    receipt = _append(tmp_path, earlier, now=earlier.alpha_demand.requested_at)
+    assert not receipt.replayed
+    assert receipt.line_count == 2
+
+
 def test_per_minute_budget_of_five_bundles(tmp_path: Path) -> None:
     for index in range(5):
         _append(tmp_path, _bundle(requested_offset=timedelta(seconds=index)))

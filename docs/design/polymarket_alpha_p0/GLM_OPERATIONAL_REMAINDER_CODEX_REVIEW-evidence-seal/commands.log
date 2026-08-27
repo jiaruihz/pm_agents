@@ -1,0 +1,4 @@
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY -u http_proxy -u https_proxy -u all_proxy -u no_proxy PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_operational_gamma_ingest.py tests/polymarket_alpha/test_operational_demand_outbox.py tests/polymarket_alpha/test_operational_book_bridge.py tests/polymarket_alpha/test_operational_coordinator.py
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY -u http_proxy -u https_proxy -u all_proxy -u no_proxy PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha
+PYTHONPATH=. .venv/bin/python -c "from src.polymarket_alpha.security import audit_source_tree; print(audit_source_tree('src/polymarket_alpha/operational')); print(audit_source_tree('scripts/ops/polymarket_alpha_operational_coordinator.py'))"
+git diff --check

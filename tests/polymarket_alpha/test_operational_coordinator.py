@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sqlite3
 import shutil
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -115,6 +116,41 @@ def _gamma_inputs() -> GammaIngestStageInputs:
     )
 
 
+def test_multi_market_gamma_is_rejected_before_any_catalog_write(tmp_path: Path) -> None:
+    markets = _gamma.multi_market_event_payloads()[:2]
+    body = json.dumps(
+        [{"id": "event-multi", "title": "Multi", "markets": markets}],
+        sort_keys=True,
+    ).encode("utf-8")
+    import hashlib
+
+    receipt = GammaResponseReceipt(
+        request_method="GET",
+        endpoint_host="gamma-api.polymarket.com",
+        endpoint_path="/events",
+        http_status=200,
+        response_bytes_sha256=hashlib.sha256(body).hexdigest(),
+        response_byte_length=len(body),
+        response_received_at=GAMMA_OBSERVED,
+    )
+    repository = _repository(tmp_path)
+    with pytest.raises(CoordinatorBlocked, match="caller limit"):
+        run_gamma_ingest_stage(
+            repository,
+            tmp_path,
+            GammaIngestStageInputs(
+                raw_response=body,
+                response_receipt=receipt,
+                run_id="multi-market-rejected",
+                observed_at=GAMMA_OBSERVED,
+                ingested_at=INGESTED,
+                page_budget=5,
+            ),
+        )
+    conn = sqlite3.connect(tmp_path / "alpha.db")
+    assert conn.execute("SELECT count(*) FROM alpha_contract_record").fetchone()[0] == 0
+    conn.close()
+    assert not (tmp_path / "state" / "gamma_ingested.json").exists()
 def _coordinator_rule_request():
     return _rule_request(
         run_id="op-coordinator-rule",
@@ -685,12 +721,37 @@ def test_cli_refuses_proxy_env_and_production_paths(monkeypatch) -> None:
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
     with pytest.raises(SystemExit, match="proxy"):
         cli.refuse_unsafe_environment()
-    monkeypatch.delenv("HTTPS_PROXY")
+    for key in cli.PROXY_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
     cli.refuse_unsafe_environment()
     with pytest.raises(SystemExit, match="production"):
         cli.require_pilot_path("/Volumes/jrs/pm_agents/runtime", label="--artifact-root", must_exist=True)
     with pytest.raises(SystemExit, match="polymarket-alpha-pilot"):
         cli.require_pilot_path(str(Path("/Users/deepsleep/projects/pm_agents/tmp")), label="--artifact-root", must_exist=True)
+
+
+def test_cli_rejects_symlink_escape_for_root_db_and_inputs() -> None:
+    cli = _load_cli()
+    pilot = _pilot_dir("cli-symlink-boundary")
+    allowed_root = pilot.parent
+    root_alias = allowed_root / f"{pilot.name}-root-alias"
+    db_alias = pilot / "alpha.db"
+    input_alias = pilot / "manifest-link.json"
+    root_alias.symlink_to(Path("/tmp"))
+    db_alias.symlink_to(Path("/tmp/outside-alpha.db"))
+    input_alias.symlink_to(Path("/etc/hosts"))
+    try:
+        with pytest.raises(SystemExit, match="symlink"):
+            cli.require_pilot_path(
+                str(root_alias), label="--artifact-root", must_exist=True
+            )
+        with pytest.raises(SystemExit, match="symlink"):
+            cli._require_alpha_db_path(str(db_alias), artifact_root=pilot.resolve())
+        with pytest.raises(SystemExit, match="symlink"):
+            cli._require_readable_input_path(str(input_alias), label="--manifest")
+    finally:
+        root_alias.unlink(missing_ok=True)
+        shutil.rmtree(pilot)
 
 
 def test_cli_runs_the_full_offline_fixture_path(monkeypatch, tmp_path: Path) -> None:

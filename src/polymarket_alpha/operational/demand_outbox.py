@@ -150,7 +150,10 @@ def validate_owner_demand_bundle(
         raise DemandOutboxLegError("YES/NO owner legs disagree on requested_checkpoints_seconds")
     if now is not None:
         now = ensure_utc(now)
+        requested = _utc_from_text(yes_row.requested_at_utc, field="requested_at_utc")
         expiry = _utc_from_text(yes_row.expires_at_utc, field="expires_at_utc")
+        if requested > now:
+            raise DemandOutboxBudgetError("demand request clock is in the future")
         if now >= expiry:
             raise DemandOutboxBudgetError("demand is already expired at submission time")
 
@@ -208,7 +211,11 @@ def _enforce_budgets(
     lines: list[tuple[bytes, str, datetime, datetime]], *, now: datetime
 ) -> None:
     window_start = now - timedelta(seconds=60)
-    recent = sum(1 for _, _, requested, _ in lines if window_start < requested <= now)
+    # A later-clock writer may win the file lock before an earlier-clock writer.
+    # Existing rows after this caller's clock are therefore not proof of
+    # corruption. Count them conservatively so they cannot evade the rate cap;
+    # the incoming bundle itself is still rejected above when future-dated.
+    recent = sum(1 for _, _, requested, _ in lines if window_start < requested)
     if recent >= MAX_BUNDLES_PER_MINUTE:
         raise DemandOutboxBudgetError(
             f"per-minute bundle budget reached: {recent} bundles in the last 60s"
@@ -229,13 +236,13 @@ def append_owner_demand_bundle(
     """Append exactly one paired YES/NO bundle to the fixed outbox locator.
 
     Budget interpretation: each JSONL line is one bundle (one Alpha demand,
-    two owner rows).  The rate budget counts bundles whose own
-    ``requested_at_utc`` falls in ``(now - 60s, now]``; the standing budget
+    two owner rows). The rate budget counts every existing bundle newer than
+    ``now - 60s``; rows later than this caller's clock count conservatively so
+    concurrent lock ordering cannot evade the cap. New future request clocks
+    are rejected. The standing budget
     counts bundles whose ``expires_at_utc`` is still in the future, including
     the one about to be appended.  Clocks are caller-supplied per the
-    offline contract; no wall clock is read here.  A future-dated bundle can
-    therefore evade the per-minute window, but the standing unexpired budget
-    still bounds it until its declared expiry.
+    offline contract; no wall clock is read here.
     """
 
     now = ensure_utc(now)
