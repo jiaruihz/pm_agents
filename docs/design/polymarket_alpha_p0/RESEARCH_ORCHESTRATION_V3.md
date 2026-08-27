@@ -1,7 +1,7 @@
 # Polymarket Alpha Research Orchestration V3
 
 Status: CANONICAL_DESIGN
-Readiness: WP1_TO_WP3_COMPLETE_BLOCKED_PENDING_WP4_TO_WP5
+Readiness: WP1_TO_WP4_COMPLETE_BLOCKED_PENDING_WP5
 Pilot scope: CONTROLLED_MANUAL_GPT_PRO_BLIND_RESEARCH_ONLY
 
 ## Authority boundary
@@ -100,6 +100,14 @@ approval, defer, correction request, or span-bound patch.
 Human ExportApproval is mandatory for every Gate R GPT Pro attempt. It binds the
 exact sealed prompt hash. The operator copies the exact file into a fresh
 session and captures the full return before editing.
+
+WP4 implements this boundary as a local-only adapter. Approval lineage binds a
+parent approval plus newly resealed prompt; a typed ResearchAttempt binds the
+job and lease clocks; source metadata remains serializable while separately
+revalidated against immutable artifact bytes. Raw transcript, response and JSON
+appendix are captured before the existing ResearchDraftCompiler and importer.
+Malformed or leaking returns quarantine, and weak critical evidence is
+non-advancing. The Alpha process gained no browser, network or provider client.
 
 ## Pilot success ceiling
 

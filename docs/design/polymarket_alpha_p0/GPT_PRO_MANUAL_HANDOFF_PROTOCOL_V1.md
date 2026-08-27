@@ -52,6 +52,13 @@ ResearchReturnCaptureSeal binds prompt, approval, attempt, raw transcript,
 response, JSON appendix, SourceCaptureManifest, operator and clocks. Provider
 supplied Alpha ids or hashes are never trusted.
 
+The attempt binding is the canonical `ResearchAttempt` id and content hash, not
+an operator-provided label. Durable records retain hashes, lengths and artifact
+locators without embedding source/return bytes; every read into an importer or
+persist operation must reload and rehash the immutable bytes. Batch persistence
+preflights every locator and writes a completion marker last. A partial batch
+without that marker is never treated as a complete capture.
+
 ## Import, retry and quarantine
 
 The existing ResearchDraftCompiler and importer recompute identities and check
@@ -63,3 +70,6 @@ leakage, schema, identity, or hash failures quarantine.
 Provider/UI failure uses the same prompt hash and a new attempt id. One bounded
 FORMAT_REPAIR may request only the same JSON structure. Any substantive prompt,
 rule, plan or cutoff change creates a new job revision, not a retry.
+
+Implementation status: WP4 `COMPLETE`; evidence is sealed in
+`GATE_R_WP4-evidence-seal/`. This status does not authorize a provider call.

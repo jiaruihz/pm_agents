@@ -1,0 +1,19 @@
+Gate R WP4 capability audit
+
+Scope:
+  src/polymarket_alpha/research/manual_handoff.py
+  src/polymarket_alpha/contracts/models.py
+
+Forbidden import/capability pattern scan:
+  requests|httpx|aiohttp|urllib|socket|websocket|subprocess|importlib|
+  py_clob_client|private-key|signing|create_order|post_order
+
+Result: 0 matches in the WP4 adapter and contract additions.
+
+NETWORK_USE=NONE
+PROVIDER_CALLS=NONE
+BROWSER_USE=NONE
+DATABASE_MIGRATION=NONE
+ORDER_CAPABILITY=NONE
+SIGNING_CAPABILITY=NONE
+PRIVATE_KEY_ACCESS=NONE

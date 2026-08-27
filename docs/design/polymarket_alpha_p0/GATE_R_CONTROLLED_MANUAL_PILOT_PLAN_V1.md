@@ -1,6 +1,6 @@
 # Gate R Controlled Manual GPT Pro Pilot Plan V1
 
-Status: IMPLEMENTATION_IN_PROGRESS_WP1_TO_WP3_COMPLETE
+Status: IMPLEMENTATION_IN_PROGRESS_WP1_TO_WP4_COMPLETE
 Entry: WP1 through WP5 must pass before WP6 pilot authorization.
 
 ## Work packages
@@ -38,6 +38,7 @@ Rollback: pin the prior reader; retain old artifacts as incompatible.
 WP4 — Human handoff and return/source capture
 
 Owner: existing research handoff/ArtifactStore owner.
+Status: COMPLETE; evidence: `GATE_R_WP4-evidence-seal/`.
 Deliver: ExportApprovalReceipt, structured patch/reseal, operator runbook, raw
 return/JSON/source capture, ReturnCaptureSeal and retry/quarantine rules.
 Verify: exact-file copy rehearsal, prompt mutation, raw preservation,

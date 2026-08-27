@@ -17,6 +17,7 @@ from .base import (
     AlphaContract,
     CommonEnvelope,
     canonical_data,
+    bytes_sha256,
     content_sha256,
     ensure_utc,
     normalize_rule_text,
@@ -2153,6 +2154,294 @@ class BlindWorkOrderPromptSeal(AlphaContract):
         seal_payload = {"work_order_id": self.work_order_id, **identity}
         if self.seal_sha256 != content_sha256(seal_payload):
             raise ValueError("prompt seal hash must bind all prompt metadata")
+        return self
+
+
+# Gate R WP4 intentionally models only locally captured, immutable bytes.  These
+# records contain no provider client, browser, or transport capability.
+class ExportApprovalAction(StrEnum):
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+
+
+class ExactFileCopyPolicy(StrEnum):
+    COPY_ATTESTED_NOT_CRYPTOGRAPHICALLY_OBSERVED = "COPY_ATTESTED_NOT_CRYPTOGRAPHICALLY_OBSERVED"
+
+
+class ManualCaptureScope(StrEnum):
+    FULL = "FULL"
+    EXCERPT = "EXCERPT"
+    REFERENCE = "REFERENCE"
+
+
+class SourceRepresentation(StrEnum):
+    ORIGINAL_BYTES = "ORIGINAL_BYTES"
+    SAVED_HTML = "SAVED_HTML"
+    RENDERED_PDF = "RENDERED_PDF"
+    TEXT_EXPORT = "TEXT_EXPORT"
+    SCREENSHOT = "SCREENSHOT"
+    NONE = "NONE"
+
+
+class JsonAppendixParseStatus(StrEnum):
+    PARSED = "PARSED"
+    MALFORMED = "MALFORMED"
+    ABSENT = "ABSENT"
+
+
+class ExportApprovalReceipt(AlphaContract):
+    """One human decision for one exact WP3 prompt seal; never reusable."""
+
+    approval_receipt_id: str
+    work_order_id: str
+    prompt_sha256: str
+    approver_id: str
+    approved_at_utc: datetime
+    expires_at_utc: datetime
+    action: ExportApprovalAction
+    review_check_codes: tuple[str, ...]
+    copy_policy: ExactFileCopyPolicy
+    prompt_patch_id: str | None = None
+    parent_approval_receipt_id: str | None = None
+    parent_approval_sha256: str | None = None
+    parent_work_order_id: str | None = None
+    parent_prompt_sha256: str | None = None
+    approval_sha256: str
+
+    @field_validator("prompt_sha256", "approval_sha256", "parent_approval_sha256", "parent_prompt_sha256")
+    @classmethod
+    def _approval_hashes(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("approved_at_utc", "expires_at_utc")
+    @classmethod
+    def _approval_clocks(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def _approval_identity(self) -> "ExportApprovalReceipt":
+        if not self.work_order_id.strip() or not self.approver_id.strip() or not self.review_check_codes:
+            raise ValueError("approval requires work order, approver, and review checks")
+        if self.expires_at_utc <= self.approved_at_utc:
+            raise ValueError("approval expiry must follow approval")
+        if len(self.review_check_codes) != len(set(self.review_check_codes)) or any(not x.strip() for x in self.review_check_codes):
+            raise ValueError("review check codes must be unique and nonblank")
+        lineage = (
+            self.prompt_patch_id, self.parent_approval_receipt_id,
+            self.parent_approval_sha256, self.parent_work_order_id,
+            self.parent_prompt_sha256,
+        )
+        if any(value is not None for value in lineage) != all(value is not None for value in lineage):
+            raise ValueError("prompt patch lineage fields must occur together")
+        if self.prompt_patch_id is not None and (
+            self.parent_work_order_id == self.work_order_id or self.parent_prompt_sha256 == self.prompt_sha256
+        ):
+            raise ValueError("a patched prompt requires a newly sealed work order and prompt")
+        payload = self.model_dump(mode="python", exclude={"approval_receipt_id", "approval_sha256"})
+        if self.approval_receipt_id != stable_record_id("export_approval_receipt", payload):
+            raise ValueError("approval receipt id must be content-derived")
+        if self.approval_sha256 != content_sha256(payload):
+            raise ValueError("approval receipt hash must be content-derived")
+        return self
+
+
+class SourceCapture(AlphaContract):
+    """Metadata plus caller-supplied frozen source bytes, validated locally."""
+
+    source_capture_id: str
+    source_key: str
+    canonical_url: str
+    title: str
+    publisher: str
+    source_class: str
+    primary_or_secondary: Literal["PRIMARY", "SECONDARY"]
+    published_at_utc: datetime | None = None
+    updated_at_utc: datetime | None = None
+    effective_at_utc: datetime | None = None
+    accessed_at_utc: datetime
+    first_available_at_utc: datetime
+    pit_cutoff_utc: datetime
+    pit_available: bool
+    capture_scope: ManualCaptureScope
+    representation: SourceRepresentation
+    content_type: str | None = None
+    content_length_bytes: int | None = Field(default=None, ge=1)
+    content_sha256: str | None = None
+    artifact_locator: str | None = None
+    claim_ids: tuple[str, ...]
+    quote_locator_or_excerpt: str | None = None
+    redirect_chain: tuple[str, ...] = ()
+    archive_or_version_identity: str | None = None
+    content_bytes: bytes | None = Field(default=None, exclude=True)
+
+    @field_validator(
+        "accessed_at_utc", "first_available_at_utc", "pit_cutoff_utc",
+        "published_at_utc", "updated_at_utc", "effective_at_utc",
+    )
+    @classmethod
+    def _source_clock(cls, value: datetime | None) -> datetime | None:
+        return ensure_utc(value) if value is not None else None
+
+    @field_validator("content_sha256")
+    @classmethod
+    def _source_hash(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("artifact_locator")
+    @classmethod
+    def _source_locator(cls, value: str | None) -> str | None:
+        return _relative_artifact_locator(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def _source_capture_identity(self) -> "SourceCapture":
+        if not all(x.strip() for x in (self.source_key, self.canonical_url, self.title, self.publisher, self.source_class)) or not self.claim_ids:
+            raise ValueError("source capture requires canonical identity and claim ids")
+        if len(self.claim_ids) != len(set(self.claim_ids)) or any(not x.strip() for x in self.claim_ids):
+            raise ValueError("claim ids must be unique and nonblank")
+        if any(not x.strip() for x in self.redirect_chain):
+            raise ValueError("redirect chain entries must be nonblank")
+        if self.effective_at_utc and self.effective_at_utc > self.accessed_at_utc:
+            raise ValueError("effective time cannot follow access")
+        if self.published_at_utc and self.published_at_utc > self.accessed_at_utc:
+            raise ValueError("publication cannot follow access")
+        if self.first_available_at_utc > self.accessed_at_utc:
+            raise ValueError("first availability cannot follow access")
+        if self.pit_available != (self.first_available_at_utc <= self.pit_cutoff_utc):
+            raise ValueError("PIT availability must be derived from first availability and cutoff")
+        captured = self.capture_scope != ManualCaptureScope.REFERENCE
+        if not captured:
+            if any(x is not None for x in (self.content_type, self.content_length_bytes, self.content_sha256, self.artifact_locator, self.content_bytes)) or self.representation != SourceRepresentation.NONE:
+                raise ValueError("REFERENCE capture cannot claim content bytes or representation")
+        else:
+            if self.representation == SourceRepresentation.NONE or any(x is None for x in (self.content_type, self.content_length_bytes, self.content_sha256, self.artifact_locator)):
+                raise ValueError("FULL/EXCERPT capture requires replayable local metadata")
+            if self.content_bytes is not None and (
+                len(self.content_bytes) != self.content_length_bytes or bytes_sha256(self.content_bytes) != self.content_sha256
+            ):
+                raise ValueError("source content hash/length must be recomputed from supplied bytes")
+            if self.capture_scope == ManualCaptureScope.EXCERPT and not self.quote_locator_or_excerpt:
+                raise ValueError("EXCERPT capture requires quote locator or excerpt")
+        payload = self.model_dump(mode="python", exclude={"source_capture_id", "content_bytes"})
+        if self.source_capture_id != stable_record_id("source_capture", payload):
+            raise ValueError("source capture id must be content-derived")
+        return self
+
+
+class SourceCaptureManifest(AlphaContract):
+    manifest_id: str
+    manifest_sha256: str
+    captures: tuple[SourceCapture, ...]
+    pit_cutoff_utc: datetime
+    critical_claim_ids: tuple[str, ...]
+    created_at_utc: datetime
+
+    @field_validator("manifest_sha256")
+    @classmethod
+    def _manifest_hash(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("created_at_utc", "pit_cutoff_utc")
+    @classmethod
+    def _manifest_clock(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def _manifest_identity(self) -> "SourceCaptureManifest":
+        if not self.captures or len({x.source_capture_id for x in self.captures}) != len(self.captures):
+            raise ValueError("source manifest requires unique captures")
+        if self.captures != tuple(sorted(self.captures, key=lambda x: x.source_capture_id)):
+            raise ValueError("source captures must be sorted")
+        if len({x.source_key for x in self.captures}) != len(self.captures):
+            raise ValueError("source capture keys must be unique")
+        if len(self.critical_claim_ids) != len(set(self.critical_claim_ids)) or any(not item.strip() for item in self.critical_claim_ids):
+            raise ValueError("critical claim ids must be unique nonblank strings")
+        if any(capture.pit_cutoff_utc != self.pit_cutoff_utc for capture in self.captures):
+            raise ValueError("all captures must share the manifest PIT cutoff")
+        payload = {"captures": self.captures, "pit_cutoff_utc": self.pit_cutoff_utc,
+            "critical_claim_ids": self.critical_claim_ids, "created_at_utc": self.created_at_utc}
+        if self.manifest_id != stable_record_id("source_capture_manifest", payload) or self.manifest_sha256 != content_sha256(payload):
+            raise ValueError("source manifest identity/hash must be content-derived")
+        return self
+
+
+class ResearchReturnCaptureSeal(CommonEnvelope):
+    return_seal_id: str
+    research_job_id: str
+    attempt_id: str
+    attempt_sha256: str
+    work_order_id: str
+    prompt_sha256: str
+    approval_receipt_id: str
+    provider_ui: str
+    displayed_model: str
+    session_mode: str
+    operator_id: str
+    started_at_utc: datetime
+    completed_at_utc: datetime
+    captured_at_utc: datetime
+    raw_transcript_locator: str
+    raw_transcript_sha256: str
+    raw_transcript_byte_length: int = Field(gt=0)
+    raw_response_locator: str
+    raw_response_sha256: str
+    raw_response_byte_length: int = Field(gt=0)
+    json_appendix_locator: str | None = None
+    json_appendix_sha256: str | None = None
+    json_appendix_byte_length: int | None = Field(default=None, ge=1)
+    json_parse_status: JsonAppendixParseStatus
+    source_manifest_id: str
+    source_manifest_sha256: str
+    copy_attestation: ExactFileCopyPolicy
+    observed_tool_usage: tuple[str, ...]
+    return_seal_sha256: str
+    raw_transcript_bytes: bytes | None = Field(default=None, exclude=True)
+    raw_response_bytes: bytes | None = Field(default=None, exclude=True)
+    json_appendix_bytes: bytes | None = Field(default=None, exclude=True)
+
+    @field_validator("started_at_utc", "completed_at_utc", "captured_at_utc")
+    @classmethod
+    def _return_clock(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("attempt_sha256", "prompt_sha256", "raw_transcript_sha256", "raw_response_sha256", "json_appendix_sha256", "source_manifest_sha256", "return_seal_sha256")
+    @classmethod
+    def _return_hash(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("raw_transcript_locator", "raw_response_locator", "json_appendix_locator")
+    @classmethod
+    def _return_locator(cls, value: str | None) -> str | None:
+        return _relative_artifact_locator(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def _return_identity(self) -> "ResearchReturnCaptureSeal":
+        if not all(x.strip() for x in (self.research_job_id, self.attempt_id, self.work_order_id, self.approval_receipt_id, self.provider_ui, self.displayed_model, self.session_mode, self.operator_id, self.source_manifest_id)):
+            raise ValueError("return capture bindings must not be blank")
+        if not (self.started_at_utc <= self.completed_at_utc <= self.captured_at_utc):
+            raise ValueError("return capture clocks must be ordered")
+        for raw, digest, length, label in ((self.raw_transcript_bytes, self.raw_transcript_sha256, self.raw_transcript_byte_length, "transcript"), (self.raw_response_bytes, self.raw_response_sha256, self.raw_response_byte_length, "response")):
+            if raw is not None and (not isinstance(raw, bytes) or len(raw) != length or bytes_sha256(raw) != digest):
+                raise ValueError(f"raw {label} hash/length must be recomputed from supplied bytes")
+        appendix_fields = (self.json_appendix_locator, self.json_appendix_sha256, self.json_appendix_byte_length)
+        appendix_metadata = all(value is not None for value in appendix_fields)
+        if any(value is not None for value in appendix_fields) != appendix_metadata:
+            raise ValueError("JSON appendix metadata must be complete or absent")
+        if self.json_appendix_bytes is not None and not appendix_metadata:
+            raise ValueError("JSON appendix bytes require complete metadata")
+        if self.json_appendix_bytes is not None and (
+            len(self.json_appendix_bytes) != self.json_appendix_byte_length
+            or bytes_sha256(self.json_appendix_bytes) != self.json_appendix_sha256
+        ):
+            raise ValueError("JSON appendix hash/length must be recomputed")
+        if self.json_parse_status == JsonAppendixParseStatus.PARSED and not appendix_metadata:
+            raise ValueError("PARSED JSON appendix requires captured metadata")
+        payload = self.model_dump(mode="python", exclude={"return_seal_id", "return_seal_sha256", "raw_transcript_bytes", "raw_response_bytes", "json_appendix_bytes"})
+        logical_id = stable_record_id("research_return_capture", self.research_job_id,
+            self.attempt_id, self.attempt_sha256, self.work_order_id)
+        if self.return_seal_id != self.record_id or self.record_id != logical_id:
+            raise ValueError("return seal id must bind the logical attempt")
+        if self.return_seal_sha256 != content_sha256(payload):
+            raise ValueError("return seal hash must bind captured content")
         return self
 
 

@@ -114,24 +114,31 @@ and expiry.
 
 Approval binds approval_receipt_id, work_order_id, prompt hash, approver,
 approved/expires UTC, APPROVE or REJECT, review check codes, exact-file-copy
-policy, nullable patch id and receipt hash.
+policy, nullable patch id and receipt hash. A patch additionally binds parent
+approval id/hash and parent work-order/prompt hash; all lineage fields occur
+together, and the child must use a newly sealed work order and prompt.
 
 ## ResearchReturnCaptureSeal and SourceCaptureManifest
 
 Return seal binds research job, attempt and work order ids, prompt hash,
-approval receipt, provider UI/displayed model/session mode, operator,
+canonical ResearchAttempt hash, approval receipt, provider UI/displayed
+model/session mode, operator,
 start/completion/capture clocks, raw transcript/response/JSON appendix
 locators/hashes/lengths, JSON parse status, source manifest id/hash,
 copy-attestation status, observed tool usage and return seal hash.
 
-Every source capture contains source_capture_id, canonical URL, title,
-publisher, source class, primary/secondary flag, published/updated/effective/
-accessed clocks, PIT availability, capture scope, representation, content type,
+Every source capture contains source_capture_id, canonical URL, title, source
+key, publisher, source class, primary/secondary flag,
+published/updated/effective/access/first-available clocks, shared PIT cutoff,
+derived PIT availability, capture scope, representation, content type,
 byte length, locally recomputed hash, artifact locator, claim ids, quote locator
 or excerpt, redirect chain and archive/version identity.
 
 Capture scope is FULL_DOCUMENT, EXCERPT_ONLY or REFERENCE_ONLY. Representation
 is ORIGINAL_BYTES, SAVED_HTML, RENDERED_PDF, TEXT_EXPORT, SCREENSHOT or NONE.
+The manifest binds critical claim ids and the shared PIT cutoff. Serialized
+metadata is replayable without embedding bytes, but FULL/EXCERPT advancement
+requires separately loaded bytes whose locally recomputed hash and length match.
 
 ## MarketComparison
 

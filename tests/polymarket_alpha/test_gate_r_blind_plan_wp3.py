@@ -79,7 +79,7 @@ def _compile(**changes):
 
 def _seal(built, rule, packet, *, provider_policy_version="v1"):
     return seal_blind_work_order_prompt(plan=built, candidate_snapshot=_snapshot(), packet=packet,
-        rule_contract=rule, research_job_id="research_job:offline", attempt_policy_id="manual-v1",
+        rule_contract=rule, research_job_id="research_job:" + "a" * 64, attempt_policy_id="manual-v1",
         output_schema_id="blind-return-v1", output_schema_sha256="7" * 64,
         provider_policy_id="manual-provider", provider_policy_version=provider_policy_version,
         created_at_utc=NOW, expires_at_utc=NOW + timedelta(hours=1))

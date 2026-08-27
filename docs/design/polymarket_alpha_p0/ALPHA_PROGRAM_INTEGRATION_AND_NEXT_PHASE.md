@@ -18,13 +18,15 @@ P1-A07=COMPLETE
 GLM_SEMANTIC_TRIAGE=IMPLEMENTED_AS_ADDITIVE_SEAM
 CONTROLLED_50_MARKET_E2E=COMPLETE_WITH_LIMITATIONS
 NEXT_ENGINEERING_PHASE=GATE_R_CONTROLLED_MANUAL_GPT_PRO_BLIND_PILOT
-NEXT_ENGINEERING_PHASE_STATUS=WP1_TO_WP3_COMPLETE_BLOCKED_PENDING_WP4_TO_WP5
+NEXT_ENGINEERING_PHASE_STATUS=WP1_TO_WP4_COMPLETE_BLOCKED_PENDING_WP5
 GATE_R_WP1=COMPLETE
 GATE_R_WP1_EVIDENCE=GATE_R_WP1-evidence-seal
 GATE_R_WP2=COMPLETE
 GATE_R_WP2_EVIDENCE=GATE_R_WP2-evidence-seal
 GATE_R_WP3=COMPLETE
 GATE_R_WP3_EVIDENCE=GATE_R_WP3-evidence-seal
+GATE_R_WP4=COMPLETE
+GATE_R_WP4_EVIDENCE=GATE_R_WP4-evidence-seal
 TARGET_READINESS=READY_FOR_CONTROLLED_MANUAL_GPT_PRO_BLIND_RESEARCH_PILOT
 TARGET_READINESS_SCOPE=CONTROLLED_MANUAL_NO_ORDER_ONLY
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
@@ -37,9 +39,12 @@ LIVE_ORDER_SIGNING_PRIVATE_KEY=STRICTLY_OUT_OF_SCOPE
 The offline substrate is accepted and retained. WP1 has closed the canonical
 lifecycle and deterministic routing portion; WP2 has closed the independent
 GLM-5.3 proposal, exact-source binding and bounded human patch portion; WP3 has
-closed the atomic Blind question/source plan and exact prompt-byte seal. The next
-phase is not yet authorized to call GPT Pro: WP4 and WP5 must close the remaining accepted
-orchestration blockers. WP6 then requires a separate explicit controlled-pilot
+closed the atomic Blind question/source plan and exact prompt-byte seal; WP4 has
+closed exact-file approval/export, ResearchAttempt-bound return capture, source
+artifact verification, quarantine/insufficiency routing and the real existing
+draft/importer bridge. The next phase is not yet authorized to call GPT Pro:
+WP5 must close deterministic market comparison. WP6 then requires a separate
+explicit controlled-pilot
 authorization. A Gate R pass still does not authorize daily operation,
 production capture expansion, automated browser execution, or trading.
 
@@ -317,8 +322,8 @@ one does not imply that another passed.
 
 ### Gate R — Controlled manual GPT Pro Blind research pilot
 
-WP1 through WP3 are complete; WP4 and WP5 must implement the remaining canonical V3
-contracts before any pilot call. After separate authorization, WP6 uses eight
+WP1 through WP4 are complete; WP5 must implement the remaining canonical V3
+market-comparison contracts before any pilot call. After separate authorization, WP6 uses eight
 preregistered Candidates,
 independent GLM-5.3 review, human exact-file prompt export, raw GPT Pro return
 and actual source capture, deterministic import, fresh paired books,
