@@ -795,7 +795,8 @@ class AlphaRepository:
         elif isinstance(c, ResearchJobTransition):
             self._require_contract_hash(conn, c.job_id, c.job_sha256)
             job = conn.execute(
-                "SELECT current_status, max_attempts FROM alpha_research_job_v1 WHERE job_id=?",
+                "SELECT current_status, max_attempts, expires_at_utc "
+                "FROM alpha_research_job_v1 WHERE job_id=?",
                 (c.job_id,),
             ).fetchone()
             if job is None:
@@ -847,25 +848,68 @@ class AlphaRepository:
                 ResearchTransitionReason.RETRY_EXHAUSTED,
             }:
                 if c.cause_record_id is None:
-                    raise ContractConflictError("result transition requires a return receipt")
+                    raise ContractConflictError("result transition requires a sealed cause")
                 receipt = conn.execute(
                     "SELECT job_id, attempt_id, disposition, received_at_utc "
                     "FROM alpha_research_return_receipt_v1 WHERE return_receipt_id=?",
                     (c.cause_record_id,),
                 ).fetchone()
-                disposition_by_reason = {
-                    ResearchTransitionReason.RESULT_ACCEPTED: ResearchReturnDisposition.RETURNED.value,
-                    ResearchTransitionReason.RESULT_QUARANTINED: ResearchReturnDisposition.QUARANTINED.value,
-                    ResearchTransitionReason.ATTEMPT_FAILED: ResearchReturnDisposition.FAILED.value,
-                    ResearchTransitionReason.RETRY_EXHAUSTED: ResearchReturnDisposition.FAILED.value,
-                }
-                if (
-                    receipt is None
-                    or tuple(receipt[:2]) != (c.job_id, c.attempt_id)
-                    or str(receipt[2]) != disposition_by_reason[c.reason]
-                    or canonical_datetime(c.effective_at) < str(receipt[3])
-                ):
-                    raise ContractConflictError("result transition does not bind its return receipt")
+                if c.reason in {
+                    ResearchTransitionReason.RESULT_ACCEPTED,
+                    ResearchTransitionReason.RESULT_QUARANTINED,
+                } and receipt is None:
+                    # The orchestrated path uses the importer receipt as the final
+                    # cause, while retaining the provider return as a prerequisite.
+                    imported = conn.execute(
+                        "SELECT packet_id, packet_sha256, status, imported_at_utc "
+                        "FROM alpha_research_import_receipt_v2 WHERE import_receipt_id=?",
+                        (c.cause_record_id,),
+                    ).fetchone()
+                    job_packet = conn.execute(
+                        "SELECT packet_id, packet_sha256 FROM alpha_research_job_v1 "
+                        "WHERE job_id=?",
+                        (c.job_id,),
+                    ).fetchone()
+                    returned = conn.execute(
+                        "SELECT received_at_utc FROM alpha_research_return_receipt_v1 "
+                        "WHERE job_id=? AND attempt_id=? AND disposition=?",
+                        (
+                            c.job_id,
+                            c.attempt_id,
+                            ResearchReturnDisposition.RETURNED.value,
+                        ),
+                    ).fetchone()
+                    expected_status = (
+                        "ACCEPTED"
+                        if c.reason == ResearchTransitionReason.RESULT_ACCEPTED
+                        else "QUARANTINED"
+                    )
+                    if (
+                        imported is None
+                        or job_packet is None
+                        or tuple(imported[:2]) != tuple(job_packet)
+                        or str(imported[2]) != expected_status
+                        or returned is None
+                        or canonical_datetime(c.effective_at) < str(imported[3])
+                        or canonical_datetime(c.effective_at) < str(returned[0])
+                    ):
+                        raise ContractConflictError(
+                            "result transition does not bind its importer and provider receipts"
+                        )
+                else:
+                    disposition_by_reason = {
+                        ResearchTransitionReason.RESULT_ACCEPTED: ResearchReturnDisposition.RETURNED.value,
+                        ResearchTransitionReason.RESULT_QUARANTINED: ResearchReturnDisposition.QUARANTINED.value,
+                        ResearchTransitionReason.ATTEMPT_FAILED: ResearchReturnDisposition.FAILED.value,
+                        ResearchTransitionReason.RETRY_EXHAUSTED: ResearchReturnDisposition.FAILED.value,
+                    }
+                    if (
+                        receipt is None
+                        or tuple(receipt[:2]) != (c.job_id, c.attempt_id)
+                        or str(receipt[2]) != disposition_by_reason[c.reason]
+                        or canonical_datetime(c.effective_at) < str(receipt[3])
+                    ):
+                        raise ContractConflictError("result transition does not bind its return receipt")
                 if (
                     c.reason == ResearchTransitionReason.ATTEMPT_FAILED
                     and attempt is not None
@@ -900,6 +944,15 @@ class AlphaRepository:
                 ):
                     raise ContractConflictError(
                         "rule invalidation must bind the job RuleContract"
+                    )
+            elif c.reason == ResearchTransitionReason.JOB_TTL_EXPIRED:
+                if (
+                    c.cause_record_id != c.job_id
+                    or c.cause_record_sha256 != c.job_sha256
+                    or canonical_datetime(c.effective_at) < str(job[2])
+                ):
+                    raise ContractConflictError(
+                        "job TTL expiry must bind the expired ResearchJob"
                     )
             conn.execute(
                 "INSERT INTO alpha_research_job_transition_v1 VALUES "

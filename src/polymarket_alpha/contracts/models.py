@@ -1320,6 +1320,7 @@ class ResearchTransitionReason(StrEnum):
     MANUAL_CANCELLED = "MANUAL_CANCELLED"
     PACKET_INVALIDATED = "PACKET_INVALIDATED"
     RULE_REVISION_INVALIDATED = "RULE_REVISION_INVALIDATED"
+    JOB_TTL_EXPIRED = "JOB_TTL_EXPIRED"
 
 
 class ResearchJob(CommonEnvelope):
@@ -1630,6 +1631,12 @@ class ResearchJobTransition(CommonEnvelope):
             } and self.reason in {
                 ResearchTransitionReason.PACKET_INVALIDATED,
                 ResearchTransitionReason.RULE_REVISION_INVALIDATED,
+            }
+        elif self.to_status == ResearchJobStatus.FAILED and self.reason == ResearchTransitionReason.JOB_TTL_EXPIRED:
+            legal = self.from_status in {
+                ResearchJobStatus.QUEUED,
+                ResearchJobStatus.LEASED,
+                ResearchJobStatus.RETRY_PENDING,
             }
         else:
             legal = self.reason in allowed.get((self.from_status, self.to_status), set())

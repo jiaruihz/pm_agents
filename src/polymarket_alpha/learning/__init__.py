@@ -23,6 +23,18 @@ from .resolution_intake import (
     ResolutionIntakeResult,
     intake_captured_resolution,
 )
+from .resolution_adapters import (
+    RESOLUTION_ADAPTER_VERSION,
+    CapturedOfficialResolution,
+    OfficialJsonResolutionAdapter,
+    OfficialKeyValueResolutionAdapter,
+    ParsedResolutionAssertion,
+    ResolutionAdapterError,
+    ResolutionAdapterFailureCode,
+    ResolutionSourceAdapter,
+    ResolutionSourcePolicy,
+    adapt_captured_official_resolution,
+)
 from .scoring import CalibrationPolicy, ScoringPolicy, build_calibration_report, score_prediction
 
 __all__ = [
@@ -35,10 +47,19 @@ __all__ = [
     "PredictionBackfillSuccess",
     "ResolutionReference",
     "RESOLUTION_INTAKE_VERSION",
+    "RESOLUTION_ADAPTER_VERSION",
     "CapturedResolutionSource",
+    "CapturedOfficialResolution",
     "ResolutionIntakeError",
     "ResolutionIntakeRequest",
     "ResolutionIntakeResult",
+    "ResolutionAdapterError",
+    "ResolutionAdapterFailureCode",
+    "ResolutionSourceAdapter",
+    "ResolutionSourcePolicy",
+    "OfficialJsonResolutionAdapter",
+    "OfficialKeyValueResolutionAdapter",
+    "ParsedResolutionAssertion",
     "ResolutionSelectionError",
     "ResolutionSelectionPolicy",
     "ResolutionSelectionReceipt",
@@ -48,6 +69,7 @@ __all__ = [
     "build_market_resolution",
     "build_prediction_resolution_link",
     "intake_captured_resolution",
+    "adapt_captured_official_resolution",
     "plan_prediction_backfill",
     "select_resolution_head",
     "score_prediction",
