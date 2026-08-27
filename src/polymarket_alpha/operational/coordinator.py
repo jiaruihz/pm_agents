@@ -34,6 +34,7 @@ from ..books.adapter import (
     PairedBookNormalization,
     build_owner_capture_demands,
 )
+from ..artifacts import ArtifactConflictError, ArtifactStore
 from ..contracts import (
     BlindResearchPacket,
     BookCaptureDemand,
@@ -76,11 +77,8 @@ from ..recall.registry import ProviderRegistry
 from ..recall.structural_metadata import StructuralMetadataRecaller
 from ..recall.wallet import WalletRecallProvider
 from ..research.handoff import (
-    HandoffConflictError,
     PacketHandoffManifest,
     ResultHandoffReceipt,
-    _read_allowed,
-    _write_immutable,
 )
 from ..rules.models import RuleCompilationReceipt, RuleCompilationRequest, RuleGateDecision
 from ..storage import AlphaRepository
@@ -254,10 +252,8 @@ def seal_state(artifact_root: Path, state: CoordinatorState) -> None:
     """
 
     try:
-        _write_immutable(
-            Path(artifact_root),
-            state.locator(),
-            canonical_json(state.to_payload()).encode("utf-8"),
+        ArtifactStore(Path(artifact_root)).write_immutable(
+            state.locator(), canonical_json(state.to_payload()).encode("utf-8")
         )
     except ValueError as error:
         raise CoordinatorBlocked(
@@ -266,7 +262,7 @@ def seal_state(artifact_root: Path, state: CoordinatorState) -> None:
 
 
 def load_state(artifact_root: Path, stage: OperationalStage) -> CoordinatorState:
-    raw = _read_allowed(Path(artifact_root), f"{STATE_LOCATOR_PREFIX}/{stage.value}.json")
+    raw = ArtifactStore(Path(artifact_root)).read(f"{STATE_LOCATOR_PREFIX}/{stage.value}.json")
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -713,7 +709,7 @@ def run_blind_resume_stage(
             max_staleness_seconds=inputs.max_staleness_seconds,
             target_sizes=inputs.target_sizes,
         )
-    except (ReviewPipelineBlocked, HandoffConflictError) as error:
+    except (ReviewPipelineBlocked, ArtifactConflictError) as error:
         raise CoordinatorBlocked(f"Blind result import was blocked: {error}") from error
     if outcome.accepted is None:
         # A quarantined/rejected Blind result must never create a
@@ -797,7 +793,7 @@ def _require_outbox_line(artifact_root: Path, bundle_id: str | None) -> None:
     if not bundle_id:
         raise CoordinatorBlocked("state does not carry the demand outbox bundle id")
     try:
-        raw = _read_allowed(Path(artifact_root), DEMAND_OUTBOX_LOCATOR)
+        raw = ArtifactStore(Path(artifact_root)).read(DEMAND_OUTBOX_LOCATOR)
     except (OSError, ValueError) as error:
         raise CoordinatorBlocked(f"owner demand outbox is unreadable: {error}") from error
     for line in raw.decode("utf-8", errors="strict").splitlines():
@@ -845,7 +841,7 @@ def run_book_stage(
             packet_created_at=inputs.packet_created_at,
             handoff_created_at=inputs.handoff_created_at,
         )
-    except (ReviewPipelineBlocked, HandoffConflictError) as error:
+    except (ReviewPipelineBlocked, ArtifactConflictError) as error:
         raise CoordinatorBlocked(f"Market packet export was blocked: {error}") from error
     if build.accepted is None:
         return BookStageResult(None, bridge, build)
@@ -952,7 +948,7 @@ def run_market_resume_stage(
             rank_config=inputs.rank_config,
             rule_risk_reasons=inputs.rule_risk_reasons,
         )
-    except (ReviewPipelineBlocked, HandoffConflictError) as error:
+    except (ReviewPipelineBlocked, ArtifactConflictError) as error:
         raise CoordinatorBlocked(f"Market result import was blocked: {error}") from error
     final = outcome.final
     if final is None:

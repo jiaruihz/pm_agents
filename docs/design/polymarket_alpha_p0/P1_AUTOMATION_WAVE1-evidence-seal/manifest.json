@@ -1,0 +1,22 @@
+{
+  "baseline_commit": "b73cf989",
+  "disposition": "COMPLETE_OFFLINE",
+  "migration_id": "alpha_p1_0002_research_automation",
+  "network_use": "NONE",
+  "order_capability": "NONE",
+  "production_access": "NONE",
+  "review_findings_closed": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0,
+    "nit": 0
+  },
+  "tests": {
+    "full_alpha_passed": 603,
+    "wave1_focused_passed": 16
+  },
+  "work_packages": {
+    "P1-A01": "COMPLETE",
+    "P1-A02": "COMPLETE"
+  }
+}

@@ -20,6 +20,7 @@ CATALOG_INTEGRITY_MIGRATION_ID = "alpha_p0_0003_catalog_integrity"
 RULE_CONTRACT_INSTANCE_MIGRATION_ID = "alpha_p0_0004_rule_contract_instances"
 P0_01R2_PROJECTION_MIGRATION_ID = "alpha_p0_0005_p0_01r2_projections"
 P1_RESOLUTION_LEARNING_MIGRATION_ID = "alpha_p1_0001_resolution_learning"
+P1_RESEARCH_AUTOMATION_MIGRATION_ID = "alpha_p1_0002_research_automation"
 
 # Every object is alpha-namespaced so a shared legacy research database is never
 # altered.  This migration is intentionally additive; rollback is a reader pin,
@@ -497,6 +498,94 @@ CREATE TABLE IF NOT EXISTS alpha_calibration_slice_v1 (
 );
 """
 
+# P1 research automation is an append-only work-order protocol.  The job row's
+# current_status is only a projection of immutable transition contracts; job,
+# attempt, work-order, return and transition contract bytes remain sealed in
+# alpha_contract_record.
+P1_RESEARCH_AUTOMATION_MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS alpha_research_job_v1 (
+    job_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    packet_stage TEXT NOT NULL CHECK(packet_stage IN ('BLIND','MARKET_AWARE')),
+    packet_id TEXT NOT NULL REFERENCES alpha_research_packet(packet_id),
+    packet_sha256 TEXT NOT NULL CHECK(length(packet_sha256)=64),
+    rule_contract_id TEXT NOT NULL REFERENCES alpha_rule_contract_instance_v3(rule_contract_id),
+    rule_contract_sha256 TEXT NOT NULL CHECK(length(rule_contract_sha256)=64),
+    brief_artifact_locator TEXT NOT NULL,
+    brief_bytes_sha256 TEXT NOT NULL CHECK(length(brief_bytes_sha256)=64),
+    provider_policy_id TEXT NOT NULL,
+    source_policy_id TEXT NOT NULL,
+    max_attempts INTEGER NOT NULL CHECK(max_attempts BETWEEN 1 AND 10),
+    available_at_utc TEXT NOT NULL,
+    expires_at_utc TEXT NOT NULL,
+    current_status TEXT NOT NULL CHECK(current_status IN ('QUEUED','LEASED','RETRY_PENDING','COMPLETED','QUARANTINED','FAILED','CANCELLED','INVALIDATED')),
+    current_transition_id TEXT,
+    CHECK(expires_at_utc > available_at_utc)
+);
+CREATE INDEX IF NOT EXISTS alpha_research_job_status_clock_idx
+ON alpha_research_job_v1(current_status, available_at_utc, expires_at_utc);
+CREATE TABLE IF NOT EXISTS alpha_research_attempt_v1 (
+    attempt_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    job_id TEXT NOT NULL REFERENCES alpha_research_job_v1(job_id),
+    job_sha256 TEXT NOT NULL CHECK(length(job_sha256)=64),
+    attempt_number INTEGER NOT NULL CHECK(attempt_number > 0),
+    worker_id TEXT NOT NULL,
+    leased_at_utc TEXT NOT NULL,
+    lease_expires_at_utc TEXT NOT NULL,
+    UNIQUE(job_id, attempt_number),
+    CHECK(lease_expires_at_utc > leased_at_utc)
+);
+CREATE TABLE IF NOT EXISTS alpha_research_work_order_v1 (
+    work_order_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    job_id TEXT NOT NULL REFERENCES alpha_research_job_v1(job_id),
+    job_sha256 TEXT NOT NULL CHECK(length(job_sha256)=64),
+    attempt_id TEXT NOT NULL UNIQUE REFERENCES alpha_research_attempt_v1(attempt_id),
+    attempt_sha256 TEXT NOT NULL CHECK(length(attempt_sha256)=64),
+    packet_stage TEXT NOT NULL CHECK(packet_stage IN ('BLIND','MARKET_AWARE')),
+    packet_id TEXT NOT NULL REFERENCES alpha_research_packet(packet_id),
+    packet_sha256 TEXT NOT NULL CHECK(length(packet_sha256)=64),
+    brief_artifact_locator TEXT NOT NULL,
+    brief_bytes_sha256 TEXT NOT NULL CHECK(length(brief_bytes_sha256)=64),
+    provider_policy_id TEXT NOT NULL,
+    source_policy_id TEXT NOT NULL,
+    issued_at_utc TEXT NOT NULL,
+    expires_at_utc TEXT NOT NULL,
+    CHECK(expires_at_utc > issued_at_utc)
+);
+CREATE TABLE IF NOT EXISTS alpha_research_return_receipt_v1 (
+    return_receipt_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    job_id TEXT NOT NULL REFERENCES alpha_research_job_v1(job_id),
+    job_sha256 TEXT NOT NULL CHECK(length(job_sha256)=64),
+    attempt_id TEXT NOT NULL UNIQUE REFERENCES alpha_research_attempt_v1(attempt_id),
+    attempt_sha256 TEXT NOT NULL CHECK(length(attempt_sha256)=64),
+    work_order_id TEXT NOT NULL UNIQUE REFERENCES alpha_research_work_order_v1(work_order_id),
+    work_order_sha256 TEXT NOT NULL CHECK(length(work_order_sha256)=64),
+    disposition TEXT NOT NULL CHECK(disposition IN ('RETURNED','QUARANTINED','FAILED')),
+    returned_artifact_locator TEXT,
+    returned_bytes_sha256 TEXT CHECK(returned_bytes_sha256 IS NULL OR length(returned_bytes_sha256)=64),
+    returned_byte_length INTEGER CHECK(returned_byte_length IS NULL OR returned_byte_length > 0),
+    failure_code TEXT,
+    received_at_utc TEXT NOT NULL,
+    CHECK((disposition='RETURNED' AND returned_artifact_locator IS NOT NULL AND returned_bytes_sha256 IS NOT NULL AND returned_byte_length IS NOT NULL AND failure_code IS NULL)
+       OR (disposition='QUARANTINED' AND returned_artifact_locator IS NOT NULL AND returned_bytes_sha256 IS NOT NULL AND returned_byte_length IS NOT NULL AND failure_code IS NOT NULL)
+       OR (disposition='FAILED' AND returned_artifact_locator IS NULL AND returned_bytes_sha256 IS NULL AND returned_byte_length IS NULL AND failure_code IS NOT NULL))
+);
+CREATE TABLE IF NOT EXISTS alpha_research_job_transition_v1 (
+    transition_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    job_id TEXT NOT NULL REFERENCES alpha_research_job_v1(job_id),
+    job_sha256 TEXT NOT NULL CHECK(length(job_sha256)=64),
+    attempt_id TEXT REFERENCES alpha_research_attempt_v1(attempt_id),
+    from_status TEXT NOT NULL CHECK(from_status IN ('QUEUED','LEASED','RETRY_PENDING','COMPLETED','QUARANTINED','FAILED','CANCELLED','INVALIDATED')),
+    to_status TEXT NOT NULL CHECK(to_status IN ('QUEUED','LEASED','RETRY_PENDING','COMPLETED','QUARANTINED','FAILED','CANCELLED','INVALIDATED')),
+    reason TEXT NOT NULL,
+    cause_record_id TEXT REFERENCES alpha_contract_record(record_id),
+    cause_record_sha256 TEXT CHECK(cause_record_sha256 IS NULL OR length(cause_record_sha256)=64),
+    effective_at_utc TEXT NOT NULL,
+    CHECK((cause_record_id IS NULL) = (cause_record_sha256 IS NULL))
+);
+CREATE INDEX IF NOT EXISTS alpha_research_job_transition_job_clock_idx
+ON alpha_research_job_transition_v1(job_id, effective_at_utc, transition_id);
+"""
+
 
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -554,6 +643,16 @@ def p1_resolution_learning_manifest() -> dict[str, str]:
         "schema_version": ALPHA_SCHEMA_VERSION,
         "migration_id": P1_RESOLUTION_LEARNING_MIGRATION_ID,
         "sql_sha256": _sha(P1_RESOLUTION_LEARNING_MIGRATION_SQL),
+    }
+
+
+def p1_research_automation_manifest() -> dict[str, str]:
+    """Return the additive P1 research-job projection manifest."""
+
+    return {
+        "schema_version": ALPHA_SCHEMA_VERSION,
+        "migration_id": P1_RESEARCH_AUTOMATION_MIGRATION_ID,
+        "sql_sha256": _sha(P1_RESEARCH_AUTOMATION_MIGRATION_SQL),
     }
 
 
@@ -629,6 +728,7 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
     rule_instances = rule_contract_instance_manifest()
     p0_01r2_projections = p0_01r2_projection_manifest()
     p1_resolution_learning = p1_resolution_learning_manifest()
+    p1_research_automation = p1_research_automation_manifest()
     with _connection(target) as (conn, _owned):
         conn.execute("PRAGMA foreign_keys = ON")
         try:
@@ -651,6 +751,9 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                 if statement.strip():
                     conn.execute(statement)
             for statement in P1_RESOLUTION_LEARNING_MIGRATION_SQL.split(";\n"):
+                if statement.strip():
+                    conn.execute(statement)
+            for statement in P1_RESEARCH_AUTOMATION_MIGRATION_SQL.split(";\n"):
                 if statement.strip():
                     conn.execute(statement)
             _backfill_rule_contract_revisions(conn)
@@ -702,6 +805,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                     P1_RESOLUTION_LEARNING_MIGRATION_ID,
                     ALPHA_SCHEMA_VERSION,
                     p1_resolution_learning["sql_sha256"],
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
+                (
+                    P1_RESEARCH_AUTOMATION_MIGRATION_ID,
+                    ALPHA_SCHEMA_VERSION,
+                    p1_research_automation["sql_sha256"],
                     now,
                 ),
             )
@@ -761,6 +873,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                 p1_resolution_learning["sql_sha256"],
             ):
                 raise RuntimeError("incompatible Alpha P1 resolution/learning migration already recorded")
+            p1_automation_row = conn.execute(
+                "SELECT schema_version, sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+                (P1_RESEARCH_AUTOMATION_MIGRATION_ID,),
+            ).fetchone()
+            if p1_automation_row is None or tuple(p1_automation_row) != (
+                ALPHA_SCHEMA_VERSION,
+                p1_research_automation["sql_sha256"],
+            ):
+                raise RuntimeError("incompatible Alpha P1 research automation migration already recorded")
             manifest_row = conn.execute(
                 "SELECT migration_id, contract_version, manifest_sha256 FROM alpha_schema_manifest WHERE schema_version = ?",
                 (ALPHA_SCHEMA_VERSION,),

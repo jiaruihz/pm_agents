@@ -31,9 +31,9 @@ from ..books.adapter import (
     PairedBookNormalization,
     normalize_paired_owner_books,
 )
+from ..artifacts import normalize_locator
 from ..contracts import BookCaptureDemand
 from ..contracts.base import ensure_utc
-from ..research.handoff import _relative_locator
 from .demand_outbox import validate_owner_demand_bundle
 
 
@@ -99,7 +99,7 @@ def _build_leg(
     expected_capture_id: str,
 ) -> FrozenOwnerBookArtifact:
     try:
-        _relative_locator(submission.locator)
+        normalize_locator(submission.locator)
     except ValueError as error:
         raise _LegInvalid(BookBridgeFailureCode.LOCATOR_INVALID, str(error)) from error
     try:

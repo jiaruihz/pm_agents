@@ -1,0 +1,5 @@
+{
+  "migration_id": "alpha_p1_0002_research_automation",
+  "migration_sql_sha256": "bd4bf518a528cbea5a041787540616738dc3753b214ea0f871398664187dddc6",
+  "p1_automation_contract_schema_sha256": "99775318fd238156b1d0e697c4b086c831fbd06f82d658a22e53226a70e58a25"
+}

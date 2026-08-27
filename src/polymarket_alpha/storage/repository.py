@@ -22,6 +22,9 @@ from ..contracts.models import (
     BookCaptureReceipt, SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt,
     CalibrationReport, MarketResolution, PredictionResolutionLink, PredictionScore,
     ResolutionAdjudicationStatus, ResolutionOutcome, ScoringEligibility,
+    ResearchAttempt, ResearchJob, ResearchJobStatus, ResearchJobTransition,
+    ResearchReturnDisposition, ResearchReturnReceipt, ResearchTransitionReason,
+    ResearchWorkOrder,
 )
 from ..contracts.base import canonical_decimal
 from ..rules.models import RuleGateDecision
@@ -564,6 +567,361 @@ class AlphaRepository:
             )
             for reason in c.reasons:
                 conn.execute("INSERT OR IGNORE INTO alpha_research_import_reason_v2 VALUES (?, ?)", (c.import_receipt_id, reason.value))
+        elif isinstance(c, ResearchJob):
+            packet = conn.execute(
+                "SELECT packet_stage FROM alpha_research_packet WHERE packet_id=?",
+                (c.packet_id,),
+            ).fetchone()
+            if packet is None or str(packet[0]) != c.packet_stage.value:
+                raise ContractConflictError(
+                    "research job packet is absent or has a mismatched stage"
+                )
+            self._require_contract_hash(conn, c.packet_id, c.packet_sha256)
+            self._require_contract_hash(
+                conn, c.rule_contract_id, c.rule_contract_sha256
+            )
+            if conn.execute(
+                "SELECT 1 FROM alpha_rule_contract_instance_v3 WHERE rule_contract_id=?",
+                (c.rule_contract_id,),
+            ).fetchone() is None:
+                raise ContractConflictError("research job RuleContract is absent")
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_research_job_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+                (
+                    c.job_id,
+                    c.packet_stage.value,
+                    c.packet_id,
+                    c.packet_sha256,
+                    c.rule_contract_id,
+                    c.rule_contract_sha256,
+                    c.brief_artifact_locator,
+                    c.brief_bytes_sha256,
+                    c.provider_policy_id,
+                    c.source_policy_id,
+                    c.max_attempts,
+                    canonical_datetime(c.available_at),
+                    canonical_datetime(c.expires_at),
+                    c.initial_status.value,
+                ),
+            )
+        elif isinstance(c, ResearchAttempt):
+            self._require_contract_hash(conn, c.job_id, c.job_sha256)
+            if conn.execute(
+                "SELECT 1 FROM alpha_research_attempt_v1 WHERE attempt_id=?",
+                (c.attempt_id,),
+            ).fetchone() is not None:
+                return
+            job = conn.execute(
+                "SELECT max_attempts, available_at_utc, expires_at_utc, "
+                "current_status, current_transition_id "
+                "FROM alpha_research_job_v1 WHERE job_id=?",
+                (c.job_id,),
+            ).fetchone()
+            if job is None:
+                raise ContractConflictError("research attempt job is absent")
+            if c.attempt_number > int(job[0]):
+                raise ContractConflictError("research attempt exceeds job max_attempts")
+            if str(job[3]) not in {
+                ResearchJobStatus.QUEUED.value,
+                ResearchJobStatus.RETRY_PENDING.value,
+            }:
+                raise ContractConflictError(
+                    "research attempt requires a QUEUED or RETRY_PENDING job"
+                )
+            if not (
+                str(job[1]) <= canonical_datetime(c.leased_at) < str(job[2])
+                and canonical_datetime(c.lease_expires_at) <= str(job[2])
+            ):
+                raise ContractConflictError("research attempt lease is outside job window")
+            prior_numbers = tuple(
+                int(row[0])
+                for row in conn.execute(
+                    "SELECT attempt_number FROM alpha_research_attempt_v1 "
+                    "WHERE job_id=? ORDER BY attempt_number",
+                    (c.job_id,),
+                ).fetchall()
+            )
+            if c.attempt_number not in prior_numbers and c.attempt_number != len(prior_numbers) + 1:
+                raise ContractConflictError("research attempts must be sequential")
+            if str(job[3]) == ResearchJobStatus.QUEUED.value and c.attempt_number != 1:
+                raise ContractConflictError("QUEUED job can create only attempt one")
+            if str(job[3]) == ResearchJobStatus.RETRY_PENDING.value:
+                if job[4] is None:
+                    raise ContractConflictError("retry-pending job lacks its transition")
+                retry_clock = conn.execute(
+                    "SELECT effective_at_utc FROM alpha_research_job_transition_v1 "
+                    "WHERE transition_id=?",
+                    (str(job[4]),),
+                ).fetchone()
+                if retry_clock is None or canonical_datetime(c.leased_at) < str(retry_clock[0]):
+                    raise ContractConflictError("retry attempt predates retry transition")
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_research_attempt_v1 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.attempt_id,
+                    c.job_id,
+                    c.job_sha256,
+                    c.attempt_number,
+                    c.worker_id,
+                    canonical_datetime(c.leased_at),
+                    canonical_datetime(c.lease_expires_at),
+                ),
+            )
+        elif isinstance(c, ResearchWorkOrder):
+            self._require_contract_hash(conn, c.job_id, c.job_sha256)
+            self._require_contract_hash(conn, c.attempt_id, c.attempt_sha256)
+            if conn.execute(
+                "SELECT 1 FROM alpha_research_work_order_v1 WHERE work_order_id=?",
+                (c.work_order_id,),
+            ).fetchone() is not None:
+                return
+            job = conn.execute(
+                "SELECT packet_stage, packet_id, packet_sha256, brief_artifact_locator, "
+                "brief_bytes_sha256, provider_policy_id, source_policy_id, expires_at_utc, "
+                "current_status "
+                "FROM alpha_research_job_v1 WHERE job_id=?",
+                (c.job_id,),
+            ).fetchone()
+            attempt = conn.execute(
+                "SELECT job_id, leased_at_utc, lease_expires_at_utc "
+                "FROM alpha_research_attempt_v1 WHERE attempt_id=?",
+                (c.attempt_id,),
+            ).fetchone()
+            expected_job = (
+                c.packet_stage.value,
+                c.packet_id,
+                c.packet_sha256,
+                c.brief_artifact_locator,
+                c.brief_bytes_sha256,
+                c.provider_policy_id,
+                c.source_policy_id,
+            )
+            if job is None or tuple(job[:7]) != expected_job:
+                raise ContractConflictError("research work order differs from its job")
+            if str(job[8]) not in {
+                ResearchJobStatus.QUEUED.value,
+                ResearchJobStatus.RETRY_PENDING.value,
+            }:
+                raise ContractConflictError(
+                    "research work order requires a job awaiting lease"
+                )
+            if attempt is None or str(attempt[0]) != c.job_id:
+                raise ContractConflictError("research work order attempt belongs to another job")
+            if (
+                canonical_datetime(c.issued_at) < str(attempt[1])
+                or canonical_datetime(c.expires_at) > str(attempt[2])
+                or canonical_datetime(c.expires_at) > str(job[7])
+            ):
+                raise ContractConflictError("research work order is outside lease/job window")
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_research_work_order_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.work_order_id,
+                    c.job_id,
+                    c.job_sha256,
+                    c.attempt_id,
+                    c.attempt_sha256,
+                    c.packet_stage.value,
+                    c.packet_id,
+                    c.packet_sha256,
+                    c.brief_artifact_locator,
+                    c.brief_bytes_sha256,
+                    c.provider_policy_id,
+                    c.source_policy_id,
+                    canonical_datetime(c.issued_at),
+                    canonical_datetime(c.expires_at),
+                ),
+            )
+        elif isinstance(c, ResearchReturnReceipt):
+            self._require_contract_hash(conn, c.job_id, c.job_sha256)
+            self._require_contract_hash(conn, c.attempt_id, c.attempt_sha256)
+            self._require_contract_hash(conn, c.work_order_id, c.work_order_sha256)
+            if conn.execute(
+                "SELECT 1 FROM alpha_research_return_receipt_v1 WHERE return_receipt_id=?",
+                (c.return_receipt_id,),
+            ).fetchone() is not None:
+                return
+            binding = conn.execute(
+                "SELECT job_id, attempt_id, issued_at_utc, expires_at_utc "
+                "FROM alpha_research_work_order_v1 "
+                "WHERE work_order_id=?",
+                (c.work_order_id,),
+            ).fetchone()
+            if binding is None or tuple(binding[:2]) != (c.job_id, c.attempt_id):
+                raise ContractConflictError("research return does not bind its work order")
+            if canonical_datetime(c.received_at) < str(binding[2]):
+                raise ContractConflictError("research return predates work-order issue")
+            current = conn.execute(
+                "SELECT j.current_status, t.attempt_id "
+                "FROM alpha_research_job_v1 j "
+                "LEFT JOIN alpha_research_job_transition_v1 t "
+                "ON t.transition_id=j.current_transition_id WHERE j.job_id=?",
+                (c.job_id,),
+            ).fetchone()
+            active_lease = current is not None and tuple(current) == (
+                ResearchJobStatus.LEASED.value,
+                c.attempt_id,
+            )
+            if c.disposition != ResearchReturnDisposition.QUARANTINED and not active_lease:
+                raise ContractConflictError("research return is not for the active lease")
+            if (
+                c.disposition == ResearchReturnDisposition.RETURNED
+                and canonical_datetime(c.received_at) > str(binding[3])
+            ):
+                raise ContractConflictError(
+                    "late research return must be quarantined, not accepted"
+                )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_research_return_receipt_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.return_receipt_id,
+                    c.job_id,
+                    c.job_sha256,
+                    c.attempt_id,
+                    c.attempt_sha256,
+                    c.work_order_id,
+                    c.work_order_sha256,
+                    c.disposition.value,
+                    c.returned_artifact_locator,
+                    c.returned_bytes_sha256,
+                    c.returned_byte_length,
+                    c.failure_code,
+                    canonical_datetime(c.received_at),
+                ),
+            )
+        elif isinstance(c, ResearchJobTransition):
+            self._require_contract_hash(conn, c.job_id, c.job_sha256)
+            job = conn.execute(
+                "SELECT current_status, max_attempts FROM alpha_research_job_v1 WHERE job_id=?",
+                (c.job_id,),
+            ).fetchone()
+            if job is None:
+                raise ContractConflictError("research transition job is absent")
+            existing_transition = conn.execute(
+                "SELECT 1 FROM alpha_research_job_transition_v1 WHERE transition_id=?",
+                (c.transition_id,),
+            ).fetchone()
+            if existing_transition is not None:
+                self._rebuild_research_job_projection(conn, c.job_id)
+                return
+            if str(job[0]) != c.from_status.value:
+                raise ContractConflictError("research transition does not continue current status")
+            attempt = None
+            if c.attempt_id is not None:
+                attempt = conn.execute(
+                    "SELECT job_id, attempt_number, leased_at_utc, lease_expires_at_utc "
+                    "FROM alpha_research_attempt_v1 WHERE attempt_id=?",
+                    (c.attempt_id,),
+                ).fetchone()
+                if attempt is None or str(attempt[0]) != c.job_id:
+                    raise ContractConflictError("research transition attempt belongs to another job")
+            if c.cause_record_id is not None:
+                assert c.cause_record_sha256 is not None
+                self._require_contract_hash(
+                    conn, c.cause_record_id, c.cause_record_sha256
+                )
+            if c.reason == ResearchTransitionReason.LEASE_GRANTED:
+                if attempt is None or c.cause_record_id != c.attempt_id:
+                    raise ContractConflictError("lease transition must be caused by its attempt")
+                if canonical_datetime(c.effective_at) != str(attempt[2]):
+                    raise ContractConflictError("lease transition clock must equal leased_at")
+                if conn.execute(
+                    "SELECT 1 FROM alpha_research_work_order_v1 WHERE attempt_id=?",
+                    (c.attempt_id,),
+                ).fetchone() is None:
+                    raise ContractConflictError("lease transition requires a sealed work order")
+            elif c.reason == ResearchTransitionReason.LEASE_EXPIRED:
+                if (
+                    attempt is None
+                    or c.cause_record_id != c.attempt_id
+                    or canonical_datetime(c.effective_at) < str(attempt[3])
+                ):
+                    raise ContractConflictError("lease-expiry transition precedes lease expiry")
+            elif c.reason in {
+                ResearchTransitionReason.RESULT_ACCEPTED,
+                ResearchTransitionReason.RESULT_QUARANTINED,
+                ResearchTransitionReason.ATTEMPT_FAILED,
+                ResearchTransitionReason.RETRY_EXHAUSTED,
+            }:
+                if c.cause_record_id is None:
+                    raise ContractConflictError("result transition requires a return receipt")
+                receipt = conn.execute(
+                    "SELECT job_id, attempt_id, disposition, received_at_utc "
+                    "FROM alpha_research_return_receipt_v1 WHERE return_receipt_id=?",
+                    (c.cause_record_id,),
+                ).fetchone()
+                disposition_by_reason = {
+                    ResearchTransitionReason.RESULT_ACCEPTED: ResearchReturnDisposition.RETURNED.value,
+                    ResearchTransitionReason.RESULT_QUARANTINED: ResearchReturnDisposition.QUARANTINED.value,
+                    ResearchTransitionReason.ATTEMPT_FAILED: ResearchReturnDisposition.FAILED.value,
+                    ResearchTransitionReason.RETRY_EXHAUSTED: ResearchReturnDisposition.FAILED.value,
+                }
+                if (
+                    receipt is None
+                    or tuple(receipt[:2]) != (c.job_id, c.attempt_id)
+                    or str(receipt[2]) != disposition_by_reason[c.reason]
+                    or canonical_datetime(c.effective_at) < str(receipt[3])
+                ):
+                    raise ContractConflictError("result transition does not bind its return receipt")
+                if (
+                    c.reason == ResearchTransitionReason.ATTEMPT_FAILED
+                    and attempt is not None
+                    and int(attempt[1]) >= int(job[1])
+                ):
+                    raise ContractConflictError("exhausted final attempt cannot become RETRY_PENDING")
+                if (
+                    c.reason == ResearchTransitionReason.RETRY_EXHAUSTED
+                    and attempt is not None
+                    and int(attempt[1]) < int(job[1])
+                ):
+                    raise ContractConflictError("RETRY_EXHAUSTED requires the final attempt")
+            elif c.reason == ResearchTransitionReason.PACKET_INVALIDATED:
+                packet = conn.execute(
+                    "SELECT packet_id, packet_sha256 FROM alpha_research_job_v1 WHERE job_id=?",
+                    (c.job_id,),
+                ).fetchone()
+                if packet is None or tuple(packet) != (
+                    c.cause_record_id,
+                    c.cause_record_sha256,
+                ):
+                    raise ContractConflictError("packet invalidation must bind the job packet")
+            elif c.reason == ResearchTransitionReason.RULE_REVISION_INVALIDATED:
+                rule = conn.execute(
+                    "SELECT rule_contract_id, rule_contract_sha256 "
+                    "FROM alpha_research_job_v1 WHERE job_id=?",
+                    (c.job_id,),
+                ).fetchone()
+                if rule is None or tuple(rule) != (
+                    c.cause_record_id,
+                    c.cause_record_sha256,
+                ):
+                    raise ContractConflictError(
+                        "rule invalidation must bind the job RuleContract"
+                    )
+            conn.execute(
+                "INSERT INTO alpha_research_job_transition_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.transition_id,
+                    c.job_id,
+                    c.job_sha256,
+                    c.attempt_id,
+                    c.from_status.value,
+                    c.to_status.value,
+                    c.reason.value,
+                    c.cause_record_id,
+                    c.cause_record_sha256,
+                    canonical_datetime(c.effective_at),
+                ),
+            )
+            conn.execute(
+                "UPDATE alpha_research_job_v1 SET current_status=?, current_transition_id=? "
+                "WHERE job_id=?",
+                (c.to_status.value, c.transition_id, c.job_id),
+            )
         elif isinstance(c, ClaimEvidence):
             conn.execute("INSERT INTO alpha_evidence_item VALUES (?, ?)", (c.evidence_id, c.content_sha256))
         elif isinstance(c, ReviewDecision):
@@ -1030,8 +1388,79 @@ class AlphaRepository:
         if isinstance(contract, (MarketChangeEvent, BookCaptureDemand, BookCaptureReceipt,
                                  SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt,
                                  MarketResolution, PredictionResolutionLink, PredictionScore,
-                                 CalibrationReport)):
+                                 CalibrationReport, ResearchJob, ResearchAttempt,
+                                 ResearchWorkOrder, ResearchReturnReceipt,
+                                 ResearchJobTransition)):
             self._save_projection(conn, contract, contract.canonical_sha256)
+
+    def get_research_job_status(self, job_id: str) -> ResearchJobStatus | None:
+        """Return the transition-derived job projection without mutating it."""
+
+        self.migrate()
+        conn, owns = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT current_status FROM alpha_research_job_v1 WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            return None if row is None else ResearchJobStatus(str(row[0]))
+        finally:
+            if owns:
+                conn.close()
+
+    @staticmethod
+    def _rebuild_research_job_projection(
+        conn: sqlite3.Connection, job_id: str
+    ) -> None:
+        """Derive the mutable job pointer solely from its append-only ledger."""
+
+        if conn.execute(
+            "SELECT 1 FROM alpha_research_job_v1 WHERE job_id=?", (job_id,)
+        ).fetchone() is None:
+            raise ContractConflictError("research transition job is absent")
+        rows = [
+            tuple(row)
+            for row in conn.execute(
+                "SELECT transition_id, from_status, to_status, effective_at_utc "
+                "FROM alpha_research_job_transition_v1 WHERE job_id=?",
+                (job_id,),
+            ).fetchall()
+        ]
+        status = ResearchJobStatus.QUEUED.value
+        current_transition_id: str | None = None
+        previous_clock: str | None = None
+        remaining = list(rows)
+        while remaining:
+            candidates = [
+                row
+                for row in remaining
+                if str(row[1]) == status
+                and (previous_clock is None or str(row[3]) >= previous_clock)
+            ]
+            if not candidates:
+                raise ContractConflictError(
+                    "research transition ledger does not form one complete chain"
+                )
+            next_clock = min(str(row[3]) for row in candidates)
+            earliest = [row for row in candidates if str(row[3]) == next_clock]
+            if len(earliest) != 1:
+                raise ContractConflictError(
+                    "research transition ledger has divergent branches"
+                )
+            transition_id, _from_status, to_status, effective_at = earliest[0]
+            if previous_clock is not None and str(effective_at) < previous_clock:
+                raise ContractConflictError(
+                    "research transition ledger clocks are not monotonic"
+                )
+            remaining.remove(earliest[0])
+            status = str(to_status)
+            current_transition_id = str(transition_id)
+            previous_clock = str(effective_at)
+        conn.execute(
+            "UPDATE alpha_research_job_v1 SET current_status=?, current_transition_id=? "
+            "WHERE job_id=?",
+            (status, current_transition_id, job_id),
+        )
 
     @staticmethod
     def _require_contract_hash(conn: sqlite3.Connection, record_id: str, digest: str) -> None:

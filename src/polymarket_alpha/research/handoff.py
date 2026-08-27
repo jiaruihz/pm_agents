@@ -11,11 +11,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-import os
 from pathlib import Path, PurePosixPath
-import stat
 from typing import Mapping
 
+from ..artifacts import (
+    ArtifactConflictError,
+    ArtifactPathError,
+    ArtifactStore,
+    normalize_locator,
+)
 from ..contracts import (
     BlindResearchPacket,
     MarketResearchPacket,
@@ -38,12 +42,9 @@ class HandoffState(StrEnum):
     QUARANTINED = "QUARANTINED"
 
 
-class HandoffPathError(ValueError):
-    """A caller-supplied locator cannot be safely used below the artifact root."""
-
-
-class HandoffConflictError(ValueError):
-    """An immutable locator already contains different bytes."""
+# Compatibility names: the public artifact API owns these typed failures.
+HandoffPathError = ArtifactPathError
+HandoffConflictError = ArtifactConflictError
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,115 +115,27 @@ class ResultHandoffReceipt:
 
 
 def _artifact_root(root: Path) -> Path:
-    root = Path(root)
-    if not root.is_absolute():
-        raise HandoffPathError("artifact_root must be an explicit absolute path")
-    if root.is_symlink() or not root.exists() or not root.is_dir():
-        raise HandoffPathError("artifact_root must be an existing non-symlink directory")
-    return root
+    """Compatibility wrapper for the public :class:`ArtifactStore` owner."""
+
+    return ArtifactStore(root).root
 
 
 def _relative_locator(locator: str) -> PurePosixPath:
-    if not isinstance(locator, str) or not locator.strip() or "\\" in locator:
-        raise HandoffPathError("locator must be a non-empty POSIX relative path")
-    path = PurePosixPath(locator)
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        raise HandoffPathError("locator must not be absolute or traverse directories")
-    return path
+    """Compatibility wrapper for public locator normalization."""
+
+    return PurePosixPath(normalize_locator(locator))
 
 
 def _open_parent(root: Path, locator: str, *, create_parents: bool) -> tuple[int, str]:
-    """Resolve every parent from an owned dirfd without following symlinks."""
-
-    relative = _relative_locator(locator)
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        current_fd = os.open(root, directory_flags)
-    except OSError as error:
-        raise HandoffPathError("artifact_root cannot be opened safely") from error
-    try:
-        for part in relative.parts[:-1]:
-            try:
-                next_fd = os.open(part, directory_flags, dir_fd=current_fd)
-            except FileNotFoundError:
-                if not create_parents:
-                    raise HandoffPathError("locator parent does not exist")
-                try:
-                    os.mkdir(part, mode=0o700, dir_fd=current_fd)
-                except FileExistsError:
-                    pass
-                try:
-                    next_fd = os.open(part, directory_flags, dir_fd=current_fd)
-                except OSError as error:
-                    raise HandoffPathError("locator parent must be a real directory") from error
-            except OSError as error:
-                raise HandoffPathError("locator parent must be a real directory") from error
-            os.close(current_fd)
-            current_fd = next_fd
-        return current_fd, relative.name
-    except Exception:
-        os.close(current_fd)
-        raise
-
-
-def _read_regular_at(parent_fd: int, name: str) -> bytes:
-    try:
-        fd = os.open(
-            name,
-            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
-            dir_fd=parent_fd,
-        )
-    except OSError as error:
-        raise HandoffPathError("allowlisted file is absent or unsafe") from error
-    try:
-        metadata = os.fstat(fd)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise HandoffPathError("allowlisted path must be a regular file")
-        with os.fdopen(fd, "rb") as handle:
-            fd = -1
-            return handle.read()
-    finally:
-        if fd >= 0:
-            os.close(fd)
+    return ArtifactStore(root).open_parent(locator, create_parents=create_parents)
 
 
 def _write_immutable(root: Path, locator: str, data: bytes) -> None:
-    parent_fd, name = _open_parent(root, locator, create_parents=True)
-    try:
-        try:
-            fd = os.open(
-                name,
-                os.O_WRONLY
-                | os.O_CREAT
-                | os.O_EXCL
-                | getattr(os, "O_NOFOLLOW", 0),
-                0o600,
-                dir_fd=parent_fd,
-            )
-        except FileExistsError:
-            try:
-                existing = _read_regular_at(parent_fd, name)
-            except HandoffPathError as error:
-                raise HandoffConflictError(f"immutable locator conflict: {locator}") from error
-            if existing != data:
-                raise HandoffConflictError(f"immutable locator conflict: {locator}")
-            return
-        except OSError as error:
-            raise HandoffPathError("immutable locator cannot be opened safely") from error
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-    finally:
-        os.close(parent_fd)
+    ArtifactStore(root).write_immutable(locator, data)
 
 
 def _read_allowed(root: Path, locator: str) -> bytes:
-    parent_fd, name = _open_parent(root, locator, create_parents=False)
-    try:
-        return _read_regular_at(parent_fd, name)
-    finally:
-        os.close(parent_fd)
+    return ArtifactStore(root).read(locator)
 
 
 def _packet_bytes(packet: ResearchPacketValue) -> bytes:

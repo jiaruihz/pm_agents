@@ -30,9 +30,9 @@ from ..books.adapter import (
     OWNER_STRATEGY_KEY,
     OwnerDemandBundle,
 )
+from ..artifacts import ArtifactPathError, ArtifactStore
 from ..contracts import bytes_sha256, canonical_json, content_sha256
 from ..contracts.base import ensure_utc
-from ..research.handoff import HandoffPathError, _artifact_root, _open_parent
 
 
 DEMAND_OUTBOX_SCHEMA_VERSION = "polymarket_alpha_demand_outbox_v1"
@@ -252,8 +252,9 @@ def append_owner_demand_bundle(
     bundle_id = str(payload["bundle_id"])
 
     try:
-        root = _artifact_root(Path(artifact_root))
-    except HandoffPathError as error:
+        store = ArtifactStore(Path(artifact_root))
+        root = store.root
+    except ArtifactPathError as error:
         raise DemandOutboxPathError(str(error)) from error
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -274,7 +275,7 @@ def append_owner_demand_bundle(
             fcntl.flock(lock_fd, fcntl.LOCK_EX)
             try:
                 return _append_under_root_lock(
-                    root,
+                    store,
                     root_fd=root_fd,
                     line_bytes=line_bytes,
                     payload=payload,
@@ -326,7 +327,7 @@ def _open_create_with_enoent_retry(
 
 
 def _append_under_root_lock(
-    root: Path,
+    store: ArtifactStore,
     *,
     root_fd: int,
     line_bytes: bytes,
@@ -335,8 +336,8 @@ def _append_under_root_lock(
     now: datetime,
 ) -> DemandOutboxAppendReceipt:
     try:
-        parent_fd, name = _open_parent(root, DEMAND_OUTBOX_LOCATOR, create_parents=True)
-    except HandoffPathError as error:
+        parent_fd, name = store.open_parent(DEMAND_OUTBOX_LOCATOR, create_parents=True)
+    except ArtifactPathError as error:
         raise DemandOutboxPathError(str(error)) from error
     write_fd = -1
     try:

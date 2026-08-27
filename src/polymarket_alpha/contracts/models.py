@@ -7,6 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 import hashlib
 import json
+from pathlib import PurePosixPath
 import re
 from typing import Annotated, Any, Literal
 
@@ -22,6 +23,19 @@ from .base import (
     rule_sha256,
     validate_sha256,
 )
+
+
+def _relative_artifact_locator(value: str) -> str:
+    value = value.strip()
+    path = PurePosixPath(value)
+    if (
+        not value
+        or "\\" in value
+        or path.is_absolute()
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise ValueError("artifact locator must be a safe relative POSIX path")
+    return str(path)
 
 
 class MarketStatus(StrEnum):
@@ -1279,6 +1293,363 @@ class ResearchImportReceipt(CommonEnvelope):
         return self
 
 
+class ResearchJobStatus(StrEnum):
+    QUEUED = "QUEUED"
+    LEASED = "LEASED"
+    RETRY_PENDING = "RETRY_PENDING"
+    COMPLETED = "COMPLETED"
+    QUARANTINED = "QUARANTINED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    INVALIDATED = "INVALIDATED"
+
+
+class ResearchReturnDisposition(StrEnum):
+    RETURNED = "RETURNED"
+    QUARANTINED = "QUARANTINED"
+    FAILED = "FAILED"
+
+
+class ResearchTransitionReason(StrEnum):
+    LEASE_GRANTED = "LEASE_GRANTED"
+    LEASE_EXPIRED = "LEASE_EXPIRED"
+    ATTEMPT_FAILED = "ATTEMPT_FAILED"
+    RETRY_EXHAUSTED = "RETRY_EXHAUSTED"
+    RESULT_ACCEPTED = "RESULT_ACCEPTED"
+    RESULT_QUARANTINED = "RESULT_QUARANTINED"
+    MANUAL_CANCELLED = "MANUAL_CANCELLED"
+    PACKET_INVALIDATED = "PACKET_INVALIDATED"
+    RULE_REVISION_INVALIDATED = "RULE_REVISION_INVALIDATED"
+
+
+class ResearchJob(CommonEnvelope):
+    """Immutable root for one provider-neutral research execution request."""
+
+    job_id: str
+    packet_stage: PacketStage
+    packet_id: str
+    packet_sha256: str
+    rule_contract_id: str
+    rule_contract_sha256: str
+    brief_artifact_locator: str
+    brief_bytes_sha256: str
+    provider_policy_id: str
+    source_policy_id: str
+    max_attempts: int = Field(ge=1, le=10)
+    available_at: datetime
+    expires_at: datetime
+    initial_status: ResearchJobStatus = ResearchJobStatus.QUEUED
+
+    @field_validator(
+        "packet_sha256", "rule_contract_sha256", "brief_bytes_sha256"
+    )
+    @classmethod
+    def job_hashes_are_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("available_at", "expires_at")
+    @classmethod
+    def job_times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator(
+        "provider_policy_id", "source_policy_id"
+    )
+    @classmethod
+    def job_text_is_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("research job text fields must not be blank")
+        return value
+
+    @field_validator("brief_artifact_locator")
+    @classmethod
+    def job_locator_is_relative(cls, value: str) -> str:
+        return _relative_artifact_locator(value)
+
+    @model_validator(mode="after")
+    def job_identity_and_window_are_consistent(self) -> "ResearchJob":
+        if self.job_id != self.record_id or not re.fullmatch(
+            r"research_job:[0-9a-f]{64}", self.record_id
+        ):
+            raise ValueError("ResearchJob id must use research_job namespace")
+        packet_namespace = (
+            "blind_packet" if self.packet_stage == PacketStage.BLIND else "market_packet"
+        )
+        if not re.fullmatch(rf"{packet_namespace}:[0-9a-f]{{64}}", self.packet_id):
+            raise ValueError("ResearchJob packet namespace must match packet_stage")
+        if not re.fullmatch(r"rule_contract:[0-9a-f]{64}", self.rule_contract_id):
+            raise ValueError("ResearchJob requires a RuleContract id")
+        if self.expires_at <= self.available_at:
+            raise ValueError("ResearchJob expires_at must follow available_at")
+        if self.initial_status != ResearchJobStatus.QUEUED:
+            raise ValueError("ResearchJob must start QUEUED")
+        return self
+
+
+class ResearchAttempt(CommonEnvelope):
+    attempt_id: str
+    job_id: str
+    job_sha256: str
+    attempt_number: int = Field(ge=1)
+    worker_id: str
+    leased_at: datetime
+    lease_expires_at: datetime
+
+    @field_validator("job_sha256")
+    @classmethod
+    def attempt_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("worker_id")
+    @classmethod
+    def worker_is_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("worker_id must not be blank")
+        return value
+
+    @field_validator("leased_at", "lease_expires_at")
+    @classmethod
+    def attempt_times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def attempt_identity_and_lease_are_consistent(self) -> "ResearchAttempt":
+        if self.attempt_id != self.record_id or not re.fullmatch(
+            r"research_attempt:[0-9a-f]{64}", self.record_id
+        ):
+            raise ValueError("ResearchAttempt id must use research_attempt namespace")
+        if not re.fullmatch(r"research_job:[0-9a-f]{64}", self.job_id):
+            raise ValueError("ResearchAttempt requires a ResearchJob id")
+        if self.lease_expires_at <= self.leased_at:
+            raise ValueError("ResearchAttempt lease must have positive duration")
+        return self
+
+
+class ResearchWorkOrder(CommonEnvelope):
+    work_order_id: str
+    job_id: str
+    job_sha256: str
+    attempt_id: str
+    attempt_sha256: str
+    packet_stage: PacketStage
+    packet_id: str
+    packet_sha256: str
+    brief_artifact_locator: str
+    brief_bytes_sha256: str
+    provider_policy_id: str
+    source_policy_id: str
+    issued_at: datetime
+    expires_at: datetime
+
+    @field_validator(
+        "job_sha256", "attempt_sha256", "packet_sha256", "brief_bytes_sha256"
+    )
+    @classmethod
+    def work_order_hashes_are_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("issued_at", "expires_at")
+    @classmethod
+    def work_order_times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator(
+        "provider_policy_id", "source_policy_id"
+    )
+    @classmethod
+    def work_order_text_is_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("research work-order text fields must not be blank")
+        return value
+
+    @field_validator("brief_artifact_locator")
+    @classmethod
+    def work_order_locator_is_relative(cls, value: str) -> str:
+        return _relative_artifact_locator(value)
+
+    @model_validator(mode="after")
+    def work_order_identity_and_window_are_consistent(self) -> "ResearchWorkOrder":
+        if self.work_order_id != self.record_id or not re.fullmatch(
+            r"research_work_order:[0-9a-f]{64}", self.record_id
+        ):
+            raise ValueError("ResearchWorkOrder id must use research_work_order namespace")
+        if not re.fullmatch(r"research_job:[0-9a-f]{64}", self.job_id):
+            raise ValueError("ResearchWorkOrder requires a ResearchJob id")
+        if not re.fullmatch(r"research_attempt:[0-9a-f]{64}", self.attempt_id):
+            raise ValueError("ResearchWorkOrder requires a ResearchAttempt id")
+        packet_namespace = (
+            "blind_packet" if self.packet_stage == PacketStage.BLIND else "market_packet"
+        )
+        if not re.fullmatch(rf"{packet_namespace}:[0-9a-f]{{64}}", self.packet_id):
+            raise ValueError("ResearchWorkOrder packet namespace must match packet_stage")
+        if self.expires_at <= self.issued_at:
+            raise ValueError("ResearchWorkOrder expires_at must follow issued_at")
+        return self
+
+
+class ResearchReturnReceipt(CommonEnvelope):
+    return_receipt_id: str
+    job_id: str
+    job_sha256: str
+    attempt_id: str
+    attempt_sha256: str
+    work_order_id: str
+    work_order_sha256: str
+    disposition: ResearchReturnDisposition
+    returned_artifact_locator: str | None = None
+    returned_bytes_sha256: str | None = None
+    returned_byte_length: int | None = Field(default=None, ge=1)
+    failure_code: str | None = None
+    received_at: datetime
+
+    @field_validator(
+        "job_sha256", "attempt_sha256", "work_order_sha256", "returned_bytes_sha256"
+    )
+    @classmethod
+    def return_hashes_are_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("received_at")
+    @classmethod
+    def returned_at_is_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("returned_artifact_locator")
+    @classmethod
+    def return_locator_is_relative(cls, value: str | None) -> str | None:
+        return _relative_artifact_locator(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def return_disposition_is_consistent(self) -> "ResearchReturnReceipt":
+        if self.return_receipt_id != self.record_id or not re.fullmatch(
+            r"research_return_receipt:[0-9a-f]{64}", self.record_id
+        ):
+            raise ValueError(
+                "ResearchReturnReceipt id must use research_return_receipt namespace"
+            )
+        if not re.fullmatch(r"research_job:[0-9a-f]{64}", self.job_id):
+            raise ValueError("ResearchReturnReceipt requires a ResearchJob id")
+        if not re.fullmatch(r"research_attempt:[0-9a-f]{64}", self.attempt_id):
+            raise ValueError("ResearchReturnReceipt requires a ResearchAttempt id")
+        if not re.fullmatch(r"research_work_order:[0-9a-f]{64}", self.work_order_id):
+            raise ValueError("ResearchReturnReceipt requires a ResearchWorkOrder id")
+        artifact_values = (
+            self.returned_artifact_locator,
+            self.returned_bytes_sha256,
+            self.returned_byte_length,
+        )
+        if self.disposition in (
+            ResearchReturnDisposition.RETURNED,
+            ResearchReturnDisposition.QUARANTINED,
+        ):
+            if any(item is None for item in artifact_values):
+                raise ValueError("returned/quarantined receipt requires returned artifact bytes")
+        elif any(item is not None for item in artifact_values):
+            raise ValueError("FAILED receipt cannot claim returned artifact bytes")
+        if self.disposition == ResearchReturnDisposition.RETURNED:
+            if self.failure_code is not None:
+                raise ValueError("RETURNED receipt cannot have a failure_code")
+        elif not self.failure_code or not self.failure_code.strip():
+            raise ValueError("failed/quarantined receipt requires failure_code")
+        return self
+
+
+class ResearchJobTransition(CommonEnvelope):
+    transition_id: str
+    job_id: str
+    job_sha256: str
+    attempt_id: str | None = None
+    from_status: ResearchJobStatus
+    to_status: ResearchJobStatus
+    reason: ResearchTransitionReason
+    cause_record_id: str | None = None
+    cause_record_sha256: str | None = None
+    effective_at: datetime
+
+    @field_validator("job_sha256", "cause_record_sha256")
+    @classmethod
+    def transition_hashes_are_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("effective_at")
+    @classmethod
+    def transition_time_is_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def transition_is_append_only_and_legal(self) -> "ResearchJobTransition":
+        if self.transition_id != self.record_id or not re.fullmatch(
+            r"research_job_transition:[0-9a-f]{64}", self.record_id
+        ):
+            raise ValueError(
+                "ResearchJobTransition id must use research_job_transition namespace"
+            )
+        if not re.fullmatch(r"research_job:[0-9a-f]{64}", self.job_id):
+            raise ValueError("ResearchJobTransition requires a ResearchJob id")
+        if self.attempt_id is not None and not re.fullmatch(
+            r"research_attempt:[0-9a-f]{64}", self.attempt_id
+        ):
+            raise ValueError("attempt_id must use research_attempt namespace")
+        if (self.cause_record_id is None) != (self.cause_record_sha256 is None):
+            raise ValueError("transition cause id/hash must be supplied together")
+        allowed = {
+            (ResearchJobStatus.QUEUED, ResearchJobStatus.LEASED): {
+                ResearchTransitionReason.LEASE_GRANTED
+            },
+            (ResearchJobStatus.RETRY_PENDING, ResearchJobStatus.LEASED): {
+                ResearchTransitionReason.LEASE_GRANTED
+            },
+            (ResearchJobStatus.LEASED, ResearchJobStatus.RETRY_PENDING): {
+                ResearchTransitionReason.LEASE_EXPIRED,
+                ResearchTransitionReason.ATTEMPT_FAILED,
+            },
+            (ResearchJobStatus.LEASED, ResearchJobStatus.COMPLETED): {
+                ResearchTransitionReason.RESULT_ACCEPTED
+            },
+            (ResearchJobStatus.LEASED, ResearchJobStatus.QUARANTINED): {
+                ResearchTransitionReason.RESULT_QUARANTINED
+            },
+            (ResearchJobStatus.LEASED, ResearchJobStatus.FAILED): {
+                ResearchTransitionReason.RETRY_EXHAUSTED
+            },
+        }
+        if self.to_status == ResearchJobStatus.CANCELLED:
+            legal = self.from_status in {
+                ResearchJobStatus.QUEUED,
+                ResearchJobStatus.LEASED,
+                ResearchJobStatus.RETRY_PENDING,
+            } and self.reason == ResearchTransitionReason.MANUAL_CANCELLED
+        elif self.to_status == ResearchJobStatus.INVALIDATED:
+            legal = self.from_status in {
+                ResearchJobStatus.QUEUED,
+                ResearchJobStatus.LEASED,
+                ResearchJobStatus.RETRY_PENDING,
+            } and self.reason in {
+                ResearchTransitionReason.PACKET_INVALIDATED,
+                ResearchTransitionReason.RULE_REVISION_INVALIDATED,
+            }
+        else:
+            legal = self.reason in allowed.get((self.from_status, self.to_status), set())
+        if not legal:
+            raise ValueError("illegal ResearchJob transition")
+        attempt_reasons = {
+            ResearchTransitionReason.LEASE_GRANTED,
+            ResearchTransitionReason.LEASE_EXPIRED,
+            ResearchTransitionReason.ATTEMPT_FAILED,
+            ResearchTransitionReason.RETRY_EXHAUSTED,
+            ResearchTransitionReason.RESULT_ACCEPTED,
+            ResearchTransitionReason.RESULT_QUARANTINED,
+        }
+        if self.reason in attempt_reasons and self.attempt_id is None:
+            raise ValueError("attempt-related transition requires attempt_id")
+        if self.reason != ResearchTransitionReason.MANUAL_CANCELLED and self.cause_record_id is None:
+            raise ValueError("non-manual transition requires a hash-bound cause record")
+        return self
+
+
 class RuleGateB(StrEnum):
     PASS = "PASS"
     PASS_WITH_RULE_RISK = "PASS_WITH_RULE_RISK"
@@ -1703,6 +2074,14 @@ P1_CONTRACT_MODELS = (
     CalibrationReport,
 )
 
+P1_AUTOMATION_CONTRACT_MODELS = (
+    ResearchJob,
+    ResearchAttempt,
+    ResearchWorkOrder,
+    ResearchReturnReceipt,
+    ResearchJobTransition,
+)
+
 
 def contract_schema_bundle() -> dict[str, Any]:
     return {model.__name__: model.model_json_schema() for model in CONTRACT_MODELS}
@@ -1721,6 +2100,24 @@ def contract_schema_fingerprint() -> str:
 
 def p1_contract_schema_bundle() -> dict[str, Any]:
     return {model.__name__: model.model_json_schema() for model in P1_CONTRACT_MODELS}
+
+
+def p1_automation_contract_schema_bundle() -> dict[str, Any]:
+    return {
+        model.__name__: model.model_json_schema()
+        for model in P1_AUTOMATION_CONTRACT_MODELS
+    }
+
+
+def p1_automation_contract_schema_fingerprint() -> str:
+    encoded = json.dumps(
+        p1_automation_contract_schema_bundle(),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def p1_contract_schema_fingerprint() -> str:

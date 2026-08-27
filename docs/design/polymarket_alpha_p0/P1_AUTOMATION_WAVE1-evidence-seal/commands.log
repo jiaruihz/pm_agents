@@ -1,0 +1,11 @@
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY .venv/bin/python -m pytest -q tests/polymarket_alpha/test_research_job_contracts_p1_a02.py tests/polymarket_alpha/test_artifact_store_p1_a01.py
+# 16 passed in 0.47s
+
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY -u http_proxy -u https_proxy -u all_proxy -u no_proxy .venv/bin/python -m pytest -q tests/polymarket_alpha
+# 603 passed in 12.96s
+
+.venv/bin/python -c "from src.polymarket_alpha.security import audit_source_tree; ..."
+# artifacts/research/operational/contracts/storage: 0 violations each
+
+git diff --check -- src/polymarket_alpha tests/polymarket_alpha
+# PASS (no output)
