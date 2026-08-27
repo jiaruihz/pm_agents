@@ -46,6 +46,13 @@ from .market import (
     build_market_formal_review_demand,
     freeze_market_research_packet,
 )
+from .market_comparison import (
+    MARKET_COMPARISON_COMPILER_VERSION,
+    DeterministicMarketAssessmentCompiler,
+    MarketAssessment,
+    MarketComparisonError,
+    MarketComparisonPolicy,
+)
 from .handoff import (
     HandoffConflictError,
     HandoffPathError,
@@ -151,6 +158,11 @@ __all__ = [
     "build_research_brief",
     "compile_research_draft",
     "freeze_market_research_packet",
+    "MARKET_COMPARISON_COMPILER_VERSION",
+    "DeterministicMarketAssessmentCompiler",
+    "MarketAssessment",
+    "MarketComparisonError",
+    "MarketComparisonPolicy",
     "import_research_result",
     "HandoffConflictError",
     "HandoffPathError",

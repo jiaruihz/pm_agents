@@ -2464,6 +2464,164 @@ class MarketResearchPacket(CommonEnvelope):
         return self
 
 
+class MarketComparisonStatus(StrEnum):
+    """Disposition of one immutable Blind-versus-book comparison."""
+
+    READY = "READY"
+    BOOK_REFRESH_REQUIRED = "BOOK_REFRESH_REQUIRED"
+    NON_ADVANCING = "NON_ADVANCING"
+
+
+class MarketComparison(CommonEnvelope):
+    """Content-addressed executable comparison; it never changes Blind belief."""
+
+    comparison_id: str
+    comparison_sha256: str
+    accepted_blind_result_id: str
+    accepted_blind_result_sha256: str
+    blind_p_yes_low: Decimal = Field(ge=0, le=1)
+    blind_p_yes_mid: Decimal = Field(ge=0, le=1)
+    blind_p_yes_high: Decimal = Field(ge=0, le=1)
+    blind_as_of_utc: datetime
+    rule_contract_id: str
+    rule_contract_sha256: str
+    rule_hash: str
+    book_receipt_id: str
+    book_receipt_sha256: str
+    orderbook_snapshot_id: str
+    orderbook_snapshot_sha256: str
+    book_capture_at_utc: datetime
+    comparison_as_of_utc: datetime
+    policy_size: Decimal = Field(gt=0)
+    yes_bid: Decimal | None = Field(default=None, ge=0, le=1)
+    yes_ask: Decimal | None = Field(default=None, ge=0, le=1)
+    no_bid: Decimal | None = Field(default=None, ge=0, le=1)
+    no_ask: Decimal | None = Field(default=None, ge=0, le=1)
+    yes_buy_vwap: Decimal | None = Field(default=None, ge=0, le=1)
+    no_buy_vwap: Decimal | None = Field(default=None, ge=0, le=1)
+    fee_slippage_cost_policy_id: str
+    fee_slippage_cost_policy_version: str
+    fee_rate: Decimal = Field(ge=0, le=1)
+    slippage_buffer: Decimal = Field(ge=0, le=1)
+    yes_edge_low: Decimal | None = None
+    yes_edge_mid: Decimal | None = None
+    yes_edge_high: Decimal | None = None
+    no_edge_low: Decimal | None = None
+    no_edge_mid: Decimal | None = None
+    no_edge_high: Decimal | None = None
+    stale: bool
+    insufficient_depth: bool
+    one_sided: bool
+    crossed_outcome: bool
+    status: MarketComparisonStatus
+    reason_codes: tuple[str, ...]
+
+    @field_validator(
+        "comparison_sha256", "accepted_blind_result_sha256", "rule_contract_sha256",
+        "rule_hash", "book_receipt_sha256", "orderbook_snapshot_sha256",
+    )
+    @classmethod
+    def comparison_hashes_are_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("blind_as_of_utc", "book_capture_at_utc", "comparison_as_of_utc")
+    @classmethod
+    def comparison_clocks_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("comparison_id", "accepted_blind_result_id", "rule_contract_id", "book_receipt_id", "orderbook_snapshot_id", "fee_slippage_cost_policy_id", "fee_slippage_cost_policy_version")
+    @classmethod
+    def comparison_text_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("MarketComparison identity/policy fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def comparison_is_complete_and_content_derived(self) -> "MarketComparison":
+        if self.comparison_id != self.record_id:
+            raise ValueError("comparison_id must equal record_id")
+        if not (self.blind_p_yes_low <= self.blind_p_yes_mid <= self.blind_p_yes_high):
+            raise ValueError("Blind interval must be ordered")
+        if self.book_capture_at_utc > self.comparison_as_of_utc:
+            raise ValueError("comparison cannot precede book capture")
+        if self.blind_as_of_utc > self.comparison_as_of_utc:
+            raise ValueError("comparison cannot precede Blind as-of")
+        values = (self.yes_bid, self.yes_ask, self.no_bid, self.no_ask, self.yes_buy_vwap, self.no_buy_vwap)
+        edges = (self.yes_edge_low, self.yes_edge_mid, self.yes_edge_high, self.no_edge_low, self.no_edge_mid, self.no_edge_high)
+        observed_one_sided = any(value is None for value in (self.yes_bid, self.yes_ask, self.no_bid, self.no_ask))
+        if self.one_sided != observed_one_sided:
+            raise ValueError("one_sided must be derived from paired top-of-book quotes")
+        observed_crossed = False
+        if not observed_one_sided:
+            assert self.yes_bid is not None and self.yes_ask is not None
+            assert self.no_bid is not None and self.no_ask is not None
+            observed_crossed = (
+                self.yes_bid >= self.yes_ask
+                or self.no_bid >= self.no_ask
+                or self.yes_bid + self.no_bid > Decimal("1")
+                or self.yes_ask + self.no_ask < Decimal("1")
+            )
+        if self.crossed_outcome != observed_crossed:
+            raise ValueError("crossed_outcome must be derived from paired quotes")
+        executable = not (self.stale or self.insufficient_depth or self.one_sided or self.crossed_outcome)
+        if executable:
+            if any(value is None for value in values) or any(value is None for value in edges):
+                raise ValueError("READY comparison requires paired prices, policy depth and edge intervals")
+            assert self.yes_bid is not None and self.yes_ask is not None and self.no_bid is not None and self.no_ask is not None
+            assert self.yes_edge_low is not None and self.yes_edge_mid is not None and self.yes_edge_high is not None
+            assert self.no_edge_low is not None and self.no_edge_mid is not None and self.no_edge_high is not None
+            if self.yes_bid >= self.yes_ask or self.no_bid >= self.no_ask:
+                raise ValueError("READY comparison cannot use crossed leg quotes")
+            if not (self.yes_edge_low <= self.yes_edge_mid <= self.yes_edge_high and self.no_edge_low <= self.no_edge_mid <= self.no_edge_high):
+                raise ValueError("edge intervals must be ordered")
+            assert self.yes_buy_vwap is not None and self.no_buy_vwap is not None
+            yes_cost = self.yes_buy_vwap * (Decimal("1") + self.fee_rate) + self.slippage_buffer
+            no_cost = self.no_buy_vwap * (Decimal("1") + self.fee_rate) + self.slippage_buffer
+            expected_edges = (
+                self.blind_p_yes_low - yes_cost,
+                self.blind_p_yes_mid - yes_cost,
+                self.blind_p_yes_high - yes_cost,
+                (Decimal("1") - self.blind_p_yes_high) - no_cost,
+                (Decimal("1") - self.blind_p_yes_mid) - no_cost,
+                (Decimal("1") - self.blind_p_yes_low) - no_cost,
+            )
+            if edges != expected_edges:
+                raise ValueError("edge intervals must be deterministically recomputed")
+            if self.status != MarketComparisonStatus.READY:
+                raise ValueError("executable comparison must be READY")
+        else:
+            expected_status = (
+                MarketComparisonStatus.BOOK_REFRESH_REQUIRED
+                if self.stale or self.one_sided or self.insufficient_depth
+                else MarketComparisonStatus.NON_ADVANCING
+            )
+            if self.status != expected_status:
+                raise ValueError("unusable comparison status must match refresh/block semantics")
+            if any(value is not None for value in edges):
+                raise ValueError("unusable comparison cannot fabricate edge intervals")
+        expected_reasons: list[str] = []
+        if executable:
+            expected_reasons.append("EXECUTABLE_PAIRED_BOOK")
+        else:
+            if self.stale:
+                expected_reasons.append("BOOK_REFRESH_REQUIRED")
+            if self.insufficient_depth:
+                expected_reasons.append("INSUFFICIENT_POLICY_DEPTH")
+            if self.one_sided:
+                expected_reasons.append("ONE_SIDED_BOOK")
+            if self.crossed_outcome:
+                expected_reasons.append("CROSS_OUTCOME_INCONSISTENT")
+        if self.reason_codes != tuple(sorted(expected_reasons)):
+            raise ValueError("reason_codes must exactly match the derived comparison state")
+        payload = self.model_dump(mode="python", exclude={"record_id", "comparison_id", "comparison_sha256"})
+        expected_hash = content_sha256(payload)
+        expected_id = stable_record_id("market_comparison", payload)
+        if self.comparison_sha256 != expected_hash or self.record_id != expected_id:
+            raise ValueError("MarketComparison id/hash must be recomputed from complete content")
+        return self
+
+
 ResearchPacket = Annotated[
     BlindResearchPacket | MarketResearchPacket,
     Field(discriminator="packet_stage"),
@@ -2596,6 +2754,14 @@ class ResearchResultEnvelope(CommonEnvelope):
                 raise ValueError("MARKET_AWARE result requires a market_packet id")
             if self.probability_estimate.estimate_stage == EstimateStage.BLIND:
                 raise ValueError("MARKET_AWARE result requires a market-aware probability estimate")
+            if self.extensions.get("probability_update") == "NONE":
+                baseline = self.extensions.get("blind_probability_interval")
+                try:
+                    bound = tuple(Decimal(str(value)) for value in baseline) if isinstance(baseline, list) else ()
+                except Exception:
+                    bound = ()
+                if bound != (self.probability_estimate.p_event_yes_low, self.probability_estimate.p_event_yes_mid, self.probability_estimate.p_event_yes_high):
+                    raise ValueError("market assessment cannot overwrite the bound Blind probability interval")
         return self
 
 

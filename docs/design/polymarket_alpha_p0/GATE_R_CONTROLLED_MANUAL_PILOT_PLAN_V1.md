@@ -1,6 +1,6 @@
 # Gate R Controlled Manual GPT Pro Pilot Plan V1
 
-Status: IMPLEMENTATION_IN_PROGRESS_WP1_TO_WP4_COMPLETE
+Status: WP1_TO_WP5_COMPLETE_AWAITING_EXPLICIT_WP6_AUTHORIZATION
 Entry: WP1 through WP5 must pass before WP6 pilot authorization.
 
 ## Work packages
@@ -48,6 +48,7 @@ Rollback: disable external handoff and retain fixture/manual fallback.
 WP5 — Deterministic market comparison
 
 Owner: existing Rule B/Decision owner.
+Status: COMPLETE; evidence: `GATE_R_WP5-evidence-seal/`.
 Deliver: MarketComparison, cost/depth/staleness bindings,
 DeterministicMarketAssessmentCompiler, disabled optional critique contract and
 refresh-on-new-info semantics.

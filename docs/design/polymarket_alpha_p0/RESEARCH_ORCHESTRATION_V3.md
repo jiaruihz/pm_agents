@@ -1,7 +1,7 @@
 # Polymarket Alpha Research Orchestration V3
 
 Status: CANONICAL_DESIGN
-Readiness: WP1_TO_WP4_COMPLETE_BLOCKED_PENDING_WP5
+Readiness: WP1_TO_WP5_COMPLETE_AWAITING_EXPLICIT_WP6_AUTHORIZATION
 Pilot scope: CONTROLLED_MANUAL_GPT_PRO_BLIND_RESEARCH_ONLY
 
 ## Authority boundary
@@ -52,6 +52,14 @@ freshness, or source-coverage failures. Execution remains NO_ORDER.
 
 Optional MarketCritique is disabled in Gate R. If later authorized, it may only
 emit challenge or refresh requests and cannot replace the Blind probability.
+
+WP5 implements the comparison as deterministic local code. The comparison
+binds the exact accepted Blind result, current rule, formal-review receipt,
+paired snapshot and versioned cost/depth policy. TTL expiry or missing policy
+depth requests refresh; paired-outcome inconsistency blocks without pretending
+that a refresh alone resolves it. Only READY produces a MARKET result, the
+existing importer remains sole importer, and the decision ledger independently
+rejects any change to the accepted Blind interval before emitting `NO_ORDER`.
 
 ## Canonical transitions
 

@@ -148,6 +148,12 @@ executable YES/NO bid/ask and depth at policy size, fee/slippage/cost policy
 id/version, YES/NO edge intervals, staleness/liquidity/cross-outcome flags,
 status, reason codes, created_at_utc and hash.
 
+The model validator recomputes the complete identity/hash, derives paired quote
+and cross-outcome flags, recomputes all six edge values from the frozen Blind
+interval plus policy-size VWAP/fee/slippage, and requires exact reason/status
+semantics. TTL expiry is inclusive at the configured boundary. A crossed
+outcome is `NON_ADVANCING`; it does not falsely claim `BOOK_REFRESH_REQUIRED`.
+
 ## Decision bindings
 
 ResearchResultEnvelope and ProbabilityEstimate add QuestionSet, SourcePlan,

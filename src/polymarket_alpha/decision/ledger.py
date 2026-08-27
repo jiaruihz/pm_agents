@@ -198,6 +198,16 @@ def _bind(
         != blind_result.probability_estimate.blind_candidate_id
     ):
         raise DecisionLedgerError("market probability Blind candidate binding mismatch")
+    if (
+        market_result.probability_estimate.p_event_yes_low,
+        market_result.probability_estimate.p_event_yes_mid,
+        market_result.probability_estimate.p_event_yes_high,
+    ) != (
+        blind_result.probability_estimate.p_event_yes_low,
+        blind_result.probability_estimate.p_event_yes_mid,
+        blind_result.probability_estimate.p_event_yes_high,
+    ):
+        raise DecisionLedgerError("market result cannot overwrite the accepted Blind probability")
     _fresh(book.source_observed_at, as_of, config.max_book_age_seconds, "orderbook")
     _fresh(blind_result.completed_at, as_of, config.max_result_age_seconds, "Blind result")
     _fresh(market_result.completed_at, as_of, config.max_result_age_seconds, "Market result")

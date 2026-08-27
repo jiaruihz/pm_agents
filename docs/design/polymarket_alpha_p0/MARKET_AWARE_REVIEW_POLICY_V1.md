@@ -32,3 +32,7 @@ critic may emit only challenge codes, liquidity/selection-risk notes, or refresh
 requests. It cannot provide a replacement probability or directly drive a
 decision/order. Disabling the comparator version returns to the prior offline
 fixture path while preserving all artifacts.
+
+Implementation status: WP5 `COMPLETE`; evidence is sealed in
+`GATE_R_WP5-evidence-seal/`. This status authorizes no market-data request,
+provider call, pilot execution or order capability.
