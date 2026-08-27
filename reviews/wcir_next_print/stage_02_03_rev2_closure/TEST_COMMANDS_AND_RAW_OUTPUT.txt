@@ -1,0 +1,33 @@
+$ .venv/bin/python scripts/analysis/forecast_quality/wcir_stage23_rev2_closure.py
+exit_code=0
+{
+  "output": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure",
+  "status": "PASS",
+  "headlines": {
+    "primary_oracle": 89,
+    "reaction_primary_aggregate": 89,
+    "date_concentration": 89,
+    "bootstrap": 89,
+    "city_gate": 89,
+    "baseline_intersection": 1
+  }
+}
+
+
+$ .venv/bin/pytest -q tests/research_tests/test_wcir_stage23_rev2.py tests/research_tests/test_wcir_stage23_rev2_closure.py
+exit_code=0
+.........................                                                [100%]
+=============================== warnings summary ===============================
+tests/research_tests/test_wcir_stage23_rev2_closure.py::test_full_package_verifier_fails_closed[duplicate]
+  /Users/deepsleep/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/zipfile/__init__.py:1624: UserWarning: Duplicate name: 'evidence.bin'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+25 passed, 1 warning in 0.21s
+
+
+$ .venv/bin/python -m py_compile scripts/analysis/forecast_quality/wcir_stage23_rev2_closure.py scripts/analysis/forecast_quality/wcir_collector_clock_shadow.py scripts/analysis/forecast_quality/package_wcir_stage23_rev2_closure.py
+exit_code=0
+
+
+

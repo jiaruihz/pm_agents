@@ -1,0 +1,98 @@
+{
+  "entries": [
+    {
+      "path": "BOOK_VALIDITY_CORRIGENDUM_RESULTS.json",
+      "sha256": "c1e9ba5b4395d577a03f46e7dc3fcb7a9d5bd1b4f18dc1ecc00261d7b718a537",
+      "size_bytes": 1155992
+    },
+    {
+      "path": "BOOK_VALIDITY_LIVENESS_FRESHNESS_CONTRACT_V1.md",
+      "sha256": "1d2b62a3bfb591a60454c742dffb0574d395863956c6284d880ea88aad609a31",
+      "size_bytes": 2384
+    },
+    {
+      "path": "COMPLETE_REV2_EVIDENCE_PACKAGE_AUDIT.json",
+      "sha256": "3c23e7bc154b372d614f7f4b116cf39ccc851b458a653b35a181dc11e9ddde10",
+      "size_bytes": 4627
+    },
+    {
+      "path": "DEPENDENCY_FREEZE.txt",
+      "sha256": "af61f8c75e03cab1d5fe114aa8472e4e4eb32bccc15a9d8ee47740bed74420ea",
+      "size_bytes": 1714
+    },
+    {
+      "path": "FINAL_CODE_AND_ENVIRONMENT_FREEZE.json",
+      "sha256": "bf80516a9684f86b62e622d89bf0ce6ccd0d9498d3821a1da7048f41bca7e33c",
+      "size_bytes": 9977
+    },
+    {
+      "path": "GPT_PRO_REVIEW_PACKET_STAGE_02_03_REV2_CLOSURE.md",
+      "sha256": "ccf4d832640e8fb67ce7997e8e74cf0281c4cff41f12fc5a8d8218e6ae64e6a9",
+      "size_bytes": 1436
+    },
+    {
+      "path": "INDEPENDENT_CODE_REVIEW.md",
+      "sha256": "5b500d904b16e2fea2e3fefe02585bcae8e33f26fc02d36bbeb7b38a7c0d9751",
+      "size_bytes": 1588
+    },
+    {
+      "path": "LATENCY_CONTRACT_DIAGNOSTICS.json",
+      "sha256": "8bf818b28d759b74ca5b611f8acae11e03fd3ec1836f2fbc4c156aaa265c9fb2",
+      "size_bytes": 1831
+    },
+    {
+      "path": "MATCHED_DENOMINATOR_CONTRACT_V1.md",
+      "sha256": "947d3b9d0eabe018eef8543547108c9c5aa1660b9e0253b274be0cd85807f53c",
+      "size_bytes": 996
+    },
+    {
+      "path": "MATCHED_DENOMINATOR_DIAGNOSTIC.json",
+      "sha256": "ac62c12a45a60d1c15cf637ae1a4e9e0f6493ab6a2c389fcb022b618509e6d63",
+      "size_bytes": 681
+    },
+    {
+      "path": "ORACLE_FAMILY_MEASUREMENT_HARNESS.json",
+      "sha256": "3f8c211c845ebe00280e0a658705fdfe046e2c2d6a612448405299d124679bb7",
+      "size_bytes": 846
+    },
+    {
+      "path": "PACKAGE_FAIL_CLOSED_TESTS.txt",
+      "sha256": "a81d600505dc521561684dcf670deb0c83e2b984ce6d35788cc1985eada8d026",
+      "size_bytes": 720
+    },
+    {
+      "path": "PERFECT_PRINT_ORACLE_FAMILY_CONTRACT_V1.md",
+      "sha256": "c20b021130e15265da848e0965759d87bacac33e9a10e88f53e38874d0060fc0",
+      "size_bytes": 2466
+    },
+    {
+      "path": "PRIMARY_REACTION_GATE_RECONCILIATION_SUMMARY.json",
+      "sha256": "eb3e28035f0790fae58b98a254e5f0c4344abd841e9e4ce8766d332cfb12c862",
+      "size_bytes": 1895
+    },
+    {
+      "path": "REPRODUCE_STAGE23_REV2.sh",
+      "sha256": "c6676c13d66e29cc9fdcaec15d47ab5b852609ced990faca8f0bc4764a43e8a9",
+      "size_bytes": 1223
+    },
+    {
+      "path": "TEST_COMMANDS_AND_RAW_OUTPUT.txt",
+      "sha256": "5e75b342e191e09b59f819a820474494bb3d46e80a7f6f34b320bebc3711afcc",
+      "size_bytes": 1395
+    },
+    {
+      "path": "evidence/ORACLE_FAMILY_MEASUREMENT_ROWS.jsonl.gz",
+      "sha256": "f43e0853a9f498beadc2c07e39ee2cba8f57ca3436492316b01b83b9e0c3eecd",
+      "size_bytes": 339104
+    },
+    {
+      "path": "evidence/PRIMARY_REACTION_GATE_ROW_RECONCILIATION.jsonl.gz",
+      "sha256": "774c5c55ea7647bfbe33fcc1ecf1e6e8f7e926eb701462a04e23296cb50c86af",
+      "size_bytes": 78822
+    }
+  ],
+  "entry_count": 18,
+  "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure",
+  "strict_entry_set": true,
+  "unmanifested_extra_files_allowed": false
+}
