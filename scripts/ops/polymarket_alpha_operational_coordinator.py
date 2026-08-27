@@ -258,12 +258,15 @@ def _stage_ingest_gamma(args: argparse.Namespace) -> None:
         ),
     )
     result = run_gamma_ingest_stage(_repository(args.alpha_db), args.artifact_root, inputs)
+    catalog = result.ingest.catalog
     _emit(
         {
             "stage": result.state.stage.value if result.state else None,
             "state_locator": result.state.locator() if result.state else None,
             "snapshot_ids": list(result.state.snapshot_ids) if result.state else [],
             "flattened_markets": result.ingest.flattened_market_count,
+            "catalog_error_receipts": len(catalog.error_receipts) if catalog else None,
+            "catalog_drift_receipts": len(catalog.drift_receipts) if catalog else None,
         }
     )
 

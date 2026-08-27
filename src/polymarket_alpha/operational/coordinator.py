@@ -30,7 +30,6 @@ from typing import Any, Mapping, Sequence
 
 from ..books.adapter import (
     BookCaptureReceipt,
-    FrozenOwnerBookArtifact,
     OwnerDemandBundle,
     PairedBookNormalization,
     build_owner_capture_demands,
@@ -77,6 +76,7 @@ from ..recall.registry import ProviderRegistry
 from ..recall.structural_metadata import StructuralMetadataRecaller
 from ..recall.wallet import WalletRecallProvider
 from ..research.handoff import (
+    HandoffConflictError,
     PacketHandoffManifest,
     ResultHandoffReceipt,
     _read_allowed,
@@ -246,11 +246,23 @@ class CoordinatorState:
 
 
 def seal_state(artifact_root: Path, state: CoordinatorState) -> None:
-    _write_immutable(
-        Path(artifact_root),
-        state.locator(),
-        canonical_json(state.to_payload()).encode("utf-8"),
-    )
+    """Seal one stage state immutably; a different-bytes rewrite is a block.
+
+    Replaying a stage with identical inputs produces identical canonical
+    bytes and stays idempotent; any other content at the same locator is a
+    coordinator-level block, not an untyped filesystem error.
+    """
+
+    try:
+        _write_immutable(
+            Path(artifact_root),
+            state.locator(),
+            canonical_json(state.to_payload()).encode("utf-8"),
+        )
+    except ValueError as error:
+        raise CoordinatorBlocked(
+            f"{state.stage.value} state manifest cannot be sealed: {error}"
+        ) from error
 
 
 def load_state(artifact_root: Path, stage: OperationalStage) -> CoordinatorState:
@@ -322,18 +334,21 @@ def _manifest_payload(manifest: PacketHandoffManifest) -> dict[str, Any]:
 
 
 def _manifest_from_payload(payload: Mapping[str, Any]) -> PacketHandoffManifest:
-    return PacketHandoffManifest(
-        handoff_version=str(payload["handoff_version"]),
-        state=str(payload["state"]),
-        packet_stage=str(payload["packet_stage"]),
-        packet_id=str(payload["packet_id"]),
-        packet_sha256=str(payload["packet_sha256"]),
-        packet_bytes_sha256=str(payload["packet_bytes_sha256"]),
-        packet_byte_length=int(payload["packet_byte_length"]),
-        packet_locator=str(payload["packet_locator"]),
-        manifest_locator=str(payload["manifest_locator"]),
-        created_at=datetime.fromisoformat(str(payload["created_at"])),
-    )
+    try:
+        return PacketHandoffManifest(
+            handoff_version=str(payload["handoff_version"]),
+            state=str(payload["state"]),
+            packet_stage=str(payload["packet_stage"]),
+            packet_id=str(payload["packet_id"]),
+            packet_sha256=str(payload["packet_sha256"]),
+            packet_bytes_sha256=str(payload["packet_bytes_sha256"]),
+            packet_byte_length=int(payload["packet_byte_length"]),
+            packet_locator=str(payload["packet_locator"]),
+            manifest_locator=str(payload["manifest_locator"]),
+            created_at=datetime.fromisoformat(str(payload["created_at"])),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise CoordinatorBlocked(f"state manifest has a malformed packet manifest: {error}") from error
 
 
 def _handoff_payload(receipt: ResultHandoffReceipt) -> dict[str, Any]:
@@ -389,15 +404,20 @@ def _load_accepted_stage(repository: AlphaRepository, state: CoordinatorState) -
     if state.blind_handoff_receipt is None:
         raise CoordinatorBlocked("state does not carry the Blind handoff receipt")
     handoff_payload = state.blind_handoff_receipt
-    handoff = ResultHandoffReceipt(
-        state=str(handoff_payload["state"]),
-        packet_manifest=_manifest_from_payload(handoff_payload["packet_manifest"]),
-        result_locator=str(handoff_payload["result_locator"]),
-        sealed_submission_locator=str(handoff_payload["sealed_submission_locator"]),
-        submitted_bytes_sha256=str(handoff_payload["submitted_bytes_sha256"]),
-        submitted_byte_length=int(handoff_payload["submitted_byte_length"]),
-        import_receipt=import_receipt,
-    )
+    try:
+        handoff = ResultHandoffReceipt(
+            state=str(handoff_payload["state"]),
+            packet_manifest=_manifest_from_payload(handoff_payload["packet_manifest"]),
+            result_locator=str(handoff_payload["result_locator"]),
+            sealed_submission_locator=str(handoff_payload["sealed_submission_locator"]),
+            submitted_bytes_sha256=str(handoff_payload["submitted_bytes_sha256"]),
+            submitted_byte_length=int(handoff_payload["submitted_byte_length"]),
+            import_receipt=import_receipt,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise CoordinatorBlocked(
+            f"{state.stage.value} state manifest has a malformed handoff receipt: {error}"
+        ) from error
     transitions = tuple(
         _contract(repository, state, record_id, CandidateTransition)
         for record_id in state.transition_ids[: state.accepted_transition_count]
@@ -693,7 +713,7 @@ def run_blind_resume_stage(
             max_staleness_seconds=inputs.max_staleness_seconds,
             target_sizes=inputs.target_sizes,
         )
-    except ReviewPipelineBlocked as error:
+    except (ReviewPipelineBlocked, HandoffConflictError) as error:
         raise CoordinatorBlocked(f"Blind result import was blocked: {error}") from error
     if outcome.accepted is None:
         # A quarantined/rejected Blind result must never create a
@@ -812,18 +832,21 @@ def run_book_stage(
     )
     if not bridge.accepted or bridge.yes_artifact is None or bridge.no_artifact is None:
         return BookStageResult(None, bridge, None)
-    build = accept_formal_book(
-        repository=repository,
-        stage=accepted_stage,
-        yes_artifact=bridge.yes_artifact,
-        no_artifact=bridge.no_artifact,
-        received_at=inputs.received_at,
-        artifact_root=Path(artifact_root),
-        packet_locator=MARKET_PACKET_LOCATOR,
-        manifest_locator=MARKET_MANIFEST_LOCATOR,
-        packet_created_at=inputs.packet_created_at,
-        handoff_created_at=inputs.handoff_created_at,
-    )
+    try:
+        build = accept_formal_book(
+            repository=repository,
+            stage=accepted_stage,
+            yes_artifact=bridge.yes_artifact,
+            no_artifact=bridge.no_artifact,
+            received_at=inputs.received_at,
+            artifact_root=Path(artifact_root),
+            packet_locator=MARKET_PACKET_LOCATOR,
+            manifest_locator=MARKET_MANIFEST_LOCATOR,
+            packet_created_at=inputs.packet_created_at,
+            handoff_created_at=inputs.handoff_created_at,
+        )
+    except (ReviewPipelineBlocked, HandoffConflictError) as error:
+        raise CoordinatorBlocked(f"Market packet export was blocked: {error}") from error
     if build.accepted is None:
         return BookStageResult(None, bridge, build)
     market_stage = build.accepted
@@ -929,7 +952,7 @@ def run_market_resume_stage(
             rank_config=inputs.rank_config,
             rule_risk_reasons=inputs.rule_risk_reasons,
         )
-    except ReviewPipelineBlocked as error:
+    except (ReviewPipelineBlocked, HandoffConflictError) as error:
         raise CoordinatorBlocked(f"Market result import was blocked: {error}") from error
     final = outcome.final
     if final is None:

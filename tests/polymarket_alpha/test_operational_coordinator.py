@@ -674,6 +674,85 @@ def test_stages_require_their_predecessor_state(tmp_path: Path) -> None:
         )
 
 
+def test_multi_market_response_is_rejected_by_the_single_market_coordinator(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    repository = _repository(root)
+    market_a = market_payload(
+        id="m-a",
+        question="Will A happen?",
+        conditionId="0xcond-a",
+        clobTokenIds=json.dumps(["tok-yes-a", "tok-no-a"]),
+        rules=RAW_RULE,
+    )
+    market_b = market_payload(
+        id="m-b",
+        question="Will B happen?",
+        conditionId="0xcond-b",
+        clobTokenIds=json.dumps(["tok-yes-b", "tok-no-b"]),
+        rules=RAW_RULE,
+    )
+    body = json.dumps(
+        [{"id": "event-multi", "title": "Two Markets", "markets": [market_a, market_b]}],
+        sort_keys=True,
+    ).encode("utf-8")
+    import hashlib
+
+    inputs = GammaIngestStageInputs(
+        raw_response=body,
+        response_receipt=GammaResponseReceipt(
+            request_method="GET",
+            endpoint_host="gamma-api.polymarket.com",
+            endpoint_path="/events",
+            http_status=200,
+            response_bytes_sha256=hashlib.sha256(body).hexdigest(),
+            response_byte_length=len(body),
+            response_received_at=GAMMA_OBSERVED,
+        ),
+        run_id=RUN_ID,
+        observed_at=GAMMA_OBSERVED,
+        ingested_at=INGESTED,
+        page_budget=5,
+    )
+    with pytest.raises(CoordinatorBlocked, match="one market|caller limit"):
+        run_gamma_ingest_stage(repository, root, inputs)
+    assert not (root / "state/GAMMA_INGESTED.json").exists()
+
+
+def test_replacing_a_blind_result_file_then_rerunning_is_a_typed_block(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    repository, _ingest, _scan, blind = _run_through_blind(root)
+    sources = _write_blind_result(root, blind.blind.blind_packet)
+    inputs = BlindResumeStageInputs(
+        result_locator="inbox/blind-result.json",
+        receipt_locator="receipts/blind.json",
+        source_contents=sources,
+        imported_at=BLIND_IMPORTED_AT,
+        demand_requested_at=DEMAND_REQUESTED_AT,
+        demand_valid_until=DEMAND_VALID_UNTIL,
+        max_staleness_seconds=MAX_STALENESS,
+        target_sizes=(Decimal("10"),),
+    )
+    first = run_blind_resume_stage(repository, root, inputs)
+    assert first.state is not None
+    # Replace the result bytes at the same locator and re-run: the sealed
+    # handoff receipt locator would need different bytes, which must surface
+    # as a typed coordinator block, never an untyped conflict traceback.
+    submitted, _ = _blind_submission(blind.blind.blind_packet)
+    replaced = json.loads(submitted)
+    replaced["producer"] = "a different manual provider"
+    from src.polymarket_alpha.contracts import ResearchResultEnvelope, canonical_json
+
+    (root / "inbox/blind-result.json").write_bytes(
+        canonical_json(ResearchResultEnvelope.model_validate(replaced)).encode("utf-8")
+    )
+    with pytest.raises(CoordinatorBlocked, match="blocked"):
+        run_blind_resume_stage(repository, root, inputs)
+
+
 def test_wrong_rule_hash_is_blocked_at_the_blind_stage(tmp_path: Path) -> None:
     root = tmp_path
     repository = _repository(root)
