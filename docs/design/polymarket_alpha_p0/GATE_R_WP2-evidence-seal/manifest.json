@@ -1,0 +1,29 @@
+{
+  "disposition": "COMPLETE",
+  "delivery_commit": "SAME_COMMIT_AS_THIS_MANIFEST",
+  "parent_commit": "eda5c734",
+  "scope": "GATE_R_WP2_OFFLINE_ONLY",
+  "worker": {
+    "agent": "terra_worker",
+    "usage_telemetry": "unavailable"
+  },
+  "review": {
+    "agent": "luna_verifier",
+    "initial_disposition": "REQUEST_CHANGES",
+    "final_findings_closed": 8,
+    "usage_telemetry": "unavailable"
+  },
+  "tests": {
+    "focused": {"passed": 95, "failed": 0},
+    "full_alpha": {"passed": 682, "failed": 3},
+    "full_alpha_known_environment_failures": [
+      "test_security_final_p0_11.py::test_os_sandbox_canary_is_explicitly_not_run_without_sandbox_exec",
+      "test_security_os_sandbox_p0_11.py::test_os_sandbox_denies_raw_network_connect",
+      "test_security_os_sandbox_p0_11.py::test_os_sandbox_receives_explicit_secret_free_environment"
+    ],
+    "environment_failure": "nested sandbox-exec returns sandbox_apply: Operation not permitted"
+  },
+  "external_calls": 0,
+  "execution": "NO_ORDER",
+  "readiness_after_wp2": "BLOCKED_PENDING_WP3_TO_WP5"
+}

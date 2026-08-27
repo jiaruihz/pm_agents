@@ -864,6 +864,418 @@ class DisagreementReceipt(CommonEnvelope):
         return self
 
 
+# Gate R WP2 records deliberately live in the shared contract module.  They are
+# append-only proposals and review receipts; none of them is a RuleContract or
+# a Rule A decision.
+class IndependentReviewDisposition(StrEnum):
+    ADVANCE = "ADVANCE"
+    REVIEW = "REVIEW"
+    DEFER = "DEFER"
+
+
+class RuleReviewAction(StrEnum):
+    APPROVE = "APPROVE"
+    PATCH = "PATCH"
+    DEFER = "DEFER"
+    REQUEST_CORRECTION = "REQUEST_CORRECTION"
+
+
+class IndependentReviewAttemptStatus(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    QUARANTINED = "QUARANTINED"
+    BUDGET_EXCEEDED = "BUDGET_EXCEEDED"
+
+
+class IndependentReviewBudget(AlphaContract):
+    max_total_tokens: int = Field(gt=0)
+    max_cost_usd_micros: int = Field(ge=0)
+    max_duration_ms: int = Field(gt=0)
+
+
+class RuleParseFieldProposal(AlphaContract):
+    field_name: str
+    proposed_value: str
+    source_segment_id: str
+    exact_quote: str
+    proposal_confidence_milli: int = Field(ge=0, le=1000)
+    unresolved: bool
+
+    @field_validator("field_name", "proposed_value", "source_segment_id", "exact_quote")
+    @classmethod
+    def proposal_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("rule proposal text must not be blank")
+        return value
+
+
+class IndependentSemanticReview(CommonEnvelope):
+    review_id: str
+    attempt_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    projection_id: str
+    projection_sha256: str
+    routing_decision_id: str
+    routing_decision_sha256: str
+    work_order_id: str
+    work_order_sha256: str
+    rule_source_artifact_id: str
+    rule_source_sha256: str
+    provider: str
+    requested_model: str
+    reported_model: str | None = None
+    prompt_version: str
+    schema_version_provider: str
+    prompt_sha256: str
+    provider_wrapper_sha256: str
+    provider_return_sha256: str
+    usage: dict[str, int] = Field(default_factory=dict)
+    cost_usd_micros: int | None = Field(default=None, ge=0)
+    duration_ms: int | None = Field(default=None, ge=0)
+    topic: str
+    entities: tuple[str, ...]
+    relevant_clocks: tuple[str, ...]
+    source_type_hints: tuple[str, ...]
+    researchability: str
+    ambiguities: tuple[str, ...] = ()
+    independent_disposition_proposal: IndependentReviewDisposition
+
+    @field_validator(
+        "candidate_snapshot_sha256",
+        "projection_sha256",
+        "routing_decision_sha256",
+        "work_order_sha256",
+        "rule_source_sha256",
+        "prompt_sha256",
+        "provider_wrapper_sha256",
+        "provider_return_sha256",
+    )
+    @classmethod
+    def review_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator(
+        "review_id", "attempt_id", "candidate_snapshot_id", "projection_id",
+        "routing_decision_id", "work_order_id", "rule_source_artifact_id",
+        "provider", "requested_model", "prompt_version", "schema_version_provider",
+        "topic", "researchability",
+    )
+    @classmethod
+    def review_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("review fields must not be blank")
+        return value
+
+    @field_validator("reported_model")
+    @classmethod
+    def optional_review_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None and value.strip() else None
+
+    @field_validator("entities", "relevant_clocks", "source_type_hints", "ambiguities")
+    @classmethod
+    def review_lists(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(item.strip() for item in value)
+        if any(not item for item in cleaned) or len(cleaned) != len(set(cleaned)):
+            raise ValueError("review lists must be unique nonblank strings")
+        return cleaned
+
+    @field_validator("usage")
+    @classmethod
+    def review_usage(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(not key.strip() or count < 0 for key, count in value.items()):
+            raise ValueError("usage must be nonnegative")
+        return value
+
+    @model_validator(mode="after")
+    def review_identity(self) -> "IndependentSemanticReview":
+        if self.review_id != self.record_id:
+            raise ValueError("review_id must equal record_id")
+        if self.record_id != stable_record_id(
+            "independent_semantic_review",
+            self.attempt_id,
+            self.candidate_snapshot_id,
+            self.candidate_snapshot_sha256,
+            self.projection_id,
+            self.projection_sha256,
+            self.routing_decision_id,
+            self.routing_decision_sha256,
+            self.work_order_id,
+            self.work_order_sha256,
+            self.prompt_sha256,
+            self.provider,
+            self.requested_model,
+        ):
+            raise ValueError("independent review id must bind the sealed logical attempt")
+        return self
+
+
+class StructuredRuleParseProposal(CommonEnvelope):
+    proposal_id: str
+    attempt_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    projection_id: str
+    projection_sha256: str
+    routing_decision_id: str
+    routing_decision_sha256: str
+    work_order_id: str
+    work_order_sha256: str
+    rule_source_artifact_id: str
+    rule_source_sha256: str
+    provider: str
+    requested_model: str
+    reported_model: str | None = None
+    prompt_version: str
+    schema_version_provider: str
+    prompt_sha256: str
+    provider_wrapper_sha256: str
+    provider_return_sha256: str
+    usage: dict[str, int] = Field(default_factory=dict)
+    cost_usd_micros: int | None = Field(default=None, ge=0)
+    duration_ms: int | None = Field(default=None, ge=0)
+    proposals: tuple[RuleParseFieldProposal, ...]
+
+    @field_validator(
+        "candidate_snapshot_sha256", "projection_sha256", "routing_decision_sha256",
+        "work_order_sha256", "rule_source_sha256", "prompt_sha256",
+        "provider_wrapper_sha256", "provider_return_sha256",
+    )
+    @classmethod
+    def proposal_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator(
+        "proposal_id", "attempt_id", "candidate_snapshot_id", "projection_id",
+        "routing_decision_id", "work_order_id", "rule_source_artifact_id",
+        "provider", "requested_model", "prompt_version", "schema_version_provider",
+    )
+    @classmethod
+    def proposal_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("proposal binding fields must not be blank")
+        return value
+
+    @field_validator("reported_model")
+    @classmethod
+    def optional_proposal_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None and value.strip() else None
+
+    @field_validator("usage")
+    @classmethod
+    def proposal_usage(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(not key.strip() or count < 0 for key, count in value.items()):
+            raise ValueError("usage must be nonnegative")
+        return value
+
+    @model_validator(mode="after")
+    def proposal_identity(self) -> "StructuredRuleParseProposal":
+        if self.proposal_id != self.record_id or not self.proposals:
+            raise ValueError("proposal id must match and proposals must not be empty")
+        names = tuple(item.field_name for item in self.proposals)
+        if len(names) != len(set(names)):
+            raise ValueError("each field may have one proposal")
+        if self.record_id != stable_record_id(
+            "structured_rule_parse_proposal",
+            self.attempt_id,
+            self.candidate_snapshot_id,
+            self.candidate_snapshot_sha256,
+            self.projection_id,
+            self.projection_sha256,
+            self.routing_decision_id,
+            self.routing_decision_sha256,
+            self.work_order_id,
+            self.work_order_sha256,
+            self.prompt_sha256,
+            self.provider,
+            self.requested_model,
+        ):
+            raise ValueError("proposal id must bind the sealed logical attempt")
+        return self
+
+
+class IndependentReviewAttemptReceipt(CommonEnvelope):
+    receipt_id: str
+    attempt_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    work_order_id: str
+    work_order_sha256: str
+    prompt_sha256: str
+    provider_wrapper_sha256: str | None = None
+    provider_return_sha256: str | None = None
+    provider: str
+    requested_model: str
+    status: IndependentReviewAttemptStatus
+    reason_codes: tuple[str, ...]
+    usage: dict[str, int] = Field(default_factory=dict)
+    cost_usd_micros: int | None = Field(default=None, ge=0)
+    duration_ms: int | None = Field(default=None, ge=0)
+
+    @field_validator(
+        "candidate_snapshot_sha256", "work_order_sha256", "prompt_sha256",
+        "provider_wrapper_sha256", "provider_return_sha256",
+    )
+    @classmethod
+    def attempt_hashes(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator(
+        "receipt_id", "attempt_id", "candidate_snapshot_id", "work_order_id",
+        "provider", "requested_model",
+    )
+    @classmethod
+    def attempt_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("attempt receipt fields must not be blank")
+        return value
+
+    @field_validator("reason_codes")
+    @classmethod
+    def attempt_reasons(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(sorted(item.strip() for item in value))
+        if not cleaned or any(not item for item in cleaned) or len(cleaned) != len(set(cleaned)):
+            raise ValueError("attempt reason codes must be unique nonblank strings")
+        return cleaned
+
+    @field_validator("usage")
+    @classmethod
+    def attempt_usage(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(not key.strip() or count < 0 for key, count in value.items()):
+            raise ValueError("usage must be nonnegative")
+        return value
+
+    @model_validator(mode="after")
+    def attempt_identity(self) -> "IndependentReviewAttemptReceipt":
+        if self.receipt_id != self.record_id:
+            raise ValueError("attempt receipt id must equal record_id")
+        expected = stable_record_id(
+            "independent_review_attempt",
+            self.attempt_id,
+            self.candidate_snapshot_id,
+            self.candidate_snapshot_sha256,
+            self.work_order_id,
+            self.work_order_sha256,
+            self.provider,
+            self.requested_model,
+        )
+        if self.record_id != expected:
+            raise ValueError("attempt receipt id must bind the logical attempt")
+        if self.status == IndependentReviewAttemptStatus.ACCEPTED and (
+            self.provider_wrapper_sha256 is None or self.provider_return_sha256 is None
+        ):
+            raise ValueError("accepted attempt requires provider artifact hashes")
+        return self
+
+
+class RuleInterpretationPatch(AlphaContract):
+    field_path: str
+    old_value_hash: str
+    new_value: str
+    source_segment_id: str
+    source_artifact_id: str
+    source_content_sha256: str
+    exact_quote: str
+    quote_start: int = Field(ge=0)
+    quote_end: int = Field(gt=0)
+
+    @field_validator("field_path", "new_value", "source_segment_id", "source_artifact_id", "exact_quote")
+    @classmethod
+    def patch_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("patch fields must not be blank")
+        return value
+
+    @field_validator("old_value_hash", "source_content_sha256")
+    @classmethod
+    def patch_hash(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @model_validator(mode="after")
+    def patch_span(self) -> "RuleInterpretationPatch":
+        if self.quote_end - self.quote_start != len(self.exact_quote):
+            raise ValueError("patch quote offsets must match the exact quote")
+        return self
+
+
+class RuleReviewApproval(CommonEnvelope):
+    review_receipt_id: str
+    rule_contract_draft_id: str
+    before_hash: str
+    before_draft: dict[str, str]
+    reviewer_id: str
+    reviewed_at: datetime
+    action: RuleReviewAction
+    reason_codes: tuple[str, ...]
+    review_note: str = ""
+    patches: tuple[RuleInterpretationPatch, ...] = ()
+    after_draft_id: str | None = None
+    after_hash: str | None = None
+    after_draft: dict[str, str] | None = None
+
+    @field_validator("before_hash", "after_hash")
+    @classmethod
+    def approval_hashes(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def approval_clock(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def approval_identity(self) -> "RuleReviewApproval":
+        if self.review_receipt_id != self.record_id or not self.reason_codes:
+            raise ValueError("approval receipt id must match and include reasons")
+        if content_sha256(self.before_draft) != self.before_hash:
+            raise ValueError("before draft does not match before_hash")
+        if len(self.reason_codes) != len(set(self.reason_codes)) or any(not code.strip() for code in self.reason_codes):
+            raise ValueError("approval reasons must be unique nonblank strings")
+        if self.action == RuleReviewAction.PATCH and (
+            not self.patches or self.after_hash is None or self.after_draft_id is None or self.after_draft is None
+        ):
+            raise ValueError("patch approval requires patches and resealed after draft")
+        if self.action != RuleReviewAction.PATCH and (
+            self.patches or self.after_hash is not None or self.after_draft_id is not None or self.after_draft is not None
+        ):
+            raise ValueError("only PATCH may carry a replacement draft")
+        if self.action == RuleReviewAction.PATCH:
+            fields = tuple(patch.field_path for patch in self.patches)
+            if len(fields) != len(set(fields)):
+                raise ValueError("a field may be patched only once per approval")
+            replay = dict(self.before_draft)
+            for patch in self.patches:
+                if patch.field_path not in replay:
+                    raise ValueError("patch field is absent from before draft")
+                old_hash = hashlib.sha256(replay[patch.field_path].encode("utf-8")).hexdigest()
+                if old_hash != patch.old_value_hash:
+                    raise ValueError("patch old value hash is stale")
+                replay[patch.field_path] = patch.new_value
+            if replay != self.after_draft or content_sha256(replay) != self.after_hash:
+                raise ValueError("after draft is not the ordered patch result")
+            if self.after_draft_id != stable_record_id(
+                "rule_contract_draft", self.rule_contract_draft_id, self.after_hash
+            ):
+                raise ValueError("after draft id must bind the patched draft")
+        expected_id = stable_record_id(
+            "rule_review_approval",
+            self.rule_contract_draft_id,
+            self.before_hash,
+            self.action,
+            self.reason_codes,
+            self.patches,
+            self.after_draft_id,
+            self.after_hash,
+        )
+        if self.record_id != expected_id:
+            raise ValueError("approval receipt id must be content-derived")
+        return self
+
+
 class RuleGate(StrEnum):
     PASS = "PASS"
     WATCH_RULE = "WATCH_RULE"

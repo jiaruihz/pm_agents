@@ -6,6 +6,15 @@ from .compiler import (
     structured_parse_from_legacy,
 )
 from .gates import evaluate_gate_a, evaluate_gate_b
+from .binding import (
+    BoundRuleProposal,
+    CanonicalRuleSegment,
+    RuleBindingError,
+    RuleBindingReceipt,
+    apply_rule_review,
+    bind_rule_parse_proposal,
+    binding_source_evidence,
+)
 from .models import (
     CompilationStatus,
     CorpusSourceIdentity,
@@ -37,4 +46,11 @@ __all__ = [
     "evaluate_gate_a",
     "evaluate_gate_b",
     "structured_parse_from_legacy",
+    "BoundRuleProposal",
+    "CanonicalRuleSegment",
+    "RuleBindingError",
+    "RuleBindingReceipt",
+    "apply_rule_review",
+    "bind_rule_parse_proposal",
+    "binding_source_evidence",
 ]

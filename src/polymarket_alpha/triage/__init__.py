@@ -32,6 +32,15 @@ from .routing import (
     deterministic_eligibility,
     route_triage,
 )
+from .independent_review import (
+    GLM53_REVIEW_VERSION,
+    Glm53WorkOrder,
+    ImportedIndependentReview,
+    IndependentReviewError,
+    IndependentReviewQuarantine,
+    build_glm53_work_order,
+    import_independent_review,
+)
 
 __all__ = [
     "GLM_SEMANTIC_TRIAGE_VERSION",
@@ -62,4 +71,11 @@ __all__ = [
     "compare_typed_reviews",
     "deterministic_eligibility",
     "route_triage",
+    "GLM53_REVIEW_VERSION",
+    "Glm53WorkOrder",
+    "ImportedIndependentReview",
+    "IndependentReviewError",
+    "IndependentReviewQuarantine",
+    "build_glm53_work_order",
+    "import_independent_review",
 ]

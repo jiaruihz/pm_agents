@@ -1,0 +1,10 @@
+PASS
+
+Scoped runtime files:
+- src/polymarket_alpha/triage/independent_review.py
+- src/polymarket_alpha/rules/binding.py
+- scripts/ops/polymarket_alpha_glm53_independent_review.py
+
+No import of requests, httpx, aiohttp, websocket, socket, subprocess,
+importlib, py_clob_client, Selenium or Playwright. No order, signing or
+private-key capability. The sidecar creates/validates offline JSON only.

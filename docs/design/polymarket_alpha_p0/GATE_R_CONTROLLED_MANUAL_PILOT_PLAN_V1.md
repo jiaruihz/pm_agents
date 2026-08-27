@@ -1,6 +1,6 @@
 # Gate R Controlled Manual GPT Pro Pilot Plan V1
 
-Status: DESIGN_ACCEPTED_IMPLEMENTATION_NOT_STARTED
+Status: IMPLEMENTATION_IN_PROGRESS_WP1_WP2_COMPLETE
 Entry: WP1 through WP5 must pass before WP6 pilot authorization.
 
 ## Work packages
@@ -18,6 +18,7 @@ Rollback: feature-disable triage routing and retain append-only records.
 WP2 — Independent GLM-5.3 and rule binding
 
 Owner: sole Rule/shared-contract owner.
+Status: COMPLETE; evidence: `GATE_R_WP2-evidence-seal/`.
 Deliver: typed independent review and rule proposal, sidecar adapter,
 no-GLM-4.7-input policy, quote binder, bounded human rule patch/approval.
 Verify: prompt isolation, fabricated/cross-source quote, stale patch, risk-tier,

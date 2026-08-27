@@ -1,0 +1,8 @@
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_gate_r_glm53_wp2.py tests/polymarket_alpha/test_gate_r_routing_wp1.py
+PYTHONPATH=. .venv/bin/pytest -q --junitxml=docs/design/polymarket_alpha_p0/GATE_R_WP2-evidence-seal/test-results/focused.xml tests/polymarket_alpha/test_gate_r_routing_wp1.py tests/polymarket_alpha/test_gate_r_glm53_wp2.py tests/polymarket_alpha/test_glm_semantic_triage.py tests/polymarket_alpha/test_rule_gates_p0_07.py tests/polymarket_alpha/test_contracts_p0_01.py tests/polymarket_alpha/test_contracts_p0_01r2.py
+PYTHONPATH=. .venv/bin/pytest -q --junitxml=docs/design/polymarket_alpha_p0/GATE_R_WP2-evidence-seal/test-results/full-alpha.xml tests/polymarket_alpha
+.venv/bin/python -m py_compile src/polymarket_alpha/contracts/models.py src/polymarket_alpha/triage/independent_review.py src/polymarket_alpha/rules/binding.py scripts/ops/polymarket_alpha_glm53_independent_review.py tests/polymarket_alpha/test_gate_r_glm53_wp2.py
+.venv/bin/python scripts/ops/polymarket_alpha_glm53_independent_review.py --print-schema
+rg capability-import scan over the three WP2 runtime/sidecar modules
+shasum -a 256 -c docs/design/polymarket_alpha_p0/GATE_R_DESIGN_MANIFEST.sha256
+git diff --check

@@ -34,8 +34,13 @@ DEFER_NONTERMINAL.
 
 ## IndependentSemanticReview and StructuredRuleParseProposal
 
-Both bind review_id, attempt_id, projection_id/hash, provider/model,
-prompt/schema versions and usage/cost/duration receipt.
+Both bind review/proposal id, attempt id, Candidate snapshot id/hash,
+projection id/hash, routing-decision id/hash, work-order id/hash, canonical rule
+source artifact/hash, provider/requested/reported model, prompt/schema versions,
+prompt hash, raw wrapper hash, provider-return hash and usage/cost/duration.
+The logical record id deliberately excludes provider-return bytes so a second,
+different return for the same sealed attempt becomes a repository content
+conflict instead of a second logical result.
 
 Semantic review contains topic, entities, relevant_clocks, source_type_hints,
 researchability, ambiguities and independent_disposition_proposal.
@@ -50,8 +55,20 @@ Required fields: review_receipt_id, rule_contract_draft_id, before_hash,
 reviewer_id, reviewed_at_utc, action, reason_codes, audit-only review_note and
 nullable after_draft_id/hash.
 
-Patch operations bind field_path, old_value_hash, new_value, source_segment_id
-and exact_quote. Action is APPROVE, PATCH, DEFER or REQUEST_CORRECTION.
+Patch operations bind field_path, old_value_hash, new_value, source segment and
+artifact identity, source-content hash, exact quote and recomputed offsets.
+Approval contains the before draft and, for PATCH, the ordered after draft;
+model validation replays unique field patches and verifies before/after hashes,
+after-draft identity and receipt identity. Action is APPROVE, PATCH, DEFER or
+REQUEST_CORRECTION.
+
+## IndependentReviewAttemptReceipt
+
+Every external attempt binds the logical work order, Candidate snapshot,
+provider/model, prompt hash, exact wrapper/return hashes when present,
+usage/cost/duration and one status: ACCEPTED, QUARANTINED or BUDGET_EXCEEDED.
+Schema, leakage and budget failures remain append-only receipts attached to the
+typed quarantine; they cannot advance.
 
 ## BlindResearchQuestionSet
 
