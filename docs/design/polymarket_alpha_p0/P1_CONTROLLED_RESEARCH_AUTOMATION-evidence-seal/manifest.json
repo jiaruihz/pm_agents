@@ -1,0 +1,30 @@
+{
+  "code_commit": "b11ba6953508ad4eeeb6b2a500b851b1c65a4924",
+  "disposition": "READY_FOR_CONTROLLED_EXTERNAL_RESEARCH_PILOT",
+  "readiness_scope": "OFFLINE_AUTOMATION_BASELINE_ONLY",
+  "work_packages": {
+    "P1-A03": "COMPLETE",
+    "P1-A04": "COMPLETE",
+    "P1-A05": "COMPLETE",
+    "P1-A06": "COMPLETE",
+    "P1-A07": "COMPLETE"
+  },
+  "tests": {
+    "focused": 40,
+    "full_alpha": 631,
+    "failed": 0
+  },
+  "capability_audit": {
+    "modules": 4,
+    "violations": 0
+  },
+  "independent_review": {
+    "critical": 0,
+    "major_found": 1,
+    "major_closed": 1,
+    "remaining": 0
+  },
+  "external_research_network_pilot": "NOT_APPROVED",
+  "read_only_operational_pilot": "NOT_APPROVED",
+  "live_order_signing_private_key": "STRICTLY_OUT_OF_SCOPE"
+}
