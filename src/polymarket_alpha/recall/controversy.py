@@ -247,6 +247,14 @@ class ControversySkip(AlphaContract):
     reason: ControversySkipReason
     detail: str
 
+    @field_validator("source_path", "detail")
+    @classmethod
+    def skip_fields_are_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("skip fields must not be blank")
+        return value
+
 
 class ControversyRejectionReason(StrEnum):
     SOURCE_IDENTITY_MISMATCH = "SOURCE_IDENTITY_MISMATCH"
@@ -264,6 +272,14 @@ class ControversyRejection(AlphaContract):
     case_id: str
     reason: ControversyRejectionReason
     detail: str
+
+    @field_validator("source_path", "case_id", "detail")
+    @classmethod
+    def rejection_fields_are_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("rejection fields must not be blank")
+        return value
 
 
 # Closed feature vocabulary: source/PIT binding only.  Anything outside it

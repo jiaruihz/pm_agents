@@ -1,0 +1,3 @@
+root=/Users/deepsleep/projects/pm_agents/src/polymarket_alpha
+passed=True
+violations=0

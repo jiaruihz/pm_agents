@@ -27,10 +27,12 @@ from src.polymarket_alpha.recall.controversy import (
     CONTROVERSY_RECALLER_VERSION,
     ControversyFinding,
     ControversyMarketMapping,
+    ControversyRejection,
     ControversyRejectionReason,
     ControversyRecallOutcome,
     ControversyRecallRequest,
     ControversyRecaller,
+    ControversySkip,
     ControversySkipReason,
     ControversySourceExpectation,
     ControversySourceIdentity,
@@ -304,6 +306,57 @@ def test_duplicate_logical_case_is_adjudicated_deterministically() -> None:
         mirror_identity.source_path,
     }
     assert "conflicting entries" in conflicting[0].detail
+
+
+def test_intra_payload_duplicate_case_ids_are_adjudicated() -> None:
+    corpus = _payload("corpus_v1.json")
+    redundant = corpus.model_copy(update={"cases": corpus.cases + (corpus.cases[0],)})
+    redundant_outcome = _recall(_request(redundant))
+    assert {hit.features["case_id"] for hit in redundant_outcome.hits} == {
+        "case-001", "case-002", "case-003"
+    }
+    intra_dups = [
+        item for item in redundant_outcome.rejections
+        if item.reason is ControversyRejectionReason.DUPLICATE_CASE
+    ]
+    assert [(item.case_id, item.source_path) for item in intra_dups] == [
+        ("case-001", corpus.identity.source_path)
+    ]
+
+    conflicting = corpus.model_copy(
+        update={
+            "cases": corpus.cases
+            + (corpus.cases[0].model_copy(update={"finding": ControversyFinding.RESOLUTION_DISPUTED}),)
+        }
+    )
+    conflict_outcome = _recall(_request(conflicting))
+    assert {hit.features["case_id"] for hit in conflict_outcome.hits} == {"case-002", "case-003"}
+    intra_conflicts = [
+        item for item in conflict_outcome.rejections
+        if item.reason is ControversyRejectionReason.DUPLICATE_CASE_CONFLICT
+    ]
+    assert [(item.case_id, item.source_path) for item in intra_conflicts] == [
+        ("case-001", corpus.identity.source_path),
+        ("case-001", corpus.identity.source_path),
+    ]
+
+
+def test_skip_and_rejection_contracts_reject_blank_fields() -> None:
+    with pytest.raises(ValueError, match="blank"):
+        ControversySkip(
+            provider_id=CONTROVERSY_PROVIDER_ID,
+            source_path=" ",
+            reason=ControversySkipReason.SOURCE_MISSING,
+            detail="x",
+        )
+    with pytest.raises(ValueError, match="blank"):
+        ControversyRejection(
+            provider_id=CONTROVERSY_PROVIDER_ID,
+            source_path="/frozen/x",
+            case_id=" ",
+            reason=ControversyRejectionReason.UNMAPPED_MARKET,
+            detail="y",
+        )
 
 
 def test_missing_source_is_a_typed_skip_not_a_global_failure() -> None:
