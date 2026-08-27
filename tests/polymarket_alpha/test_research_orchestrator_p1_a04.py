@@ -7,6 +7,7 @@ from decimal import Decimal
 import json
 from pathlib import Path
 import sqlite3
+from unittest.mock import Mock
 
 import pytest
 
@@ -25,12 +26,14 @@ from src.polymarket_alpha.contracts import (
 )
 from src.polymarket_alpha.pilot import run_offline_fixture_pilot
 from src.polymarket_alpha.research import (
+    ResearchBindingError,
     DeterministicFakeExecutor,
     DraftClaim,
     DraftEstimate,
     DraftSource,
     ResearchBaselineError,
     ResearchDraft,
+    build_research_job,
     ResearchResumeError,
     prepare_research_execution,
     resume_research_execution,
@@ -265,6 +268,54 @@ def test_resume_rejects_changed_rule_and_market_requires_blind_baseline(tmp_path
             worker_id="fixture-worker",
             run_id="p1-a04-market",
             created_at=market_packet.created_at,
+        )
+
+
+def test_market_execution_seals_exact_accepted_blind_baseline(tmp_path: Path) -> None:
+    from tests.polymarket_alpha.test_market_research_p0_08c import (
+        _accepted_blind_result,
+        _freeze,
+    )
+
+    repository = Mock(spec=AlphaRepository)
+    packet = _freeze()
+    accepted = _accepted_blind_result()[4]
+    created = packet.created_at
+    prepared = prepare_research_execution(
+        repository=repository,
+        artifact_root=tmp_path,
+        packet=packet,
+        rule_contract=packet.rule_contract,
+        provider_policy_id="fixture-provider-v1",
+        source_policy_id="fixture-sources-v1",
+        max_attempts=1,
+        available_at=created,
+        expires_at=created + timedelta(hours=1),
+        leased_at=created,
+        lease_duration=timedelta(minutes=10),
+        worker_id="fixture-worker",
+        run_id="p1-a04-market-valid",
+        created_at=created,
+        accepted_blind_result=accepted,
+    )
+    brief = json.loads((tmp_path / prepared.brief_locator).read_bytes())
+    assert brief["accepted_blind_result_payload"]["record_id"] == accepted.record_id
+
+    brief["accepted_blind_result_payload"]["producer"] = "tampered-provider"
+    tampered = canonical_json(brief).encode("utf-8")
+    with pytest.raises(ResearchBindingError, match="frozen packet"):
+        build_research_job(
+            packet=packet,
+            brief_bytes=tampered,
+            brief_artifact_locator="_sealed/research_briefs/tampered.json",
+            rule_contract=packet.rule_contract,
+            provider_policy_id="fixture-provider-v1",
+            source_policy_id="fixture-sources-v1",
+            max_attempts=1,
+            available_at=created,
+            expires_at=created + timedelta(hours=1),
+            run_id="p1-a04-market-tampered",
+            created_at=created,
         )
 
 

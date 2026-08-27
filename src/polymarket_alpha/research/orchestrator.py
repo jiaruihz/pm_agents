@@ -141,7 +141,11 @@ def prepare_research_execution(
 
     _validate_market_baseline(packet, accepted_blind_result)
     created_at = ensure_utc(created_at)
-    brief_bytes = build_research_brief(packet, created_at=created_at).canonical_bytes()
+    brief_bytes = build_research_brief(
+        packet,
+        created_at=created_at,
+        accepted_blind_result=accepted_blind_result,
+    ).canonical_bytes()
     brief_hash = bytes_sha256(brief_bytes)
     brief_locator = f"_sealed/research_briefs/{packet.record_id}/{brief_hash}.json"
     try:

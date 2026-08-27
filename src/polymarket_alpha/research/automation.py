@@ -21,7 +21,7 @@ from ..contracts import (
     BlindResearchPacket, MarketResearchPacket, PacketStage, ResearchAttempt,
     ResearchJob, ResearchJobStatus, ResearchJobTransition,
     ResearchReturnDisposition, ResearchReturnReceipt, ResearchTransitionReason,
-    ResearchWorkOrder, RuleContract, blind_leak_reasons, bytes_sha256,
+    ResearchResultEnvelope, ResearchWorkOrder, RuleContract, blind_leak_reasons, bytes_sha256,
     canonical_json, stable_record_id,
 )
 from ..contracts.base import ensure_utc
@@ -166,14 +166,30 @@ def _validate_brief(packet: ResearchPacketValue, brief_bytes: bytes) -> None:
         return
     try:
         value = json.loads(brief_bytes)
-    except (TypeError, json.JSONDecodeError) as error:
+        blind_result = ResearchResultEnvelope.model_validate(
+            value.get("accepted_blind_result_payload")
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise ResearchBindingError("brief bytes must be JSON rendered by ResearchBrief") from error
+    packet_payload = packet.model_dump(mode="json", exclude_none=False)
+    packet_bytes = canonical_json(packet_payload).encode("utf-8")
+    blind_refs = tuple(
+        item for item in packet.provenance if item.relation == "accepted_blind_result"
+    )
     if not isinstance(value, dict) or (
         value.get("packet_stage") != packet.packet_stage.value
         or value.get("packet_id") != packet.record_id
         or value.get("packet_sha256") != packet.canonical_sha256
-        or value.get("packet_bytes_sha256") != bytes_sha256(canonical_json(packet).encode("utf-8"))
-        or value.get("packet_payload") != json.loads(canonical_json(packet))
+        or value.get("packet_bytes_sha256") != bytes_sha256(packet_bytes)
+        or value.get("packet_payload") != packet_payload
+        or blind_result.packet_stage != PacketStage.BLIND
+        or blind_result.record_id != packet.blind_result_id
+        or blind_result.packet_id != packet.blind_packet_id
+        or blind_result.evidence != packet.blind_evidence
+        or blind_result.completed_at > packet.created_at
+        or len(blind_refs) != 1
+        or blind_refs[0].source_artifact_id != blind_result.record_id
+        or blind_refs[0].content_sha256 != blind_result.canonical_sha256
     ):
         raise ResearchBindingError("brief bytes do not bind the supplied frozen packet")
 

@@ -8,9 +8,13 @@ import json
 import sys
 
 import pytest
-from src.polymarket_alpha.pilot.operational import OperationalPilotAuthorization
-from src.polymarket_alpha.contracts import stable_record_id
-from src.polymarket_alpha.security import build_mac_local_market_proxy_profile
+from src.polymarket_alpha.pilot.operational import (
+    OperationalPilotAuthorization,
+    OperationalPilotBudget,
+    build_gamma_events_endpoint_policy,
+)
+from src.polymarket_alpha.contracts import canonical_json, content_sha256, stable_record_id
+from src.polymarket_alpha.security import CapabilityDenied, build_mac_local_market_proxy_profile
 
 
 SCRIPT_DIR = Path(__file__).parents[2] / "scripts" / "ops"
@@ -83,7 +87,16 @@ def _proxy_exchange(
     return exchange
 
 
-def _authorization() -> OperationalPilotAuthorization:
+def _authorization(
+    policy=None,
+    budget: OperationalPilotBudget | None = None,
+) -> OperationalPilotAuthorization:
+    policy = policy or build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=5,
+        policy_run_id="read_only_operational_pilot_v1",
+    )
+    budget = budget or gamma.FIRST_PILOT_BUDGET
     return OperationalPilotAuthorization(
         record_id=stable_record_id("operational_authorization", "gamma-test"),
         run_id=stable_record_id("operational_authorization_run", "gamma-test"),
@@ -95,6 +108,8 @@ def _authorization() -> OperationalPilotAuthorization:
         authorization_id="owner-authorized-20260827",
         preflight_manifest_id="preflight-test",
         preflight_manifest_sha256="a" * 64,
+        endpoint_policy_sha256=policy.canonical_sha256,
+        budget_sha256=content_sha256(budget),
         authorized_at=NOW - timedelta(seconds=1),
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -102,15 +117,23 @@ def _authorization() -> OperationalPilotAuthorization:
 
 def _run(tmp_path: Path, **kwargs: object) -> dict[str, object]:
     isolated_name = f"{tmp_path.name}-{hashlib.sha256(str(tmp_path).encode()).hexdigest()[:12]}"
+    budget = kwargs.get("budget", gamma.FIRST_PILOT_BUDGET)
+    policy = kwargs.get("endpoint_policy") or build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=5,
+        policy_run_id="read_only_operational_pilot_v1",
+    )
     defaults: dict[str, object] = {
         "owner_authorization_id": "owner-authorized-20260827",
-        "authorization": _authorization(),
+        "authorization": _authorization(policy, budget),
         "artifact_root": Path("/tmp/polymarket-alpha-pilot") / isolated_name / "run-1",
         "limit": 3,
         "requested_at": NOW,
         "resolver": _resolver,
         "exchange": _exchange(),
         "environment": {},
+        "budget": budget,
+        "endpoint_policy": policy,
     }
     defaults.update(kwargs)
     return gamma.execute_gamma_events(**defaults)  # type: ignore[arg-type]
@@ -135,6 +158,181 @@ def test_happy_path_authorizes_fixed_route_and_writes_immutable_artifacts(tmp_pa
     assert security_path.is_file()
     assert hashlib.sha256(security_path.read_bytes()).hexdigest() == receipt["security_receipt_sha256"]
 
+
+def test_expanded_sealed_page_policy_supports_bounded_offset(tmp_path: Path) -> None:
+    budget = OperationalPilotBudget(
+        max_markets_per_scan=50,
+        max_tokens_per_batch=100,
+        max_demands_per_minute=50,
+        max_network_requests_total=4,
+        max_artifact_bytes_total=5_000_000,
+        max_runtime_minutes=30,
+    )
+    policy = build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=20,
+        policy_run_id="live50-test",
+        allowed_offsets=(0, 20),
+    )
+
+    def exchange(host: str, target: str, addresses: tuple[str, ...], timeout: float, maximum: int):
+        assert host == gamma.GAMMA_HOST
+        assert target == "/events?closed=false&limit=20&offset=20"
+        assert addresses == (PUBLIC_IP,)
+        return gamma.ExchangeResponse(
+            200,
+            {},
+            b'[{"id":"event-20"}]',
+            PUBLIC_IP,
+            NOW + timedelta(seconds=1),
+        )
+
+    receipt = _run(
+        tmp_path,
+        limit=20,
+        offset=20,
+        minimum_event_limit=1,
+        budget=budget,
+        endpoint_policy=policy,
+        max_body_bytes=5_000_000,
+        exchange=exchange,
+    )
+    assert receipt["offset"] == 20
+    assert receipt["event_count"] == 1
+
+    with pytest.raises(CapabilityDenied, match="offset"):
+        _run(
+            tmp_path / "wrong-offset",
+            limit=20,
+            offset=40,
+            minimum_event_limit=1,
+            budget=budget,
+            endpoint_policy=policy,
+            max_body_bytes=5_000_000,
+            exchange=exchange,
+        )
+
+
+def test_authorization_binds_exact_policy_and_budget(tmp_path: Path) -> None:
+    approved_policy = build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=5,
+        policy_run_id="approved-policy",
+    )
+    different_policy = build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=5,
+        policy_run_id="different-policy",
+    )
+    authorization = _authorization(approved_policy, gamma.FIRST_PILOT_BUDGET)
+    with pytest.raises(gamma.GammaPilotDenied, match="policy does not match"):
+        _run(
+            tmp_path / "policy",
+            authorization=authorization,
+            endpoint_policy=different_policy,
+        )
+
+    different_budget = OperationalPilotBudget(
+        max_markets_per_scan=5,
+        max_tokens_per_batch=10,
+        max_demands_per_minute=5,
+        max_network_requests_total=1,
+        max_artifact_bytes_total=50_000_000,
+        max_runtime_minutes=30,
+    )
+    with pytest.raises(gamma.GammaPilotDenied, match="budget does not match"):
+        _run(
+            tmp_path / "budget",
+            authorization=authorization,
+            endpoint_policy=approved_policy,
+            budget=different_budget,
+        )
+
+
+def test_persistent_budget_ledger_blocks_second_distinct_request(tmp_path: Path) -> None:
+    budget = OperationalPilotBudget(
+        max_markets_per_scan=5,
+        max_tokens_per_batch=10,
+        max_demands_per_minute=5,
+        max_network_requests_total=1,
+        max_artifact_bytes_total=50_000_000,
+        max_runtime_minutes=30,
+    )
+    policy = build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=5,
+        policy_run_id="one-request-only",
+        allowed_offsets=(0, 20),
+    )
+    first = _run(
+        tmp_path,
+        budget=budget,
+        endpoint_policy=policy,
+    )
+    assert first["offset"] == 0
+
+    def exchange(*_args):
+        raise AssertionError("budget denial must precede the second exchange")
+
+    with pytest.raises(gamma.GammaPilotDenied, match="network request budget exceeded"):
+        _run(
+            tmp_path,
+            budget=budget,
+            endpoint_policy=policy,
+            offset=20,
+            exchange=exchange,
+        )
+
+
+def test_cli_loads_sealed_policy_budget_and_offset(tmp_path: Path, monkeypatch) -> None:
+    budget = gamma.FIRST_PILOT_BUDGET
+    policy = build_gamma_events_endpoint_policy(
+        created_at=NOW,
+        max_event_limit=5,
+        policy_run_id="cli-offset",
+        allowed_offsets=(0, 20),
+    )
+    authorization = _authorization(policy, budget)
+    authorization_path = tmp_path / "authorization.json"
+    policy_path = tmp_path / "policy.json"
+    budget_path = tmp_path / "budget.json"
+    authorization_path.write_text(canonical_json(authorization))
+    policy_path.write_text(canonical_json(policy))
+    budget_path.write_text(canonical_json(budget))
+    captured: dict[str, object] = {}
+
+    def fake_execute(**kwargs):
+        captured.update(kwargs)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(gamma, "execute_gamma_events", fake_execute)
+    assert gamma.main(
+        [
+            "--owner-authorization-id",
+            authorization.authorization_id,
+            "--authorization-json",
+            str(authorization_path),
+            "--endpoint-policy-json",
+            str(policy_path),
+            "--budget-json",
+            str(budget_path),
+            "--artifact-root",
+            "/tmp/polymarket-alpha-pilot/cli-offset-test",
+            "--limit",
+            "5",
+            "--offset",
+            "20",
+            "--minimum-event-limit",
+            "1",
+            "--max-body-bytes",
+            "12345",
+        ]
+    ) == 0
+    assert captured["offset"] == 20
+    assert captured["minimum_event_limit"] == 1
+    assert captured["max_body_bytes"] == 12345
+    assert captured["endpoint_policy"] == policy
+    assert captured["budget"] == budget
 
 @pytest.mark.parametrize("limit", [0, 1, 2, 6, 100])
 def test_limit_bypasses_are_not_expressible(tmp_path: Path, limit: int) -> None:
@@ -173,7 +371,9 @@ def test_response_shape_and_event_limit_fail_closed(tmp_path: Path) -> None:
         _run(tmp_path / "empty", exchange=_exchange(body=b"[]"))
     with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
         _run(tmp_path / "over-limit", exchange=_exchange(body=b"[{},{},{},{}]"))
-    body = b'[{"markets":[{"id":"m1"},{"marketId":2},{"id":"m1"}]}]'
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "missing-event-id", exchange=_exchange(body=b"[{}]"))
+    body = b'[{"id":"event-1","markets":[{"id":"m1"},{"marketId":2},{"id":"m1"}]}]'
     receipt = _run(tmp_path, exchange=_exchange(body=body))
     assert receipt["nested_distinct_market_count"] == 2
 
@@ -238,6 +438,12 @@ def test_unsafe_artifact_roots_are_denied(tmp_path: Path, artifact_root: str) ->
             artifact_root=artifact_root,
             limit=3,
             requested_at=NOW,
+            budget=gamma.FIRST_PILOT_BUDGET,
+            endpoint_policy=build_gamma_events_endpoint_policy(
+                created_at=NOW,
+                max_event_limit=5,
+                policy_run_id="read_only_operational_pilot_v1",
+            ),
             resolver=_resolver,
             exchange=_exchange(),
             environment={},

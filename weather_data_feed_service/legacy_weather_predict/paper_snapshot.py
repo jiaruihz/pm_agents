@@ -929,12 +929,12 @@ def fetch_token_orderbook_batch(
                             "request_attempt_count": attempt,
                             "prior_attempt_errors": attempt_errors,
                             "summary": summary,
-                            "raw": {
-                                "bids": summary["bids"],
-                                "asks": summary["asks"],
-                                "timestamp": raw.get("timestamp"),
-                                "hash": raw.get("hash"),
-                            },
+                            # Preserve the exact response object hashed by
+                            # ``materialize_orderbook_capture``.  Truncating
+                            # this field to the top-N summary left archived
+                            # owner artifacts whose raw bytes could not verify
+                            # against ``raw_payload_hash`` at the Alpha bridge.
+                            "raw": dict(raw),
                         }
                     results[token_id] = (rows_by_token[token_id], book)
                 break

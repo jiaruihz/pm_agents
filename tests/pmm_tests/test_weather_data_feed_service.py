@@ -267,7 +267,10 @@ def test_paper_snapshot_batch_retries_transient_proxy_failure(monkeypatch, tmp_p
                 json=[
                     {
                         "asset_id": row["token_id"],
-                        "bids": [],
+                        "bids": [
+                            {"price": f"0.{index + 10:03d}", "size": "1"}
+                            for index in range(25)
+                        ],
                         "asks": [],
                         "timestamp": "1",
                         "hash": row["token_id"],
@@ -288,6 +291,9 @@ def test_paper_snapshot_batch_retries_transient_proxy_failure(monkeypatch, tmp_p
         "ConnectTimeout: proxy handshake timeout",
         "ConnectTimeout: proxy handshake timeout",
     ]
+    assert len(book["summary"]["bids"]) == 20
+    assert len(book["raw"]["bids"]) == 25
+    assert book["raw_payload_hash"] == paper_snapshot.canonical_json_hash(book["raw"])
 
 
 def test_paper_snapshot_batch_does_not_retry_contract_error(monkeypatch, tmp_path) -> None:

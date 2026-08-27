@@ -360,6 +360,8 @@ class OperationalPilotAuthorization(CommonEnvelope):
     authorization_id: str
     preflight_manifest_id: str
     preflight_manifest_sha256: str
+    endpoint_policy_sha256: str
+    budget_sha256: str
     authorized_at: datetime
     expires_at: datetime
     network_io_authorized: Literal[True] = True
@@ -376,7 +378,9 @@ class OperationalPilotAuthorization(CommonEnvelope):
             raise ValueError("pilot authorization identity must not be blank")
         return value
 
-    @field_validator("preflight_manifest_sha256")
+    @field_validator(
+        "preflight_manifest_sha256", "endpoint_policy_sha256", "budget_sha256"
+    )
     @classmethod
     def preflight_hash_is_valid(cls, value: str) -> str:
         return validate_sha256(value)
@@ -423,6 +427,8 @@ def authorize_operational_preflight(
         "operational_authorization",
         manifest.record_id,
         manifest.canonical_sha256,
+        preflight.endpoint_policy.canonical_sha256,
+        content_sha256(manifest.budget),
         authorization_id,
         authorized_at,
         expires_at,
@@ -438,13 +444,39 @@ def authorize_operational_preflight(
         authorization_id=authorization_id,
         preflight_manifest_id=manifest.record_id,
         preflight_manifest_sha256=manifest.canonical_sha256,
+        endpoint_policy_sha256=preflight.endpoint_policy.canonical_sha256,
+        budget_sha256=content_sha256(manifest.budget),
         authorized_at=authorized_at,
         expires_at=expires_at,
     )
 
 
-def build_first_pilot_endpoint_policy(*, created_at: datetime) -> ReadOnlyPolicyArtifact:
+def build_gamma_events_endpoint_policy(
+    *,
+    created_at: datetime,
+    max_event_limit: int,
+    policy_run_id: str,
+    allowed_offsets: tuple[int, ...] = (0,),
+) -> ReadOnlyPolicyArtifact:
+    """Freeze one public Gamma ``/events`` GET policy.
+
+    ``max_event_limit`` is deliberately an event-page bound rather than a
+    market count: one Gamma event may contain many binary markets.  Callers
+    must enforce their distinct-market budget after flattening the response.
+    The historical 3--5 fixture pilot remains a thin wrapper below.
+    """
+
     created_at = ensure_utc(created_at)
+    if not 1 <= max_event_limit <= 100:
+        raise ValueError("Gamma event page limit must be in [1, 100]")
+    if not policy_run_id.strip():
+        raise ValueError("policy_run_id must not be blank")
+    if (
+        not allowed_offsets
+        or tuple(sorted(set(allowed_offsets))) != allowed_offsets
+        or any(value < 0 for value in allowed_offsets)
+    ):
+        raise ValueError("allowed_offsets must be sorted, unique, and non-negative")
     endpoints = (
         EndpointRule(
             rule_id="gamma_events_public_bounded",
@@ -463,20 +495,22 @@ def build_first_pilot_endpoint_policy(*, created_at: datetime) -> ReadOnlyPolicy
                     key="limit",
                     kind=QueryValueKind.INTEGER_RANGE,
                     minimum=1,
-                    maximum=FIRST_PILOT_BUDGET.max_markets_per_scan,
+                    maximum=max_event_limit,
                 ),
                 QueryValueRule(
                     key="offset",
                     kind=QueryValueKind.EXACT,
-                    exact_values=("0",),
+                    exact_values=tuple(str(value) for value in allowed_offsets),
                 ),
             ),
         ),
     )
     payload = {
         "schema_version": ALPHA_CONTRACT_VERSION,
-        "record_id": stable_record_id("read_only_policy", endpoints, FIRST_PILOT_BUDGET),
-        "run_id": stable_record_id("security_run", "read_only_operational_pilot_v1"),
+        "record_id": stable_record_id(
+            "read_only_policy", endpoints, max_event_limit, policy_run_id
+        ),
+        "run_id": stable_record_id("security_run", policy_run_id),
         "created_at": created_at,
         "source": "alpha_operational_preflight",
         "source_version": OPERATIONAL_PREFLIGHT_VERSION,
@@ -488,6 +522,15 @@ def build_first_pilot_endpoint_policy(*, created_at: datetime) -> ReadOnlyPolicy
         "max_redirects": 0,
     }
     return ReadOnlyPolicyArtifact(**payload)
+
+
+def build_first_pilot_endpoint_policy(*, created_at: datetime) -> ReadOnlyPolicyArtifact:
+    return build_gamma_events_endpoint_policy(
+        created_at=created_at,
+        max_event_limit=FIRST_PILOT_BUDGET.max_markets_per_scan,
+        policy_run_id="read_only_operational_pilot_v1",
+        allowed_offsets=(0,),
+    )
 
 
 def _prepare_operational_preflight(

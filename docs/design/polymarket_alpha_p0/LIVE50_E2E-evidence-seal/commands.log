@@ -1,0 +1,31 @@
+# Commands are normalized for review; secrets and transient shell plumbing are omitted.
+
+# Production identity precheck (read-only)
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+
+# Gamma page execution used execute_gamma_events() with sealed authorization,
+# explicit mac_local_market_proxy_v1, no ambient proxy env, no redirects/auth.
+# Page 0: limit=20 offset=0, 5 MiB response cap.
+# Page 1: limit=20 offset=20, first 1 MiB fail-closed attempt, then 5 MiB.
+
+# Catalog/recall/book orchestration used released repository owners:
+# GammaCatalogIngestor -> RecallOrchestrationRequest -> run_recall_orchestration
+# -> aggregate_recall_hits; existing weather_market_books owner batch implementation
+# -> FrozenOwnerBookArtifact -> normalize_paired_owner_books.
+
+# Full target chain used released coordinator stages:
+# run_gamma_ingest_stage -> run_scan_stage -> run_blind_stage
+# -> prepare/resume deterministic Blind research -> run_blind_resume_stage
+# -> existing owner fresh paired book -> run_book_stage
+# -> prepare/resume deterministic Market research -> run_market_resume_stage.
+
+.venv/bin/python -m pytest -q \
+  tests/polymarket_alpha/test_gamma_catalog_p0_03.py \
+  tests/polymarket_alpha/test_operational_gamma_executor_op_02.py \
+  tests/polymarket_alpha/test_operational_preflight_op_04_05.py \
+  tests/polymarket_alpha/test_research_orchestrator_p1_a04.py \
+  tests/pmm_tests/test_weather_data_feed_service.py
+
+.venv/bin/python -m pytest -q tests/polymarket_alpha
+
+git diff --check -- <owned files>

@@ -62,6 +62,7 @@ KNOWN_GAMMA_MARKET_FIELDS = frozenset(
         "archived",
         "endDate",
         "endDateISO",
+        "endDateIso",
         "endTime",
         "volume",
         "volumeNum",
@@ -179,6 +180,16 @@ def lifecycle_status(payload: Mapping[str, Any]) -> MarketStatus:
     """
 
     missing = [field for field in _LIFECYCLE_FIELDS if field not in payload]
+    # The current public Gamma active-market payload omits ``resolved``.  For
+    # an explicitly active, explicitly non-closed market, resolution is
+    # necessarily false and can be derived without ambiguity.  Closed rows
+    # still fail closed because Gamma exposes several resolution-status fields
+    # whose semantics are not interchangeable.
+    if missing == ["resolved"]:
+        active = _lifecycle_flag(payload, "active")
+        closed = _lifecycle_flag(payload, "closed")
+        if active and not closed:
+            return MarketStatus.ACTIVE
     if missing:
         raise GammaNormalizationError(
             "LIFECYCLE_FIELD_MISSING", f"missing lifecycle fields: {missing}"
@@ -244,7 +255,10 @@ def normalize_market_payload(
         raise GammaNormalizationError("TOKEN_MAPPING_INVALID", str(exc)) from None
 
     question = _required_text(payload, "question", "QUESTION_MISSING")
-    rules_text = payload.get("rules")
+    # Gamma's current public market/event payload calls the binding text
+    # ``description``; older captured fixtures used ``rules``.  Preserve both
+    # spellings and prefer the explicit historical field when present.
+    rules_text = payload.get("rules") or payload.get("description")
     if not isinstance(rules_text, str) or not rules_text.strip():
         raise GammaNormalizationError(
             "RULES_MISSING", "rules must be a non-blank string"
@@ -252,7 +266,10 @@ def normalize_market_payload(
 
     status = lifecycle_status(payload)
     end_at = _parse_utc_datetime(
-        payload.get("endDate") or payload.get("endDateISO") or payload.get("endTime")
+        payload.get("endDate")
+        or payload.get("endDateISO")
+        or payload.get("endDateIso")
+        or payload.get("endTime")
     )
 
     event_titles = sorted(

@@ -11,21 +11,24 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import socket
 import ssl
+import stat
 from typing import Callable, Mapping
 
 from src.polymarket_alpha.contracts import canonical_json, content_sha256
 from src.polymarket_alpha.pilot.operational import (
     FIRST_PILOT_BUDGET,
+    OperationalPilotBudget,
     OperationalPilotAuthorization,
-    build_first_pilot_endpoint_policy,
 )
+from src.polymarket_alpha.security import ReadOnlyPolicyArtifact
 from src.polymarket_alpha.security import (
     MAC_LOCAL_MARKET_PROXY_PROFILE_ID,
     AlphaReadOnlyTransport,
@@ -463,6 +466,9 @@ def _summarize_gamma_events(body: bytes, *, requested_limit: int) -> tuple[int, 
     for event in payload:
         if not isinstance(event, dict):
             raise GammaPilotDenied("Gamma event response entries must be objects")
+        event_id = event.get("id")
+        if not isinstance(event_id, (str, int)) or not str(event_id).strip():
+            raise GammaPilotDenied("Gamma event response entries require a non-blank id")
         markets = event.get("markets", [])
         if markets is None:
             markets = []
@@ -475,6 +481,98 @@ def _summarize_gamma_events(body: bytes, *, requested_limit: int) -> tuple[int, 
             if isinstance(market_id, (str, int)) and str(market_id).strip():
                 market_ids.add(str(market_id).strip())
     return len(payload), len(market_ids)
+
+
+def _record_budget_event(
+    *,
+    root: Path,
+    authorization: OperationalPilotAuthorization,
+    endpoint_policy: ReadOnlyPolicyArtifact,
+    budget: OperationalPilotBudget,
+    event_kind: str,
+    event_key: str,
+    occurred_at: datetime,
+    artifact_bytes: int = 0,
+) -> None:
+    """Append one cross-process budget event under an exclusive file lock."""
+
+    if event_kind not in {"NETWORK_REQUEST", "ARTIFACT_WRITE"}:
+        raise GammaPilotDenied("unknown Gamma budget event kind")
+    if artifact_bytes < 0 or (event_kind == "NETWORK_REQUEST" and artifact_bytes):
+        raise GammaPilotDenied("invalid Gamma budget event byte count")
+    binding = {
+        "authorization_record_id": authorization.record_id,
+        "endpoint_policy_sha256": endpoint_policy.canonical_sha256,
+        "budget_sha256": content_sha256(budget),
+    }
+    event = {
+        "schema": "polymarket_alpha_gamma_budget_event_v1",
+        "event_id": hashlib.sha256(
+            canonical_json((binding, event_kind, event_key)).encode("utf-8")
+        ).hexdigest(),
+        "event_kind": event_kind,
+        "event_key": event_key,
+        "occurred_at": occurred_at.isoformat(),
+        "artifact_bytes": artifact_bytes,
+        **binding,
+    }
+    ledger_path = root / "gamma_budget.jsonl"
+    flags = os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(ledger_path, flags, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
+            raise GammaPilotDenied("Gamma budget ledger is not a private regular file")
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        os.lseek(fd, 0, os.SEEK_SET)
+        raw = b""
+        while True:
+            chunk = os.read(fd, 64 * 1024)
+            if not chunk:
+                break
+            raw += chunk
+        rows: list[dict[str, object]] = []
+        for line in raw.splitlines():
+            try:
+                row = json.loads(line)
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise GammaPilotDenied("Gamma budget ledger is corrupt") from error
+            if not isinstance(row, dict) or any(row.get(key) != value for key, value in binding.items()):
+                raise GammaPilotDenied("Gamma budget ledger binding mismatch")
+            rows.append(row)
+        existing = next((row for row in rows if row.get("event_id") == event["event_id"]), None)
+        if existing is not None:
+            if existing != event:
+                raise GammaPilotDenied("Gamma budget event id collision")
+            return
+        projected = [*rows, event]
+        request_count = len(
+            {
+                str(row["event_key"])
+                for row in projected
+                if row.get("event_kind") == "NETWORK_REQUEST"
+            }
+        )
+        total_artifact_bytes = sum(
+            int(row.get("artifact_bytes", 0))
+            for row in projected
+            if row.get("event_kind") == "ARTIFACT_WRITE"
+        )
+        if request_count > budget.max_network_requests_total:
+            raise GammaPilotDenied("Gamma network request budget exceeded")
+        if total_artifact_bytes > budget.max_artifact_bytes_total:
+            raise GammaPilotDenied("Gamma cumulative artifact budget exceeded")
+        if occurred_at > authorization.authorized_at + timedelta(
+            minutes=budget.max_runtime_minutes
+        ):
+            raise GammaPilotDenied("Gamma runtime budget exceeded")
+        os.write(fd, canonical_json(event).encode("utf-8") + b"\n")
+        os.fsync(fd)
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 
 def execute_gamma_events(
@@ -492,6 +590,10 @@ def execute_gamma_events(
     environment: Mapping[str, str] | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_body_bytes: int = MAX_RESPONSE_BYTES,
+    budget: OperationalPilotBudget = FIRST_PILOT_BUDGET,
+    endpoint_policy: ReadOnlyPolicyArtifact | None = None,
+    minimum_event_limit: int = 3,
+    offset: int = 0,
 ) -> dict[str, object]:
     """Execute exactly the bounded public Gamma events GET, or fail closed."""
 
@@ -499,10 +601,20 @@ def execute_gamma_events(
         raise GammaPilotDenied("explicit owner_authorization_id is required")
     if authorization.authorization_id != owner_authorization_id:
         raise GammaPilotDenied("owner_authorization_id does not match sealed authorization")
-    if not 3 <= limit <= FIRST_PILOT_BUDGET.max_markets_per_scan:
-        raise GammaPilotDenied("limit must be within the first-pilot 3-5 market bound")
-    if timeout_seconds <= 0 or max_body_bytes <= 0 or max_body_bytes > FIRST_PILOT_BUDGET.max_artifact_bytes_total:
+    if endpoint_policy is None:
+        raise GammaPilotDenied("sealed endpoint_policy is required")
+    if authorization.endpoint_policy_sha256 != endpoint_policy.canonical_sha256:
+        raise GammaPilotDenied("endpoint policy does not match sealed authorization")
+    if authorization.budget_sha256 != content_sha256(budget):
+        raise GammaPilotDenied("budget does not match sealed authorization")
+    if not minimum_event_limit <= limit <= budget.max_markets_per_scan:
+        if budget == FIRST_PILOT_BUDGET and minimum_event_limit == 3:
+            raise GammaPilotDenied("limit must be within the first-pilot 3-5 market bound")
+        raise GammaPilotDenied("limit is outside the sealed Gamma event-page budget")
+    if timeout_seconds <= 0 or max_body_bytes <= 0 or max_body_bytes > budget.max_artifact_bytes_total:
         raise GammaPilotDenied("invalid bounded timeout or response size")
+    if offset < 0:
+        raise GammaPilotDenied("offset must be non-negative")
     requested_at = _ensure_utc(requested_at)
     if not authorization.network_io_authorized or requested_at < authorization.authorized_at or requested_at >= authorization.expires_at:
         raise GammaPilotDenied("sealed operational authorization is not active for this request")
@@ -515,17 +627,27 @@ def execute_gamma_events(
 
     request = TransportRequest(
         method=HttpMethod.GET,
-        url=f"https://{GAMMA_HOST}{GAMMA_PATH}?closed=false&limit={limit}&offset=0",
+        url=f"https://{GAMMA_HOST}{GAMMA_PATH}?closed=false&limit={limit}&offset={offset}",
         headers={"Accept": "application/json"},
         requested_at=requested_at,
     )
+    frozen_policy = endpoint_policy
     frozen_transport = transport or AlphaReadOnlyTransport(
-        TransportMode.READ_ONLY, build_first_pilot_endpoint_policy(created_at=requested_at)
+        TransportMode.READ_ONLY, frozen_policy
     )
     transport_authorization = frozen_transport.authorize(request, environment={})
     if transport_authorization.authorized_request.canonical_url != request.url:
         raise GammaPilotDenied("fixed request did not canonicalize exactly")
     request_sha256 = transport_authorization.authorized_request.request_sha256
+    _record_budget_event(
+        root=root,
+        authorization=authorization,
+        endpoint_policy=frozen_policy,
+        budget=budget,
+        event_kind="NETWORK_REQUEST",
+        event_key=request_sha256,
+        occurred_at=requested_at,
+    )
 
     def raise_with_failure_receipt(
         error: BaseException,
@@ -570,7 +692,7 @@ def execute_gamma_events(
 
     dns_answers: tuple[str, ...] = ()
     try:
-        request_target = f"{GAMMA_PATH}?closed=false&limit={limit}&offset=0"
+        request_target = f"{GAMMA_PATH}?closed=false&limit={limit}&offset={offset}"
         if proxy_profile is None:
             dns_answers = resolver(GAMMA_HOST)
             if not dns_answers:
@@ -653,10 +775,9 @@ def execute_gamma_events(
         raise AssertionError("unreachable")
     security_receipt_sha256 = content_sha256(security_receipt)
     security_path = root / "receipts" / f"{request_sha256}.security.json"
-    _immutable_write(security_path, canonical_json(security_receipt).encode("utf-8"))
+    security_bytes = canonical_json(security_receipt).encode("utf-8")
     raw_sha256 = hashlib.sha256(response.body).hexdigest()
     raw_path = root / "raw" / f"{request_sha256}.bin"
-    _immutable_write(raw_path, response.body)
     receipt = {
         "schema": "polymarket_alpha_gamma_read_only_pilot_v1",
         "owner_authorization_id": owner_authorization_id,
@@ -668,6 +789,7 @@ def execute_gamma_events(
         "request_sha256": request_sha256,
         "host": GAMMA_HOST,
         "path": GAMMA_PATH,
+        "offset": offset,
         "method": "GET",
         "requested_at": requested_at.isoformat(),
         "completed_at": completed_at.isoformat(),
@@ -701,6 +823,18 @@ def execute_gamma_events(
     }
     receipt_bytes = canonical_json(receipt).encode("utf-8")
     receipt_path = root / "receipts" / f"{request_sha256}.json"
+    _record_budget_event(
+        root=root,
+        authorization=authorization,
+        endpoint_policy=frozen_policy,
+        budget=budget,
+        event_kind="ARTIFACT_WRITE",
+        event_key=request_sha256,
+        occurred_at=completed_at,
+        artifact_bytes=len(response.body) + len(security_bytes) + len(receipt_bytes),
+    )
+    _immutable_write(security_path, security_bytes)
+    _immutable_write(raw_path, response.body)
     _immutable_write(receipt_path, receipt_bytes)
     return {**receipt, "receipt_artifact_locator": str(receipt_path), "receipt_sha256": content_sha256(receipt)}
 
@@ -709,9 +843,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--owner-authorization-id", required=True)
     parser.add_argument("--authorization-json", required=True, help="sealed OperationalPilotAuthorization JSON")
+    parser.add_argument("--endpoint-policy-json", required=True, help="policy hash-bound by the authorization")
+    parser.add_argument("--budget-json", required=True, help="budget hash-bound by the authorization")
     parser.add_argument("--artifact-root", required=True)
     parser.add_argument("--limit", required=True, type=int)
+    parser.add_argument("--offset", type=int, default=0)
+    parser.add_argument("--minimum-event-limit", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument("--max-body-bytes", type=int, default=MAX_RESPONSE_BYTES)
     parser.add_argument(
         "--proxy-profile",
         choices=("direct", MAC_LOCAL_MARKET_PROXY_PROFILE_ID),
@@ -721,6 +860,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     authorization = OperationalPilotAuthorization.model_validate_json(
         Path(args.authorization_json).read_text(encoding="utf-8")
+    )
+    endpoint_policy = ReadOnlyPolicyArtifact.model_validate_json(
+        Path(args.endpoint_policy_json).read_text(encoding="utf-8")
+    )
+    budget = OperationalPilotBudget.model_validate_json(
+        Path(args.budget_json).read_text(encoding="utf-8")
     )
     proxy_profile = (
         build_mac_local_market_proxy_profile(created_at=_utc_now())
@@ -732,8 +877,13 @@ def main(argv: list[str] | None = None) -> int:
         authorization=authorization,
         artifact_root=args.artifact_root,
         limit=args.limit,
+        offset=args.offset,
+        minimum_event_limit=args.minimum_event_limit,
         requested_at=_utc_now(),
         timeout_seconds=args.timeout_seconds,
+        max_body_bytes=args.max_body_bytes,
+        budget=budget,
+        endpoint_policy=endpoint_policy,
         proxy_profile=proxy_profile,
     )
     print(canonical_json(receipt))

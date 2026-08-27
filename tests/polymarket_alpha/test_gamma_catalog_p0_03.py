@@ -454,6 +454,43 @@ def test_lifecycle_status_mapping(overrides: dict, expected: MarketStatus) -> No
     assert lifecycle_status(market_payload(**overrides)) == expected
 
 
+def test_current_gamma_active_shape_may_omit_resolved() -> None:
+    payload = market_payload()
+    payload.pop("resolved")
+    assert lifecycle_status(payload) is MarketStatus.ACTIVE
+
+
+def test_closed_gamma_shape_may_not_infer_missing_resolved() -> None:
+    from src.polymarket_alpha.adapters.gamma_normalize import GammaNormalizationError
+
+    payload = market_payload(active=False, closed=True)
+    payload.pop("resolved")
+    with pytest.raises(GammaNormalizationError) as excinfo:
+        lifecycle_status(payload)
+    assert excinfo.value.reason_code == "LIFECYCLE_FIELD_MISSING"
+
+
+def test_current_gamma_description_and_end_date_iso_are_normalized(
+    tmp_path: Path,
+) -> None:
+    repository, db = _repository(tmp_path)
+    payload = market_payload(id="50000")
+    payload["description"] = payload.pop("rules")
+    payload["endDateIso"] = payload.pop("endDate")
+    payload.pop("resolved")
+
+    result = _ingestor(repository, db).ingest_pages(
+        [CapturedPage.of([payload], OBSERVED)],
+        run_id="run-current-gamma-shape",
+        ingested_at=INGESTED,
+    )
+
+    assert result.counts()["snapshots"] == 1
+    assert result.snapshots[0].rules_raw == BASE_RULES
+    assert result.snapshots[0].status is MarketStatus.ACTIVE
+    assert result.snapshots[0].end_at is not None
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
