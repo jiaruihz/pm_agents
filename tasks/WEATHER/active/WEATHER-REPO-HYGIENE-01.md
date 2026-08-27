@@ -1,0 +1,58 @@
+# WEATHER-REPO-HYGIENE-01
+
+TASK_ID: WEATHER-REPO-HYGIENE-01
+PROJECT_ID: WEATHER
+WORKSTREAM: REPO-HYGIENE
+STATUS: ACTIVE
+ROLE: COORDINATOR/INTEGRATOR
+REPO_ROOT: /Users/deepsleep/projects/pm_agents
+BASE_COMMIT: 102044b967ed6516deef0b16ca052de41a11d9ce
+OWNER: owner
+CREATED_AT: 2026-08-28T00:35:00+08:00
+HANDOFF_PATH: tasks/WEATHER/handoffs/WEATHER-REPO-HYGIENE-01.md
+
+## Goal
+
+清理 `/Users/deepsleep/projects/pm_agents` 内外由本仓库产生的明确可重建中间态与失去生命周期管理的临时 worktree，并修复持续制造无界日志的 producer；保持所有用户未提交工作、研究 evidence、production runtime、canonical DB、订单/fill 与策略行为不变。
+
+## Owner authorization
+
+用户已明确要求清理 pm_agents 的结构与文件。授权包括把确认无消费者、可重建的 cache/build/log intermediate 和 clean temporary worktree 移入可恢复区；不包括永久清空 Trash、删除研究/raw/canonical 数据、改变策略或启停 live executor。
+
+## Write scope
+
+- 可重建的 `__pycache__`、`.pytest_cache`、`.DS_Store`、frontend tool cache 与经核验的 empty/generated intermediate
+- 本仓库注册且位于 `/private/tmp` 的 clean、无消费者 worktree
+- canonical refresh 有界日志实现及 focused tests（若确认是无界 writer 根因）
+- `docs/WEATHER_JRS_RUNTIME_INCIDENTS.md`
+- 本 task、matching handoff 与 `tasks/projects/WEATHER.md`
+- 一个当前用户 Trash 下的可恢复 cleanup set
+
+## Non-goals
+
+- 不清理 `.git` objects、`.venv`、active `node_modules` 或当前 review artifact。
+- 不删除/归档任何 tracked、modified、untracked 用户源码与文档。
+- 不移动 `runtime` 中无法证明可重建或已有第二正本的研究输入/evidence。
+- 不改变 production release SHA、runtime root、strategy config、live/shadow mode、order/fill/dedupe state，不访问 N100。
+
+## Acceptance
+
+1. pre/post Git status 中 34 个 modified 与 168 个 untracked 用户路径完整保留；本任务只新增 task-owned tracked files。
+2. 每个移出的 cache/worktree/log intermediate 有 producer/consumer、size、open-handle 与恢复证据；Trash 不清空。
+3. clean temporary worktree 移除后 branch/commit 保留；Codex worktree、managed releases 与 categorized data-feed worktree不动。
+4. canonical refresh 日志若处理，必须先修无界 writer，再有界迁移/轮转并证明 LaunchAgent exit 0、fill gate PASS。
+5. production strict manifest/controller/storage identity 保持 healthy，critical runtime/order/fill impact 为 0。
+6. focused tests、task protocol、diff check 通过；若修改代码，完成一次独立只读 review 并修复 findings。
+
+## Required evidence
+
+- before/after disk and candidate inventory
+- worktree HEAD/branch/status/process evidence
+- production manifest/controller output
+- cleanup set path and allocated bytes
+- exact list of preserved large runtime/evidence categories
+
+## Allowed disposition
+
+- READY_FOR_REVIEW
+- BLOCKED
