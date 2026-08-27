@@ -20,6 +20,11 @@ P1_RESOLUTION_SOURCE_INTAKE_OFFLINE=COMPLETE
 P1_LIVE_RESOLUTION_BACKFILL=NOT_IMPLEMENTED
 RESEARCH_BRIEF_RENDERER=COMPLETE
 RESEARCH_DRAFT_COMPILER=COMPLETE
+OFFLINE_OPERATIONAL_BRIDGE=ACCEPTED_CURRENT_BASELINE
+CURRENT_ALPHA_CODE_BASELINE_COMMIT=673767a14d084435bbcdb804ca409b4c822f0d84
+CURRENT_ALPHA_TEST_BASELINE=587_PASSED
+NEXT_ENGINEERING_PHASE=P1_CONTROLLED_RESEARCH_AUTOMATION_OFFLINE
+NEXT_PHASE_PLAN=ALPHA_PROGRAM_INTEGRATION_AND_NEXT_PHASE.md
 BLIND_RESEARCH_EXECUTION=MANUAL_IMMUTABLE_HANDOFF_ONLY
 MARKET_RESEARCH_EXECUTION=MANUAL_IMMUTABLE_HANDOFF_ONLY
 DAILY_SCAN_SCHEDULER=NOT_IMPLEMENTED
@@ -49,7 +54,7 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P0-12 offline E2E | COMPLETE | A01-A18, 371 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
 | Unified offline integration closure | COMPLETE | Four released pre-book providers, staged immutable handoff, formal book gating, Rule A/B, no-order ledger, partial failure and second-scan refresh pass; 430 Alpha tests are sealed under `P0_UNIFIED_OFFLINE_PIPELINE-evidence-seal`. |
 | P1 resolution/learning offline foundation | COMPLETE | Append-only resolution/link/score/calibration contracts, migration `alpha_p1_0001_resolution_learning`, deterministic replay and forged-aggregate rejection are sealed under `P1_RESOLUTION_LEARNING-evidence-seal`. Live resolution ingestion/backfill remains unimplemented. |
-| Offline operational bridge | COMPLETE_AFTER_CODEX_REVIEW | Captured Gamma ingest, bounded paired-demand outbox, existing-owner book bridge and resumable single-market coordinator are sealed under `GLM_OPERATIONAL_REMAINDER_CODEX_REVIEW-evidence-seal`; this is not authorization to run the network pilot. |
+| Offline operational bridge | ACCEPTED_CURRENT_BASELINE | Captured Gamma ingest, bounded paired-demand outbox, existing-owner book bridge and resumable single-market coordinator passed the Codex review seal and GLM's later typed-failure self-review. Current-HEAD verification is 587 Alpha tests, 50 focused operational tests and 0 capability-audit violations; integration truth and next work are in `ALPHA_PROGRAM_INTEGRATION_AND_NEXT_PHASE.md`. This is not authorization to run the network pilot. |
 | P1 correction/backfill planner | COMPLETE | Correction-chain head selection, policy/hash receipt, isolated prediction backfill and atomic persistence grouping are sealed under `P1_BACKFILL_PLANNER-evidence-seal`. No authoritative source adapter or scheduler exists. |
 | P1 captured resolution intake | COMPLETE_OFFLINE | Caller-supplied source bytes, exact RuleContract source/precedence labels and parser assertion are hash-bound into replayable resolution facts under `P1_INTAKE_AND_RESEARCH_BRIEF-evidence-seal`. No online source fetcher exists. |
 | Blind/Market research execution | MANUAL_HANDOFF_ONLY | Packet export, immutable result intake and validation are complete; no model/API/browser executor is owned by Alpha. A human or separately authorized agent must currently return the structured result artifact. |
@@ -78,6 +83,12 @@ Market packets are exported immutably, then wait for a caller-supplied result.
 There is currently no Alpha-owned GPT/API/browser executor and no daily polling
 scheduler. Those are real remaining engineering workstreams, separate from the
 already complete packet/importer and decision logic.
+
+The next implementation phase is now frozen as controlled research automation
+offline, not a live-request phase. Its dependency graph, sole owners,
+acceptance evidence, rollback boundaries, and the later independent research,
+market-data, and daily-shadow gates are specified in
+`ALPHA_PROGRAM_INTEGRATION_AND_NEXT_PHASE.md`.
 
 The next-gate offline preflight is also implemented at source commit
 `ef82da8844562c63eacc5d16a73b17fe5b98abbb`: four synthetic Gamma-shaped binary fixtures, exact canonical
