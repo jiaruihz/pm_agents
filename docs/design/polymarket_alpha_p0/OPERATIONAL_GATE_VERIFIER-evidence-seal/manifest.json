@@ -1,0 +1,31 @@
+{
+  "schema": "polymarket_alpha_operational_gate_verifier_seal_v1",
+  "source_commit": "a5d105e4b584f436a18eb8a3fd9a80259becf369",
+  "implementation_status": "COMPLETE",
+  "runtime_gate_status": "WAITING_FOR_GLM_AND_OPERATIONAL_EVIDENCE",
+  "focused_tests_passed": 43,
+  "alpha_tests_passed": 484,
+  "review_findings": {
+    "P0": 2,
+    "P1": 3,
+    "P2": 1,
+    "fixed": 6
+  },
+  "checked_gates": [
+    "AUTHORIZATION",
+    "GAMMA_TRANSPORT",
+    "SELECTED_MARKET_IDENTITY",
+    "PAIRED_OWNER_BOOKS",
+    "BUDGET",
+    "WEATHER_ISOLATION",
+    "SECURITY_CANARIES",
+    "ROLLBACK",
+    "NO_ORDER_LINEAGE"
+  ],
+  "network_requests": 0,
+  "production_changes": 0,
+  "operational_pilot_certified": false,
+  "execution": "NO_ORDER",
+  "disposition": "IMPLEMENTED_WAITING_FOR_EVIDENCE"
+}
+

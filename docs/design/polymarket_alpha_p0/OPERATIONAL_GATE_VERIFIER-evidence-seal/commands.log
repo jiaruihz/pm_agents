@@ -1,0 +1,27 @@
+2026-08-27 initial verifier tests:
+  .venv/bin/python -m pytest -q tests/polymarket_alpha/test_operational_gate_verifier.py
+  result after fixture fixes: 9 passed
+
+2026-08-27 pre-review focused regression:
+  .venv/bin/python -m pytest -q tests/polymarket_alpha/test_operational_gate_verifier.py tests/polymarket_alpha/test_operational_preflight_op_04_05.py tests/polymarket_alpha/test_governance_seal_p0_10.py
+  result: 41 passed
+
+2026-08-27 independent review:
+  result: 2 P0, 3 P1, 1 P2; all fixed
+  reviewer focused result: 9 passed
+
+2026-08-27 post-review focused regression:
+  same focused command
+  result: 43 passed
+
+2026-08-27 full Alpha regression:
+  .venv/bin/python -m pytest -q tests/polymarket_alpha
+  result: 484 passed
+
+Not run:
+  GLM operational modules
+  owner demand submission
+  production deploy/restart/config write
+  current runtime DB write
+  order/signing/private-key operation
+
