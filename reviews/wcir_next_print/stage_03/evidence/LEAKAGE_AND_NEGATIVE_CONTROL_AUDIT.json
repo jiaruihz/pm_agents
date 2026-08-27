@@ -1,0 +1,11 @@
+{
+  "atlanta_2026_07_17_terminal_false_control": "outside five-city denominator; retained as mandatory future source-onboarding control",
+  "blocker": "insufficient executable date coverage",
+  "book_clock": "WS received_at_utc as-of only",
+  "future_fields_excluded_from_features": true,
+  "official_clock": "official_first_seen_at_utc",
+  "shuffled_time_negative_control": true,
+  "source_clock": "source_detect_ts_utc",
+  "status": "pass_with_coverage_blocker",
+  "within_date_grouping": true
+}

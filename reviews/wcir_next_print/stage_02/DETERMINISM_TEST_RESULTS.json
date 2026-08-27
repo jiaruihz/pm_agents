@@ -1,0 +1,17 @@
+{
+  "duplicate_frames": 0,
+  "external_predecessor_chain_count": 1,
+  "external_predecessors": [
+    {
+      "declared_previous_subscription_epoch_id": "f071c1165c591d2761f716f8c6dc72fe835091b9f9d3ba3382fa247b0a6d9c6b",
+      "first_frozen_epoch_id": "264f0d397dacb4c95e6adbbbf8125e6fa07881602ffc16c4ff170de6aae03156"
+    }
+  ],
+  "input_frames": 12429,
+  "reconnect_chains": 4,
+  "reconstruction_errors": 16,
+  "run_id_forward": "2c33076e11ab85e03cfa21c748718d196460dc59815e437bae9db4136b94ad79",
+  "run_id_reversed": "2c33076e11ab85e03cfa21c748718d196460dc59815e437bae9db4136b94ad79",
+  "snapshot_count": 6250,
+  "status": "pass"
+}

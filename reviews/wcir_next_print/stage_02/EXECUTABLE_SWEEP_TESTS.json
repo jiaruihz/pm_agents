@@ -1,0 +1,16 @@
+{
+  "maker_fill_proxy_only": true,
+  "queue_truth": false,
+  "share_sizes": [
+    1,
+    5,
+    10
+  ],
+  "truth_rows": 6250,
+  "two_sided_fully_executable_counts": {
+    "1.0": 5355,
+    "10.0": 5256,
+    "5.0": 5292
+  },
+  "weather_taker_fee_rate": 0.05
+}

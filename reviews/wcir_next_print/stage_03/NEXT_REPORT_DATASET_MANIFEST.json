@@ -1,0 +1,58 @@
+{
+  "city_scope": [
+    "Amsterdam",
+    "Tokyo",
+    "Helsinki",
+    "Seoul",
+    "Busan"
+  ],
+  "coverage_by_city": {
+    "Amsterdam": {
+      "five_share_30s_executable_oracle_events": 0,
+      "five_share_30s_executable_target_dates": 0,
+      "linked_next_official_events": 87,
+      "linked_target_dates": 16,
+      "raw_fast_events": 87
+    },
+    "Busan": {
+      "five_share_30s_executable_oracle_events": 1,
+      "five_share_30s_executable_target_dates": 1,
+      "linked_next_official_events": 385,
+      "linked_target_dates": 16,
+      "raw_fast_events": 385
+    },
+    "Helsinki": {
+      "five_share_30s_executable_oracle_events": 0,
+      "five_share_30s_executable_target_dates": 0,
+      "linked_next_official_events": 59,
+      "linked_target_dates": 15,
+      "raw_fast_events": 59
+    },
+    "Seoul": {
+      "five_share_30s_executable_oracle_events": 0,
+      "five_share_30s_executable_target_dates": 0,
+      "linked_next_official_events": 268,
+      "linked_target_dates": 14,
+      "raw_fast_events": 268
+    },
+    "Tokyo": {
+      "five_share_30s_executable_oracle_events": 0,
+      "five_share_30s_executable_target_dates": 0,
+      "linked_next_official_events": 42,
+      "linked_target_dates": 14,
+      "raw_fast_events": 42
+    }
+  },
+  "cutoff_date": "2026-08-26",
+  "frozen_dataset": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03/evidence/FROZEN_NEXT_REPORT_EVENTS.jsonl.gz",
+    "row_count": 841,
+    "sha256": "c169c3f8153b562c48a4761c1f9a0151ac4278e1beb57a057385d512474ee26c",
+    "size_bytes": 122585
+  },
+  "linked_next_official_rows": 841,
+  "production_health_boundary": "raw_runtime_read_only; no canonical healthy claim",
+  "row_count": 841,
+  "schema_version": "wcir_next_report_event_v1",
+  "start_date": "2026-08-09"
+}

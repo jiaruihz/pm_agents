@@ -1,0 +1,1646 @@
+{
+  "event_alignments": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02/evidence/EVENT_ALIGNED_BOOK_ROWS_2026-08-26.jsonl.gz",
+    "row_count": 792,
+    "sha256": "beceb1c8737d7abd38d97c6a2142fb9b44f4d7676661f37247deafb9bf56c96d",
+    "size_bytes": 49709
+  },
+  "executable_truths": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02/evidence/FROZEN_EXECUTABLE_BOOK_TRUTHS_2026-08-26.jsonl.gz",
+    "row_count": 6250,
+    "sha256": "fd3c484d779e61f81cbf4a0d249ab7f4e60475ff029bbd75028d019b98fa7b45",
+    "size_bytes": 681099
+  },
+  "rest": {
+    "frozen_rest": {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02/evidence/FROZEN_REST_BOOKS_2026-08-26.jsonl.gz",
+      "row_count": 4788,
+      "sha256": "e69d4451abfbe6931e00d4b4f6eabb75c107e96167a882baf32d6f929c404b6d",
+      "size_bytes": 1741777
+    },
+    "source_files": [
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_000442.jsonl.gz",
+        "sha256": "3ed5096f321d20ede302930166054e6a47c76f58690dc05ab16e435a3b79a4b9",
+        "size_bytes": 784550
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_000942.jsonl.gz",
+        "sha256": "be2f9f43c805f64b3743cb7b66a58b7b5c8e4c8c6f980d333741e55e57886b96",
+        "size_bytes": 785880
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_001442.jsonl.gz",
+        "sha256": "28f21784d11066e30974c05ed9314e0ecd637b9cc77e41317f29024fed5f4c50",
+        "size_bytes": 788095
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_001943.jsonl.gz",
+        "sha256": "9d76c9e93425871b981ea80ab1b6b6b0d02182086061a1887961a1713802bfe2",
+        "size_bytes": 791119
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_002442.jsonl.gz",
+        "sha256": "6ff3288b474198a49bd0a17e49eabdcba3436fc8ff0360e07735427d159ea9da",
+        "size_bytes": 787436
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_002942.jsonl.gz",
+        "sha256": "6eadd484362be89831b40b0f89d88b14bb06d43803389d618af101c73b4e374f",
+        "size_bytes": 786074
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_003443.jsonl.gz",
+        "sha256": "b4a5582abe72bf775b8fc74cba21b0e9dd0df3cb0c0cecdd85f62bc1ba496405",
+        "size_bytes": 778616
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_003942.jsonl.gz",
+        "sha256": "cbbf448053075102240506ab4db7977cebe147605977993850d85ed08666675a",
+        "size_bytes": 782437
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_004442.jsonl.gz",
+        "sha256": "9715fe48a0d7d92481a266b47e80575f371fe24202ed7636f11f0131d1e938ff",
+        "size_bytes": 782882
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_004942.jsonl.gz",
+        "sha256": "5b451525c0ed9377d0f0c8318b088c654b96df61ba028044b577fe8a2d2ddb24",
+        "size_bytes": 782321
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_005442.jsonl.gz",
+        "sha256": "e28167f3894ac248ccf07bdd202461553f6c4069e019e819de086539ca202a2a",
+        "size_bytes": 783107
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_005942.jsonl.gz",
+        "sha256": "8da56ae91e99c1c06102d8abbe4d25dcaef85856517193a5d36e3e0e2bfbaaa2",
+        "size_bytes": 779146
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_010442.jsonl.gz",
+        "sha256": "4e440a4be1e4e23fc732aadc898fe18c02925eeece4179713ff045befd9160f3",
+        "size_bytes": 773525
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_010944.jsonl.gz",
+        "sha256": "96846151dc8b75b3530a6a2038faaf13f0678d9aa8be9e3f332264933daae8dd",
+        "size_bytes": 770679
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_011444.jsonl.gz",
+        "sha256": "e23737204bdb1dd3a0a176855cd97de2bee2779d516b4cf16197be8e548b2ca3",
+        "size_bytes": 770658
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_011943.jsonl.gz",
+        "sha256": "c791755911321e7ceb650c0c5adad27e09caba81bc56138d17d1f1129616b8b5",
+        "size_bytes": 769685
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_012444.jsonl.gz",
+        "sha256": "fe4cee7b3278871cb3ec7a4f1e7652066b732f9740324aa517fba84267f3cb25",
+        "size_bytes": 770099
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_012944.jsonl.gz",
+        "sha256": "60378db2e344012ab0c3e0502340d62c0029a5af8f17d6874aa27b686b89ce3a",
+        "size_bytes": 773655
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_013443.jsonl.gz",
+        "sha256": "a0e80268dc3b899c11499549fca97ca1d85149a5debf5a53c03925a3271cad91",
+        "size_bytes": 773843
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_013944.jsonl.gz",
+        "sha256": "045fb98fe195e8743de2d4bdc894a993215fe08974ccf8ba665addeaca1a32ca",
+        "size_bytes": 773898
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_014443.jsonl.gz",
+        "sha256": "7a5077dd13ebd9b25b7e661fb88c035c482f6202833c33dd4398695757e7e496",
+        "size_bytes": 772628
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_014943.jsonl.gz",
+        "sha256": "b74d84689c0a99d1e05c2ac38da56d7505d2d5c5aad6103ba876dc135feecc79",
+        "size_bytes": 772791
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_015443.jsonl.gz",
+        "sha256": "9c2c6187dd14f576caf9d75f50e1e99b10a00ca2ed6194ce7fbc7eb2a99be942",
+        "size_bytes": 771870
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_015943.jsonl.gz",
+        "sha256": "00bb46fbdb40c6e4e5b5e27ff448e1963038cee16b824e00b88bcac542b9fcb2",
+        "size_bytes": 770138
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_020443.jsonl.gz",
+        "sha256": "ba591d58ecc16c86d4d79831f322ff643e6254f1dfc3072bd5c9ee264e0bebbc",
+        "size_bytes": 769759
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_020943.jsonl.gz",
+        "sha256": "27548f8b014615b9bad95c50e1870ecac3dfc26bc8d366f159db2172531aae38",
+        "size_bytes": 768824
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_021443.jsonl.gz",
+        "sha256": "adfa35cdf98adb901d7c8abbe954ae43acaa6744ad2fbcb6baf2b2fa657fdd21",
+        "size_bytes": 769284
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_021943.jsonl.gz",
+        "sha256": "896863b6bf48429c5d7d142451bbb1a353817c00571e4505878603896a9e0b50",
+        "size_bytes": 769045
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_022444.jsonl.gz",
+        "sha256": "dba1691d6e5dd42ac773f43f4cc0ad6bc678e3170e42c16efe573030eddfccbe",
+        "size_bytes": 765925
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_022943.jsonl.gz",
+        "sha256": "6d627790f4bdefb538ad6e4a4226f9dc7e7ca2cee352b8a33465827d1f37199b",
+        "size_bytes": 767866
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_023443.jsonl.gz",
+        "sha256": "65a6326b5029f9f07f56747ed1f90ee439c82aa8701609c16f1c26b6debf28f3",
+        "size_bytes": 775853
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_023944.jsonl.gz",
+        "sha256": "fab7e6263fdc94f63ad99369ac29cd6a8db03accb73baf01189dcf9e700ac760",
+        "size_bytes": 776644
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_024444.jsonl.gz",
+        "sha256": "9938e83721c10876695251d252b9d9ac60a9e19297f1b08a501051c9af7e7013",
+        "size_bytes": 773594
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_024944.jsonl.gz",
+        "sha256": "568ad3cef1edaa3a5bdacc7c5d432e1c8adca1651d5fc13e7b6cfc4542fe592d",
+        "size_bytes": 775868
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_025443.jsonl.gz",
+        "sha256": "43039304fab9206dbd9195a396cc0b57b31d728925b021de81b94a0920dd4b21",
+        "size_bytes": 769224
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_025943.jsonl.gz",
+        "sha256": "2de43d1fa71dd95b34702389d0c7907658cebf6245a3dac25ee90e78a9e364ee",
+        "size_bytes": 768907
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_030443.jsonl.gz",
+        "sha256": "a13b772fbef2cb8e7474db9cd3dd0a7de241458d137ab73ff0e8aa42b3eb88b6",
+        "size_bytes": 742787
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_030943.jsonl.gz",
+        "sha256": "799c444497721f004d4dcee62a126b086f13db9a629a51dc9e435bfe0da086de",
+        "size_bytes": 743432
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_031443.jsonl.gz",
+        "sha256": "a3a32516be0bdccaed0613de784ec6861a157094327aa46f92492af319a14e57",
+        "size_bytes": 738872
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_031943.jsonl.gz",
+        "sha256": "b0c2fd1c7b7170249823fac21f159c086d47776d04e54cefff74e2163e2b1091",
+        "size_bytes": 744798
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_032443.jsonl.gz",
+        "sha256": "a2da762cf9da3c4357fe0c134e022e117ad0d0b631b4664cb95c3d7a9786ddc9",
+        "size_bytes": 743764
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_032944.jsonl.gz",
+        "sha256": "2bad074d3da478e56b75610efc09cb052b1ce46481e432e2ad2b8f230935af80",
+        "size_bytes": 743752
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_033443.jsonl.gz",
+        "sha256": "2d0a841307fb8b28621766d39620af5e6c66c97bb112d8e8be289c949367620a",
+        "size_bytes": 743889
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_033943.jsonl.gz",
+        "sha256": "c38d9dc30a167f14dbb9f3d11b7927ac4abda2a3b707e2f0bcb1238f41fa9ca0",
+        "size_bytes": 744301
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_034443.jsonl.gz",
+        "sha256": "3a45523a708dcbd8837f87901b643d69be5d72bd8f6c936952f9269fc528bafc",
+        "size_bytes": 744576
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_034943.jsonl.gz",
+        "sha256": "fd9961e2856bd8f674010730ce360c95629e49451d0964fbc7ae0c98da646336",
+        "size_bytes": 744447
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_035444.jsonl.gz",
+        "sha256": "1d3deb52ca4ece6505bf7557d0f78ec1f034e8037127e32cef7fb4c83e2143f7",
+        "size_bytes": 739156
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_035945.jsonl.gz",
+        "sha256": "c599302f3d2ed77d5f65f36964ce5e543f379b2884ba6b30189426443f9921bc",
+        "size_bytes": 733063
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_040444.jsonl.gz",
+        "sha256": "d0143d75d5ec71bbacd24cf25fdc93a3874d75cf4119b3006fc42752bd6a44e3",
+        "size_bytes": 689053
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_040944.jsonl.gz",
+        "sha256": "35d2dc084412f588e2506b33e6d3088070d24792bc38d606d9559f49e57ad687",
+        "size_bytes": 688750
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_041445.jsonl.gz",
+        "sha256": "d18e5fbaaee819ff7c4f95a6a23125f9dc8bb0095c91bc6b5833e251c18ffa97",
+        "size_bytes": 688944
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_041944.jsonl.gz",
+        "sha256": "b45aa60b7131b4f0a1d2671587a7714ea4ef9ee41aa8ea8bb7d378009895864b",
+        "size_bytes": 689988
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_042444.jsonl.gz",
+        "sha256": "8b9c1ba5f5b6556514906a7db00ced6bea4d9b537e599dfc7e20b8f25ad9963c",
+        "size_bytes": 686103
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_042944.jsonl.gz",
+        "sha256": "6cbd43c511ca19f3341d0a8d32160c0cc34feb9d222b55dcf59fdc8affec5886",
+        "size_bytes": 690372
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_043444.jsonl.gz",
+        "sha256": "f58a224b7a72cdbcca36308b4ab4ab719f9d899612bb0bb90976cd12f6f619b5",
+        "size_bytes": 688895
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_043944.jsonl.gz",
+        "sha256": "c1dd208bdc11e1188a6c545ac2f494e981456cbf17be3a55680f01476c73050e",
+        "size_bytes": 689408
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_044444.jsonl.gz",
+        "sha256": "4307a5b21d508daa55c618e2e73ba37f0acb916d0e3a64e8d0271ddabcf3b0f7",
+        "size_bytes": 685496
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_044945.jsonl.gz",
+        "sha256": "f0cf0d276c3bbe84c7484d3b4cd7c503babce92bbd4cec3ac6a14e9a5bdc294a",
+        "size_bytes": 689242
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_045444.jsonl.gz",
+        "sha256": "c4cb1a50fe08b48ba8e9c1ed8e84be252906170c7c876f189662e49c197fce67",
+        "size_bytes": 688553
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_045944.jsonl.gz",
+        "sha256": "f6b9c1201a166662ca28bb75b0805347ae14bf80b789fb69634d0e9a025d19f2",
+        "size_bytes": 684034
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_050444.jsonl.gz",
+        "sha256": "da48e94b85a8005522f1c358cdebaea83465967ad8f1acf3b5aaa0e160ed709a",
+        "size_bytes": 725215
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_050944.jsonl.gz",
+        "sha256": "6a97891ff610042676761230f0c70763181e9162b6542ecc0d4b3c4c9861c8f2",
+        "size_bytes": 727206
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_051444.jsonl.gz",
+        "sha256": "2efde003b506c7f57395dc5bf0c1cf255456da22d4e3dbde47efefd0e0aa4c23",
+        "size_bytes": 726362
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_051944.jsonl.gz",
+        "sha256": "fd83466f29135118bd1cd863602b9ee6d1777238324e417f6de3a25084636ed5",
+        "size_bytes": 726764
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_052444.jsonl.gz",
+        "sha256": "46b49ce6e62445004dc84702fe9b77fbef8163d072b727ac598359a86e54ec6f",
+        "size_bytes": 727028
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_052944.jsonl.gz",
+        "sha256": "9c3a6d5d9cf4e33b1fd53e2e9c6a5142477afc947e9f7fd98359a30ed0796d6d",
+        "size_bytes": 726887
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_053444.jsonl.gz",
+        "sha256": "7eb5c21ab3f0c64ff6c35f4e21a8af13df4e81f1f3a75b738cea8c36927d16ed",
+        "size_bytes": 727327
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_053945.jsonl.gz",
+        "sha256": "97fedcb0c07140b23223c014934033d8edeaf9f6e56bdad8140de8be97dffdc9",
+        "size_bytes": 722710
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_054445.jsonl.gz",
+        "sha256": "629a316e262e19276d0b05ac644945058549134108c811d09d924c355a091d21",
+        "size_bytes": 722627
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_054944.jsonl.gz",
+        "sha256": "d81ec5082f6fcf0e904f79fc737d27715b0e6bbf38fcb083b117c2c18c80d3ad",
+        "size_bytes": 721565
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_055445.jsonl.gz",
+        "sha256": "ea0fb10c6986bf5c28a9f3881deed5c38e28f22fc2fd0e43d564407e0ee0fe19",
+        "size_bytes": 722333
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_055944.jsonl.gz",
+        "sha256": "11dae4c4ba0dab3b26c594e859a65a32a4db589b375fb0ca38cbb37842078921",
+        "size_bytes": 718762
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_060444.jsonl.gz",
+        "sha256": "33972bc864afbd45730b82bd19bd3d93424533711625bfac3e5a48ea46ecec05",
+        "size_bytes": 774464
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_060945.jsonl.gz",
+        "sha256": "59da2a7edab5a9c38ee7124cf02b67c5510d9ee018e8963b03132c99a6842007",
+        "size_bytes": 781330
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_061444.jsonl.gz",
+        "sha256": "d0fbdb2d0e3b348baf16299792ddbef6c2ef46c67f952bfc30c9f3b59debada1",
+        "size_bytes": 781807
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_061944.jsonl.gz",
+        "sha256": "780a2deea5a92e7d6f12f2d4facbdc4c961229e5d848b0fd085ae5a9a910dc08",
+        "size_bytes": 782931
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_062444.jsonl.gz",
+        "sha256": "016132644c36285d03364f245d13f0c2af82a2c5de793a06cb3dbd0eb1843abd",
+        "size_bytes": 779880
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_062944.jsonl.gz",
+        "sha256": "98820bae4ab361eeecd32b1d233c3abd00b27521f3e8f3ca6bf8b238d7cd1fe9",
+        "size_bytes": 780287
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_063444.jsonl.gz",
+        "sha256": "fa3a46297505efd309d265a7abb42b2d9444823eb6b39644bae0408a6624b5eb",
+        "size_bytes": 777048
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_063944.jsonl.gz",
+        "sha256": "eaa9e84359b491471a0958347a0183b5c161e9171e9d67d6cf5e5c6bfa88e08a",
+        "size_bytes": 780131
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_064444.jsonl.gz",
+        "sha256": "49bf3557240c1f32d603a4b9b333ba22b2d301fa0ee3142e88e850bb2ab26c0c",
+        "size_bytes": 780800
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_064944.jsonl.gz",
+        "sha256": "7a585a911b6d113a75503ff16321140e9d8c48d5a5b686a29e91d2646ebe850d",
+        "size_bytes": 781366
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_065445.jsonl.gz",
+        "sha256": "0862d5db11ca118623cdd684fb5fec4ac93e406f4e9d84b97db2727ad25455e3",
+        "size_bytes": 781778
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_065944.jsonl.gz",
+        "sha256": "2f4e2f25008ce2b79d2c1967fffb7520b5a8c8f2aced2d8cca235bdfbbbb4d3a",
+        "size_bytes": 778536
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_070444.jsonl.gz",
+        "sha256": "c9b3831169e40f56512ef0948efa7420b1c449c0a62035a57c1055770f29154a",
+        "size_bytes": 781884
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_070944.jsonl.gz",
+        "sha256": "ca4173d132da8d4fb2adf399462a94310bde0d1b734beef5b00c1c2e6baa5cc7",
+        "size_bytes": 788823
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_071444.jsonl.gz",
+        "sha256": "75779faef3448a16641269697eb4100598eaa2e83b8402655350a075fd176493",
+        "size_bytes": 789368
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_071944.jsonl.gz",
+        "sha256": "f730254d87c72b9339d04e66347cfe2e92b163cd707fbd87ddc2b3e509ce8861",
+        "size_bytes": 787575
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_072444.jsonl.gz",
+        "sha256": "fede70e322564195964344507350fd129d23ab911aa70644956c08e2b2ece117",
+        "size_bytes": 787014
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_072944.jsonl.gz",
+        "sha256": "505b947afc9868b8d7751d9fe38e52b7792d84324e172de61fd89c8ee9c12e7f",
+        "size_bytes": 784682
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_073444.jsonl.gz",
+        "sha256": "80c153942664e3c66eab924daae10efa5238164711c24d50616147db996c76c0",
+        "size_bytes": 790397
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_073944.jsonl.gz",
+        "sha256": "30452f83497bfbf02dfbe8915bf3ce59d6db3469592162a42cd48f0276120239",
+        "size_bytes": 790839
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_074444.jsonl.gz",
+        "sha256": "3327cfdfc7dc77094ea3662dbf69e67752ef2e6f49418054f62f4aa3a630dd95",
+        "size_bytes": 791503
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_074944.jsonl.gz",
+        "sha256": "6df7ec71f53cb7cd7fd92d088c401ded7e8a8b0982b85eaf43a8cc3aedee5c90",
+        "size_bytes": 791216
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_075444.jsonl.gz",
+        "sha256": "265b4a8b704652ad7130febd8d62ec69a7784b67ec5e530036ae58e344f1775f",
+        "size_bytes": 792604
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_075945.jsonl.gz",
+        "sha256": "9d6eb420ac1ef27bf6bc340d8a82366244856d71e85718ebdc8b5efed7720998",
+        "size_bytes": 788923
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_080444.jsonl.gz",
+        "sha256": "08fc2638bbae1ec98a390bcbfe084be2efe09bdb77eb3b92244eef6226e18f76",
+        "size_bytes": 786256
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_080945.jsonl.gz",
+        "sha256": "1797606d1510873756c77b7094c4e5f2af953da7a5692639a0bd17a674b9a0e5",
+        "size_bytes": 787447
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_081444.jsonl.gz",
+        "sha256": "8e040766e8dc3aa7b64e0c4a08c4e78535fbd1ba958a689c20319a7b60db3de5",
+        "size_bytes": 784952
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_081944.jsonl.gz",
+        "sha256": "b73dbbc33fab89c585ced2f646f7956b417dadf07aee22333320cffb3b5070a2",
+        "size_bytes": 786990
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_082444.jsonl.gz",
+        "sha256": "63ecf23ef2603386f83cd67820a4e29b779e9f73611fb0ff3dbfc6e7256fa05f",
+        "size_bytes": 786630
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_082944.jsonl.gz",
+        "sha256": "f363518d481d96492c6a9139a5dd2ff49e11ee2ef1184eb67f8b077b350d6e7c",
+        "size_bytes": 786383
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_083444.jsonl.gz",
+        "sha256": "47585d5940532917149bc1ce3ad50581056e01a0cd3951bc2bb8ed3b7fbbbce9",
+        "size_bytes": 789640
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_083944.jsonl.gz",
+        "sha256": "abaec7b2790a7db8bf7958e7c41bf588e83e3f6f3a205a17648eb938e1861421",
+        "size_bytes": 791791
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_084444.jsonl.gz",
+        "sha256": "1c50ce94a9f5bd788e205f1b6f4a206492676bee177ee0492af2936456b97e21",
+        "size_bytes": 790427
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_084944.jsonl.gz",
+        "sha256": "0ac179ce917b0e3171cdf709ac92ebf798735279c8f5a9951d1f9ab2f349870d",
+        "size_bytes": 789367
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_085444.jsonl.gz",
+        "sha256": "bce967909fdd7fea00eae9ebfdd27af5a357e76d7e3ac7c862c4c586276fbc86",
+        "size_bytes": 788624
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_085945.jsonl.gz",
+        "sha256": "f9cc192822f380be5c636cbcbb8fd22e471f2f0641e0a7cafa21f99319c346d8",
+        "size_bytes": 788272
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_090445.jsonl.gz",
+        "sha256": "f4f61518714809cee9e265955715a01af512631203ee99ebc4cf70b738850eb5",
+        "size_bytes": 774468
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_090945.jsonl.gz",
+        "sha256": "59b8545717616a57547d0da4bd35260d7f98a15be9ebb33caa143071848ee5ce",
+        "size_bytes": 775395
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_091445.jsonl.gz",
+        "sha256": "3a5f06d54d6c928bb4527b4bfd584d3a3dd1837a1db27d399b658fe2a2d01cb5",
+        "size_bytes": 775339
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_091945.jsonl.gz",
+        "sha256": "d95194ce1e28be13e8576ae95f2812eec35c00b0bc8f0d74418f0064086ed46a",
+        "size_bytes": 772072
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_092445.jsonl.gz",
+        "sha256": "4f6efeeccf20dc5319e59f4308643b1a2e15859dc6f526976bf4892aeefafdba",
+        "size_bytes": 771012
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_092945.jsonl.gz",
+        "sha256": "2dbbcda41f8a8db16b18d99cf38e65b33a19ed8b2bde083c677414289befbba5",
+        "size_bytes": 773537
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_093445.jsonl.gz",
+        "sha256": "2fd4c1a9bf179723827ce4f68c37032a63b5e6438ff7e4bbcc7f32f261b651e2",
+        "size_bytes": 771762
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_093945.jsonl.gz",
+        "sha256": "1917ebd0071b462efa3477a4d949ebe626767382ab86ce1f94eecbcb56e36414",
+        "size_bytes": 774273
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_094445.jsonl.gz",
+        "sha256": "ea1c45fa8234fe186c303eac2783f4abc591d1eb584cb47542008537ef9e1340",
+        "size_bytes": 773587
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_094945.jsonl.gz",
+        "sha256": "f832fce81f54cd028c5d163546aea9d5f9c3fbc16fd89b18af907e715ac1137e",
+        "size_bytes": 773450
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_095445.jsonl.gz",
+        "sha256": "eeba5caba93cde780f709d306350aa82cae74cf120907c821558deacd6470c5b",
+        "size_bytes": 773338
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_095945.jsonl.gz",
+        "sha256": "c6a6b8df82272784bba48230cfe81a6366d8e62c09c4dcd530ac60b8e8bab4ae",
+        "size_bytes": 772786
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_100445.jsonl.gz",
+        "sha256": "08df47ea99c290e0af9f9b06c6af2d05b3a374dd52007422ba5c2d705dff6ac1",
+        "size_bytes": 750126
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_100945.jsonl.gz",
+        "sha256": "09bb00f8e88a51f1038470ed8a000b4ce8a1516a1bfa341dcddf8a54e6675eec",
+        "size_bytes": 751331
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_101445.jsonl.gz",
+        "sha256": "41ed9c3712814aa21c2e8ca7dde615825841d338a22114f7fdb79e739d5edbae",
+        "size_bytes": 750467
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_101945.jsonl.gz",
+        "sha256": "a31834f1c038f831a43715f112f9bcae40f31410c8b802eb08cf7c0be65920c9",
+        "size_bytes": 750850
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_102445.jsonl.gz",
+        "sha256": "39a50f5f97051f7910a5252cf1884ff8e51fc76d34ce86f4f371f1177f62d32d",
+        "size_bytes": 748412
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_102945.jsonl.gz",
+        "sha256": "15f7fd7f61c2de7bcff37343e4ddb21b81eccde7580acfffdc10efc7ffa87a02",
+        "size_bytes": 746870
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_103445.jsonl.gz",
+        "sha256": "027f7ac4bfe64952708adbf4fb0c767babe956552ad4b620edb73a1252964a85",
+        "size_bytes": 750260
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_103945.jsonl.gz",
+        "sha256": "cdcbc0b02d7209752f08a2378d6182f0efda8bb21a9d5c408145f2723565a5c9",
+        "size_bytes": 749859
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_104445.jsonl.gz",
+        "sha256": "41dc7081ce0f35abc6bbb90c05480d1cf8d86c149741fd4619df77386159c838",
+        "size_bytes": 750181
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_104945.jsonl.gz",
+        "sha256": "03d0e4a7b189d0902bee5890f4df6552a1482b2b2a066a678699320d3f2cdfa9",
+        "size_bytes": 748310
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_105446.jsonl.gz",
+        "sha256": "a5b7f8c0b654b46270259e9bf6decdc870062a58a8bfead68967f85202028e61",
+        "size_bytes": 748907
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_105945.jsonl.gz",
+        "sha256": "28ebe674c6874eb09c53c9fbe2f78906fdf03d7a7b9840d50371a41d29efd5a8",
+        "size_bytes": 747490
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_110445.jsonl.gz",
+        "sha256": "59b7d49c79fbd32a357165a646b0d23a8a1371369deea096a22d7e56aa294576",
+        "size_bytes": 726939
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_110945.jsonl.gz",
+        "sha256": "791dd50039a5e6f846e6af0f34842b2d54529b10fa6ccc5f0c7b45ecb5adbeed",
+        "size_bytes": 727276
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_111445.jsonl.gz",
+        "sha256": "32e08090774082032332f600eaeb62c2777bb59db46dac18b384f5ec99ec6011",
+        "size_bytes": 727772
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_111945.jsonl.gz",
+        "sha256": "2c787cc107a23590d3b039121fabee94d646d166dcbe6181c04728de17f70ddd",
+        "size_bytes": 727861
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_112445.jsonl.gz",
+        "sha256": "4be5b9d7506462034809611e70e883ddff71867ab947557cb87ced2abb147b37",
+        "size_bytes": 728704
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_112945.jsonl.gz",
+        "sha256": "57920464d03eb0e3bb84df9d5edc52fb5fd535d31c71b119dda930b6c751db12",
+        "size_bytes": 728588
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_113445.jsonl.gz",
+        "sha256": "0c2351e01d8068469908ed069339aa6ef396188269c15ca7eb06ec5079d4d0da",
+        "size_bytes": 727173
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_113945.jsonl.gz",
+        "sha256": "d39363b09acb4c1ae5dbdbaae6db8795ea50debe86f5f22a2072153de9db9fad",
+        "size_bytes": 727960
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_114445.jsonl.gz",
+        "sha256": "66de70736981d1866b35a2e38bef3c9ac7901ab8c12b4f069ea1f3c360911250",
+        "size_bytes": 725908
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_114945.jsonl.gz",
+        "sha256": "7ed097d254934424f2e4161ae7a2f67b88796b45d272b19769cb63bb8a5a8004",
+        "size_bytes": 728733
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_115446.jsonl.gz",
+        "sha256": "1f086b0a6c5d48aef6fe2ab10603d86d63014ef86195865b109a4dc648db4345",
+        "size_bytes": 727345
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_115945.jsonl.gz",
+        "sha256": "c57853e47533632cc259f3127c915fceb2deb1332b2d41836a3620815bd52504",
+        "size_bytes": 724962
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_120446.jsonl.gz",
+        "sha256": "5d1f65bdd53a7df8d5e1f6758a76a4268dba8f19296eb1e24e34a746d1e3c1dc",
+        "size_bytes": 729809
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_120946.jsonl.gz",
+        "sha256": "a934cffed3fac8bacc61e8dbfb35d1e852681ffbb6914b0e6dde9aba308c2e5b",
+        "size_bytes": 729151
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_121446.jsonl.gz",
+        "sha256": "b81ed25fc86c84c1de5b1ed987468627eb8be11b4c655c17ded65458e1dcf22c",
+        "size_bytes": 729276
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_121946.jsonl.gz",
+        "sha256": "8cfc6503a32bf17cac6b070f2eaaee6738480faf0570e7950fe7d197d24fdfc3",
+        "size_bytes": 728165
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_122446.jsonl.gz",
+        "sha256": "45c9a6035b18871de4a943bebe9535cd7efa95071d7c9d345d0d4fd7509b41fc",
+        "size_bytes": 728497
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_122946.jsonl.gz",
+        "sha256": "9cc291e920183c15b3b92cd46ca9b30a4f7171de8c2cc735cac72d2dbc32ec14",
+        "size_bytes": 728208
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_123446.jsonl.gz",
+        "sha256": "d98253a2c379d80c94481feb2bbca4ded9c64dde3af208b3acc44ec6efc712e6",
+        "size_bytes": 727927
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_123946.jsonl.gz",
+        "sha256": "e64b8ee375431519e9ed746a191887575c96178eeb53a5882f4c64b6d233a7b7",
+        "size_bytes": 726747
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_124446.jsonl.gz",
+        "sha256": "c41d740dabdeac60d2e87db40cee8659c01fd0e27f6f9302449cd1eb20f9c28c",
+        "size_bytes": 726331
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_124946.jsonl.gz",
+        "sha256": "0185b34c35d182f9bbc458f9e8830bc7c360c8eab09517d8191ef1255fe8e40a",
+        "size_bytes": 725302
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_125446.jsonl.gz",
+        "sha256": "09e9f05c814f1ff7668f4a7cb80eb6cd852f3bf7e053ad9af9d587f52f937433",
+        "size_bytes": 725190
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_125946.jsonl.gz",
+        "sha256": "3e54e789f4595263cdce6203f847fd3ee3a1aede6c984a4cb4b06c49768f574a",
+        "size_bytes": 724760
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_130446.jsonl.gz",
+        "sha256": "3eb22677fef7ab6a5437169f8d66eb0678d84eb3d97cd958ee035e54b65898be",
+        "size_bytes": 738494
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_130946.jsonl.gz",
+        "sha256": "492c65f31e1adcc55b033cd7b90c6b89217805dc2295b3079be03e5d7d857e33",
+        "size_bytes": 738869
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_131446.jsonl.gz",
+        "sha256": "ec8d79111a166a1d1d2b119463bbaa872f45e7c3a88be55146d3cefde90b9b3c",
+        "size_bytes": 739071
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_131947.jsonl.gz",
+        "sha256": "acc7379e703c360de5bc6ea6e2aa243933f44c4a221012ddeaf0c9f765349bf3",
+        "size_bytes": 739206
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_132446.jsonl.gz",
+        "sha256": "bc5faa9ef91590a81b68e5f277670c2a5b0fa83d134e85134c5f3888165540e8",
+        "size_bytes": 739036
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_132946.jsonl.gz",
+        "sha256": "991695a35a70bba1030ded25ff4b4fbaf3c37af59a8818396f269f58152bad59",
+        "size_bytes": 738962
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_133446.jsonl.gz",
+        "sha256": "6c87ea76a869431170f6f15723adbe84432e6d47082106df3ba0962041111ae6",
+        "size_bytes": 738822
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_133946.jsonl.gz",
+        "sha256": "1f26b0e5084e281a12a996b763da78a302faebc10721630b8ee88dd542b28c4e",
+        "size_bytes": 738678
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_134447.jsonl.gz",
+        "sha256": "99f7f39cc5a3cbfc6e9a7ff860068f0fc522d6c38d773a5e182cc0dd3b14e99f",
+        "size_bytes": 738471
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_134946.jsonl.gz",
+        "sha256": "bc60cb237007e631d7cb60dc84397f53cd79ac3163b8db4ce90d2944d6e46b07",
+        "size_bytes": 738756
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_135446.jsonl.gz",
+        "sha256": "3ec985f36d3e31746e9a065da30440fb87e76e761e9c550cdb66703b41877e90",
+        "size_bytes": 738451
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_135947.jsonl.gz",
+        "sha256": "b35647c151d7339c9a88e0defb48eba768c0b9f919fc2991176e036da547ceb8",
+        "size_bytes": 738050
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_140446.jsonl.gz",
+        "sha256": "3e26fbba2dddf255cb12af8e0979714a0bbcfdc91233be59cd0b9f618c0d34cc",
+        "size_bytes": 752039
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_140946.jsonl.gz",
+        "sha256": "504cc0e32b440c1e97e206c556b0e38a671b49700af1e6e4d6408a78a3a810c5",
+        "size_bytes": 752158
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_141446.jsonl.gz",
+        "sha256": "f26e7ce0cff072b759c55829a307629de934ff5b2851c28101f73063ec3bb9c3",
+        "size_bytes": 752102
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_141945.jsonl.gz",
+        "sha256": "47500783377a27bc5190f9a76522154d0d475fe0b499351ad8850e8f69bd9967",
+        "size_bytes": 751971
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_142445.jsonl.gz",
+        "sha256": "fed5d08a759f6316f9b956dbb4c1d0108746f77b2e3070e320a21a4d6e6cf70a",
+        "size_bytes": 752023
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_142945.jsonl.gz",
+        "sha256": "c70a87d58e5a057100d09baf65514fc094687bc205738e3fbb8f9cc2c6cb17f1",
+        "size_bytes": 752350
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_143445.jsonl.gz",
+        "sha256": "11f2b01efe48d9b62460f5c705b81c2df5686b4c7f37c80e9789ead9da7947c8",
+        "size_bytes": 752168
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_143945.jsonl.gz",
+        "sha256": "129e32fce250beca04dae16e32fc5de494c50c01d247fd9e4d348a5a8c08892a",
+        "size_bytes": 752059
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_144445.jsonl.gz",
+        "sha256": "b594db86d13a6196a36d5f5746aab2dc9e1c0799e5d57db84e3cbe5cfc2bb489",
+        "size_bytes": 751533
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_144945.jsonl.gz",
+        "sha256": "ce13406601f76ab3f66fd90a1ef6d52bced03d81de27b6cf0049d6740ea7dca3",
+        "size_bytes": 751542
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_145446.jsonl.gz",
+        "sha256": "d7239e2566618d858472e33d3ebdeb970c5cd76547b8a661eacce540cb0763ed",
+        "size_bytes": 751639
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_145945.jsonl.gz",
+        "sha256": "b85b6506748df40894bdc86d21768568b45007d9b23e08be06cb18f0a836f819",
+        "size_bytes": 751522
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_150445.jsonl.gz",
+        "sha256": "46d45bee9f6d5c509fbe3c516612c01cbd503ebaebca81401117c7bff49858a9",
+        "size_bytes": 772957
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_150945.jsonl.gz",
+        "sha256": "c26890e7c8da63509c503936230988f855bcf22eaae6c4edf2a9cb0bb1058811",
+        "size_bytes": 773126
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_151445.jsonl.gz",
+        "sha256": "d6efe33f9ac0d4e21a37af018b5632b2ca605adcdf30e65ba29f6fbc54c1114b",
+        "size_bytes": 772896
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_151946.jsonl.gz",
+        "sha256": "90f6af8d903377abfbdbd5b528b093ff5b8b024d3a7afe789385e16defd6149d",
+        "size_bytes": 757703
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_152445.jsonl.gz",
+        "sha256": "b6f375e8d2a889aa8b5224a8a9713d673a183f02a443450085e249d189b8a569",
+        "size_bytes": 757269
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_152945.jsonl.gz",
+        "sha256": "9fef95203699ed91902a8a307499bb031669341c894de2dfa2dd56c68714392e",
+        "size_bytes": 756550
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_153445.jsonl.gz",
+        "sha256": "35b0d60e48fe940a0b961ae8116fce9dda037a8ba33fba0085a5c5fc195f96ca",
+        "size_bytes": 757067
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_153945.jsonl.gz",
+        "sha256": "4f0215738863919bb7469465c0ca92ea8682271765b1e93580fc65f6dd0e9288",
+        "size_bytes": 757041
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_154445.jsonl.gz",
+        "sha256": "e03dad4e35313651c61b59113f187f8a126d6bfe0dec93bee71be5387dd72f11",
+        "size_bytes": 755746
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_154945.jsonl.gz",
+        "sha256": "c49a2b6fa191a817037290954c300480d3ad0f22ef01f73e3bada1043d403c7a",
+        "size_bytes": 752648
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_155445.jsonl.gz",
+        "sha256": "b6a1cea3c7aef237f9e15c59a594813539ce9240b04eb4dc38cae94423a5c6ae",
+        "size_bytes": 734853
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_155945.jsonl.gz",
+        "sha256": "9e15d3bf74a998854beceac0ede87d0378ee5b51738ec7ac11b99e0c6af2c9e8",
+        "size_bytes": 764163
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_160446.jsonl.gz",
+        "sha256": "bb293afa12ad14fab43f2cede9847222e927c69929292e0c290fc6e0152b41a2",
+        "size_bytes": 769479
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_160945.jsonl.gz",
+        "sha256": "cf98c8a0f1ea5d2f7d7354b230572daefbd7301233615f064a5b67f734971bbd",
+        "size_bytes": 769814
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_161445.jsonl.gz",
+        "sha256": "fd74858666e2f5b53f3dd52e3715e280a3e73835f5d7f33eae5da8dc97a421e8",
+        "size_bytes": 772473
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_161945.jsonl.gz",
+        "sha256": "5adf9179c7d239d89d5a134237d503256df9383d25bfc7d5d932a948e43214e1",
+        "size_bytes": 777174
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_162446.jsonl.gz",
+        "sha256": "7c28e95c2aa8a64590f26181857f4aecbdb295d4ed235af099b3fc48b908825d",
+        "size_bytes": 779881
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_162946.jsonl.gz",
+        "sha256": "75b8780a979fcf03a67b096124bbd528fe49ca501ee2be6c43a3462759489d9e",
+        "size_bytes": 778915
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_163446.jsonl.gz",
+        "sha256": "ac1a7641f894ea7dd37ee0d30b8eea438afd5d2605361d9eaf67c4023261a228",
+        "size_bytes": 780400
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_163946.jsonl.gz",
+        "sha256": "66125b337aa743ca10413528bfcce818b730be790b158d8bb1ec3326306a3f01",
+        "size_bytes": 783366
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_164446.jsonl.gz",
+        "sha256": "17f94e8e28a9164c1cf2f0c5d733884fc5761e81a8e73d6867b09274cfc56549",
+        "size_bytes": 783081
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_164946.jsonl.gz",
+        "sha256": "587ca99b7bfbaf97a39a9957af103fab9f513340b9cc0e84d5b1a39d28e0c393",
+        "size_bytes": 783181
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_165446.jsonl.gz",
+        "sha256": "4054ab207fc362f17967c6934dc9bd40a1b2d6489279f7c60d4a7b87e5f330a0",
+        "size_bytes": 780322
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_165946.jsonl.gz",
+        "sha256": "7c902b83729c5be945bc45db70bdf6930cb38bcaea72e043d00bf1f1a31a7f1d",
+        "size_bytes": 778349
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_170446.jsonl.gz",
+        "sha256": "77f5dd8f3d44a1bfd10a4bca5bbfb153de427e02e379e650cf1b91ec86266c40",
+        "size_bytes": 781211
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_170946.jsonl.gz",
+        "sha256": "f2d949ce2bc1a2d67b1f989dfcd7e741ae7dcb24b4f32c5594cb3c85e27b52c1",
+        "size_bytes": 771124
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_171446.jsonl.gz",
+        "sha256": "1cc68d28f194a5bf27fa7cdeadaa4351f85bfd1baed08d9910e4175f54906ab1",
+        "size_bytes": 778369
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_171946.jsonl.gz",
+        "sha256": "5be1e259bea53aa9687bf61d0102043307de2b3317240881632af4ee791bd0ce",
+        "size_bytes": 780456
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_172446.jsonl.gz",
+        "sha256": "bb076d824a55e0a44039153afa2e7b1221c3c94de074287a498e2a5c98726eba",
+        "size_bytes": 779545
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_172946.jsonl.gz",
+        "sha256": "25c595ed8f5cc3878746c2533481d5219a3a6e2a59fb3ea254408dce0a368182",
+        "size_bytes": 778707
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_173446.jsonl.gz",
+        "sha256": "897db2ced26fe7c72118c03c5ba27f4912fc6c4260822e1b98c2aafd3db22d60",
+        "size_bytes": 778911
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_173946.jsonl.gz",
+        "sha256": "deb1e8d3c4f0920e38f9070378695fbb79dfdd5f8517409934d5f6dcefd37656",
+        "size_bytes": 779569
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_174446.jsonl.gz",
+        "sha256": "a827a9b2c3d54fe990fb9eb9e0d669747e886b24c568ca17a83e201b50b3132f",
+        "size_bytes": 780157
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_174946.jsonl.gz",
+        "sha256": "e4834cca344ab8e82728aef674d5f97b736476966aea806a14b1784997d14db3",
+        "size_bytes": 778903
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_175446.jsonl.gz",
+        "sha256": "07aefc863037530d08d276f928f1aa91693223bb1f918d1230609a0a715894f1",
+        "size_bytes": 779325
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_175946.jsonl.gz",
+        "sha256": "85527e5e5d0db8b65803d31edd1440bae6d9bb03f148f3e24366225a687970a0",
+        "size_bytes": 777329
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_180446.jsonl.gz",
+        "sha256": "9343607a05be36381ba66f7c32f0e6c133dd4736a580b6e3fd04a4ce1bc731be",
+        "size_bytes": 771644
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_180946.jsonl.gz",
+        "sha256": "c9b6fbc4375a82c149888c90d807b395f58bd66eedcdbaf41a262ca26653e37c",
+        "size_bytes": 772229
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_181446.jsonl.gz",
+        "sha256": "77749820bdcbb21bd0d8631327cf0f656705fe59b78809d9606d10e6743ae609",
+        "size_bytes": 771417
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_181946.jsonl.gz",
+        "sha256": "a63ec16fcfde0a0ab14a89cf752eed4567ae1388340d0bdcd98fd0361ee77be6",
+        "size_bytes": 772087
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_182446.jsonl.gz",
+        "sha256": "ed4a16a981356b5bc775ba2999b0f6be4b195de02298ebbabdbbdef0cb4b239f",
+        "size_bytes": 768745
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_182946.jsonl.gz",
+        "sha256": "7283bbca5bcee92b3efb0ecaeba186ce513477c583d849252b9a7af77f263b3e",
+        "size_bytes": 771561
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_183446.jsonl.gz",
+        "sha256": "181b9da076789be4440a960156d5debc68b71f7f9b4ec769e18d21e14374094f",
+        "size_bytes": 770708
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_183946.jsonl.gz",
+        "sha256": "5748a3044c2d39fc2f68c3ded6133c52e26f3897d949581e0f774883517dcb34",
+        "size_bytes": 770893
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_184446.jsonl.gz",
+        "sha256": "a7af7eb61a7b29683c7bf6319728287480a15d510bab623e825123fa8d622ca2",
+        "size_bytes": 772245
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_184946.jsonl.gz",
+        "sha256": "12e3ffcb2e9c9cbb04ccbc71c9a6cff0be31f6a1aa0e45c244c9e8721516e7c7",
+        "size_bytes": 770883
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_185447.jsonl.gz",
+        "sha256": "8e76c2f0c5f48f69d0dd44d363cb0299cac2c348ed1c69567af66687de5ce6ed",
+        "size_bytes": 768207
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_185946.jsonl.gz",
+        "sha256": "9e4cf0407b7bef2f6e41071c87d03a2e87fdbbde3926a97791efe91e83809567",
+        "size_bytes": 767469
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_190446.jsonl.gz",
+        "sha256": "31492ef4615c9235ec7de613353f681c22a2ef4f26d51cf95299b30b1f03f26b",
+        "size_bytes": 766828
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_190946.jsonl.gz",
+        "sha256": "2889bd0e32081b76d2fb43a44a4e665e948b314e2fcca1ea4985e533c918f29d",
+        "size_bytes": 768327
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_191446.jsonl.gz",
+        "sha256": "84b94da7d68fb3d60253859fb1d19ef09adfcd179358ea513e910aed7883f3b8",
+        "size_bytes": 769452
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_191947.jsonl.gz",
+        "sha256": "ad97706910e89df612660fd9942d442ba9f91b13e7420d50e474497a4e87b8b0",
+        "size_bytes": 767192
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_192446.jsonl.gz",
+        "sha256": "80987ba95093e361b4c6641114d30e2b41b306105a17638813ed6353af1240e2",
+        "size_bytes": 769432
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_192946.jsonl.gz",
+        "sha256": "3c59d63a0097f68354dfe32f6814f9a6b4b821cfd9b5cfe26c1e508621958db8",
+        "size_bytes": 768946
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_193446.jsonl.gz",
+        "sha256": "7c8dc080614618113826c9182b2c298b1683e1e72619ecf7ae3deeb628781215",
+        "size_bytes": 768192
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_193946.jsonl.gz",
+        "sha256": "14fd94ba3f0233fc213836610c963da38aa88868197a4fd7bbc17fc49298a40b",
+        "size_bytes": 769066
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_194447.jsonl.gz",
+        "sha256": "b9ee02df2be6d11c04fe8efbfeca8099bf2dfc4047bc2bb95037b7f82ad5067e",
+        "size_bytes": 770597
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_194947.jsonl.gz",
+        "sha256": "b4097df47e35a63481934d929c27fbe7175eb039110950c162832eefd1625f0a",
+        "size_bytes": 770638
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_195446.jsonl.gz",
+        "sha256": "b8c98f7cbb94d1165beb5157f75f3a684cf3f13acebe71f63bb1712ba4b2aacd",
+        "size_bytes": 771654
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_195946.jsonl.gz",
+        "sha256": "3d96d589aa6c29541a213fb5da6bdfbef35d5711ce380c26b73cd8fc6303256c",
+        "size_bytes": 768427
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_200446.jsonl.gz",
+        "sha256": "916ef17c7e0e287e6b62f3b711e9cb37235a7b051688fbbf0d1bb1ee8fdcfa4e",
+        "size_bytes": 776226
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_200946.jsonl.gz",
+        "sha256": "f47d2d5cac7c463ac49069a1b67529df2088cf415ca5ccaab8eb091be60bce57",
+        "size_bytes": 776551
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_201446.jsonl.gz",
+        "sha256": "31ac93096abbe857d495bfdc1d6fb93743e8050e22a11b35956db6ca9b7fffe6",
+        "size_bytes": 778225
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_201946.jsonl.gz",
+        "sha256": "2d2b9e6bbb22249351f6c5be5fd744deee4a316d6fc501971d5e69277f978861",
+        "size_bytes": 779410
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_202446.jsonl.gz",
+        "sha256": "5498a0dd73bcdb9113ba4a40ab7e002d7362370f28d41174c2ec5fac55c92843",
+        "size_bytes": 777793
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_202946.jsonl.gz",
+        "sha256": "70ea7a6da4a8db9b6ca1f62e6d4dc385394c6f5245f68d25ae45082a8199f1c4",
+        "size_bytes": 778254
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_203446.jsonl.gz",
+        "sha256": "8926c094393a3e3471b3d454584d0a56a51760f36ec57decbe829b852fa2bd31",
+        "size_bytes": 776963
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_203946.jsonl.gz",
+        "sha256": "5bcc8fe2d05993b40051e53c7555e54be41583b33f6fbb53468ebae48e60cc75",
+        "size_bytes": 776885
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_204446.jsonl.gz",
+        "sha256": "83b5c249a98840e3dfc94a412bfcd7854752708159bce00d35acd99e68a1adbf",
+        "size_bytes": 777026
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_204946.jsonl.gz",
+        "sha256": "b7302b667263ca0fa0137b201d42b284db280f491cca8079ec8a1e59816173e0",
+        "size_bytes": 776735
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_205446.jsonl.gz",
+        "sha256": "283a9c898e33dcf512eb805cbeb8028818b6f4219939bd3df94c13e5d89642c3",
+        "size_bytes": 777310
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_205946.jsonl.gz",
+        "sha256": "c75e883d782c88b63978fdbf98e16a34c5fee4d0b4b022217658d19102ed7d3e",
+        "size_bytes": 775115
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_210446.jsonl.gz",
+        "sha256": "b066a84abfee09ddc3e3e0d674a62a0c681c52d3993031a63ecac72c3e0d0d36",
+        "size_bytes": 741844
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_210946.jsonl.gz",
+        "sha256": "5a3dff67578b7e3fc43e872cb17be4ff1fbe22af3046a74876a2c1d0202d8320",
+        "size_bytes": 740907
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_211446.jsonl.gz",
+        "sha256": "1ea787145d47374438352ade932b02453819790ce6d0aa85f819d199b57997d9",
+        "size_bytes": 740699
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_211946.jsonl.gz",
+        "sha256": "2d2c53f3578a29f8c9f549997856fcb23383bc07eeecae1049b11efd4fe2492c",
+        "size_bytes": 741639
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_212446.jsonl.gz",
+        "sha256": "0b9a76a4a83daa6f6d3b0db4fbbe6868bbb13f47297ec5f83ce16514021ea346",
+        "size_bytes": 740053
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_212946.jsonl.gz",
+        "sha256": "2b5c5439d494f9dbf4c5a7beb4e59b275e89e748aa9856b952e26aab73af438f",
+        "size_bytes": 737558
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_213446.jsonl.gz",
+        "sha256": "bd1fd98e81806de1fa8db2aef07d5052ed634958ead2af6aa3dc40d33d358686",
+        "size_bytes": 738902
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_213946.jsonl.gz",
+        "sha256": "1369add0f0fc7e27b5d2201a9007a43afc9e6c6b4fa63808d352dfcaf29760d0",
+        "size_bytes": 738853
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_214447.jsonl.gz",
+        "sha256": "b9de8727975ed18dd9999a7aecc9d2f755cd831402ef58caa307d10a1ad4db62",
+        "size_bytes": 739480
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_214946.jsonl.gz",
+        "sha256": "87f01ee2841bc31665e9cd816be8cecf191ffdb42ce4fdc39a5c8d30e3ba91b2",
+        "size_bytes": 738724
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_215446.jsonl.gz",
+        "sha256": "e125ba96940608f59da5fac1ef8c088af3a39988f9caf19cf7a3fdf91242770a",
+        "size_bytes": 737377
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_215946.jsonl.gz",
+        "sha256": "37891a364aea3d07d20f0b9444db3102e685dac3ccd41580f5b1ba3c118864f0",
+        "size_bytes": 738408
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_220446.jsonl.gz",
+        "sha256": "b62d243db87c862bdaf126cc3ec7ee945d57223cb70be9a426d13bd4fa1ba549",
+        "size_bytes": 646281
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_220946.jsonl.gz",
+        "sha256": "707610a7eec0f34eefc69e75599bc66a28afdd0edede81a21c7dedaec7c1ea76",
+        "size_bytes": 644966
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_221446.jsonl.gz",
+        "sha256": "d5943d8b2054e961650b9bcfd042893141485284390f8cc855c119ec6a8df3d7",
+        "size_bytes": 645152
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_221947.jsonl.gz",
+        "sha256": "9582418fb96e5d2b266ad27de36d056ff3b82b0f9139d598f7f4e953b084eb6f",
+        "size_bytes": 645157
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_222446.jsonl.gz",
+        "sha256": "a9c739bf988e5254ac2c75140734dcd08e40cf69f58df0dc3a58368ef8309aaa",
+        "size_bytes": 647776
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_222946.jsonl.gz",
+        "sha256": "be5d83c7a8d9d1fe69bbf5cf37bfb149d5f975e48988705eb455e61c1a27aa73",
+        "size_bytes": 647528
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_223446.jsonl.gz",
+        "sha256": "0c22e717092619cb706c3e660dbcf67964e496c1ab5dd1dc8adddcf9117d300f",
+        "size_bytes": 648515
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_223946.jsonl.gz",
+        "sha256": "1064aa4ccd9a0a6dc6dc4727e43a9bd057cc4b23a1c66be827545d6a30e2286c",
+        "size_bytes": 648341
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_224446.jsonl.gz",
+        "sha256": "08e846604a3234c3036c38e250ce6b88be8905944cd300d3029aeb70e9c6c27a",
+        "size_bytes": 649714
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_224946.jsonl.gz",
+        "sha256": "c1a9877778d6de211ad6d1b3f7745878a66a811642e78c696c8e294c985942f1",
+        "size_bytes": 649002
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_225446.jsonl.gz",
+        "sha256": "dfd006151125b4dabea01e544e14faeb40f99949a36718be0a1c8cd5e4726a23",
+        "size_bytes": 647977
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_225946.jsonl.gz",
+        "sha256": "d05940f8a1af89c7e0d5825e3f3716581264d80bf0f4e9e9853278542909b894",
+        "size_bytes": 645317
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_230446.jsonl.gz",
+        "sha256": "328e278980efa71b40295572cc718c69235b9bce4e2f472e4320475319249a9b",
+        "size_bytes": 684372
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_230946.jsonl.gz",
+        "sha256": "634aa60ade4e006e87e4404e7bb3adffe0f9d939f17e7a7f5a2c4d7100c0a3f3",
+        "size_bytes": 686052
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_231446.jsonl.gz",
+        "sha256": "5a2a017f57faa1177adbdf11ee7e91e0c7fb3e6f1a0ab3ec71da5f07890c915e",
+        "size_bytes": 684667
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_231947.jsonl.gz",
+        "sha256": "537eb70891bed5e759d72d5837d31f7fd35052e21a6033580c2339d3191a68df",
+        "size_bytes": 682212
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_232447.jsonl.gz",
+        "sha256": "ff50c1c55c30519a7294737520423f81f38349b4ef569b549f7c2a8dec801263",
+        "size_bytes": 683369
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_232946.jsonl.gz",
+        "sha256": "62b72bbf6b12415ea0926f221eaa78c8598a69c494f3fa785ac3d2ee4bfe546c",
+        "size_bytes": 683667
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_233446.jsonl.gz",
+        "sha256": "e214bed63ddb0885e1867d4c45873145bda01f711b445663af91ab75a80e2897",
+        "size_bytes": 682629
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_233848.jsonl.gz",
+        "sha256": "545a9de3116bcc10d16433bfecbd6b123e0a487db9b9e0628c42209c14503d9b",
+        "size_bytes": 682027
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_234348.jsonl.gz",
+        "sha256": "fb3de26bbbc006f3c79e3eb06fbb27024cdfb102c0435ddf2de889b6d05ad51a",
+        "size_bytes": 683461
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_234750.jsonl.gz",
+        "sha256": "1e6ac51d711e7685de02572c889150c36606dca2ce6dd3ea724e28178ac5e7e3",
+        "size_bytes": 681878
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_235251.jsonl.gz",
+        "sha256": "213d2b91a3fc2831206af26af453f2968853dc4be5bdfb29fe2fb0dd5d855413",
+        "size_bytes": 681317
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/batches/2026-08-26/market_books_20260826_235750.jsonl.gz",
+        "sha256": "dff5609db5e02451f2b30397f0451c45ab619881ae4a695e9e841c746d10348a",
+        "size_bytes": 681826
+      }
+    ]
+  },
+  "ws": {
+    "city_scope": [
+      "Amsterdam",
+      "Tokyo",
+      "Helsinki",
+      "Seoul",
+      "Busan"
+    ],
+    "event_rows": 72,
+    "frozen_epochs": {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02/evidence/FROZEN_SUBSCRIPTION_EPOCHS_2026-08-26.jsonl.gz",
+      "row_count": 608,
+      "sha256": "eb2f955bf95a334f7ded923371b5be891eed14bb3bbe8cc113129482d38887f9",
+      "size_bytes": 537576
+    },
+    "frozen_frames": {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02/evidence/FROZEN_WS_FRAMES_2026-08-26.jsonl.gz",
+      "row_count": 12429,
+      "sha256": "38ec8fe51e20f3addc76bc21cdaf5fee70005a507878c739a29547edd5051b19",
+      "size_bytes": 1611615
+    },
+    "raw_ws_files": [
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_00_1787504073882162000_11470.jsonl",
+        "sha256": "254ca34ba98c2546a1c1c3c96698e51f2eba8e435e6eac910f19d759ab7e7915",
+        "size_bytes": 10528393
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_01_1787504073882162000_11470.jsonl",
+        "sha256": "0a602ca5228ac449528eff67c739552bcf19ba7df0ec72267817b30d78473a4f",
+        "size_bytes": 10243123
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_02_1787504073882162000_11470.jsonl",
+        "sha256": "f179062576921f8e226089485cb3472e82c66215a157424cf5b1732d6d9afea9",
+        "size_bytes": 16259336
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_03_1787504073882162000_11470.jsonl",
+        "sha256": "600b8bc35aacec8aedce239f8d856d37d9fecf8ad16f4ed75db286faf1477800",
+        "size_bytes": 74174054
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_04_1787504073882162000_11470.jsonl",
+        "sha256": "6c7e296312ce3ec041c81b613356b9fe2dbf89f41b91edd3193cb5b6abaecf9a",
+        "size_bytes": 30300410
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_05_1787504073882162000_11470.jsonl",
+        "sha256": "b22321914e97b622739be5297b1f2c1e3b53c04700ff8ff4fbe444d7417458f5",
+        "size_bytes": 594227
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_06_1787504073882162000_11470.jsonl",
+        "sha256": "e2999a889a3d92376d2f15b5d3fcb16dd825ee77c3b34e676c3c79aae404847b",
+        "size_bytes": 328605
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_07_1787504073882162000_11470.jsonl",
+        "sha256": "05a57238d4f6e73a3e536f5651069ee05d0f7e829b54f8c84cd31143a7bc8bb4",
+        "size_bytes": 461632
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_08_1787504073882162000_11470.jsonl",
+        "sha256": "2f592df95eba5b4c8b3b8f56af06c7ee69492bcb9b4a79b85049600277cc532e",
+        "size_bytes": 12815199
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_09_1787504073882162000_11470.jsonl",
+        "sha256": "617483cf088473747a80e1384d9c2527ae7c8c28c5559f9a2ec5124a6dc9ec32",
+        "size_bytes": 39064572
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_10_1787504073882162000_11470.jsonl",
+        "sha256": "e308588d8fe56f78307a21f29b41a760da89b2b137fef1c15bb77945e130a794",
+        "size_bytes": 43195947
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_11_1787504073882162000_11470.jsonl",
+        "sha256": "f0ba4e849cbb5e25161500f023c8470cdd2994e3cb32f267f350de4e8c3c39f5",
+        "size_bytes": 7820515
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_12_1787504073882162000_11470.jsonl",
+        "sha256": "1f82cc3611e954212f3fd42ce95bee41c0b45377b856c98798af44ee7accd535",
+        "size_bytes": 55324702
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_13_1787504073882162000_11470.jsonl",
+        "sha256": "9c11ef76d8418af280c4846f358db5ffe8c80a2e8f1400403a7fe68508118c0d",
+        "size_bytes": 130536829
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_14_1787504073882162000_11470.jsonl",
+        "sha256": "0bf3532268a2d291de14e769fee2255a4b0bc02039a1b4e150575eb09cd30a78",
+        "size_bytes": 107122812
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_15_1787504073882162000_11470.jsonl",
+        "sha256": "e97d48cefcb57a137385065ebaedf114494a67dba2b997ad7e9aba09cb4c930c",
+        "size_bytes": 11302170
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_15_1787758728899017000_90944.jsonl",
+        "sha256": "3c0c921568ca73cc61ed1e1632cd95eee5cfd1e7bf1667d406894ab25637b34b",
+        "size_bytes": 19949288
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_15_1787759270947528000_5872.jsonl",
+        "sha256": "5266114b8f36b019fc269c9707369e9e296c6dcdac1bd136715b2e8b5cd99d1e",
+        "size_bytes": 69713297
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_16_1787759270947528000_5872.jsonl",
+        "sha256": "9fcdf0ec9312f189f9599ab4ae77f804b56cfd63a1608dee1e02342e3d5fee15",
+        "size_bytes": 10833530
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_17_1787759270947528000_5872.jsonl",
+        "sha256": "b6536017add755638853163cf4b0efde39153be1f3feffb2d3a9e902ccfb0232",
+        "size_bytes": 158190208
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_18_1787759270947528000_5872.jsonl",
+        "sha256": "4858a1f7290b0d5c40d3e194a400eb8605c53ac803507eabd7a99c90be0732bb",
+        "size_bytes": 24799576
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_19_1787759270947528000_5872.jsonl",
+        "sha256": "b3feabbe1c659908c4128f89ee59c1baac836e4ed27ce477ae7745982b4ea0e1",
+        "size_bytes": 22215522
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_20_1787759270947528000_5872.jsonl",
+        "sha256": "6aac6d676a7d20f03f49b96cf79dc6dd489639fb8386474cbe3a2f9d1188721d",
+        "size_bytes": 167329500
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_21_1787759270947528000_5872.jsonl",
+        "sha256": "295e9612749301ba14d11f49aa0740110b4cf85388c41401803ce45228346424",
+        "size_bytes": 114639141
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_22_1787759270947528000_5872.jsonl",
+        "sha256": "11b85d1ec9ff432236b74820151d121b44d99bafa360cb58955fb64f4caac6c3",
+        "size_bytes": 72606338
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-26/market_books_ws_20260826_23_1787787455303089000_9330.jsonl",
+        "sha256": "779adb265677355c07a7f62139968bb70861e9d9fa6e4b11b2a6411d0d399955",
+        "size_bytes": 1808619
+      }
+    ],
+    "sample_date": "2026-08-26",
+    "sample_design": "predeclared_latest_complete_day_before_stage_run",
+    "source_epoch_file": {
+      "path": "/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/subscription_epochs/subscription_epochs_2026-08-26.jsonl",
+      "sha256": "350ebcf46c52c20e3e63f0322dee74497b580021bbbc1f8fdb37ecad6081818e",
+      "size_bytes": 10089850
+    },
+    "target_token_ids": [
+      "100495499210321432174173636642825597320003320601763721705424801316088153600629",
+      "108671970066177197081292436467892048068108344414466049682356167945034357007514",
+      "11695614786415226965843637330905765651058769730765041095613242659613393803248",
+      "16190109610590879782782506792630312151803601677614111070328934798418055802261",
+      "18595890129263841710290635752947396433184926824176221975737557884731515726915",
+      "21133035623894586414832326978738790671438242591278673949418871317910963090683",
+      "24027484691727928813753949248720591690971544595433995231035996313860238573188",
+      "32352330591270468117960533356626923448223536453673624603025473647506366318235",
+      "34277294409104391293521771437397153913832448373054841229623901804286555801916",
+      "37477118097140212600177113039300618446801598973543665998684759017044667111656",
+      "60144835080089734084770210668970512716375745925334031360720100411642270227853",
+      "60686292265769244860926981046766187956288993571564688302593108739725106631779",
+      "61578332428725271577677061407613077142043726641733285871593391978874014319284",
+      "68715137897042202044746213928784598917040300755436869012002513507560497344860",
+      "70838685336113219166947418359354046314516265178820153716138020937763165603815",
+      "78112924846068476362142243601567275141225741667831028501926838654535114370745",
+      "83186675663645713948368400533572269530855070616139576150335844416752848261449",
+      "88248922878148398109764343177505441074429595036740892087793713419299261417877"
+    ],
+    "target_tokens": 18
+  }
+}
