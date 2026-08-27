@@ -1,11 +1,14 @@
 # Polymarket Alpha — Read-only Operational Pilot Gate
 
 ```text
-GATE_STATUS=REWORK_OPERATIONAL_BOUNDARY
+GATE_STATUS=PROXY_BOUNDARY_PASS_REMAINDER_PENDING
 OFFLINE_PREFLIGHT_STATUS=IMPLEMENTED_AND_TESTED
 OFFLINE_PREFLIGHT_SOURCE_COMMIT=ef82da8844562c63eacc5d16a73b17fe5b98abbb
 OPERATIONAL_BOUNDARY_SOURCE_COMMIT=d9f23070da5ff9a47168a0f960db1d2f9441e2d8
-AUTHORIZED_GAMMA_ATTEMPT=FAILED_BEFORE_HTTP_RESPONSE
+DIRECT_GAMMA_ATTEMPT=FAILED_BEFORE_HTTP_RESPONSE
+EXPLICIT_PROXY_PROFILE=mac_local_market_proxy_v1
+EXPLICIT_PROXY_GAMMA_CANARY=PASS_HTTP_200
+CANARY_COUNTS=4_EVENTS_21_NESTED_MARKETS
 OWNER_DEMAND_ATTEMPT=NOT_RUN_FAIL_CLOSED
 ENTRY_EVIDENCE=P0_UNIFIED_OFFLINE_PIPELINE-evidence-seal
 ALLOWED_OUTCOME=READ_ONLY_OPERATIONAL_PILOT_READY | REWORK_OPERATIONAL_BOUNDARY
@@ -16,11 +19,23 @@ PRODUCTION_CAPTURE_EXPANSION=SEPARATE_AUTHORIZATION
 The offline OP-01/OP-04/OP-05 preparation is sealed under
 `READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal`. The owner authorized a
 bounded attempt on 2026-08-27. The exact Gamma route was authorized, but direct
-TLS egress timed out after proxy variables were removed as required. No HTTP
-response was received. The current weather controller was already CRITICAL and
-the newly implemented Alpha inbox has not been deployed, so owner demand,
-weather isolation and OP-06 replay were not run. Evidence is sealed under
-`READ_ONLY_OPERATIONAL_PILOT-ATTEMPT-evidence-seal`.
+TLS egress timed out after inherited proxy variables were removed. ADR-011
+forbids environment proxy inheritance; it does not forbid a versioned explicit
+proxy capability. The correction uses only the sealed loopback profile
+`mac_local_market_proxy_v1`, exact CONNECT authority
+`gamma-api.polymarket.com:443`, Gamma TLS SNI/certificate verification, and a
+separate proxy security receipt. Arbitrary proxy URLs and proxy credentials
+remain unavailable. The historical failed attempt is preserved unchanged
+under `READ_ONLY_OPERATIONAL_PILOT-ATTEMPT-evidence-seal`.
+
+The corrected explicit-profile canary passed on 2026-08-27: CONNECT 200, Gamma
+TLS name verification, HTTP 200, four events and 21 distinct nested markets.
+The bounded raw payload was 84,979 bytes. The raw, request and proxy security
+receipts are preserved under
+`/private/tmp/polymarket-alpha-pilot/proxy-canary-bhhLlg`; their hashes are
+copied into `OPERATIONAL_PROXY_BOUNDARY-evidence-seal`. This closes only the
+proxy transport boundary. Owner-demand deployment, paired live books, weather
+isolation and OP-06 operational replay remain pending.
 
 ## Objective
 
@@ -71,6 +86,7 @@ max_artifact_bytes_total=50_000_000
 max_runtime_minutes=30
 redirects=disabled
 proxy_environment=cleared
+proxy_mode=direct | mac_local_market_proxy_v1
 current_runtime_db_writes=0
 ```
 
@@ -92,7 +108,7 @@ not automatically widened after a successful run.
    exact pre/during/post numbers must be sealed rather than summarized.
 7. Request count, rate, staleness, throughput and artifact growth remain within
    the fixed budget.
-8. Generic HTTP, raw socket/websocket, redirect, proxy, encoded-path,
+8. Generic HTTP, raw socket/websocket, redirect, inherited/arbitrary proxy, encoded-path,
    unexpected body/header, dynamic import and subprocess canaries remain denied.
 9. The resulting ledger is `NO_POSITION` or `SIMULATED` and always
    `execution=NO_ORDER`.

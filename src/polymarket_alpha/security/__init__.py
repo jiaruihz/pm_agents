@@ -24,6 +24,14 @@ from .transport import (
     TransportMode,
     TransportRequest,
 )
+from .proxy import (
+    MAC_LOCAL_MARKET_PROXY_PROFILE_ID,
+    ExplicitProxyProfile,
+    ProxyConnectionObservation,
+    ProxySecurityReceipt,
+    build_mac_local_market_proxy_profile,
+    seal_proxy_security_receipt,
+)
 
 __all__ = [
     "CapabilityDecision",
@@ -46,4 +54,10 @@ __all__ = [
     "SecurityDecisionReceipt",
     "TransportMode",
     "TransportRequest",
+    "MAC_LOCAL_MARKET_PROXY_PROFILE_ID",
+    "ExplicitProxyProfile",
+    "ProxyConnectionObservation",
+    "ProxySecurityReceipt",
+    "build_mac_local_market_proxy_profile",
+    "seal_proxy_security_receipt",
 ]

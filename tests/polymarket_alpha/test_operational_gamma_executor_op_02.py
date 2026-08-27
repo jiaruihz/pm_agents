@@ -10,6 +10,7 @@ import sys
 import pytest
 from src.polymarket_alpha.pilot.operational import OperationalPilotAuthorization
 from src.polymarket_alpha.contracts import stable_record_id
+from src.polymarket_alpha.security import build_mac_local_market_proxy_profile
 
 
 SCRIPT_DIR = Path(__file__).parents[2] / "scripts" / "ops"
@@ -42,6 +43,42 @@ def _exchange(
         assert timeout > 0
         assert maximum > 0
         return gamma.ExchangeResponse(status, headers or {}, body, peer_ip, completed_at)
+
+    return exchange
+
+
+def _proxy_exchange(
+    *,
+    body: bytes = b'[{"id":"event-1"}]',
+    peer_ip: str = "127.0.0.1",
+    tls_server_name: str = gamma.GAMMA_HOST,
+    connect_authority: str = f"{gamma.GAMMA_HOST}:443",
+    connect_status: int = 200,
+    connection_mode: str = "EXPLICIT_PROXY",
+    proxy_profile_id: str | None = None,
+    target_resolution: str = "PROXY",
+):
+    def exchange(host, target, profile, timeout, maximum):
+        assert host == gamma.GAMMA_HOST
+        assert target == "/events?closed=false&limit=3&offset=0"
+        assert profile.proxy_host == "127.0.0.1"
+        assert profile.proxy_port == 7896
+        assert timeout > 0
+        assert maximum > 0
+        return gamma.ExchangeResponse(
+            200,
+            {},
+            body,
+            peer_ip,
+            NOW + timedelta(seconds=1),
+            connection_mode=connection_mode,
+            proxy_profile_id=proxy_profile_id or profile.profile_id,
+            proxy_dns_answers=("127.0.0.1",),
+            connect_authority=connect_authority,
+            connect_status=connect_status,
+            tls_server_name=tls_server_name,
+            target_resolution=target_resolution,
+        )
 
     return exchange
 
@@ -94,6 +131,9 @@ def test_happy_path_authorizes_fixed_route_and_writes_immutable_artifacts(tmp_pa
     assert receipt["auth_headers_present"] is False
     assert Path(str(receipt["raw_artifact_locator"])).read_bytes() == b'[{"id":"event-1"}]'
     assert Path(str(receipt["receipt_artifact_locator"])).is_file()
+    security_path = Path(str(receipt["security_receipt_artifact_locator"]))
+    assert security_path.is_file()
+    assert hashlib.sha256(security_path.read_bytes()).hexdigest() == receipt["security_receipt_sha256"]
 
 
 @pytest.mark.parametrize("limit", [0, 1, 2, 6, 100])
@@ -103,12 +143,12 @@ def test_limit_bypasses_are_not_expressible(tmp_path: Path, limit: int) -> None:
 
 
 def test_redirect_oversize_dns_peer_mismatch_and_timeout_fail_closed(tmp_path: Path) -> None:
-    with pytest.raises(gamma.GammaPilotDenied, match="redirect"):
-        _run(tmp_path, exchange=_exchange(status=302, headers={"location": "https://evil.example"}))
-    with pytest.raises(gamma.GammaPilotDenied, match="exceeds"):
-        _run(tmp_path, exchange=_exchange(body=b"x" * 11), max_body_bytes=10)
-    with pytest.raises(gamma.GammaPilotDenied, match="DNS/peer"):
-        _run(tmp_path, exchange=_exchange(peer_ip="8.8.8.8"))
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "redirect", exchange=_exchange(status=302, headers={"location": "https://evil.example"}))
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "oversize", exchange=_exchange(body=b"x" * 11), max_body_bytes=10)
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "peer", exchange=_exchange(peer_ip="8.8.8.8"))
     with pytest.raises(gamma.GammaPilotDenied, match="invalid bounded"):
         _run(tmp_path, timeout_seconds=0)
 
@@ -127,12 +167,12 @@ def test_exchange_failure_is_immutably_receipted_without_claiming_http_response(
 
 
 def test_response_shape_and_event_limit_fail_closed(tmp_path: Path) -> None:
-    with pytest.raises(gamma.GammaPilotDenied, match="valid JSON"):
-        _run(tmp_path, exchange=_exchange(body=b"not-json"))
-    with pytest.raises(gamma.GammaPilotDenied, match="1..requested_limit"):
-        _run(tmp_path, exchange=_exchange(body=b"[]"))
-    with pytest.raises(gamma.GammaPilotDenied, match="1..requested_limit"):
-        _run(tmp_path, exchange=_exchange(body=b"[{},{},{},{}]"))
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "invalid-json", exchange=_exchange(body=b"not-json"))
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "empty", exchange=_exchange(body=b"[]"))
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt="):
+        _run(tmp_path / "over-limit", exchange=_exchange(body=b"[{},{},{},{}]"))
     body = b'[{"markets":[{"id":"m1"},{"marketId":2},{"id":"m1"}]}]'
     receipt = _run(tmp_path, exchange=_exchange(body=body))
     assert receipt["nested_distinct_market_count"] == 2
@@ -153,6 +193,31 @@ def test_http_reader_rejects_truncated_or_surplus_content_length() -> None:
     long = _FakeSocket([b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nab"])
     with pytest.raises(gamma.GammaPilotDenied, match="exceeds declared"):
         gamma._read_http_response(long, max_body_bytes=10)  # type: ignore[arg-type]
+
+
+def test_http_reader_decodes_bounded_chunked_and_rejects_complex_framing() -> None:
+    good = _FakeSocket(
+        [
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n",
+            b"4\r\ntest\r\n3\r\n123\r\n0\r\n\r\n",
+        ]
+    )
+    assert gamma._read_http_response(good, max_body_bytes=7)[2] == b"test123"  # type: ignore[arg-type]
+    bad_payloads = (
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 1\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1;x=y\r\na\r\n0\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\na\r\n0\r\nX: y\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\na",
+    )
+    for payload in bad_payloads:
+        with pytest.raises(gamma.GammaPilotDenied):
+            gamma._read_http_response(_FakeSocket([payload]), max_body_bytes=7)  # type: ignore[arg-type]
+    oversize = _FakeSocket(
+        [b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n8\r\n12345678\r\n0\r\n\r\n"]
+    )
+    with pytest.raises(gamma.GammaPilotDenied, match="exceeds"):
+        gamma._read_http_response(oversize, max_body_bytes=7)  # type: ignore[arg-type]
 
 
 def test_exact_retry_is_idempotent_and_different_bytes_conflict(tmp_path: Path) -> None:
@@ -184,6 +249,80 @@ def test_proxy_environment_presence_is_rejected_before_authorization(tmp_path: P
         _run(tmp_path, environment={"HTTPS_PROXY": "http://proxy.invalid"})
 
 
+def test_explicit_proxy_profile_does_not_resolve_target_locally_and_seals_dual_receipt(
+    tmp_path: Path,
+) -> None:
+    profile = build_mac_local_market_proxy_profile(created_at=NOW)
+
+    def forbidden_resolver(_host: str) -> tuple[str, ...]:
+        raise AssertionError("proxy mode must not resolve the target locally")
+
+    receipt = _run(
+        tmp_path,
+        proxy_profile=profile,
+        proxy_exchange=_proxy_exchange(),
+        resolver=forbidden_resolver,
+    )
+    assert receipt["connection_mode"] == "EXPLICIT_PROXY"
+    assert receipt["dns_answers"] == ()
+    assert receipt["proxy_profile_id"] == "mac_local_market_proxy_v1"
+    assert receipt["proxy_profile_sha256"] == profile.canonical_sha256
+    assert receipt["proxy_dns_answers"] == ("127.0.0.1",)
+    assert receipt["proxy_connected_ip"] == "127.0.0.1"
+    assert receipt["connect_authority"] == "gamma-api.polymarket.com:443"
+    assert receipt["connect_status"] == 200
+    assert receipt["target_resolution"] == "PROXY"
+    assert receipt["tls_server_name"] == gamma.GAMMA_HOST
+    assert receipt["proxy_security_receipt_sha256"]
+    security_path = Path(str(receipt["security_receipt_artifact_locator"]))
+    security = json.loads(security_path.read_text(encoding="utf-8"))
+    assert security["proxy_profile_id"] == profile.profile_id
+    assert security["connect_authority"] == "gamma-api.polymarket.com:443"
+
+
+@pytest.mark.parametrize(
+    "proxy_exchange",
+    [
+        _proxy_exchange(peer_ip="127.0.0.2"),
+        _proxy_exchange(tls_server_name="evil.example"),
+        _proxy_exchange(connect_authority="evil.example:443"),
+        _proxy_exchange(connect_status=407),
+        _proxy_exchange(connection_mode="DIRECT"),
+        _proxy_exchange(proxy_profile_id="unsealed-profile"),
+        _proxy_exchange(target_resolution="DIRECT_DNS"),
+    ],
+)
+def test_proxy_observation_tampering_fails_closed(tmp_path: Path, proxy_exchange) -> None:
+    profile = build_mac_local_market_proxy_profile(created_at=NOW)
+    with pytest.raises(gamma.GammaPilotDenied, match="receipt=") as captured:
+        _run(
+            tmp_path,
+            proxy_profile=profile,
+            proxy_exchange=proxy_exchange,
+        )
+    failure_path = Path(str(captured.value).split("receipt=", 1)[1])
+    failure = json.loads(failure_path.read_text(encoding="utf-8"))
+    assert failure["status"] == "FAILED_AFTER_HTTP_RESPONSE"
+    assert failure["http_response_received"] is True
+
+
+def test_connect_response_parser_rejects_auth_redirect_trailing_and_oversize() -> None:
+    ok = _FakeSocket([b"HTTP/1.1 200 Connection established\r\nX-Proxy: local\r\n\r\n"])
+    assert gamma._read_connect_response(ok)[0] == 200  # type: ignore[arg-type]
+    for payload in (
+        b"HTTP/1.1 407 Auth\r\nProxy-Authenticate: Basic\r\n\r\n",
+        b"HTTP/1.1 302 Redirect\r\nLocation: https://evil.example\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\n\r\ntrailing",
+    ):
+        with pytest.raises(gamma.GammaPilotDenied):
+            gamma._read_connect_response(_FakeSocket([payload]))  # type: ignore[arg-type]
+    with pytest.raises(gamma.GammaPilotDenied, match="exceed"):
+        gamma._read_connect_response(  # type: ignore[arg-type]
+            _FakeSocket([b"HTTP/1.1 200 OK\r\nX: " + b"a" * 100]),
+            max_header_bytes=32,
+        )
+
+
 def test_sealed_authorization_id_and_expiry_are_enforced(tmp_path: Path) -> None:
     with pytest.raises(gamma.GammaPilotDenied, match="does not match"):
         _run(tmp_path, owner_authorization_id="different-owner")
@@ -205,3 +344,5 @@ def test_script_ast_has_no_generic_transport_or_execution_imports() -> None:
     source = (SCRIPT_DIR / "polymarket_alpha_gamma_read_only_pilot.py").read_text(encoding="utf-8")
     assert "order" not in source.lower().replace("border", "")
     assert "signing" not in source.lower()
+    assert "--proxy-url" not in source
+    assert "MAC_LOCAL_MARKET_PROXY_PROFILE_ID" in source
