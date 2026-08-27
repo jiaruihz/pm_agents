@@ -7,6 +7,10 @@ PROGRAM_PHASE=P0_OFFLINE_IMPLEMENTATION
 P0_COMPLETE=YES
 P0_COMPLETION_STATUS=CERTIFIED_OFFLINE
 SOURCE_COMMIT=3335cbaa3196adf46e7ef284fcd094515ca89e37
+UNIFIED_PIPELINE_SOURCE_COMMIT=c3a578c4ec4f98974c7f130b9dfd02b019460049
+UNIFIED_MULTI_RECALL_PIPELINE=COMPLETE
+IMMUTABLE_RESEARCH_HANDOFF=COMPLETE
+REPEATED_SCAN_REFRESH=COMPLETE
 NEXT_GATE=READ_ONLY_OPERATIONAL_PILOT_GATE
 NEXT_GATE_STATUS=PREPARED_NOT_AUTHORIZED
 NEXT_GATE_OFFLINE_PREFLIGHT=IMPLEMENTED_AND_TESTED
@@ -34,11 +38,16 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P0-10 harness adapter | COMPLETE | One coordinator, unique owners, complete evidence and hash-bound offline completion receipt pass. |
 | P0-11 security | COMPLETE | Static, transport, dynamic canary and macOS process/network capability proofs pass for offline scope. |
 | P0-12 offline E2E | COMPLETE | A01-A18, 371 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
+| Unified offline integration closure | COMPLETE | Four released pre-book providers, staged immutable handoff, formal book gating, Rule A/B, no-order ledger, partial failure and second-scan refresh pass; 430 Alpha tests are sealed under `P0_UNIFIED_OFFLINE_PIPELINE-evidence-seal`. |
 
-P0 now has a complete deterministic offline fixture path from Change → Recall
-→ Candidate → Rule A → Blind import → formal paired book → Market import →
-Rule B → rank/ledger → `SIMULATION_RECORDED`. This is not evidence that daily
-network operation, production capture expansion, or live execution is ready.
+P0 now has a complete deterministic offline path from multi-route Recall →
+Candidate → Rule A → immutable Blind handoff/import → formal paired book →
+immutable Market handoff/import → Rule B → rank/ledger →
+`SIMULATION_RECORDED`, plus append-only second-scan refresh. The original P0-12
+single-route fixture remains preserved; the unified closure is separately
+sealed so component completion is not confused with orchestration completion.
+This is not evidence that daily network operation, production capture
+expansion, or live execution is ready.
 
 The next-gate offline preflight is also implemented at source commit
 `ef82da8844562c63eacc5d16a73b17fe5b98abbb`: four synthetic Gamma-shaped binary fixtures, exact canonical

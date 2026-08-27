@@ -1,0 +1,18 @@
+.venv/bin/python -m pytest -q tests/polymarket_alpha/test_multi_recall_pipeline.py tests/polymarket_alpha/test_research_handoff_pipeline.py tests/polymarket_alpha/test_scan_refresh_pipeline.py tests/polymarket_alpha/test_unified_review_pipeline.py
+# 27 passed in 0.25s
+
+.venv/bin/python -m pytest -q tests/polymarket_alpha
+# 430 passed in 5.00s
+
+.venv/bin/python - <<'PY'
+from src.polymarket_alpha.security import audit_source_tree
+result = audit_source_tree('src/polymarket_alpha')
+print(f'passed={result.passed} violations={len(result.violations)}')
+PY
+# passed=True violations=0
+
+.venv/bin/python -m compileall -q src/polymarket_alpha/pipeline src/polymarket_alpha/research
+# PASS
+
+git diff --check -- src/polymarket_alpha/pipeline src/polymarket_alpha/research tests/polymarket_alpha/test_multi_recall_pipeline.py tests/polymarket_alpha/test_research_handoff_pipeline.py tests/polymarket_alpha/test_scan_refresh_pipeline.py tests/polymarket_alpha/test_unified_review_pipeline.py
+# PASS
