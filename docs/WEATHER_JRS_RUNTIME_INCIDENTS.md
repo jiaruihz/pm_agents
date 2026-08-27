@@ -1,7 +1,7 @@
 # Weather JRS Runtime Incident Ledger
 
 Status: current-source
-Updated: 2026-08-13
+Updated: 2026-08-27
 Scope: Mac canonical JRS tmux permission context, production runtime control,
 collector continuity, and recovery acceptance.
 
@@ -245,3 +245,45 @@ This is a successful post-reboot recovery and additional real reboot/login
 acceptance evidence. It remains `recovery improved`; it does not eliminate the
 architectural macOS TCC/GUI permission-host dependency or authorize unattended
 live restoration.
+
+## 2026-08-27 Production Release-Root Migration
+
+The 23 weather production release checkouts were moved from ad-hoc
+`/Users/deepsleep/projects/pm_agents*` directories to the declared managed
+root `/Users/deepsleep/.local/share/pm_agents/releases/<release_id>/<sha>`.
+All 23 are detached linked worktrees of the operational repository, have the
+declared HEAD, share its Git common directory, and route `runtime/weather.db`
+to the unchanged JRS physical canonical DB. The old project-root checkouts
+were removed only after process cwd/command, tmux pane and LaunchAgent scans
+showed no consumers. Unique legacy feature stores were hash-verified and
+retained under the JRS archive before removal.
+
+The controlled cutover ran approximately `2026-08-27T15:05Z–15:20Z`. During
+the first core-carry restart, its new checkout-relative `runtime/weather.db`
+default created a zero-byte split SQLite file. The runtime failed before it
+could read `strategy_instance_runtime`; the local file had no tables and no
+canonical writes. The file was isolated, every release DB path was pinned to
+the canonical JRS DB, and controller restart restored the runtime. Review of
+the affected approximately four-minute window found `entry_plans=0`,
+`live_orders=0`, and `signal_status=already_processed`: extra orders `0`,
+missed orders `0`, fills `0`, and canonical DB pollution `0`.
+
+The first post-cutover canonical refresh also exposed a release-relative fill
+cache default. It produced a failed gate only inside the release checkout; it
+did not alter canonical fills or `fact_trades`. The operational wrapper now
+provisions an explicit pointer to the operational canonical fill cache before
+each refresh. The next LaunchAgent run exited `0` and the gate passed with
+`1,567/1,567` fills, zero DB/cache ID delta, zero DB/fact cost delta, zero
+missing-order rows, and zero over-order keys.
+
+Final acceptance: strict manifest `healthy` with no findings and no missing
+pre-change sessions; controller, JRS context, storage identity and data-feed
+semantics all `healthy`; all 31 release-backed desired-running runtimes run
+from the managed root, both intentionally paused dispute runtimes remain
+paused, and the JRS context keeper was not migrated. Authenticated CLOB
+evidence before and after cutover had the same balance (`162513747`) and exact
+same 32-open-order payload (SHA-256
+`5cf2cabe1961371ec438120f6a3c1d78a033f67e61d03e4b03bb5119f3da7542`).
+The pre-existing JRS permission-host failure observed before the cutover was
+recovered through the controller; the migration does not claim to eliminate
+the underlying macOS TCC dependency.
