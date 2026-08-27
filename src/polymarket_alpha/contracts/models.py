@@ -21,6 +21,7 @@ from .base import (
     ensure_utc,
     normalize_rule_text,
     rule_sha256,
+    stable_record_id,
     validate_sha256,
 )
 
@@ -571,6 +572,295 @@ class CandidateTransition(CommonEnvelope):
             raise ValueError("STATE_TRANSITION must change state")
         if not self.related_artifact_ids:
             raise ValueError("transition requires related artifact lineage")
+        return self
+
+
+# Gate R WP1 contracts.  These deliberately live beside Candidate rather than
+# in a second orchestration schema: the generic contract ledger remains the
+# only persistence owner.
+class CandidateEligibility(StrEnum):
+    ELIGIBLE = "ELIGIBLE"
+    MARKET_CLOSED = "MARKET_CLOSED"
+    RESOLVED = "RESOLVED"
+    SUPERSEDED = "SUPERSEDED"
+    DEADLINE_ELAPSED = "DEADLINE_ELAPSED"
+    DUPLICATE = "DUPLICATE"
+    REFRESH_REQUIRED = "REFRESH_REQUIRED"
+    INVALIDATED = "INVALIDATED"
+    ARCHIVED = "ARCHIVED"
+
+
+class RiskTier(StrEnum):
+    R1_SIMPLE = "R1_SIMPLE"
+    R2_REVIEW = "R2_REVIEW"
+    R3_CRITICAL = "R3_CRITICAL"
+    D_MODEL_ONLY = "D_MODEL_ONLY"
+    D_DETERMINISTIC = "D_DETERMINISTIC"
+
+
+class TriageRoutingAction(StrEnum):
+    TRY_DIRECT_COMPILE = "TRY_DIRECT_COMPILE"
+    REQUEST_GLM53 = "REQUEST_GLM53"
+    HUMAN_RULE_REVIEW = "HUMAN_RULE_REVIEW"
+    DEFER_NONTERMINAL = "DEFER_NONTERMINAL"
+
+
+class CandidateSnapshotSeal(CommonEnvelope):
+    seal_id: str
+    candidate_id: str
+    candidate_revision_id: str
+    canonical_market_revision_id: str
+    canonical_rule_source_artifact_id: str
+    rule_source_sha256: str
+    rule_source_byte_length: int = Field(gt=0)
+    lifecycle_state: CandidateState
+    eligibility: CandidateEligibility
+    eligibility_as_of_utc: datetime
+    eligibility_policy_id: str
+    eligibility_policy_version: str
+    allowed_projection_input_ids: tuple[str, ...]
+    seal_sha256: str
+
+    @field_validator(
+        "seal_id",
+        "candidate_id",
+        "candidate_revision_id",
+        "canonical_market_revision_id",
+        "canonical_rule_source_artifact_id",
+        "eligibility_policy_id",
+        "eligibility_policy_version",
+    )
+    @classmethod
+    def wp1_required_ids(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("snapshot identifiers must not be blank")
+        return value
+
+    @field_validator("rule_source_sha256", "seal_sha256")
+    @classmethod
+    def wp1_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("eligibility_as_of_utc")
+    @classmethod
+    def wp1_clock(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("allowed_projection_input_ids")
+    @classmethod
+    def wp1_inputs(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or any(not item.strip() for item in value):
+            raise ValueError("allowed projection input ids must be non-empty")
+        if value != tuple(sorted(set(value))):
+            raise ValueError("allowed projection input ids must be unique and sorted")
+        return value
+
+    @model_validator(mode="after")
+    def wp1_identity(self) -> "CandidateSnapshotSeal":
+        if self.seal_id != self.record_id:
+            raise ValueError("seal_id must equal record_id")
+        expected = content_sha256({
+            "candidate_id": self.candidate_id,
+            "candidate_revision_id": self.candidate_revision_id,
+            "canonical_market_revision_id": self.canonical_market_revision_id,
+            "canonical_rule_source_artifact_id": self.canonical_rule_source_artifact_id,
+            "rule_source_sha256": self.rule_source_sha256,
+            "rule_source_byte_length": self.rule_source_byte_length,
+            "lifecycle_state": self.lifecycle_state,
+            "eligibility": self.eligibility,
+            "eligibility_as_of_utc": self.eligibility_as_of_utc,
+            "eligibility_policy_id": self.eligibility_policy_id,
+            "eligibility_policy_version": self.eligibility_policy_version,
+            "allowed_projection_input_ids": self.allowed_projection_input_ids,
+        })
+        if self.seal_sha256 != expected:
+            raise ValueError("seal_sha256 does not bind the snapshot payload")
+        if self.record_id != stable_record_id("candidate_snapshot", {
+            "candidate_id": self.candidate_id,
+            "candidate_revision_id": self.candidate_revision_id,
+            "canonical_market_revision_id": self.canonical_market_revision_id,
+            "canonical_rule_source_artifact_id": self.canonical_rule_source_artifact_id,
+            "rule_source_sha256": self.rule_source_sha256,
+            "rule_source_byte_length": self.rule_source_byte_length,
+            "lifecycle_state": self.lifecycle_state,
+            "eligibility": self.eligibility,
+            "eligibility_as_of_utc": self.eligibility_as_of_utc,
+            "eligibility_policy_id": self.eligibility_policy_id,
+            "eligibility_policy_version": self.eligibility_policy_version,
+            "allowed_projection_input_ids": self.allowed_projection_input_ids,
+        }):
+            raise ValueError("snapshot id must be content-derived from the sealed payload")
+        return self
+
+
+class RuleDryRunReceipt(CommonEnvelope):
+    receipt_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    compiler_version: str
+    complete: bool
+    direct_compile_possible: bool
+    authoritative_source_count: int = Field(ge=0)
+    complexity_score: int = Field(ge=0)
+    ambiguity_codes: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...]
+
+    @field_validator("candidate_snapshot_sha256")
+    @classmethod
+    def dry_hash(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("ambiguity_codes", "reason_codes")
+    @classmethod
+    def dry_codes(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value) or len(value) != len(set(value)):
+            raise ValueError("reason codes must be unique non-blank")
+        return tuple(sorted(value))
+
+    @model_validator(mode="after")
+    def dry_identity(self) -> "RuleDryRunReceipt":
+        if self.receipt_id != self.record_id or not self.reason_codes:
+            raise ValueError("dry-run receipt requires matching id and reason codes")
+        if self.direct_compile_possible and not self.complete:
+            raise ValueError("direct compile cannot be possible for an incomplete dry-run")
+        expected_id = stable_record_id("rule_dry_run", (
+            self.candidate_snapshot_id,
+            self.candidate_snapshot_sha256,
+            self.compiler_version,
+            self.complete,
+            self.direct_compile_possible,
+            self.authoritative_source_count,
+            self.complexity_score,
+            tuple(sorted(self.ambiguity_codes)),
+            tuple(sorted(self.reason_codes)),
+        ))
+        if self.record_id != expected_id:
+            raise ValueError("dry-run receipt id must be content-derived")
+        return self
+
+
+class TriageRoutingDecision(CommonEnvelope):
+    routing_decision_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    triage_receipt_id: str | None = None
+    triage_receipt_sha256: str | None = None
+    rule_dry_run_receipt_id: str
+    rule_dry_run_receipt_sha256: str
+    risk_tier: RiskTier
+    risk_reason_codes: tuple[str, ...]
+    sample_policy_id: str
+    sample_seed: str
+    sampled: bool
+    future_policy_sampled: bool
+    future_sample_policy_id: str
+    sample_context_id: str
+    triage_attempt_id: str | None = None
+    action: TriageRoutingAction
+    future_policy_action: TriageRoutingAction
+    refresh_after_utc: datetime | None = None
+
+    @field_validator("candidate_snapshot_sha256", "triage_receipt_sha256", "rule_dry_run_receipt_sha256")
+    @classmethod
+    def route_hashes(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("refresh_after_utc")
+    @classmethod
+    def route_clock(cls, value: datetime | None) -> datetime | None:
+        return ensure_utc(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def route_identity(self) -> "TriageRoutingDecision":
+        if self.routing_decision_id != self.record_id:
+            raise ValueError("routing_decision_id must equal record_id")
+        if bool(self.triage_receipt_id) != bool(self.triage_receipt_sha256):
+            raise ValueError("triage receipt id/hash must occur together")
+        if bool(self.triage_receipt_id) != bool(self.triage_attempt_id):
+            raise ValueError("triage receipt and attempt id must occur together")
+        if not self.risk_reason_codes or len(self.risk_reason_codes) != len(set(self.risk_reason_codes)):
+            raise ValueError("risk reason codes must be non-empty and unique")
+        if not self.sample_seed.strip() or not self.sample_context_id.strip():
+            raise ValueError("sample seed and context must not be blank")
+        if self.sampled != (self.action == TriageRoutingAction.REQUEST_GLM53):
+            raise ValueError("sampled must describe the actual GLM-5.3 route")
+        if self.future_policy_sampled != (
+            self.future_policy_action == TriageRoutingAction.REQUEST_GLM53
+        ):
+            raise ValueError("future_policy_sampled conflicts with counterfactual route")
+        if self.future_sample_policy_id != "future_triage_sampling_v1":
+            raise ValueError("unsupported future routing sample policy")
+        if self.action == TriageRoutingAction.DEFER_NONTERMINAL and self.refresh_after_utc is None:
+            raise ValueError("nonterminal defer requires refresh_after_utc")
+        pilot_mode = self.sample_policy_id == "gate_r_8_case_100pct_glm53_v1"
+        if not pilot_mode and self.sample_policy_id != "future_triage_sampling_v1":
+            raise ValueError("unsupported routing sample policy")
+        expected_id = stable_record_id("triage_routing", (
+            self.candidate_snapshot_id,
+            self.candidate_snapshot_sha256,
+            self.triage_receipt_id,
+            self.rule_dry_run_receipt_id,
+            self.risk_tier,
+            self.sample_seed,
+            self.sample_context_id,
+            pilot_mode,
+            self.action,
+            self.future_policy_action,
+        ))
+        if self.record_id != expected_id:
+            raise ValueError("routing decision id must be content-derived")
+        return self
+
+
+class DisagreementReceipt(CommonEnvelope):
+    receipt_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    first_attempt_id: str
+    first_attempt_sha256: str
+    second_attempt_id: str
+    second_attempt_sha256: str
+    difference_codes: tuple[str, ...]
+    route_decision_id: str
+    route_decision_sha256: str
+    routing_policy_version: str
+    sample_seed: str
+
+    @field_validator(
+        "candidate_snapshot_sha256",
+        "first_attempt_sha256",
+        "second_attempt_sha256",
+        "route_decision_sha256",
+    )
+    @classmethod
+    def disagreement_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @model_validator(mode="after")
+    def disagreement_identity(self) -> "DisagreementReceipt":
+        if self.receipt_id != self.record_id or self.first_attempt_id == self.second_attempt_id:
+            raise ValueError("receipt id must match and attempts must be distinct")
+        if (
+            not self.first_attempt_id.strip()
+            or not self.second_attempt_id.strip()
+            or not self.route_decision_id.strip()
+        ):
+            raise ValueError("attempt and route ids must not be blank")
+        if len(self.difference_codes) != len(set(self.difference_codes)):
+            raise ValueError("difference codes must be unique")
+        expected_id = stable_record_id(
+            "triage_disagreement",
+            self.candidate_snapshot_id,
+            self.first_attempt_id,
+            self.first_attempt_sha256,
+            self.second_attempt_id,
+            self.second_attempt_sha256,
+            self.difference_codes,
+            self.route_decision_id,
+        )
+        if self.record_id != expected_id:
+            raise ValueError("disagreement receipt id must be content-derived")
         return self
 
 

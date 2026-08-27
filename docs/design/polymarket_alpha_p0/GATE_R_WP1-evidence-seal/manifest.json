@@ -1,0 +1,39 @@
+{
+  "schema_version": "gate_r_wp1_evidence_v1",
+  "disposition": "WP1_COMPLETE_READY_FOR_WP2_WP3",
+  "readiness_scope": "OFFLINE_DETERMINISTIC_CONTRACTS_ONLY",
+  "parent_design_commit": "6c57a608",
+  "focused_tests": {
+    "passed": 99,
+    "failed": 0,
+    "junit": "test-results/focused.xml"
+  },
+  "full_alpha_tests": {
+    "passed": 672,
+    "failed": 3,
+    "baseline_passed": 652,
+    "baseline_failed": 3,
+    "environment_failure": "nested macOS sandbox-exec is denied by the managed Codex sandbox",
+    "junit": "test-results/full-alpha.xml"
+  },
+  "review": {
+    "model": "luna_verifier",
+    "p1_findings": 3,
+    "p2_findings": 2,
+    "closed": 5
+  },
+  "worker": {
+    "model": "terra_worker",
+    "turns": 1,
+    "usage_telemetry": "unavailable"
+  },
+  "capabilities": {
+    "network": false,
+    "browser": false,
+    "subprocess": false,
+    "order": false,
+    "signing": false,
+    "private_key": false,
+    "execution": "NO_ORDER"
+  }
+}

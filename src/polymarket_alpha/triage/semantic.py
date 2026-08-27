@@ -176,6 +176,10 @@ class SemanticTriageInput(AlphaContract):
 class SemanticTriageProjection(CommonEnvelope):
     projection_id: str
     policy_id: str = "price_blind_semantic_triage_v1"
+    projection_policy_version: str = "v1"
+    candidate_snapshot_id: str | None = None
+    candidate_snapshot_sha256: str | None = None
+    invalidation_parent_id: str | None = None
     items: tuple[SemanticTriageInput, ...]
 
     @model_validator(mode="after")
@@ -188,6 +192,12 @@ class SemanticTriageProjection(CommonEnvelope):
         if len(ids) != len(set(ids)):
             raise ValueError("semantic triage item ids must be unique")
         _scan_forbidden(self.model_dump(mode="python"), provider_result=False)
+        if bool(self.candidate_snapshot_id) != bool(self.candidate_snapshot_sha256):
+            raise ValueError("candidate snapshot id/hash must occur together")
+        if self.candidate_snapshot_sha256 is not None:
+            validate_sha256(self.candidate_snapshot_sha256)
+            if len(self.items) != 1:
+                raise ValueError("a CandidateSnapshot-bound projection must contain one item")
         return self
 
     def canonical_bytes(self) -> bytes:
@@ -276,6 +286,9 @@ class SemanticTriageDecision(CommonEnvelope):
     result: SemanticTriageItemResult
     eligibility: SemanticTriageEligibility
     effective_disposition: SemanticTriageDisposition
+    candidate_snapshot_id: str | None = None
+    candidate_snapshot_sha256: str | None = None
+    attempt_id: str | None = None
     model_only_terminal_rejection: bool = False
 
     @model_validator(mode="after")
@@ -293,6 +306,14 @@ class SemanticTriageDecision(CommonEnvelope):
             raise ValueError("effective disposition conflicts with deterministic eligibility")
         if self.model_only_terminal_rejection:
             raise ValueError("semantic triage cannot terminally reject a candidate")
+        if bool(self.candidate_snapshot_id) != bool(self.candidate_snapshot_sha256):
+            raise ValueError("candidate snapshot id/hash must occur together")
+        if self.candidate_snapshot_sha256 is not None:
+            validate_sha256(self.candidate_snapshot_sha256)
+            if self.attempt_id is None or not self.attempt_id.strip():
+                raise ValueError("snapshot-bound triage decision requires attempt_id")
+        elif self.attempt_id is not None:
+            raise ValueError("attempt_id requires a candidate snapshot binding")
         return self
 
 
@@ -309,6 +330,9 @@ class SemanticTriageReceipt(CommonEnvelope):
     provider_dispositions: dict[str, int]
     dispositions: dict[str, int]
     execution: str = "NO_ORDER"
+    candidate_snapshot_id: str | None = None
+    candidate_snapshot_sha256: str | None = None
+    attempt_id: str | None = None
 
     @field_validator("imported_at")
     @classmethod
@@ -334,6 +358,14 @@ class SemanticTriageReceipt(CommonEnvelope):
                 raise ValueError("dispositions must contain exact nonnegative triage counts")
             if sum(counts.values()) != self.item_count:
                 raise ValueError("disposition counts must equal item_count")
+        if bool(self.candidate_snapshot_id) != bool(self.candidate_snapshot_sha256):
+            raise ValueError("candidate snapshot id/hash must occur together")
+        if self.candidate_snapshot_sha256 is not None:
+            validate_sha256(self.candidate_snapshot_sha256)
+            if self.attempt_id is None or not self.attempt_id.strip():
+                raise ValueError("snapshot-bound triage receipt requires attempt_id")
+        elif self.attempt_id is not None:
+            raise ValueError("attempt_id requires a candidate snapshot binding")
         return self
 
 
@@ -362,6 +394,9 @@ def build_semantic_triage_projection(
     *,
     run_id: str,
     created_at: datetime,
+    candidate_snapshot_id: str | None = None,
+    candidate_snapshot_sha256: str | None = None,
+    invalidation_parent_id: str | None = None,
 ) -> tuple[SemanticTriageProjection, tuple[SemanticTriageBinding, ...]]:
     """Whitelist semantic fields from raw catalog markets and blind identity."""
 
@@ -415,7 +450,15 @@ def build_semantic_triage_projection(
                 source_market_sha256=source_hash,
             )
         )
-    projection_id = stable_record_id("semantic_projection", run_id, inputs)
+    projection_identity: list[Any] = [run_id, inputs]
+    if candidate_snapshot_id is not None:
+        projection_identity.append({
+            "candidate_snapshot_id": candidate_snapshot_id,
+            "candidate_snapshot_sha256": candidate_snapshot_sha256,
+            "invalidation_parent_id": invalidation_parent_id,
+            "projection_policy_version": "v1",
+        })
+    projection_id = stable_record_id("semantic_projection", *projection_identity)
     projection = SemanticTriageProjection(
         record_id=projection_id,
         projection_id=projection_id,
@@ -423,6 +466,9 @@ def build_semantic_triage_projection(
         created_at=created_at,
         source="alpha_semantic_projection",
         source_version=GLM_SEMANTIC_TRIAGE_VERSION,
+        candidate_snapshot_id=candidate_snapshot_id,
+        candidate_snapshot_sha256=candidate_snapshot_sha256,
+        invalidation_parent_id=invalidation_parent_id,
         items=tuple(inputs),
     )
     return projection, tuple(bindings)
@@ -447,10 +493,17 @@ def import_semantic_triage_result(
     artifact_root: Path,
     imported_at: datetime,
     repository: AlphaRepository | None = None,
+    attempt_id: str | None = None,
 ) -> SemanticTriageImport:
     """Validate, bind and append-only seal one provider return."""
 
     imported_at = ensure_utc(imported_at)
+    if projection.candidate_snapshot_id is not None and (
+        attempt_id is None or not attempt_id.strip()
+    ):
+        raise TriageResultError("snapshot-bound provider return requires attempt_id")
+    if projection.candidate_snapshot_id is None and attempt_id is not None:
+        raise TriageResultError("attempt_id requires a candidate snapshot binding")
     try:
         result = SemanticTriageProviderResult.model_validate(provider_payload)
     except Exception as error:
@@ -483,15 +536,21 @@ def import_semantic_triage_result(
             if eligibility == SemanticTriageEligibility.DEADLINE_ELAPSED
             else item.disposition
         )
-        decision_id = stable_record_id(
-            "semantic_decision",
+        decision_identity: list[Any] = [
             projection.projection_id,
             item_id,
             item,
             provider_wrapper_sha256,
             eligibility,
             effective_disposition,
-        )
+        ]
+        if attempt_id is not None:
+            decision_identity.append({
+                "attempt_id": attempt_id,
+                "candidate_snapshot_id": projection.candidate_snapshot_id,
+                "candidate_snapshot_sha256": projection.candidate_snapshot_sha256,
+            })
+        decision_id = stable_record_id("semantic_decision", *decision_identity)
         decisions.append(
             SemanticTriageDecision(
                 record_id=decision_id,
@@ -514,6 +573,9 @@ def import_semantic_triage_result(
                 result=item,
                 eligibility=eligibility,
                 effective_disposition=effective_disposition,
+                candidate_snapshot_id=projection.candidate_snapshot_id,
+                candidate_snapshot_sha256=projection.candidate_snapshot_sha256,
+                attempt_id=attempt_id,
             )
         )
 
@@ -526,12 +588,18 @@ def import_semantic_triage_result(
         for status in SemanticTriageDisposition
     }
     provider_result_bytes = canonical_json(result).encode("utf-8")
-    receipt_id = stable_record_id(
-        "semantic_receipt",
+    receipt_identity: list[Any] = [
         projection.projection_id,
         provider_wrapper_sha256,
         bytes_sha256(provider_result_bytes),
-    )
+    ]
+    if attempt_id is not None:
+        receipt_identity.append({
+            "attempt_id": attempt_id,
+            "candidate_snapshot_id": projection.candidate_snapshot_id,
+            "candidate_snapshot_sha256": projection.candidate_snapshot_sha256,
+        })
+    receipt_id = stable_record_id("semantic_receipt", *receipt_identity)
     receipt = SemanticTriageReceipt(
         record_id=receipt_id,
         receipt_id=receipt_id,
@@ -549,6 +617,9 @@ def import_semantic_triage_result(
         item_count=len(result.items),
         provider_dispositions=provider_dispositions,
         dispositions=dispositions,
+        candidate_snapshot_id=projection.candidate_snapshot_id,
+        candidate_snapshot_sha256=projection.candidate_snapshot_sha256,
+        attempt_id=attempt_id,
     )
 
     store = ArtifactStore(Path(artifact_root))

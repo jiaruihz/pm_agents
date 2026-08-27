@@ -21,6 +21,17 @@ from .semantic import (
     import_semantic_triage_result,
     semantic_triage_json_schema,
 )
+from .routing import (
+    FUTURE_SAMPLE_POLICY_ID,
+    PILOT_SAMPLE_POLICY_ID,
+    ROUTING_POLICY_ID,
+    ROUTING_POLICY_VERSION,
+    build_candidate_snapshot_seal,
+    build_rule_dry_run_receipt,
+    compare_typed_reviews,
+    deterministic_eligibility,
+    route_triage,
+)
 
 __all__ = [
     "GLM_SEMANTIC_TRIAGE_VERSION",
@@ -42,4 +53,13 @@ __all__ = [
     "build_semantic_triage_projection",
     "import_semantic_triage_result",
     "semantic_triage_json_schema",
+    "FUTURE_SAMPLE_POLICY_ID",
+    "PILOT_SAMPLE_POLICY_ID",
+    "ROUTING_POLICY_ID",
+    "ROUTING_POLICY_VERSION",
+    "build_candidate_snapshot_seal",
+    "build_rule_dry_run_receipt",
+    "compare_typed_reviews",
+    "deterministic_eligibility",
+    "route_triage",
 ]

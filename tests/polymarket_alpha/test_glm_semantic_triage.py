@@ -384,3 +384,51 @@ def test_elapsed_deadline_deterministically_defers_model_advance(tmp_path: Path)
     assert expired.effective_disposition == SemanticTriageDisposition.DEFER
     assert imported.receipt.provider_dispositions == {"ADVANCE": 2, "REVIEW": 0, "DEFER": 0}
     assert imported.receipt.dispositions == {"ADVANCE": 1, "REVIEW": 0, "DEFER": 1}
+
+
+def test_snapshot_bound_import_requires_and_propagates_attempt_identity(
+    tmp_path: Path,
+) -> None:
+    artifact_root = tmp_path / "artifacts"
+    artifact_root.mkdir()
+    snapshot_id = "candidate_snapshot:" + "a" * 64
+    snapshot_sha256 = "b" * 64
+    projection, bindings = build_semantic_triage_projection(
+        _markets()[:1],
+        run_id="triage-snapshot",
+        created_at=NOW,
+        candidate_snapshot_id=snapshot_id,
+        candidate_snapshot_sha256=snapshot_sha256,
+    )
+    payload = _payload(projection)
+
+    with pytest.raises(TriageResultError, match="requires attempt_id"):
+        import_semantic_triage_result(
+            projection=projection,
+            bindings=bindings,
+            provider_payload=payload,
+            prompt_bytes=b"prompt",
+            provider_wrapper_bytes=b"{}",
+            provider=_metadata(),
+            artifact_root=artifact_root,
+            imported_at=NOW,
+        )
+
+    imported = import_semantic_triage_result(
+        projection=projection,
+        bindings=bindings,
+        provider_payload=payload,
+        prompt_bytes=b"prompt",
+        provider_wrapper_bytes=b"{}",
+        provider=_metadata(),
+        artifact_root=artifact_root,
+        imported_at=NOW,
+        attempt_id="attempt:glm47",
+    )
+    assert imported.receipt.attempt_id == "attempt:glm47"
+    assert imported.receipt.candidate_snapshot_id == snapshot_id
+    assert all(item.attempt_id == "attempt:glm47" for item in imported.decisions)
+    assert all(
+        item.candidate_snapshot_sha256 == snapshot_sha256
+        for item in imported.decisions
+    )

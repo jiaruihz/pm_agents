@@ -15,12 +15,19 @@ rule_source_sha256, rule_source_byte_length, lifecycle_state,
 eligibility_as_of_utc, eligibility_policy_id/version,
 allowed_projection_input_ids, created_at_utc, seal_id and seal_sha256.
 
+Eligibility is one of ELIGIBLE, MARKET_CLOSED, RESOLVED, SUPERSEDED,
+DEADLINE_ELAPSED, DUPLICATE, REFRESH_REQUIRED, INVALIDATED or ARCHIVED.
+
 ## TriageRoutingDecision
 
 Required fields: routing_decision_id, candidate_snapshot_id/hash,
 triage_receipt_id/hash, rule_dry_run_receipt_id/hash, risk_tier,
-risk_reason_codes, sample_policy_id, sample_seed, sampled, action,
-nullable refresh_after_utc and created_at_utc.
+risk_reason_codes, sample_policy_id, sample_seed, sample_context_id,
+sampled, future_policy_sampled, future_sample_policy_id,
+future_policy_action, triage_attempt_id, action, nullable refresh_after_utc and
+created_at_utc. Sampled describes the actual GLM-5.3 route; the future fields
+preserve the counterfactual production sampling decision during the 100-percent
+Gate R calibration pilot.
 
 Action is one of TRY_DIRECT_COMPILE, REQUEST_GLM53, HUMAN_RULE_REVIEW or
 DEFER_NONTERMINAL.
