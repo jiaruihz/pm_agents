@@ -354,6 +354,95 @@ class OperationalPreflightResult(AlphaContract):
         return self
 
 
+class OperationalPilotAuthorization(CommonEnvelope):
+    """Owner approval bound to one exact offline preflight manifest."""
+
+    authorization_id: str
+    preflight_manifest_id: str
+    preflight_manifest_sha256: str
+    authorized_at: datetime
+    expires_at: datetime
+    network_io_authorized: Literal[True] = True
+    owner_demand_authorized: Literal[True] = True
+    production_config_changes_authorized: Literal[False] = False
+    current_runtime_db_writes_authorized: Literal[False] = False
+    execution_capability: Literal["NO_ORDER"] = "NO_ORDER"
+
+    @field_validator("authorization_id", "preflight_manifest_id")
+    @classmethod
+    def authorization_text_is_nonblank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("pilot authorization identity must not be blank")
+        return value
+
+    @field_validator("preflight_manifest_sha256")
+    @classmethod
+    def preflight_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("authorized_at", "expires_at")
+    @classmethod
+    def authorization_times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def authorization_window_is_ordered(self) -> "OperationalPilotAuthorization":
+        if self.expires_at <= self.authorized_at:
+            raise ValueError("pilot authorization must expire after authorization")
+        if self.expires_at > self.authorized_at + timedelta(
+            minutes=FIRST_PILOT_BUDGET.max_runtime_minutes
+        ):
+            raise ValueError("pilot authorization exceeds the first-pilot runtime budget")
+        return self
+
+
+def authorize_operational_preflight(
+    preflight: OperationalPreflightResult,
+    *,
+    owner_authorization_id: str,
+    authorized_at: datetime,
+    expires_at: datetime,
+) -> OperationalPilotAuthorization:
+    """Freeze explicit approval without mutating the preflight manifest."""
+
+    if preflight.network_io_performed or preflight.owner_demand_submitted:
+        raise ValueError("authorization requires an untouched offline preflight")
+    manifest = preflight.manifest
+    if (
+        manifest.gate_status != PilotGateStatus.PREPARED_NOT_AUTHORIZED
+        or manifest.network_io_authorized
+        or manifest.production_config_changes_authorized
+        or manifest.execution_capability != "NO_ORDER"
+    ):
+        raise ValueError("preflight manifest is not eligible for read-only authorization")
+    authorized_at = ensure_utc(authorized_at)
+    expires_at = ensure_utc(expires_at)
+    authorization_id = owner_authorization_id.strip()
+    record_id = stable_record_id(
+        "operational_authorization",
+        manifest.record_id,
+        manifest.canonical_sha256,
+        authorization_id,
+        authorized_at,
+        expires_at,
+    )
+    return OperationalPilotAuthorization(
+        record_id=record_id,
+        run_id=stable_record_id("operational_authorization_run", manifest.run_id),
+        created_at=authorized_at,
+        source="alpha_operational_authorization",
+        source_version=OPERATIONAL_PREFLIGHT_VERSION,
+        provenance=(),
+        extensions={},
+        authorization_id=authorization_id,
+        preflight_manifest_id=manifest.record_id,
+        preflight_manifest_sha256=manifest.canonical_sha256,
+        authorized_at=authorized_at,
+        expires_at=expires_at,
+    )
+
+
 def build_first_pilot_endpoint_policy(*, created_at: datetime) -> ReadOnlyPolicyArtifact:
     created_at = ensure_utc(created_at)
     endpoints = (

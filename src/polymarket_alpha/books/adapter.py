@@ -277,7 +277,11 @@ def build_owner_capture_demands(demand: BookCaptureDemand) -> OwnerDemandBundle:
             priority=priority,
             requested_at_utc=_utc_text(demand.requested_at),
             expires_at_utc=_utc_text(demand.valid_until),
-            desired_transport="REST",
+            # The sole existing owner accepts shared dynamic demand through
+            # its WS subscription and keeps REST as canonical context/fallback.
+            # REST-only rows are not executable by that owner and would be
+            # rejected as an invalid shared-demand contract.
+            desired_transport="REST_WS",
             requested_checkpoints_seconds=(0,),
             trigger_event_id=demand.demand_id,
             metadata={

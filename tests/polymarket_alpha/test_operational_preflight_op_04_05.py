@@ -11,11 +11,13 @@ from src.polymarket_alpha.pilot import (
     FIRST_PILOT_BUDGET,
     BudgetEventKind,
     OperationalPilotManifest,
+    OperationalPilotAuthorization,
     OwnerHealthObservation,
     PilotBudgetEvent,
     PilotBudgetLedger,
     PilotGateStatus,
     build_first_pilot_endpoint_policy,
+    authorize_operational_preflight,
     compare_weather_isolation,
     prepare_fixture_backed_operational_preflight,
     validate_rollback_rehearsal,
@@ -173,6 +175,49 @@ def test_offline_manifest_cannot_claim_authorization_or_unsafe_artifact_root() -
         )
     with pytest.raises(ValidationError, match="dedicated pilot child"):
         OperationalPilotManifest.model_validate({**payload, "artifact_root": "/tmp"})
+
+
+def test_owner_authorization_is_separate_hash_bound_and_time_bounded() -> None:
+    preflight = prepare_operational_preflight(
+        fixture_identities=_fixture_identities(),
+        artifact_root="/tmp/polymarket-alpha-pilot/run-authorized",
+        prepared_at=NOW,
+    )
+    authorization = authorize_operational_preflight(
+        preflight,
+        owner_authorization_id="user-thread-approval-2026-08-27",
+        authorized_at=NOW + timedelta(minutes=1),
+        expires_at=NOW + timedelta(minutes=31),
+    )
+    assert isinstance(authorization, OperationalPilotAuthorization)
+    assert authorization.preflight_manifest_id == preflight.manifest.record_id
+    assert authorization.preflight_manifest_sha256 == preflight.manifest.canonical_sha256
+    assert authorization.network_io_authorized
+    assert authorization.owner_demand_authorized
+    assert authorization.production_config_changes_authorized is False
+    assert authorization.current_runtime_db_writes_authorized is False
+    assert authorization.execution_capability == "NO_ORDER"
+    retry = authorize_operational_preflight(
+        preflight,
+        owner_authorization_id="user-thread-approval-2026-08-27",
+        authorized_at=NOW + timedelta(minutes=1),
+        expires_at=NOW + timedelta(minutes=31),
+    )
+    assert retry == authorization
+    with pytest.raises(ValidationError, match="runtime budget"):
+        authorize_operational_preflight(
+            preflight,
+            owner_authorization_id="user-thread-approval-2026-08-27",
+            authorized_at=NOW,
+            expires_at=NOW + timedelta(minutes=31),
+        )
+    with pytest.raises(ValueError, match="must not be blank"):
+        authorize_operational_preflight(
+            preflight,
+            owner_authorization_id=" ",
+            authorized_at=NOW,
+            expires_at=NOW + timedelta(minutes=30),
+        )
 
 
 def test_op01_fixture_set_binds_directly_to_preflight_manifest() -> None:

@@ -26,6 +26,10 @@ import websockets
 from websockets.asyncio.client import ClientConnection
 
 from src.platform.market_data.capture_demand import CaptureDemand
+from src.platform.market_data.capture_inbox import (
+    DEFAULT_ALPHA_CONSUMER,
+    CaptureDemandInbox,
+)
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
@@ -241,10 +245,75 @@ class SourceEventCursor:
 class MarketCaptureDemandCursor:
     """Incrementally fold bounded weather and shared direct-token requests."""
 
-    def __init__(self, path: Path | Sequence[Path]) -> None:
+    def __init__(
+        self,
+        path: Path | Sequence[Path] = (),
+        *,
+        inbox: CaptureDemandInbox | None = None,
+    ) -> None:
         self.paths = (path,) if isinstance(path, Path) else tuple(path)
+        self.inbox = inbox
         self.offsets: dict[Path, int] = {item: 0 for item in self.paths}
         self.active: dict[str, dict[str, Any]] = {}
+        self.polymarket_payloads: dict[str, str] = {}
+        self.inbox_active_ids: set[str] = set()
+
+    def _ingest_line(
+        self,
+        line: bytes,
+        *,
+        required_consumer_id: str | None = None,
+    ) -> str | None:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(row, dict):
+            return
+        schema = row.get("schema_version")
+        identity = str(row.get("capture_request_id") or row.get("demand_id") or "")
+        if schema == "weather_market_capture_demand_v1" and identity:
+            if required_consumer_id is None:
+                self.active[identity] = row
+                return identity
+            return None
+        if schema != "polymarket_capture_demand_v1" or not identity:
+            return
+        if required_consumer_id is None and row.get("consumer_id") == DEFAULT_ALPHA_CONSUMER:
+            # Alpha owns only its fixed inbox.  Enabling that inbox must not
+            # make legacy/shared JSONL paths an alternate Alpha injection path.
+            return
+        if required_consumer_id is not None and row.get("consumer_id") != required_consumer_id:
+            return
+        try:
+            demand = CaptureDemand(
+                demand_id=str(row["demand_id"]),
+                consumer_id=str(row["consumer_id"]),
+                strategy_key=str(row["strategy_key"]),
+                condition_id=str(row["condition_id"]),
+                token_id=str(row["token_id"]),
+                reason=str(row["reason"]),
+                priority=str(row["priority"]),
+                requested_at_utc=str(row["requested_at_utc"]),
+                expires_at_utc=str(row["expires_at_utc"]),
+                desired_transport=str(row["desired_transport"]),
+                requested_checkpoints_seconds=tuple(row.get("requested_checkpoints_seconds") or ()),
+                trigger_event_id=row.get("trigger_event_id"),
+                metadata=row.get("metadata") or {},
+                schema_version=str(row["schema_version"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            return
+        normalized = demand.to_dict()
+        payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        previous = self.polymarket_payloads.get(identity)
+        if previous is not None and previous != payload:
+            # A demand id is immutable.  Ignore a conflicting replay instead
+            # of letting a later journal line rewrite a canonical declaration.
+            return
+        self.polymarket_payloads[identity] = payload
+        self.active[identity] = normalized
+        return identity
 
     def read(self, *, now_utc: datetime) -> list[dict[str, Any]]:
         for path in self.paths:
@@ -263,41 +332,20 @@ class MarketCaptureDemandCursor:
             except OSError:
                 lines = []
             for line in lines:
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(row, dict):
-                    continue
-                schema = row.get("schema_version")
-                identity = str(
-                    row.get("capture_request_id") or row.get("demand_id") or ""
-                )
-                if schema == "weather_market_capture_demand_v1" and identity:
-                    self.active[identity] = row
-                elif schema == "polymarket_capture_demand_v1" and identity:
-                    try:
-                        demand = CaptureDemand(
-                            demand_id=str(row["demand_id"]),
-                            consumer_id=str(row["consumer_id"]),
-                            strategy_key=str(row["strategy_key"]),
-                            condition_id=str(row["condition_id"]),
-                            token_id=str(row["token_id"]),
-                            reason=str(row["reason"]),
-                            priority=str(row["priority"]),
-                            requested_at_utc=str(row["requested_at_utc"]),
-                            expires_at_utc=str(row["expires_at_utc"]),
-                            desired_transport=str(row["desired_transport"]),
-                            requested_checkpoints_seconds=tuple(
-                                row.get("requested_checkpoints_seconds") or ()
-                            ),
-                            trigger_event_id=row.get("trigger_event_id"),
-                            metadata=row.get("metadata") or {},
-                            schema_version=str(row["schema_version"]),
-                        )
-                    except (KeyError, TypeError, ValueError):
-                        continue
-                    self.active[identity] = demand.to_dict()
+                self._ingest_line(line)
+        if self.inbox is not None:
+            for identity in self.inbox_active_ids:
+                self.active.pop(identity, None)
+            self.inbox_active_ids.clear()
+            inbox_lines = self.inbox.read_lines()
+            if not self.inbox.last_errors:
+                for inbox_line in inbox_lines:
+                    identity = self._ingest_line(
+                        inbox_line.line,
+                        required_consumer_id=inbox_line.consumer_id,
+                    )
+                    if identity is not None:
+                        self.inbox_active_ids.add(identity)
         result: list[dict[str, Any]] = []
         retained: dict[str, dict[str, Any]] = {}
         for identity, row in self.active.items():
@@ -875,8 +923,15 @@ class Collector:
             ([Path(args.market_capture_demands_jsonl)] if args.market_capture_demands_jsonl else [])
             + [Path(value) for value in args.shared_capture_demands_jsonl]
         )
+        self.alpha_capture_demand_inbox = (
+            CaptureDemandInbox(args.shared_capture_demand_inbox_root)
+            if args.shared_capture_demand_inbox_root
+            else None
+        )
         self.market_capture_demand_cursor = (
-            MarketCaptureDemandCursor(demand_paths) if demand_paths else None
+            MarketCaptureDemandCursor(demand_paths, inbox=self.alpha_capture_demand_inbox)
+            if demand_paths or self.alpha_capture_demand_inbox is not None
+            else None
         )
         self.next_report_at_utc: dict[str, str] = {}
         self.selection = Selection(
@@ -943,6 +998,14 @@ class Collector:
                 allowed_cities=self.args.cities,
                 max_ttl_minutes=self.args.market_capture_max_ttl_min,
                 max_active_tokens=self.args.market_capture_max_active_tokens,
+                allowed_shared_strategy_keys=(
+                    "rule_lawyer.dispute_repricing",
+                    "reheat_risk.current_yes",
+                ) + (
+                    ("polymarket_alpha.p0_offline",)
+                    if self.alpha_capture_demand_inbox is not None
+                    else ()
+                ),
             )
         self.invalidation_state = self.selection.invalidation_state
         _publish_json_atomic(
@@ -1082,6 +1145,12 @@ class Collector:
                 "capture_demands": self.selection.capture_demands,
                 "market_capture_demands_jsonl": self.args.market_capture_demands_jsonl,
                 "shared_capture_demands_jsonl": self.args.shared_capture_demands_jsonl,
+                "shared_capture_demand_inbox_root": self.args.shared_capture_demand_inbox_root,
+                "shared_capture_demand_inbox_errors": list(
+                    self.alpha_capture_demand_inbox.last_errors
+                    if self.alpha_capture_demand_inbox is not None
+                    else ()
+                ),
                 "post_invalidation_sec": self.args.post_invalidation_sec,
                 "event_burst_sec": self.args.event_burst_sec,
                 "report_window_before_sec": self.args.report_window_before_sec,
@@ -1260,6 +1329,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="Additional append-only polymarket_capture_demand_v1 stream; repeatable",
+    )
+    parser.add_argument(
+        "--shared-capture-demand-inbox-root",
+        default="",
+        help=(
+            "Disabled by default. Read only <root>/polymarket_alpha/"
+            "capture_demands.jsonl through the existing owner."
+        ),
     )
     parser.add_argument("--market-capture-max-ttl-min", type=float, default=120.0)
     parser.add_argument("--market-capture-max-active-tokens", type=int, default=12)

@@ -234,7 +234,7 @@ def test_sensing_demand_maps_to_exactly_two_existing_owner_declarations() -> Non
     assert bundle.alpha_demand == demand
     assert {row.token_id for row in bundle.owner_demands} == {"yes-token", "no-token"}
     assert {row.priority for row in bundle.owner_demands} == {"P1"}
-    assert {row.desired_transport for row in bundle.owner_demands} == {"REST"}
+    assert {row.desired_transport for row in bundle.owner_demands} == {"REST_WS"}
     assert all(row.trigger_event_id == demand.demand_id for row in bundle.owner_demands)
 
 

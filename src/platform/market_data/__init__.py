@@ -25,6 +25,8 @@ _EXPORT_TO_MODULE = {
     "CaptureDemand": "src.platform.market_data.capture_demand",
     "CaptureAssignment": "src.platform.market_data.capture_demand",
     "coalesce_capture_demands": "src.platform.market_data.capture_demand",
+    "CaptureDemandInbox": "src.platform.market_data.capture_inbox",
+    "InboxDemandLine": "src.platform.market_data.capture_inbox",
     "CaptureReceipt": "src.platform.market_data.capture_receipt",
     "MarketExpression": "src.platform.market_data.market_group",
     "MarketGroupSnapshot": "src.platform.market_data.market_group",
