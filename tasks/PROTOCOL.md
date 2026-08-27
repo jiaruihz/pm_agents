@@ -1,42 +1,47 @@
-# Task Protocol
+# PM Agents Task Protocol
 
-## 文件约定
+本协议用于 Codex、GLM 和网页端 GPT Pro 在同一仓库内跨线程协作。它补充根 `AGENTS.md`；天气、生产、资金和 skill 安全边界仍以根规则为准。
 
-| 文件 | 写入方 | 用途 |
-|---|---|---|
-| `tasks/current_task.md` | Claude（Orchestrator） | 当前任务指令 |
-| `tasks/task_result.md` | MiniMax（Executor） | 执行结果汇报 |
-| `tasks/progress.md` | 双方 | 总体进度记录 |
+## 指令优先级
 
-## MiniMax 收到任务后的工作流
+1. 用户当前会话的明确指令
+2. 当前 `ACTIVE` task
+3. `tasks/projects/<PROJECT_ID>.md` 的 owner decision 与 accepted state
+4. 已接受的 review/evidence
+5. 历史报告、旧 prompt、代码注释
 
-1. 读 `tasks/current_task.md`
-2. 按指令执行（写代码、跑测试、跑命令）
-3. 把结果写入 `tasks/task_result.md`（格式见下）
-4. **不要**修改 `tasks/current_task.md`，等 Claude 来更新
+历史材料只是 evidence，不会自动成为执行指令。未审阅结果不得写成 accepted state。
 
-## task_result.md 格式
+## 什么时候建 task
 
-```markdown
-# Result: <Task 名称>
+多步实现、研究、跨线程工作或需要 GLM/GPT Pro 交接时建 task。简单问答、一次性只读查询和无需交接的小修不强制建。
 
-## Status
-DONE / PARTIAL / FAILED
+Task ID：`<PROJECT>-<WORKSTREAM>-<NN>`，例如 `WCIR-ORACLE-01`。
 
-## Files Changed
-- Created: path/to/file.py
-- Modified: path/to/other.py
+状态仅使用：`DRAFT`、`ACTIVE`、`BLOCKED`、`READY_FOR_REVIEW`、`ACCEPTED`、`PAUSED`。
 
-## Test Output
+## 线程与角色
+
+- 一个线程只负责一个 task；并发写 task 必须 write scope 正交并使用独立 worktree。
+- Codex 默认是 coordinator/integrator：准备 task、核对实现与 review、维护 accepted state。
+- GLM 默认是 executor：只按 task 实施、验证并写 handoff，不能接受自己的工作。
+- GPT Pro 默认是 reviewer：只读审阅 task、handoff、diff/tests/artifact，不能改代码或更新 state。
+- 只有用户/owner 明确决定，才能把 `READY_FOR_REVIEW` 改成 `ACCEPTED` 或开放下一 stage/capability。
+
+## 文件流转
+
+```text
+tasks/queue/<TASK_ID>.md
+  -> tasks/active/<TASK_ID>.md
+  -> tasks/handoffs/<TASK_ID>.md
+  -> tasks/archive/<TASK_ID>.md
 ```
-pytest ... 的输出贴这里
-```
 
-## Notes
-遇到的问题、偏离任务的地方、需要 Claude review 的点
-```
+外部模型 packet 生成到 `tasks/packets/`。外部原始回复与 packet 一起保留，但 reviewer opinion 不等于 owner decision。
 
-## 注意事项
-- 每次只执行 current_task.md 里的任务，不要超前
-- 遇到不确定的设计决策，写在 Notes 里，不要自己猜
-- 命令都在 `/home/rui/projects/pm_agent` 下运行，记得 `PYTHONPATH=.`
+## 安全边界
+
+- 未写进 task 的文件默认只读。
+- 不跨项目顺手修改，不覆盖历史 evidence，不自行扩大 task。
+- live、下单、部署、转账、债务、还款、删除数据或其他不可逆动作必须在 task 中获得明确授权。
+- 执行者只能交付 `READY_FOR_REVIEW` 或 `BLOCKED`；完成后生成 handoff 并停止。
