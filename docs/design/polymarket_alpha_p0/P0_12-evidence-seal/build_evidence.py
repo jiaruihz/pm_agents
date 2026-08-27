@@ -31,7 +31,7 @@ from src.weather_agent_harness.orchestration import WorkOrder, WorkStatus
 
 ROOT = Path(__file__).resolve().parents[4]
 SEAL = Path(__file__).resolve().parent
-SOURCE_COMMIT = "83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5"
+SOURCE_COMMIT = "3335cbaa3196adf46e7ef284fcd094515ca89e37"
 RUN_ID = "alpha-p0-12-offline-20260827"
 GENERATED_AT = "2026-08-27T12:00:00Z"
 

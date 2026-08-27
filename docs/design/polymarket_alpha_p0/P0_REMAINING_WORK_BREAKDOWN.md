@@ -6,7 +6,9 @@ Status date: 2026-08-27
 PROGRAM_PHASE=P0_OFFLINE_IMPLEMENTATION
 P0_COMPLETE=YES
 P0_COMPLETION_STATUS=CERTIFIED_OFFLINE
-SOURCE_COMMIT=83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5
+SOURCE_COMMIT=3335cbaa3196adf46e7ef284fcd094515ca89e37
+NEXT_GATE=READ_ONLY_OPERATIONAL_PILOT_GATE
+NEXT_GATE_STATUS=PREPARED_NOT_AUTHORIZED
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 ```
@@ -30,7 +32,7 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P0-09 decision ledger | COMPLETE | Append-only lifecycle reaches SIMULATION_RECORDED; ranker emits only NO_ORDER and atomic ledger passes. |
 | P0-10 harness adapter | COMPLETE | One coordinator, unique owners, complete evidence and hash-bound offline completion receipt pass. |
 | P0-11 security | COMPLETE | Static, transport, dynamic canary and macOS process/network capability proofs pass for offline scope. |
-| P0-12 offline E2E | COMPLETE | A01-A18, 369 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
+| P0-12 offline E2E | COMPLETE | A01-A18, 371 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
 
 P0 now has a complete deterministic offline fixture path from Change → Recall
 → Candidate → Rule A → Blind import → formal paired book → Market import →
@@ -38,6 +40,11 @@ Rule B → rank/ledger → `SIMULATION_RECORDED`. This is not evidence that dail
 network operation, production capture expansion, or live execution is ready.
 
 ## 2. Implemented sequence (historical work breakdown)
+
+The executable next-gate contract is
+`READ_ONLY_OPERATIONAL_PILOT_GATE.md`. Preparation is complete; execution still
+requires explicit authorization because it introduces real network traffic and
+touches the current market-book owner boundary.
 
 ```text
 Immediate, independent:

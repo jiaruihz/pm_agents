@@ -23,7 +23,7 @@
     "WorkStatus"
   ],
   "seal_scope_staged_explicitly": true,
-  "source_commit": "83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5",
+  "source_commit": "3335cbaa3196adf46e7ef284fcd094515ca89e37",
   "source_files_sha256": {
     "src/polymarket_alpha/__init__.py": "723dc4afb76a25c872c335388be74508d1b84fda15d1fd077039d0c7ea0de1ae",
     "src/polymarket_alpha/adapters/__init__.py": "5b15dc0e6f8c7f71e8231656072c1ce6f9cd4e69dc85768cdf7f370785cbd5f6",
@@ -52,7 +52,7 @@
     "src/polymarket_alpha/recall/__init__.py": "291ea4b1c24295e6dd91a9b7a1263f7d9bbce6b189fa1b1373c0afee3980f94c",
     "src/polymarket_alpha/recall/aggregate.py": "af4d54f23b61edd3f168546227de2708a1db17b2cae5887629bf7b12aa8a5bd7",
     "src/polymarket_alpha/recall/book_anomaly.py": "d10990a6fd686c805c06e56e479dddac95c1253d2ba74f617eed313f583de1e6",
-    "src/polymarket_alpha/recall/controversy.py": "37d1fe8ede52ddb156a78fe7400ca530e9a088c1f62a43956c58a97156a940ed",
+    "src/polymarket_alpha/recall/controversy.py": "515ad6f938351b0d108cd05605f0ff6bb10393877ec2e7ed03ecbe58c331c740",
     "src/polymarket_alpha/recall/new_changed.py": "06bb002d161659a60d2822aaa0770c52a17c1b61bb29f8d9951863265111693a",
     "src/polymarket_alpha/recall/registry.py": "cd968bc429c1ba4b3449be2c377052131ca99f2f3d5b63d144526555c8634153",
     "src/polymarket_alpha/recall/structural_metadata.py": "a3450349e409d8cf2e542e15ee1a1b14ca7b52934ec0347ba3c024557358b0a9",
@@ -73,6 +73,6 @@
     "src/polymarket_alpha/storage/migrations.py": "f5389075dc5ad4ed51aa370615d3756ead900cbff0472723584927f32f2c1a1c",
     "src/polymarket_alpha/storage/repository.py": "97fe3dad604fa905d5befd6efa976f5e06d7078db0e8f5d21985360e7116cf70"
   },
-  "source_tree_sha256": "195282a9598c3682c2be91f0dbfc666f2cf4f8fa5c88df3bb60b37fe0f6a575b",
+  "source_tree_sha256": "1df839ebf945e2e9b8e11619adf1ce094db0d3529e48da56f66c65867b69aa62",
   "working_tree_had_unrelated_user_changes": true
 }

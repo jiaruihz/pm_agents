@@ -10,9 +10,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-01",
-      "sha256": "e0f92b85b37abbcbd9718b6f9728df0f215409815df01be90553a7baf7c46dbd",
+      "sha256": "c39d17e2f086e80490b7bef9394606031a194e96d35809754358ed7a59b695fc",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-01",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-01",
       "uri": "artifact://alpha-p0/P0-01.json"
     },
     {
@@ -20,9 +20,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-02",
-      "sha256": "e2200f9ec8cbfa2a10355b7231530f9f8902d59222ee525abd26af00434cdb6e",
+      "sha256": "97478b683f86439f4a80846788f5f4552ce202a2f0c5fbf247dcc244796be505",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-02",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-02",
       "uri": "artifact://alpha-p0/P0-02.json"
     },
     {
@@ -30,9 +30,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-03",
-      "sha256": "1ad5617bd3722da7ff9f409616982e329ef1b7c06a92192907249fbba715e474",
+      "sha256": "b79d3b92b336523ad74493287754a48ed9569dd8af9d0b2004e37f3e03cc7d45",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-03",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-03",
       "uri": "artifact://alpha-p0/P0-03.json"
     },
     {
@@ -40,9 +40,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-04",
-      "sha256": "96b3bafea52750a1cff2a40ee8836a6e59d8d088f8c425b1f08a6816aa480671",
+      "sha256": "fdf6a3aac2fcd4e685d918938a52d694f7efc34a5d2eac258e88db7acda7daa5",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-04",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-04",
       "uri": "artifact://alpha-p0/P0-04.json"
     },
     {
@@ -50,9 +50,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-05",
-      "sha256": "f89706b79f5ed45ca134aba9d76b23c39799c4e5b25c1d59434e12b1af2194e0",
+      "sha256": "8177d2eab0e5cd0ccd93696202d310fc816cc8824cac3dee84235f801078628f",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-05",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-05",
       "uri": "artifact://alpha-p0/P0-05.json"
     },
     {
@@ -60,9 +60,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-06",
-      "sha256": "8cb70ad67e251d1a980aa0d89b18bbff323da38384c8fe920dfd7b3bc88319c8",
+      "sha256": "5cd23eaca5f06b82e0f155e79724bdfc6035a95506c1322797d7e4a2be3de182",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-06",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-06",
       "uri": "artifact://alpha-p0/P0-06.json"
     },
     {
@@ -70,9 +70,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-07",
-      "sha256": "d1865f94c0b17400a211883c2bde8b3ce75f6886fe104484c141e0036e6d6836",
+      "sha256": "aae5c4b422acaa87344ab686b5c7b01ffd9a11a0e661bfe7abba6a4378df802d",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-07",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-07",
       "uri": "artifact://alpha-p0/P0-07.json"
     },
     {
@@ -80,9 +80,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-08",
-      "sha256": "6d0e72f7df762bb01079b8f62115c3cff865fdaa7848749b18ba70fe1a792616",
+      "sha256": "673ab042890e82c7ed8e4a36de20ae1f37600f495092882f9d4f278a99498840",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-08",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-08",
       "uri": "artifact://alpha-p0/P0-08.json"
     },
     {
@@ -90,9 +90,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-09",
-      "sha256": "18f6a6e7734f1dd94c967c9c15ca644fc67be701129132610e6beea98e80f817",
+      "sha256": "bc236cea9ba5b4359456620668d0fe3fb704a597427301813b637ff31ef37e01",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-09",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-09",
       "uri": "artifact://alpha-p0/P0-09.json"
     },
     {
@@ -100,9 +100,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-10",
-      "sha256": "0673dc04147d240cf59313e592fcbfc790ab493b8d7d71d86c7a39676a34d3fb",
+      "sha256": "1656affdbfd6d61fe4c84df4208e04ed30219b39ffc12ad6695111f41eb30559",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-10",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-10",
       "uri": "artifact://alpha-p0/P0-10.json"
     },
     {
@@ -110,9 +110,9 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-11",
-      "sha256": "931f44b005e9a6c36e91ae6aafb31e9a04a0922a1603942661030d8b1d1df120",
+      "sha256": "3b0626c4c289729feb605e908f0aae8aa9e32fb2a5b7ddf17cf9a8f485e2e218",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-11",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-11",
       "uri": "artifact://alpha-p0/P0-11.json"
     },
     {
@@ -120,17 +120,17 @@
       "media_type": "application/json",
       "producer_attempt": 1,
       "producer_work_order_id": "P0-12",
-      "sha256": "e556057954de3dd015f2e534bcc1913944408166636a381f7a93358db25e84c1",
+      "sha256": "6787f971b5bba3a66dc96d9431a201f3f99a1b61d1afa8427302a81bc74a8c3c",
       "size_bytes": 100,
-      "snapshot_uri": "git://83257f700d9ab0eaa5e8e6c1cd6ca96b8a8b9ca5/P0-12",
+      "snapshot_uri": "git://3335cbaa3196adf46e7ef284fcd094515ca89e37/P0-12",
       "uri": "artifact://alpha-p0/P0-12.json"
     }
   ],
   "extensions": {},
-  "manifest_sha256": "0b039069dd3ebfb1e7c94655f598421ec4f9590d6c10ae72708d34f4bedfa447",
+  "manifest_sha256": "fcbc6b5f23c4310a53fde7cdb4b05a71d12a5d05da07e41e885413ee75263ae4",
   "provenance": [],
   "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY",
-  "record_id": "governance_manifest:0b039069dd3ebfb1e7c94655f598421ec4f9590d6c10ae72708d34f4bedfa447",
+  "record_id": "governance_manifest:fcbc6b5f23c4310a53fde7cdb4b05a71d12a5d05da07e41e885413ee75263ae4",
   "run_id": "alpha-p0-12-offline-20260827",
   "schema_version": "alpha_p0_v1.0",
   "seal_version": "alpha_p0_governance_v1",
