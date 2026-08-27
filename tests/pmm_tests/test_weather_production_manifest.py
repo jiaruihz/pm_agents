@@ -1,8 +1,12 @@
 from pathlib import Path
 
+import pytest
+import yaml
+
 from scripts.ops import weather_production_manifest as manifest
 from src.strategies.runtime.production import (
     WeatherManagedRuntimeSpec,
+    WeatherProductionReleaseSpec,
     WeatherProductionSpec,
     load_production_spec,
 )
@@ -31,8 +35,12 @@ def test_committed_production_spec_owns_jrs_canonical_db():
 
     assert spec.canonical_db_path == Path("/Volumes/jrs/pm_agents/runtime/weather.db")
     assert spec.operational_repo_root == Path("/Users/deepsleep/projects/pm_agents")
+    assert spec.production_release_root == Path(
+        "/Users/deepsleep/.local/share/pm_agents/releases"
+    )
     assert spec.canonical_refresh_checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_prod"
+        "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
+        "588d33fcf89a19bc68a765129444bd2d59500c21"
     )
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
@@ -41,12 +49,26 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     release_ids = [release.release_id for release in spec.releases]
     assert len(release_ids) == len(set(release_ids))
     assert spec.release("control_plane").checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_prod"
+        "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
+        "588d33fcf89a19bc68a765129444bd2d59500c21"
     )
     assert len(spec.release("control_plane").expected_repo_sha) == 40
     assert spec.release("core_carry_runtime").checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_core_carry_prod"
+        "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
+        "b39f234ef3117f9f4c7c680d5074cfbebde7fa59"
     )
+
+
+def test_production_spec_rejects_release_outside_managed_root(tmp_path):
+    raw = yaml.safe_load(
+        (ROOT / "src/strategies/runtime/production.yaml").read_text(encoding="utf-8")
+    )
+    raw["production_releases"][0]["checkout_root"] = "/tmp/unmanaged-release"
+    candidate = tmp_path / "production.yaml"
+    candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="production release checkout_root must equal"):
+        load_production_spec(candidate)
 
 
 def test_nested_project_worktree_is_included_in_lifecycle_audit(tmp_path, monkeypatch):
@@ -63,6 +85,28 @@ def test_nested_project_worktree_is_included_in_lifecycle_audit(tmp_path, monkey
     rows = manifest.inspect_persistent_worktrees(spec)
 
     assert rows == [{"root": str(nested), "registered": False, "exists": False}]
+
+
+def test_old_sha_under_managed_release_root_is_included_in_lifecycle_audit(
+    tmp_path, monkeypatch
+):
+    base = production_spec(tmp_path)
+    release_root = tmp_path / "releases"
+    spec = WeatherProductionSpec(
+        **{**base.__dict__, "production_release_root": release_root}
+    )
+    old_sha = release_root / "collector" / ("a" * 40)
+    monkeypatch.setattr(
+        manifest,
+        "run_command",
+        lambda *args, **kwargs: __import__("subprocess").CompletedProcess(
+            args=[], returncode=0, stdout=f"worktree {old_sha}\nHEAD abc\n", stderr=""
+        ),
+    )
+
+    rows = manifest.inspect_persistent_worktrees(spec)
+
+    assert rows == [{"root": str(old_sha), "registered": False, "exists": False}]
 
 
 def test_manifest_reports_runtime_health_contract_mismatch(tmp_path, monkeypatch):
@@ -398,6 +442,68 @@ def test_manifest_warns_when_declared_production_checkout_is_dirty(tmp_path, mon
             ]
         },
     }
+
+
+def test_manifest_rejects_release_from_independent_clone(tmp_path, monkeypatch):
+    base = production_spec(tmp_path)
+    release_root = tmp_path / "releases"
+    sha = "a" * 40
+    checkout = release_root / "collector" / sha
+    release = WeatherProductionReleaseSpec(
+        release_id="collector",
+        checkout_root=checkout,
+        expected_repo_sha=sha,
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "production_release_root": release_root,
+            "releases": (release,),
+        }
+    )
+    spec.canonical_db_path.parent.mkdir(parents=True)
+    spec.canonical_db_path.write_text("canonical", encoding="utf-8")
+    local = tmp_path / "repo/runtime/weather.db"
+    local.parent.mkdir(parents=True)
+    local.symlink_to(spec.canonical_db_path)
+    db_route = manifest.inspect_db_route(spec, repo_root=tmp_path / "repo")
+    monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(manifest, "inspect_persistent_worktrees", lambda _spec: [])
+
+    def fake_git_metadata(root, cache):
+        root = Path(root)
+        payload = {
+            "root": str(root),
+            "head": sha if root == checkout else "b" * 40,
+            "branch": "HEAD",
+            "dirty_tracked": False,
+            "git_common_dir": (
+                str(tmp_path / "foreign/.git")
+                if root == checkout
+                else str(spec.operational_repo_root / ".git")
+            ),
+        }
+        cache[str(root)] = payload
+        return payload
+
+    monkeypatch.setattr(manifest, "git_metadata", fake_git_metadata)
+
+    payload = manifest.build_manifest(
+        spec=spec,
+        processes=[],
+        tmux_rows=[],
+        launchctl_rows=[],
+        db_route=db_route,
+        db_consumers={},
+    )
+
+    finding = next(
+        item
+        for item in payload["findings"]
+        if item["kind"] == "production_release_not_linked_worktree"
+    )
+    assert finding["severity"] == "critical"
+    assert finding["detail"]["release_id"] == "collector"
 
 
 def test_prechange_comparison_fails_when_existing_session_disappears():

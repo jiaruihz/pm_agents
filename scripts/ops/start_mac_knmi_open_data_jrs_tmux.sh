@@ -6,9 +6,22 @@ source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 
 VOLUME="${WEATHER_JRS_VOLUME:-/Volumes/jrs}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$VOLUME/weather_data_feed_service_runtime}"
-SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-/Users/deepsleep/projects/pm_agents_knmi_recovery}"
-PYTHON_BIN="${KNMI_PYTHON_BIN:-/Users/deepsleep/projects/pm_agents_prod/.venv/bin/python}"
-ENV_FILE="${KNMI_ENV_FILE:-/Users/deepsleep/projects/pm_agents_prod/.env.knmi}"
+PRODUCTION_SPEC="${WEATHER_PRODUCTION_CONFIG:-$PROJECT_DIR/src/strategies/runtime/production.yaml}"
+DEFAULT_SERVICE_DIR="$(
+  cd "$PROJECT_DIR"
+  "$PROJECT_DIR/.venv/bin/python" -c \
+    'import sys; from pathlib import Path; from src.strategies.runtime.production import load_production_spec; print(load_production_spec(Path(sys.argv[1])).release("knmi").checkout_root)' \
+    "$PRODUCTION_SPEC"
+)"
+DEFAULT_CONTROL_DIR="$(
+  cd "$PROJECT_DIR"
+  "$PROJECT_DIR/.venv/bin/python" -c \
+    'import sys; from pathlib import Path; from src.strategies.runtime.production import load_production_spec; print(load_production_spec(Path(sys.argv[1])).release("control_plane").checkout_root)' \
+    "$PRODUCTION_SPEC"
+)"
+SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$DEFAULT_SERVICE_DIR}"
+PYTHON_BIN="${KNMI_PYTHON_BIN:-$SERVICE_DIR/.venv/bin/python}"
+ENV_FILE="${KNMI_ENV_FILE:-$DEFAULT_CONTROL_DIR/.env.knmi}"
 OUTPUT_DIR="${KNMI_OPEN_DATA_OUTPUT_DIR:-$RUNTIME_ROOT/output/knmi_open_data}"
 LOG_FILE="${KNMI_OPEN_DATA_LOG_FILE:-$RUNTIME_ROOT/loop/knmi_open_data.log}"
 STATUS_PATH="${KNMI_OPEN_DATA_STATUS_PATH:-$OUTPUT_DIR/supervisor_status.json}"

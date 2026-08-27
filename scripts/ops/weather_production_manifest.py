@@ -400,11 +400,28 @@ def git_metadata(root: Path, cache: dict[str, dict[str, Any]]) -> dict[str, Any]
         timeout=5.0,
         stderr=None,
     )
+    common_dir = run_command(
+        [
+            "git",
+            "-C",
+            key,
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
+        timeout=3.0,
+        stderr=None,
+    )
     payload = {
         "root": key,
         "head": head.stdout.strip() if head.returncode == 0 else None,
         "branch": branch.stdout.strip() if branch.returncode == 0 else None,
         "dirty_tracked": bool(status.stdout.strip()) if status.returncode == 0 else None,
+        "git_common_dir": (
+            common_dir.stdout.strip()
+            if common_dir.returncode == 0 and common_dir.stdout.strip()
+            else None
+        ),
     }
     cache[key] = payload
     return payload
@@ -434,8 +451,14 @@ def inspect_persistent_worktrees(spec: WeatherProductionSpec) -> list[dict[str, 
         for runtime in spec.managed_runtimes
         if runtime.checkout_root is not None
     )
+    allowed.update(release.checkout_root.resolve() for release in spec.releases)
     parent = spec.operational_repo_root.parent.resolve()
     prefix = spec.operational_repo_root.name
+    managed_release_root = (
+        spec.production_release_root.resolve()
+        if spec.production_release_root is not None
+        else None
+    )
     rows: list[dict[str, Any]] = []
     for line in proc.stdout.splitlines():
         if not line.startswith("worktree "):
@@ -443,7 +466,17 @@ def inspect_persistent_worktrees(spec: WeatherProductionSpec) -> list[dict[str, 
         root = Path(line.removeprefix("worktree ")).resolve()
         top_level_project = root.parent == parent and root.name.startswith(prefix)
         nested_project = root.is_relative_to(spec.operational_repo_root.resolve())
-        if not top_level_project and not nested_project:
+        registered_release = root in allowed
+        managed_release = (
+            managed_release_root is not None
+            and root.is_relative_to(managed_release_root)
+        )
+        if (
+            not top_level_project
+            and not nested_project
+            and not registered_release
+            and not managed_release
+        ):
             continue
         rows.append(
             {
@@ -724,6 +757,9 @@ def build_manifest(
         git_metadata(root, git_cache)
 
     releases_by_root: dict[Path, list[Any]] = {}
+    operational_common_dir = git_metadata(
+        spec.operational_repo_root.resolve(), git_cache
+    ).get("git_common_dir")
     for release in spec.releases:
         root = release.checkout_root.resolve()
         releases_by_root.setdefault(root, []).append(release)
@@ -741,6 +777,21 @@ def build_manifest(
                         "checkout_root": str(root),
                         "expected_repo_sha": release.expected_repo_sha,
                         "observed_head": metadata.get("head"),
+                    },
+                )
+            )
+        observed_common_dir = metadata.get("git_common_dir")
+        if observed_common_dir != operational_common_dir:
+            findings.append(
+                finding(
+                    "critical",
+                    "production_release_not_linked_worktree",
+                    "production release checkout does not share the operational Git object store",
+                    {
+                        "release_id": release.release_id,
+                        "checkout_root": str(root),
+                        "expected_git_common_dir": operational_common_dir,
+                        "observed_git_common_dir": observed_common_dir,
                     },
                 )
             )

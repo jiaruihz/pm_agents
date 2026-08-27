@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
 import yaml
-import re
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -112,6 +112,7 @@ class WeatherProductionSpec:
     managed_runtimes: tuple[WeatherManagedRuntimeSpec, ...] = field(default_factory=tuple)
     releases: tuple[WeatherProductionReleaseSpec, ...] = field(default_factory=tuple)
     allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
+    production_release_root: Path | None = None
 
     def release(self, release_id: str) -> WeatherProductionReleaseSpec:
         for release in self.releases:
@@ -221,6 +222,15 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     releases_raw = raw.get("production_releases") or []
     if not isinstance(releases_raw, list):
         raise ValueError("production spec production_releases must be a list")
+    production_release_root = (
+        Path(raw["production_release_root"])
+        if raw.get("production_release_root")
+        else None
+    )
+    if releases_raw and production_release_root is None:
+        raise ValueError("production spec requires production_release_root when releases exist")
+    if production_release_root is not None and not production_release_root.is_absolute():
+        raise ValueError("production_release_root must be absolute")
     releases: list[WeatherProductionReleaseSpec] = []
     release_by_id: dict[str, WeatherProductionReleaseSpec] = {}
     for item in releases_raw:
@@ -233,10 +243,22 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         )
         if release.release_id in release_by_id:
             raise ValueError(f"duplicate production release_id: {release.release_id}")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_]*", release.release_id):
+            raise ValueError(f"invalid production release_id: {release.release_id}")
         if not release.checkout_root.is_absolute():
             raise ValueError(f"release checkout_root must be absolute: {release.release_id}")
         if not re.fullmatch(r"[0-9a-f]{40}", release.expected_repo_sha):
             raise ValueError(f"release expected_repo_sha must be a full SHA: {release.release_id}")
+        expected_checkout_root = (
+            production_release_root / release.release_id / release.expected_repo_sha
+        )
+        if release.checkout_root != expected_checkout_root:
+            raise ValueError(
+                "production release checkout_root must equal "
+                "<production_release_root>/<release_id>/<expected_repo_sha>: "
+                f"{release.release_id} expected={expected_checkout_root} "
+                f"observed={release.checkout_root}"
+            )
         releases.append(release)
         release_by_id[release.release_id] = release
     managed: list[WeatherManagedRuntimeSpec] = []
@@ -449,6 +471,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         managed_runtimes=tuple(managed),
         releases=tuple(releases),
         allowed_unmanaged_sessions=tuple(str(item) for item in allowed_unmanaged),
+        production_release_root=production_release_root,
     )
     if not spec.canonical_db_path.is_absolute():
         raise ValueError("canonical_db_path must be absolute")

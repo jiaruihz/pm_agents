@@ -69,7 +69,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
     assert by_id["current_yes_core_carry_tiny_live_v2"].release_id == "core_carry_runtime"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
-        "/Users/deepsleep/projects/pm_agents_core_carry_prod/scripts/ops/"
+        "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
+        "b39f234ef3117f9f4c7c680d5074cfbebde7fa59/scripts/ops/"
         "start_weather_current_yes_core_carry_tiny_live_v2.sh"
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
@@ -146,7 +147,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert "weather_canonical_refresh" in spec.allowed_unmanaged_sessions
     assert by_id["weather_knmi_open_data_jrs"].checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_knmi_recovery"
+        "/Users/deepsleep/.local/share/pm_agents/releases/knmi/"
+        "ef64a2d0b14230d21e3544161dbf95a097eeca9c"
     )
     assert by_id["weather_knmi_open_data_jrs"].resolved_restart_script() == Path(
         "/Users/deepsleep/projects/pm_agents/scripts/ops/"
@@ -175,7 +177,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1"
     ].accepted_health_statuses == ("ok",)
     observation_checkout = Path(
-        "/Users/deepsleep/projects/pm_agents_fast_observation_prod"
+        "/Users/deepsleep/.local/share/pm_agents/releases/fast_observation/"
+        "331f309ebeea14fd6b61727584a8cf19b40dc6a0"
     )
     assert by_id[
         "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1"
@@ -192,7 +195,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_current_yes_heat_death_shadow_v1"].max_health_age_sec == 2400
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == observation_checkout
     assert by_id["weather_helsinki_pre_cross_active_ladder_shadow"].checkout_root == Path(
-        "/Users/deepsleep/projects/pm_agents_helsinki_ladder_prod"
+        "/Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/"
+        "f64728197135caf78b11491395bf23220b3fc872"
     )
     event_shadow = by_id["current_yes_core_carry_event_rescore_shadow_v1"]
     assert event_shadow.execution_mode == "shadow"
@@ -206,7 +210,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id[
         "weather_helsinki_pre_cross_active_ladder_shadow"
     ].resolved_start_script() == Path(
-        "/Users/deepsleep/projects/pm_agents_helsinki_ladder_prod/scripts/ops/"
+        "/Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/"
+        "f64728197135caf78b11491395bf23220b3fc872/scripts/ops/"
         "start_weather_helsinki_pre_cross_active_ladder_shadow.sh"
     )
 

@@ -279,17 +279,24 @@ def test_jrs_start_entries_do_not_create_jrs_directories_outside_tmux():
     assert offenders == []
 
 
-def test_live_cross_start_uses_existing_production_python():
+def test_live_cross_start_uses_its_pinned_release_python():
     text = (OPS / "start_weather_live_cross_observations.sh").read_text(
         encoding="utf-8"
     )
 
-    assert (
-        'PY="${PYTHON_BIN:-/Users/deepsleep/projects/pm_agents_prod/.venv/bin/python}"'
-        in text
-    )
+    assert 'PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"' in text
     assert 'if [[ ! -x "$PY" ]]' in text
-    assert '$ROOT/.venv/bin/python' not in text
+
+
+def test_knmi_start_resolves_release_paths_from_production_spec():
+    text = (OPS / "start_mac_knmi_open_data_jrs_tmux.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'release("knmi").checkout_root' in text
+    assert 'release("control_plane").checkout_root' in text
+    assert "/Users/deepsleep/projects/pm_agents_knmi_recovery" not in text
+    assert "/Users/deepsleep/projects/pm_agents_prod" not in text
 
 
 def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
