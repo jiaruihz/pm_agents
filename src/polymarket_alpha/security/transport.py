@@ -47,6 +47,11 @@ class Decision(StrEnum):
     DENY = "DENY"
 
 
+class QueryValueKind(StrEnum):
+    EXACT = "EXACT"
+    INTEGER_RANGE = "INTEGER_RANGE"
+
+
 _HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
 _QUERY_COMPONENT_RE = re.compile(r"^[A-Za-z0-9._~:-]*$")
 _URL_RE = re.compile(r"^https://(?P<authority>[^/?#]+)(?P<path>/[^?#]*)?(?:\?(?P<query>[^#]*))?$")
@@ -75,6 +80,43 @@ _DANGEROUS_HEADERS = frozenset(
 )
 
 
+class QueryValueRule(AlphaContract):
+    key: str
+    kind: QueryValueKind
+    exact_values: tuple[str, ...] = ()
+    minimum: int | None = None
+    maximum: int | None = None
+
+    @field_validator("key")
+    @classmethod
+    def key_is_canonical(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not value or not _QUERY_COMPONENT_RE.fullmatch(value):
+            raise ValueError("query value rule key must be canonical")
+        return value
+
+    @field_validator("exact_values")
+    @classmethod
+    def exact_values_are_canonical(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if len(value) != len(set(value)) or any(
+            not _QUERY_COMPONENT_RE.fullmatch(item) for item in value
+        ):
+            raise ValueError("exact query values must be canonical and unique")
+        return value
+
+    @model_validator(mode="after")
+    def rule_shape_is_consistent(self) -> "QueryValueRule":
+        if self.kind == QueryValueKind.EXACT:
+            if not self.exact_values or self.minimum is not None or self.maximum is not None:
+                raise ValueError("EXACT query rule requires only exact_values")
+        else:
+            if self.exact_values or self.minimum is None or self.maximum is None:
+                raise ValueError("INTEGER_RANGE requires minimum and maximum only")
+            if self.minimum < 0 or self.maximum < self.minimum:
+                raise ValueError("integer query range must be ordered and non-negative")
+        return self
+
+
 def _validate_host(value: str) -> str:
     if value != value.lower() or not value.isascii() or not _HOST_RE.fullmatch(value):
         raise ValueError("host must be canonical lowercase ASCII without a port")
@@ -98,6 +140,7 @@ class EndpointRule(AlphaContract):
     path: str
     allowed_query_keys: tuple[str, ...] = ()
     required_query_keys: tuple[str, ...] = ()
+    query_value_rules: tuple[QueryValueRule, ...] = ()
     body_policy: BodyPolicy = BodyPolicy.NONE
     allowed_body_fields: tuple[str, ...] = ()
     required_body_fields: tuple[str, ...] = ()
@@ -133,6 +176,11 @@ class EndpointRule(AlphaContract):
     def endpoint_shape_is_consistent(self) -> "EndpointRule":
         if not set(self.required_query_keys) <= set(self.allowed_query_keys):
             raise ValueError("required query keys must be allowed")
+        value_rule_keys = [item.key for item in self.query_value_rules]
+        if len(value_rule_keys) != len(set(value_rule_keys)):
+            raise ValueError("query value rule keys must be unique")
+        if not set(value_rule_keys) <= set(self.allowed_query_keys):
+            raise ValueError("query value rules must target allowed query keys")
         if not set(self.required_body_fields) <= set(self.allowed_body_fields):
             raise ValueError("required body fields must be allowed")
         if _DANGEROUS_HEADERS & set(self.allowed_request_headers):
@@ -398,6 +446,24 @@ def _safe_body(rule: EndpointRule, body: Any) -> Any:
     return tuple(normalized)
 
 
+def _safe_query(rule: EndpointRule, query: tuple[tuple[str, str], ...]) -> None:
+    value_rules = {item.key: item for item in rule.query_value_rules}
+    for key, value in query:
+        value_rule = value_rules.get(key)
+        if value_rule is None:
+            continue
+        if value_rule.kind == QueryValueKind.EXACT:
+            if value not in value_rule.exact_values:
+                raise ValueError(f"query value is not allowlisted: {key}")
+            continue
+        if not value.isascii() or not value.isdigit():
+            raise ValueError(f"query value must be a non-negative integer: {key}")
+        parsed = int(value)
+        assert value_rule.minimum is not None and value_rule.maximum is not None
+        if not value_rule.minimum <= parsed <= value_rule.maximum:
+            raise ValueError(f"query value is outside the allowed range: {key}")
+
+
 class AlphaReadOnlyTransport:
     """Fail-closed request authorizer; intentionally contains no I/O adapter."""
 
@@ -482,6 +548,7 @@ class AlphaReadOnlyTransport:
                 raise ValueError("query contains an unallowlisted key")
             if not set(rule.required_query_keys) <= query_keys:
                 raise ValueError("query is missing a required key")
+            _safe_query(rule, query)
             env_keys = _safe_environment(self.policy, environment or {})
             headers = _safe_headers(rule, request.headers)
             body = _safe_body(rule, request.json_body)
