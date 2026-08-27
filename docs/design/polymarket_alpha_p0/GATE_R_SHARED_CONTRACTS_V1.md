@@ -78,7 +78,10 @@ research_as_of_utc, pit_cutoff_utc, allowed input artifact ids/hashes,
 leakage_scan_receipt_id and created_at_utc.
 
 Each question contains question_id, claim_type, neutral_question_text,
-required_answer_type, evidence_target, time_scope, required and dependency ids.
+required_answer_type, evidence_target, time_scope, required, dependency ids,
+allowlisted provenance template and Blind evidence ids. Its id is derived from
+that complete payload. The QuestionSet model recomputes its complete id/hash and
+orders `PIT cutoff <= research as-of <= creation`.
 
 ## SourcePlan
 
@@ -92,12 +95,22 @@ capture preference, minimum claim coverage, critical-claim policy,
 max_sources/searches/elapsed_minutes/attempts, stop conditions and PIT
 freshness/availability rules.
 
+SourcePlan also freezes all QuestionSet question ids, critical claim ids/types,
+forbidden source classes/domains and complete plan budgets. Critical ids must be
+QuestionSet members; critical types require primary-source policies; allowed
+and forbidden classes/domains cannot overlap. Venue, Gamma, CLOB and mirror
+sources fail in the model validator even if a caller bypasses the compiler.
+
 ## BlindWorkOrderPromptSeal and ExportApprovalReceipt
 
 Prompt seal binds work_order_id, research_job_id, attempt_policy_id,
 Candidate/Rule/Blind packet/QuestionSet/SourcePlan identities and hashes,
-output_schema_id/hash, provider policy/version, content type, encoding, newline
+atomic plan-seal identity/hash, output_schema_id/hash, provider policy/version,
+content type, encoding, newline
 mode, byte length, prompt hash, preview hash, created/expires UTC and seal hash.
+The model recomputes the work-order id and full metadata seal; byte verification
+revalidates the typed seal before checking UTF-8/LF, full hash, preview, length
+and expiry.
 
 Approval binds approval_receipt_id, work_order_id, prompt hash, approver,
 approved/expires UTC, APPROVE or REJECT, review check codes, exact-file-copy

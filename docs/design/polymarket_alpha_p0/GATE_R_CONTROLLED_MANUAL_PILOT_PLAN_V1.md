@@ -1,6 +1,6 @@
 # Gate R Controlled Manual GPT Pro Pilot Plan V1
 
-Status: IMPLEMENTATION_IN_PROGRESS_WP1_WP2_COMPLETE
+Status: IMPLEMENTATION_IN_PROGRESS_WP1_TO_WP3_COMPLETE
 Entry: WP1 through WP5 must pass before WP6 pilot authorization.
 
 ## Work packages
@@ -28,6 +28,7 @@ Rollback: disable adapter; route to human/direct compiler.
 WP3 — Blind plan and prompt seal
 
 Owner: existing Research Packet/work-order owner.
+Status: COMPLETE; evidence: `GATE_R_WP3-evidence-seal/`.
 Deliver: atomic QuestionSet/SourcePlan compiler, provenance/leakage receipt,
 PromptSeal and identity-bound work order.
 Verify: byte determinism, forbidden-origin corpus, plan cross-hash, cutoff/rule/

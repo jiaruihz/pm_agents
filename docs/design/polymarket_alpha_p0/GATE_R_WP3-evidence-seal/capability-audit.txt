@@ -1,0 +1,9 @@
+PASS
+
+Scoped runtime file:
+- src/polymarket_alpha/research/blind_plan.py
+
+Imports are limited to dataclass, datetime, re, typing, shared contracts and
+the existing controlled Blind question templates. No network, provider SDK,
+browser, filesystem writer, repository, scheduler, subprocess, dynamic import,
+order, signing or private-key capability is present.

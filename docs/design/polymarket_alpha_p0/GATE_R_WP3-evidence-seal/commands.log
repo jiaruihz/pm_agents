@@ -1,0 +1,7 @@
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_gate_r_blind_plan_wp3.py
+PYTHONPATH=. .venv/bin/pytest -q --junitxml=docs/design/polymarket_alpha_p0/GATE_R_WP3-evidence-seal/test-results/focused.xml tests/polymarket_alpha/test_gate_r_routing_wp1.py tests/polymarket_alpha/test_gate_r_glm53_wp2.py tests/polymarket_alpha/test_gate_r_blind_plan_wp3.py tests/polymarket_alpha/test_blind_research_p0_08a.py tests/polymarket_alpha/test_market_research_p0_08c.py tests/polymarket_alpha/test_research_importer_p0_08b.py tests/polymarket_alpha/test_contracts_p0_01.py tests/polymarket_alpha/test_contracts_p0_01r2.py tests/polymarket_alpha/test_research_work_order_p1_a03.py tests/polymarket_alpha/test_research_draft_p1.py
+PYTHONPATH=. .venv/bin/pytest -q --junitxml=docs/design/polymarket_alpha_p0/GATE_R_WP3-evidence-seal/test-results/full-alpha.xml tests/polymarket_alpha
+.venv/bin/python -m py_compile src/polymarket_alpha/contracts/models.py src/polymarket_alpha/research/blind_plan.py src/polymarket_alpha/research/__init__.py tests/polymarket_alpha/test_gate_r_blind_plan_wp3.py
+rg capability-import scan over src/polymarket_alpha/research/blind_plan.py
+shasum -a 256 -c docs/design/polymarket_alpha_p0/GATE_R_DESIGN_MANIFEST.sha256
+git diff --check

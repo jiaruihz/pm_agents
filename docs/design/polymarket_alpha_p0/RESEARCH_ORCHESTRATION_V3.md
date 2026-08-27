@@ -1,7 +1,7 @@
 # Polymarket Alpha Research Orchestration V3
 
 Status: CANONICAL_DESIGN
-Readiness: WP1_WP2_COMPLETE_BLOCKED_PENDING_WP3_TO_WP5
+Readiness: WP1_TO_WP3_COMPLETE_BLOCKED_PENDING_WP4_TO_WP5
 Pilot scope: CONTROLLED_MANUAL_GPT_PRO_BLIND_RESEARCH_ONLY
 
 ## Authority boundary

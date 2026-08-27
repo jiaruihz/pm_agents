@@ -1760,6 +1760,402 @@ class BlindResearchPacket(CommonEnvelope):
         return self
 
 
+# Gate R WP3 artifacts are deliberately small, offline contracts.  They do not
+# inherit CommonEnvelope because a plan is a sealed input artifact rather than
+# a lifecycle event; every identity below is content-derived by its compiler.
+class BlindPlanArtifactBinding(AlphaContract):
+    artifact_id: str
+    artifact_sha256: str
+
+    @field_validator("artifact_id")
+    @classmethod
+    def nonblank_artifact_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("artifact_id must not be blank")
+        return value
+
+    @field_validator("artifact_sha256")
+    @classmethod
+    def artifact_hash(cls, value: str) -> str:
+        return validate_sha256(value)
+
+
+class BlindPlanQuestion(AlphaContract):
+    question_id: str
+    claim_type: str
+    neutral_question_text: str
+    required_answer_type: str
+    evidence_target: str
+    time_scope: str
+    required: bool
+    dependency_ids: tuple[str, ...] = ()
+    provenance_template_id: str
+    provenance_evidence_ids: tuple[str, ...] = ()
+
+    @field_validator(
+        "question_id", "claim_type", "neutral_question_text", "required_answer_type",
+        "evidence_target", "time_scope", "provenance_template_id",
+    )
+    @classmethod
+    def plan_question_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("plan question text must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def plan_question_is_blind(self) -> "BlindPlanQuestion":
+        if blind_leak_reasons(self.model_dump(mode="python")):
+            raise ValueError("plan question contains Blind leakage")
+        if self.provenance_template_id not in _APPROVED_BLIND_QUESTION_TEMPLATES:
+            raise ValueError("question provenance template is not allowlisted")
+        if not self.question_id.startswith("blind_plan_question:"):
+            raise ValueError("question id must use blind_plan_question namespace")
+        if len(self.dependency_ids) != len(set(self.dependency_ids)) or self.question_id in self.dependency_ids:
+            raise ValueError("question dependencies must be unique and cannot reference self")
+        if len(self.provenance_evidence_ids) != len(set(self.provenance_evidence_ids)):
+            raise ValueError("question evidence provenance must be unique")
+        payload = {
+            "claim_type": self.claim_type,
+            "neutral_question_text": self.neutral_question_text,
+            "required_answer_type": self.required_answer_type,
+            "evidence_target": self.evidence_target,
+            "time_scope": self.time_scope,
+            "required": self.required,
+            "dependency_ids": self.dependency_ids,
+            "provenance_template_id": self.provenance_template_id,
+            "provenance_evidence_ids": self.provenance_evidence_ids,
+        }
+        if self.question_id != stable_record_id("blind_plan_question", payload):
+            raise ValueError("question id must be content-derived")
+        return self
+
+
+class BlindPlanLeakageReceipt(AlphaContract):
+    receipt_id: str
+    receipt_sha256: str
+    scanner_version: str
+    scanned_input_sha256: str
+    status: Literal["PASS"]
+    checked_paths: tuple[str, ...]
+
+    @field_validator("receipt_sha256", "scanned_input_sha256")
+    @classmethod
+    def leakage_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @model_validator(mode="after")
+    def leakage_identity(self) -> "BlindPlanLeakageReceipt":
+        if not self.scanner_version.strip() or not self.checked_paths:
+            raise ValueError("leakage receipt requires scanner version and checked paths")
+        payload = {
+            "scanner_version": self.scanner_version,
+            "scanned_input_sha256": self.scanned_input_sha256,
+            "status": self.status,
+            "checked_paths": self.checked_paths,
+        }
+        if self.receipt_id != stable_record_id("blind_plan_leakage_receipt", payload):
+            raise ValueError("leakage receipt id must be content-derived")
+        if self.receipt_sha256 != content_sha256(payload):
+            raise ValueError("leakage receipt hash must bind its payload")
+        return self
+
+
+class BlindResearchQuestionSet(AlphaContract):
+    schema_version: str
+    question_set_id: str
+    question_set_sha256: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    blind_projection_id: str
+    blind_projection_sha256: str
+    blind_packet_id: str
+    blind_packet_sha256: str
+    rule_contract_id: str
+    rule_contract_sha256: str
+    compiler_policy_id: str
+    compiler_policy_version: str
+    research_as_of_utc: datetime
+    pit_cutoff_utc: datetime
+    allowed_input_artifacts: tuple[BlindPlanArtifactBinding, ...]
+    leakage_scan_receipt_id: str
+    questions: tuple[BlindPlanQuestion, ...]
+    created_at_utc: datetime
+
+    @field_validator(
+        "question_set_sha256", "candidate_snapshot_sha256", "blind_projection_sha256",
+        "blind_packet_sha256", "rule_contract_sha256",
+    )
+    @classmethod
+    def qs_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("research_as_of_utc", "pit_cutoff_utc", "created_at_utc")
+    @classmethod
+    def qs_times(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def qs_is_complete(self) -> "BlindResearchQuestionSet":
+        if self.schema_version != "gate_r_wp3_v1":
+            raise ValueError("unsupported Blind question-set schema")
+        if not self.questions or not self.allowed_input_artifacts:
+            raise ValueError("question set requires questions and frozen input artifacts")
+        if not (self.pit_cutoff_utc <= self.research_as_of_utc <= self.created_at_utc):
+            raise ValueError("Blind planning clocks must order cutoff, research-as-of, creation")
+        if len({item.question_id for item in self.questions}) != len(self.questions):
+            raise ValueError("question ids must be unique")
+        if len({item.artifact_id for item in self.allowed_input_artifacts}) != len(self.allowed_input_artifacts):
+            raise ValueError("input artifact ids must be unique")
+        if self.allowed_input_artifacts != tuple(sorted(self.allowed_input_artifacts, key=lambda item: item.artifact_id)):
+            raise ValueError("input artifact bindings must be sorted")
+        if not all(value.strip() for value in (
+            self.candidate_snapshot_id, self.blind_projection_id, self.blind_packet_id,
+            self.rule_contract_id, self.compiler_policy_id, self.compiler_policy_version,
+            self.leakage_scan_receipt_id,
+        )):
+            raise ValueError("question-set binding fields must not be blank")
+        payload = {
+            "candidate_snapshot_id": self.candidate_snapshot_id,
+            "candidate_snapshot_sha256": self.candidate_snapshot_sha256,
+            "blind_projection_id": self.blind_projection_id,
+            "blind_projection_sha256": self.blind_projection_sha256,
+            "blind_packet_id": self.blind_packet_id,
+            "blind_packet_sha256": self.blind_packet_sha256,
+            "rule_contract_id": self.rule_contract_id,
+            "rule_contract_sha256": self.rule_contract_sha256,
+            "compiler_policy_id": self.compiler_policy_id,
+            "compiler_policy_version": self.compiler_policy_version,
+            "research_as_of_utc": self.research_as_of_utc,
+            "pit_cutoff_utc": self.pit_cutoff_utc,
+            "allowed_input_artifacts": self.allowed_input_artifacts,
+            "leakage_scan_receipt_id": self.leakage_scan_receipt_id,
+            "questions": self.questions,
+            "created_at_utc": self.created_at_utc,
+        }
+        if self.question_set_id != stable_record_id("blind_question_set", payload):
+            raise ValueError("question set id must be content-derived")
+        if self.question_set_sha256 != content_sha256(payload):
+            raise ValueError("question set hash must bind its complete payload")
+        return self
+
+
+class SourcePlan(AlphaContract):
+    schema_version: str
+    source_plan_id: str
+    source_plan_sha256: str
+    question_set_id: str
+    question_set_sha256: str
+    rule_contract_id: str
+    rule_contract_sha256: str
+    source_policy_id: str
+    source_policy_version: str
+    pit_cutoff_utc: datetime
+    allowed_source_classes: tuple[str, ...]
+    allowed_domains: tuple[str, ...]
+    forbidden_source_classes: tuple[str, ...]
+    forbidden_domains: tuple[str, ...]
+    primary_source_requirements: tuple[str, ...]
+    fallback_policy: str
+    source_independence_policy: str
+    capture_preference: str
+    minimum_claim_coverage: int = Field(ge=1)
+    question_ids: tuple[str, ...]
+    critical_claim_ids: tuple[str, ...]
+    critical_claim_types: tuple[str, ...]
+    max_sources: int = Field(ge=1)
+    max_searches: int = Field(ge=0)
+    max_elapsed_minutes: int = Field(ge=1)
+    max_attempts: int = Field(ge=1)
+    stop_conditions: tuple[str, ...]
+    freshness_policy: str
+    availability_policy: str
+    created_at_utc: datetime
+
+    @field_validator("source_plan_sha256", "question_set_sha256", "rule_contract_sha256")
+    @classmethod
+    def sp_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("pit_cutoff_utc", "created_at_utc")
+    @classmethod
+    def sp_times(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def source_plan_is_bounded_and_blind(self) -> "SourcePlan":
+        if self.schema_version != "gate_r_wp3_v1":
+            raise ValueError("unsupported Blind source-plan schema")
+        if not self.allowed_source_classes or not self.primary_source_requirements:
+            raise ValueError("source plan requires allowed classes and primary requirements")
+        if not self.question_ids or not self.critical_claim_ids or not self.critical_claim_types or not self.stop_conditions:
+            raise ValueError("source plan requires critical claims and stop conditions")
+        if self.minimum_claim_coverage > len(self.critical_claim_ids):
+            raise ValueError("minimum claim coverage exceeds critical claims")
+        tuple_fields = (
+            self.allowed_source_classes, self.allowed_domains, self.forbidden_source_classes,
+            self.forbidden_domains, self.primary_source_requirements, self.question_ids,
+            self.critical_claim_ids, self.critical_claim_types, self.stop_conditions,
+        )
+        if any(len(values) != len(set(values)) or any(not value.strip() for value in values) for values in tuple_fields):
+            raise ValueError("source-plan tuple fields must contain unique nonblank values")
+        if not set(self.critical_claim_ids).issubset(self.question_ids):
+            raise ValueError("critical claims must be members of the QuestionSet")
+        if not set(self.critical_claim_types).issubset(self.primary_source_requirements):
+            raise ValueError("critical claim types require primary-source policies")
+        if set(self.allowed_source_classes).intersection(self.forbidden_source_classes):
+            raise ValueError("source class cannot be both allowed and forbidden")
+        if set(self.allowed_domains).intersection(self.forbidden_domains):
+            raise ValueError("source domain cannot be both allowed and forbidden")
+        forbidden_source = re.compile(r"polymarket|gamma|\bclob\b|mirror|market[_ -]?venue", re.I)
+        if any(forbidden_source.search(value) for value in self.allowed_source_classes + self.allowed_domains):
+            raise ValueError("venue, CLOB, Gamma and mirror sources are forbidden")
+        rendered = self.model_dump(mode="python")
+        provider_safe_rendered = {key: value for key, value in rendered.items()
+            if key not in {"forbidden_source_classes", "forbidden_domains"}}
+        if blind_leak_reasons(provider_safe_rendered):
+            raise ValueError("source plan contains Blind leakage")
+        payload = {
+            key: value for key, value in rendered.items()
+            if key not in {"source_plan_id", "source_plan_sha256"}
+        }
+        if self.source_plan_id != stable_record_id("blind_source_plan", payload):
+            raise ValueError("source plan id must be content-derived")
+        if self.source_plan_sha256 != content_sha256(payload):
+            raise ValueError("source plan hash must bind its complete payload")
+        return self
+
+
+class BlindResearchPlanSeal(AlphaContract):
+    plan_seal_id: str
+    plan_seal_sha256: str
+    question_set_id: str
+    question_set_sha256: str
+    source_plan_id: str
+    source_plan_sha256: str
+    created_at_utc: datetime
+
+    @field_validator("plan_seal_sha256", "question_set_sha256", "source_plan_sha256")
+    @classmethod
+    def plan_seal_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("created_at_utc")
+    @classmethod
+    def plan_seal_time(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def plan_seal_identity(self) -> "BlindResearchPlanSeal":
+        payload = {
+            "question_set_id": self.question_set_id,
+            "question_set_sha256": self.question_set_sha256,
+            "source_plan_id": self.source_plan_id,
+            "source_plan_sha256": self.source_plan_sha256,
+            "created_at_utc": self.created_at_utc,
+        }
+        if self.plan_seal_id != stable_record_id("blind_research_plan_seal", payload):
+            raise ValueError("plan seal id must be content-derived")
+        if self.plan_seal_sha256 != content_sha256(payload):
+            raise ValueError("plan seal hash must bind its payload")
+        return self
+
+
+class BlindWorkOrderPromptSeal(AlphaContract):
+    schema_version: str
+    work_order_id: str
+    research_job_id: str
+    attempt_policy_id: str
+    candidate_snapshot_id: str
+    candidate_snapshot_sha256: str
+    rule_contract_id: str
+    rule_contract_sha256: str
+    blind_packet_id: str
+    blind_packet_sha256: str
+    question_set_id: str
+    question_set_sha256: str
+    source_plan_id: str
+    source_plan_sha256: str
+    plan_seal_id: str
+    plan_seal_sha256: str
+    output_schema_id: str
+    output_schema_sha256: str
+    provider_policy_id: str
+    provider_policy_version: str
+    content_type: Literal["text/plain"]
+    encoding: Literal["utf-8"]
+    newline_mode: Literal["LF"]
+    byte_length: int = Field(gt=0)
+    prompt_sha256: str
+    preview_sha256: str
+    created_at_utc: datetime
+    expires_at_utc: datetime
+    seal_sha256: str
+
+    @field_validator(
+        "candidate_snapshot_sha256", "rule_contract_sha256", "blind_packet_sha256",
+        "question_set_sha256", "source_plan_sha256", "plan_seal_sha256", "output_schema_sha256",
+        "prompt_sha256", "preview_sha256", "seal_sha256",
+    )
+    @classmethod
+    def prompt_hashes(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("created_at_utc", "expires_at_utc")
+    @classmethod
+    def prompt_times(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def prompt_expiry_is_future(self) -> "BlindWorkOrderPromptSeal":
+        if self.schema_version != "gate_r_wp3_v1":
+            raise ValueError("unsupported Blind prompt-seal schema")
+        if self.expires_at_utc <= self.created_at_utc:
+            raise ValueError("prompt expiry must be after creation")
+        required = (
+            self.research_job_id, self.attempt_policy_id, self.candidate_snapshot_id,
+            self.rule_contract_id, self.blind_packet_id, self.question_set_id,
+            self.source_plan_id, self.plan_seal_id, self.output_schema_id,
+            self.provider_policy_id, self.provider_policy_version,
+        )
+        if any(not value.strip() for value in required):
+            raise ValueError("prompt-seal binding fields must not be blank")
+        identity = {
+            "research_job_id": self.research_job_id,
+            "attempt_policy_id": self.attempt_policy_id,
+            "candidate_snapshot_id": self.candidate_snapshot_id,
+            "candidate_snapshot_sha256": self.candidate_snapshot_sha256,
+            "rule_contract_id": self.rule_contract_id,
+            "rule_contract_sha256": self.rule_contract_sha256,
+            "blind_packet_id": self.blind_packet_id,
+            "blind_packet_sha256": self.blind_packet_sha256,
+            "question_set_id": self.question_set_id,
+            "question_set_sha256": self.question_set_sha256,
+            "source_plan_id": self.source_plan_id,
+            "source_plan_sha256": self.source_plan_sha256,
+            "plan_seal_id": self.plan_seal_id,
+            "plan_seal_sha256": self.plan_seal_sha256,
+            "output_schema_id": self.output_schema_id,
+            "output_schema_sha256": self.output_schema_sha256,
+            "provider_policy_id": self.provider_policy_id,
+            "provider_policy_version": self.provider_policy_version,
+            "content_type": self.content_type,
+            "encoding": self.encoding,
+            "newline_mode": self.newline_mode,
+            "byte_length": self.byte_length,
+            "prompt_sha256": self.prompt_sha256,
+            "preview_sha256": self.preview_sha256,
+            "created_at_utc": self.created_at_utc,
+            "expires_at_utc": self.expires_at_utc,
+        }
+        if self.work_order_id != stable_record_id("blind_work_order", identity):
+            raise ValueError("work order id must bind all prompt metadata")
+        seal_payload = {"work_order_id": self.work_order_id, **identity}
+        if self.seal_sha256 != content_sha256(seal_payload):
+            raise ValueError("prompt seal hash must bind all prompt metadata")
+        return self
+
+
 class MarketResearchPacket(CommonEnvelope):
     packet_stage: Literal[PacketStage.MARKET_AWARE] = PacketStage.MARKET_AWARE
     candidate_id: str
