@@ -19,6 +19,7 @@ RULE_CORPUS_REVISION_MIGRATION_ID = "alpha_p0_0002_rule_corpus_revision"
 CATALOG_INTEGRITY_MIGRATION_ID = "alpha_p0_0003_catalog_integrity"
 RULE_CONTRACT_INSTANCE_MIGRATION_ID = "alpha_p0_0004_rule_contract_instances"
 P0_01R2_PROJECTION_MIGRATION_ID = "alpha_p0_0005_p0_01r2_projections"
+P1_RESOLUTION_LEARNING_MIGRATION_ID = "alpha_p1_0001_resolution_learning"
 
 # Every object is alpha-namespaced so a shared legacy research database is never
 # altered.  This migration is intentionally additive; rollback is a reader pin,
@@ -370,6 +371,132 @@ CREATE TABLE IF NOT EXISTS alpha_research_import_reason_v2 (
 );
 """
 
+# P1 closes predictions by appending new settlement/link/score/report facts.
+# Existing PredictionRecord contracts and alpha_prediction_record rows remain
+# immutable; no column below is an UPDATE target for a P0 record.
+P1_RESOLUTION_LEARNING_MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS alpha_market_resolution_v1 (
+    resolution_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    condition_id TEXT,
+    outcome TEXT NOT NULL CHECK(outcome IN ('YES','NO','INVALID')),
+    adjudication_status TEXT NOT NULL CHECK(adjudication_status IN ('FINAL','PENDING_DISPUTE')),
+    resolved_at_utc TEXT NOT NULL,
+    source_observed_at_utc TEXT NOT NULL,
+    source_artifact_id TEXT NOT NULL REFERENCES alpha_source_artifact_v2(artifact_id),
+    source_artifact_sha256 TEXT NOT NULL CHECK(length(source_artifact_sha256)=64),
+    rule_contract_id TEXT NOT NULL REFERENCES alpha_rule_contract_instance_v3(rule_contract_id),
+    rule_contract_sha256 TEXT NOT NULL CHECK(length(rule_contract_sha256)=64),
+    rule_hash TEXT NOT NULL CHECK(length(rule_hash)=64),
+    contract_revision_id TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    supersedes_resolution_id TEXT REFERENCES alpha_market_resolution_v1(resolution_id),
+    supersedes_resolution_sha256 TEXT CHECK(supersedes_resolution_sha256 IS NULL OR length(supersedes_resolution_sha256)=64),
+    CHECK(resolved_at_utc <= source_observed_at_utc),
+    CHECK((supersedes_resolution_id IS NULL) = (supersedes_resolution_sha256 IS NULL)),
+    CHECK(supersedes_resolution_id IS NULL OR supersedes_resolution_id <> resolution_id)
+);
+CREATE INDEX IF NOT EXISTS alpha_market_resolution_market_clock_idx
+ON alpha_market_resolution_v1(market_id, resolved_at_utc, source_observed_at_utc);
+CREATE TABLE IF NOT EXISTS alpha_prediction_resolution_link_v1 (
+    link_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    market_id TEXT NOT NULL REFERENCES alpha_market(market_id),
+    prediction_id TEXT NOT NULL REFERENCES alpha_prediction_record(prediction_id),
+    prediction_sha256 TEXT NOT NULL CHECK(length(prediction_sha256)=64),
+    decision_id TEXT NOT NULL REFERENCES alpha_review_decision(decision_id),
+    decision_sha256 TEXT NOT NULL CHECK(length(decision_sha256)=64),
+    probability_estimate_id TEXT NOT NULL REFERENCES alpha_contract_record(record_id),
+    probability_estimate_sha256 TEXT NOT NULL CHECK(length(probability_estimate_sha256)=64),
+    rule_contract_id TEXT NOT NULL REFERENCES alpha_rule_contract_instance_v3(rule_contract_id),
+    rule_contract_sha256 TEXT NOT NULL CHECK(length(rule_contract_sha256)=64),
+    resolution_id TEXT NOT NULL REFERENCES alpha_market_resolution_v1(resolution_id),
+    resolution_sha256 TEXT NOT NULL CHECK(length(resolution_sha256)=64),
+    linked_at_utc TEXT NOT NULL,
+    scoring_eligibility TEXT NOT NULL CHECK(scoring_eligibility IN ('ELIGIBLE','EXCLUDED_INVALID','EXCLUDED_PENDING_DISPUTE')),
+    exclusion_reason TEXT,
+    predicted_probability TEXT NOT NULL,
+    market_baseline_probability TEXT,
+    market_type TEXT NOT NULL,
+    rule_clarity TEXT NOT NULL,
+    orderbook_snapshot_id TEXT REFERENCES alpha_orderbook_snapshot(snapshot_id),
+    orderbook_snapshot_sha256 TEXT CHECK(orderbook_snapshot_sha256 IS NULL OR length(orderbook_snapshot_sha256)=64),
+    entry_direction TEXT CHECK(entry_direction IS NULL OR entry_direction IN ('YES','NO')),
+    entry_token_id TEXT,
+    entry_quantity TEXT,
+    entry_vwap TEXT,
+    entry_gross_cost TEXT,
+    entry_fee_amount TEXT,
+    entry_fee_model_version TEXT,
+    UNIQUE(prediction_id, resolution_id),
+    CHECK((scoring_eligibility='ELIGIBLE' AND exclusion_reason IS NULL) OR (scoring_eligibility<>'ELIGIBLE' AND length(trim(exclusion_reason))>0)),
+    CHECK((orderbook_snapshot_id IS NULL AND orderbook_snapshot_sha256 IS NULL AND entry_direction IS NULL AND entry_token_id IS NULL AND entry_quantity IS NULL AND entry_vwap IS NULL AND entry_gross_cost IS NULL AND entry_fee_amount IS NULL AND entry_fee_model_version IS NULL)
+       OR (orderbook_snapshot_id IS NOT NULL AND orderbook_snapshot_sha256 IS NOT NULL AND entry_direction IS NOT NULL AND entry_token_id IS NOT NULL AND entry_quantity IS NOT NULL AND entry_vwap IS NOT NULL AND entry_gross_cost IS NOT NULL AND entry_fee_amount IS NOT NULL AND entry_fee_model_version IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS alpha_prediction_resolution_link_prediction_idx
+ON alpha_prediction_resolution_link_v1(prediction_id, linked_at_utc);
+CREATE INDEX IF NOT EXISTS alpha_prediction_resolution_link_resolution_idx
+ON alpha_prediction_resolution_link_v1(resolution_id);
+CREATE TABLE IF NOT EXISTS alpha_prediction_score_v1 (
+    score_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    link_id TEXT NOT NULL REFERENCES alpha_prediction_resolution_link_v1(link_id),
+    link_sha256 TEXT NOT NULL CHECK(length(link_sha256)=64),
+    prediction_id TEXT NOT NULL REFERENCES alpha_prediction_record(prediction_id),
+    resolution_id TEXT NOT NULL REFERENCES alpha_market_resolution_v1(resolution_id),
+    outcome TEXT NOT NULL CHECK(outcome IN ('YES','NO')),
+    outcome_label INTEGER NOT NULL CHECK(outcome_label IN (0,1)),
+    predicted_probability TEXT NOT NULL,
+    market_baseline_probability TEXT,
+    brier_score TEXT NOT NULL,
+    log_loss TEXT NOT NULL,
+    market_baseline_brier_score TEXT,
+    market_baseline_log_loss TEXT,
+    simulated_pnl TEXT,
+    market_type TEXT NOT NULL,
+    rule_clarity TEXT NOT NULL,
+    entry_vwap TEXT,
+    scoring_policy_version TEXT NOT NULL,
+    log_loss_epsilon TEXT NOT NULL,
+    scoring_policy_sha256 TEXT NOT NULL CHECK(length(scoring_policy_sha256)=64),
+    UNIQUE(link_id, scoring_policy_sha256),
+    CHECK((market_baseline_probability IS NULL AND market_baseline_brier_score IS NULL AND market_baseline_log_loss IS NULL)
+       OR (market_baseline_probability IS NOT NULL AND market_baseline_brier_score IS NOT NULL AND market_baseline_log_loss IS NOT NULL)),
+    CHECK((entry_vwap IS NULL) = (simulated_pnl IS NULL))
+);
+CREATE TABLE IF NOT EXISTS alpha_calibration_report_v1 (
+    report_id TEXT PRIMARY KEY REFERENCES alpha_contract_record(record_id),
+    dimension TEXT NOT NULL CHECK(dimension IN ('MARKET_TYPE','RULE_CLARITY','ENTRY_PRICE')),
+    calibration_policy_version TEXT NOT NULL,
+    rule_clarity_boundaries_json TEXT NOT NULL,
+    entry_price_boundaries_json TEXT NOT NULL,
+    calibration_policy_sha256 TEXT NOT NULL CHECK(length(calibration_policy_sha256)=64)
+);
+CREATE TABLE IF NOT EXISTS alpha_calibration_report_score_v1 (
+    report_id TEXT NOT NULL REFERENCES alpha_calibration_report_v1(report_id),
+    score_id TEXT NOT NULL REFERENCES alpha_prediction_score_v1(score_id),
+    score_sha256 TEXT NOT NULL CHECK(length(score_sha256)=64),
+    PRIMARY KEY(report_id, score_id)
+);
+CREATE TABLE IF NOT EXISTS alpha_calibration_report_exclusion_v1 (
+    report_id TEXT NOT NULL REFERENCES alpha_calibration_report_v1(report_id),
+    score_id TEXT NOT NULL REFERENCES alpha_prediction_score_v1(score_id),
+    PRIMARY KEY(report_id, score_id)
+);
+CREATE TABLE IF NOT EXISTS alpha_calibration_slice_v1 (
+    report_id TEXT NOT NULL REFERENCES alpha_calibration_report_v1(report_id),
+    slice_key TEXT NOT NULL,
+    sample_count INTEGER NOT NULL CHECK(sample_count > 0),
+    mean_predicted_probability TEXT NOT NULL,
+    observed_yes_rate TEXT NOT NULL,
+    mean_brier_score TEXT NOT NULL,
+    mean_log_loss TEXT NOT NULL,
+    mean_market_baseline_brier_score TEXT,
+    mean_market_baseline_log_loss TEXT,
+    mean_simulated_pnl TEXT,
+    PRIMARY KEY(report_id, slice_key),
+    CHECK((mean_market_baseline_brier_score IS NULL) = (mean_market_baseline_log_loss IS NULL))
+);
+"""
+
 
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -417,6 +544,16 @@ def p0_01r2_projection_manifest() -> dict[str, str]:
         "schema_version": ALPHA_SCHEMA_VERSION,
         "migration_id": P0_01R2_PROJECTION_MIGRATION_ID,
         "sql_sha256": _sha(P0_01R2_PROJECTION_MIGRATION_SQL),
+    }
+
+
+def p1_resolution_learning_manifest() -> dict[str, str]:
+    """Return the additive P1 settlement and learning projection manifest."""
+
+    return {
+        "schema_version": ALPHA_SCHEMA_VERSION,
+        "migration_id": P1_RESOLUTION_LEARNING_MIGRATION_ID,
+        "sql_sha256": _sha(P1_RESOLUTION_LEARNING_MIGRATION_SQL),
     }
 
 
@@ -491,6 +628,7 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
     catalog_integrity = catalog_integrity_manifest()
     rule_instances = rule_contract_instance_manifest()
     p0_01r2_projections = p0_01r2_projection_manifest()
+    p1_resolution_learning = p1_resolution_learning_manifest()
     with _connection(target) as (conn, _owned):
         conn.execute("PRAGMA foreign_keys = ON")
         try:
@@ -510,6 +648,9 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                 if statement.strip():
                     conn.execute(statement)
             for statement in P0_01R2_PROJECTION_MIGRATION_SQL.split(";\n"):
+                if statement.strip():
+                    conn.execute(statement)
+            for statement in P1_RESOLUTION_LEARNING_MIGRATION_SQL.split(";\n"):
                 if statement.strip():
                     conn.execute(statement)
             _backfill_rule_contract_revisions(conn)
@@ -552,6 +693,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                     CATALOG_INTEGRITY_MIGRATION_ID,
                     ALPHA_SCHEMA_VERSION,
                     catalog_integrity["sql_sha256"],
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_schema_migrations VALUES (?, ?, ?, ?)",
+                (
+                    P1_RESOLUTION_LEARNING_MIGRATION_ID,
+                    ALPHA_SCHEMA_VERSION,
+                    p1_resolution_learning["sql_sha256"],
                     now,
                 ),
             )
@@ -602,6 +752,15 @@ def migrate(target: str | Path | sqlite3.Connection) -> dict[str, str]:
                 p0_01r2_projections["sql_sha256"],
             ):
                 raise RuntimeError("incompatible Alpha P0-01R2 projection migration already recorded")
+            p1_resolution_row = conn.execute(
+                "SELECT schema_version, sql_sha256 FROM alpha_schema_migrations WHERE migration_id = ?",
+                (P1_RESOLUTION_LEARNING_MIGRATION_ID,),
+            ).fetchone()
+            if p1_resolution_row is None or tuple(p1_resolution_row) != (
+                ALPHA_SCHEMA_VERSION,
+                p1_resolution_learning["sql_sha256"],
+            ):
+                raise RuntimeError("incompatible Alpha P1 resolution/learning migration already recorded")
             manifest_row = conn.execute(
                 "SELECT migration_id, contract_version, manifest_sha256 FROM alpha_schema_manifest WHERE schema_version = ?",
                 (ALPHA_SCHEMA_VERSION,),

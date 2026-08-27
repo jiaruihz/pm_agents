@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
+from decimal import Decimal, localcontext
 from typing import Any, Sequence
 
 from ..contracts import (
@@ -19,7 +20,10 @@ from ..contracts.models import (
     OrderbookSnapshot, RecallHit, ReviewDecision, RuleContract, PredictionRecord,
     BlindResearchPacket, MarketResearchPacket, MarketChangeEvent, BookCaptureDemand,
     BookCaptureReceipt, SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt,
+    CalibrationReport, MarketResolution, PredictionResolutionLink, PredictionScore,
+    ResolutionAdjudicationStatus, ResolutionOutcome, ScoringEligibility,
 )
+from ..contracts.base import canonical_decimal
 from ..rules.models import RuleGateDecision
 from .migrations import migrate
 
@@ -569,6 +573,452 @@ class AlphaRepository:
                 "INSERT INTO alpha_prediction_record VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (c.prediction_id, c.market_id, c.decision_id, c.probability_estimate_id, c.packet_id, c.orderbook_snapshot_id, c.position_state.value),
             )
+        elif isinstance(c, MarketResolution):
+            c = MarketResolution.model_validate(c.model_dump(mode="python"))
+            self._require_contract_hash(conn, c.source_artifact_id, c.source_artifact_sha256)
+            source_row = conn.execute(
+                "SELECT capture_scope, content_sha256 FROM alpha_source_artifact_v2 WHERE artifact_id=?",
+                (c.source_artifact_id,),
+            ).fetchone()
+            if source_row is None or str(source_row[0]) == "REFERENCE_ONLY" or source_row[1] is None:
+                raise ContractConflictError("resolution source artifact is absent or not replayable")
+            self._require_contract_hash(conn, c.rule_contract_id, c.rule_contract_sha256)
+            rule_row = conn.execute(
+                "SELECT market_id, rule_hash, contract_revision_id "
+                "FROM alpha_rule_contract_instance_v3 WHERE rule_contract_id=?",
+                (c.rule_contract_id,),
+            ).fetchone()
+            if rule_row is None or tuple(rule_row) != (
+                c.market_id,
+                c.rule_hash,
+                c.contract_revision_id,
+            ):
+                raise ContractConflictError("resolution rule contract lineage mismatch")
+            market_row = conn.execute(
+                "SELECT condition_id FROM alpha_market WHERE market_id=?", (c.market_id,)
+            ).fetchone()
+            if market_row is None or market_row[0] != c.condition_id:
+                raise ContractConflictError("resolution canonical market identity mismatch")
+            if c.supersedes_resolution_id is not None:
+                assert c.supersedes_resolution_sha256 is not None
+                self._require_contract_hash(
+                    conn, c.supersedes_resolution_id, c.supersedes_resolution_sha256
+                )
+                superseded = conn.execute(
+                    "SELECT market_id FROM alpha_market_resolution_v1 WHERE resolution_id=?",
+                    (c.supersedes_resolution_id,),
+                ).fetchone()
+                if superseded is None or str(superseded[0]) != c.market_id:
+                    raise ContractConflictError("superseded resolution belongs to another market")
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_market_resolution_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.resolution_id,
+                    c.market_id,
+                    c.condition_id,
+                    c.outcome.value,
+                    c.adjudication_status.value,
+                    canonical_datetime(c.resolved_at),
+                    canonical_datetime(c.source_observed_at),
+                    c.source_artifact_id,
+                    c.source_artifact_sha256,
+                    c.rule_contract_id,
+                    c.rule_contract_sha256,
+                    c.rule_hash,
+                    c.contract_revision_id,
+                    c.parser_version,
+                    c.supersedes_resolution_id,
+                    c.supersedes_resolution_sha256,
+                ),
+            )
+        elif isinstance(c, PredictionResolutionLink):
+            c = PredictionResolutionLink.model_validate(c.model_dump(mode="python"))
+            for record_id, expected_hash in (
+                (c.prediction_id, c.prediction_sha256),
+                (c.decision_id, c.decision_sha256),
+                (c.probability_estimate_id, c.probability_estimate_sha256),
+                (c.rule_contract_id, c.rule_contract_sha256),
+                (c.resolution_id, c.resolution_sha256),
+            ):
+                self._require_contract_hash(conn, record_id, expected_hash)
+            duplicate = conn.execute(
+                "SELECT link_id FROM alpha_prediction_resolution_link_v1 "
+                "WHERE prediction_id=? AND resolution_id=?",
+                (c.prediction_id, c.resolution_id),
+            ).fetchone()
+            if duplicate is not None and str(duplicate[0]) != c.link_id:
+                raise ContractConflictError("prediction-resolution pair already has another link")
+            prediction_row = conn.execute(
+                "SELECT market_id, decision_id, probability_estimate_id, orderbook_snapshot_id "
+                "FROM alpha_prediction_record WHERE prediction_id=?",
+                (c.prediction_id,),
+            ).fetchone()
+            if prediction_row is None or tuple(prediction_row[:3]) != (
+                c.market_id,
+                c.decision_id,
+                c.probability_estimate_id,
+            ):
+                raise ContractConflictError("prediction-resolution link prediction lineage mismatch")
+            prediction_payload = self._contract_payload(conn, c.prediction_id)
+            decision_payload = self._contract_payload(conn, c.decision_id)
+            if decision_payload.get("execution") != "NO_ORDER":
+                raise ContractConflictError("prediction-resolution link requires a NO_ORDER decision")
+            decision_row = conn.execute(
+                "SELECT market_id FROM alpha_review_decision WHERE decision_id=?", (c.decision_id,)
+            ).fetchone()
+            if decision_row is None or str(decision_row[0]) != c.market_id:
+                raise ContractConflictError("prediction-resolution link decision market mismatch")
+            resolution_row = conn.execute(
+                "SELECT market_id, outcome, adjudication_status FROM alpha_market_resolution_v1 "
+                "WHERE resolution_id=?",
+                (c.resolution_id,),
+            ).fetchone()
+            if resolution_row is None or str(resolution_row[0]) != c.market_id:
+                raise ContractConflictError("prediction-resolution link resolution market mismatch")
+            expected_eligibility = (
+                ScoringEligibility.EXCLUDED_PENDING_DISPUTE
+                if str(resolution_row[2]) == ResolutionAdjudicationStatus.PENDING_DISPUTE.value
+                else ScoringEligibility.EXCLUDED_INVALID
+                if str(resolution_row[1]) == ResolutionOutcome.INVALID.value
+                else ScoringEligibility.ELIGIBLE
+            )
+            if c.scoring_eligibility != expected_eligibility:
+                raise ContractConflictError("link scoring eligibility contradicts resolution")
+            rule_row = conn.execute(
+                "SELECT market_id, rule_hash FROM alpha_rule_contract_instance_v3 WHERE rule_contract_id=?",
+                (c.rule_contract_id,),
+            ).fetchone()
+            if rule_row is None or tuple(rule_row) != (c.market_id, self._contract_json_field(conn, c.prediction_id, "rule_hash")):
+                raise ContractConflictError("prediction-resolution link rule lineage mismatch")
+            estimate = self._contract_payload(conn, c.probability_estimate_id)
+            if (
+                estimate.get("estimate_stage") != "FINAL"
+                or estimate.get("market_id") != c.market_id
+                or str(estimate.get("p_event_yes_mid")) != canonical_decimal(c.predicted_probability)
+            ):
+                raise ContractConflictError("prediction-resolution link estimate lineage mismatch")
+            baseline = estimate.get("p_market_yes_mid")
+            if (None if baseline is None else str(baseline)) != (
+                None
+                if c.market_baseline_probability is None
+                else canonical_decimal(c.market_baseline_probability)
+            ):
+                raise ContractConflictError("prediction-resolution link baseline probability mismatch")
+            rule_payload = self._contract_payload(conn, c.rule_contract_id)
+            if str(rule_payload.get("clarity_score")) != canonical_decimal(c.rule_clarity):
+                raise ContractConflictError("prediction-resolution link rule clarity mismatch")
+            entry = c.entry_basis
+            position_state = prediction_payload.get("position_state")
+            if (position_state == "SIMULATED") != (entry is not None):
+                raise ContractConflictError("simulation entry presence contradicts prediction position state")
+            if position_state not in ("SIMULATED", "NO_POSITION"):
+                raise ContractConflictError("prediction-resolution link has unsupported position state")
+            if entry is not None:
+                if prediction_row[3] != entry.orderbook_snapshot_id:
+                    raise ContractConflictError("simulation entry does not use prediction orderbook")
+                self._require_contract_hash(
+                    conn, entry.orderbook_snapshot_id, entry.orderbook_snapshot_sha256
+                )
+                book_row = conn.execute(
+                    "SELECT market_id FROM alpha_orderbook_snapshot WHERE snapshot_id=?",
+                    (entry.orderbook_snapshot_id,),
+                ).fetchone()
+                if book_row is None or str(book_row[0]) != c.market_id:
+                    raise ContractConflictError("simulation entry orderbook market mismatch")
+                if (
+                    decision_payload.get("action") != "SIMULATE"
+                    or decision_payload.get("direction") != entry.direction
+                    or str(decision_payload.get("target_size"))
+                    != canonical_decimal(entry.quantity)
+                ):
+                    raise ContractConflictError("simulation entry contradicts frozen decision")
+                book_payload = self._contract_payload(conn, entry.orderbook_snapshot_id)
+                identity = book_payload.get("identity")
+                depth_field = "yes_depth" if entry.direction == "YES" else "no_depth"
+                token_field = "yes_token_id" if entry.direction == "YES" else "no_token_id"
+                if not isinstance(identity, dict) or identity.get(token_field) != entry.token_id:
+                    raise ContractConflictError("simulation entry token mapping mismatch")
+                matching_depth = tuple(
+                    row
+                    for row in book_payload.get(depth_field, ())
+                    if isinstance(row, dict)
+                    and str(row.get("target_size")) == canonical_decimal(entry.quantity)
+                )
+                if (
+                    len(matching_depth) != 1
+                    or matching_depth[0].get("buy_insufficient_depth") is not False
+                    or str(matching_depth[0].get("buy_vwap"))
+                    != canonical_decimal(entry.entry_vwap)
+                ):
+                    raise ContractConflictError("simulation entry does not match frozen book depth")
+            from ..learning.resolution import (
+                LearningResolutionError,
+                build_prediction_resolution_link,
+            )
+
+            try:
+                expected_link = build_prediction_resolution_link(
+                    prediction=PredictionRecord.model_validate(prediction_payload),
+                    decision=ReviewDecision.model_validate(decision_payload),
+                    probability_estimate=self._model_from_contract(
+                        conn, c.probability_estimate_id, "ProbabilityEstimate"
+                    ),
+                    rule_contract=RuleContract.model_validate(rule_payload),
+                    resolution=MarketResolution.model_validate(
+                        self._contract_payload(conn, c.resolution_id)
+                    ),
+                    orderbook=OrderbookSnapshot.model_validate(
+                        self._contract_payload(conn, str(prediction_row[3]))
+                    ),
+                    market_type=c.market_type,
+                    linked_at=c.linked_at,
+                    run_id=c.run_id,
+                    fee_amount=Decimal("0") if entry is None else entry.fee_amount,
+                    fee_model_version=(
+                        "no_fee_v1" if entry is None else entry.fee_model_version
+                    ),
+                )
+            except (LearningResolutionError, ValueError) as exc:
+                raise ContractConflictError(
+                    "prediction-resolution link cannot be replayed from parents"
+                ) from exc
+            if expected_link != c:
+                raise ContractConflictError(
+                    "prediction-resolution link differs from deterministic parent replay"
+                )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_prediction_resolution_link_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.link_id,
+                    c.market_id,
+                    c.prediction_id,
+                    c.prediction_sha256,
+                    c.decision_id,
+                    c.decision_sha256,
+                    c.probability_estimate_id,
+                    c.probability_estimate_sha256,
+                    c.rule_contract_id,
+                    c.rule_contract_sha256,
+                    c.resolution_id,
+                    c.resolution_sha256,
+                    canonical_datetime(c.linked_at),
+                    c.scoring_eligibility.value,
+                    c.exclusion_reason,
+                    canonical_decimal(c.predicted_probability),
+                    None if c.market_baseline_probability is None else canonical_decimal(c.market_baseline_probability),
+                    c.market_type,
+                    canonical_decimal(c.rule_clarity),
+                    None if entry is None else entry.orderbook_snapshot_id,
+                    None if entry is None else entry.orderbook_snapshot_sha256,
+                    None if entry is None else entry.direction,
+                    None if entry is None else entry.token_id,
+                    None if entry is None else canonical_decimal(entry.quantity),
+                    None if entry is None else canonical_decimal(entry.entry_vwap),
+                    None if entry is None else canonical_decimal(entry.gross_cost),
+                    None if entry is None else canonical_decimal(entry.fee_amount),
+                    None if entry is None else entry.fee_model_version,
+                ),
+            )
+        elif isinstance(c, PredictionScore):
+            c = PredictionScore.model_validate(c.model_dump(mode="python"))
+            self._require_contract_hash(conn, c.link_id, c.link_sha256)
+            duplicate = conn.execute(
+                "SELECT score_id FROM alpha_prediction_score_v1 WHERE link_id=? AND scoring_policy_sha256=?",
+                (c.link_id, c.scoring_policy_sha256),
+            ).fetchone()
+            if duplicate is not None and str(duplicate[0]) != c.score_id:
+                raise ContractConflictError("link and scoring policy already have another score")
+            link_row = conn.execute(
+                "SELECT prediction_id, resolution_id, scoring_eligibility, predicted_probability, "
+                "market_baseline_probability, market_type, rule_clarity, entry_vwap "
+                "FROM alpha_prediction_resolution_link_v1 WHERE link_id=?",
+                (c.link_id,),
+            ).fetchone()
+            if link_row is None or tuple(link_row[:3]) != (
+                c.prediction_id,
+                c.resolution_id,
+                ScoringEligibility.ELIGIBLE.value,
+            ):
+                raise ContractConflictError("prediction score link lineage mismatch")
+            if tuple(link_row[3:8]) != (
+                canonical_decimal(c.predicted_probability),
+                None if c.market_baseline_probability is None else canonical_decimal(c.market_baseline_probability),
+                c.market_type,
+                canonical_decimal(c.rule_clarity),
+                None if c.entry_vwap is None else canonical_decimal(c.entry_vwap),
+            ):
+                raise ContractConflictError("prediction score does not preserve link inputs")
+            expected_policy_sha256 = content_sha256(
+                {
+                    "scoring_policy_version": c.scoring_policy_version,
+                    "log_loss_epsilon": c.log_loss_epsilon,
+                }
+            )
+            if c.scoring_policy_sha256 != expected_policy_sha256:
+                raise ContractConflictError("prediction score policy hash mismatch")
+            resolution_outcome = conn.execute(
+                "SELECT outcome FROM alpha_market_resolution_v1 WHERE resolution_id=?",
+                (c.resolution_id,),
+            ).fetchone()
+            if resolution_outcome is None or str(resolution_outcome[0]) != c.outcome:
+                raise ContractConflictError("prediction score outcome contradicts resolution")
+            label = Decimal(c.outcome_label)
+            if c.brier_score != (c.predicted_probability - label) ** 2:
+                raise ContractConflictError("prediction Brier score is not replayable")
+            if c.log_loss != self._binary_log_loss(
+                c.predicted_probability, c.outcome_label, c.log_loss_epsilon
+            ):
+                raise ContractConflictError("prediction log loss is not replayable")
+            if c.market_baseline_probability is not None:
+                assert c.market_baseline_brier_score is not None
+                assert c.market_baseline_log_loss is not None
+                if c.market_baseline_brier_score != (
+                    c.market_baseline_probability - label
+                ) ** 2:
+                    raise ContractConflictError("market baseline Brier score is not replayable")
+                if c.market_baseline_log_loss != self._binary_log_loss(
+                    c.market_baseline_probability, c.outcome_label, c.log_loss_epsilon
+                ):
+                    raise ContractConflictError("market baseline log loss is not replayable")
+            link_payload = self._contract_payload(conn, c.link_id)
+            entry_payload = link_payload.get("entry_basis")
+            if entry_payload is not None:
+                if not isinstance(entry_payload, dict):
+                    raise ContractConflictError("prediction score entry basis is malformed")
+                quantity = Decimal(str(entry_payload["quantity"]))
+                payout = quantity if str(entry_payload["direction"]) == c.outcome else Decimal("0")
+                expected_pnl = payout - Decimal(str(entry_payload["gross_cost"])) - Decimal(
+                    str(entry_payload["fee_amount"])
+                )
+                if c.simulated_pnl != expected_pnl:
+                    raise ContractConflictError("prediction simulated PnL is not replayable")
+            from ..learning.scoring import LearningScoringError, ScoringPolicy, score_prediction
+
+            try:
+                expected_score = score_prediction(
+                    link=PredictionResolutionLink.model_validate(link_payload),
+                    resolution=MarketResolution.model_validate(
+                        self._contract_payload(conn, c.resolution_id)
+                    ),
+                    policy=ScoringPolicy(
+                        version=c.scoring_policy_version,
+                        probability_epsilon=c.log_loss_epsilon,
+                    ),
+                    scored_at=c.created_at,
+                    run_id=c.run_id,
+                )
+            except (LearningScoringError, ValueError) as exc:
+                raise ContractConflictError(
+                    "prediction score cannot be replayed from parents"
+                ) from exc
+            if expected_score != c:
+                raise ContractConflictError(
+                    "prediction score differs from deterministic parent replay"
+                )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_prediction_score_v1 VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    c.score_id,
+                    c.link_id,
+                    c.link_sha256,
+                    c.prediction_id,
+                    c.resolution_id,
+                    c.outcome,
+                    c.outcome_label,
+                    canonical_decimal(c.predicted_probability),
+                    None if c.market_baseline_probability is None else canonical_decimal(c.market_baseline_probability),
+                    canonical_decimal(c.brier_score),
+                    canonical_decimal(c.log_loss),
+                    None if c.market_baseline_brier_score is None else canonical_decimal(c.market_baseline_brier_score),
+                    None if c.market_baseline_log_loss is None else canonical_decimal(c.market_baseline_log_loss),
+                    None if c.simulated_pnl is None else canonical_decimal(c.simulated_pnl),
+                    c.market_type,
+                    canonical_decimal(c.rule_clarity),
+                    None if c.entry_vwap is None else canonical_decimal(c.entry_vwap),
+                    c.scoring_policy_version,
+                    canonical_decimal(c.log_loss_epsilon),
+                    c.scoring_policy_sha256,
+                ),
+            )
+        elif isinstance(c, CalibrationReport):
+            c = CalibrationReport.model_validate(c.model_dump(mode="python"))
+            score_objects: list[PredictionScore] = []
+            for ref in c.score_references:
+                self._require_contract_hash(conn, ref.score_id, ref.score_sha256)
+                if conn.execute(
+                    "SELECT 1 FROM alpha_prediction_score_v1 WHERE score_id=?", (ref.score_id,)
+                ).fetchone() is None:
+                    raise ContractConflictError("calibration report references a non-score contract")
+                score_objects.append(
+                    PredictionScore.model_validate(self._contract_payload(conn, ref.score_id))
+                )
+            from ..learning.scoring import (
+                CalibrationPolicy,
+                LearningScoringError,
+                build_calibration_report,
+            )
+
+            try:
+                expected_report = build_calibration_report(
+                    scores=tuple(score_objects),
+                    dimension=c.dimension,
+                    policy=CalibrationPolicy(
+                        version=c.calibration_policy_version,
+                        rule_clarity_boundaries=c.rule_clarity_boundaries,
+                        entry_price_boundaries=c.entry_price_boundaries,
+                    ),
+                    reported_at=c.created_at,
+                    run_id=c.run_id,
+                )
+            except (LearningScoringError, ValueError) as exc:
+                raise ContractConflictError(
+                    "calibration report cannot be replayed from referenced scores"
+                ) from exc
+            if expected_report != c:
+                raise ContractConflictError(
+                    "calibration report differs from deterministic score replay"
+                )
+            conn.execute(
+                "INSERT OR IGNORE INTO alpha_calibration_report_v1 VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    c.report_id,
+                    c.dimension.value,
+                    c.calibration_policy_version,
+                    canonical_json(c.rule_clarity_boundaries),
+                    canonical_json(c.entry_price_boundaries),
+                    c.calibration_policy_sha256,
+                ),
+            )
+            for ref in c.score_references:
+                conn.execute(
+                    "INSERT OR IGNORE INTO alpha_calibration_report_score_v1 VALUES (?, ?, ?)",
+                    (c.report_id, ref.score_id, ref.score_sha256),
+                )
+            for score_id in c.excluded_score_ids:
+                conn.execute(
+                    "INSERT OR IGNORE INTO alpha_calibration_report_exclusion_v1 VALUES (?, ?)",
+                    (c.report_id, score_id),
+                )
+            for row in c.slices:
+                conn.execute(
+                    "INSERT OR IGNORE INTO alpha_calibration_slice_v1 VALUES "
+                    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        c.report_id,
+                        row.slice_key,
+                        row.count,
+                        canonical_decimal(row.mean_predicted_probability),
+                        canonical_decimal(row.observed_yes_rate),
+                        canonical_decimal(row.mean_brier_score),
+                        canonical_decimal(row.mean_log_loss),
+                        None if row.mean_market_baseline_brier_score is None else canonical_decimal(row.mean_market_baseline_brier_score),
+                        None if row.mean_market_baseline_log_loss is None else canonical_decimal(row.mean_market_baseline_log_loss),
+                        None if row.mean_simulated_pnl is None else canonical_decimal(row.mean_simulated_pnl),
+                    ),
+                )
 
     def _save_existing_projection(
         self, conn: sqlite3.Connection, contract: CommonEnvelope
@@ -578,7 +1028,9 @@ class AlphaRepository:
         if self._save_raw_artifact_projection(conn, contract):
             return
         if isinstance(contract, (MarketChangeEvent, BookCaptureDemand, BookCaptureReceipt,
-                                 SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt)):
+                                 SourceArtifact, ResearchResultEnvelope, ResearchImportReceipt,
+                                 MarketResolution, PredictionResolutionLink, PredictionScore,
+                                 CalibrationReport)):
             self._save_projection(conn, contract, contract.canonical_sha256)
 
     @staticmethod
@@ -586,6 +1038,53 @@ class AlphaRepository:
         row = conn.execute("SELECT canonical_sha256 FROM alpha_contract_record WHERE record_id=?", (record_id,)).fetchone()
         if row is None or str(row[0]) != digest:
             raise ContractConflictError(f"referenced contract {record_id} is absent or hash-mismatched")
+
+    @staticmethod
+    def _contract_payload(conn: sqlite3.Connection, record_id: str) -> dict[str, Any]:
+        row = conn.execute(
+            "SELECT canonical_json, canonical_sha256 FROM alpha_contract_record WHERE record_id=?",
+            (record_id,),
+        ).fetchone()
+        if row is None:
+            raise ContractConflictError(f"referenced contract {record_id} is absent")
+        try:
+            payload = json.loads(str(row[0]))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise StoredContractCorruptionError("referenced contract JSON is invalid") from exc
+        if not isinstance(payload, dict) or content_sha256(payload) != str(row[1]):
+            raise StoredContractCorruptionError("referenced contract hash mismatch")
+        return payload
+
+    @classmethod
+    def _contract_json_field(
+        cls, conn: sqlite3.Connection, record_id: str, field_name: str
+    ) -> Any:
+        return cls._contract_payload(conn, record_id).get(field_name)
+
+    @classmethod
+    def _model_from_contract(
+        cls, conn: sqlite3.Connection, record_id: str, expected_type: str
+    ) -> Any:
+        row = conn.execute(
+            "SELECT contract_type FROM alpha_contract_record WHERE record_id=?", (record_id,)
+        ).fetchone()
+        if row is None or str(row[0]) != expected_type:
+            raise ContractConflictError(
+                f"referenced contract {record_id} is not {expected_type}"
+            )
+        payload = cls._contract_payload(conn, record_id)
+        if expected_type == "ProbabilityEstimate":
+            from ..contracts.models import ProbabilityEstimate
+
+            return ProbabilityEstimate.model_validate(payload)
+        raise ContractConflictError(f"unsupported typed contract replay: {expected_type}")
+
+    @staticmethod
+    def _binary_log_loss(probability: Decimal, label: int, epsilon: Decimal) -> Decimal:
+        clipped = max(epsilon, min(Decimal("1") - epsilon, probability))
+        with localcontext() as context:
+            context.prec = 50
+            return -(clipped.ln() if label == 1 else (Decimal("1") - clipped).ln())
 
     @staticmethod
     def _save_raw_artifact_projection(

@@ -1357,6 +1357,315 @@ class PredictionRecord(CommonEnvelope):
         return self
 
 
+class ResolutionOutcome(StrEnum):
+    YES = "YES"
+    NO = "NO"
+    INVALID = "INVALID"
+
+
+class ResolutionAdjudicationStatus(StrEnum):
+    FINAL = "FINAL"
+    PENDING_DISPUTE = "PENDING_DISPUTE"
+
+
+class ScoringEligibility(StrEnum):
+    ELIGIBLE = "ELIGIBLE"
+    EXCLUDED_INVALID = "EXCLUDED_INVALID"
+    EXCLUDED_PENDING_DISPUTE = "EXCLUDED_PENDING_DISPUTE"
+
+
+class MarketResolution(CommonEnvelope):
+    """Immutable settlement assertion backed by a replayable source artifact."""
+
+    resolution_id: str
+    market_id: str
+    condition_id: str | None = None
+    outcome: ResolutionOutcome
+    adjudication_status: ResolutionAdjudicationStatus
+    resolved_at: datetime
+    source_observed_at: datetime
+    source_artifact_id: str
+    source_artifact_sha256: str
+    rule_contract_id: str
+    rule_contract_sha256: str
+    rule_hash: str
+    contract_revision_id: str
+    parser_version: str
+    supersedes_resolution_id: str | None = None
+    supersedes_resolution_sha256: str | None = None
+
+    @field_validator(
+        "source_artifact_sha256",
+        "rule_contract_sha256",
+        "rule_hash",
+        "supersedes_resolution_sha256",
+    )
+    @classmethod
+    def resolution_hashes_are_valid(cls, value: str | None) -> str | None:
+        return validate_sha256(value) if value is not None else None
+
+    @field_validator("resolved_at", "source_observed_at")
+    @classmethod
+    def resolution_times_are_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator("market_id", "source_artifact_id", "rule_contract_id", "contract_revision_id", "parser_version")
+    @classmethod
+    def resolution_text_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("resolution text fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def resolution_lineage_is_consistent(self) -> "MarketResolution":
+        if self.resolution_id != self.record_id:
+            raise ValueError("resolution_id must equal record_id")
+        if self.resolved_at > self.source_observed_at or self.source_observed_at > self.created_at:
+            raise ValueError("resolution clocks must be resolved_at <= observed_at <= created_at")
+        if (self.supersedes_resolution_id is None) != (
+            self.supersedes_resolution_sha256 is None
+        ):
+            raise ValueError("superseded resolution id and hash must be set together")
+        if self.supersedes_resolution_id == self.resolution_id:
+            raise ValueError("a resolution cannot supersede itself")
+        return self
+
+
+class SimulationEntryBasis(AlphaContract):
+    """Frozen offline fill assumption; never evidence of an actual order or fill."""
+
+    direction: Literal["YES", "NO"]
+    token_id: str
+    quantity: Decimal = Field(gt=0)
+    entry_vwap: Decimal = Field(ge=0, le=1)
+    gross_cost: Decimal = Field(ge=0)
+    fee_amount: Decimal = Field(ge=0)
+    fee_model_version: str
+    orderbook_snapshot_id: str
+    orderbook_snapshot_sha256: str
+
+    @field_validator("orderbook_snapshot_sha256")
+    @classmethod
+    def entry_book_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("token_id", "fee_model_version", "orderbook_snapshot_id")
+    @classmethod
+    def entry_text_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("simulation entry fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def entry_cost_is_exact(self) -> "SimulationEntryBasis":
+        if self.gross_cost != self.quantity * self.entry_vwap:
+            raise ValueError("gross_cost must equal quantity * entry_vwap")
+        return self
+
+
+class PredictionResolutionLink(CommonEnvelope):
+    """Append-only binding from one frozen prediction to one resolution assertion."""
+
+    link_id: str
+    market_id: str
+    prediction_id: str
+    prediction_sha256: str
+    decision_id: str
+    decision_sha256: str
+    probability_estimate_id: str
+    probability_estimate_sha256: str
+    rule_contract_id: str
+    rule_contract_sha256: str
+    resolution_id: str
+    resolution_sha256: str
+    linked_at: datetime
+    scoring_eligibility: ScoringEligibility
+    exclusion_reason: str | None = None
+    predicted_probability: Decimal = Field(ge=0, le=1)
+    market_baseline_probability: Decimal | None = Field(default=None, ge=0, le=1)
+    market_type: str
+    rule_clarity: Decimal = Field(ge=0, le=1)
+    entry_basis: SimulationEntryBasis | None = None
+
+    @field_validator(
+        "prediction_sha256",
+        "decision_sha256",
+        "probability_estimate_sha256",
+        "rule_contract_sha256",
+        "resolution_sha256",
+    )
+    @classmethod
+    def link_hashes_are_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("linked_at")
+    @classmethod
+    def linked_at_is_utc(cls, value: datetime) -> datetime:
+        return ensure_utc(value)
+
+    @field_validator(
+        "market_id",
+        "prediction_id",
+        "decision_id",
+        "probability_estimate_id",
+        "rule_contract_id",
+        "resolution_id",
+        "market_type",
+    )
+    @classmethod
+    def link_text_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("prediction-resolution link fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def link_semantics_are_consistent(self) -> "PredictionResolutionLink":
+        if self.link_id != self.record_id:
+            raise ValueError("link_id must equal record_id")
+        if self.scoring_eligibility == ScoringEligibility.ELIGIBLE:
+            if self.exclusion_reason is not None:
+                raise ValueError("eligible links cannot carry an exclusion reason")
+        elif self.exclusion_reason is None or not self.exclusion_reason.strip():
+            raise ValueError("excluded links require an explicit reason")
+        return self
+
+
+class PredictionScore(CommonEnvelope):
+    """Versioned derived score; source prediction and resolution remain untouched."""
+
+    score_id: str
+    link_id: str
+    link_sha256: str
+    prediction_id: str
+    resolution_id: str
+    outcome: Literal["YES", "NO"]
+    outcome_label: Literal[0, 1]
+    predicted_probability: Decimal = Field(ge=0, le=1)
+    market_baseline_probability: Decimal | None = Field(default=None, ge=0, le=1)
+    brier_score: Decimal = Field(ge=0)
+    log_loss: Decimal = Field(ge=0)
+    market_baseline_brier_score: Decimal | None = Field(default=None, ge=0)
+    market_baseline_log_loss: Decimal | None = Field(default=None, ge=0)
+    simulated_pnl: Decimal | None = None
+    market_type: str
+    rule_clarity: Decimal = Field(ge=0, le=1)
+    entry_vwap: Decimal | None = Field(default=None, ge=0, le=1)
+    scoring_policy_version: str
+    log_loss_epsilon: Decimal = Field(gt=0, lt=1)
+    scoring_policy_sha256: str
+
+    @field_validator("link_sha256", "scoring_policy_sha256")
+    @classmethod
+    def score_hashes_are_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @field_validator("link_id", "prediction_id", "resolution_id", "market_type", "scoring_policy_version")
+    @classmethod
+    def score_text_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("prediction score fields must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def score_semantics_are_consistent(self) -> "PredictionScore":
+        if self.score_id != self.record_id:
+            raise ValueError("score_id must equal record_id")
+        if (self.outcome == "YES") != (self.outcome_label == 1):
+            raise ValueError("outcome label must encode YES=1 and NO=0")
+        baseline = (
+            self.market_baseline_probability,
+            self.market_baseline_brier_score,
+            self.market_baseline_log_loss,
+        )
+        if any(value is None for value in baseline) and any(
+            value is not None for value in baseline
+        ):
+            raise ValueError("market baseline probability and scores must be set together")
+        if (self.entry_vwap is None) != (self.simulated_pnl is None):
+            raise ValueError("entry_vwap and simulated_pnl must be set together")
+        return self
+
+
+class CalibrationDimension(StrEnum):
+    MARKET_TYPE = "MARKET_TYPE"
+    RULE_CLARITY = "RULE_CLARITY"
+    ENTRY_PRICE = "ENTRY_PRICE"
+
+
+class ScoreReference(AlphaContract):
+    score_id: str
+    score_sha256: str
+
+    @field_validator("score_sha256")
+    @classmethod
+    def score_reference_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+
+class CalibrationSlice(AlphaContract):
+    slice_key: str
+    count: int = Field(gt=0)
+    mean_predicted_probability: Decimal = Field(ge=0, le=1)
+    observed_yes_rate: Decimal = Field(ge=0, le=1)
+    mean_brier_score: Decimal = Field(ge=0)
+    mean_log_loss: Decimal = Field(ge=0)
+    mean_market_baseline_brier_score: Decimal | None = Field(default=None, ge=0)
+    mean_market_baseline_log_loss: Decimal | None = Field(default=None, ge=0)
+    mean_simulated_pnl: Decimal | None = None
+
+
+class CalibrationReport(CommonEnvelope):
+    report_id: str
+    dimension: CalibrationDimension
+    score_references: tuple[ScoreReference, ...]
+    slices: tuple[CalibrationSlice, ...]
+    excluded_score_ids: tuple[str, ...] = ()
+    calibration_policy_version: str
+    rule_clarity_boundaries: tuple[Decimal, ...]
+    entry_price_boundaries: tuple[Decimal, ...]
+    calibration_policy_sha256: str
+
+    @field_validator("calibration_policy_sha256")
+    @classmethod
+    def calibration_hash_is_valid(cls, value: str) -> str:
+        return validate_sha256(value)
+
+    @model_validator(mode="after")
+    def calibration_report_is_consistent(self) -> "CalibrationReport":
+        if self.report_id != self.record_id:
+            raise ValueError("report_id must equal record_id")
+        score_ids = tuple(item.score_id for item in self.score_references)
+        if not score_ids or len(score_ids) != len(set(score_ids)):
+            raise ValueError("calibration report requires unique score references")
+        if tuple(sorted(score_ids)) != score_ids:
+            raise ValueError("score references must be sorted by score_id")
+        slice_keys = tuple(item.slice_key for item in self.slices)
+        if not slice_keys or len(slice_keys) != len(set(slice_keys)):
+            raise ValueError("calibration report requires unique non-empty slices")
+        if tuple(sorted(slice_keys)) != slice_keys:
+            raise ValueError("calibration slices must be sorted by slice_key")
+        if tuple(sorted(set(self.excluded_score_ids))) != self.excluded_score_ids:
+            raise ValueError("excluded score ids must be unique and sorted")
+        if not set(self.excluded_score_ids).issubset(score_ids):
+            raise ValueError("excluded score ids must remain hash-bound score references")
+        for name, boundaries in (
+            ("rule_clarity_boundaries", self.rule_clarity_boundaries),
+            ("entry_price_boundaries", self.entry_price_boundaries),
+        ):
+            if (
+                len(boundaries) < 2
+                or boundaries[0] != Decimal("0")
+                or boundaries[-1] != Decimal("1")
+                or tuple(sorted(set(boundaries))) != boundaries
+            ):
+                raise ValueError(f"{name} must be unique, sorted, and span 0 through 1")
+        return self
+
+
 CONTRACT_MODELS = (
     MarketIdentity,
     MarketAlias,
@@ -1387,6 +1696,13 @@ CONTRACT_MODELS = (
     PredictionRecord,
 )
 
+P1_CONTRACT_MODELS = (
+    MarketResolution,
+    PredictionResolutionLink,
+    PredictionScore,
+    CalibrationReport,
+)
+
 
 def contract_schema_bundle() -> dict[str, Any]:
     return {model.__name__: model.model_json_schema() for model in CONTRACT_MODELS}
@@ -1395,6 +1711,21 @@ def contract_schema_bundle() -> dict[str, Any]:
 def contract_schema_fingerprint() -> str:
     encoded = json.dumps(
         contract_schema_bundle(),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def p1_contract_schema_bundle() -> dict[str, Any]:
+    return {model.__name__: model.model_json_schema() for model in P1_CONTRACT_MODELS}
+
+
+def p1_contract_schema_fingerprint() -> str:
+    encoded = json.dumps(
+        p1_contract_schema_bundle(),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),

@@ -14,6 +14,8 @@ REPEATED_SCAN_REFRESH=COMPLETE
 NEXT_GATE=READ_ONLY_OPERATIONAL_PILOT_GATE
 NEXT_GATE_STATUS=PREPARED_NOT_AUTHORIZED
 NEXT_GATE_OFFLINE_PREFLIGHT=IMPLEMENTED_AND_TESTED
+P1_RESOLUTION_LEARNING_OFFLINE_FOUNDATION=COMPLETE
+P1_LIVE_RESOLUTION_BACKFILL=NOT_IMPLEMENTED
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 ```
@@ -39,6 +41,7 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P0-11 security | COMPLETE | Static, transport, dynamic canary and macOS process/network capability proofs pass for offline scope. |
 | P0-12 offline E2E | COMPLETE | A01-A18, 371 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
 | Unified offline integration closure | COMPLETE | Four released pre-book providers, staged immutable handoff, formal book gating, Rule A/B, no-order ledger, partial failure and second-scan refresh pass; 430 Alpha tests are sealed under `P0_UNIFIED_OFFLINE_PIPELINE-evidence-seal`. |
+| P1 resolution/learning offline foundation | COMPLETE | Append-only resolution/link/score/calibration contracts, migration `alpha_p1_0001_resolution_learning`, deterministic replay and forged-aggregate rejection are sealed under `P1_RESOLUTION_LEARNING-evidence-seal`. Live resolution ingestion/backfill remains unimplemented. |
 
 P0 now has a complete deterministic offline path from multi-route Recall →
 Candidate → Rule A → immutable Blind handoff/import → formal paired book →
@@ -48,6 +51,12 @@ single-route fixture remains preserved; the unified closure is separately
 sealed so component completion is not confused with orchestration completion.
 This is not evidence that daily network operation, production capture
 expansion, or live execution is ready.
+
+The first post-P0 learning foundation is also complete offline. It can close a
+sealed prediction only when a caller supplies a replayable resolution artifact,
+then produce versioned simulated PnL, Brier/Log Loss and calibration slices
+without updating the P0 PredictionRecord. It does not fetch official outcomes,
+schedule backfills, or treat Gamma lifecycle state as settlement truth.
 
 The next-gate offline preflight is also implemented at source commit
 `ef82da8844562c63eacc5d16a73b17fe5b98abbb`: four synthetic Gamma-shaped binary fixtures, exact canonical
