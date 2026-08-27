@@ -1,16 +1,13 @@
 # Polymarket Alpha — Current Engineering Baseline and Next Phase
 
-Status date: 2026-08-27
+Status date: 2026-08-28
 
 ```text
-COORDINATOR_DISPOSITION=ACCEPTED_OFFLINE_ENGINEERING_BASELINE
-CODE_BASELINE_COMMIT=673767a14d084435bbcdb804ca409b4c822f0d84
+COORDINATOR_DISPOSITION=ACCEPT_WITH_REQUIRED_CHANGES
 P0_OFFLINE_PIPELINE=COMPLETE
 OFFLINE_OPERATIONAL_BRIDGE=ACCEPTED_AFTER_CODEX_REVIEW_AND_GLM_SELF_REVIEW
 P1_OFFLINE_RESOLUTION_LEARNING=COMPLETE
 P1_RESEARCH_BRIEF_AND_DRAFT_COMPILATION=COMPLETE
-NEXT_ENGINEERING_PHASE=P1_CONTROLLED_RESEARCH_AUTOMATION_OFFLINE
-NEXT_ENGINEERING_PHASE_STATUS=COMPLETE
 P1-A01=COMPLETE
 P1-A02=COMPLETE
 P1-A03=COMPLETE
@@ -18,9 +15,12 @@ P1-A04=COMPLETE
 P1-A05=COMPLETE
 P1-A06=COMPLETE
 P1-A07=COMPLETE
-P1_CONTROLLED_AUTOMATION_CODE_COMMIT=b11ba6953508ad4eeeb6b2a500b851b1c65a4924
-P1_DISPOSITION=READY_FOR_CONTROLLED_EXTERNAL_RESEARCH_PILOT
-P1_READINESS_SCOPE=OFFLINE_AUTOMATION_BASELINE_ONLY
+GLM_SEMANTIC_TRIAGE=IMPLEMENTED_AS_ADDITIVE_SEAM
+CONTROLLED_50_MARKET_E2E=COMPLETE_WITH_LIMITATIONS
+NEXT_ENGINEERING_PHASE=GATE_R_CONTROLLED_MANUAL_GPT_PRO_BLIND_PILOT
+NEXT_ENGINEERING_PHASE_STATUS=BLOCKED_PENDING_WP1_TO_WP5
+TARGET_READINESS=READY_FOR_CONTROLLED_MANUAL_GPT_PRO_BLIND_RESEARCH_PILOT
+TARGET_READINESS_SCOPE=CONTROLLED_MANUAL_NO_ORDER_ONLY
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 EXTERNAL_RESEARCH_NETWORK_PILOT=NOT_APPROVED
 DAILY_READ_ONLY_SHADOW=NOT_APPROVED
@@ -28,10 +28,30 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 LIVE_ORDER_SIGNING_PRIVATE_KEY=STRICTLY_OUT_OF_SCOPE
 ```
 
-The P1 disposition means the immutable work-order/result-return contracts are
-ready for a separately authorized controlled-provider integration. It does not
-authorize network access, a real provider, a daily scheduler, production DB
-migration, capture expansion, or execution.
+The offline substrate is accepted and retained. The next phase is not yet
+authorized to call GPT Pro: WP1 through WP5 must first close the nine accepted
+orchestration blockers. WP6 then requires a separate explicit controlled-pilot
+authorization. A Gate R pass still does not authorize daily operation,
+production capture expansion, automated browser execution, or trading.
+
+## 0. Current canonical design
+
+The current program truth is:
+
+- GPT_PRO_PIPELINE_REVIEW_RESULT_V3.md
+- RESEARCH_ORCHESTRATION_V3.md
+- GATE_R_SHARED_CONTRACTS_V1.md
+- DETERMINISTIC_TRIAGE_ROUTING_POLICY_V1.md
+- GLM_5_3_INDEPENDENT_REVIEW_AND_RULE_PARSE_CONTRACT_V1.md
+- BLIND_RESEARCH_PLAN_CONTRACT_V1.md
+- GPT_PRO_MANUAL_HANDOFF_PROTOCOL_V1.md
+- MARKET_AWARE_REVIEW_POLICY_V1.md
+- GATE_R_CONTROLLED_MANUAL_PILOT_PLAN_V1.md
+
+The reviewed GPT_PRO_PIPELINE_REVIEW_V3 package and all evidence-seal READMEs
+remain immutable historical inputs. Sections 4 and 5 below describe the
+completed P1-A01 through P1-A07 offline wave and are retained as historical
+implementation lineage; they are no longer the current next-phase plan.
 
 ## 1. Coordinator integration decision
 
@@ -130,9 +150,9 @@ configuration, or order path was replaced or activated.
    only source-specific, hash-bound artifacts under an explicit RuleContract
    source/precedence policy.
 
-## 4. Next phase objective
+## 4. Historical completed phase objective
 
-The next phase is `P1_CONTROLLED_RESEARCH_AUTOMATION_OFFLINE`.
+The completed historical phase was `P1_CONTROLLED_RESEARCH_AUTOMATION_OFFLINE`.
 
 Its objective is to replace the manual copy/paste seam with a replayable work
 order and result-return protocol while retaining the current no-network Alpha
@@ -159,7 +179,7 @@ their upstream public contracts are released. P1-A04 owns orchestration state;
 P1-A05 owns scheduling policy and may not duplicate job state. P1-A07 is
 coordinator-owned and integrates every workstream.
 
-## 5. Bounded work packages
+## 5. Historical P1-A01 through P1-A07 work packages
 
 ### P1-A01 — Public immutable artifact API
 
@@ -277,25 +297,24 @@ Scope:
 - publish one consolidated evidence seal with commands, hashes, test results,
   limitations, rollback rehearsal, and task usage telemetry.
 
-Required disposition:
+Historical P1-A07 result: the provider-neutral offline automation baseline
+completed. That result did not authorize an external research call and has
+been superseded as a readiness statement by the Gate R V3 contracts.
 
-```text
-READY_FOR_CONTROLLED_EXTERNAL_RESEARCH_PILOT
-or
-REWORK_P1_CONTROLLED_AUTOMATION_OFFLINE
-```
-
-## 6. Gates after the next offline phase
+## 6. Gates after the current offline baseline
 
 The following gates are separate and require explicit authorization. Passing
 one does not imply that another passed.
 
-### Gate R — Controlled external research pilot
+### Gate R — Controlled manual GPT Pro Blind research pilot
 
-Uses a real authorized model/browser executor for a small frozen fixture set.
-It must prove provider/source allowlists, Blind venue exclusion, source snapshot
-capture, token/cost/time budgets, retry/kill behavior, and immutable return
-receipts. It does not fetch live markets or schedule daily scans.
+WP1 through WP5 implement the canonical V3 contracts before any pilot call.
+After separate authorization, WP6 uses eight preregistered Candidates,
+independent GLM-5.3 review, human exact-file prompt export, raw GPT Pro return
+and actual source capture, deterministic import, fresh paired books,
+Blind-vs-Book comparison and NO_ORDER ledger. The Integration Gatekeeper owns
+the single evidence seal. A pass means controlled manual research only; it
+does not authorize automated provider/browser execution or daily scans.
 
 ### Gate O — Read-only operational market-data pilot
 
