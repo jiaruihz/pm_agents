@@ -90,8 +90,10 @@ HANDOFF_PATH: tasks/WEATHER/handoffs/WEATHER-REPO-HYGIENE-01.md
 - The 34 pre-existing modified paths remain modified.  Of 168 pre-existing
   untracked paths, 164 remain untracked and four GLM semantic-triage paths were
   independently committed as `7bf760ce` while this task was running; all four
-  still exist and are ancestors of this task commit.  No pre-existing user
-  path was removed.
+  still exist and are ancestors of this task commit.  Seventeen additional
+  untracked research/review paths appeared concurrently, so the final observed
+  status was 34 modified plus 181 untracked.  No pre-existing user path was
+  removed.
 - Preserved by design: `.git`, active `.venv`, active frontend dependencies,
   `reviews`, `tmp`, proposal-reward/dispute/analysis evidence, N100 historical
   backup, nested external-research repos, harness runs, canonical DB and every

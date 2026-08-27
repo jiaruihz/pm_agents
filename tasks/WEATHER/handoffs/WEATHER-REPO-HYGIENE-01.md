@@ -35,7 +35,9 @@ CLEANUP_SET: /Users/deepsleep/.Trash/pm-agents-repo-hygiene-20260828.uOlVkv
 5. **User and research state was preserved.**
    All 34 pre-existing modified paths remain.  Four of the 168 pre-existing
    untracked GLM triage paths became tracked in concurrent commit `7bf760ce`;
-   the other 164 remain untracked.  All 202 original paths still exist.
+   the other 164 remain untracked.  Seventeen new concurrent research/review
+   paths brought the final observed count to 181 untracked.  All 202 original
+   paths still exist.
    Large evidence/runtime categories intentionally retained include
    `proposal_reward` (`119,532 KiB`), `dispute_repricing` (`85,384 KiB`),
    `analysis_snapshots` (`50,888 KiB`), `_backups_n100` (`14,040 KiB`),
