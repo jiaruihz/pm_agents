@@ -1,0 +1,23 @@
+{
+  "run_id": "p1-resolution-backfill-planner-2026-08-27",
+  "base_commit": "3aa821850d9c1b954f57f591e91be9c95793fae1",
+  "branch": "codex/market-ladder-kink-v1",
+  "scope": "OFFLINE_CORRECTION_SELECTION_AND_BACKFILL_PLANNING_ONLY",
+  "disposition": "COMPLETE_OFFLINE_PLANNER",
+  "tests": {
+    "p1_learning_and_backfill_focused": {"passed": 20, "failed": 0},
+    "full_alpha": {"passed": 559, "failed": 0},
+    "backfill_security_violations": 0
+  },
+  "independent_review": {
+    "status": "FINDING_FIXED",
+    "p1": 1,
+    "open": 0,
+    "telemetry": "unavailable"
+  },
+  "authoritative_resolution_source_implemented": false,
+  "scheduler_implemented": false,
+  "current_db_migrated": false,
+  "network_used": false,
+  "live_execution_reachable": false
+}

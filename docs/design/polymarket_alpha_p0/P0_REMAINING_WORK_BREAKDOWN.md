@@ -15,6 +15,7 @@ NEXT_GATE=READ_ONLY_OPERATIONAL_PILOT_GATE
 NEXT_GATE_STATUS=PREPARED_NOT_AUTHORIZED
 NEXT_GATE_OFFLINE_PREFLIGHT=IMPLEMENTED_AND_TESTED
 P1_RESOLUTION_LEARNING_OFFLINE_FOUNDATION=COMPLETE
+P1_CORRECTION_BACKFILL_OFFLINE_PLANNER=COMPLETE
 P1_LIVE_RESOLUTION_BACKFILL=NOT_IMPLEMENTED
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
@@ -42,6 +43,8 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P0-12 offline E2E | COMPLETE | A01-A18, 371 Alpha tests, 12 legacy tests and 18 harness tests are sealed under `P0_12-evidence-seal`. |
 | Unified offline integration closure | COMPLETE | Four released pre-book providers, staged immutable handoff, formal book gating, Rule A/B, no-order ledger, partial failure and second-scan refresh pass; 430 Alpha tests are sealed under `P0_UNIFIED_OFFLINE_PIPELINE-evidence-seal`. |
 | P1 resolution/learning offline foundation | COMPLETE | Append-only resolution/link/score/calibration contracts, migration `alpha_p1_0001_resolution_learning`, deterministic replay and forged-aggregate rejection are sealed under `P1_RESOLUTION_LEARNING-evidence-seal`. Live resolution ingestion/backfill remains unimplemented. |
+| Offline operational bridge | COMPLETE_AFTER_CODEX_REVIEW | Captured Gamma ingest, bounded paired-demand outbox, existing-owner book bridge and resumable single-market coordinator are sealed under `GLM_OPERATIONAL_REMAINDER_CODEX_REVIEW-evidence-seal`; this is not authorization to run the network pilot. |
+| P1 correction/backfill planner | COMPLETE | Correction-chain head selection, policy/hash receipt, isolated prediction backfill and atomic persistence grouping are sealed under `P1_BACKFILL_PLANNER-evidence-seal`. No authoritative source adapter or scheduler exists. |
 
 P0 now has a complete deterministic offline path from multi-route Recall →
 Candidate → Rule A → immutable Blind handoff/import → formal paired book →
@@ -52,11 +55,12 @@ sealed so component completion is not confused with orchestration completion.
 This is not evidence that daily network operation, production capture
 expansion, or live execution is ready.
 
-The first post-P0 learning foundation is also complete offline. It can close a
-sealed prediction only when a caller supplies a replayable resolution artifact,
-then produce versioned simulated PnL, Brier/Log Loss and calibration slices
-without updating the P0 PredictionRecord. It does not fetch official outcomes,
-schedule backfills, or treat Gamma lifecycle state as settlement truth.
+The first post-P0 learning foundation and its pure backfill planner are complete
+offline. They can validate an append-only correction chain and close sealed
+predictions only when a caller supplies replayable resolution artifacts, then
+produce versioned simulated PnL, Brier/Log Loss and calibration slices without
+updating the P0 PredictionRecord. They do not fetch official outcomes, schedule
+jobs, or treat Gamma lifecycle state as settlement truth.
 
 The next-gate offline preflight is also implemented at source commit
 `ef82da8844562c63eacc5d16a73b17fe5b98abbb`: four synthetic Gamma-shaped binary fixtures, exact canonical
