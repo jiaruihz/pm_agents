@@ -317,6 +317,10 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert 'ln -sfn "$CANONICAL_FILL_CACHE" "$REFRESH_FILL_CACHE"' in starter
     assert 'export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q' in starter
     assert 'SESSION="weather_canonical_refresh"' in starter
+    assert "WEATHER_JRS_ONESHOT_LOG_MAX_BYTES" in starter
+    assert "WEATHER_JRS_ONESHOT_LOG_RETAIN_BYTES" in starter
+    assert "67108864" in starter
+    assert "8388608" in starter
     assert "run_weather_canonical_refresh_launchd.sh" in starter
     assert "weather_jrs_tmux_start_socket" not in starter
     assert "weather_jrs_tmux_mkdir" not in starter
@@ -429,6 +433,200 @@ esac
     )
     assert failure.returncode == 1
     assert "JRS tmux one-shot failed" in failure.stderr
+
+
+def test_shared_helper_compacts_opted_in_oneshot_log_before_append(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_tmux.write_text(
+        """#!/bin/sh
+case "$4" in
+  has-session)
+    exit 1
+    ;;
+  new-session)
+    /bin/sh -c "$8"
+    exit 0
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    helper = OPS / "weather_jrs_tmux_env.sh"
+    runtime_root = tmp_path / "runtime"
+    job_dir = tmp_path / "job"
+    job_dir.mkdir(parents=True)
+    (job_dir / "tmux.log").write_text("0123456789abcdef", encoding="utf-8")
+    env = {
+        **os.environ,
+        "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+        "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+        "WEATHER_JRS_ONESHOT_LOG_MAX_BYTES": "10",
+        "WEATHER_JRS_ONESHOT_LOG_RETAIN_BYTES": "4",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            (
+                'source "$1"; '
+                'weather_jrs_tmux_run_oneshot "$2" compact_job "$3" '
+                '"printf fresh"'
+            ),
+            "_",
+            str(helper),
+            str(runtime_root),
+            str(job_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (job_dir / "tmux.log").read_text(encoding="utf-8") == "cdeffresh"
+
+
+def test_shared_helper_rejects_invalid_oneshot_log_bounds(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_tmux.write_text(
+        """#!/bin/sh
+case "$4" in
+  has-session)
+    exit 1
+    ;;
+  new-session)
+    /bin/sh -c "$8"
+    exit 0
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    env = {
+        **os.environ,
+        "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+        "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+        "WEATHER_JRS_ONESHOT_LOG_MAX_BYTES": "10",
+        "WEATHER_JRS_ONESHOT_LOG_RETAIN_BYTES": "10",
+    }
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; weather_jrs_tmux_run_oneshot "$2" invalid_job "$3" true',
+            "_",
+            str(OPS / "weather_jrs_tmux_env.sh"),
+            str(tmp_path / "runtime"),
+            str(tmp_path / "job"),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    assert "invalid JRS one-shot log retain bytes" in result.stderr
+
+
+def test_shared_helper_does_not_compact_when_session_already_exists(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_tmux.write_text(
+        """#!/bin/sh
+case "$4" in
+  has-session)
+    [ "$6" = "=running_job" ] && exit 0
+    exit 1
+    ;;
+  new-session)
+    [ "$7" = "running_job" ] && exit 1
+    /bin/sh -c "$8"
+    exit 0
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    job_dir = tmp_path / "job"
+    job_dir.mkdir(parents=True)
+    log_file = job_dir / "tmux.log"
+    log_file.write_text("0123456789abcdef", encoding="utf-8")
+    env = {
+        **os.environ,
+        "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+        "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+        "WEATHER_JRS_ONESHOT_LOG_MAX_BYTES": "10",
+        "WEATHER_JRS_ONESHOT_LOG_RETAIN_BYTES": "4",
+    }
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; weather_jrs_tmux_run_oneshot "$2" running_job "$3" true',
+            "_",
+            str(OPS / "weather_jrs_tmux_env.sh"),
+            str(tmp_path / "runtime"),
+            str(job_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "already running; skipping" in result.stdout
+    assert log_file.read_text(encoding="utf-8") == "0123456789abcdef"
+
+
+def test_shared_helper_leaves_existing_log_unbounded_without_opt_in(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_tmux.write_text(
+        """#!/bin/sh
+case "$4" in
+  has-session)
+    exit 1
+    ;;
+  new-session)
+    /bin/sh -c "$8"
+    exit 0
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    job_dir = tmp_path / "job"
+    job_dir.mkdir(parents=True)
+    log_file = job_dir / "tmux.log"
+    log_file.write_text("existing", encoding="utf-8")
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            (
+                'source "$1"; '
+                'weather_jrs_tmux_run_oneshot "$2" unbounded_job "$3" '
+                '"printf fresh"'
+            ),
+            "_",
+            str(OPS / "weather_jrs_tmux_env.sh"),
+            str(tmp_path / "runtime"),
+            str(job_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+            "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert log_file.read_text(encoding="utf-8") == "existingfresh"
 
 
 def test_shared_helper_captures_errexit_job_status_and_log(tmp_path):

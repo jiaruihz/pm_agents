@@ -192,6 +192,27 @@ weather_jrs_tmux_mkdir() {
   weather_jrs_tmux_exec_checked "$socket" "mkdir" "$command"
 }
 
+weather_jrs_tmux_oneshot_log_prep_command() {
+  local log_file="$1"
+  local max_bytes="$2"
+  local retain_bytes="$3"
+  local command
+
+  if [[ ! "$max_bytes" =~ ^[1-9][0-9]*$ ]]; then
+    echo "invalid JRS one-shot log max bytes: $max_bytes" >&2
+    return 1
+  fi
+  if [[ ! "$retain_bytes" =~ ^[1-9][0-9]*$ || "$retain_bytes" -ge "$max_bytes" ]]; then
+    echo "invalid JRS one-shot log retain bytes: $retain_bytes (max: $max_bytes)" >&2
+    return 1
+  fi
+
+  printf -v command \
+    'set -eu; log=%q; if [ -f "$log" ]; then size="$(wc -c < "$log")"; if [ "$size" -gt %q ]; then tmp="${log}.compact.$$"; trap '\''rm -f "$tmp"'\'' EXIT INT TERM; tail -c %q "$log" > "$tmp"; mv "$tmp" "$log"; trap - EXIT INT TERM; fi; fi' \
+    "$log_file" "$max_bytes" "$retain_bytes"
+  printf '%s\n' "$command"
+}
+
 weather_jrs_tmux_run_oneshot() (
   local runtime_root="$1"
   local session="$2"
@@ -203,6 +224,7 @@ weather_jrs_tmux_run_oneshot() (
   local status_bridge
   local session_command
   local status_bridge_command
+  local log_prep_command=":"
   local rc
 
   if [[ -z "$session" || ! "$session" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -212,9 +234,11 @@ weather_jrs_tmux_run_oneshot() (
 
   socket="$(weather_jrs_tmux_start_socket "$runtime_root")" || return 1
   weather_jrs_tmux_mkdir "$socket" "$job_dir" || return 1
-  if weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; then
-    echo "JRS tmux one-shot already running; skipping: session=$session"
-    return 0
+  if [[ -n "${WEATHER_JRS_ONESHOT_LOG_MAX_BYTES:-}" ]]; then
+    log_prep_command="$(weather_jrs_tmux_oneshot_log_prep_command \
+      "$log_file" \
+      "$WEATHER_JRS_ONESHOT_LOG_MAX_BYTES" \
+      "${WEATHER_JRS_ONESHOT_LOG_RETAIN_BYTES:-8388608}")" || return 1
   fi
 
   status_bridge="$(
@@ -223,10 +247,17 @@ weather_jrs_tmux_run_oneshot() (
   trap 'rm -f "$status_bridge"' EXIT INT TERM
 
   printf -v session_command \
-    'set +e; mkdir -p %q; rm -f %q; ( %s ) >> %q 2>&1; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
-    "$job_dir" "$status_file" "$job_command" "$log_file" "$status_file"
-  WEATHER_JRS_TMUX_MUTATION_AUTHORITY=bounded-oneshot \
-    weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"
+    'set +e; mkdir -p %q; rm -f %q; ( %s ); prep_rc=$?; if [ "$prep_rc" -eq 0 ]; then ( %s ) >> %q 2>&1; rc=$?; else rc=$prep_rc; fi; printf "%%s\n" "$rc" > %q; exit "$rc"' \
+    "$job_dir" "$status_file" "$log_prep_command" "$job_command" "$log_file" "$status_file"
+  if ! WEATHER_JRS_TMUX_MUTATION_AUTHORITY=bounded-oneshot \
+    weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"; then
+    if weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; then
+      echo "JRS tmux one-shot already running; skipping: session=$session"
+      return 0
+    fi
+    echo "failed to start JRS tmux one-shot: session=$session" >&2
+    return 1
+  fi
   echo "started JRS tmux one-shot: socket=$socket session=$session log=$log_file"
 
   while weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; do
