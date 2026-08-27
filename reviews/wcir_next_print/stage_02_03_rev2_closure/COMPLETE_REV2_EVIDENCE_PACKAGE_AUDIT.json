@@ -1,0 +1,97 @@
+{
+  "all_required_files_verified_against_legacy_manifests": true,
+  "generated_at_utc": "2026-08-27T17:23:40.398737+00:00",
+  "legacy_manifests": [
+    {
+      "entry_count": 20,
+      "entry_set_verified": true,
+      "manifest_sha256": "babf7b47bccc5937701a6f487c56c6bdb1479b91bdfcd45a8c01fb278cab06a8",
+      "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2"
+    },
+    {
+      "entry_count": 15,
+      "entry_set_verified": true,
+      "manifest_sha256": "23b4af7f347898a30932788d23878ef7d934caf9f5ba2fa50c68fcd5e3a76a01",
+      "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2"
+    }
+  ],
+  "legacy_stage_2_3_artifacts_modified": false,
+  "reconciliation_row_file": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/evidence/PRIMARY_REACTION_GATE_ROW_RECONCILIATION.jsonl.gz",
+    "sha256": "774c5c55ea7647bfbe33fcc1ecf1e6e8f7e926eb701462a04e23296cb50c86af",
+    "size_bytes": 78822
+  },
+  "required_full_evidence": [
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/RAW_LINEAGE_RANDOM_SAMPLE.json",
+      "sha256": "3141f72ce739a2c8e6073f5e58ca1118d45f1e475c87d6297bf105e4d9110614",
+      "size_bytes": 47673
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/REST_WS_COMPARABLE_PARITY.json",
+      "sha256": "4ce1ae0d77ab150d9fc86e21dde7de81aa70a4ec33edee6b047651da10992f5a",
+      "size_bytes": 69494
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/EVENT_BOOK_COVERAGE_MATRIX.jsonl.gz",
+      "sha256": "a4a6b3dab524be8614771f3a3127c066388a84403121f711af550d128abe81f6",
+      "size_bytes": 3960086
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/FROZEN_EVENT_MARKET_UNIVERSE.jsonl.gz",
+      "sha256": "531dbcca04e210f3ed70f4ff74fd28dbcaa39de7e2580073a22aeaeec8a36ffc",
+      "size_bytes": 204885
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/FROZEN_MARKET_TOKEN_IDENTITIES.jsonl.gz",
+      "sha256": "817bf720fb4aeafeede916aaf4ace9eb80a5198aa8874f4c81b653713baaf9ac",
+      "size_bytes": 257522
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/FROZEN_PIPELINE_LATENCY_ROWS.jsonl.gz",
+      "sha256": "b4920db706345f3a4349dd43fc3982a79c15e49dee0a3aad60fe229381b8ca9a",
+      "size_bytes": 86433
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/REPLAY_CHUNKED_RESULT.json",
+      "sha256": "a3f862a702b93b5004054c358b493f4b135ad937623ff1e069eb557b67aa85cf",
+      "size_bytes": 1303
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/REPLAY_REVERSE_RESULT.json",
+      "sha256": "e9c0dc4313184bdb671837de0be4d0b8f62d5c7b166406ae02acc0b4bac8a864",
+      "size_bytes": 1303
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/INDEPENDENT_PNL_RECALCULATION.json",
+      "sha256": "b001efef3f998d710a66528f5d36f9b79513789761349f859a9eff19e32f8be4",
+      "size_bytes": 51588
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/EX_POST_ENVELOPE_ROWS.jsonl.gz",
+      "sha256": "9390cada704901355db0c43b5e26a1305185c1d09e07e8ec85ad2b5cfc621c39",
+      "size_bytes": 39308
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/FROZEN_FORECAST_BASELINE_ROWS.jsonl.gz",
+      "sha256": "b96c4f05b1e459be342e29660d4cbc99825c90169a64561daa56c7203e484e94",
+      "size_bytes": 62525
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/MATCHED_BASELINE_ROWS.jsonl.gz",
+      "sha256": "81ca0d88d46d027a8848f1e7f50b64aac52397a274d397c11ae31214b15b5703",
+      "size_bytes": 70758
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/PRIMARY_ORACLE_ROWS.jsonl.gz",
+      "sha256": "e3c8db8d4e5ac75eff298dff3ebb9f3b6cc3ee14112e274d019640f6065b08c4",
+      "size_bytes": 117285
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/REACTION_WINDOW_ROWS.jsonl.gz",
+      "sha256": "69ffb11322f9715b12235fdb52fc8fa6aaff273d85a85bf081eec3534e86cb78",
+      "size_bytes": 42491
+    }
+  ],
+  "status": "PASS"
+}

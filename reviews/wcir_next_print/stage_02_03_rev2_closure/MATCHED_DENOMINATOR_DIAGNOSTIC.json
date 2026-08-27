@@ -1,0 +1,25 @@
+{
+  "all_baseline_exact_intersection": {
+    "effective_n": 1,
+    "official_print_n": 1,
+    "raw_n": 1,
+    "target_date_n": 1
+  },
+  "alpha_or_futility_claim_authorized": false,
+  "full_event_denominator": {
+    "effective_n": 238,
+    "no_trade_and_abstain_retained_with_zero_pnl": true,
+    "official_print_n": 238,
+    "raw_n": 841,
+    "target_date_n": 18
+  },
+  "note": "Reasons are non-exclusive because a row can lack both market data and a feature.",
+  "reason_histogram_nonexclusive": {
+    "chosen token unavailable": 641,
+    "feature unavailable": 0,
+    "market-only OOF blocked": 840,
+    "missing entry book": 0,
+    "missing exit book": 23,
+    "other": 0
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "collector_mode": "isolated_network_free_synthetic_shadow",
+  "fills": 0,
+  "live_behavior_changed": false,
+  "notional_usd": 0,
+  "orders": 0,
+  "production_collector_deployed": false,
+  "production_config_modified": false,
+  "production_order_path_modified": false,
+  "production_manifest_strict_postcheck": "healthy",
+  "production_identity_freeze": [
+    {"path": "src/strategies/runtime/production.yaml", "size_bytes": 31336, "sha256": "d75f6bc11305812fb740f33153076994ad89e5c2db7a32ebd2d9a47178510ed8"},
+    {"path": "scripts/ops/_weather_market_books_ws_body.sh", "size_bytes": 3763, "sha256": "3932d6da4ec41832a1b2de62ec93b16c5772401bc538659addce2a55f2219d29"},
+    {"path": "weather_data_feed/ws_incremental_book.py", "size_bytes": 392, "sha256": "b4e70bef8f0d262493efae7d6916b6ef42024982c6c52e68cee02eca3703f9de"},
+    {"path": "src/platform/market_data/ws_incremental_book.py", "size_bytes": 45028, "sha256": "5d35d8c826b4315002c15d2d5646ee9e0fad3504a666b17d64305b25ccb154c2"}
+  ],
+  "rest_repairs_ws_gaps": false,
+  "shared_token_set_modified": false,
+  "status": "PASS"
+}

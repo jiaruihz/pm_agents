@@ -1,0 +1,179 @@
+{
+  "code_and_test_identities": [
+    {
+      "path": "scripts/analysis/forecast_quality/research_wcir_stage02_stage03_rev2.py",
+      "sha256": "41e5e2e8ae4dfab529dba625562e85cb6a1d531fb3e53ff003e8fd3ea38f8608",
+      "size_bytes": 102390
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/verify_wcir_stage23_rev2_replay.py",
+      "sha256": "bede17eea85ec4191d5a12624e4c7d73872ca8133dc3ad815f1b5e2c740517e1",
+      "size_bytes": 7717
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/package_wcir_stage23_rev2_review.py",
+      "sha256": "871b541584f98ae4ad179a6850f740b660a1e031f20728834e91e5b2f04ac15b",
+      "size_bytes": 5257
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/wcir_stage23_rev2_closure.py",
+      "sha256": "43c7966d6e50198c1371a1f200ccfc2ace077465192d021e1de07fa896bcd9d0",
+      "size_bytes": 38599
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/package_wcir_stage23_rev2_closure.py",
+      "sha256": "100e5faf89903c8389124d618a41245ac6f38496e88994d85d32f08050a39105",
+      "size_bytes": 6652
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/wcir_collector_clock_shadow.py",
+      "sha256": "f414ab8418ebc3c55f5c94226937b1ea0aecb7e8f373af16ea7e76187fd9f00a",
+      "size_bytes": 12561
+    },
+    {
+      "path": "src/platform/market_data/executable_book_truth.py",
+      "sha256": "ebe98849be51f574ffd10156ef5a3d090b5c766aac652c7a501aee6e3132865b",
+      "size_bytes": 10137
+    },
+    {
+      "path": "src/platform/market_data/ws_incremental_book.py",
+      "sha256": "5d35d8c826b4315002c15d2d5646ee9e0fad3504a666b17d64305b25ccb154c2",
+      "size_bytes": 45028
+    },
+    {
+      "path": "tests/research_tests/test_wcir_stage23_rev2.py",
+      "sha256": "9284d376c8af0c3b5f26f50c5a122929ebf50c34bf2889072ee7d3d9c9b9ad38",
+      "size_bytes": 9507
+    },
+    {
+      "path": "tests/research_tests/test_wcir_stage23_rev2_closure.py",
+      "sha256": "dfbcb2d9837aa7925126c79f94a3d35151221ab18f41193a415fd7b5eff37c89",
+      "size_bytes": 7596
+    }
+  ],
+  "environment": {
+    "dependency_freeze": {
+      "path": "DEPENDENCY_FREEZE.txt",
+      "sha256": "af61f8c75e03cab1d5fe114aa8472e4e4eb32bccc15a9d8ee47740bed74420ea",
+      "size_bytes": 1714
+    },
+    "locale": "C/C.UTF-8/C/C/C/C",
+    "machine": "arm64",
+    "os": "macOS-26.5.1-arm64-arm-64bit",
+    "python": "3.12.13",
+    "python_executable": "/Users/deepsleep/projects/pm_agents/.venv/bin/python",
+    "timezone": "Asia/Shanghai (CST +0800)"
+  },
+  "generated_at_utc": "2026-08-27T17:23:40.234533+00:00",
+  "prior_compact_review_input": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155641Z.zip",
+    "required_sha256": "43d8c6e03fea23e91c46125a374558383cab35e3f4a608283f0e16f4a3205e4b",
+    "sha256": "43d8c6e03fea23e91c46125a374558383cab35e3f4a608283f0e16f4a3205e4b",
+    "size_bytes": 401179,
+    "verified": true
+  },
+  "production_boundary": {
+    "production_deployment_performed": false,
+    "production_files_modified_by_this_change": false,
+    "production_manifest_strict_postcheck": "healthy (unsandboxed read-only check, 2026-08-28 CST)"
+  },
+  "repository": {
+    "branch": "codex/market-ladder-kink-v1",
+    "current_head": "4def0c0ce7e02b1e716c023f4ddda42df4bc4112",
+    "git_status_porcelain": [
+      "M AGENTS.md",
+      " M CLAUDE.md",
+      " M docs/WEATHER_DATA_PIPELINE.md",
+      " M docs/WEATHER_DOCS_INDEX.md",
+      " M docs/WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md",
+      " M docs/WEATHER_STRATEGY_REGISTRY.md",
+      " M docs/WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md",
+      " M docs/analysis/2026-08/2026-08-20-core-carry-maker-adverse-selection-review-v1.md",
+      " M docs/analysis/2026-08/2026-08-20-core-carry-research-status-and-consult-prompt-v1.md",
+      " M docs/analysis/2026-08/2026-08-23-core-carry-market-state-execution-quality-p2-v1.md",
+      " M docs/analysis/post_cross_repricing.md",
+      " M docs/analysis/reheat_risk.md",
+      " M frontend/strategy_dashboard/src/app/App.tsx",
+      " M frontend/strategy_dashboard/src/components/PageFrame.tsx",
+      " M frontend/strategy_dashboard/src/data/copy-trade-types.ts",
+      " M frontend/strategy_dashboard/src/data/weather-http.ts",
+      " M frontend/strategy_dashboard/src/pages/weather/CopyTradeWalletDetailPage.tsx",
+      " M frontend/strategy_dashboard/src/styles.css",
+      " M scripts/analysis/tmin/evaluate_tmin_cross_prev_no_shadow_v1.py",
+      " M scripts/analysis/tmin/evaluate_tmin_no_further_cooling_shadow_v1.py",
+      " M scripts/analysis/wallet_weather/compare_external_wallet_performance_v1.py",
+      " M scripts/analysis/wallet_weather/render_weather_wallet_peer_report_v1.py",
+      " M scripts/analysis/wallet_weather/research_weather_wallet_peer_scan_v1.py",
+      " M scripts/analysis/wallet_weather/run_external_wallet_full_ladder_batch_v1.py",
+      " M scripts/ops/backfill_weather_pm_history.py",
+      " M scripts/ops/weather_agent_harness.py",
+      " M skills/weather-strategy-performance/SKILL.md",
+      " M src/weather_agent_harness/orchestration/__init__.py",
+      " M src/weather_agent_harness/orchestration/contracts.py",
+      " M src/weather_agent_harness/orchestration/dispatch.py",
+      " M src/weather_agent_harness/orchestration/execution.py",
+      " M src/weather_agent_harness/orchestration/usage.py",
+      " M tests/research_tests/test_tmin_cross_prev_no_performance_v1.py",
+      " M weather_city_runtime/__init__.py",
+      " M weather_dashboard/api/routers/copy_trade.py",
+      "?? claude_code_env.sh",
+      "?? config/",
+      "?? docs/AGENT_CONTEXT_REFERENCE.md",
+      "?? docs/CLAUDE_CONTEXT_REFERENCE.md",
+      "?? docs/analysis/2026-08/2026-08-20-tmin-cross-metar-basis-replay-v1.md",
+      "?? docs/analysis/2026-08/2026-08-23-core-carry-external-consult-round2-prompt-v1.md",
+      "?? docs/design/polymarket_alpha_p0/glm_handoff/GLM_P0_03_FINAL_REPORT.md",
+      "?? docs/design/polymarket_alpha_p0/glm_handoff/GLM_P0_03_ROUND2_REVIEW_REPORT.md",
+      "?? frontend/strategy_dashboard/src/pages/weather/CapitalEfficiencyPage.tsx",
+      "?? reviews/wcir_next_print/collector_clock_amendment_v1/",
+      "?? reviews/wcir_next_print/stage_00/",
+      "?? reviews/wcir_next_print/stage_00_03_consolidated_review/CONSOLIDATED_EVIDENCE_MANIFEST.json",
+      "?? reviews/wcir_next_print/stage_00_03_consolidated_review/wcir-next-print-stage-00-03-consolidated-review-and-training-consult-20260827T133342Z.zip",
+      "?? reviews/wcir_next_print/stage_00_03_consolidated_review/wcir-next-print-stage-00-03-consolidated-review-and-training-consult-20260827T133342Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_00_03_gpt_pro_brief/wcir-stage-00-03-gpt-pro-review-brief-20260827T133635Z.zip",
+      "?? reviews/wcir_next_print/stage_00_03_gpt_pro_brief/wcir-stage-00-03-gpt-pro-review-brief-20260827T133635Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_00_rev2/",
+      "?? reviews/wcir_next_print/stage_01/",
+      "?? reviews/wcir_next_print/stage_02/EVIDENCE_MANIFEST.json",
+      "?? reviews/wcir_next_print/stage_02/wcir-next-print-stage-02-review-20260827T090456Z.zip",
+      "?? reviews/wcir_next_print/stage_02/wcir-next-print-stage-02-review-20260827T090456Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_closure/",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155400Z.zip",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155400Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155443Z.zip",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155443Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155524Z.zip",
+      "?? reviews/wcir_next_print/stage_02_03_rev2_review/wcir-stage-02-03-rev2-gpt-pro-review-20260827T155524Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_02_rev2/RAW_LINEAGE_RANDOM_SAMPLE.json",
+      "?? reviews/wcir_next_print/stage_02_rev2/REST_WS_COMPARABLE_PARITY.json",
+      "?? reviews/wcir_next_print/stage_02_rev2/evidence/",
+      "?? reviews/wcir_next_print/stage_03/EVIDENCE_MANIFEST.json",
+      "?? reviews/wcir_next_print/stage_03/wcir-next-print-stage-03-review-20260827T090456Z.zip",
+      "?? reviews/wcir_next_print/stage_03/wcir-next-print-stage-03-review-20260827T090456Z.zip.sha256",
+      "?? reviews/wcir_next_print/stage_03_rev2/INDEPENDENT_PNL_RECALCULATION.json",
+      "?? reviews/wcir_next_print/stage_03_rev2/evidence/",
+      "?? scripts/analysis/forecast_quality/package_wcir_stage23_rev2_closure.py",
+      "?? scripts/analysis/forecast_quality/research_wcir_admission_forward_review.py",
+      "?? scripts/analysis/forecast_quality/wcir_collector_clock_shadow.py",
+      "?? scripts/analysis/forecast_quality/wcir_stage23_rev2_closure.py",
+      "?? scripts/analysis/market_structure_edge/research_tmax_fixed_60m_exit_v1.py",
+      "?? scripts/ops/ingest_weather_lowest_settlements.py",
+      "?? scripts/ops/sync_polymarket_account_ledger.py",
+      "?? tests/research_tests/test_tmax_fixed_60m_exit_v1.py",
+      "?? tests/research_tests/test_tmin_no_further_cooling_challenger_v1.py",
+      "?? tests/research_tests/test_wcir_next_print_contracts.py",
+      "?? tests/research_tests/test_wcir_stage01_evidence.py",
+      "?? tests/research_tests/test_wcir_stage23_rev2_closure.py",
+      "?? tests/weather_dashboard/api/test_capital_efficiency.py",
+      "?? tests/weather_dashboard/ingest/",
+      "?? tmp/",
+      "?? weather_city_runtime/next_print_adapters.py",
+      "?? weather_city_runtime/next_print_contracts.py",
+      "?? weather_city_runtime/next_print_journal.py",
+      "?? weather_dashboard/api/capital_efficiency.py",
+      "?? weather_dashboard/ingest/polymarket_account_ledger.py"
+    ],
+    "stage23_closure_start_head": "4def0c0ce7e02b1e716c023f4ddda42df4bc4112",
+    "submodule_status": []
+  }
+}

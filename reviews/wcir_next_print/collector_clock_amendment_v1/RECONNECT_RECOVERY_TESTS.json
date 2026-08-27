@@ -1,0 +1,12 @@
+{
+  "ack_cleared": true,
+  "after_reconnect_valid": false,
+  "before_reconnect_valid": true,
+  "gap_blocker": "RECONNECT_REQUIRES_NEW_BASELINE",
+  "new_request_ack_baseline_required": true,
+  "old_baseline_reused": false,
+  "request_cleared": true,
+  "restart_contract": "same fail-closed transition as reconnect",
+  "rollback": "stop isolated process; production unchanged",
+  "status": "PASS"
+}

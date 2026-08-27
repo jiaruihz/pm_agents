@@ -1,0 +1,62 @@
+{
+  "clock_domain": "host UTC wall receive; monotonic span was not frozen and is a rev2 evidence limit",
+  "collector_epoch": "not frozen per latency row; pooled value is diagnostic only",
+  "end_clock": "runner decision-ready after fresh-book fetch receive wall clock",
+  "global_pooled_diagnostic": {
+    "observed_n": 840,
+    "p50_seconds": 0.616,
+    "p90_seconds": 6.518000000000001,
+    "p95_seconds": 49.772999999999996,
+    "primary_policy_authorized": false
+  },
+  "missing_handling": "retain row, exclude from percentile numerator, report missing_n",
+  "outlier_handling": "no deletion or winsorization; nearest-rank percentiles",
+  "per_city_source": [
+    {
+      "city": "Amsterdam",
+      "missing_n": 0,
+      "observed_n": 87,
+      "p50_seconds": 3.9419999999999997,
+      "p90_seconds": 51.434,
+      "p95_seconds": 53.065000000000005,
+      "source": "knmi"
+    },
+    {
+      "city": "Busan",
+      "missing_n": 0,
+      "observed_n": 385,
+      "p50_seconds": 0.6100000000000001,
+      "p90_seconds": 3.0180000000000002,
+      "p95_seconds": 55.842999999999996,
+      "source": "amos_runway"
+    },
+    {
+      "city": "Helsinki",
+      "missing_n": 0,
+      "observed_n": 59,
+      "p50_seconds": 0.459,
+      "p90_seconds": 0.8180000000000001,
+      "p95_seconds": 1.398,
+      "source": "fmi"
+    },
+    {
+      "city": "Seoul",
+      "missing_n": 1,
+      "observed_n": 267,
+      "p50_seconds": 0.578,
+      "p90_seconds": 10.639,
+      "p95_seconds": 42.598,
+      "source": "amos_runway"
+    },
+    {
+      "city": "Tokyo",
+      "missing_n": 0,
+      "observed_n": 42,
+      "p50_seconds": 0.45899999999999996,
+      "p90_seconds": 1.114,
+      "p95_seconds": 1.1920000000000002,
+      "source": "jma_amedas"
+    }
+  ],
+  "start_clock": "source_detect_ts_utc / source first_seen receive wall clock"
+}
