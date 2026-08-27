@@ -1,0 +1,296 @@
+{
+  "Amsterdam": {
+    "date_block_inference": {
+      "bootstrap_draws": 10000,
+      "date_mean_pnl_usd": -0.22140685448717942,
+      "one_sided_90_lower": -0.3201797282051282,
+      "one_sided_90_upper": -0.12817175320512814,
+      "seed": 20260827,
+      "status": "computed",
+      "target_date_count": 13
+    },
+    "disposition": "CONTINUE_COLLECTION_WITHOUT_MODELING",
+    "gate_checks": {
+      "at_least_90pct_dates_source_t0_ge_80pct": false,
+      "minimum_causal_events": false,
+      "minimum_paired_5_share_feasible_events": false,
+      "minimum_target_dates": false,
+      "minimum_unique_official_print_groups": false,
+      "paired_entry_exit_ge_85pct": false,
+      "source_t0_book_valid_ge_90pct": false
+    },
+    "metrics": {
+      "by_target_date_source_t0_book_valid_rate": {
+        "2026-08-11": 0.4,
+        "2026-08-12": 0.0,
+        "2026-08-13": 0.0,
+        "2026-08-14": 0.2857142857142857,
+        "2026-08-15": 0.0,
+        "2026-08-16": 0.0,
+        "2026-08-17": 0.0,
+        "2026-08-18": 0.14285714285714285,
+        "2026-08-19": 0.0,
+        "2026-08-20": 0.0,
+        "2026-08-21": 0.16666666666666666,
+        "2026-08-22": 0.0,
+        "2026-08-23": 0.3333333333333333,
+        "2026-08-24": 0.1111111111111111,
+        "2026-08-25": 0.0,
+        "2026-08-26": 0.25
+      },
+      "causal_events": 87,
+      "paired_5_share_feasible_events": 22,
+      "paired_entry_exit_rate": 0.25287356321839083,
+      "source_t0_book_valid_rate": 0.11494252873563218,
+      "source_t0_status_counts": {
+        "ARCHIVE_MISSING": 2,
+        "OPEN_GAP": 5,
+        "STALE_BOOK": 70,
+        "VALID_BUT_ONE_SIDED": 8,
+        "VALID_TWO_SIDED_DEPTH": 2
+      },
+      "target_dates": 16,
+      "target_dates_source_t0_book_valid_ge_80pct_rate": 0.0,
+      "unique_official_print_groups": 60
+    },
+    "requirements": {
+      "causal_events": 180,
+      "paired_5_share_feasible_events": 100,
+      "target_dates": 40,
+      "unique_official_print_groups": 100
+    }
+  },
+  "Busan": {
+    "date_block_inference": {
+      "bootstrap_draws": 10000,
+      "date_mean_pnl_usd": -0.12009147624999997,
+      "one_sided_90_lower": -0.2617136570833332,
+      "one_sided_90_upper": 0.025798553020833285,
+      "seed": 20260827,
+      "status": "computed",
+      "target_date_count": 10
+    },
+    "disposition": "CONTINUE_COLLECTION_WITHOUT_MODELING",
+    "gate_checks": {
+      "at_least_90pct_dates_source_t0_ge_80pct": false,
+      "minimum_causal_events": true,
+      "minimum_paired_5_share_feasible_events": false,
+      "minimum_target_dates": false,
+      "minimum_unique_official_print_groups": false,
+      "paired_entry_exit_ge_85pct": false,
+      "source_t0_book_valid_ge_90pct": false
+    },
+    "metrics": {
+      "by_target_date_source_t0_book_valid_rate": {
+        "2026-08-09": 0.0,
+        "2026-08-10": 0.6428571428571429,
+        "2026-08-11": 0.5428571428571428,
+        "2026-08-12": 0.0,
+        "2026-08-13": 0.0,
+        "2026-08-14": 0.02,
+        "2026-08-15": 0.0,
+        "2026-08-17": 0.10526315789473684,
+        "2026-08-18": 0.4473684210526316,
+        "2026-08-19": 0.038461538461538464,
+        "2026-08-20": 0.0,
+        "2026-08-21": 0.0,
+        "2026-08-22": 0.0,
+        "2026-08-24": 0.07692307692307693,
+        "2026-08-25": 0.0,
+        "2026-08-26": 0.02857142857142857
+      },
+      "causal_events": 385,
+      "paired_5_share_feasible_events": 56,
+      "paired_entry_exit_rate": 0.14545454545454545,
+      "source_t0_book_valid_rate": 0.13506493506493505,
+      "source_t0_status_counts": {
+        "ARCHIVE_MISSING": 3,
+        "NO_BASELINE": 43,
+        "OPEN_GAP": 17,
+        "STALE_BOOK": 270,
+        "VALID_BUT_INSUFFICIENT_DEPTH": 4,
+        "VALID_BUT_ONE_SIDED": 8,
+        "VALID_TWO_SIDED_DEPTH": 40
+      },
+      "target_dates": 16,
+      "target_dates_source_t0_book_valid_ge_80pct_rate": 0.0,
+      "unique_official_print_groups": 53
+    },
+    "requirements": {
+      "causal_events": 350,
+      "paired_5_share_feasible_events": 120,
+      "target_dates": 40,
+      "unique_official_print_groups": 150
+    }
+  },
+  "Helsinki": {
+    "date_block_inference": {
+      "bootstrap_draws": 10000,
+      "date_mean_pnl_usd": -0.1270838333333333,
+      "one_sided_90_lower": -0.23234999999999997,
+      "one_sided_90_upper": -0.021817666666666666,
+      "seed": 20260827,
+      "status": "computed",
+      "target_date_count": 2
+    },
+    "disposition": "CONTINUE_COLLECTION_WITHOUT_MODELING",
+    "gate_checks": {
+      "at_least_90pct_dates_source_t0_ge_80pct": false,
+      "minimum_causal_events": false,
+      "minimum_paired_5_share_feasible_events": false,
+      "minimum_target_dates": false,
+      "minimum_unique_official_print_groups": false,
+      "paired_entry_exit_ge_85pct": false,
+      "source_t0_book_valid_ge_90pct": false
+    },
+    "metrics": {
+      "by_target_date_source_t0_book_valid_rate": {
+        "2026-08-09": 0.0,
+        "2026-08-10": 0.75,
+        "2026-08-11": 1.0,
+        "2026-08-12": 0.0,
+        "2026-08-13": 0.0,
+        "2026-08-15": 0.0,
+        "2026-08-16": 0.0,
+        "2026-08-17": 0.0,
+        "2026-08-18": 0.0,
+        "2026-08-20": 0.0,
+        "2026-08-21": 0.0,
+        "2026-08-22": 0.0,
+        "2026-08-24": 0.0,
+        "2026-08-25": 0.0,
+        "2026-08-26": 0.0
+      },
+      "causal_events": 59,
+      "paired_5_share_feasible_events": 4,
+      "paired_entry_exit_rate": 0.06779661016949153,
+      "source_t0_book_valid_rate": 0.06779661016949153,
+      "source_t0_status_counts": {
+        "ARCHIVE_MISSING": 1,
+        "NO_BASELINE": 1,
+        "OPEN_GAP": 5,
+        "STALE_BOOK": 48,
+        "VALID_BUT_ONE_SIDED": 2,
+        "VALID_TWO_SIDED_DEPTH": 2
+      },
+      "target_dates": 15,
+      "target_dates_source_t0_book_valid_ge_80pct_rate": 0.06666666666666667,
+      "unique_official_print_groups": 42
+    },
+    "requirements": {
+      "causal_events": 150,
+      "paired_5_share_feasible_events": 100,
+      "target_dates": 40,
+      "unique_official_print_groups": 100
+    }
+  },
+  "Seoul": {
+    "date_block_inference": {
+      "one_sided_90_lower": null,
+      "one_sided_90_upper": null,
+      "status": "insufficient_target_dates",
+      "target_date_count": 0
+    },
+    "disposition": "CONTINUE_COLLECTION_WITHOUT_MODELING",
+    "gate_checks": {
+      "at_least_90pct_dates_source_t0_ge_80pct": false,
+      "minimum_causal_events": false,
+      "minimum_paired_5_share_feasible_events": false,
+      "minimum_target_dates": false,
+      "minimum_unique_official_print_groups": false,
+      "paired_entry_exit_ge_85pct": false,
+      "source_t0_book_valid_ge_90pct": false
+    },
+    "metrics": {
+      "by_target_date_source_t0_book_valid_rate": {
+        "2026-08-09": 0.0,
+        "2026-08-10": 0.0,
+        "2026-08-11": 0.0,
+        "2026-08-12": 0.0,
+        "2026-08-13": 0.0,
+        "2026-08-14": 0.0,
+        "2026-08-16": 0.0,
+        "2026-08-17": 0.0,
+        "2026-08-18": 0.0,
+        "2026-08-19": 0.0,
+        "2026-08-23": 0.0,
+        "2026-08-24": 0.0,
+        "2026-08-25": 0.0,
+        "2026-08-26": 0.0
+      },
+      "causal_events": 268,
+      "paired_5_share_feasible_events": 0,
+      "paired_entry_exit_rate": 0.0,
+      "source_t0_book_valid_rate": 0.0,
+      "source_t0_status_counts": {
+        "ARCHIVE_MISSING": 268
+      },
+      "target_dates": 14,
+      "target_dates_source_t0_book_valid_ge_80pct_rate": 0.0,
+      "unique_official_print_groups": 49
+    },
+    "requirements": {
+      "causal_events": 300,
+      "paired_5_share_feasible_events": 120,
+      "target_dates": 40,
+      "unique_official_print_groups": 150
+    }
+  },
+  "Tokyo": {
+    "date_block_inference": {
+      "bootstrap_draws": 10000,
+      "date_mean_pnl_usd": -0.31308746666666665,
+      "one_sided_90_lower": -0.4645713333333332,
+      "one_sided_90_upper": -0.16160360000000001,
+      "seed": 20260827,
+      "status": "computed",
+      "target_date_count": 5
+    },
+    "disposition": "CONTINUE_COLLECTION_WITHOUT_MODELING",
+    "gate_checks": {
+      "at_least_90pct_dates_source_t0_ge_80pct": false,
+      "minimum_causal_events": false,
+      "minimum_paired_5_share_feasible_events": false,
+      "minimum_target_dates": false,
+      "minimum_unique_official_print_groups": false,
+      "paired_entry_exit_ge_85pct": false,
+      "source_t0_book_valid_ge_90pct": false
+    },
+    "metrics": {
+      "by_target_date_source_t0_book_valid_rate": {
+        "2026-08-09": 0.0,
+        "2026-08-10": 0.0,
+        "2026-08-11": 0.0,
+        "2026-08-12": 0.0,
+        "2026-08-16": 0.0,
+        "2026-08-17": 0.0,
+        "2026-08-19": 0.0,
+        "2026-08-20": 0.0,
+        "2026-08-21": 0.0,
+        "2026-08-22": 0.0,
+        "2026-08-23": 0.0,
+        "2026-08-24": 0.0,
+        "2026-08-25": 0.0,
+        "2026-08-26": 0.0
+      },
+      "causal_events": 42,
+      "paired_5_share_feasible_events": 7,
+      "paired_entry_exit_rate": 0.16666666666666666,
+      "source_t0_book_valid_rate": 0.0,
+      "source_t0_status_counts": {
+        "ARCHIVE_MISSING": 4,
+        "OPEN_GAP": 7,
+        "STALE_BOOK": 31
+      },
+      "target_dates": 14,
+      "target_dates_source_t0_book_valid_ge_80pct_rate": 0.0,
+      "unique_official_print_groups": 34
+    },
+    "requirements": {
+      "causal_events": 120,
+      "paired_5_share_feasible_events": 80,
+      "target_dates": 40,
+      "unique_official_print_groups": 80
+    }
+  }
+}

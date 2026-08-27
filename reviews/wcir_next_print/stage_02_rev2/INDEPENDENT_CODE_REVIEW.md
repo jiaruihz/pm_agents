@@ -27,6 +27,12 @@ failure closure, determinism, and test gaps. The reviewer did not modify code.
    both manifests and the package builder refreshes them before building its
    strict whitelist archive.
 
+Coordinator final inspection also found that a non-empty one-row baseline
+intersection was labelled `available` even though the Stage 2 coverage gate was
+closed. The label now fails closed as
+`blocked_stage2_coverage_gate_and_insufficient_exact_intersection`; the frozen
+baseline rows themselves are unchanged.
+
 ## Verification after fixes
 
 ```text
@@ -35,7 +41,7 @@ python -m pytest -q tests/research_tests/test_wcir_stage23_rev2.py \
   tests/pmm_tests/test_executable_book_truth.py \
   tests/pmm_tests/test_weather_ws_incremental_book.py
 
-34 passed in 0.24s
+37 passed in 0.18s
 ```
 
 `ruff` and `mypy` are not installed in this environment, so no lint/type-check

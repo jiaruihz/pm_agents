@@ -1,0 +1,103 @@
+{
+  "entries": [
+    {
+      "path": "BOOK_VALIDITY_AND_FAILURE_CONTRACT.md",
+      "sha256": "1e9528e5a0ec13db9c72526c9ddc1cea1ce30d063887877e0b78f75f6e26e1be",
+      "size_bytes": 2513
+    },
+    {
+      "path": "COLLECTOR_AND_INPUT_FREEZE.json",
+      "sha256": "2cd73288934fecac23b0813f6b6960b91f673b19f3b181f8e46e7660e3d6fb70",
+      "size_bytes": 1858
+    },
+    {
+      "path": "COVERAGE_ROOT_CAUSE_DIAGNOSIS.json",
+      "sha256": "4b656cba41ab2ebf2ea4c53dfb62db56b13b74f9548df9f1aadf13c387fe36d1",
+      "size_bytes": 3390
+    },
+    {
+      "path": "DETERMINISM_IDENTITY_COMPARISON.json",
+      "sha256": "7090e788a2098cdfee9fd0a18d339142b24c0a6bb6667baccb4a7dc435cf4e1e",
+      "size_bytes": 1694
+    },
+    {
+      "path": "DUPLICATE_EVENT_IMMUTABILITY_AUDIT.json",
+      "sha256": "93b61da8402e77eece42b6529c803b6f591c438e6c6e1fb20829e908be550826",
+      "size_bytes": 940
+    },
+    {
+      "path": "EVENT_ALIGNED_BOOK_COVERAGE.json",
+      "sha256": "8950b0e93ea953b164a36220642008df2aba1b1ef0152cc5e704064e43d3f01f",
+      "size_bytes": 12481
+    },
+    {
+      "path": "FULL_ARCHIVE_REPLAY_MANIFEST.json",
+      "sha256": "f8ec2bfc9a6380956c063f21c4bc5b9986cf343a2c3f00ddbb735006e644566f",
+      "size_bytes": 1770590
+    },
+    {
+      "path": "GPT_PRO_REVIEW_PACKET_STAGE_02_REV2.md",
+      "sha256": "ea620523f1ebf16159f6944e5163dd86dd440f9c75ad525014e2387c104ce04a",
+      "size_bytes": 2997
+    },
+    {
+      "path": "INDEPENDENT_CODE_REVIEW.md",
+      "sha256": "ea55033af3e8e94105a03405c65cd02e9e174a10f02b36d734b7984af4d2157a",
+      "size_bytes": 2375
+    },
+    {
+      "path": "RAW_LINEAGE_RANDOM_SAMPLE.json",
+      "sha256": "3141f72ce739a2c8e6073f5e58ca1118d45f1e475c87d6297bf105e4d9110614",
+      "size_bytes": 47673
+    },
+    {
+      "path": "REPRODUCTION_RESULTS.json",
+      "sha256": "ab5a8769030b65ae13830fd53c530e87cfd6e69063c3b508c9a1521fe9bf5f19",
+      "size_bytes": 2066
+    },
+    {
+      "path": "REST_WS_COMPARABLE_PARITY.json",
+      "sha256": "4ce1ae0d77ab150d9fc86e21dde7de81aa70a4ec33edee6b047651da10992f5a",
+      "size_bytes": 69494
+    },
+    {
+      "path": "UNIQUE_FAILURE_REASON_AUDIT.json",
+      "sha256": "fa906f7933a6e400a0635081e203dcd148917bdb5d81888a71dc9b39ced7c60b",
+      "size_bytes": 628
+    },
+    {
+      "path": "evidence/EVENT_BOOK_COVERAGE_MATRIX.jsonl.gz",
+      "sha256": "a4a6b3dab524be8614771f3a3127c066388a84403121f711af550d128abe81f6",
+      "size_bytes": 3960086
+    },
+    {
+      "path": "evidence/FROZEN_EVENT_MARKET_UNIVERSE.jsonl.gz",
+      "sha256": "531dbcca04e210f3ed70f4ff74fd28dbcaa39de7e2580073a22aeaeec8a36ffc",
+      "size_bytes": 204885
+    },
+    {
+      "path": "evidence/FROZEN_MARKET_TOKEN_IDENTITIES.jsonl.gz",
+      "sha256": "817bf720fb4aeafeede916aaf4ace9eb80a5198aa8874f4c81b653713baaf9ac",
+      "size_bytes": 257522
+    },
+    {
+      "path": "evidence/FROZEN_PIPELINE_LATENCY_ROWS.jsonl.gz",
+      "sha256": "b4920db706345f3a4349dd43fc3982a79c15e49dee0a3aad60fe229381b8ca9a",
+      "size_bytes": 86433
+    },
+    {
+      "path": "evidence/REPLAY_CHUNKED_RESULT.json",
+      "sha256": "a3f862a702b93b5004054c358b493f4b135ad937623ff1e069eb557b67aa85cf",
+      "size_bytes": 1303
+    },
+    {
+      "path": "evidence/REPLAY_REVERSE_RESULT.json",
+      "sha256": "e9c0dc4313184bdb671837de0be4d0b8f62d5c7b166406ae02acc0b4bac8a864",
+      "size_bytes": 1303
+    }
+  ],
+  "entry_count": 19,
+  "entry_set_sha256": "e9661f5a9d4e16a363a813e7144967e445c89d94fad9b22ee519a2aa3f674f02",
+  "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2",
+  "unmanifested_extra_files_allowed": false
+}

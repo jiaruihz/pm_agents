@@ -25,6 +25,43 @@ from scripts.analysis.forecast_quality.research_wcir_stage02_stage03_rev2 import
 )
 
 
+ARCHIVE_IDENTITY_KEYS = (
+    "ws_files",
+    "raw_frame_count",
+    "raw_frame_ordered_identity",
+    "coverage_identity",
+    "ws_file_count",
+    "query_count",
+    "relevant_token_count",
+    "ever_subscribed_relevant_token_count",
+    "unknown_epoch_frame_count",
+    "applied_frame_count",
+    "duplicate_frame_count",
+    "reconstruction_error_count",
+    "clock_uncertainty_frame_count",
+    "blocker_reason_counts",
+    "day_summaries",
+    "transport_day_count",
+    "normal_day_count",
+    "reconnect_or_gap_day_count",
+)
+
+
+def verified_identity_payload(
+    *,
+    event_identity: dict,
+    universe_identity: dict,
+    epoch_files: list[dict],
+    archive: dict,
+) -> dict:
+    return {
+        "frozen_event_identity": event_identity,
+        "frozen_universe_identity": universe_identity,
+        "subscription_epoch_files": epoch_files,
+        "archive": {key: archive[key] for key in ARCHIVE_IDENTITY_KEYS},
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-root", type=Path, default=Path("/Volumes/jrs/weather_data_feed_service_runtime"))
@@ -71,6 +108,18 @@ def main() -> int:
     actual_universe_identity = file_identity(args.frozen_universe, row_count=len(universes))
     expected_event_identity = freeze["frozen_legacy_event_dataset"]
     expected_universe_identity = expected["frozen_market_universe"]
+    expected_verified_identity = verified_identity_payload(
+        event_identity=expected_event_identity,
+        universe_identity=expected_universe_identity,
+        epoch_files=expected["subscription_epoch_files"],
+        archive=expected,
+    )
+    actual_verified_identity = verified_identity_payload(
+        event_identity=actual_event_identity,
+        universe_identity=actual_universe_identity,
+        epoch_files=epoch_files,
+        archive=actual,
+    )
     checks = {
         "frozen_event_identity": actual_event_identity == expected_event_identity,
         "frozen_universe_identity": actual_universe_identity == expected_universe_identity,
@@ -83,6 +132,10 @@ def main() -> int:
         "coverage_identity": actual["coverage_identity"] == expected["coverage_identity"],
         "ws_file_complete_identity": actual["ws_files"] == expected["ws_files"],
         "day_summaries": actual["day_summaries"] == expected["day_summaries"],
+        "complete_verified_identity_hash": (
+            canonical_hash(actual_verified_identity)
+            == canonical_hash(expected_verified_identity)
+        ),
     }
     for key in (
         "ws_file_count",
@@ -125,22 +178,14 @@ def main() -> int:
         {
             "raw_frame_ordered_identity": expected["raw_frame_ordered_identity"],
             "coverage_identity": expected["coverage_identity"],
-            "manifest_core_hash": canonical_hash(
-                {
-                    key: expected[key]
-                    for key in checks
-                    if key in expected
-                }
-            ),
+            "verified_identity_hash": canonical_hash(expected_verified_identity),
             "status": "reference",
         },
     )
     runs[args.file_order] = {
         "raw_frame_ordered_identity": actual["raw_frame_ordered_identity"],
         "coverage_identity": actual["coverage_identity"],
-        "manifest_core_hash": canonical_hash(
-            {key: actual[key] for key in checks if key in actual}
-        ),
+        "verified_identity_hash": canonical_hash(actual_verified_identity),
         "result_file": file_identity(args.result),
         "status": result["status"],
     }

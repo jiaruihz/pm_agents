@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import hashlib
+import zipfile
 
 import pytest
 
@@ -14,6 +16,9 @@ from scripts.analysis.forecast_quality.research_wcir_stage02_stage03_rev2 import
     independent_net_pnl,
     percentile,
     select_primary_oracle_action,
+)
+from scripts.analysis.forecast_quality.package_wcir_stage23_rev2_review import (
+    verify_archive,
 )
 from src.platform.market_data.executable_book_truth import (
     ExecutableBookTruth,
@@ -226,6 +231,28 @@ def test_duplicate_event_immutable_drift_fails_closed(tmp_path) -> None:
                 }
             ],
         )
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "hash_drift"])
+def test_compact_package_verifier_fails_closed(tmp_path, mutation: str) -> None:
+    payload = b"frozen-summary\n"
+    entries = [
+        {
+            "path": "summary.txt",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+    ]
+    archive_path = tmp_path / "packet.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        if mutation != "missing":
+            archive.writestr(
+                "summary.txt", b"drift\n" if mutation == "hash_drift" else payload
+            )
+        archive.writestr("PACKAGE_CONTENTS.json", "{}\n")
+        if mutation == "extra":
+            archive.writestr("unexpected.txt", "extra\n")
+    with pytest.raises(RuntimeError):
+        verify_archive(archive_path, entries)
 
 
 def test_primary_oracle_action_uses_t0_cost_and_semantics_only() -> None:

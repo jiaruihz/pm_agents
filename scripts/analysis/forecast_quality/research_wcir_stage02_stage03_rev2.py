@@ -1875,7 +1875,11 @@ def summarize_stage3(
             "inner_group": "official_print_id",
             "full_sample_fit_forbidden": True,
         },
-        "stage3_baseline_closure": "blocked" if not intersection_rows else "available",
+        "stage3_baseline_closure": (
+            "blocked_stage2_coverage_gate_and_insufficient_exact_intersection"
+            if len(intersection_rows) < len(events)
+            else "available"
+        ),
     }
 
     concentration = {}

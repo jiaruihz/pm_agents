@@ -1,0 +1,52 @@
+{
+  "code_freeze_sha": "ed844e4816b0fad70633103dac97aae0702d0402",
+  "cutoff_date_inclusive": "2026-08-26",
+  "full_archive_forward_replay": {
+    "alignment_rows": 84240,
+    "coverage_identity": "2e0351bac634d4847aebc77786472dc986001938525b79cad9d90c55d36b9b09",
+    "event_rows": 841,
+    "exit_code": 0,
+    "raw_frame_count": 15856707,
+    "raw_frame_ordered_identity": "632f107fb73c916bd96fbc1f6006748aedf4b2dce69acd47215b99bf41bf24ba",
+    "source_t0_book_valid_count": 66,
+    "source_t0_book_valid_rate": 0.07847800237812129,
+    "ws_file_count": 465
+  },
+  "determinism": {
+    "chunked": "pass",
+    "complete_verified_identity_hash": "aeed2bb637c83f2f568afb64c44d90232e94d080765f8aa901ab4d09236afaf7",
+    "forward": "reference_pass",
+    "reverse": "pass",
+    "status": "pass"
+  },
+  "duplicate_immutability": {
+    "duplicate_event_key_count": 0,
+    "payload_drift_count": 0,
+    "status": "pass"
+  },
+  "focused_tests": {
+    "command": "python -m pytest -q tests/research_tests/test_wcir_stage23_rev2.py tests/pmm_tests/test_executable_book_truth.py tests/pmm_tests/test_weather_ws_incremental_book.py",
+    "passed": 37,
+    "failed": 0,
+    "status": "pass"
+  },
+  "production_manifest_strict": {
+    "command": "python scripts/ops/weather_production_manifest.py --strict",
+    "exit_code": 0,
+    "status": "healthy"
+  },
+  "static_checks": {
+    "py_compile": "pass",
+    "ruff": "not_installed_no_result_claimed",
+    "mypy": "not_installed_no_result_claimed"
+  },
+  "zero_notional_continuity": {
+    "audit_path": "reviews/wcir_next_print/stage_00_rev2/ZERO_NOTIONAL_AUDIT.json",
+    "audit_sha256": "c8795cb4bc328afb32067d28263cbbc46aea2f46b0f9113b9f38865061ca9c6e",
+    "fills": 0,
+    "notional_usd": 0.0,
+    "orders": 0,
+    "status": "PASS_PROVEN_ZERO_NOTIONAL"
+  },
+  "scope_note": "No collector, production config, selector, threshold, position policy, order path, or live behavior was modified. A post-run presentation-label correction fails closed the one-row baseline intersection; row data and replay identities are unchanged."
+}

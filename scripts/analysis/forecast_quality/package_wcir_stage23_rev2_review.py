@@ -28,8 +28,6 @@ REVIEW_FILES = (
     "stage_02_rev2/EVENT_ALIGNED_BOOK_COVERAGE.json",
     "stage_02_rev2/UNIQUE_FAILURE_REASON_AUDIT.json",
     "stage_02_rev2/COVERAGE_ROOT_CAUSE_DIAGNOSIS.json",
-    "stage_02_rev2/REST_WS_COMPARABLE_PARITY.json",
-    "stage_02_rev2/RAW_LINEAGE_RANDOM_SAMPLE.json",
     "stage_02_rev2/DETERMINISM_IDENTITY_COMPARISON.json",
     "stage_02_rev2/REPRODUCTION_RESULTS.json",
     "stage_02_rev2/INDEPENDENT_CODE_REVIEW.md",
@@ -38,7 +36,6 @@ REVIEW_FILES = (
     "stage_03_rev2/FULL_TWO_SIDED_ORACLE_CONTRACT.md",
     "stage_03_rev2/TWO_SIDED_PRIMARY_ORACLE_RESULTS.json",
     "stage_03_rev2/EX_POST_ENVELOPE_MANIFEST.json",
-    "stage_03_rev2/INDEPENDENT_PNL_RECALCULATION.json",
     "stage_03_rev2/MATCHED_BASELINES_AND_ROW_INTERSECTION.json",
     "stage_03_rev2/REACTION_INFERENCE_AND_CONCENTRATION.json",
     "stage_03_rev2/CITY_GATES.json",
@@ -52,6 +49,23 @@ MAX_PACKAGE_BYTES = 10 * 1024 * 1024
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def verify_archive(output: Path, entries: list[dict[str, object]]) -> None:
+    expected_names = {str(entry["path"]) for entry in entries} | {
+        "PACKAGE_CONTENTS.json"
+    }
+    with zipfile.ZipFile(output) as archive:
+        actual_names = set(archive.namelist())
+        if actual_names != expected_names:
+            raise RuntimeError(
+                f"zip entry-set mismatch missing={sorted(expected_names - actual_names)} "
+                f"extra={sorted(actual_names - expected_names)}"
+            )
+        for entry in entries:
+            actual = hashlib.sha256(archive.read(str(entry["path"]))).hexdigest()
+            if actual != entry["sha256"]:
+                raise RuntimeError(f"zip hash mismatch: {entry['path']}")
 
 
 def main() -> int:
@@ -103,18 +117,8 @@ def main() -> int:
         output.unlink()
         raise RuntimeError("review package exceeds 10 MiB compact-packet limit")
 
+    verify_archive(output, entries)
     expected_names = {entry["path"] for entry in entries} | {"PACKAGE_CONTENTS.json"}
-    with zipfile.ZipFile(output) as archive:
-        actual_names = set(archive.namelist())
-        if actual_names != expected_names:
-            raise RuntimeError(
-                f"zip entry-set mismatch missing={sorted(expected_names - actual_names)} "
-                f"extra={sorted(actual_names - expected_names)}"
-            )
-        for entry in entries:
-            actual = hashlib.sha256(archive.read(entry["path"])).hexdigest()
-            if actual != entry["sha256"]:
-                raise RuntimeError(f"zip hash mismatch: {entry['path']}")
     sha = digest(output)
     sidecar.write_text(f"{sha}  {output.name}\n", encoding="utf-8")
     print(
