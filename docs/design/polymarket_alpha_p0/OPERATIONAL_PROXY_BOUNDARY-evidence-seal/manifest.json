@@ -1,0 +1,32 @@
+{
+  "schema": "polymarket_alpha_operational_proxy_boundary_seal_v1",
+  "attempt_date": "2026-08-27",
+  "source_commit": "480b1ed47b7dd7b8992847c1ff6a53aa81bfe554",
+  "profile_id": "mac_local_market_proxy_v1",
+  "proxy_peer": "127.0.0.1:7896",
+  "connect_authority": "gamma-api.polymarket.com:443",
+  "connect_status": 200,
+  "tls_server_name": "gamma-api.polymarket.com",
+  "http_status": 200,
+  "event_count": 4,
+  "nested_distinct_market_count": 21,
+  "raw_bytes_length": 84979,
+  "raw_bytes_sha256": "abd388787d22f521fc4d4547a2850579872db979cebe902dd9a0f863889317f2",
+  "request_receipt_sha256": "4855401a550a15399694f9a427de804a427aa1b2392a311d296fc59b287bf73d",
+  "proxy_security_receipt_sha256": "c8ad6a7fb9aa53e6585b5e27334c7abd563aed02d7a3ab9173b7f4a042e469d0",
+  "focused_tests_passed": 100,
+  "alpha_tests_passed": 473,
+  "owner_demands_submitted": 0,
+  "production_changes": 0,
+  "current_runtime_db_writes": 0,
+  "live_order_signing_private_key": "OUT_OF_SCOPE_AND_UNREACHABLE",
+  "disposition": "PROXY_BOUNDARY_PASS",
+  "remaining_operational_gates": [
+    "Gamma response ingest into temporary Alpha repository",
+    "Alpha demand outbox and deployment authorization",
+    "paired existing-owner book receipt bridge",
+    "weather owner isolation",
+    "OP-06 read-only operational replay"
+  ]
+}
+
