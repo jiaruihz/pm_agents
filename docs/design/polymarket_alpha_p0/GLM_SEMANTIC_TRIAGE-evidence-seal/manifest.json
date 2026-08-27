@@ -1,0 +1,39 @@
+{
+  "schema_version": "glm_semantic_triage_evidence_v1",
+  "disposition": "COMPLETE_FOR_CONTROLLED_SEMANTIC_TRIAGE_PILOT",
+  "readiness_scope": "CONTROLLED_EXTERNAL_PROVIDER_PILOT_ONLY",
+  "run_id": "glm-triage-pilot-20260828-final",
+  "projection_id": "semantic_projection:470dc7fa0ec8c7b83be80bd3777b83a03a68501d382dfa4b283714e1e40aee1e",
+  "receipt_id": "semantic_receipt:14c5e83764156512398b649855b0010c3868f5a518c654822746400a4880c8c5",
+  "created_at_utc": "2026-08-27T16:36:23.59045Z",
+  "provider": {
+    "endpoint_family": "open.bigmodel.cn/api/anthropic",
+    "requested_model": "haiku",
+    "reported_model": "glm-4.7",
+    "duration_ms": 10804,
+    "cost_usd_micros": 42043,
+    "input_tokens": 1114,
+    "cache_read_input_tokens": 896,
+    "output_tokens": 1441,
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+  },
+  "market_count": 3,
+  "provider_dispositions": {"ADVANCE": 3, "REVIEW": 0, "DEFER": 0},
+  "effective_dispositions": {"ADVANCE": 2, "REVIEW": 0, "DEFER": 1},
+  "database_contract_counts": {
+    "SemanticTriageDecision": 3,
+    "SemanticTriageReceipt": 1
+  },
+  "execution": "NO_ORDER",
+  "tests": {
+    "focused_and_wave0": {"passed": 40, "failed": 0},
+    "full_alpha": {"passed": 655, "failed": 0}
+  },
+  "independent_review": {
+    "model": "luna_verifier",
+    "finding_count": 2,
+    "findings_fixed": 2,
+    "reviewer_usage_telemetry": "unavailable"
+  }
+}
