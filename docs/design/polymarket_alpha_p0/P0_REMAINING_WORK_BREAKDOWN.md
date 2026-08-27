@@ -16,7 +16,12 @@ NEXT_GATE_STATUS=PREPARED_NOT_AUTHORIZED
 NEXT_GATE_OFFLINE_PREFLIGHT=IMPLEMENTED_AND_TESTED
 P1_RESOLUTION_LEARNING_OFFLINE_FOUNDATION=COMPLETE
 P1_CORRECTION_BACKFILL_OFFLINE_PLANNER=COMPLETE
+P1_RESOLUTION_SOURCE_INTAKE_OFFLINE=COMPLETE
 P1_LIVE_RESOLUTION_BACKFILL=NOT_IMPLEMENTED
+RESEARCH_BRIEF_RENDERER=COMPLETE
+BLIND_RESEARCH_EXECUTION=MANUAL_IMMUTABLE_HANDOFF_ONLY
+MARKET_RESEARCH_EXECUTION=MANUAL_IMMUTABLE_HANDOFF_ONLY
+DAILY_SCAN_SCHEDULER=NOT_IMPLEMENTED
 READ_ONLY_OPERATIONAL_PILOT=NOT_APPROVED
 PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 ```
@@ -45,6 +50,10 @@ PRODUCTION_CAPTURE_EXPANSION=NOT_AUTHORIZED
 | P1 resolution/learning offline foundation | COMPLETE | Append-only resolution/link/score/calibration contracts, migration `alpha_p1_0001_resolution_learning`, deterministic replay and forged-aggregate rejection are sealed under `P1_RESOLUTION_LEARNING-evidence-seal`. Live resolution ingestion/backfill remains unimplemented. |
 | Offline operational bridge | COMPLETE_AFTER_CODEX_REVIEW | Captured Gamma ingest, bounded paired-demand outbox, existing-owner book bridge and resumable single-market coordinator are sealed under `GLM_OPERATIONAL_REMAINDER_CODEX_REVIEW-evidence-seal`; this is not authorization to run the network pilot. |
 | P1 correction/backfill planner | COMPLETE | Correction-chain head selection, policy/hash receipt, isolated prediction backfill and atomic persistence grouping are sealed under `P1_BACKFILL_PLANNER-evidence-seal`. No authoritative source adapter or scheduler exists. |
+| P1 captured resolution intake | COMPLETE_OFFLINE | Caller-supplied source bytes, exact RuleContract source/precedence labels and parser assertion are hash-bound into replayable resolution facts under `P1_INTAKE_AND_RESEARCH_BRIEF-evidence-seal`. No online source fetcher exists. |
+| Blind/Market research execution | MANUAL_HANDOFF_ONLY | Packet export, immutable result intake and validation are complete; no model/API/browser executor is owned by Alpha. A human or separately authorized agent must currently return the structured result artifact. |
+| Research brief renderer | COMPLETE | Deterministic Blind/Market briefs are copyable to GPT Pro or another authorized provider; Market briefs include the exact accepted Blind baseline, and Blind briefs keep venue data out. This improves the manual seam but is not autonomous execution. |
+| Daily scan scheduler | NOT_IMPLEMENTED | The coordinator is resumable and stage-bounded but intentionally has no polling loop or autonomous scheduler. Operational activation requires its own owner, budgets and rollback gate. |
 
 P0 now has a complete deterministic offline path from multi-route Recall →
 Candidate → Rule A → immutable Blind handoff/import → formal paired book →
@@ -61,6 +70,12 @@ predictions only when a caller supplies replayable resolution artifacts, then
 produce versioned simulated PnL, Brier/Log Loss and calibration slices without
 updating the P0 PredictionRecord. They do not fetch official outcomes, schedule
 jobs, or treat Gamma lifecycle state as settlement truth.
+
+The research pipeline is structurally complete but not autonomous: Blind and
+Market packets are exported immutably, then wait for a caller-supplied result.
+There is currently no Alpha-owned GPT/API/browser executor and no daily polling
+scheduler. Those are real remaining engineering workstreams, separate from the
+already complete packet/importer and decision logic.
 
 The next-gate offline preflight is also implemented at source commit
 `ef82da8844562c63eacc5d16a73b17fe5b98abbb`: four synthetic Gamma-shaped binary fixtures, exact canonical

@@ -5,6 +5,12 @@ from .blind import (
     BlindPacketBuild,
     build_blind_research_packet,
 )
+from .brief import (
+    RESEARCH_BRIEF_VERSION,
+    ResearchBrief,
+    ResearchBriefError,
+    build_research_brief,
+)
 from .importer import (
     RESEARCH_IMPORTER_VERSION,
     ResearchImportOutcome,
@@ -29,11 +35,15 @@ from .handoff import (
 __all__ = [
     "BLIND_QUESTION_TEMPLATES",
     "BlindPacketBuild",
+    "RESEARCH_BRIEF_VERSION",
+    "ResearchBrief",
+    "ResearchBriefError",
     "RESEARCH_IMPORTER_VERSION",
     "ResearchImportOutcome",
     "MARKET_PACKET_BUILDER_VERSION",
     "build_market_formal_review_demand",
     "build_blind_research_packet",
+    "build_research_brief",
     "freeze_market_research_packet",
     "import_research_result",
     "HandoffConflictError",
