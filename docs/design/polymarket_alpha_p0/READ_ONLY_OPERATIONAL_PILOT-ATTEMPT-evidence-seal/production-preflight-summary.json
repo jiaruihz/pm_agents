@@ -1,0 +1,21 @@
+{
+  "observed_at_utc": "2026-08-27T05:40:03Z",
+  "manifest_strict_exit_code": 0,
+  "manifest_status": "healthy",
+  "jrs_context": "healthy",
+  "canonical_db_route": "healthy",
+  "market_books_owner": "healthy",
+  "weather_controller_exit_code": 2,
+  "weather_controller_status": "CRITICAL",
+  "critical_baseline": [
+    "paired_bid_mm_shadow_v1:health_artifact_stale",
+    "weather_city_probability_runtime_v3:missing_and_stale",
+    "current_yes_core_carry_tiny_live_v2:missing_and_stale",
+    "current_yes_core_carry_event_rescore_shadow_v1:missing_stale_dependency",
+    "current_yes_core_carry_market_state_shadow_v2:missing_stale_dependency",
+    "weather_scheduled_informed_maker_shadow_v1:missing_stale_dependency",
+    "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1:missing_and_stale",
+    "weather_tmin_cross_prev_no_shadow_v1:missing_and_stale"
+  ],
+  "production_mutation_performed": false
+}

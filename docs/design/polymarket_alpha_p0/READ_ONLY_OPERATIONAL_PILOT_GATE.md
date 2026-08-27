@@ -1,9 +1,12 @@
 # Polymarket Alpha — Read-only Operational Pilot Gate
 
 ```text
-GATE_STATUS=PREPARED_NOT_AUTHORIZED
+GATE_STATUS=REWORK_OPERATIONAL_BOUNDARY
 OFFLINE_PREFLIGHT_STATUS=IMPLEMENTED_AND_TESTED
 OFFLINE_PREFLIGHT_SOURCE_COMMIT=ef82da8844562c63eacc5d16a73b17fe5b98abbb
+OPERATIONAL_BOUNDARY_SOURCE_COMMIT=d9f23070da5ff9a47168a0f960db1d2f9441e2d8
+AUTHORIZED_GAMMA_ATTEMPT=FAILED_BEFORE_HTTP_RESPONSE
+OWNER_DEMAND_ATTEMPT=NOT_RUN_FAIL_CLOSED
 ENTRY_EVIDENCE=P0_UNIFIED_OFFLINE_PIPELINE-evidence-seal
 ALLOWED_OUTCOME=READ_ONLY_OPERATIONAL_PILOT_READY | REWORK_OPERATIONAL_BOUNDARY
 LIVE_ORDER_SIGNING_PRIVATE_KEY=OUT_OF_SCOPE
@@ -11,9 +14,13 @@ PRODUCTION_CAPTURE_EXPANSION=SEPARATE_AUTHORIZATION
 ```
 
 The offline OP-01/OP-04/OP-05 preparation is sealed under
-`READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal`. This does not change
-`GATE_STATUS`: OP-02 owner demands, OP-03 production observations, and OP-06
-read-only replay have not run.
+`READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal`. The owner authorized a
+bounded attempt on 2026-08-27. The exact Gamma route was authorized, but direct
+TLS egress timed out after proxy variables were removed as required. No HTTP
+response was received. The current weather controller was already CRITICAL and
+the newly implemented Alpha inbox has not been deployed, so owner demand,
+weather isolation and OP-06 replay were not run. Evidence is sealed under
+`READ_ONLY_OPERATIONAL_PILOT-ATTEMPT-evidence-seal`.
 
 ## Objective
 

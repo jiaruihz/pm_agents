@@ -1,0 +1,28 @@
+{
+  "schema": "polymarket_alpha_operational_attempt_seal_v1",
+  "attempt_date": "2026-08-27",
+  "source_commit": "d9f23070da5ff9a47168a0f960db1d2f9441e2d8",
+  "authorization_id": "user-thread-approval-2026-08-27-read-only-operational-pilot",
+  "preflight_manifest_id": "operational_manifest:9950a50d6ed9684105fa966afe2e4427fee9d56ab47c3d37c0dd4f94f7e5bb5e",
+  "preflight_manifest_sha256": "8abf2e8dd4773963a4c5291dc2c559d938aec524d0f2c342bcf2ee9536c12279",
+  "gamma_invocations": 2,
+  "gamma_http_responses": 0,
+  "gamma_events_received": 0,
+  "gamma_markets_received": 0,
+  "owner_demands_submitted": 0,
+  "production_changes": 0,
+  "current_runtime_db_writes": 0,
+  "live_order_signing_private_key": "OUT_OF_SCOPE_AND_UNREACHABLE",
+  "focused_tests": 131,
+  "alpha_tests": 449,
+  "review_status": "FINDINGS_FIXED",
+  "weather_manifest": "healthy",
+  "weather_controller": "CRITICAL_PREEXISTING_BASELINE",
+  "market_books_owner": "healthy_not_modified",
+  "disposition": "REWORK_OPERATIONAL_BOUNDARY",
+  "blocking_reasons": [
+    "direct no-proxy TLS egress unavailable from the execution environment",
+    "Alpha owner inbox implementation is not deployed or configured",
+    "clean weather before/during/after isolation baseline is unavailable"
+  ]
+}
