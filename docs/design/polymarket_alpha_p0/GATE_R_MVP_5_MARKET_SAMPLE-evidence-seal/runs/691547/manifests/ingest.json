@@ -1,0 +1,18 @@
+{
+  "response_path": "/private/tmp/polymarket-alpha-pilot/chain-20260828-kvsTgm/input/gamma-derived-market-691547.json",
+  "receipt": {
+    "request_method": "GET",
+    "endpoint_host": "gamma-api.polymarket.com",
+    "endpoint_path": "/events",
+    "http_status": 200,
+    "response_bytes_sha256": "cdf421b87649e6e22fcc0d84a44d55f6fb0f7fb6dd7d295e7c2e4404a6e08593",
+    "response_byte_length": 9413,
+    "response_received_at": "2026-08-28T01:55:52.510949+00:00"
+  },
+  "run_id": "current-sample-20260828-market-691547",
+  "observed_at": "2026-08-28T01:55:52.510949+00:00",
+  "ingested_at": "2026-08-28T01:57:14Z",
+  "page_budget": 1,
+  "requested_offset": 0,
+  "requested_limit": 1
+}

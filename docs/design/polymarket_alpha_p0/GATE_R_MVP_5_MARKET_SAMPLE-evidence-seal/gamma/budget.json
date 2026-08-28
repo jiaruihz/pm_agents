@@ -1,0 +1,1 @@
+{"max_markets_per_scan":5,"max_tokens_per_batch":10,"max_demands_per_minute":5,"max_network_requests_total":30,"max_artifact_bytes_total":50000000,"max_runtime_minutes":30,"redirects":"disabled","proxy_environment":"cleared","current_runtime_db_writes":0}

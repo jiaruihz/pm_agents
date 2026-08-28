@@ -1,0 +1,75 @@
+{
+  "execution": "NO_ORDER",
+  "gamma_raw_sha256": "9085fbb8dd018ef6d54df011b23f7536ca5b7fa38db73391dfc757f3e1522f0e",
+  "items": [
+    {
+      "ask": 0.13,
+      "card": "CARD_01_691547.md",
+      "id": "691547",
+      "n": 1,
+      "payoff": 669.2307692307692,
+      "prompt": "PROMPT_01_691547.md",
+      "q": "Kraken IPO by December 31, 2026?",
+      "spread": 0.04,
+      "url": "https://polymarket.com/event/kraken-ipo-in-2025/kraken-ipo-by-december-31-2026-513"
+    },
+    {
+      "ask": 0.068,
+      "card": "CARD_02_3206940.md",
+      "id": "3206940",
+      "n": 2,
+      "payoff": 1370.5882352941173,
+      "prompt": "PROMPT_02_3206940.md",
+      "q": "Macron out by December 31, 2026?",
+      "spread": 0.024,
+      "url": "https://polymarket.com/event/macron-out-in-2025/macron-out-by-december-31-2026-20260728190614227"
+    },
+    {
+      "ask": 0.08,
+      "card": "CARD_03_2354064.md",
+      "id": "2354064",
+      "n": 3,
+      "payoff": 1150.0,
+      "prompt": "PROMPT_03_2354064.md",
+      "q": "Will the next UK election be called by December 31, 2026?",
+      "spread": 0.01,
+      "url": "https://polymarket.com/event/uk-election-called-by/will-the-next-uk-election-be-called-by-december-31-2026"
+    },
+    {
+      "ask": 0.08,
+      "card": "CARD_04_677404.md",
+      "id": "677404",
+      "n": 4,
+      "payoff": 1150.0,
+      "prompt": "PROMPT_04_677404.md",
+      "q": "China x India military clash by December 31, 2026?",
+      "spread": 0.01,
+      "url": "https://polymarket.com/event/china-x-india-military-clash-by-december-31/china-x-india-military-clash-by-december-31-2026"
+    },
+    {
+      "ask": 0.067,
+      "card": "CARD_05_2749382.md",
+      "id": "2749382",
+      "n": 5,
+      "payoff": 1392.5373134328358,
+      "prompt": "PROMPT_05_2749382.md",
+      "q": "NATO/EU troops fighting in Ukraine by December 31, 2026?",
+      "spread": 0.023,
+      "url": "https://polymarket.com/event/natoeu-troops-fighting-in-ukraine-in-2025/natoeu-troops-fighting-in-ukraine-by-december-31-2026"
+    }
+  ],
+  "market_count": 5,
+  "prompt_leakage_scan": "PASS",
+  "prompt_sha256s": {
+    "PROMPT_01_691547.md": "710b683704e959548eae0505dbf7cbfe94ac1123528cb99e71ecaf3776b015eb",
+    "PROMPT_02_3206940.md": "280ec0eb4eb5e64543452b308264a641005fb0206fb6988ad5fdd31df5da37f9",
+    "PROMPT_03_2354064.md": "c0c5f54a2a93989e70c46862c20204c84769c226a11846ebeab5e0e005b63b32",
+    "PROMPT_04_677404.md": "d21b77e6df448009fe54d096943e0641209d1aa79057e04fad8c3ceb149851ab",
+    "PROMPT_05_2749382.md": "e1923672db3d445f20f047cb98d21a84b449d2b1cad5f0b2979b99345ef8a546"
+  },
+  "schema": "alpha_batch5_mvp_v2",
+  "supersedes_for_now": [
+    "/private/tmp/polymarket-alpha-pilot/batch5-20260828-UhtHDS",
+    "/private/tmp/polymarket-alpha-pilot/batch5-20260828-v2-p9tyD7"
+  ]
+}

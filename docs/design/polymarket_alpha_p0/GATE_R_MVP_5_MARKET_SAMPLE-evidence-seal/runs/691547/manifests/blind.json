@@ -1,0 +1,62 @@
+{
+  "rule_request": {
+    "run_id": "current-sample-20260828-rule-691547",
+    "market_id": "691547",
+    "market_snapshot_id": "gamma_market_snapshot:2b9b2419cfa126112dca18795bf1dc5dbe610f2a5953e5a0c61f0ed0cdd9e1c1",
+    "raw_rule_text": "This market will resolve to \"Yes\" if Kraken completes an Initial Public Offering (IPO) by the listed date ET, as confirmed by official company announcements and credible news sources. Otherwise, this market will resolve to \"No.\"\n\nThe IPO refers to the first sale of stock by the listed company to the public on any recognized stock exchange.\n\nIf Kraken is acquired by another company that is already public, this market will immediately resolve to \"No.\"\n\nThe resolution source for this market is a consensus of credible reporting.",
+    "expected_rule_hash": "a2d7a24d65e43401741ef99e382db31ea7ab8016790c8da711040b835c54be99",
+    "parse_status": "PARSED",
+    "parsed": {
+      "subject_entity": "Kraken",
+      "entity_match_rule": "Kraken, the company named in the binding market rule",
+      "yes_trigger": "Kraken completes its first public sale of stock on a recognized stock exchange by the listed deadline",
+      "threshold": null,
+      "deadline": "2027-01-01T05:00:00Z",
+      "timezone": "America/New_York",
+      "resolution_sources": [
+        "official company announcements",
+        "consensus of credible reporting"
+      ],
+      "source_precedence": [
+        "official company announcements",
+        "credible news consensus"
+      ],
+      "initial_or_final": "FINAL",
+      "qualifying_examples": [
+        "Kraken completes an IPO on a recognized stock exchange by December 31, 2026 ET"
+      ],
+      "non_qualifying_examples": [
+        "Kraken only files for an IPO but does not complete it by the deadline",
+        "Kraken is acquired by a company that is already public"
+      ],
+      "ambiguities": [],
+      "clarity_score": "0.88"
+    },
+    "parser_version": "manual-structured-current-sample-v1",
+    "compiled_at": "2026-08-28T01:58:34Z",
+    "source_evidence": [
+      {
+        "field_names": [
+          "subject_entity",
+          "entity_match_rule",
+          "yes_trigger",
+          "deadline",
+          "resolution_sources",
+          "source_precedence"
+        ],
+        "source_artifact_id": "gamma_rule_source:a2d7a24d65e43401741ef99e382db31ea7ab8016790c8da711040b835c54be99",
+        "source_content_sha256": "a2d7a24d65e43401741ef99e382db31ea7ab8016790c8da711040b835c54be99",
+        "artifact_text": "This market will resolve to \"Yes\" if Kraken completes an Initial Public Offering (IPO) by the listed date ET, as confirmed by official company announcements and credible news sources. Otherwise, this market will resolve to \"No.\"\n\nThe IPO refers to the first sale of stock by the listed company to the public on any recognized stock exchange.\n\nIf Kraken is acquired by another company that is already public, this market will immediately resolve to \"No.\"\n\nThe resolution source for this market is a consensus of credible reporting.",
+        "quote_start": 0,
+        "quote_end": 530,
+        "legal_role": "binding_resolution_rule",
+        "adjudication_use": "binding",
+        "observed_at": "2026-08-28T01:55:52.510949Z"
+      }
+    ],
+    "corpus": null
+  },
+  "gate_evaluated_at": "2026-08-28T01:58:34Z",
+  "packet_created_at": "2026-08-28T01:58:35Z",
+  "handoff_created_at": "2026-08-28T01:58:36Z"
+}
