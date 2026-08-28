@@ -21,6 +21,7 @@ FIXED_SHARES = 5.0
 SOLE_BLOCKER = "non_positive_taker_ev"
 LEDGER_SCHEMA_VERSION = "core_carry_near_core_maker_ledger_v1"
 MANIFEST_SCHEMA_VERSION = "core_carry_near_core_maker_manifest_v1"
+WS_CONTROL_READINESS_SCHEMA_VERSION = "core_carry_near_core_ws_control_readiness_v1"
 
 
 def city_day(row: Mapping[str, Any]) -> tuple[str, str]:
@@ -84,6 +85,42 @@ def consumed_city_days(
         if str(row.get("status") or "") == "submitted" or matched_shares(row) > 0:
             consumed.add(key)
     return consumed
+
+
+def ws_control_readiness_failures(payload: Mapping[str, Any]) -> list[str]:
+    """Validate the E1 smoke seal required before any WS-1 live order."""
+
+    failures: list[str] = []
+    if str(payload.get("schema_version") or "") != WS_CONTROL_READINESS_SCHEMA_VERSION:
+        failures.append("ws_control_schema_mismatch")
+    if str(payload.get("status") or "") != "ready":
+        failures.append("ws_control_not_ready")
+    if str(payload.get("raw_ingestion") or "") != "continuous_event_driven":
+        failures.append("raw_ingestion_not_continuous_event_driven")
+    try:
+        heartbeat_ms = float(payload.get("policy_heartbeat_ms"))
+    except (TypeError, ValueError):
+        heartbeat_ms = float("inf")
+    if heartbeat_ms > 500:
+        failures.append("policy_heartbeat_slower_than_500ms")
+    try:
+        snapshot_ms = float(payload.get("feature_snapshot_max_interval_ms"))
+    except (TypeError, ValueError):
+        snapshot_ms = float("inf")
+    if snapshot_ms > 1000:
+        failures.append("feature_snapshot_slower_than_1s")
+    if not bool(payload.get("private_order_updates")):
+        failures.append("private_order_updates_unavailable")
+    if str(payload.get("staleness_action") or "") != "safety_cancel":
+        failures.append("staleness_action_not_safety_cancel")
+    try:
+        pre_sec = float(payload.get("window_pre_sec"))
+        post_sec = float(payload.get("window_post_sec"))
+    except (TypeError, ValueError):
+        pre_sec, post_sec = 0.0, 0.0
+    if pre_sec < 60 or post_sec < 900:
+        failures.append("replay_window_below_60s_pre_900s_post")
+    return failures
 
 
 def filled_exposure_by_city_day(
