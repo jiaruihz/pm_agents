@@ -1,0 +1,8 @@
+status=FAILED_NO_IMPORT
+requested_alias=haiku
+resolved_provider_model=glm-4.7
+provider_error=unrecognized_model: glm-4.7
+
+The controlled sidecar allowlist permits the haiku alias for this route. The current
+local provider mapping resolved it to glm-4.7, which was unavailable. No model output
+was imported, no result was fabricated, and the allowlist was not bypassed.

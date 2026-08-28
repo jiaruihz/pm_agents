@@ -1,6 +1,6 @@
 # Polymarket Alpha — 项目总览与当前事实
 
-状态日期：2026-08-28
+状态日期：2026-08-29
 项目简称：`Polymarket Alpha`
 当前框架：`Gate R Controlled Manual Research Pipeline`
 中文简称：`Gate R 多路召回与人工深研框架`
@@ -12,11 +12,20 @@
 
 目前获准并实际验证到的最高运行状态是：一次受控、只读、无下单的 5 市场 smoke sample 已完成 Gamma 抓取并逐市场推进到 `BLIND_PACKET_FROZEN`。它还不是完整 Gate R WP6，也不是每日扫描服务，更不是交易系统。
 
+此外，2026-08-29 完成了一次更宽的当前市场 Candidate-stage 扫描：50 个
+events 展开 608 个市场，确定性初筛得到 192 个 eligible markets，最终冻结
+20 个 `CANDIDATE_MERGED`。这轮覆盖更广，但因 GLM provider alias 当前不可用，
+有意停在 Candidate，不能替代下方推进更深的 5 市场 smoke sample。
+
 ```text
 ENGINEERING_BASELINE=COMPLETE_OFFLINE
 GATE_R_WP1_TO_WP5=COMPLETE
 CONTROLLED_5_MARKET_SMOKE=PARTIAL_SUCCESS
 SMOKE_STOP_STATE=BLIND_PACKET_FROZEN
+CONTROLLED_MARKET20_SCAN=CANDIDATE_STAGE_COMPLETE_WITH_LIMITATIONS
+MARKET20_RECALL_HITS=20
+MARKET20_CANDIDATES=20
+MARKET20_GLM=FAILED_NO_IMPORT
 GPT_PRO_BLIND_RESULT=NOT_RECEIVED
 FRESH_PAIRED_BOOK_AFTER_BLIND=NOT_REQUESTED
 RULE_B_AND_PREDICTION_LEDGER_FOR_SAMPLE=NOT_REACHED
@@ -120,6 +129,7 @@ Gamma market facts
 | Offline fixture implementation | `PASS` |
 | Gate R WP1–WP5 engineering | `PASS` |
 | 受控一次性 Gamma read-only sample | `PASS` |
+| 20 市场 Candidate-stage 当前扫描 | `PASS_WITH_LIMITATIONS` |
 | 5 市场 Candidate → Rule A → GLM triage → Blind prompt | `PASS_WITH_LIMITATIONS` |
 | 正式 8-case Gate R WP6 | `NOT_EXECUTED` |
 | GPT Pro Blind 结果导入 | `WAITING_FOR_REAL_RESULTS` |
@@ -209,6 +219,12 @@ WP1–WP5 evidence seal 记录一致，不涉及 Alpha 业务逻辑或本轮文�
 - `GATE_R_MVP_5_MARKET_SAMPLE-evidence-seal/README.md`
 - `GATE_R_MVP_5_MARKET_SAMPLE-evidence-seal/batch/00_BATCH_INDEX.md`
 - `GATE_R_MVP_5_MARKET_SAMPLE-evidence-seal/hashes.sha256`
+
+### 当前 20 市场 Candidate 扫描
+
+- `GATE_R_MARKET20_SCAN-20260829-evidence-seal/README.md`
+- `GATE_R_MARKET20_SCAN-20260829-evidence-seal/USABLE_MARKETS_20.md`
+- `GATE_R_MARKET20_SCAN-20260829-evidence-seal/hashes.sha256`
 
 ## 9. 关键 Git lineage
 
