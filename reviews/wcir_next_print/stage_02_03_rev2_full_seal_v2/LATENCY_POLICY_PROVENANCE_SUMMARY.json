@@ -1,0 +1,10 @@
+{
+  "collector_epoch_materialized": false,
+  "forward_primary_status": "NOT_FORWARD_PRIMARY",
+  "future_primary_requirement": "city + source + collector_epoch frozen operational SLO estimated only from pre-cutoff observations",
+  "latency_policy_id": "wcir_legacy_global_pooled_p95_49p773_v1",
+  "legacy_status": "LEGACY_DIAGNOSTIC_ONLY",
+  "row_count": 841,
+  "slo_seconds": 49.772999999999996,
+  "status": "PASS"
+}

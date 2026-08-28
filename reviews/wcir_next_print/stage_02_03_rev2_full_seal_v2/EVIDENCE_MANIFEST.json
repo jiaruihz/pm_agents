@@ -1,0 +1,113 @@
+{
+  "entries": [
+    {
+      "path": "BOOK_VALIDITY_CORRIGENDUM_RESULTS.json",
+      "sha256": "c1e9ba5b4395d577a03f46e7dc3fcb7a9d5bd1b4f18dc1ecc00261d7b718a537",
+      "size_bytes": 1155992
+    },
+    {
+      "path": "CAUSAL_ENTRY_AND_ORACLE_FAMILY_CONTRACT.md",
+      "sha256": "f6ff2fc9827e3bbd95c117aecda447c074c3e3adca1b0d1322512b53ab2950fc",
+      "size_bytes": 1248
+    },
+    {
+      "path": "DENOMINATOR_LAYER_SUMMARY.json",
+      "sha256": "627383c273ea7e3ad7ebe52a2d68d983d5d0ee719938221ae9f04ae19f59863b",
+      "size_bytes": 522
+    },
+    {
+      "path": "FINAL_CODE_AND_ENVIRONMENT_FREEZE.json",
+      "sha256": "2cd43af20cff2a441e337ff6043d23eb4bff1d9e2d641b3212e50354f9a9d2fb",
+      "size_bytes": 2640
+    },
+    {
+      "path": "FULL_EVIDENCE_SEAL_V2_AUDIT.json",
+      "sha256": "ebdbd71e63b05944d22443a3b7c6a4e3d1895b8c7ca7aed875bf8c75ece363d0",
+      "size_bytes": 3703
+    },
+    {
+      "path": "GPT_PRO_REVIEW_PACKET_STAGE23_FULL_SEAL_V2.md",
+      "sha256": "6ae72fac5b94fce6f4e325f8d00c9bd2d9dc783ef64d53a536c780bd8c1b561d",
+      "size_bytes": 2312
+    },
+    {
+      "path": "INDEPENDENT_CODE_REVIEW.md",
+      "sha256": "46dca48c0b040964c75fc4abea8eadfd7a0afd9555114982329ab1608c1485e3",
+      "size_bytes": 1882
+    },
+    {
+      "path": "LATENCY_POLICY_PROVENANCE_SUMMARY.json",
+      "sha256": "6dd51df7a91c802df1e72e866665aa936e13502968aab42a0822d2b6063e7b20",
+      "size_bytes": 417
+    },
+    {
+      "path": "LATENCY_PROVENANCE_CONTRACT.md",
+      "sha256": "05e5338808a1182d27e3c63b6f1e1da241e09d9a5995aa29484630e24f6c60da",
+      "size_bytes": 828
+    },
+    {
+      "path": "LAYERED_DENOMINATOR_CONTRACT.md",
+      "sha256": "fa9365b5e83a760c4ccdd6803e1037c1cb0c00f1a5708f0dd2b9bc8fcfb1b637",
+      "size_bytes": 1056
+    },
+    {
+      "path": "ORACLE_FAMILY_MEASUREMENT_HARNESS.json",
+      "sha256": "dee5e4d5129e4b4902d8816614afa58a7ac49b80ae035dc463b800796a3356c5",
+      "size_bytes": 616
+    },
+    {
+      "path": "PACKAGE_FAIL_CLOSED_TESTS.txt",
+      "sha256": "d87b9c71841749f4641f93bbbb925b68fd729815db5ee8f4d4c6b4c21e48cc8a",
+      "size_bytes": 384
+    },
+    {
+      "path": "PRIMARY_REACTION_GATE_RECONCILIATION_SUMMARY.json",
+      "sha256": "eb3e28035f0790fae58b98a254e5f0c4344abd841e9e4ce8766d332cfb12c862",
+      "size_bytes": 1895
+    },
+    {
+      "path": "PYTHON_ENVIRONMENT.txt",
+      "sha256": "af61f8c75e03cab1d5fe114aa8472e4e4eb32bccc15a9d8ee47740bed74420ea",
+      "size_bytes": 1714
+    },
+    {
+      "path": "REPRODUCE_STAGE23_FULL_SEAL_V2.sh",
+      "sha256": "e018173cd76a7e6583c4806bdd6e9d635c13c8739e02e0057420f202d0315c6f",
+      "size_bytes": 4173
+    },
+    {
+      "path": "TEST_COMMANDS_AND_RAW_OUTPUT.txt",
+      "sha256": "32c82a3b73ba1c14b195621a9c10da2e6bb13bf99ccb44d64f45c541239bc1cf",
+      "size_bytes": 1079
+    },
+    {
+      "path": "ZERO_NOTIONAL_AUDIT.json",
+      "sha256": "6b68356791be4400c6a244149f32a70ec031a4b2cb18be09289923e581203fc5",
+      "size_bytes": 519
+    },
+    {
+      "path": "evidence/DENOMINATOR_LAYER_ROWS.jsonl.gz",
+      "sha256": "79ca3c5852520089eadd720085aef8363aca199947042962646d8f8109d703f4",
+      "size_bytes": 66131
+    },
+    {
+      "path": "evidence/LATENCY_POLICY_PROVENANCE_ROWS.jsonl.gz",
+      "sha256": "67d444998ed611f0163327567dacd6ffd912b3e5ef43c9a684668f1136e36879",
+      "size_bytes": 36736
+    },
+    {
+      "path": "evidence/ORACLE_FAMILY_MEASUREMENT_ROWS.jsonl.gz",
+      "sha256": "55177f235ee233959d46c2374bc8a5b124859eac1ba53dba48adf3c9af25426f",
+      "size_bytes": 726378
+    },
+    {
+      "path": "evidence/PRIMARY_REACTION_GATE_ROW_RECONCILIATION.jsonl.gz",
+      "sha256": "774c5c55ea7647bfbe33fcc1ecf1e6e8f7e926eb701462a04e23296cb50c86af",
+      "size_bytes": 78822
+    }
+  ],
+  "entry_count": 21,
+  "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_full_seal_v2",
+  "strict_entry_set": true,
+  "unmanifested_extra_files_allowed": false
+}

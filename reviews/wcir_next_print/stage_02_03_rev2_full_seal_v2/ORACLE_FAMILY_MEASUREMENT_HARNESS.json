@@ -1,0 +1,25 @@
+{
+  "causal_hard_gate_applied_to_every_row": true,
+  "entry_checkpoint_not_after_decision_ready_guard_applied": true,
+  "entry_equal_official_first_seen_fails_closed": true,
+  "event_count": 841,
+  "forward_primary_latency_entry_materialized": false,
+  "horizons_seconds": [
+    5,
+    15,
+    30,
+    60,
+    120
+  ],
+  "legacy_latency_entry_materialized": true,
+  "missing_or_uncomparable_clock_fails_closed": true,
+  "model_or_policy_selection_authorized": false,
+  "policy_count": 6,
+  "post_official_market_data_used_for_action": false,
+  "row_count": 50460,
+  "sizes": [
+    1,
+    5
+  ],
+  "status": "PASS"
+}

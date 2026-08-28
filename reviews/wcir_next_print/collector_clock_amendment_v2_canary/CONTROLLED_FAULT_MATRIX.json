@@ -1,0 +1,70 @@
+{
+  "all_passed": true,
+  "fault_count": 8,
+  "fills": 0,
+  "notional_usd": 0,
+  "orders": 0,
+  "passed_count": 8,
+  "rows": [
+    {
+      "actively_induced": true,
+      "actively_induced_on_real_network_frame": true,
+      "evidence_origin": "ACTUAL_PUBLIC_WS_FRAME_TO_BOUNDED_BUFFER",
+      "exception": "backpressure frame drop",
+      "fail_closed": true,
+      "fault": "queue_overflow",
+      "wire_sha256": "5defea7aebec2f4a4ddd55920d2d26fa958c94ad31ddb4e4b71c8e5b06176b85"
+    },
+    {
+      "actively_induced": true,
+      "actively_induced_on_real_network_baseline_path": true,
+      "evidence_origin": "CONTROLLED_GAP_INJECTION_AFTER_ACTUAL_PUBLIC_WS_BASELINE",
+      "exception": "delta without valid baseline",
+      "exchange_sequence_is_protocol_unavailable": true,
+      "fail_closed": true,
+      "fault": "sequence_gap",
+      "reason": "CONTROLLED_SEQUENCE_GAP_ON_REAL_BASELINE_PATH",
+      "wire_sha256": "5ddbd0515f0c42939011633c07458b0cefab60ab5be5b73bf574d2bd7ae563a2"
+    },
+    {
+      "actively_induced": true,
+      "fail_closed": true,
+      "fault": "heartbeat_timeout",
+      "reason": "HEARTBEAT_TIMEOUT"
+    },
+    {
+      "actively_induced": true,
+      "exception": "scheduler stall",
+      "fail_closed": true,
+      "fault": "scheduler_stall",
+      "reason": "SCHEDULER_STALL"
+    },
+    {
+      "actively_induced": true,
+      "exception": "exchange event clock regression",
+      "fail_closed": true,
+      "fault": "exchange_timestamp_regression",
+      "reason": "EXCHANGE_EVENT_CLOCK_REGRESSION"
+    },
+    {
+      "actively_induced": true,
+      "exception": "wall clock regression",
+      "fail_closed": true,
+      "fault": "wall_clock_regression"
+    },
+    {
+      "actively_induced": true,
+      "fail_closed": true,
+      "fault": "hard_reconnect",
+      "new_connection_and_epoch_required": true,
+      "real_network_connection": true
+    },
+    {
+      "actively_induced": true,
+      "fail_closed": true,
+      "fault": "process_restart",
+      "fresh_machine_state_required_new_baseline": true,
+      "real_network_connection": true
+    }
+  ]
+}

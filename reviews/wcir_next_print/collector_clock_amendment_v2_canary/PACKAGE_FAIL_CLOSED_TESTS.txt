@@ -1,0 +1,3 @@
+Strict package verifier rejects missing, extra, duplicate, size-drift, and same-size
+hash-drift entries. Extracted full-seal reproduction verifies exact entry set and all
+manifested hashes before evidence reconstruction.

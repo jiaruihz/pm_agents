@@ -1,0 +1,6 @@
+Command: .venv/bin/python -m pytest -q tests/research_tests/test_wcir_stage23_rev2.py tests/research_tests/test_wcir_stage23_rev2_closure.py tests/research_tests/test_wcir_stage23_full_seal_v2.py
+Result: 35 passed, 1 intentional duplicate-zip warning in 0.16s.
+
+Bounded network result: PASS. Five public-read-only phases, three normal/recovery
+receipt+baseline+pong passes, two real-path fault phases, 13 frame metadata rows,
+10,603 wire bytes, 0 parse errors, 0 normal-path drops, 8/8 faults fail closed.

@@ -1,0 +1,19 @@
+{
+  "alpha_or_futility_claim_authorized": false,
+  "conditional_alpha_missing_data_is_null": true,
+  "layers": {
+    "EVENT_UNIVERSE": 841,
+    "OPERATIONAL_FAIL_CLOSED": 841,
+    "PAIRWISE_BASELINE_COMPARABLE": 1,
+    "RESEARCH_MARKET_DATA_ELIGIBLE": 89
+  },
+  "operational_dispositions": {
+    "DATA_FAIL_CLOSED": 665,
+    "POLICY_ABSTAIN": 87,
+    "POLICY_ACTION": 89
+  },
+  "operational_missing_data_pnl_is_zero": true,
+  "policy_abstain_distinct_from_data_fail_closed": true,
+  "row_count": 841,
+  "status": "PASS"
+}

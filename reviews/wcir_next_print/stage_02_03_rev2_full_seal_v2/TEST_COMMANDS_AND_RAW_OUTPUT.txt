@@ -1,0 +1,11 @@
+Command: .venv/bin/python -m pytest -q tests/research_tests/test_wcir_stage23_rev2.py tests/research_tests/test_wcir_stage23_rev2_closure.py tests/research_tests/test_wcir_stage23_full_seal_v2.py
+Result: 35 passed, 1 warning in 0.16s
+Warning: intentional duplicate-entry mutation case emitted zipfile UserWarning: Duplicate name: evidence.bin
+
+Command: .venv/bin/python scripts/analysis/forecast_quality/wcir_stage23_full_seal_v2.py
+Result: PASS; 841 EVENT_UNIVERSE, 841 OPERATIONAL_FAIL_CLOSED, 89 RESEARCH_MARKET_DATA_ELIGIBLE, 1 PAIRWISE_BASELINE_COMPARABLE, 50,460 oracle-family rows.
+
+Command: PYTHON_BIN=.venv/bin/python reviews/wcir_next_print/stage_02_03_rev2_full_seal_v2/REPRODUCE_STAGE23_FULL_SEAL_V2.sh
+Result: PASS; 9 deterministic artifacts reproduced offline; normalized audit semantic fields and row identities match.
+
+Network canary command is frozen by NETWORK_CANARY_RESULTS.json and was bounded to five public-read-only phases. Result: PASS; 13 metadata frames, 10,603 wire bytes, 0 parse errors, 0 normal-path queue drops, 8/8 controlled faults fail closed.

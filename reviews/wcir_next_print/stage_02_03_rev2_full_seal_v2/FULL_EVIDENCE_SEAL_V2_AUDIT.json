@@ -1,0 +1,80 @@
+{
+  "fills": 0,
+  "generated_at_utc": "2026-08-28T02:11:19.264642+00:00",
+  "immutable_stage2_stage3_manifests": [
+    {
+      "entry_count": 20,
+      "entry_set_verified": true,
+      "manifest_sha256": "babf7b47bccc5937701a6f487c56c6bdb1479b91bdfcd45a8c01fb278cab06a8",
+      "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2"
+    },
+    {
+      "entry_count": 15,
+      "entry_set_verified": true,
+      "manifest_sha256": "23b4af7f347898a30932788d23878ef7d934caf9f5ba2fa50c68fcd5e3a76a01",
+      "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2"
+    }
+  ],
+  "modeling_performed": false,
+  "new_row_evidence": [
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_full_seal_v2/evidence/PRIMARY_REACTION_GATE_ROW_RECONCILIATION.jsonl.gz",
+      "sha256": "774c5c55ea7647bfbe33fcc1ecf1e6e8f7e926eb701462a04e23296cb50c86af",
+      "size_bytes": 78822
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_full_seal_v2/evidence/LATENCY_POLICY_PROVENANCE_ROWS.jsonl.gz",
+      "sha256": "67d444998ed611f0163327567dacd6ffd912b3e5ef43c9a684668f1136e36879",
+      "size_bytes": 36736
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_full_seal_v2/evidence/ORACLE_FAMILY_MEASUREMENT_ROWS.jsonl.gz",
+      "sha256": "55177f235ee233959d46c2374bc8a5b124859eac1ba53dba48adf3c9af25426f",
+      "size_bytes": 726378
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_full_seal_v2/evidence/DENOMINATOR_LAYER_ROWS.jsonl.gz",
+      "sha256": "79ca3c5852520089eadd720085aef8363aca199947042962646d8f8109d703f4",
+      "size_bytes": 66131
+    }
+  ],
+  "notional_usd": 0,
+  "orders": 0,
+  "prior_full_seal_required_artifacts": [
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/COMPLETE_REV2_EVIDENCE_PACKAGE_AUDIT.json",
+      "sha256": "3c23e7bc154b372d614f7f4b116cf39ccc851b458a653b35a181dc11e9ddde10",
+      "size_bytes": 4627
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/FINAL_CODE_AND_ENVIRONMENT_FREEZE.json",
+      "sha256": "bf80516a9684f86b62e622d89bf0ce6ccd0d9498d3821a1da7048f41bca7e33c",
+      "size_bytes": 9977
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/TEST_COMMANDS_AND_RAW_OUTPUT.txt",
+      "sha256": "5e75b342e191e09b59f819a820474494bb3d46e80a7f6f34b320bebc3711afcc",
+      "size_bytes": 1395
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/PACKAGE_FAIL_CLOSED_TESTS.txt",
+      "sha256": "a81d600505dc521561684dcf670deb0c83e2b984ce6d35788cc1985eada8d026",
+      "size_bytes": 720
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/EVIDENCE_MANIFEST.json",
+      "sha256": "ed55147486eea9066bfa634dc14b18aa95c3c0819b7b92b93d14de2888f2f9a4",
+      "size_bytes": 3419
+    },
+    {
+      "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/REPRODUCE_STAGE23_REV2.sh",
+      "sha256": "c6676c13d66e29cc9fdcaec15d47ab5b852609ced990faca8f0bc4764a43e8a9",
+      "size_bytes": 1223
+    }
+  ],
+  "production_files_modified": false,
+  "raw_15m_frame_replay_repeated": false,
+  "reason_raw_replay_not_repeated": "immutable stage2/stage3 manifests and prior full seal are verified before deterministic closure rebuild",
+  "stage4_work_performed": false,
+  "status": "PASS"
+}

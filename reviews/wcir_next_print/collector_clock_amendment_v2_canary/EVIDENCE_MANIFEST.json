@@ -1,0 +1,73 @@
+{
+  "entries": [
+    {
+      "path": "CONTROLLED_FAULT_MATRIX.json",
+      "sha256": "6dac05abffe134dabd47914b96bacd3b43bef86f40502866d9f1e77671925b20",
+      "size_bytes": 2099
+    },
+    {
+      "path": "EXPECTED_TOKEN_DEMAND.json",
+      "sha256": "a60d32754eee0185d3826491a7fe16fc08623883ba32ee447276f0ca18095c32",
+      "size_bytes": 758
+    },
+    {
+      "path": "FINAL_CODE_AND_ENVIRONMENT_FREEZE.json",
+      "sha256": "2cd43af20cff2a441e337ff6043d23eb4bff1d9e2d641b3212e50354f9a9d2fb",
+      "size_bytes": 2640
+    },
+    {
+      "path": "GPT_PRO_REVIEW_PACKET_COLLECTOR_CLOCK_V2_CANARY.md",
+      "sha256": "d2387ada2aeb995a94d23db33522a3e356152d273fa8c7f77ac09892df75731f",
+      "size_bytes": 1977
+    },
+    {
+      "path": "NETWORK_ADAPTER_AND_CLOCK_CONTRACT.md",
+      "sha256": "3943b4abf1e2f85f3d02e1a73cb64006e03cd951a475e0658ae6305a3563f47d",
+      "size_bytes": 1666
+    },
+    {
+      "path": "NETWORK_CANARY_RESULTS.json",
+      "sha256": "6edeb451fdc9ca764fce2c465991474839714244c33c851a2db5a2d59732e051",
+      "size_bytes": 7418
+    },
+    {
+      "path": "PACKAGE_FAIL_CLOSED_TESTS.txt",
+      "sha256": "f7f6b4fdbe8254dc0b7b54c0e825f03da73c7729e8550d91bebc2f632585e010",
+      "size_bytes": 221
+    },
+    {
+      "path": "PYTHON_ENVIRONMENT.txt",
+      "sha256": "af61f8c75e03cab1d5fe114aa8472e4e4eb32bccc15a9d8ee47740bed74420ea",
+      "size_bytes": 1714
+    },
+    {
+      "path": "TEST_COMMANDS_AND_RAW_OUTPUT.txt",
+      "sha256": "63243022309a652345ad061d625f9840f491b06af511e448b658cec6f358c6dd",
+      "size_bytes": 506
+    },
+    {
+      "path": "TOKEN_IDENTITY_INPUT.json",
+      "sha256": "b9d853a29f54d9945fdc16d955bc9304aee5b308fc802be8ad8a31529c95a1be",
+      "size_bytes": 1079
+    },
+    {
+      "path": "ZERO_NOTIONAL_AND_ISOLATION_AUDIT.json",
+      "sha256": "2216091d34554f88859644cd1e8b431dc82f607a39d147a41a2444769e1eb8d3",
+      "size_bytes": 498
+    },
+    {
+      "path": "evidence/NETWORK_FRAME_METADATA.jsonl.gz",
+      "sha256": "5b146fc95567b1e4eeded76e10432fd268f256ff080edfe251c49a95cea687a8",
+      "size_bytes": 838
+    },
+    {
+      "path": "evidence/STATE_TRANSITIONS.jsonl",
+      "sha256": "864dcde546a6e3ce09f241fd5293a234d2e666f8454e650eea6b7fad158b2983",
+      "size_bytes": 10084
+    }
+  ],
+  "entry_count": 13,
+  "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/collector_clock_amendment_v2_canary",
+  "strict_entry_set": true,
+  "unmanifested_extra_files_allowed": false
+}
