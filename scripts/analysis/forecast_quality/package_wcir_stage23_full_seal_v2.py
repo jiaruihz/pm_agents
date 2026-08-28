@@ -5,8 +5,12 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
+import locale
+import platform
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -31,6 +35,87 @@ STAGE3 = REVIEW / "stage_03_rev2"
 EVENTS = REVIEW / "stage_03/evidence/FROZEN_NEXT_REPORT_EVENTS.jsonl.gz"
 
 
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run_text(*args: str) -> str:
+    return subprocess.run(args, cwd=ROOT, check=True, text=True, capture_output=True).stdout.strip()
+
+
+def write_freezes(code_files: tuple[str, ...]) -> None:
+    dependencies = run_text(str(ROOT / ".venv/bin/python"), "-m", "pip", "freeze") + "\n"
+    head = run_text("git", "rev-parse", "HEAD")
+    production_yaml = ROOT / "src/strategies/runtime/production.yaml"
+    committed_production = subprocess.run(
+        ["git", "show", f"{head}:src/strategies/runtime/production.yaml"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout
+    production_match = hashlib.sha256(committed_production).hexdigest() == sha256(production_yaml)
+    freeze = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "code_commit_sha": head,
+        "branch": run_text("git", "branch", "--show-current"),
+        "code_and_test_identities": [
+            {"path": relative, "size_bytes": (ROOT / relative).stat().st_size, "sha256": sha256(ROOT / relative)}
+            for relative in code_files
+        ],
+        "environment": {
+            "python": platform.python_version(),
+            "python_executable": str(ROOT / ".venv/bin/python"),
+            "os": platform.platform(),
+            "machine": platform.machine(),
+            "locale": locale.setlocale(locale.LC_ALL, None),
+            "timezone": "Asia/Shanghai (CST +0800)",
+            "pip_freeze_sha256": hashlib.sha256(dependencies.encode()).hexdigest(),
+        },
+        "production_boundary": {
+            "production_yaml_sha256": sha256(production_yaml),
+            "production_yaml_matches_code_commit": production_match,
+            "production_config_modified_by_this_work": False,
+            "production_deployment_performed": False,
+        },
+    }
+    if not production_match:
+        raise RuntimeError("production.yaml differs from frozen code commit")
+    for root in (SEAL, CANARY):
+        (root / "PYTHON_ENVIRONMENT.txt").write_text(dependencies, encoding="utf-8")
+        (root / "FINAL_CODE_AND_ENVIRONMENT_FREEZE.json").write_text(
+            json.dumps(freeze, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    canary = json.loads((CANARY / "NETWORK_CANARY_RESULTS.json").read_text())
+    zero = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "network_channel": "PUBLIC_MARKET_READ_ONLY",
+        "authentication_used": canary["network"]["authentication_used"],
+        "order_or_user_channel_used": canary["network"]["order_or_user_channel_used"],
+        "production_consumer_joined": canary["production_consumer_joined"],
+        "production_config_modified": canary["production_config_modified"],
+        "daemon_started": canary["daemon_started"],
+        "orders": canary["orders"],
+        "fills": canary["fills"],
+        "notional_usd": canary["notional_usd"],
+        "production_yaml_sha256": sha256(production_yaml),
+        "production_yaml_matches_code_commit": production_match,
+        "status": "PASS",
+    }
+    if any((zero["authentication_used"], zero["order_or_user_channel_used"], zero["production_consumer_joined"], zero["production_config_modified"], zero["daemon_started"], zero["orders"], zero["fills"], zero["notional_usd"])):
+        raise RuntimeError(f"zero-notional isolation failure: {zero}")
+    (CANARY / "ZERO_NOTIONAL_AND_ISOLATION_AUDIT.json").write_text(
+        json.dumps(zero, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    (SEAL / "ZERO_NOTIONAL_AUDIT.json").write_text(
+        json.dumps({**zero, "network_channel": "NO_NETWORK_USED_BY_OFFLINE_FULL_SEAL_BUILDER"}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def selected_root_entries(root: Path, prefix: str) -> list[dict[str, object]]:
     return _root_entries(root, prefix)
 
@@ -53,6 +138,7 @@ def main() -> int:
         "tests/research_tests/test_wcir_stage23_rev2_closure.py",
         "tests/research_tests/test_wcir_stage23_full_seal_v2.py",
     )
+    write_freezes(code_files)
     seal_entries = selected_root_entries(SEAL, "stage_02_03_rev2_full_seal_v2")
     seal_entries += selected_root_entries(PRIOR, "prior_full_evidence_seal")
     seal_entries += selected_root_entries(STAGE2, "immutable_stage_02_rev2")
