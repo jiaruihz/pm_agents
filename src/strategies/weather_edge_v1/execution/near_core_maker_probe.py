@@ -40,34 +40,50 @@ def is_candidate(row: Mapping[str, Any]) -> bool:
 
 
 def matched_shares(row: Mapping[str, Any]) -> float:
-    """Read authoritative matched quantity when present, otherwise fail low."""
+    """Read authoritative matched quantity first, then legacy fallbacks."""
 
-    candidates: list[Any] = [
-        row.get("authoritative_matched_shares"),
-        row.get("source_filled_shares"),
-        row.get("matched_shares"),
-        row.get("size_matched"),
-    ]
+    authoritative: list[Any] = [row.get("authoritative_matched_shares")]
     response = row.get("exchange_response")
     if isinstance(response, Mapping):
         state = response.get("authoritative_order_state")
         if isinstance(state, Mapping):
-            candidates.extend(
+            authoritative.extend(
                 (
                     state.get("size_matched"),
                     state.get("sizeMatched"),
                     state.get("matched_shares"),
                 )
             )
-    values: list[float] = []
-    for value in candidates:
+    fallback = [
+        row.get("source_filled_shares"),
+        row.get("matched_shares"),
+        row.get("size_matched"),
+    ]
+    for value in (*authoritative, *fallback):
         try:
             parsed = float(value)
         except (TypeError, ValueError):
             continue
         if parsed >= 0:
-            values.append(parsed)
-    return min(FIXED_SHARES, max(values, default=0.0))
+            return min(FIXED_SHARES, parsed)
+    return 0.0
+
+
+def consumed_city_days(
+    rows: Iterable[Mapping[str, Any]],
+) -> set[tuple[str, str]]:
+    """One near-Core submit or non-zero fill consumes the city-day sleeve."""
+
+    consumed: set[tuple[str, str]] = set()
+    for row in rows:
+        if str(row.get("strategy_instance") or "") != STRATEGY_INSTANCE:
+            continue
+        key = city_day(row)
+        if not all(key):
+            continue
+        if str(row.get("status") or "") == "submitted" or matched_shares(row) > 0:
+            consumed.add(key)
+    return consumed
 
 
 def filled_exposure_by_city_day(
