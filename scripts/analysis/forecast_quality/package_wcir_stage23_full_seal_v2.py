@@ -134,9 +134,6 @@ def main() -> int:
     parser.add_argument("--timestamp")
     args = parser.parse_args()
     stamp = args.timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    write_directory_manifest(SEAL)
-    write_directory_manifest(CANARY)
-
     code_files = (
         "scripts/analysis/forecast_quality/wcir_stage23_rev2_closure.py",
         "scripts/analysis/forecast_quality/wcir_stage23_full_seal_v2.py",
@@ -148,6 +145,8 @@ def main() -> int:
         "tests/research_tests/test_wcir_stage23_full_seal_v2.py",
     )
     write_freezes(code_files)
+    write_directory_manifest(SEAL)
+    write_directory_manifest(CANARY)
     seal_entries = selected_root_entries(SEAL, "stage_02_03_rev2_full_seal_v2")
     seal_entries += selected_root_entries(PRIOR, "prior_full_evidence_seal")
     seal_entries += selected_root_entries(STAGE2, "immutable_stage_02_rev2")
