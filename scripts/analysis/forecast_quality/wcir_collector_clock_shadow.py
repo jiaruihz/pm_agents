@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Isolated, network-free WCIR collector-clock shadow state machine.
+"""Isolated WCIR collector-clock state machine.
 
-It is intentionally not imported by production collectors and has no exchange,
-order, fill, database, or production-config dependency.
+It is intentionally not imported by production collectors and has no order,
+fill, database, credential, or production-config dependency.  A separate
+bounded public-read-only canary may drive it with real market-channel frames.
 """
 
 from __future__ import annotations
@@ -73,16 +74,34 @@ class CollectorClockShadow:
     connection_id: str
     host_clock_sync_status: str = "UNKNOWN"
     journal_path: Path | None = None
+    process_instance_id: str = "process-unknown"
     tokens: dict[str, TokenSubscriptionState] = field(default_factory=dict)
     _last_wall_ns: int | None = None
     _last_monotonic_ns: int | None = None
     _request_monotonic_ns: deque[int] = field(default_factory=deque)
     journal_sequence: int = 0
+    last_scheduler_tick_monotonic_ns: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.journal_path is None or not self.journal_path.exists():
+            return
+        expected = 0
+        with self.journal_path.open("r", encoding="utf-8") as handle:
+            for raw in handle:
+                if not raw.strip():
+                    continue
+                row = json.loads(raw)
+                expected += 1
+                if int(row.get("sequence", -1)) != expected:
+                    raise RuntimeError("append-only journal sequence drift")
+        self.journal_sequence = expected
 
     def _journal(self, event: str, payload: Mapping[str, Any]) -> None:
         self.journal_sequence += 1
         row = {
             "sequence": self.journal_sequence,
+            "journal_event_id": stable_hash({"process_instance_id": self.process_instance_id, "sequence": self.journal_sequence}),
+            "process_instance_id": self.process_instance_id,
             "event": event,
             "active_epoch_id": self.active_epoch_id,
             "connection_id": self.connection_id,
@@ -172,6 +191,26 @@ class CollectorClockShadow:
             token.valid = False
             token.gap_blocker = f"CONNECTION_LIVENESS_{state}"
         self._journal("LIVENESS_CHANGED", {"token_id": token_id, "state": state})
+
+    def heartbeat_timeout(self, *, reason: str = "HEARTBEAT_TIMEOUT") -> None:
+        for token in self.tokens.values():
+            token.heartbeat_liveness = "DEAD"
+            token.valid = False
+            token.gap_blocker = reason
+        self._journal("HEARTBEAT_TIMEOUT", {"reason": reason, "token_count": len(self.tokens)})
+
+    def scheduler_tick(self, *, monotonic_ns: int, maximum_gap_ns: int) -> None:
+        if monotonic_ns <= 0 or maximum_gap_ns <= 0:
+            raise ValueError("invalid scheduler clock or gap")
+        prior = self.last_scheduler_tick_monotonic_ns
+        self.last_scheduler_tick_monotonic_ns = monotonic_ns
+        if prior is not None and monotonic_ns - prior > maximum_gap_ns:
+            for token in self.tokens.values():
+                token.valid = False
+                token.gap_blocker = "SCHEDULER_STALL"
+            self._journal("SCHEDULER_STALL", {"gap_ns": monotonic_ns - prior, "maximum_gap_ns": maximum_gap_ns})
+            raise RuntimeError("scheduler stall")
+        self._journal("SCHEDULER_TICK", {"monotonic_ns": monotonic_ns, "maximum_gap_ns": maximum_gap_ns})
 
     def open_gap(self, token_id: str, reason: str) -> None:
         state = self.tokens[token_id]
