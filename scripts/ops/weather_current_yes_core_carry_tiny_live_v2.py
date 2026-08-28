@@ -2088,13 +2088,7 @@ def near_core_entry_plans(
         return [], []
     live_rows = list(iter_jsonl(output_dir / "live_orders.jsonl"))
     existing_family = submitted_city_days(family_live_order_files(output_dir))
-    near_submitted = {
-        near_core_maker_probe.city_day(row)
-        for row in live_rows
-        if str(row.get("strategy_instance") or "")
-        == near_core_maker_probe.STRATEGY_INSTANCE
-        and str(row.get("status") or "") == "submitted"
-    }
+    near_consumed = near_core_maker_probe.consumed_city_days(live_rows)
     used_city_days, used_cost = near_core_daily_usage(output_dir, now)
     plans: list[dict[str, Any]] = []
     ledger: list[dict[str, Any]] = []
@@ -2109,8 +2103,8 @@ def near_core_entry_plans(
             reason = "existing_core_actionable_priority"
         elif key in existing_family:
             reason = "existing_core_family_exposure"
-        elif key in near_submitted:
-            reason = "near_core_city_day_already_submitted"
+        elif key in near_consumed:
+            reason = "near_core_city_day_exposure_already_consumed"
         elif used_city_days >= int(args.near_core_max_city_days_per_bj_day):
             reason = "near_core_daily_city_day_cap"
         plan = None if reason else build_near_core_entry_plan(
@@ -2166,7 +2160,7 @@ def near_core_entry_plans(
         )
         if plan is not None:
             plans.append(plan)
-            near_submitted.add(key)
+            near_consumed.add(key)
             used_city_days += 1
             used_cost += planned_cost
     return plans, ledger

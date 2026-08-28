@@ -305,6 +305,61 @@ def test_near_core_fill_reduces_existing_core_shared_maker_budget(tmp_path) -> N
     assert attempts[0]["remaining_core_maker_shares"] == 2
 
 
+def test_terminal_near_core_fill_consumes_city_day_without_submitted_row(
+    tmp_path,
+) -> None:
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "model_edge_after_fee_and_depth": -0.001,
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [
+            {
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "city": "Busan",
+                "target_date": "2026-07-24",
+                "status": "filled",
+                "authoritative_matched_shares": 5,
+            }
+        ],
+    )
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert plans == []
+    assert ledger[0]["reason"] == "near_core_city_day_exposure_already_consumed"
+
+
+def test_near_core_authoritative_fill_precedes_conflicting_legacy_fields() -> None:
+    assert near_core_maker_probe.matched_shares(
+        {
+            "authoritative_matched_shares": 0,
+            "source_filled_shares": 5,
+            "matched_shares": 4,
+        }
+    ) == 0
+    assert near_core_maker_probe.matched_shares(
+        {
+            "source_filled_shares": 5,
+            "exchange_response": {
+                "authoritative_order_state": {"size_matched": 2}
+            },
+        }
+    ) == 2
+
+
 def test_market_above_frozen_training_support_is_not_eligible() -> None:
     artifact = runner.load_artifact(runner.ARTIFACT_PATH)
     result = runner.evaluate_entry(
