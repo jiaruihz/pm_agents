@@ -25,6 +25,7 @@ def test_legacy_profile_names_and_behavior_are_preserved_and_json_safe():
         "split_taker_two_maker_event_validated_no_fallback_v5": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker_staged", "current_yes_residual_carry_staged_maker_v3", "maker_event_validated_staged_until_update_or_ttl_v3", True, 1.0), ("maker_pullback", "current_yes_residual_carry_pullback_maker_v1", "maker_event_validated_static_pullback_until_update_or_ttl_v1", True, 1.0))),
         "split_taker_two_maker_event_rearmed_no_fallback_v6": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker_staged", "current_yes_residual_carry_staged_maker_v3", "maker_event_validated_staged_until_update_or_ttl_v3", True, 1.0), ("maker_pullback", "current_yes_residual_carry_pullback_maker_v1", "maker_event_validated_static_pullback_until_update_or_ttl_v1", True, 1.0))),
         "split_taker_shared_maker_staged_to_pullback_v7": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker_staged", "current_yes_residual_carry_shared_maker_v1", "maker_shared_staged_then_pullback_until_update_or_ttl_v1", True, 1.0))),
+        "near_core_fixed_rest_maker_ws1_v1": ("all_maker", 90, (("maker_staged", "core_carry_near_core_fixed_rest_maker_v1", "near_core_fixed_rest_safety_cancel_only_v1", True, 1.0),)),
     }
 
     assert tuple(profiles._PROFILES) == tuple(expected)

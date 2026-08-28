@@ -322,6 +322,7 @@ class CoreCarryRequestBuilder:
             post_only=post_only,
             book_epoch_ref=book.book_epoch_ref,
             now_utc=datetime.now(timezone.utc).isoformat(),
+            client_order_prefix=str(plan.get("client_order_prefix") or "pmc_"),
         )
 
 
@@ -779,13 +780,14 @@ def execute_core_carry_plans(
             live_errors += 1
             continue
         stub = _stub_order_state(plan, source)
-        invalidate = action_name in {
+        force_cancel = bool(plan.get("cancel_only"))
+        invalidate = force_cancel or action_name in {
             "core_carry_maker_cancel_new_observation",
             "core_carry_maker_cancel_weather_state",
         }
         deadline = (
             datetime.now(timezone.utc).isoformat()
-            if action_name == "core_carry_maker_cancel_ttl"
+            if force_cancel or action_name == "core_carry_maker_cancel_ttl"
             else str(plan.get("maker_lifecycle_deadline_utc") or plan.get("expires_at_utc") or "")
         )
         context = LifecycleContext(

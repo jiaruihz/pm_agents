@@ -16,6 +16,7 @@ from src.strategies.weather_edge_v1.execution.contracts import (
 class FakeTransport:
     def __init__(self, *, post_responses=None):
         self.posts = []
+        self.cancels = []
         self.post_responses = list(post_responses or [])
 
     def fetch_capabilities(self):
@@ -78,6 +79,7 @@ class FakeTransport:
         return {"status": "live", "orderID": order_id}
 
     def cancel_order(self, _order_id):
+        self.cancels.append(_order_id)
         return {"status": "cancelled"}
 
     def fetch_order(self, _order_id, _client_order_id):
@@ -626,3 +628,92 @@ def test_terminal_maker_is_projected_once_and_removed_from_lifecycle_heads(
     assert rows[-1]["status"] == "filled"
     assert rows[-1]["child_order_role"] == "core_carry_maker_terminal"
     assert runner.maker_lifecycle_heads(tmp_path / "live_orders.jsonl")[-1]["status"] == "filled"
+
+
+def test_explicit_cancel_only_supports_near_core_safety_actions(
+    tmp_path, monkeypatch
+) -> None:
+    maker_plan = runner.build_near_core_entry_plan(
+        {
+            **_score(),
+            "eligible": False,
+            "reasons": ["non_positive_taker_ev"],
+            "model_edge_after_fee_and_depth": -0.001,
+        },
+        live_enabled=True,
+        now=datetime(2026, 7, 28, 4, 31, tzinfo=timezone.utc),
+        order_ttl_min=15,
+    )
+    assert maker_plan is not None
+    transport = FakeTransport()
+    monkeypatch.setattr(
+        shared,
+        "build_live_transport",
+        lambda **_kwargs: (transport, {"mode": "test"}),
+    )
+    shared.execute_core_carry_plans(
+        plans=[maker_plan],
+        output_dir=tmp_path,
+        live=True,
+        market_proxy=None,
+        max_child_shares=5,
+        max_batch_cost_usd=5,
+        code_commit="test-sha",
+    )
+    submitted = json.loads(
+        (tmp_path / "live_orders.jsonl").read_text().splitlines()[-1]
+    )
+    lifecycle_plan = runner.build_maker_lifecycle_plan(
+        submitted,
+        action="near_core_maker_cancel_core_supersession",
+        limit_price=0,
+        cancel_only=True,
+        cancel_source_order=True,
+        now=datetime(2026, 7, 28, 4, 32, tzinfo=timezone.utc),
+        live_enabled=True,
+    )
+    live_state = RestingOrderState(
+        order_id=runner.live_order_id(submitted),
+        client_order_id=str(submitted["client_order_id"]),
+        expected_venue_order_id=None,
+        root_order_id=runner.live_order_id(submitted),
+        source_order_id=runner.live_order_id(submitted),
+        plan_id=str(submitted["plan_id"]),
+        token_id=str(submitted["token_id"]),
+        venue_side="BUY",
+        outcome_side="YES",
+        requested_shares="5",
+        matched_shares="0",
+        remaining_shares="5",
+        posted_price=str(submitted["posted_price"]),
+        status="live",
+        created_at_utc=str(submitted["created_at_utc"]),
+        maker_only=True,
+        execution_profile=str(submitted["resolved_execution_profile"]),
+        execution_policy=str(submitted["execution_policy"]),
+        order_lifecycle_policy=str(submitted["order_lifecycle_policy"]),
+        reprice_count=0,
+        data_epoch_ref=str(submitted["data_epoch_ref"]),
+        authoritative_state_version="OPEN:0:5",
+        lifecycle_owner=shared.RUNTIME_OWNER,
+        raw_venue_status="LIVE",
+        order_state_provenance="test",
+    )
+    monkeypatch.setattr(
+        shared.PolymarketVenueAdapter,
+        "fetch_order_state",
+        lambda *_args, **_kwargs: live_state,
+    )
+
+    result = shared.execute_core_carry_plans(
+        plans=[lifecycle_plan],
+        output_dir=tmp_path,
+        live=True,
+        market_proxy=None,
+        max_child_shares=5,
+        max_batch_cost_usd=5,
+        code_commit="test-sha",
+    )
+
+    assert result["live_errors"] == 0, result
+    assert transport.cancels == [runner.live_order_id(submitted)]

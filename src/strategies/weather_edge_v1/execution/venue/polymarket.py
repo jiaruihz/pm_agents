@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -143,7 +144,9 @@ def make_client_order_id(
         "token_id": request.token_id,
         "venue_side": request.venue_side,
     }
-    return "pmc_" + hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()[:40]
+    return request.client_order_prefix + hashlib.sha256(
+        canonical_json(payload).encode("utf-8")
+    ).hexdigest()[:40]
 
 
 @dataclass(frozen=True)
@@ -157,18 +160,24 @@ class PolymarketOrderRequest(JsonContract):
     book_epoch_ref: str
     now_utc: str
     expiration_utc: str | None = None
+    client_order_prefix: str = "pmc_"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "token_id", str(self.token_id).strip())
         object.__setattr__(self, "venue_side", str(self.venue_side).upper().strip())
         object.__setattr__(self, "order_type", str(self.order_type).upper().strip())
         object.__setattr__(self, "book_epoch_ref", str(self.book_epoch_ref).strip())
+        object.__setattr__(self, "client_order_prefix", str(self.client_order_prefix).strip())
         object.__setattr__(self, "price", _decimal(self.price, "price"))
         object.__setattr__(self, "shares", _decimal(self.shares, "shares"))
         if not self.token_id or self.venue_side not in {"BUY", "SELL"} or not self.order_type or not self.book_epoch_ref:
             raise VenueAdapterError("order request has missing or invalid identity fields")
         if self.price <= 0 or self.price >= 1 or self.shares <= 0:
             raise VenueAdapterError("order price must be between 0 and 1 and shares must be positive")
+        if not re.fullmatch(r"pmc_[a-z0-9_]{0,12}", self.client_order_prefix):
+            raise VenueAdapterError(
+                "client_order_prefix must match pmc_[a-z0-9_]{0,12}"
+            )
         _parse_utc(self.now_utc)
         if self.expiration_utc is not None:
             _parse_utc(self.expiration_utc)

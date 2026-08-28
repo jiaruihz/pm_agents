@@ -414,6 +414,41 @@ _PROFILES = {
             "low_price_band_halt_min_posted_price": "0.84",
         },
     ),
+    "near_core_fixed_rest_maker_ws1_v1": ExecutionProfile(
+        name="near_core_fixed_rest_maker_ws1_v1",
+        legs=(
+            ExecutionLegProfile(
+                role="maker_staged",
+                execution_policy="core_carry_near_core_fixed_rest_maker_v1",
+                order_lifecycle_policy="near_core_fixed_rest_safety_cancel_only_v1",
+                maker_only=True,
+                reprice_policy="none_safety_cancel_only",
+                price_cap_policy=(
+                    "model_probability_retained_edge_and_taker_improvement"
+                ),
+                max_reprices=0,
+            ),
+        ),
+        cancel_buffer_sec=90,
+        planner_supported=False,
+        allocation_policy="all_maker",
+        refresh_sec=0.5,
+        ttl_sec=900,
+        data_epoch_policy="cancel",
+        fixed_parameters={
+            "minimum_taker_improvement_ticks": 1,
+            "retained_edge": "0.01",
+            "maker_budget_mode": "separate_near_core_fixed_5_share",
+            "clock_basis": "next_source_report_not_collector_availability",
+            "state_epoch_components": (
+                "observation+forecast_curve+exact_bracket_token"
+            ),
+            "replacement_price_policy": "none_safety_cancel_only",
+            "maker_experiment_id": "core_carry_near_core_maker_ws1_v1",
+            "low_price_band_halt_min_posted_price": "0.84",
+            "economic_ws_cancel_enabled": False,
+        },
+    ),
 }
 
 # Alias values are (resolved profile name, fixture identity). Keep this empty
