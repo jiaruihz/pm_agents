@@ -58,6 +58,13 @@ def write_freezes(code_files: tuple[str, ...]) -> None:
         capture_output=True,
     ).stdout
     production_match = hashlib.sha256(committed_production).hexdigest() == sha256(production_yaml)
+    manifest_check = subprocess.run(
+        [str(ROOT / ".venv/bin/python"), "scripts/ops/weather_production_manifest.py", "--strict"],
+        cwd=ROOT,
+        capture_output=True,
+    )
+    if manifest_check.returncode != 0:
+        raise RuntimeError("production manifest strict postcheck failed")
     freeze = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "code_commit_sha": head,
@@ -80,6 +87,8 @@ def write_freezes(code_files: tuple[str, ...]) -> None:
             "production_yaml_matches_code_commit": production_match,
             "production_config_modified_by_this_work": False,
             "production_deployment_performed": False,
+            "production_manifest_strict_postcheck": "healthy",
+            "production_manifest_stdout_sha256": hashlib.sha256(manifest_check.stdout).hexdigest(),
         },
     }
     if not production_match:
