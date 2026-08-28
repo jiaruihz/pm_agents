@@ -55,7 +55,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert len(spec.release("control_plane").expected_repo_sha) == 40
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "b39f234ef3117f9f4c7c680d5074cfbebde7fa59"
+        "8c973d32d4315c07ff7180f3b66b5b3024b4ae60"
     )
 
 
