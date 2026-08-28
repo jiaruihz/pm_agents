@@ -145,7 +145,9 @@ def test_live_parser_defaults_match_frozen_ten_plus_shared_five_contract() -> No
     assert args.near_core_maker_shares == 5
 
 
-def test_near_core_live_requires_separate_confirmation() -> None:
+def test_near_core_live_requires_separate_confirmation_and_ws_control_seal(
+    tmp_path,
+) -> None:
     args = runner.parser().parse_args(
         ["run", "--live", "--confirm-live", "--near-core-maker-probe-enabled"]
     )
@@ -153,6 +155,21 @@ def test_near_core_live_requires_separate_confirmation() -> None:
     with pytest.raises(RuntimeError, match="confirm-near-core-maker-probe-live"):
         runner.validate_runtime_arguments(args)
 
+    readiness = tmp_path / "near_core_ws_control_readiness.json"
+    runner.write_json(
+        readiness,
+        {
+            "schema_version": near_core_maker_probe.WS_CONTROL_READINESS_SCHEMA_VERSION,
+            "status": "ready",
+            "raw_ingestion": "continuous_event_driven",
+            "policy_heartbeat_ms": 500,
+            "feature_snapshot_max_interval_ms": 1000,
+            "private_order_updates": True,
+            "staleness_action": "safety_cancel",
+            "window_pre_sec": 60,
+            "window_post_sec": 900,
+        },
+    )
     confirmed = runner.parser().parse_args(
         [
             "run",
@@ -160,9 +177,15 @@ def test_near_core_live_requires_separate_confirmation() -> None:
             "--confirm-live",
             "--near-core-maker-probe-enabled",
             "--confirm-near-core-maker-probe-live",
+            "--near-core-ws-control-manifest",
+            str(readiness),
         ]
     )
     runner.validate_runtime_arguments(confirmed)
+
+    runner.write_json(readiness, {"schema_version": "wrong", "status": "ready"})
+    with pytest.raises(RuntimeError, match="WS control-readiness failed"):
+        runner.validate_runtime_arguments(confirmed)
 
 
 def test_near_core_plan_is_separate_fixed_rest_sleeve(tmp_path) -> None:

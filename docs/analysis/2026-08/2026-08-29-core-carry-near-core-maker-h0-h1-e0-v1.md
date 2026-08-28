@@ -26,7 +26,7 @@ E0 已在当前生产 Core runtime SHA `b39f234ef3117f9f4c7c680d5074cfbebde7fa59
 
 ## E0 实现合同
 
-- 独立 feature flag：默认关闭；真实单除通用 `--live --confirm-live` 外，还必须显式 `--confirm-near-core-maker-probe-live`。
+- 独立 feature flag：默认关闭；真实单除通用 `--live --confirm-live` 外，还必须显式 `--confirm-near-core-maker-probe-live`，并加载 E1 smoke 生成的 WS control-readiness manifest。manifest 必须证明 event-driven raw、≤500ms heartbeat、≤1s persisted snapshot、private updates、staleness safety cancel 和 -60/+900s replay window；当前 15s Core runner 不能冒充 WS controller。
 - selector：existing Core 不 actionable，且 frozen score 的唯一 blocker 精确等于 `non_positive_taker_ev`。
 - fixed 5 shares；独立 strategy instance、config、experiment ID、`pmc_ccnc_` client-order prefix、daily city-day/cost risk budget。
 - WS-1 只 fixed rest；仅 safety cancel（feature disabled、共同 deadline、weather state 变化、fresh two-sided book 缺失、Core supersession），没有 economic WS cancel/reprice。

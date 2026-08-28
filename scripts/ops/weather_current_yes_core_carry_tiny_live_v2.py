@@ -2339,6 +2339,9 @@ def write_near_core_runtime_artifacts(
         },
         "policy_arm": "WS1_BASELINE_FIXED_REST",
         "economic_ws_cancel_enabled": False,
+        "ws_control_readiness_manifest": str(
+            args.near_core_ws_control_manifest or ""
+        ),
         "ledger_path": str(output_dir / "near_core_maker_ledger.jsonl"),
         **DEPLOYMENT_METADATA,
     }
@@ -3058,6 +3061,28 @@ def validate_runtime_arguments(args: argparse.Namespace) -> None:
         raise RuntimeError(
             "live near-Core probe requires --confirm-near-core-maker-probe-live"
         )
+    if args.live and args.near_core_maker_probe_enabled:
+        readiness_path = Path(str(args.near_core_ws_control_manifest or ""))
+        if not str(args.near_core_ws_control_manifest or "") or not readiness_path.is_file():
+            raise RuntimeError(
+                "live near-Core probe requires an E1 WS control-readiness manifest"
+            )
+        try:
+            readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                f"near-Core WS control-readiness manifest unreadable: {exc}"
+            ) from exc
+        if not isinstance(readiness, Mapping):
+            raise RuntimeError("near-Core WS control-readiness manifest must be an object")
+        readiness_failures = near_core_maker_probe.ws_control_readiness_failures(
+            readiness
+        )
+        if readiness_failures:
+            raise RuntimeError(
+                "near-Core WS control-readiness failed: "
+                + ",".join(readiness_failures)
+            )
     if (
         float(args.taker_shares) != FROZEN_TAKER_SHARES
         or float(args.maker_shares) != FROZEN_MAKER_SHARES
@@ -3262,6 +3287,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--near-core-candidate-max-age-sec", type=float, default=90.0)
     ap.add_argument("--near-core-max-city-days-per-bj-day", type=int, default=1)
     ap.add_argument("--near-core-max-daily-cost-usd", type=float, default=5.0)
+    ap.add_argument("--near-core-ws-control-manifest", default="")
     return ap
 
 
