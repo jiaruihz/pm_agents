@@ -1,7 +1,7 @@
 # Weather Intraday Decision Casebook
 
 Status: current-reference
-Updated: 2026-07-29 current-YES semantic residual case library
+Updated: 2026-08-29 San Francisco near-Core maker no-fill case
 Scope: 实时天气判断、用户与 Codex 的结论更新、PIT 数据快照、订单/成交血缘
 
 ## 结论与动作
@@ -238,6 +238,66 @@ Ankara 最能展示“新证据推翻原 thesis”的价值，但它同时暴露
 因此 Ankara 适合人工做 thesis update 和反证检查；在 data epoch 统一、manual order lineage 与 forward 概率校准完成前，
 不适合代码自动做两腿 reversal。
 
+## Case 4 — San Francisco 64–65 YES：方向正确，但 0.83/0.84 没有可成交机会
+
+### Grain 与部署边界
+
+- grain：`current_yes_core_carry_tiny_live_v2 / SanFrancisco / 2026-08-28 / 64-65 / market 3922441`；
+  condition `0x7b14c50fb42c5df54a618e7f284a5ae3bdc3fd01e1c4aa684efabe9af3a90158`。
+- Core production release `8c973d32d4315c07ff7180f3b66b5b3024b4ae60` 已加载且主进程健康；常规
+  `10 taker + 5 shared maker` profile 为 live。
+- 同一 release 已包含 near-Core maker 观察/生命周期代码，但截至
+  `2026-08-29T07:36:29Z`，runtime 明确为 `near_core_feature_enabled=false`、
+  `near_core_live_authorized=false`、`near_core_entry_plans=0`、submitted/terminal order rows 均为 0。
+  因此下面的 `0.84` 是按冻结 quote contract 计算的反事实挂价，不是实际订单或 fill。
+
+### PIT candidate 与反事实 quote
+
+`pre_live_scores.jsonl` 在 `2026-08-28T23:32:26Z` 保存：Core hold probability
+`0.940732`，YES book `0.83 / 0.98`，tick `0.01`，10-share taker 的 fee/depth-adjusted edge
+`-0.040248`，唯一 blocker 为 `non_positive_taker_ev`。按 near-Core maker contract：
+
+```text
+maker cap = floor_to_tick(0.940732 - 0.01) = 0.93
+initial quote = min(best bid + 1 tick, best ask - 1 tick, maker cap)
+              = min(0.84, 0.97, 0.93) = 0.84
+```
+
+若只 join `0.83`，经济结论相同：两者都低于模型 cap，若最终 YES，毛收益分别为
+`0.17/share` 与 `0.16/share`；但只有真实 fill 才能形成 PnL。
+
+### 后续 tape 与 outcome
+
+- candidate 创建后第一笔 YES 成交在 `2026-08-28T23:47:10Z`，晚 `14m31s`，价格直接为 `0.98`。
+- 此后公开 tape 中 26 笔 YES 成交的最低价为 `0.98`；没有 YES seller print `<=0.84`。
+- 同期 NO 侧最高 BUY 为 `0.12`，低于与 YES `0.84` 互补成交所需的 `0.16`；所以也没有
+  complementary match。即使把 YES 追到冻结 cap `0.93`，该路径仍不会成交；追到 `0.98` 则超过
+  Core `0.940732` value，变成负 EV。
+- NOAA/NWS KSFO 在当地 `2026-08-28` 的最高观测为 `18.3°C = 64.94°F`，按市场 whole-degree
+  规则属于 `65°F`，即 `64-65 YES`。截至本次维护，Polymarket 尚未 formally resolved，canonical
+  也没有 settlement row；正式 settled denominator 必须等 exchange/canonical final，不能用 99.9% 盘口代替。
+
+证据指针：
+
+- candidate：`/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/pre_live_scores.jsonl`
+- WS：`/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/2026-08-28/market_books_ws_20260828_23_1787933342225550000_78383.jsonl`
+- production state：`/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json`
+- public tape：`https://data-api.polymarket.com/trades?market=0x7b14c50fb42c5df54a618e7f284a5ae3bdc3fd01e1c4aa684efabe9af3a90158&limit=10000`
+- settlement source：`https://api.weather.gov/stations/KSFO/observations?start=2026-08-28T07:00:00Z&end=2026-08-29T07:00:00Z&limit=500`
+
+### 案例标签与沉淀
+
+```text
+signal: direction_correct_pending_formal_resolution
+execution: unfilled_price_jump / no_edge-compatible_executable_opportunity
+order: counterfactual_only
+pnl: 0 actual
+```
+
+该例支持“模型判断正确、拒绝追到负 EV 价格也正确”，不支持“near-Core live 已验证”或“maker 一定能成交”。
+它应进入 execution no-fill/机会成本分母，用于比较 quote cap、time-to-fill 与 traded-through；不能作为
+提高 maker 价格、放宽 retained edge 或开启真钱 near-Core 的单例依据。
+
 ## 2026-07-22 frozen-forward 操作卡
 
 不是指定城市，也不是看到下雨就买。代码扫描所有 same-day city-day，出现下列连续机制状态时才提醒人工：
@@ -289,8 +349,9 @@ evidence funnel:
 PIT feature/source -> fresh full ladder -> suggested/actual action -> order -> fill -> settlement
 ```
 
-当前三例是 ex-post 选出的三个案例，不是 signal denominator。冻结包解决的是“事实与交互可回放”，不解决
-统计确认；后续 forward collector 必须同时保存没有交易、判断错误和反向后仍亏损的样本。
+前述 7/20 三例是 ex-post 选出的案例，不是 signal denominator。Case 4 是生产 candidate collector 留下的
+no-fill forward case，但 formal settlement 仍 pending；两类材料都不能替代统计确认。后续 forward collector
+必须同时保存没有交易、判断错误和反向后仍亏损的样本。
 
 ## 2026-07-21 全城市 forward scan
 
