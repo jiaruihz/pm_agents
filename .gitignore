@@ -40,6 +40,8 @@ frontend/**/node_modules/
 frontend/**/tsconfig.tsbuildinfo
 frontend/**/runtime/
 output/
+/artifacts/
+/tmp/
 archive/books/
 src/strategies/pmm/backtest/scenarios/
 src/strategies/pmm/backtest/results/
@@ -85,6 +87,7 @@ runtime/verify_market_analysis_cn/
 # Generated analysis artifacts; keep Markdown conclusions in git.
 docs/analysis/**/*.json
 docs/analysis/**/*.jsonl
+!docs/analysis/templates/research-record.json
 # Raw HTTP/API caches are replay inputs, not reviewable repository content.
 # Keep them local until the owning run is promoted to the JRS artifact store.
 docs/analysis/**/generated/**/cache/
@@ -124,6 +127,12 @@ docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_open_positio
 
 # Local agent state
 .claude/
+
+# Review packets are local assembly/evidence workspaces. Existing tracked
+# legacy evidence remains tracked, but new packets belong in the external
+# content-addressed research artifact root. Keep only the boundary README.
+/reviews/**
+!/reviews/README.md
 
 # Strategy runtime platform is SOURCE, not runtime artifacts (override runtime/ rule)
 !src/strategies/runtime/

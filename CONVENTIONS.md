@@ -1,5 +1,14 @@
 # PM Agent — Codex Collaboration Conventions
 
+Status: `historical-reference`
+
+This file preserves earlier implementation conventions and examples; some
+paths and runtime assumptions below are historical. Current task routing and
+safety come from `AGENTS.md`, repository placement from
+`docs/PROJECT_STRUCTURE.md`, and weather production truth from the controller,
+manifest, `production.yaml`, raw runtime, and exchange evidence. Do not copy
+host paths or start commands from this file into current operations.
+
 > For any agent (Codex, Claude, MiniMax, human) contributing to this codebase.  
 > Read alongside `CLAUDE.md` (Claude Code姿态) and `AGENTS.md` (Codex姿态).  
 > See `docs/WEATHER_SYSTEM_CONTRACT.md` for canonical field names and enumerations.

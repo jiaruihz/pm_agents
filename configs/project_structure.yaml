@@ -1,0 +1,113 @@
+schema_version: pm_agents_project_structure_v1
+
+# These are ownership classes, not a request to move legacy packages in one
+# batch. The checker rejects new unclassified roots while migration stays
+# incremental and import-compatible.
+tracked_root_directories:
+  .codex: agent_configuration
+  .github: repository_automation
+  chatgpt-web-bot: local_tool_project
+  configs: canonical_configuration
+  data: small_versioned_inputs
+  deploy: deployment_assets
+  docs: durable_knowledge
+  frontend: application_source
+  reviews: legacy_review_evidence
+  scripts: entrypoints_and_offline_jobs
+  skills: agent_task_routing
+  src: canonical_python_source
+  tasks: project_state
+  tests: verification
+  weather_city_runtime: legacy_root_python_package
+  weather_dashboard: legacy_root_python_package
+  weather_data_feed: legacy_root_python_package
+  weather_data_feed_service: legacy_root_python_package
+  weather_feature_layer: legacy_root_python_package
+  weather_model_evaluation: legacy_root_python_package
+  weather_modeling: legacy_root_python_package
+
+tracked_root_files:
+  - .env.example
+  - .gitignore
+  - .pre-commit-config.yaml
+  - AGENTS.md
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - CONVENTIONS.md
+  - Dockerfile
+  - FORECAST_TAIL_EXECUTABLE_VERSIONS_2026-07-03.md
+  - LICENSE.md
+  - Makefile.weather
+  - README.md
+  - requirements.txt
+
+# Existing local-only files whose owner has not yet been migrated. They remain
+# visible warnings, not precedents for adding more root files.
+legacy_untracked_root_files:
+  claude_code_env.sh: pending shell-environment owner and placement decision
+  weather_clock_contract.py: pending canonical source-package placement
+
+canonical_roots:
+  python_source: src
+  configuration: configs
+  durable_knowledge: docs
+  task_routing: skills
+  runtime_state: runtime
+  tests: tests
+
+legacy_python_roots:
+  - weather_city_runtime
+  - weather_dashboard
+  - weather_data_feed
+  - weather_data_feed_service
+  - weather_feature_layer
+  - weather_model_evaluation
+  - weather_modeling
+
+legacy_or_workspace_config_roots:
+  - config
+
+transient_roots:
+  - artifacts
+  - output
+  - runtime
+  - tmp
+
+workspace_only_roots:
+  - .claude
+  - .pytest_cache
+  - .venv
+  - __pycache__
+
+context_contract:
+  # The target is already met in the active working context. The hard ceiling
+  # remains at the pre-migration tracked baseline until the independent
+  # AGENTS/CLAUDE context-reduction change lands, then it should be lowered.
+  target_entrypoint_lines: 120
+  max_entrypoint_lines: 260
+  required_files:
+    - AGENTS.md
+    - docs/PROJECT_STRUCTURE.md
+    - docs/RESEARCH_KNOWLEDGE_SYSTEM.md
+    - docs/WEATHER_DOCS_INDEX.md
+  readme_required_links:
+    - AGENTS.md
+    - docs/PROJECT_STRUCTURE.md
+    - docs/RESEARCH_KNOWLEDGE_SYSTEM.md
+  readme_forbidden_markers:
+    - "生产端（N100）"
+    - "/home/rui/projects/pm_agent"
+    - "weather.db                ← SQLite 分析库（可随时删掉重建）"
+
+review_workspace:
+  root: reviews
+  metadata_allowlist:
+    - reviews/README.md
+  # Frozen baseline measured 2026-08-30. Cleanup lowers it; new review
+  # evidence must go to the external artifact store instead of raising it.
+  max_legacy_tracked_files: 148
+  max_legacy_tracked_bytes: 26556883
+
+skill_catalog: skills/catalog.yaml
+research_record_template: docs/analysis/templates/research-record.json
+research_record_schema: configs/schemas/research_record_v1.schema.json

@@ -31,6 +31,10 @@ jobs:
     - name: Lint with black
       run: |
         black .
+    - name: Validate project structure and research contracts
+      run: |
+        python scripts/ops/check_project_structure.py --strict
+        PYTHONPATH=. pytest -q tests/governance
     - name: Test with unittest
       run: |
         python -m unittest discover

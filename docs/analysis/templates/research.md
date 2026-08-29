@@ -5,6 +5,10 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 
 # Weather 研究：{topic}
 
+> Project record: `{artifact run}/research_record.json`。先按
+> `docs/RESEARCH_KNOWLEDGE_SYSTEM.md` 固定 hypothesis、denominator、identity
+> 与 knowledge handoff；本 Markdown 只保留需要人读的机制与结论。
+
 ## 单轮 brief
 
 - hypothesis（可证伪，一句话）：
@@ -119,6 +123,7 @@ M5：新机制/概率/快源/PIT 研究 brief；固定方法见 weather-strategy
 
 ## Output routing（交付前填）
 
+- research record（`research_record_ctl.py validate` 必须 PASS）：
 - family living doc（必须更新）：
 - registry/index update：
 - canonical machine format（只能选一种 CSV/JSON/JSONL/Parquet）：

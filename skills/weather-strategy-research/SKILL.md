@@ -9,7 +9,7 @@ description: 设计和验证新的 weather 策略机制、物理特征、概率/
 
 ## 先定位血缘
 
-读 `AGENTS.md`、`docs/WEATHER_ANALYSIS_CONTRACT.md`、`docs/WEATHER_STRATEGY_QUANT_DESIGN.md`、`docs/WEATHER_STRATEGY_REGISTRY.md` 和目标 family living doc。
+读 `AGENTS.md`、`docs/RESEARCH_KNOWLEDGE_SYSTEM.md`、`docs/WEATHER_ANALYSIS_CONTRACT.md`、`docs/WEATHER_STRATEGY_QUANT_DESIGN.md`、`docs/WEATHER_STRATEGY_REGISTRY.md` 和目标 family living doc。
 
 跨城市分钟/小时间隔温度模型还必须读 `docs/WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md` 与
 `docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md`，先声明目标、PIT 时钟、source/cadence、settlement lattice 和盘口在模型中的角色。
@@ -89,6 +89,11 @@ WS capture policy/coverage | incremental-book reconstruction parity | sampling g
 
 已有 `AGENTS.md` 的永久边界和本 skill 的固定方法不在 prompt 中重复。若任务缺 brief 信息，按用户已给范围做最小
 read-only readiness，并把唯一缺失的决策点报告出来；不要擅自扩展为另一条策略、另一座城市或 live 改动。
+
+把 brief 写入 artifact run 内的 `research_record.json`，用
+`.venv/bin/python scripts/ops/research_record_ctl.py validate RECORD` 固定 grain、
+denominator、PIT、input/code/config identity、唯一机器格式和 living-doc handoff。
+`research_record_ctl.py prompt RECORD` 生成单轮提示词；不得另建平行 prompt 章程。
 
 ## 研究问题模板
 
@@ -193,6 +198,7 @@ maker 假设必须建 fill/queue/adverse selection，不能把 future touch 当�
 - 日期报告写 `docs/analysis/YYYY-MM/`，只作 snapshot。实验结束时必须同时回写
   `docs/WEATHER_DOCS_INDEX.md`、所属 family living doc 与 `docs/WEATHER_STRATEGY_REGISTRY.md`：写清耐久结论、
   被取代的旧判断、证据边界和当前动作。只新增日期报告、不更新家族入口，任务不算完成。
+- terminal `research_record.json` 必须补 `observed_at_utc`、`durable_conclusion` 和 `action`，并再次通过 validator。
 - 新版本若只是同一模型的 feature/参数/训练窗 experiment，保留稳定 model identity，用 `run_id/artifact_id`
   区分；不要继续制造 `v9/v10/v11` 平行“当前模型”。
 - 结论保留 `inconclusive` / `shadow_candidate` / `rejected_for_expression` 边界；方向暂停不删除资产。

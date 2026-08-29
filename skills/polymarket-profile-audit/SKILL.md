@@ -1,6 +1,6 @@
 ---
 name: polymarket-profile-audit
-description: 审计一个 Polymarket 账户的历史交易、持仓、已平仓表现和 PnL 轨迹，输入支持 @username、主页 URL 或钱包地址。
+description: 审计一个 Polymarket 账户在公开端点可见窗口内的交易、持仓、已平仓表现、PnL 与回撤，输入支持 @username、主页 URL 或钱包地址。不得把公开分页称为完整私有历史，也不用于 weather live-account 对账。
 ---
 
 # Polymarket Profile Audit

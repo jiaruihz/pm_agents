@@ -1,0 +1,427 @@
+{
+  "$defs": {
+    "EvidenceInput": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "minLength": 1,
+          "title": "Coverage",
+          "type": "string"
+        },
+        "identity": {
+          "minLength": 1,
+          "title": "Identity",
+          "type": "string"
+        },
+        "input_id": {
+          "title": "Input Id",
+          "type": "string"
+        },
+        "kind": {
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "observed_at_utc": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At Utc"
+        }
+      },
+      "required": [
+        "input_id",
+        "kind",
+        "locator",
+        "identity",
+        "coverage"
+      ],
+      "title": "EvidenceInput",
+      "type": "object"
+    },
+    "ExecutionIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "code_identity": {
+          "minLength": 1,
+          "title": "Code Identity",
+          "type": "string"
+        },
+        "config_identity": {
+          "minLength": 1,
+          "title": "Config Identity",
+          "type": "string"
+        },
+        "config_locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Locator"
+        },
+        "producer": {
+          "minLength": 1,
+          "title": "Producer",
+          "type": "string"
+        },
+        "reproduce_command": {
+          "minLength": 1,
+          "title": "Reproduce Command",
+          "type": "string"
+        }
+      },
+      "required": [
+        "producer",
+        "code_identity",
+        "config_identity",
+        "reproduce_command"
+      ],
+      "title": "ExecutionIdentity",
+      "type": "object"
+    },
+    "KnowledgeHandoff": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "dated_snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dated Snapshot"
+        },
+        "durable_conclusion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Durable Conclusion"
+        },
+        "family_living_doc": {
+          "title": "Family Living Doc",
+          "type": "string"
+        },
+        "registry_or_index": {
+          "title": "Registry Or Index",
+          "type": "string"
+        },
+        "superseded_record_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Superseded Record Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "family_living_doc",
+        "registry_or_index"
+      ],
+      "title": "KnowledgeHandoff",
+      "type": "object"
+    },
+    "LifecycleStatus": {
+      "enum": [
+        "planned",
+        "running",
+        "complete",
+        "blocked",
+        "superseded_for_now"
+      ],
+      "title": "LifecycleStatus",
+      "type": "string"
+    },
+    "MachineFormat": {
+      "enum": [
+        "csv",
+        "json",
+        "jsonl",
+        "parquet",
+        "sqlite",
+        "none"
+      ],
+      "title": "MachineFormat",
+      "type": "string"
+    },
+    "OutputRouting": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_manifest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Manifest"
+        },
+        "artifact_root_contract": {
+          "minLength": 1,
+          "title": "Artifact Root Contract",
+          "type": "string"
+        },
+        "canonical_machine_format": {
+          "$ref": "#/$defs/MachineFormat"
+        },
+        "compact_summary_locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compact Summary Locator"
+        }
+      },
+      "required": [
+        "artifact_root_contract",
+        "canonical_machine_format"
+      ],
+      "title": "OutputRouting",
+      "type": "object"
+    },
+    "ResearchMethod": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_gates": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Acceptance Gates",
+          "type": "array"
+        },
+        "baselines": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Baselines",
+          "type": "array"
+        },
+        "denominator_scope": {
+          "minLength": 1,
+          "title": "Denominator Scope",
+          "type": "string"
+        },
+        "evidence_layers": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Layers",
+          "type": "array"
+        },
+        "fee_and_execution_basis": {
+          "minLength": 1,
+          "title": "Fee And Execution Basis",
+          "type": "string"
+        },
+        "forward_policy": {
+          "minLength": 1,
+          "title": "Forward Policy",
+          "type": "string"
+        },
+        "grain": {
+          "minLength": 1,
+          "title": "Grain",
+          "type": "string"
+        },
+        "label_contract": {
+          "minLength": 1,
+          "title": "Label Contract",
+          "type": "string"
+        },
+        "pit_or_asof_policy": {
+          "minLength": 1,
+          "title": "Pit Or Asof Policy",
+          "type": "string"
+        },
+        "primary_metrics": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Primary Metrics",
+          "type": "array"
+        }
+      },
+      "required": [
+        "grain",
+        "denominator_scope",
+        "evidence_layers",
+        "pit_or_asof_policy",
+        "label_contract",
+        "primary_metrics",
+        "baselines",
+        "forward_policy",
+        "acceptance_gates",
+        "fee_and_execution_basis"
+      ],
+      "title": "ResearchMethod",
+      "type": "object"
+    },
+    "ResearchQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_target": {
+          "minLength": 1,
+          "title": "Decision Target",
+          "type": "string"
+        },
+        "exclusions": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exclusions",
+          "type": "array"
+        },
+        "hypothesis": {
+          "minLength": 1,
+          "title": "Hypothesis",
+          "type": "string"
+        },
+        "scope": {
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hypothesis",
+        "decision_target",
+        "scope",
+        "exclusions"
+      ],
+      "title": "ResearchQuestion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "domain": {
+      "title": "Domain",
+      "type": "string"
+    },
+    "execution": {
+      "$ref": "#/$defs/ExecutionIdentity"
+    },
+    "family": {
+      "title": "Family",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceInput"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "knowledge": {
+      "$ref": "#/$defs/KnowledgeHandoff"
+    },
+    "lifecycle_status": {
+      "$ref": "#/$defs/LifecycleStatus"
+    },
+    "method": {
+      "$ref": "#/$defs/ResearchMethod"
+    },
+    "observed_at_utc": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed At Utc"
+    },
+    "outputs": {
+      "$ref": "#/$defs/OutputRouting"
+    },
+    "question": {
+      "$ref": "#/$defs/ResearchQuestion"
+    },
+    "record_id": {
+      "title": "Record Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "pm_agents_research_record_v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "skill": {
+      "minLength": 1,
+      "title": "Skill",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_id",
+    "run_id",
+    "domain",
+    "family",
+    "skill",
+    "lifecycle_status",
+    "question",
+    "method",
+    "execution",
+    "outputs",
+    "knowledge"
+  ],
+  "title": "ResearchRecord",
+  "type": "object"
+}

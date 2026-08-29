@@ -1,6 +1,6 @@
 ---
 name: polymarket-market-rule-audit
-description: 审计一个 Polymarket 市场的基础信息、规则、结算条件和歧义风险，输入支持市场 URL、slug 或 condition id。
+description: 审计一个 Polymarket 市场的基础信息、规则、结算来源、结算条件和歧义风险，输入支持市场 URL、slug 或 condition id。用于通用市场规则研究，不替代 weather settlement/canonical 合同。
 ---
 
 # Polymarket Market Rule Audit

@@ -1,0 +1,144 @@
+schema_version: pm_agents_skill_catalog_v1
+
+# SKILL.md frontmatter remains the discovery surface. This catalog adds the
+# project-level precedence and negative scope needed to detect overlaps.
+skills:
+  chatgpt-web-playwright:
+    domain: tooling
+    lifecycle: active
+    use_for: Scaffold a user-controlled local ChatGPT Playwright project.
+    not_for:
+      - controlling an already available in-app browser
+      - general web research
+
+  pmm-market-data-fetcher:
+    domain: legacy_pmm
+    lifecycle: dormant
+    use_for: One-shot event and orderbook snapshots for legacy PMM tests.
+    not_for:
+      - weather canonical market data
+      - continuous capture
+
+  pmm-scenario-generator:
+    domain: legacy_pmm
+    lifecycle: dormant
+    use_for: Synthetic orderbook scenarios for the retained PMM backtester.
+    not_for:
+      - active weather research
+      - production market data
+
+  polymarket-market-intel:
+    domain: polymarket_general
+    lifecycle: active
+    use_for: Comments, holders, smart-wallet evidence, and wallet history for one market.
+    not_for:
+      - rule interpretation as the only evidence
+      - weather canonical facts
+
+  polymarket-market-rule-audit:
+    domain: polymarket_general
+    lifecycle: active
+    use_for: Resolution wording, source, ambiguity, and rule-risk analysis.
+    not_for:
+      - holder or wallet-performance analysis
+      - weather settlement-source replacement
+
+  polymarket-profile-audit:
+    domain: polymarket_general
+    lifecycle: active
+    use_for: Public-history coverage, positions, PnL, and drawdown for one account.
+    not_for:
+      - claims of complete private account history
+      - weather live-account reconciliation
+
+  polymarket-research-orchestrator:
+    domain: polymarket_general
+    lifecycle: active
+    use_for: A full market or event study combining rule and market-intelligence evidence.
+    not_for:
+      - weather strategy performance
+      - production order decisions
+    depends_on:
+      - polymarket-market-intel
+      - polymarket-market-rule-audit
+      - polymarket-profile-audit
+
+  weather-fact-rebuild:
+    domain: weather
+    lifecycle: active
+    use_for: Minimal sync, refresh, rematerialization, or explicitly authorized rebuild.
+    not_for:
+      - ordinary read-only analysis with sufficient coverage
+      - JRS permission-host recovery
+
+  weather-jrs-runtime-failover:
+    domain: weather
+    lifecycle: active
+    use_for: JRS/TCC permission-host failure, bounded local failover, and repatriation.
+    not_for:
+      - normal data refresh
+      - N100 recovery
+    depends_on:
+      - weather-strategy-deploy
+
+  weather-live-account-reconcile:
+    domain: weather
+    lifecycle: active
+    use_for: Wallet cash, fills, fees, open cost, reserved funds, and canonical PnL reconciliation.
+    not_for:
+      - strategy alpha evaluation
+      - position-only summaries without cashflow questions
+
+  weather-strategy-deploy:
+    domain: weather
+    lifecycle: active
+    use_for: Git-first Mac production behavior changes through registered controller contracts.
+    not_for:
+      - research-only code changes
+      - unrequested N100 operations
+
+  weather-strategy-exposure:
+    domain: weather
+    lifecycle: active
+    use_for: Current fills, open orders, unsettled positions, concentration, and timestamped MTM.
+    not_for:
+      - wallet cashflow reconciliation
+      - realized-loss claims from open cost
+
+  weather-strategy-lineage:
+    domain: weather
+    lifecycle: active
+    use_for: Trace one decision, order, market, city-day, or anomaly through the full lineage.
+    not_for:
+      - whole-database rebuilds
+      - aggregate strategy performance
+
+  weather-strategy-performance:
+    domain: weather
+    lifecycle: active
+    use_for: Fixed-denominator probability, fill selection, fee-adjusted performance, and forward evidence.
+    not_for:
+      - designing a new mechanism
+      - wallet cashflow
+
+  weather-strategy-research:
+    domain: weather
+    lifecycle: active
+    use_for: New mechanisms, probability models, PIT features, sources, and microstructure hypotheses.
+    not_for:
+      - current account reconciliation
+      - production behavior changes
+
+precedence:
+  - condition: A weather request changes production behavior.
+    route: weather-strategy-deploy
+  - condition: A weather storage failure involves JRS or TCC.
+    route: weather-jrs-runtime-failover + weather-strategy-deploy
+  - condition: A weather question asks why one decision or order happened.
+    route: weather-strategy-lineage
+  - condition: A weather question asks aggregate results for an existing strategy.
+    route: weather-strategy-performance
+  - condition: A weather question proposes a new mechanism or model.
+    route: weather-strategy-research
+  - condition: A general Polymarket request asks for a complete market or event study.
+    route: polymarket-research-orchestrator

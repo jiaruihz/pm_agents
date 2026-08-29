@@ -1,6 +1,6 @@
 ---
 name: polymarket-market-intel
-description: 分析一个 Polymarket 市场的评论区、top holders、smart wallets 和关键钱包历史表现，输入支持市场 URL、slug 或 condition id。
+description: 分析一个 Polymarket 市场的评论区、top holders、smart wallets 和关键钱包公开历史表现，输入支持市场 URL、slug 或 condition id。用于市场情报证据，不负责规则定案，也不得作为 weather canonical facts。
 ---
 
 # Polymarket Market Intel

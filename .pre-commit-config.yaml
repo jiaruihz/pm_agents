@@ -14,3 +14,13 @@ repos:
     hooks:
     - id: gitleaks
       args: ["--redact"]
+-   repo: local
+    hooks:
+    - id: pm-agents-project-structure
+      name: PM Agents project structure contract
+      entry: python scripts/ops/check_project_structure.py --strict
+      language: python
+      additional_dependencies:
+      - pydantic>=2.8,<3
+      - pyyaml>=6,<7
+      pass_filenames: false
