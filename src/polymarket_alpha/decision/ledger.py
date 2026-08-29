@@ -107,7 +107,7 @@ def _accepted(receipt: ResearchImportReceipt, result: ResearchResultEnvelope) ->
 
 
 def _fresh(at: datetime, as_of: datetime, seconds: int, label: str) -> None:
-    if at > as_of or (as_of - at).total_seconds() > seconds:
+    if at > as_of or (as_of - at).total_seconds() >= seconds:
         raise DecisionLedgerError(f"{label} is stale or lies after as_of")
 
 
@@ -256,7 +256,15 @@ def build_ranked_ledger(
     else:
         direction, net_edge, conservative_probability = DecisionDirection.NONE, yes_edge, None
     recall_component = min(candidate.recall_score / config.recall_scale, _ONE)
-    evidence_component = sum((item.confidence for item in market_result.evidence), _ZERO) / Decimal(len(market_result.evidence))
+    # A deterministic market comparison contributes execution state, not new
+    # research evidence. Preserve the accepted Blind evidence quality instead
+    # of awarding full credit to its synthetic neutral comparison receipt.
+    scored_evidence = (
+        blind_result.evidence
+        if market_result.extensions.get("probability_update") == "NONE"
+        else market_result.evidence
+    )
+    evidence_component = sum((item.confidence for item in scored_evidence), _ZERO) / Decimal(len(scored_evidence))
     edge_component = max(net_edge, _ZERO)
     breakdown = {
         "recall": recall_component * config.recall_weight,

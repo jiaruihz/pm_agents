@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
+from scripts.analysis.forecast_quality import package_wcir_stage23_full_seal_v2 as packager
 from scripts.analysis.forecast_quality.wcir_collector_clock_shadow import CollectorClockShadow
 from scripts.analysis.forecast_quality.wcir_stage23_full_seal_v2 import (
     causal_entry_gate,
@@ -132,3 +135,29 @@ def test_scheduler_stall_invalidates_every_token() -> None:
     with pytest.raises(RuntimeError, match="scheduler stall"):
         machine.scheduler_tick(monotonic_ns=40, maximum_gap_ns=10)
     assert not machine.tokens["t"].valid
+
+
+def test_freeze_rejects_working_tree_code_different_from_claimed_commit(tmp_path, monkeypatch) -> None:
+    relative = "code.py"
+    (tmp_path / relative).write_bytes(b"working tree\n")
+    monkeypatch.setattr(packager, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        packager.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=b"committed\n"),
+    )
+    with pytest.raises(RuntimeError, match="differ from frozen commit"):
+        packager.verify_code_files_match_commit("a" * 40, (relative,))
+
+
+def test_freeze_accepts_working_tree_code_equal_to_claimed_commit(tmp_path, monkeypatch) -> None:
+    relative = "code.py"
+    content = b"committed\n"
+    (tmp_path / relative).write_bytes(content)
+    monkeypatch.setattr(packager, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        packager.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=content),
+    )
+    packager.verify_code_files_match_commit("a" * 40, (relative,))

@@ -68,7 +68,7 @@ def _gates(contract: RuleContract) -> tuple[RuleGateDecision, RuleGateDecision]:
     return gate_a, gate_b
 
 
-def _artifact_and_claim(run: str) -> tuple[SourceArtifact, ClaimEvidence]:
+def _artifact_and_claim(run: str, *, confidence: Decimal = Decimal("0.95")) -> tuple[SourceArtifact, ClaimEvidence]:
     payload = b"A final official bulletin confirms the event."
     import hashlib
     digest = hashlib.sha256(payload).hexdigest()
@@ -83,16 +83,17 @@ def _artifact_and_claim(run: str) -> tuple[SourceArtifact, ClaimEvidence]:
         claim="A final official bulletin confirms the event.", supports_yes_or_no=EvidenceSupport.YES, source_tier=SourceTier.T0,
         source_name="Agency", source_url_or_source_id=artifact.source_url_or_source_id, accessed_at=NOW - timedelta(minutes=9),
         effective_as_of=artifact.effective_as_of, primary_or_secondary="PRIMARY", quotation_or_paraphrase_location="p1",
-        confidence=Decimal("0.95"), origin=EvidenceOrigin.PRIMARY_SOURCE, source_artifact_id=artifact_id,
+        confidence=confidence, origin=EvidenceOrigin.PRIMARY_SOURCE, source_artifact_id=artifact_id,
         capture_scope=artifact.capture_scope, hash_scope=artifact.hash_scope, content_sha256=artifact.content_sha256,
         excerpt_context=payload.decode(), replayability=artifact.replayability)
     return artifact, claim
 
 
 def _result(stage: PacketStage, packet_id: str, packet_hash: str, *, market: bool, blind_id: str,
-            completed_at: datetime, imported_at: datetime) -> tuple[ResearchResultEnvelope, ResearchImportReceipt]:
+            completed_at: datetime, imported_at: datetime,
+            evidence_confidence: Decimal = Decimal("0.95")) -> tuple[ResearchResultEnvelope, ResearchImportReceipt]:
     run = f"research-{stage.value.lower()}"
-    artifact, claim = _artifact_and_claim(run)
+    artifact, claim = _artifact_and_claim(run, confidence=evidence_confidence)
     estimate_id = stable_record_id("probability_estimate", run)
     estimate = ProbabilityEstimate(**_env(estimate_id, run=run, source="research"), market_id="market-1" if market else None,
         blind_candidate_id=blind_id, estimate_stage=EstimateStage.FINAL if market else EstimateStage.BLIND,
@@ -139,7 +140,8 @@ def _inputs() -> dict[str, object]:
     blind_packet_id = stable_record_id("blind_packet", "fixture")
     blind_result, blind_receipt = _result(PacketStage.BLIND, blind_packet_id, SHA, market=False,
         blind_id="blind_candidate:" + "b" * 64, completed_at=NOW - timedelta(minutes=5),
-        imported_at=NOW - timedelta(minutes=4, seconds=30))
+        imported_at=NOW - timedelta(minutes=4, seconds=30),
+        evidence_confidence=Decimal("0.25"))
     book = _book()
     packet_id = stable_record_id("market_packet", "fixture")
     packet = MarketResearchPacket(**_env(packet_id, source="market_packet_builder", at=NOW - timedelta(minutes=3)), candidate_id=candidate.candidate_id,
@@ -160,6 +162,8 @@ def test_rank_golden_and_replay_are_deterministic() -> None:
     assert first == second
     assert first.score == Decimal("0.6265")
     assert first.score_breakdown == {"recall": Decimal("0.180"), "evidence": Decimal("0.1900"), "rule": Decimal("0.2250"), "edge": Decimal("0.0315")}
+    assert inputs["blind_result"].evidence[0].confidence == Decimal("0.25")
+    assert inputs["market_result"].evidence[0].confidence == Decimal("0.95")
     assert first.decision.action == ReviewAction.SIMULATE
     assert first.decision.execution == "NO_ORDER"
     assert first.decision.target_size == Decimal("10")
@@ -173,6 +177,13 @@ def test_mismatch_and_stale_inputs_fail_closed() -> None:
         build_ranked_ledger(**inputs)
     inputs = _inputs()
     inputs["as_of"] = NOW + timedelta(minutes=6)
+    with pytest.raises(DecisionLedgerError, match="orderbook is stale"):
+        build_ranked_ledger(**inputs)
+
+    inputs = _inputs()
+    inputs["as_of"] = inputs["book"].source_observed_at + timedelta(
+        seconds=inputs["config"].max_book_age_seconds
+    )
     with pytest.raises(DecisionLedgerError, match="orderbook is stale"):
         build_ranked_ledger(**inputs)
 

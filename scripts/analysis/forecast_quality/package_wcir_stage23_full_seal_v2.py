@@ -47,9 +47,26 @@ def run_text(*args: str) -> str:
     return subprocess.run(args, cwd=ROOT, check=True, text=True, capture_output=True).stdout.strip()
 
 
+def verify_code_files_match_commit(head: str, code_files: tuple[str, ...]) -> None:
+    """Fail closed when a seal would attribute working-tree bytes to HEAD."""
+    mismatches = []
+    for relative in code_files:
+        committed = subprocess.run(
+            ["git", "show", f"{head}:{relative}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+        if committed != (ROOT / relative).read_bytes():
+            mismatches.append(relative)
+    if mismatches:
+        raise RuntimeError(f"code/test files differ from frozen commit {head}: {mismatches}")
+
+
 def write_freezes(code_files: tuple[str, ...]) -> None:
     dependencies = run_text(str(ROOT / ".venv/bin/python"), "-m", "pip", "freeze") + "\n"
     head = run_text("git", "rev-parse", "HEAD")
+    verify_code_files_match_commit(head, code_files)
     production_yaml = ROOT / "src/strategies/runtime/production.yaml"
     committed_production = subprocess.run(
         ["git", "show", f"{head}:src/strategies/runtime/production.yaml"],

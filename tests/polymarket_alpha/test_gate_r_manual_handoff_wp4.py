@@ -24,14 +24,15 @@ from tests.polymarket_alpha.test_gate_r_blind_plan_wp3 import _compile as _plan,
 NOW = datetime(2026, 8, 28, tzinfo=timezone.utc)
 
 
-def _capture(raw: bytes = b"The final bulletin is published.", *, scope=ManualCaptureScope.EXCERPT):
+def _capture(raw: bytes = b"The final bulletin is published.", *, scope=ManualCaptureScope.EXCERPT,
+             claim_ids=("claim:critical",), pit_cutoff=NOW):
     return build_source_capture(
         source_key="final", canonical_url="https://authority.example/record", title="Record",
         publisher="Authority", source_class="OFFICIAL_PRIMARY", primary_or_secondary="PRIMARY",
         accessed_at_utc=NOW, first_available_at_utc=NOW - timedelta(days=1),
-        pit_cutoff_utc=NOW, pit_available=True, capture_scope=scope,
+        pit_cutoff_utc=pit_cutoff, pit_available=True, capture_scope=scope,
         representation=SourceRepresentation.TEXT_EXPORT, content_type="text/plain",
-        artifact_locator="sources/record.txt", claim_ids=("claim:critical",), content_bytes=raw,
+        artifact_locator="sources/record.txt", claim_ids=claim_ids, content_bytes=raw,
         quote_locator_or_excerpt=("final bulletin" if scope == ManualCaptureScope.EXCERPT else None),
     )
 
@@ -63,7 +64,8 @@ def _draft(*, claim="Agency issued a final bulletin.") -> ResearchDraft:
         completed_at=NOW + timedelta(minutes=10), producer="gpt-pro-manual", producer_version="v1")
 
 
-def _handoff(*, appendix: bytes | None = None, response: bytes = b"Independent research response"):
+def _handoff(*, appendix: bytes | None = None, response: bytes = b"Independent research response",
+             capture_pit_cutoff=NOW):
     plan, rule, _, packet = _plan()
     prompt = _seal(plan, rule, packet)
     approval = create_export_approval(seal=prompt.seal, prompt_bytes=prompt.prompt_bytes,
@@ -72,15 +74,18 @@ def _handoff(*, appendix: bytes | None = None, response: bytes = b"Independent r
         copy_policy=ExactFileCopyPolicy.COPY_ATTESTED_NOT_CRYPTOGRAPHICALLY_OBSERVED)
     attempt = _attempt(prompt.seal.research_job_id)
     binding = capture_manual_return(seal=prompt.seal, approval=approval, attempt=attempt,
+        source_plan=plan.source_plan,
         provider_ui="web", displayed_model="gpt-pro", session_mode="fresh", operator_id="human",
         started_at_utc=NOW + timedelta(minutes=1), completed_at_utc=NOW + timedelta(minutes=10),
         captured_at_utc=NOW + timedelta(minutes=11), raw_transcript_bytes=b"Fresh isolated transcript",
         raw_transcript_locator="returns/transcript.txt", raw_response_bytes=response,
         raw_response_locator="returns/response.txt",
         json_appendix_bytes=(appendix if appendix is not None else _draft().model_dump_json().encode()),
-        json_appendix_locator="returns/appendix.json", captures=(_capture(),),
-        observed_tool_usage=("search",), critical_claim_ids=("claim:critical",))
-    return binding, prompt, approval, attempt, packet
+        json_appendix_locator="returns/appendix.json",
+        captures=(_capture(claim_ids=plan.source_plan.critical_claim_ids,
+                           pit_cutoff=capture_pit_cutoff),),
+        observed_tool_usage=("search",))
+    return binding, prompt, approval, attempt, packet, plan.source_plan
 
 
 def test_source_capture_recomputes_bytes_and_manifest_is_deterministic() -> None:
@@ -141,14 +146,20 @@ def test_approval_export_replay_expiry_reject_and_conflict(tmp_path) -> None:
 
 
 def test_complete_capture_to_existing_draft_and_importer_roundtrip() -> None:
-    binding, _, _, _, packet = _handoff()
+    binding, _, _, _, packet, source_plan = _handoff()
     assert binding.disposition == CaptureDisposition.ACCEPTED
+    assert binding.critical_claim_ids == tuple(sorted(source_plan.critical_claim_ids))
     compiled = bind_return_to_draft(binding=binding, packet=packet, run_id="wp4",
         created_at=NOW + timedelta(minutes=12))
     imported = import_bound_return(binding=binding, packet=packet, compiled=compiled,
         imported_at=NOW + timedelta(minutes=13), run_id="wp4-import",
         submitted_artifact_locator="returns/submission.json")
     assert imported.receipt.status == ResearchImportStatus.ACCEPTED
+
+
+def test_capture_pit_cutoff_must_match_sealed_source_plan() -> None:
+    with pytest.raises(ManualHandoffError, match="PIT cutoff"):
+        _handoff(capture_pit_cutoff=NOW + timedelta(seconds=1))
 
 
 def test_malformed_leaking_and_insufficient_returns_do_not_advance() -> None:
@@ -169,13 +180,14 @@ def test_malformed_leaking_and_insufficient_returns_do_not_advance() -> None:
         pit_available=True, capture_scope=ManualCaptureScope.REFERENCE,
         representation=SourceRepresentation.NONE, claim_ids=("claim:critical",))
     insufficient = capture_manual_return(seal=prompt.seal, approval=approval,
-        attempt=_attempt(prompt.seal.research_job_id), provider_ui="web", displayed_model="gpt-pro",
+        attempt=_attempt(prompt.seal.research_job_id), source_plan=plan.source_plan,
+        provider_ui="web", displayed_model="gpt-pro",
         session_mode="fresh", operator_id="human", started_at_utc=NOW + timedelta(minutes=1),
         completed_at_utc=NOW + timedelta(minutes=10), captured_at_utc=NOW + timedelta(minutes=11),
         raw_transcript_bytes=b"Fresh transcript", raw_transcript_locator="r/t.txt",
         raw_response_bytes=b"Research response", raw_response_locator="r/r.txt",
         json_appendix_bytes=_draft().model_dump_json().encode(), json_appendix_locator="r/a.json",
-        captures=(reference,), observed_tool_usage=(), critical_claim_ids=("claim:critical",))
+        captures=(reference,), observed_tool_usage=())
     assert insufficient.disposition == CaptureDisposition.INSUFFICIENT_EVIDENCE
     with pytest.raises(ManualHandoffError):
         bind_return_to_draft(binding=malformed, packet=packet, run_id="wp4",
@@ -231,16 +243,17 @@ def test_non_utf8_return_is_sealed_as_malformed_and_quarantined() -> None:
 
 
 def test_cross_attempt_and_forged_contracts_fail_closed() -> None:
-    binding, prompt, approval, _, _ = _handoff()
+    binding, prompt, approval, _, _, source_plan = _handoff()
     wrong = _attempt("research_job:" + "9" * 64)
     with pytest.raises(ManualHandoffError, match="does not bind"):
         capture_manual_return(seal=prompt.seal, approval=approval, attempt=wrong,
+            source_plan=source_plan,
             provider_ui="web", displayed_model="gpt-pro", session_mode="fresh", operator_id="human",
             started_at_utc=NOW + timedelta(minutes=1), completed_at_utc=NOW + timedelta(minutes=2),
             captured_at_utc=NOW + timedelta(minutes=3), raw_transcript_bytes=b"t",
             raw_transcript_locator="x/t", raw_response_bytes=b"r", raw_response_locator="x/r",
             json_appendix_bytes=b"{}", json_appendix_locator="x/a", captures=(_capture(),),
-            observed_tool_usage=(), critical_claim_ids=("claim:critical",))
+            observed_tool_usage=())
     forged = binding.seal.model_dump(mode="python")
     forged["return_seal_sha256"] = "0" * 64
     with pytest.raises(ValidationError, match="captured content"):

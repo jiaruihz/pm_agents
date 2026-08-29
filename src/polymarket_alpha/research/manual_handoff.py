@@ -18,7 +18,7 @@ from ..artifacts import ArtifactConflictError, ArtifactPathError, ArtifactStore
 from ..contracts import (
     ALPHA_CONTRACT_VERSION, BlindWorkOrderPromptSeal, ExportApprovalAction, ExportApprovalReceipt,
     ExactFileCopyPolicy, JsonAppendixParseStatus, ManualCaptureScope,
-    ResearchAttempt, ResearchReturnCaptureSeal, SourceCapture, SourceCaptureManifest,
+    ResearchAttempt, ResearchReturnCaptureSeal, SourceCapture, SourceCaptureManifest, SourcePlan,
     blind_leak_reasons, bytes_sha256, canonical_json, content_sha256, stable_record_id,
 )
 from ..contracts.base import ensure_utc
@@ -276,12 +276,12 @@ def _parse_status(raw: bytes | None) -> JsonAppendixParseStatus:
 
 def capture_manual_return(
     *, seal: BlindWorkOrderPromptSeal, approval: ExportApprovalReceipt, attempt: ResearchAttempt,
+    source_plan: SourcePlan,
     provider_ui: str, displayed_model: str, session_mode: str, operator_id: str,
     started_at_utc: datetime, completed_at_utc: datetime, captured_at_utc: datetime,
     raw_transcript_bytes: bytes, raw_transcript_locator: str, raw_response_bytes: bytes,
     raw_response_locator: str, json_appendix_bytes: bytes | None, json_appendix_locator: str | None,
     captures: tuple[SourceCapture, ...], observed_tool_usage: tuple[str, ...],
-    critical_claim_ids: tuple[str, ...],
 ) -> ManualReturnBinding:
     """Freeze and locally validate raw return/source bytes without persisting them."""
     # The original exact bytes were verified during export.  A returned capture
@@ -291,8 +291,9 @@ def capture_manual_return(
         BlindWorkOrderPromptSeal.model_validate(seal.model_dump(mode="python"))
         ExportApprovalReceipt.model_validate(approval.model_dump(mode="python"))
         attempt = ResearchAttempt.model_validate(attempt.model_dump(mode="python"))
+        source_plan = SourcePlan.model_validate(source_plan.model_dump(mode="python"))
     except ValueError as error:
-        raise ManualHandoffError("return has invalid seal, approval, or attempt metadata") from error
+        raise ManualHandoffError("return has invalid seal, approval, attempt, or SourcePlan metadata") from error
     if approval.action != ExportApprovalAction.APPROVE or approval.work_order_id != seal.work_order_id or approval.prompt_sha256 != seal.prompt_sha256:
         raise ManualHandoffError("return does not bind approved work order")
     started_at_utc, completed_at_utc, captured_at_utc = map(
@@ -300,15 +301,20 @@ def capture_manual_return(
     )
     if attempt.job_id != seal.research_job_id:
         raise ManualHandoffError("ResearchAttempt does not bind the sealed research job")
+    if (source_plan.source_plan_id != seal.source_plan_id
+        or source_plan.source_plan_sha256 != seal.source_plan_sha256):
+        raise ManualHandoffError("SourcePlan does not bind the sealed work order")
     if not (approval.approved_at_utc <= started_at_utc < approval.expires_at_utc):
         raise ManualHandoffError("attempt start is outside approval validity")
     if not (attempt.leased_at <= started_at_utc <= completed_at_utc <= captured_at_utc <= attempt.lease_expires_at):
         raise ManualHandoffError("return clocks are outside the bound ResearchAttempt lease")
     if not isinstance(raw_transcript_bytes, bytes) or not raw_transcript_bytes or not isinstance(raw_response_bytes, bytes) or not raw_response_bytes:
         raise ManualHandoffError("immutable raw transcript/response bytes are required")
-    critical = tuple(sorted(set(critical_claim_ids)))
+    critical = tuple(sorted(source_plan.critical_claim_ids))
     manifest = build_source_manifest(captures=captures, critical_claim_ids=critical,
         created_at_utc=captured_at_utc)
+    if manifest.pit_cutoff_utc != source_plan.pit_cutoff_utc:
+        raise ManualHandoffError("source capture PIT cutoff does not bind SourcePlan")
     status = _parse_status(json_appendix_bytes)
     decoded_values: tuple[str, ...] = ()
     try:

@@ -212,6 +212,8 @@ def test_compiled_result_reaches_rule_b_and_no_order_prediction_ledger() -> None
     )
     assert ranked.decision.execution == "NO_ORDER"
     assert ranked.prediction.decision_id == ranked.decision.record_id
+    expected_evidence = sum(item.confidence for item in values[4].evidence) / Decimal(len(values[4].evidence))
+    assert ranked.score_breakdown["evidence"] == expected_evidence * Decimal("0.20")
 
     overwritten_estimate = imported.result.probability_estimate.model_copy(update={
         "p_event_yes_low": Decimal("0.80"), "p_event_yes_mid": Decimal("0.85"),
