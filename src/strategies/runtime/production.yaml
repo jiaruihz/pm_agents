@@ -51,8 +51,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/f64728197135caf78b11491395bf23220b3fc872
     expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
   - release_id: core_carry_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/8c973d32d4315c07ff7180f3b66b5b3024b4ae60
-    expected_repo_sha: 8c973d32d4315c07ff7180f3b66b5b3024b4ae60
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/264cf84d6a1b70994682253de815aba9b944d9a2
+    expected_repo_sha: 264cf84d6a1b70994682253de815aba9b944d9a2
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
     expected_repo_sha: b2b26fd96e8086a2a444e83c66fd4d55ac904705
