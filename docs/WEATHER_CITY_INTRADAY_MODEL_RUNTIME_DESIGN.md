@@ -595,6 +595,14 @@ WCIR shadow 的增量入口是 `scripts/ops/materialize_weather_city_runtime_can
 用 `--bundles` 把查询限定到 journal 的 candidate IDs，避免在 11GB canonical DB 上做全量 v2 扫描。该性能问题在首次验收时
 实际暴露并已修正，未触及执行事实。
 
+2026-08-30 起，唯一登记的 bounded canonical refresh 在 live order→fill→fact→coverage gate 完成后，增量调用上述
+WCIR materializer。常驻模式以持久 inode/byte-offset/4KB prefix-guard cursor 每轮最多读取5,000行或64MiB；journal 在读取时继续
+append 不影响本轮冻结前缀，inode替换、截断或已处理前缀变更则显式失败并要求恢复。DB 写入采用单事务，cursor 只在 commit 后
+原子推进，进程崩溃窗口按at-least-once重试，由 immutable ID 幂等去重。成功报告固定写出输入时间范围、target-date 分布、
+candidate-ID set hash、raw/canonical reconciliation 与 settlement-label attach 数量。schema hook 同时按定义差异原子替换
+replay-case views，避免 `CREATE VIEW IF NOT EXISTS` 把旧的 capability 口径永久留在physical DB。该链只追加
+event/checkpoint/candidate、连接canonical settlement label，不生成plan/order/fill/PnL，也不替代显式授权的全量rebuild。
+
 2026-08-03 对最新 production journal 冻结了 356 行快照，临时 canonical dry-run 得到 352 个唯一 candidate
 （Helsinki 144、Tokyo 212）、`candidate_delta=0`、121 event、246 checkpoint；4 条重复 candidate 来自 journal
 重放去重。production 增量写入**没有执行**：预检时 physical DB metadata/inode 仍可见，但当前 shell 与 canonical

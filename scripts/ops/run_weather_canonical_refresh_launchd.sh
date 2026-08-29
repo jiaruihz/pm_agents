@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-RUNTIME_DIR="$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh"
+RUNTIME_DIR="${WEATHER_CANONICAL_REFRESH_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh}"
 LOCK_DIR="$RUNTIME_DIR/refresh.lock"
 source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
 
@@ -33,12 +33,17 @@ PROXY_CONTROL_ROOT="$(
 MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"
 weather_export_market_proxy_env "$MARKET_PROXY"
 
-# Keep this post-trade path deliberately small: production-declared live
-# instances only, then order -> fill -> fact -> gate.  Registration is the
-# ownership boundary, so future execution modules do not require another
-# hard-coded path here.
-# The full dashboard refresh also rebuilds every signal candidate and can take
-# many minutes, which is unnecessary for closing live execution lineage.
+# Keep this bounded path additive: install schema/view migrations, append the
+# production-declared WCIR shadow journal, then close live execution lineage as
+# order -> fill -> fact -> gate.  It must not run the full dashboard rebuild.
+CANONICAL_DB_PATH="$(
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().canonical_db_path)'
+)"
+WCIR_BUNDLES_PATH="$(
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().data_feed_output_root() / "city_probability_runtime_v3" / "decision_bundles.jsonl")'
+)"
 "$PROJECT_DIR/.venv/bin/python" -c \
   "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$DB_PATH')"
 "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders \
@@ -76,3 +81,20 @@ fi
 "$PROJECT_DIR/.venv/bin/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
   --db "$DB_PATH" \
   --json-out "$PROJECT_DIR/runtime/_dashboard_logs/clob_fill_coverage_gate.json"
+
+# Candidate replay is append-only and zero-notional.  Keep it after the live
+# fill/fact/gate chain so a concurrently appended shadow journal can fail and
+# retry without delaying post-trade accounting.
+if [[ ! -s "$WCIR_BUNDLES_PATH" ]]; then
+  echo "WCIR decision bundle journal missing or empty: $WCIR_BUNDLES_PATH" >&2
+  exit 1
+fi
+"$PROJECT_DIR/.venv/bin/python" scripts/ops/materialize_weather_city_runtime_canonical_v1.py \
+  --bundles "$WCIR_BUNDLES_PATH" \
+  --db "$DB_PATH" \
+  --expected-db "$CANONICAL_DB_PATH" \
+  --state "$RUNTIME_DIR/wcir_candidate_materialization_state.json" \
+  --max-new-rows 5000 \
+  --max-new-bytes 67108864 \
+  --apply \
+  --report "$RUNTIME_DIR/wcir_candidate_materialization.json"

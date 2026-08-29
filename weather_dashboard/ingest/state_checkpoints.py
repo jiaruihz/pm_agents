@@ -79,7 +79,12 @@ def build_state_checkpoint(
     }
 
 
-def ingest_state_checkpoints(conn: sqlite3.Connection, checkpoints: Iterable[Mapping[str, Any]]) -> int:
+def ingest_state_checkpoints(
+    conn: sqlite3.Connection,
+    checkpoints: Iterable[Mapping[str, Any]],
+    *,
+    commit: bool = True,
+) -> int:
     rows = list(checkpoints)
     if not rows:
         return 0
@@ -92,5 +97,6 @@ def ingest_state_checkpoints(conn: sqlite3.Connection, checkpoints: Iterable[Map
             [row.get(column) for column in columns],
         )
         inserted += int(cursor.rowcount or 0)
-    conn.commit()
+    if commit:
+        conn.commit()
     return inserted

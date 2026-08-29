@@ -11,6 +11,7 @@ from typing import Any, Iterable
 
 from scripts.etl.build_weather_signal_candidates import CANDIDATE_DDL
 from scripts.etl.materialize_weather_event_signal_candidates import (
+    attach_settlements,
     materialize_candidate_rows,
 )
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
@@ -289,7 +290,12 @@ class _CandidateCanonicalBridge:
                 f"canonical candidate bridge missing columns: {missing_columns}"
             )
 
-    def append(self, bundles: Iterable[DecisionBundle]) -> dict[str, int]:
+    def append(
+        self,
+        bundles: Iterable[DecisionBundle],
+        *,
+        attach_candidate_settlements: bool = False,
+    ) -> dict[str, int]:
         values = list(bundles)
         for bundle in values:
             _validate_bundle(bundle)
@@ -326,30 +332,46 @@ class _CandidateCanonicalBridge:
                 apply_first_seen_schema(conn)
             else:
                 self._validate_existing_schema(conn)
-            event_result = ingest_information_events(conn, events)
-            inserted_checkpoints = ingest_state_checkpoints(conn, checkpoints)
-            result = materialize_candidate_rows(
-                conn,
-                candidates,
-                initialize_schema=self.initialize_schema,
-            )
-            candidate_ids = [row["candidate_id"] for row in candidates]
-            if candidate_ids:
-                placeholders = ",".join("?" for _ in candidate_ids)
-                canonical_count = int(
-                    conn.execute(
-                        f"SELECT COUNT(*) FROM fact_signal_candidates "
-                        f"WHERE candidate_id IN ({placeholders})",
-                        candidate_ids,
-                    ).fetchone()[0]
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                event_result = ingest_information_events(
+                    conn, events, commit=False
                 )
-            else:
-                canonical_count = 0
-            if canonical_count != len(candidate_ids):
-                raise RuntimeError(
-                    "raw/canonical candidate reconciliation failed: "
-                    f"raw_unique={len(candidate_ids)} canonical={canonical_count}"
+                inserted_checkpoints = ingest_state_checkpoints(
+                    conn, checkpoints, commit=False
                 )
+                result = materialize_candidate_rows(
+                    conn,
+                    candidates,
+                    initialize_schema=False,
+                    commit=False,
+                )
+                candidate_ids = [row["candidate_id"] for row in candidates]
+                if candidate_ids:
+                    placeholders = ",".join("?" for _ in candidate_ids)
+                    canonical_count = int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM fact_signal_candidates "
+                            f"WHERE candidate_id IN ({placeholders})",
+                            candidate_ids,
+                        ).fetchone()[0]
+                    )
+                else:
+                    canonical_count = 0
+                if canonical_count != len(candidate_ids):
+                    raise RuntimeError(
+                        "raw/canonical candidate reconciliation failed: "
+                        f"raw_unique={len(candidate_ids)} canonical={canonical_count}"
+                    )
+                settlements_attached = (
+                    attach_settlements(conn, commit=False)
+                    if attach_candidate_settlements
+                    else 0
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
         finally:
             conn.close()
         return {
@@ -370,6 +392,7 @@ class _CandidateCanonicalBridge:
             "input_normalized_legacy_checkpoint_deliveries": (
                 normalized_checkpoint_deliveries
             ),
+            "settlements_attached": settlements_attached,
         }
 
     def candidate_funnels(

@@ -315,7 +315,8 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "load_production_spec().operational_repo_root" in starter
     assert 'CANONICAL_FILL_CACHE="$OPERATIONAL_PROJECT_DIR/runtime/weather_edge_v1/clob_fills.jsonl"' in starter
     assert 'ln -sfn "$CANONICAL_FILL_CACHE" "$REFRESH_FILL_CACHE"' in starter
-    assert 'export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q' in starter
+    assert 'export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q WEATHER_CANONICAL_REFRESH_RUNTIME_DIR=%q' in starter
+    assert "WEATHER_CANONICAL_REFRESH_RUNTIME_DIR" in starter
     assert 'SESSION="weather_canonical_refresh"' in starter
     assert "WEATHER_JRS_ONESHOT_LOG_MAX_BYTES" in starter
     assert "WEATHER_JRS_ONESHOT_LOG_RETAIN_BYTES" in starter
@@ -338,6 +339,16 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "load_production_spec().operational_repo_root" in refresh
     assert 'MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"' in refresh
     assert 'weather_export_market_proxy_env "$MARKET_PROXY"' in refresh
+    assert "materialize_weather_city_runtime_canonical_v1.py" in refresh
+    assert "WCIR_BUNDLES_PATH" in refresh
+    assert "--expected-db" in refresh
+    assert "--state" in refresh
+    assert "--max-new-rows 5000" in refresh
+    assert "--max-new-bytes 67108864" in refresh
+    assert "wcir_candidate_materialization.json" in refresh
+    assert refresh.index("weather_clob_fill_coverage_gate.py") < refresh.index(
+        "materialize_weather_city_runtime_canonical_v1.py"
+    )
     assert "127.0.0.1:7890" not in refresh
     assert "127.0.0.1:7897" not in refresh
 

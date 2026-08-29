@@ -37,8 +37,8 @@ fi
 SESSION="weather_canonical_refresh"
 JOB_DIR="$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh"
 printf -v JOB_COMMAND \
-  'cd %q; export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q; %q' \
-  "$REFRESH_PROJECT_DIR" "$REFRESH_PROJECT_DIR" "$RUNTIME_ROOT" \
+  'cd %q; export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q WEATHER_CANONICAL_REFRESH_RUNTIME_DIR=%q; %q' \
+  "$REFRESH_PROJECT_DIR" "$REFRESH_PROJECT_DIR" "$RUNTIME_ROOT" "$JOB_DIR" \
   "$REFRESH_PROJECT_DIR/scripts/ops/run_weather_canonical_refresh_launchd.sh"
 
 WEATHER_JRS_ONESHOT_LOG_MAX_BYTES="${WEATHER_CANONICAL_REFRESH_LOG_MAX_BYTES:-67108864}" \

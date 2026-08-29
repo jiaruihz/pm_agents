@@ -23,6 +23,8 @@ from weather_city_runtime import (
 from scripts.ops.materialize_weather_city_runtime_canonical_v1 import (
     main as canonical_materialize_main,
 )
+import scripts.ops.materialize_weather_city_runtime_canonical_v1 as canonical_materializer
+import weather_city_runtime.canonical_bridge as canonical_bridge_module
 from scripts.analysis.market_structure_edge.report_city_intraday_canonical_v1 import (
     build_report as build_canonical_report,
 )
@@ -351,6 +353,58 @@ def test_canonical_bridge_requires_same_physical_db_and_is_idempotent(
         CanonicalCandidateBridge(split, expected_db_path=physical)
 
 
+def test_canonical_bridge_rolls_back_event_and_checkpoint_on_candidate_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "atomic-candidate.db"
+
+    def _fail_candidates(*_args, **_kwargs):
+        raise RuntimeError("injected candidate failure")
+
+    monkeypatch.setattr(
+        canonical_bridge_module, "materialize_candidate_rows", _fail_candidates
+    )
+    with pytest.raises(RuntimeError, match="injected candidate failure"):
+        TemporaryCanonicalBridge(physical).append([bundle])
+
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute("SELECT count(*) FROM weather_information_events").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_canonical_bridge_rolls_back_candidates_on_settlement_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "atomic-settlement.db"
+
+    def _fail_settlements(*_args, **_kwargs):
+        raise RuntimeError("injected settlement failure")
+
+    monkeypatch.setattr(
+        canonical_bridge_module, "attach_settlements", _fail_settlements
+    )
+    with pytest.raises(RuntimeError, match="injected settlement failure"):
+        TemporaryCanonicalBridge(physical).append(
+            [bundle], attach_candidate_settlements=True
+        )
+
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute("SELECT count(*) FROM weather_information_events").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
 def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     tmp_path: Path,
 ) -> None:
@@ -367,6 +421,20 @@ def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     )
     physical = tmp_path / "canonical.db"
     TemporaryCanonicalBridge(physical).append([])
+    settlement_conn = sqlite3.connect(physical)
+    settlement_conn.execute(
+        """
+        INSERT INTO settlement_outcomes (
+          settlement_outcome_id, source_system, city, target_date, bracket,
+          condition_id, final_price, settlement_status
+        ) VALUES (
+          'settlement-18', 'polymarket_api', 'Helsinki', '2026-08-01',
+          '18', 'condition-18', 1.0, 'settled'
+        )
+        """
+    )
+    settlement_conn.commit()
+    settlement_conn.close()
     before = sqlite3.connect(physical)
     try:
         execution_before = {
@@ -391,11 +459,18 @@ def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     ]) == 0
     applied = json.loads(apply_report.read_text())
     assert applied["canonical_reconciliation"]["inserted_candidates"] == 1
+    assert applied["settlements_attached"] == 1
+    assert applied["input_target_date_counts"] == {"2026-08-01": 1}
+    assert applied["input_target_date_min"] == "2026-08-01"
+    assert applied["input_target_date_max"] == "2026-08-01"
+    assert applied["input_snapshot"][0]["path"] == str(journal.resolve())
+    assert len(applied["input_unique_candidate_id_hash"]) == 64
     assert applied["execution_projection"] == {
         "plan": "not_created_shadow",
         "order": "not_created_shadow",
         "fill": "not_created_shadow",
         "pnl": "not_computed_without_fill",
+        "settlement_label": "canonical_condition_join_only",
     }
     report = build_canonical_report(
         physical, candidate_ids=[bundle.signal_candidate.candidate_id]
@@ -409,9 +484,137 @@ def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
             table: after.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in ("plans", "orders", "fills")
         }
+        final_yes = after.execute(
+            "SELECT final_yes FROM fact_signal_candidates WHERE candidate_id = ?",
+            (bundle.signal_candidate.candidate_id,),
+        ).fetchone()[0]
     finally:
         after.close()
     assert execution_after == execution_before
+    assert final_yes == 1.0
+
+    idempotent_report = tmp_path / "idempotent.json"
+    assert canonical_materialize_main([
+        "--bundles", str(journal),
+        "--db", str(physical),
+        "--expected-db", str(physical),
+        "--apply",
+        "--report", str(idempotent_report),
+    ]) == 0
+    idempotent = json.loads(idempotent_report.read_text())
+    assert idempotent["canonical_reconciliation"]["inserted_candidates"] == 0
+    assert idempotent["settlements_attached"] == 0
+
+
+def test_canonical_materializer_rejects_a_journal_that_changes_mid_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    row = {
+        "information_event": bundle.information_event,
+        "state_checkpoint": bundle.state_checkpoint,
+        "model_output": bundle.model_output.to_dict(),
+        "signal_candidate": bundle.signal_candidate.to_dict(),
+    }
+    journal = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(journal, [row])
+    original = canonical_materializer.load_bundles
+
+    def _mutating_load(paths):
+        bundles = original(paths)
+        with journal.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+        return bundles
+
+    monkeypatch.setattr(canonical_materializer, "load_bundles", _mutating_load)
+    with pytest.raises(RuntimeError, match="journal changed while reading"):
+        canonical_materializer.main(["--bundles", str(journal)])
+
+
+def test_canonical_materializer_cursor_is_bounded_append_only_and_idempotent(
+    tmp_path: Path,
+) -> None:
+    def _row(index: int) -> dict:
+        decision_second = index + 1
+        evaluation = _evaluation(
+            evaluation_id=f"legacy-eval-{index}",
+            decision_ts_utc=f"2026-08-01T05:42:{decision_second:02d}Z",
+            source_obs_ts_utc=f"2026-08-01T05:40:{decision_second:02d}Z",
+            lineage={
+                **_evaluation()["lineage"],
+                "source_payload_hash": f"source-payload-{index}",
+                "source_input_ref": {
+                    "physical_path": "source.jsonl",
+                    "physical_line": index,
+                },
+            },
+        )
+        bundle = legacy_bundle_from_evaluation(evaluation)
+        return {
+            "information_event": bundle.information_event,
+            "state_checkpoint": bundle.state_checkpoint,
+            "model_output": bundle.model_output.to_dict(),
+            "signal_candidate": bundle.signal_candidate.to_dict(),
+        }
+
+    journal = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(journal, [_row(1), _row(2), _row(3)])
+    state = tmp_path / "cursor.json"
+    physical = tmp_path / "cursor-canonical.db"
+    TemporaryCanonicalBridge(physical).append([])
+
+    def _apply(report_name: str) -> dict:
+        report = tmp_path / report_name
+        assert canonical_materializer.main([
+            "--bundles", str(journal),
+            "--db", str(physical),
+            "--expected-db", str(physical),
+            "--state", str(state),
+            "--max-new-rows", "2",
+            "--max-new-bytes", "1048576",
+            "--apply",
+            "--report", str(report),
+        ]) == 0
+        return json.loads(report.read_text())
+
+    first = _apply("cursor-first.json")
+    assert first["input_bundle_rows"] == 2
+    assert first["canonical_reconciliation"]["inserted_candidates"] == 2
+    assert first["cursor"]["after"]["remaining_bytes_at_snapshot"] > 0
+
+    second = _apply("cursor-second.json")
+    assert second["input_bundle_rows"] == 1
+    assert second["canonical_reconciliation"]["inserted_candidates"] == 1
+    assert second["cursor"]["after"]["remaining_bytes_at_snapshot"] == 0
+
+    with journal.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(_row(4), sort_keys=True) + "\n")
+    third = _apply("cursor-third.json")
+    assert third["input_bundle_rows"] == 1
+    assert third["canonical_reconciliation"]["inserted_candidates"] == 1
+
+    no_op = _apply("cursor-no-op.json")
+    assert no_op["input_bundle_rows"] == 0
+    assert no_op["canonical_reconciliation"]["inserted_candidates"] == 0
+    assert no_op["cursor"]["after"]["remaining_bytes_at_snapshot"] == 0
+
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 4
+    finally:
+        conn.close()
+    cursor = json.loads(state.read_text())
+    assert cursor["processed_rows"] == 4
+    assert cursor["offset_bytes"] == journal.stat().st_size
+
+    with journal.open("r+b") as handle:
+        handle.seek(cursor["offset_bytes"] - 10)
+        original = handle.read(1)
+        handle.seek(cursor["offset_bytes"] - 10)
+        handle.write(b"x" if original != b"x" else b"y")
+    with pytest.raises(ValueError, match="journal prefix changed"):
+        _apply("cursor-mutated.json")
 
 
 def test_bridge_rejects_cross_object_lineage_mismatch(tmp_path: Path) -> None:

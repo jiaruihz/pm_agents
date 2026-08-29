@@ -1,7 +1,7 @@
 # Weather Analysis Contract
 
 Status: current-source
-Updated: 2026-08-09 selective CLOB WebSocket reconstruction and coverage contract
+Updated: 2026-08-30 unified replay-case derived views
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -66,6 +66,40 @@ legacy signal 只能通过显式 adapter 投影，不伪造缺失的 `TradeInten
 - DB realpath、device/inode、canonical materialization `build_id`/build time 与报告
   `observed_at_utc`。运行中 refresh 切换 build 时，重启查询或按 build 分层，不得静默混合分母。
 - `TradeIntent` 与 execution handoff 的 blocker/record-only 语义；zero-notional 不得伪造成正 shares。
+
+### 统一案例与错题派生合同（2026-08-30）
+
+历史 case 的 canonical 分母是 `fact_signal_candidates`，不得另建一张只收“典型案例”或“错误案例”的
+手工事实表。schema hook 在完整 candidate contract 可用时安装两个只读视图：
+
+- `weather_replay_cases_v1`：每个 `candidate_id` 恰好一行，保留 scored、blocked、selected、未成交、
+  settled、pending、正确和错误 case；`replay_case_id = candidate_id`。
+- `weather_replay_mistakes_v1`：前者的派生筛选，只收
+  `model_error_flag`、`selected_loss_flag`、`realized_loss_flag` 或
+  `paper_unfilled_winner_flag` 命中的 row，不拥有独立真相。
+
+错误类型必须分轴报告，不能把“模型概率判断错”“策略选中后 outcome loss”“真实已结算亏损”和
+“paper 想下但 live 未成交的赢家”混成一个标签。`model_error_flag` 的固定定义是：把表达侧概率以
+`0.5` 二分后与表达侧结算结果比较；概率质量的主指标仍是同 rows 的 Brier/logloss，而不是 accuracy。
+
+`replay_capability` 固定为：
+
+| 值 | 含义 |
+|---|---|
+| `full_decision` | v2 event-checkpoint 的 event、checkpoint、feature/model 和 decision book 引用完整、一致且 PIT 时钟合法，可进入 model + policy 重放 |
+| `model_only` | model 输入血缘完整，但 decision book/entry 引用不足，只能重放概率判断 |
+| `legacy_summary_only` | v1 日级旧 row 可统一查询、结算与归因，但不能伪装成完整 PIT replay |
+| `blocked` | v2 引用缺失、late backfill first-seen 不可知、引用错配或发生 future leak；具体原因见 blocker 字段 |
+
+案例视图不 join fill-grain `fact_trades`，避免一对多 fill 把 candidate 分母放大。真实逐 fill 执行、fee 与
+settlement PnL 仍以 `fact_trades`/raw exchange lineage 为准。人工 golden casebook、对话时间线和机制案例
+只可作为同一 `candidate_id` 的叙事/证据附件；不能替代全分母，也不能反向决定哪些 row 被保留。
+
+这里的 `ready/full_decision` 是 **catalog 引用层 readiness**；视图明确输出
+`replay_artifact_verification_status='not_checked_by_catalog'`。真正执行 replay 前仍须解析引用、核对 raw/feature/
+model/book artifact 存在且 hash 一致。视图完整性也以 candidate materialization coverage 为上限：尚未 dual-write
+或 backfill 到 `fact_signal_candidates` 的旧 runner/raw 判断必须列为 coverage gap，不能把“视图里没有”解释成
+“当时没有判断”。
 
 ### 当前研究主口径（2026-07-15）
 

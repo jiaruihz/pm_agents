@@ -65,6 +65,7 @@ def ingest_information_events(
     events: Iterable[Mapping[str, Any]],
     *,
     ingested_at_utc: str | None = None,
+    commit: bool = True,
 ) -> dict[str, int]:
     """Append immutable event headers without rewriting their historical clocks.
 
@@ -88,5 +89,6 @@ def ingest_information_events(
             inserted += 1
         else:
             duplicates += 1
-    conn.commit()
+    if commit:
+        conn.commit()
     return {"inserted": inserted, "duplicates": duplicates}

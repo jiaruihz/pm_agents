@@ -94,6 +94,7 @@ def materialize_candidate_rows(
     *,
     batch_size: int | None = None,
     initialize_schema: bool = True,
+    commit: bool = True,
 ) -> dict[str, int]:
     if initialize_schema:
         conn.execute(CANDIDATE_DDL)
@@ -133,10 +134,11 @@ def materialize_candidate_rows(
             duplicates += 1
         blocked += int(row.get("candidate_status") == "blocked")
         pending += 1
-        if batch_size is not None and pending >= max(1, int(batch_size)):
+        if commit and batch_size is not None and pending >= max(1, int(batch_size)):
             conn.commit()
             pending = 0
-    conn.commit()
+    if commit:
+        conn.commit()
     return {
         "inserted": inserted,
         "duplicates": duplicates,
@@ -144,7 +146,7 @@ def materialize_candidate_rows(
     }
 
 
-def attach_settlements(conn: sqlite3.Connection) -> int:
+def attach_settlements(conn: sqlite3.Connection, *, commit: bool = True) -> int:
     updated = 0
     if conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settlement_outcomes'"
@@ -157,6 +159,7 @@ def attach_settlements(conn: sqlite3.Connection) -> int:
                 SELECT outcome.settlement_status
                 FROM settlement_outcomes AS outcome
                 WHERE outcome.condition_id = candidate.condition_id
+                  AND outcome.settlement_status = 'settled'
                 ORDER BY outcome.created_at_utc DESC
                 LIMIT 1
               ),
@@ -168,14 +171,17 @@ def attach_settlements(conn: sqlite3.Connection) -> int:
                 END
                 FROM settlement_outcomes AS outcome
                 WHERE outcome.condition_id = candidate.condition_id
+                  AND outcome.settlement_status = 'settled'
                 ORDER BY outcome.created_at_utc DESC
                 LIMIT 1
               )
             WHERE candidate.candidate_grain_version = 'v2_event_checkpoint'
+              AND candidate.final_yes IS NULL
               AND EXISTS (
                 SELECT 1
                 FROM settlement_outcomes AS outcome
                 WHERE outcome.condition_id = candidate.condition_id
+                  AND outcome.settlement_status = 'settled'
               )
             """
         )
@@ -204,7 +210,8 @@ def attach_settlements(conn: sqlite3.Connection) -> int:
         """
     )
     updated += int(cursor.rowcount or 0)
-    conn.commit()
+    if commit:
+        conn.commit()
     return updated
 
 

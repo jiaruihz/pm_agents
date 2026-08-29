@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import sqlite3
 
+from weather_dashboard.db.replay_case_schema import apply_replay_case_schema
+
 DDL = """
 CREATE TABLE IF NOT EXISTS weather_information_events (
  information_event_id TEXT PRIMARY KEY, event_kind TEXT NOT NULL, event_role TEXT NOT NULL,
@@ -164,4 +166,5 @@ def apply_first_seen_schema(conn: sqlite3.Connection) -> None:
             ON weather_observation_events(information_event_id)
             """
         )
+    apply_replay_case_schema(conn)
     conn.commit()
