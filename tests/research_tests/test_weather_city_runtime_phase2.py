@@ -405,6 +405,62 @@ def test_canonical_bridge_rolls_back_candidates_on_settlement_failure(
         conn.close()
 
 
+def test_canonical_bridge_bounds_and_drains_settlement_label_backlog(
+    tmp_path: Path,
+) -> None:
+    first = legacy_bundle_from_evaluation(_evaluation())
+    second = legacy_bundle_from_evaluation(
+        _evaluation(
+            current_bracket=19,
+            market={
+                **_evaluation()["market"],
+                "condition_id": "condition-19",
+                "market_id": "market-19",
+                "token_id": "token-no-19",
+            },
+        )
+    )
+    physical = tmp_path / "bounded-settlements.db"
+    bridge = TemporaryCanonicalBridge(physical)
+    bridge.append([])
+    conn = sqlite3.connect(physical)
+    conn.executemany(
+        """
+        INSERT INTO settlement_outcomes (
+          settlement_outcome_id, source_system, city, target_date, bracket,
+          condition_id, final_price, settlement_status
+        ) VALUES (?, 'polymarket_api', 'Helsinki', '2026-08-01', ?, ?, 1.0, 'settled')
+        """,
+        [
+            ("settlement-18", "18", "condition-18"),
+            ("settlement-19", "19", "condition-19"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    first_pass = bridge.append(
+        [first, second],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+    assert first_pass["settlements_attached"] == 1
+    assert first_pass["settlement_update_limit_reached"] == 1
+    second_pass = bridge.append(
+        [],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+    assert second_pass["settlements_attached"] == 1
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute(
+            "SELECT count(*) FROM fact_signal_candidates WHERE final_yes = 1.0"
+        ).fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
 def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     tmp_path: Path,
 ) -> None:
@@ -460,6 +516,8 @@ def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     applied = json.loads(apply_report.read_text())
     assert applied["canonical_reconciliation"]["inserted_candidates"] == 1
     assert applied["settlements_attached"] == 1
+    assert applied["settlement_update_limit"] == 5000
+    assert applied["settlement_update_limit_reached"] == 0
     assert applied["input_target_date_counts"] == {"2026-08-01": 1}
     assert applied["input_target_date_min"] == "2026-08-01"
     assert applied["input_target_date_max"] == "2026-08-01"

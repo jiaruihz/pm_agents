@@ -96,5 +96,6 @@ fi
   --state "$RUNTIME_DIR/wcir_candidate_materialization_state.json" \
   --max-new-rows 5000 \
   --max-new-bytes 67108864 \
+  --max-settlement-updates 5000 \
   --apply \
   --report "$RUNTIME_DIR/wcir_candidate_materialization.json"

@@ -345,6 +345,7 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "--state" in refresh
     assert "--max-new-rows 5000" in refresh
     assert "--max-new-bytes 67108864" in refresh
+    assert "--max-settlement-updates 5000" in refresh
     assert "wcir_candidate_materialization.json" in refresh
     assert refresh.index("weather_clob_fill_coverage_gate.py") < refresh.index(
         "materialize_weather_city_runtime_canonical_v1.py"

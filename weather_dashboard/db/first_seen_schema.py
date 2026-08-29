@@ -159,6 +159,21 @@ def apply_first_seen_schema(conn: sqlite3.Connection) -> None:
                 ON fact_signal_candidates(event_date, candidate_grain_version)
                 """
             )
+        if {
+            "candidate_id",
+            "candidate_grain_version",
+            "condition_id",
+            "event_date",
+            "final_yes",
+        } <= candidate_columns:
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_fact_signal_candidates_v2_pending_settlement
+                ON fact_signal_candidates(condition_id, event_date, candidate_id)
+                WHERE candidate_grain_version = 'v2_event_checkpoint'
+                  AND final_yes IS NULL
+                """
+            )
     if _table_exists(conn, "weather_observation_events"):
         conn.execute(
             """

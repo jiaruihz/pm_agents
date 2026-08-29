@@ -146,11 +146,21 @@ def materialize_candidate_rows(
     }
 
 
-def attach_settlements(conn: sqlite3.Connection, *, commit: bool = True) -> int:
+def attach_settlements(
+    conn: sqlite3.Connection,
+    *,
+    commit: bool = True,
+    max_updates: int | None = None,
+) -> int:
+    if max_updates is not None and max_updates < 0:
+        raise ValueError("max_updates must be non-negative")
+    if max_updates == 0:
+        return 0
     updated = 0
     if conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settlement_outcomes'"
     ).fetchone() is not None:
+        settled_limit = -1 if max_updates is None else max_updates
         cursor = conn.execute(
             """
             UPDATE fact_signal_candidates AS candidate
@@ -177,15 +187,35 @@ def attach_settlements(conn: sqlite3.Connection, *, commit: bool = True) -> int:
               )
             WHERE candidate.candidate_grain_version = 'v2_event_checkpoint'
               AND candidate.final_yes IS NULL
+              AND candidate.candidate_id IN (
+                SELECT pending.candidate_id
+                FROM fact_signal_candidates AS pending
+                WHERE pending.candidate_grain_version = 'v2_event_checkpoint'
+                  AND pending.final_yes IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM settlement_outcomes AS pending_outcome
+                    WHERE pending_outcome.condition_id = pending.condition_id
+                      AND pending_outcome.settlement_status = 'settled'
+                  )
+                ORDER BY pending.event_date, pending.candidate_id
+                LIMIT ?
+              )
               AND EXISTS (
                 SELECT 1
                 FROM settlement_outcomes AS outcome
                 WHERE outcome.condition_id = candidate.condition_id
                   AND outcome.settlement_status = 'settled'
               )
-            """
+            """,
+            (settled_limit,),
         )
         updated += int(cursor.rowcount or 0)
+    remaining_limit = -1 if max_updates is None else max_updates - updated
+    if remaining_limit == 0:
+        if commit:
+            conn.commit()
+        return updated
     cursor = conn.execute(
         """
         UPDATE fact_signal_candidates AS candidate
@@ -200,6 +230,21 @@ def attach_settlements(conn: sqlite3.Connection, *, commit: bool = True) -> int:
           )
         WHERE candidate.candidate_grain_version = 'v2_event_checkpoint'
           AND candidate.final_yes IS NULL
+          AND candidate.candidate_id IN (
+            SELECT pending.candidate_id
+            FROM fact_signal_candidates AS pending
+            WHERE pending.candidate_grain_version = 'v2_event_checkpoint'
+              AND pending.final_yes IS NULL
+              AND EXISTS (
+                SELECT 1
+                FROM fact_signal_candidates AS pending_legacy
+                WHERE pending_legacy.condition_id = pending.condition_id
+                  AND pending_legacy.candidate_grain_version = 'v1_legacy_daily'
+                  AND pending_legacy.final_yes IS NOT NULL
+              )
+            ORDER BY pending.event_date, pending.candidate_id
+            LIMIT ?
+          )
           AND EXISTS (
             SELECT 1
             FROM fact_signal_candidates AS legacy
@@ -207,7 +252,8 @@ def attach_settlements(conn: sqlite3.Connection, *, commit: bool = True) -> int:
               AND legacy.candidate_grain_version = 'v1_legacy_daily'
               AND legacy.final_yes IS NOT NULL
           )
-        """
+        """,
+        (remaining_limit,),
     )
     updated += int(cursor.rowcount or 0)
     if commit:

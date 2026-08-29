@@ -295,7 +295,8 @@ class _CandidateCanonicalBridge:
         bundles: Iterable[DecisionBundle],
         *,
         attach_candidate_settlements: bool = False,
-    ) -> dict[str, int]:
+        max_candidate_settlement_updates: int | None = None,
+    ) -> dict[str, int | None]:
         values = list(bundles)
         for bundle in values:
             _validate_bundle(bundle)
@@ -364,7 +365,11 @@ class _CandidateCanonicalBridge:
                         f"raw_unique={len(candidate_ids)} canonical={canonical_count}"
                     )
                 settlements_attached = (
-                    attach_settlements(conn, commit=False)
+                    attach_settlements(
+                        conn,
+                        commit=False,
+                        max_updates=max_candidate_settlement_updates,
+                    )
                     if attach_candidate_settlements
                     else 0
                 )
@@ -393,6 +398,16 @@ class _CandidateCanonicalBridge:
                 normalized_checkpoint_deliveries
             ),
             "settlements_attached": settlements_attached,
+            "settlement_update_limit": (
+                max_candidate_settlement_updates
+                if attach_candidate_settlements
+                else None
+            ),
+            "settlement_update_limit_reached": int(
+                attach_candidate_settlements
+                and max_candidate_settlement_updates is not None
+                and settlements_attached >= max_candidate_settlement_updates
+            ),
         }
 
     def candidate_funnels(

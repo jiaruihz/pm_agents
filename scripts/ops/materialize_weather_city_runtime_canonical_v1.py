@@ -249,6 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--state", type=Path)
     parser.add_argument("--max-new-rows", type=int, default=5000)
     parser.add_argument("--max-new-bytes", type=int, default=64 * 1024 * 1024)
+    parser.add_argument("--max-settlement-updates", type=int, default=5000)
     return parser
 
 
@@ -280,7 +281,11 @@ def main(argv: list[str] | None = None) -> int:
             args.db, expected_db_path=args.expected_db
         )
         mode = "canonical_incremental_apply"
-        result = bridge.append(bundles, attach_candidate_settlements=True)
+        result = bridge.append(
+            bundles,
+            attach_candidate_settlements=True,
+            max_candidate_settlement_updates=args.max_settlement_updates,
+        )
         db_path = bridge.db_path
         settlements_attached = result["settlements_attached"]
         if bundles:
@@ -343,6 +348,10 @@ def main(argv: list[str] | None = None) -> int:
         ).items())),
         "canonical_reconciliation": result,
         "settlements_attached": settlements_attached,
+        "settlement_update_limit": result["settlement_update_limit"],
+        "settlement_update_limit_reached": result[
+            "settlement_update_limit_reached"
+        ],
         **funnels,
         "execution_projection": {
             "plan": "not_created_shadow",

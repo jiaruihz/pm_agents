@@ -601,7 +601,8 @@ append 不影响本轮冻结前缀，inode替换、截断或已处理前缀变�
 原子推进，进程崩溃窗口按at-least-once重试，由 immutable ID 幂等去重。成功报告固定写出输入时间范围、target-date 分布、
 candidate-ID set hash、raw/canonical reconciliation 与 settlement-label attach 数量。schema hook 同时按定义差异原子替换
 replay-case views，避免 `CREATE VIEW IF NOT EXISTS` 把旧的 capability 口径永久留在physical DB。该链只追加
-event/checkpoint/candidate、连接canonical settlement label，不生成plan/order/fill/PnL，也不替代显式授权的全量rebuild。
+event/checkpoint/candidate、每轮最多补5,000条canonical settlement label，不生成plan/order/fill/PnL，也不替代显式授权的
+全量rebuild；首次历史label backlog必须分批排空并在报告中保留`settlement_update_limit_reached`，不能一次无界UPDATE掩盖。
 
 2026-08-03 对最新 production journal 冻结了 356 行快照，临时 canonical dry-run 得到 352 个唯一 candidate
 （Helsinki 144、Tokyo 212）、`candidate_delta=0`、121 event、246 checkpoint；4 条重复 candidate 来自 journal
