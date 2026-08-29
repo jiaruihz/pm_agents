@@ -253,7 +253,8 @@ Ankara 最能展示“新证据推翻原 thesis”的价值，但它同时暴露
 
 ### PIT candidate 与反事实 quote
 
-`pre_live_scores.jsonl` 在 `2026-08-28T23:32:26Z` 保存：Core hold probability
+`pre_live_scores.jsonl` 该 row 的 decision clock 为 `2026-08-28T23:32:26Z`，并在
+`23:32:39Z` 写入：Core hold probability
 `0.940732`，YES book `0.83 / 0.98`，tick `0.01`，10-share taker 的 fee/depth-adjusted edge
 `-0.040248`，唯一 blocker 为 `non_positive_taker_ev`。按 near-Core maker contract：
 
