@@ -200,7 +200,89 @@ def assert_runtime_contract() -> None:
 
 
 def parse_utc(value: Any) -> datetime | None:
-    return parse_utc_or_none(value)
+    # Keep this parser local because readiness and direct-book lineage accept
+    # historical `Z` clocks as well as timezone-aware ISO strings.
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+DIRECT_BOOK_CLOCK_STATUS = "direct_clob_response_clock_v1"
+
+
+def near_core_book_freshness(
+    row: Mapping[str, Any],
+    *,
+    now: datetime,
+    max_age_sec: float,
+) -> dict[str, Any]:
+    """Fail closed on the direct CLOB quote clock used to build an entry.
+
+    Rows written before the direct response-clock lineage was added carry a
+    paper-snapshot response clock next to a newer direct-fetch BBO.  For those
+    legacy rows the conservative direct-fetch timestamp is the only clock that
+    belongs to the scored bid/ask.
+    """
+
+    lineage_status = str(row.get("current_yes_book_clock_lineage_status") or "")
+    if lineage_status == DIRECT_BOOK_CLOCK_STATUS:
+        clock_value = row.get("current_yes_book_response_received_at_utc")
+        clock_source = "direct_response_received_at_utc"
+    else:
+        clock_value = row.get("current_yes_book_fetched_at_utc")
+        clock_source = "legacy_direct_fetch_clock_utc"
+    clock = parse_utc(clock_value)
+    book_status = str(row.get("current_yes_book_status") or "")
+    age_sec = (
+        (now.astimezone(timezone.utc) - clock).total_seconds()
+        if clock is not None
+        else None
+    )
+    common = {
+        "near_core_book_clock_utc": clock.isoformat() if clock is not None else "",
+        "near_core_book_clock_source": clock_source,
+        "near_core_book_status": book_status,
+        "near_core_book_max_age_sec": float(max_age_sec),
+    }
+    if book_status != "ok":
+        return {
+            **common,
+            "near_core_book_age_sec": (
+                round(age_sec, 6) if age_sec is not None else None
+            ),
+            "near_core_book_fresh": False,
+            "near_core_book_freshness_status": "direct_book_status_not_ok",
+        }
+    if clock is None:
+        return {
+            **common,
+            "near_core_book_age_sec": None,
+            "near_core_book_fresh": False,
+            "near_core_book_freshness_status": "missing_direct_book_clock",
+        }
+    assert age_sec is not None
+    if age_sec < 0.0:
+        status = "direct_book_clock_in_future"
+        fresh = False
+    elif age_sec > float(max_age_sec):
+        status = "stale_direct_book_quote"
+        fresh = False
+    else:
+        status = "fresh_direct_book_quote"
+        fresh = True
+    return {
+        **common,
+        "near_core_book_age_sec": round(age_sec, 6),
+        "near_core_book_fresh": fresh,
+        "near_core_book_freshness_status": status,
+    }
 
 
 def stable_hash(payload: Mapping[str, Any]) -> str:

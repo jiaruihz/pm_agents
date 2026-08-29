@@ -125,13 +125,27 @@ def fetch_full_book(
     client: httpx.Client,
     token_id: str,
 ) -> dict[str, Any]:
-    fetched_at = base.utc_now()
+    observed_at = base.utc_now()
     if not token_id:
-        return {"status": "missing_token", "fetched_at_utc": fetched_at, "bids": [], "asks": []}
+        return {
+            "status": "missing_token",
+            "fetched_at_utc": None,
+            "request_started_at_utc": None,
+            "response_received_at_utc": None,
+            "parsed_at_utc": None,
+            "error_observed_at_utc": observed_at,
+            "clock_lineage_status": "direct_clob_request_not_started",
+            "bids": [],
+            "asks": [],
+        }
+    request_started_at = observed_at
+    response_received_at: str | None = None
     try:
         response = client.get(CLOB_BOOK_API, params={"token_id": token_id})
+        response_received_at = base.utc_now()
         response.raise_for_status()
         payload = response.json()
+        parsed_at = base.utc_now()
         if not isinstance(payload, Mapping):
             raise ValueError("book response is not an object")
         bids = list(payload.get("bids") or [])
@@ -139,16 +153,26 @@ def fetch_full_book(
         summary = base._book_summary(payload)  # noqa: SLF001
         return {
             "status": "ok",
-            "fetched_at_utc": fetched_at,
+            "fetched_at_utc": response_received_at,
+            "request_started_at_utc": request_started_at,
+            "response_received_at_utc": response_received_at,
+            "parsed_at_utc": parsed_at,
+            "clock_lineage_status": "direct_clob_response_clock_v1",
             "bids": bids,
             "asks": asks,
             "tick_size": base.finite(payload.get("tick_size")),
             **summary,
         }
     except Exception as exc:  # noqa: BLE001
+        error_observed_at = base.utc_now()
         return {
             "status": f"fetch_error:{type(exc).__name__}",
-            "fetched_at_utc": fetched_at,
+            "fetched_at_utc": response_received_at,
+            "request_started_at_utc": request_started_at,
+            "response_received_at_utc": response_received_at,
+            "parsed_at_utc": None,
+            "error_observed_at_utc": error_observed_at,
+            "clock_lineage_status": "direct_clob_fetch_error_clock_v1",
             "bids": [],
             "asks": [],
         }
