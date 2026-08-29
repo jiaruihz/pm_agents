@@ -24,8 +24,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
   - release_id: forecast_capture
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_capture/e943e956a13526b241e29d5192c89b662bc70d5f
-    expected_repo_sha: e943e956a13526b241e29d5192c89b662bc70d5f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_capture/761a16d80f130b780fe65827ede4ca303548bd40
+    expected_repo_sha: 761a16d80f130b780fe65827ede4ca303548bd40
   - release_id: wcir
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4
     expected_repo_sha: 64c5805dc8253c928a6dedfbe71c50f2d8e641c4
