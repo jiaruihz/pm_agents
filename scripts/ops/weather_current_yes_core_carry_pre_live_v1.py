@@ -126,13 +126,25 @@ def fetch_full_book(
     client: httpx.Client,
     token_id: str,
 ) -> dict[str, Any]:
-    fetched_at = base.utc_now()
+    request_started_at = base.utc_now()
     if not token_id:
-        return {"status": "missing_token", "fetched_at_utc": fetched_at, "bids": [], "asks": []}
+        return {
+            "status": "missing_token",
+            "fetched_at_utc": request_started_at,
+            "request_started_at_utc": None,
+            "response_received_at_utc": None,
+            "parsed_at_utc": None,
+            "clock_lineage_status": "direct_clob_request_not_started",
+            "bids": [],
+            "asks": [],
+        }
+    response_received_at: str | None = None
     try:
         response = client.get(CLOB_BOOK_API, params={"token_id": token_id})
+        response_received_at = base.utc_now()
         response.raise_for_status()
         payload = response.json()
+        parsed_at = base.utc_now()
         if not isinstance(payload, Mapping):
             raise ValueError("book response is not an object")
         bids = list(payload.get("bids") or [])
@@ -140,16 +152,28 @@ def fetch_full_book(
         summary = base._book_summary(payload)  # noqa: SLF001
         return {
             "status": "ok",
-            "fetched_at_utc": fetched_at,
+            # Compatibility alias.  This used to be stamped before the HTTP
+            # request, which made it impossible to distinguish request start
+            # from the response clock of the BBO actually scored below.
+            "fetched_at_utc": response_received_at,
+            "request_started_at_utc": request_started_at,
+            "response_received_at_utc": response_received_at,
+            "parsed_at_utc": parsed_at,
+            "clock_lineage_status": "direct_clob_response_clock_v1",
             "bids": bids,
             "asks": asks,
             "tick_size": base.finite(payload.get("tick_size")),
             **summary,
         }
     except Exception as exc:  # noqa: BLE001
+        response_received_at = response_received_at or base.utc_now()
         return {
             "status": f"fetch_error:{type(exc).__name__}",
-            "fetched_at_utc": fetched_at,
+            "fetched_at_utc": response_received_at,
+            "request_started_at_utc": request_started_at,
+            "response_received_at_utc": response_received_at,
+            "parsed_at_utc": None,
+            "clock_lineage_status": "direct_clob_fetch_error_clock_v1",
             "bids": [],
             "asks": [],
         }
@@ -279,6 +303,16 @@ def score_snapshot(args: argparse.Namespace, collector_summary: Mapping[str, Any
                 "current_yes_tick_size": book.get("tick_size"),
                 "current_yes_book_status": book.get("status"),
                 "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
+                "current_yes_book_request_started_at_utc": book.get(
+                    "request_started_at_utc"
+                ),
+                "current_yes_book_response_received_at_utc": book.get(
+                    "response_received_at_utc"
+                ),
+                "current_yes_book_parsed_at_utc": book.get("parsed_at_utc"),
+                "current_yes_book_clock_lineage_status": book.get(
+                    "clock_lineage_status"
+                ),
                 "checkpoint_hour_local": hour,
                 "checkpoint_minute_local": minute,
                 "checkpoint_key": key,

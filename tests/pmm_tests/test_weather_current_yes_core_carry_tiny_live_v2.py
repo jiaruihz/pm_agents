@@ -32,6 +32,7 @@ def score_row() -> dict:
         "model_probability_hold": 0.97,
         "checkpoint_key": "Busan|2026-07-24|13",
         "decision_snapshot_ts_utc": "2026-07-24T04:30:00Z",
+        "current_yes_book_fetched_at_utc": "2026-07-24T04:30:01Z",
         "source_report_ts_utc": "2026-07-24T04:20:00Z",
         "obs_source": "aviationweather_metar",
         "observation_cadence_min": 30.0,
@@ -143,6 +144,40 @@ def test_live_parser_defaults_match_frozen_ten_plus_shared_five_contract() -> No
     assert args.near_core_maker_probe_enabled is False
     assert args.confirm_near_core_maker_probe_live is False
     assert args.near_core_maker_shares == 5
+    assert args.near_core_book_max_age_sec == 90
+
+
+def test_near_core_book_freshness_uses_direct_fetch_clock_for_legacy_rows() -> None:
+    now = datetime(2026, 8, 28, 23, 32, 39, tzinfo=timezone.utc)
+    result = runner.near_core_book_freshness(
+        {
+            "current_yes_book_clock_lineage_status": "collector_exact_response_clock",
+            "current_yes_book_response_received_at_utc": "2026-08-28T23:29:07.744Z",
+            "current_yes_book_fetched_at_utc": "2026-08-28T23:32:38Z",
+        },
+        now=now,
+        max_age_sec=90,
+    )
+
+    assert result["near_core_book_fresh"] is True
+    assert result["near_core_book_clock_source"] == "legacy_direct_fetch_clock_utc"
+    assert result["near_core_book_age_sec"] == pytest.approx(1.0)
+
+
+def test_near_core_book_freshness_rejects_stale_direct_response_clock() -> None:
+    result = runner.near_core_book_freshness(
+        {
+            "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+            "current_yes_book_response_received_at_utc": "2026-08-28T23:29:00Z",
+            "current_yes_book_fetched_at_utc": "2026-08-28T23:32:38Z",
+        },
+        now=datetime(2026, 8, 28, 23, 32, 39, tzinfo=timezone.utc),
+        max_age_sec=90,
+    )
+
+    assert result["near_core_book_fresh"] is False
+    assert result["near_core_book_freshness_status"] == "stale_direct_book_quote"
+    assert result["near_core_book_clock_source"] == "direct_response_received_at_utc"
 
 
 def test_near_core_live_requires_separate_confirmation_and_ws_control_seal(
@@ -218,6 +253,33 @@ def test_near_core_plan_is_separate_fixed_rest_sleeve(tmp_path) -> None:
     assert plan["order_lifecycle_policy"] == "near_core_fixed_rest_safety_cancel_only_v1"
     assert ledger[0]["eligible_checkpoint"] is True
     assert ledger[0]["status"] == "planned"
+
+
+def test_near_core_stale_direct_book_is_recorded_and_blocked(tmp_path) -> None:
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "model_edge_after_fee_and_depth": -0.001,
+        "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+        "current_yes_book_response_received_at_utc": "2026-07-24T04:29:00Z",
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert plans == []
+    assert ledger[0]["status"] == "blocked"
+    assert ledger[0]["reason"] == "stale_direct_book_quote"
+    assert ledger[0]["near_core_book_age_sec"] == pytest.approx(120.0)
 
 
 def test_near_core_selector_rejects_multiple_blockers(tmp_path) -> None:

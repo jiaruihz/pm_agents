@@ -216,6 +216,61 @@ def parse_utc(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+DIRECT_BOOK_CLOCK_STATUS = "direct_clob_response_clock_v1"
+
+
+def near_core_book_freshness(
+    row: Mapping[str, Any],
+    *,
+    now: datetime,
+    max_age_sec: float,
+) -> dict[str, Any]:
+    """Fail closed on the direct CLOB quote clock used to build an entry.
+
+    Rows written before the direct response-clock lineage was added carry a
+    paper-snapshot response clock next to a newer direct-fetch BBO.  For those
+    legacy rows the conservative direct-fetch timestamp is the only clock that
+    belongs to the scored bid/ask.
+    """
+
+    lineage_status = str(row.get("current_yes_book_clock_lineage_status") or "")
+    if lineage_status == DIRECT_BOOK_CLOCK_STATUS:
+        clock_value = row.get("current_yes_book_response_received_at_utc")
+        clock_source = "direct_response_received_at_utc"
+    else:
+        clock_value = row.get("current_yes_book_fetched_at_utc")
+        clock_source = "legacy_direct_fetch_clock_utc"
+    clock = parse_utc(clock_value)
+    common = {
+        "near_core_book_clock_utc": clock.isoformat() if clock is not None else "",
+        "near_core_book_clock_source": clock_source,
+        "near_core_book_max_age_sec": float(max_age_sec),
+    }
+    if clock is None:
+        return {
+            **common,
+            "near_core_book_age_sec": None,
+            "near_core_book_fresh": False,
+            "near_core_book_freshness_status": "missing_direct_book_clock",
+        }
+    age_sec = (now.astimezone(timezone.utc) - clock).total_seconds()
+    if age_sec < -5.0:
+        status = "direct_book_clock_in_future"
+        fresh = False
+    elif age_sec > float(max_age_sec):
+        status = "stale_direct_book_quote"
+        fresh = False
+    else:
+        status = "fresh_direct_book_quote"
+        fresh = True
+    return {
+        **common,
+        "near_core_book_age_sec": round(age_sec, 6),
+        "near_core_book_fresh": fresh,
+        "near_core_book_freshness_status": status,
+    }
+
+
 def stable_hash(payload: Mapping[str, Any]) -> str:
     raw = json.dumps(dict(payload), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
@@ -2098,8 +2153,15 @@ def near_core_entry_plans(
         max_age_sec=float(args.near_core_candidate_max_age_sec),
     ):
         key = near_core_maker_probe.city_day(row)
+        book_freshness = near_core_book_freshness(
+            row,
+            now=now,
+            max_age_sec=float(args.near_core_book_max_age_sec),
+        )
         reason = ""
-        if key in core_actionable_city_days:
+        if not bool(book_freshness["near_core_book_fresh"]):
+            reason = str(book_freshness["near_core_book_freshness_status"])
+        elif key in core_actionable_city_days:
             reason = "existing_core_actionable_priority"
         elif key in existing_family:
             reason = "existing_core_family_exposure"
@@ -2156,6 +2218,7 @@ def near_core_entry_plans(
                 "policy_arm": "WS1_BASELINE_FIXED_REST",
                 "economic_ws_cancel_enabled": False,
                 "live_enabled": bool(plan and plan.get("live_enabled")),
+                **book_freshness,
             }
         )
         if plan is not None:
@@ -3053,6 +3116,8 @@ def configure_signal_runner(output_dir: Path) -> None:
 def validate_runtime_arguments(args: argparse.Namespace) -> None:
     if args.live and not args.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
+    if float(args.near_core_book_max_age_sec) <= 0:
+        raise RuntimeError("--near-core-book-max-age-sec must be positive")
     if (
         args.live
         and args.near_core_maker_probe_enabled
@@ -3227,6 +3292,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "shared_maker_budget_shares": float(args.maker_shares),
         "maker_refresh_sec": float(args.maker_refresh_sec),
         "maker_reprice_limit": maker_max_reprices(),
+        "near_core_book_max_age_sec": float(args.near_core_book_max_age_sec),
         "maker_cancel_buffer_sec": get_execution_profile(
             EXECUTION_PROFILE
         ).cancel_buffer_sec,
@@ -3270,6 +3336,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-city-days-per-bj-day", type=int, default=10)
     ap.add_argument("--max-daily-cost-usd", type=float, default=100.0)
     ap.add_argument("--executor-timeout-sec", type=float, default=60.0)
+    ap.add_argument("--near-core-book-max-age-sec", type=float, default=90.0)
     ap.add_argument("--market-proxy", default=None)
     ap.add_argument("--runtime-db", default=str(ROOT / "runtime/weather.db"))
     ap.add_argument("--live", action="store_true")

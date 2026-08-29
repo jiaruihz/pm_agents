@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as pre_live
 from scripts.ops.weather_current_yes_core_carry_pre_live_v1 import (
     checkpoint_clock,
     checkpoint_eligible,
@@ -189,6 +190,44 @@ def test_family_dedupe_reads_only_submitted_city_days(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert submitted_family_city_days((journal,)) == {"Busan|2026-07-23"}
+
+
+def test_direct_book_fetch_records_response_clock_used_by_scored_bbo(
+    monkeypatch,
+) -> None:
+    stamps = iter(
+        [
+            "2026-08-28T23:32:37Z",
+            "2026-08-28T23:32:38Z",
+            "2026-08-28T23:32:38.100000Z",
+        ]
+    )
+    monkeypatch.setattr(pre_live.base, "utc_now", lambda: next(stamps))
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "bids": [{"price": "0.83", "size": "10"}],
+                "asks": [{"price": "0.98", "size": "10"}],
+                "tick_size": "0.01",
+            }
+
+    class Client:
+        def get(self, *_args, **_kwargs) -> Response:
+            return Response()
+
+    book = pre_live.fetch_full_book(Client(), "token")
+
+    assert book["status"] == "ok"
+    assert book["bid"] == pytest.approx(0.83)
+    assert book["ask"] == pytest.approx(0.98)
+    assert book["request_started_at_utc"] == "2026-08-28T23:32:37Z"
+    assert book["response_received_at_utc"] == "2026-08-28T23:32:38Z"
+    assert book["fetched_at_utc"] == book["response_received_at_utc"]
+    assert book["clock_lineage_status"] == "direct_clob_response_clock_v1"
 
 
 def test_same_snapshot_collector_replay_is_deduplicated(tmp_path: Path) -> None:
