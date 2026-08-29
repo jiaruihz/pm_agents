@@ -443,6 +443,7 @@ def apply_market_capture_demands(
     allowed_shared_strategy_keys: Iterable[str] = (
         "rule_lawyer.dispute_repricing",
         "reheat_risk.current_yes",
+        "weather_amsterdam_wcir_frozen_v2",
     ),
 ) -> Selection:
     """Union a revision-centered local strip into the selective WS set.
@@ -1001,6 +1002,7 @@ class Collector:
                 allowed_shared_strategy_keys=(
                     "rule_lawyer.dispute_repricing",
                     "reheat_risk.current_yes",
+                    "weather_amsterdam_wcir_frozen_v2",
                 ) + (
                     ("polymarket_alpha.p0_offline",)
                     if self.alpha_capture_demand_inbox is not None

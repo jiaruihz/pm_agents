@@ -22,7 +22,7 @@ WS_HEALTH_PATH="${WEATHER_MARKET_BOOKS_WS_HEALTH_PATH:-$MARKET_BOOKS_ROOT/collec
 WS_LOG_FILE="${WEATHER_MARKET_BOOKS_WS_LOG_FILE:-$MARKET_BOOKS_ROOT/ws_collector.log}"
 WS_SOURCE_EVENTS="${WEATHER_MARKET_BOOKS_WS_SOURCE_EVENTS:-$RUNTIME_ROOT/output/source_events}"
 WS_MARKET_CAPTURE_DEMANDS="${WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS:-$RUNTIME_ROOT/output/forecast_run_capture/market_capture_demands.jsonl}"
-WS_SHARED_CAPTURE_DEMANDS="${WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS:-$PM_RUNTIME_ROOT/dispute_repricing/forward_v1/capture_demands.jsonl $PM_RUNTIME_ROOT/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl}"
+WS_SHARED_CAPTURE_DEMANDS="${WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS:-$PM_RUNTIME_ROOT/dispute_repricing/forward_v1/capture_demands.jsonl $PM_RUNTIME_ROOT/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl $PM_RUNTIME_ROOT/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl}"
 WS_MARKET_CAPTURE_MAX_TTL_MIN="${WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN:-120}"
 WS_MARKET_CAPTURE_MAX_ACTIVE_TOKENS="${WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS:-24}"
 WS_CITIES="${WEATHER_MARKET_BOOKS_WS_CITIES:-Amsterdam Tokyo Helsinki Busan}"

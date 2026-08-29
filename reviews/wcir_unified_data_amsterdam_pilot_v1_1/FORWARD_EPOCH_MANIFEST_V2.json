@@ -1,0 +1,42 @@
+{
+  "book_evidence_tier_policy": "A primary; A+B sensitivity; C diagnostic; D unusable",
+  "feature_builder_hash": "2063d90361165d55a0398bd67e202eb94cc8377ec2c766de2da794c48ccac2a3",
+  "feature_parity_audit_hash": "112609ef9b9ecc9809c6fa9bceada465f88c905a4a5b451059225f1aea3de6ba",
+  "forward_epoch_id": "wcir_amsterdam_score_only_v2_bb04a8acbeafd66b",
+  "frozen_scorer_hash": "a0227417aa5b0dffcf82347a4302aa243d79c974de8bead73a8a45cc5a26dca6",
+  "layer_b": {
+    "config_hash": "a6b09c626f1b5fd8e6e0ecacc895ab34ddbf701c2ee9ed64b9f3bff8da46c561",
+    "status": "NOT_ESTIMABLE"
+  },
+  "market_identity_resolver_hash": "80add08bb7942d858fb9bbb3a6af9c357026adef3a3d9f1f6606d9029c51fc45",
+  "model_artifacts": {
+    "B2": {
+      "calibration_artifact_hash": "6635d594119b3c9cdad0f883016d94a4901c058a4d1fb613d65fac7cfd8ab5ce",
+      "model_artifact_hash": "5fab8b42f8998708c4307ed87bbc44d5ac40ba4acd8c8bfef5cdeaf15696d4fd"
+    },
+    "M1": {
+      "calibration_artifact_hash": "78144252e25f5e2ca62ce97f2f141008b8e8f3ac5f2310df5bb1c1da74a82794",
+      "model_artifact_hash": "d58522bcc1676cc2d61bfcf76e741bd19ccef7a063831e5fadb4b6836d8ce8a5"
+    },
+    "M2": {
+      "calibration_artifact_hash": "e8a5545663462ef4808e6d12d7a307936910bbf04b7f22168d3866a7407a1c03",
+      "model_artifact_hash": "aa35ff3949be41fec85b8551e5ce31830ae548f5830c18491147da0db1486d89"
+    }
+  },
+  "opportunity_generator_hash": "0377205ce6a5e1b112670d7c3cb7b0e64b7caeb4d05b93286bf184b29652797d",
+  "orders_fills_notional": [
+    0,
+    0,
+    0
+  ],
+  "prediction_journal": "artifact-store://wcir_amsterdam_score_only_shadow/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/predictions.jsonl",
+  "prediction_journal_current_sha256": "b7c0f1098531bc63e3a7391a1fdeefea9a37f3a687cfd7374dbdbb15356dc03d",
+  "prediction_journal_initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "prediction_journal_initialized": true,
+  "prediction_journal_rows": 3,
+  "reason": "The frozen scorer appended 3 real score-only row(s); no ad-hoc persistent process was started because production config changes are prohibited, so continuous ownership remains unregistered.",
+  "schema_version": "wcir_amsterdam_forward_epoch_v2",
+  "source_label_contract_hash": "fdfabd5adedf50cf878108bc9fc7facfc88fc1ea7b07f610f54c141ae8e2ece6",
+  "start_timestamp_utc": "2026-08-29T13:05:29.436577Z",
+  "status": "BOUNDED_SCORE_ONLY_STARTED_NOT_CONTINUOUSLY_SCHEDULED"
+}

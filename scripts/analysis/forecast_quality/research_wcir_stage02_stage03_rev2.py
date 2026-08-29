@@ -771,11 +771,16 @@ class HashedJsonlReader:
         }
 
 
-def load_subscription_epochs(runtime: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def load_subscription_epochs(
+    runtime: Path,
+    *,
+    start_date: str = ARCHIVE_START,
+    end_date: str = CUTOFF_DATE,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     epochs: list[dict[str, Any]] = []
     identities: list[dict[str, Any]] = []
     root = runtime / "market_books/ws_incremental/subscription_epochs"
-    for date in _date_strings(ARCHIVE_START, CUTOFF_DATE):
+    for date in _date_strings(start_date, end_date):
         path = root / f"subscription_epochs_{date}.jsonl"
         if not path.exists():
             continue
@@ -969,6 +974,8 @@ def replay_ws_archive(
     queries: Sequence[CheckpointQuery],
     *,
     file_order: str = "forward",
+    start_date: str = ARCHIVE_START,
+    end_date: str = CUTOFF_DATE,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
     """Replay every WS file byte while materializing only requested checkpoints."""
 
@@ -1018,7 +1025,7 @@ def replay_ws_archive(
     clock_uncertainty_frames = 0
     active_roots_by_day: dict[str, set[str]] = collections.defaultdict(set)
 
-    for day in _date_strings(ARCHIVE_START, CUTOFF_DATE):
+    for day in _date_strings(start_date, end_date):
         paths = sorted((runtime / f"market_books/ws_incremental/{day}").glob("*.jsonl"))
         if file_order == "reverse":
             paths = list(reversed(paths))
@@ -1268,8 +1275,8 @@ def replay_ws_archive(
         ]
     )
     archive = {
-        "archive_start": ARCHIVE_START,
-        "cutoff_date_inclusive": CUTOFF_DATE,
+        "archive_start": start_date,
+        "cutoff_date_inclusive": end_date,
         "replay_file_order": file_order,
         "ws_file_count": len(file_identities),
         "ws_files": sorted(file_identities, key=lambda row: row["path"]),

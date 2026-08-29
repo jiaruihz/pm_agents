@@ -430,6 +430,44 @@ def test_shared_direct_token_demand_uses_same_ws_owner(tmp_path) -> None:
     assert selected.token_rows["dispute-token"]["capture_universe"] == "shared_direct_token"
 
 
+def test_amsterdam_wcir_direct_token_demand_uses_same_ws_owner() -> None:
+    demand = CaptureDemand.create(
+        consumer_id="weather_amsterdam_wcir_frozen_v2",
+        strategy_key="weather_amsterdam_wcir_frozen_v2",
+        condition_id="condition-amsterdam-22",
+        token_id="amsterdam-no-22",
+        reason="next_print_previous_running_max",
+        priority="P1",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T04:59:00Z",
+        desired_transport="REST_WS",
+        requested_checkpoints_seconds=(0, 5, 15, 30, 60, 120),
+        trigger_event_id="amsterdam-decision-vintage-1",
+        metadata={
+            "city": "Amsterdam",
+            "target_date": "2026-08-09",
+            "bracket": "22",
+            "side": "NO",
+        },
+    ).to_dict()
+    selection = Selection(
+        tokens=set(), token_rows={}, city_token_counts={}, active_brackets={},
+        grace_brackets={}, scheduled_cities=[], research_cities=[], burst_cities=[],
+        missing_observation_cities=[], invalidation_state={},
+    )
+
+    selected = apply_market_capture_demands(
+        selection,
+        market_payload={"records": []},
+        demands=[demand],
+    )
+
+    assert selected.tokens == {"amsterdam-no-22"}
+    assert selected.capture_demands[0]["resolution_status"] == "resolved_direct_token"
+    assert selected.token_rows["amsterdam-no-22"]["condition_id"] == "condition-amsterdam-22"
+    assert selected.token_rows["amsterdam-no-22"]["capture_universe"] == "shared_direct_token"
+
+
 def test_core_carry_full_ladder_demand_is_allowed_by_shared_ws_owner() -> None:
     demand = CaptureDemand.create(
         consumer_id="current_yes_core_carry_tiny_live_v2",
