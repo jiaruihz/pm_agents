@@ -113,7 +113,10 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "current_yes_core_carry_market_state_shadow_v3_forward_20260824a/"
             "pretrigger_capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
-            "scheduled_informed_maker_shadow_v1/capture_demands.jsonl"
+            "scheduled_informed_maker_shadow_v1/capture_demands.jsonl "
+            "/Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/"
+            "epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/"
+            "capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "96",
@@ -132,7 +135,24 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "4db76556e65f7d066a0ef23c1cd4a0d34a6e755e"
+        "b0034ca1c99dd500966cb1ee935fc59a49a83b98"
+    )
+    amsterdam = by_id["weather_amsterdam_wcir_frozen_shadow_v2"]
+    assert amsterdam.execution_mode == "zero_notional_shadow"
+    assert amsterdam.expected_live is False
+    assert amsterdam.release_id == "amsterdam_wcir_shadow"
+    assert amsterdam.expected_health_contract() == {
+        "strategy_key": "weather_amsterdam_wcir_frozen_v2",
+        "execution_mode": "zero_notional_shadow",
+        "live_authority": False,
+        "actual_notional": 0.0,
+        "orders": 0,
+        "fills": 0,
+        "notional": 0,
+        "forward_epoch_id": "wcir_amsterdam_score_only_v2_bb04a8acbeafd66b",
+    }
+    assert spec.release("amsterdam_wcir_shadow").expected_repo_sha == (
+        "b0034ca1c99dd500966cb1ee935fc59a49a83b98"
     )
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (

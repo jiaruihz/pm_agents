@@ -18,8 +18,11 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_collector/7192012002e7fbfca05ff4c6597550cf8c6d61b8
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
   - release_id: market_books
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/4db76556e65f7d066a0ef23c1cd4a0d34a6e755e
-    expected_repo_sha: 4db76556e65f7d066a0ef23c1cd4a0d34a6e755e
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/b0034ca1c99dd500966cb1ee935fc59a49a83b98
+    expected_repo_sha: b0034ca1c99dd500966cb1ee935fc59a49a83b98
+  - release_id: amsterdam_wcir_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/b0034ca1c99dd500966cb1ee935fc59a49a83b98
+    expected_repo_sha: b0034ca1c99dd500966cb1ee935fc59a49a83b98
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
@@ -225,9 +228,31 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS: "6"
       WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES: "3000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
+
+  - instance_id: weather_amsterdam_wcir_frozen_shadow_v2
+    tmux_session: weather_amsterdam_wcir_frozen_shadow_v2
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: amsterdam_wcir_shadow
+    start_script: scripts/ops/start_weather_amsterdam_wcir_frozen_shadow_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/latest.json
+    health_format: json
+    max_health_age_sec: 420
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_key: weather_amsterdam_wcir_frozen_v2
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0.0
+      orders: 0
+      fills: 0
+      notional: 0
+      forward_epoch_id: wcir_amsterdam_score_only_v2_bb04a8acbeafd66b
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, weather_knmi_open_data_jrs]
+    recovery_policy: safe
 
   - instance_id: polymarket_dispute_repricing_zero_notional_v1
     uses_market_proxy: true
