@@ -257,6 +257,10 @@ Ankara 最能展示“新证据推翻原 thesis”的价值，但它同时暴露
 `0.940732`，YES book `0.83 / 0.98`，tick `0.01`，10-share taker 的 fee/depth-adjusted edge
 `-0.040248`，唯一 blocker 为 `non_positive_taker_ev`。按 near-Core maker contract：
 
+时钟必须分层：`0.83 / 0.98` 是 pre-live direct fetch 在 `23:32:38Z` 取得、
+`23:32:39Z` 写入的 BBO；同一 row 中的 `23:29:07.744Z` 是输入 paper snapshot 继承的
+collector response clock，不属于这组 direct-fetch 价格，不能据此把该 BBO 判为旧了 198 秒。
+
 ```text
 maker cap = floor_to_tick(0.940732 - 0.01) = 0.93
 initial quote = min(best bid + 1 tick, best ask - 1 tick, maker cap)
