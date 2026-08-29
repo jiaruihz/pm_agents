@@ -9,6 +9,26 @@ from .contracts import (
     SignalCandidate,
     TradeIntent,
 )
+from .next_print_adapters import (
+    adapt_amos_group,
+    adapt_legacy_information_event,
+    adapt_official_print,
+    adapt_source_observation,
+)
+from .next_print_contracts import (
+    CITY_CONTRACTS,
+    CanonicalMarketIdentity,
+    CanonicalOfficialPrint,
+    CanonicalSourceObservation,
+    CausalExclusionReason,
+    ExperimentEpoch,
+    LegacyModelRegistryEntry,
+    NextPrintLink,
+    audit_causal_clocks,
+    contract_schema_fingerprints,
+    link_next_official_print,
+)
+from .next_print_journal import NextPrintResearchJournal
 from .legacy_adapters import (
     DecisionBundle,
     LegacyDecisionBundle,
@@ -39,4 +59,20 @@ __all__ = [
     "DECISION_JOURNAL_SCHEMA_VERSION",
     "DecisionContractJournalSink",
     "SinkResult",
+    "CITY_CONTRACTS",
+    "CanonicalMarketIdentity",
+    "CanonicalOfficialPrint",
+    "CanonicalSourceObservation",
+    "CausalExclusionReason",
+    "ExperimentEpoch",
+    "LegacyModelRegistryEntry",
+    "NextPrintLink",
+    "adapt_amos_group",
+    "adapt_legacy_information_event",
+    "adapt_official_print",
+    "adapt_source_observation",
+    "audit_causal_clocks",
+    "contract_schema_fingerprints",
+    "link_next_official_print",
+    "NextPrintResearchJournal",
 ]
