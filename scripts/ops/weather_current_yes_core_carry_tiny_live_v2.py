@@ -241,11 +241,27 @@ def near_core_book_freshness(
         clock_value = row.get("current_yes_book_fetched_at_utc")
         clock_source = "legacy_direct_fetch_clock_utc"
     clock = parse_utc(clock_value)
+    book_status = str(row.get("current_yes_book_status") or "")
+    age_sec = (
+        (now.astimezone(timezone.utc) - clock).total_seconds()
+        if clock is not None
+        else None
+    )
     common = {
         "near_core_book_clock_utc": clock.isoformat() if clock is not None else "",
         "near_core_book_clock_source": clock_source,
+        "near_core_book_status": book_status,
         "near_core_book_max_age_sec": float(max_age_sec),
     }
+    if book_status != "ok":
+        return {
+            **common,
+            "near_core_book_age_sec": (
+                round(age_sec, 6) if age_sec is not None else None
+            ),
+            "near_core_book_fresh": False,
+            "near_core_book_freshness_status": "direct_book_status_not_ok",
+        }
     if clock is None:
         return {
             **common,
@@ -253,8 +269,8 @@ def near_core_book_freshness(
             "near_core_book_fresh": False,
             "near_core_book_freshness_status": "missing_direct_book_clock",
         }
-    age_sec = (now.astimezone(timezone.utc) - clock).total_seconds()
-    if age_sec < -5.0:
+    assert age_sec is not None
+    if age_sec < 0.0:
         status = "direct_book_clock_in_future"
         fresh = False
     elif age_sec > float(max_age_sec):

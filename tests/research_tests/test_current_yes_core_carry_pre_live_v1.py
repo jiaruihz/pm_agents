@@ -230,6 +230,73 @@ def test_direct_book_fetch_records_response_clock_used_by_scored_bbo(
     assert book["clock_lineage_status"] == "direct_clob_response_clock_v1"
 
 
+def test_direct_book_fetch_does_not_invent_response_clock_on_http_exception(
+    monkeypatch,
+) -> None:
+    stamps = iter(["2026-08-28T23:32:37Z", "2026-08-28T23:32:38Z"])
+    monkeypatch.setattr(pre_live.base, "utc_now", lambda: next(stamps))
+
+    class Client:
+        def get(self, *_args, **_kwargs):
+            raise TimeoutError("no response")
+
+    book = pre_live.fetch_full_book(Client(), "token")
+
+    assert book["status"] == "fetch_error:TimeoutError"
+    assert book["request_started_at_utc"] == "2026-08-28T23:32:37Z"
+    assert book["response_received_at_utc"] is None
+    assert book["fetched_at_utc"] is None
+    assert book["error_observed_at_utc"] == "2026-08-28T23:32:38Z"
+
+
+def test_direct_book_fetch_preserves_response_clock_for_non_object_error(
+    monkeypatch,
+) -> None:
+    stamps = iter(
+        [
+            "2026-08-28T23:32:37Z",
+            "2026-08-28T23:32:38Z",
+            "2026-08-28T23:32:38.100000Z",
+            "2026-08-28T23:32:38.200000Z",
+        ]
+    )
+    monkeypatch.setattr(pre_live.base, "utc_now", lambda: next(stamps))
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> list:
+            return []
+
+    class Client:
+        def get(self, *_args, **_kwargs) -> Response:
+            return Response()
+
+    book = pre_live.fetch_full_book(Client(), "token")
+
+    assert book["status"] == "fetch_error:ValueError"
+    assert book["response_received_at_utc"] == "2026-08-28T23:32:38Z"
+    assert book["fetched_at_utc"] == book["response_received_at_utc"]
+    assert book["error_observed_at_utc"] == "2026-08-28T23:32:38.200000Z"
+
+
+def test_direct_book_fetch_missing_token_has_no_request_or_response_clock(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        pre_live.base, "utc_now", lambda: "2026-08-28T23:32:37Z"
+    )
+
+    book = pre_live.fetch_full_book(object(), "")
+
+    assert book["status"] == "missing_token"
+    assert book["request_started_at_utc"] is None
+    assert book["response_received_at_utc"] is None
+    assert book["fetched_at_utc"] is None
+    assert book["error_observed_at_utc"] == "2026-08-28T23:32:37Z"
+
+
 def test_same_snapshot_collector_replay_is_deduplicated(tmp_path: Path) -> None:
     ledger = tmp_path / "state_decisions.jsonl"
     row = {
