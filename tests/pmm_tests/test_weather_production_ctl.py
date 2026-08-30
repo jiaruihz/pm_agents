@@ -124,6 +124,9 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "scheduled_informed_maker_shadow_v1/capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/"
             "epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/"
+            "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/"
+            "wcir_next_print_helsinki_tokyo_frozen_v1/"
+            "epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/"
             "capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/"
             "us_fast_weather_lab_metarws_pro_market_20260830/"
             "market_capture_demands.jsonl"
@@ -164,6 +167,40 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert spec.release("amsterdam_wcir_shadow").expected_repo_sha == (
         "4b0a7fdaf376fc94ca410de49b72d463b27107e4"
     )
+    wcir_ht = by_id["weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1"]
+    assert wcir_ht.execution_mode == "zero_notional_probability_only"
+    assert wcir_ht.expected_live is False
+    assert wcir_ht.release_id == "wcir_next_print_frozen"
+    assert wcir_ht.dependencies == (
+        "weather_jrs_context_keeper",
+        "weather_data_feed_jrs",
+        "weather_market_books",
+        "weather_live_cross_observations",
+        "fast_source_prev_no_trial_v1",
+    )
+    assert wcir_ht.expected_health_contract() == {
+        "strategy_key": "weather_helsinki_tokyo_wcir_next_print_frozen_v1",
+        "execution_mode": "zero_notional_probability_only",
+        "policy_status": "diagnostic_only",
+        "live_authority": False,
+        "forward_epoch_id": "wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06",
+        "safety.signal_candidates": 0,
+        "safety.trade_intents": 0,
+        "safety.plans": 0,
+        "safety.orders": 0,
+        "safety.fills": 0,
+        "safety.exchange_calls": 0,
+        "safety.actual_notional_usd": 0.0,
+        "orders": 0,
+        "fills": 0,
+        "notional": 0,
+        "actual_notional": 0.0,
+    }
+    wcir_ht_release = spec.release("wcir_next_print_frozen")
+    assert wcir_ht_release.expected_repo_sha == (
+        "d4ecfffec7ff6558a6c21191eeee61d3eafcd300"
+    )
+    assert wcir_ht_release.runtime_bindings == ("operational_venv",)
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (
         "weather_jrs_context_keeper",
