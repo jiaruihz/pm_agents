@@ -230,6 +230,83 @@ def test_temporary_bridge_is_incremental_and_reconciles_exactly(tmp_path: Path) 
     assert private_tables == []
 
 
+def test_bridge_materializes_model_outputs_append_only_and_idempotently(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    db_path = tmp_path / "model-output.db"
+    bridge = TemporaryCanonicalBridge(db_path)
+
+    first = bridge.append([bundle])
+    second = bridge.append([bundle])
+
+    assert first["inserted_model_outputs"] == 1
+    assert second["existing_model_outputs"] == 1
+    assert first["transaction_duration_seconds"] >= 0
+    assert first["wal_before_bytes"] >= 0
+    assert first["wal_after_bytes"] >= 0
+    conn = sqlite3.connect(db_path)
+    try:
+        stored = conn.execute(
+            "SELECT output_id, checkpoint_id, p_model, schema_version "
+            "FROM weather_model_outputs"
+        ).fetchone()
+        assert stored == (
+            bundle.model_output.output_id,
+            bundle.model_output.checkpoint_id,
+            bundle.model_output.p_model,
+            bundle.model_output.schema_version,
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute("UPDATE weather_model_outputs SET city = 'Tokyo'")
+    finally:
+        conn.close()
+
+
+def test_bridge_appends_non_live_trade_intents_without_execution_projection(
+    tmp_path: Path,
+) -> None:
+    evaluation = _evaluation()
+    bundle = legacy_bundle_from_evaluation(evaluation)
+    intent = legacy_trade_intent_from_paper_intent(
+        {**evaluation, "record_kind": "paper_intent", "position_key": "position-1"}
+    )
+    db_path = tmp_path / "intent.db"
+    bridge = TemporaryCanonicalBridge(db_path)
+    bridge.append([bundle])
+
+    first = bridge.append_trade_intents([intent])
+    second = bridge.append_trade_intents([intent])
+
+    assert first["inserted_trade_intents"] == 1
+    assert second["existing_trade_intents"] == 1
+    conn = sqlite3.connect(db_path)
+    try:
+        assert conn.execute("SELECT count(*) FROM weather_trade_intents").fetchone()[0] == 1
+        assert {
+            table: conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        } == {"plans": 0, "orders": 0, "fills": 0}
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute("DELETE FROM weather_trade_intents")
+    finally:
+        conn.close()
+
+    conflicting = replace(intent, metadata={"changed": True})
+    with pytest.raises(ValueError, match="conflicting canonical weather_trade_intents"):
+        bridge.append_trade_intents([conflicting])
+
+
+def test_trade_intent_requires_existing_canonical_candidate(tmp_path: Path) -> None:
+    evaluation = _evaluation()
+    intent = legacy_trade_intent_from_paper_intent(
+        {**evaluation, "record_kind": "paper_intent", "position_key": "position-1"}
+    )
+    bridge = TemporaryCanonicalBridge(tmp_path / "no-candidate.db")
+    with pytest.raises(ValueError, match="requires canonical SignalCandidate"):
+        bridge.append_trade_intents([intent])
+
+
 def test_bridge_accepts_legacy_vnext_and_mixed_without_duplicate_facts(
     tmp_path: Path,
 ) -> None:
@@ -373,6 +450,7 @@ def test_canonical_bridge_rolls_back_event_and_checkpoint_on_candidate_failure(
     try:
         assert conn.execute("SELECT count(*) FROM weather_information_events").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_model_outputs").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 0
     finally:
         conn.close()
@@ -400,6 +478,7 @@ def test_canonical_bridge_rolls_back_candidates_on_settlement_failure(
     try:
         assert conn.execute("SELECT count(*) FROM weather_information_events").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_model_outputs").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 0
     finally:
         conn.close()
@@ -758,11 +837,16 @@ def test_bridge_cli_handles_legacy_vnext_and_mixed_journals(tmp_path: Path) -> N
         "signal_candidates.jsonl",
         "trade_intents.jsonl",
         "trade_intent_blockers.jsonl",
-        "bridge_summary.json",
     ):
         assert (tmp_path / "legacy" / filename).read_bytes() == (
             repeated / filename
         ).read_bytes()
+    first_summary = json.loads((tmp_path / "legacy" / "bridge_summary.json").read_text())
+    repeated_summary = json.loads((repeated / "bridge_summary.json").read_text())
+    for summary in (first_summary, repeated_summary):
+        summary["canonical_reconciliation"].pop("transaction_duration_seconds")
+        summary.pop("summary_hash")
+    assert first_summary == repeated_summary
 
 
 def test_three_city_phase0_payloads_keep_coverage_without_fake_amsterdam_candidate() -> None:

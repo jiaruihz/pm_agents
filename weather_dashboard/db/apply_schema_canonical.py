@@ -325,7 +325,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "canonical lineage, signal clocks, fee, execution, runtime registry, and replay-case contracts",
+                "canonical lineage, signal clocks, fee, execution, runtime registry, replay-case, and decision fact contracts",
             ),
         )
     conn.commit()

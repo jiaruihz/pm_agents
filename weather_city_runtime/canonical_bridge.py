@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from scripts.etl.build_weather_signal_candidates import CANDIDATE_DDL
@@ -21,6 +23,7 @@ from weather_dashboard.ingest.state_checkpoints import ingest_state_checkpoints
 from weather_data_feed.information_events import canonical_json_hash
 from weather_model_evaluation.contracts import parse_utc
 
+from .contracts import ModelOutput, TradeIntent
 from .legacy_adapters import DecisionBundle
 
 
@@ -205,6 +208,59 @@ def _unique_candidate_rows(
     return [unique[key] for key in sorted(unique)], duplicates
 
 
+def _immutable_output_row(output: ModelOutput) -> dict[str, Any]:
+    """Serialize a contract object into the immutable canonical representation."""
+
+    row = output.to_dict()
+    row["input_refs_json"] = json.dumps(
+        row.pop("input_refs"), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    row["metadata_json"] = json.dumps(
+        row.pop("metadata"), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return row
+
+
+def _immutable_intent_row(intent: TradeIntent) -> dict[str, Any]:
+    row = intent.to_dict()
+    row["metadata_json"] = json.dumps(
+        row.pop("metadata"), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return row
+
+
+def _unique_immutable_rows(
+    rows: Iterable[dict[str, Any]], identity_field: str
+) -> tuple[list[dict[str, Any]], int]:
+    """Deduplicate exact deliveries and fail closed on an identity collision."""
+
+    unique: dict[str, dict[str, Any]] = {}
+    duplicates = 0
+    for row in rows:
+        identity = str(row[identity_field])
+        previous = unique.get(identity)
+        if previous is not None:
+            if canonical_json_hash(previous) != canonical_json_hash(row):
+                raise ValueError(f"conflicting duplicate {identity_field}: {identity}")
+            duplicates += 1
+            continue
+        unique[identity] = row
+    return [unique[key] for key in sorted(unique)], duplicates
+
+
+def _wal_bytes(db_path: Path) -> int:
+    wal_path = Path(f"{db_path}-wal")
+    return wal_path.stat().st_size if wal_path.exists() else 0
+
+
+def _assert_transaction_budget(started_at: float, max_seconds: float | None) -> None:
+    if max_seconds is not None and time.monotonic() - started_at > max_seconds:
+        raise TimeoutError(
+            "canonical decision transaction exceeded max_transaction_seconds="
+            f"{max_seconds}"
+        )
+
+
 def _validate_bundle(bundle: DecisionBundle) -> None:
     event = bundle.information_event
     checkpoint = bundle.state_checkpoint
@@ -255,6 +311,8 @@ class _CandidateCanonicalBridge:
         required_tables = {
             "weather_information_events",
             "weather_state_checkpoints",
+            "weather_model_outputs",
+            "weather_trade_intents",
             "fact_signal_candidates",
         }
         existing_tables = {
@@ -290,13 +348,59 @@ class _CandidateCanonicalBridge:
                 f"canonical candidate bridge missing columns: {missing_columns}"
             )
 
+    @staticmethod
+    def _append_immutable_rows(
+        conn: sqlite3.Connection,
+        *,
+        table: str,
+        identity_field: str,
+        rows: Iterable[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Append content-addressed rows, rejecting divergent redelivery."""
+
+        inserted = 0
+        existing = 0
+        for row in rows:
+            identity = str(row[identity_field])
+            payload_hash = canonical_json_hash(row)
+            previous = conn.execute(
+                f"SELECT payload_hash FROM {table} WHERE {identity_field} = ?",
+                (identity,),
+            ).fetchone()
+            if previous is not None:
+                if str(previous[0]) != payload_hash:
+                    raise ValueError(
+                        f"conflicting canonical {table} identity: {identity}"
+                    )
+                existing += 1
+                continue
+            values = {
+                **row,
+                "payload_hash": payload_hash,
+                "ingested_at_utc": datetime.now(timezone.utc).isoformat(),
+            }
+            columns = list(values)
+            conn.execute(
+                f"INSERT INTO {table} ({','.join(columns)}) "
+                f"VALUES ({','.join('?' for _ in columns)})",
+                [values[column] for column in columns],
+            )
+            inserted += 1
+        return {"inserted": inserted, "existing": existing}
+
     def append(
         self,
         bundles: Iterable[DecisionBundle],
         *,
         attach_candidate_settlements: bool = False,
         max_candidate_settlement_updates: int | None = None,
-    ) -> dict[str, int | None]:
+        busy_timeout_ms: int = 5_000,
+        max_transaction_seconds: float | None = 30.0,
+    ) -> dict[str, Any]:
+        if busy_timeout_ms < 0:
+            raise ValueError("busy_timeout_ms must be non-negative")
+        if max_transaction_seconds is not None and max_transaction_seconds <= 0:
+            raise ValueError("max_transaction_seconds must be positive or None")
         values = list(bundles)
         for bundle in values:
             _validate_bundle(bundle)
@@ -323,10 +427,17 @@ class _CandidateCanonicalBridge:
         candidates, duplicate_candidates_in_input = _unique_candidate_rows(
             [bundle.signal_candidate.to_canonical_input() for bundle in values],
         )
+        output_rows, duplicate_outputs_in_input = _unique_immutable_rows(
+            [_immutable_output_row(bundle.model_output) for bundle in values],
+            "output_id",
+        )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.db_path)
+        wal_before_bytes = _wal_bytes(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=busy_timeout_ms / 1000)
         conn.row_factory = sqlite3.Row
+        transaction_started_at: float | None = None
         try:
+            conn.execute(f"PRAGMA busy_timeout = {int(busy_timeout_ms)}")
             if self.initialize_schema:
                 apply_schema_canonical(conn)
                 conn.execute(CANDIDATE_DDL)
@@ -334,6 +445,7 @@ class _CandidateCanonicalBridge:
             else:
                 self._validate_existing_schema(conn)
             conn.execute("BEGIN IMMEDIATE")
+            transaction_started_at = time.monotonic()
             try:
                 event_result = ingest_information_events(
                     conn, events, commit=False
@@ -346,6 +458,12 @@ class _CandidateCanonicalBridge:
                     candidates,
                     initialize_schema=False,
                     commit=False,
+                )
+                model_output_result = self._append_immutable_rows(
+                    conn,
+                    table="weather_model_outputs",
+                    identity_field="output_id",
+                    rows=output_rows,
                 )
                 candidate_ids = [row["candidate_id"] for row in candidates]
                 if candidate_ids:
@@ -373,12 +491,21 @@ class _CandidateCanonicalBridge:
                     if attach_candidate_settlements
                     else 0
                 )
+                _assert_transaction_budget(
+                    transaction_started_at, max_transaction_seconds
+                )
                 conn.commit()
             except Exception:
                 conn.rollback()
                 raise
         finally:
             conn.close()
+        transaction_duration_seconds = (
+            time.monotonic() - transaction_started_at
+            if transaction_started_at is not None
+            else 0.0
+        )
+        wal_after_bytes = _wal_bytes(self.db_path)
         return {
             "raw_candidate_rows": len(values),
             "raw_unique_candidates": len(candidates),
@@ -387,6 +514,10 @@ class _CandidateCanonicalBridge:
             "inserted_candidates": result["inserted"],
             "existing_candidates": result["duplicates"],
             "input_duplicate_candidates": duplicate_candidates_in_input,
+            "raw_unique_model_outputs": len(output_rows),
+            "inserted_model_outputs": model_output_result["inserted"],
+            "existing_model_outputs": model_output_result["existing"],
+            "input_duplicate_model_outputs": duplicate_outputs_in_input,
             "inserted_events": event_result["inserted"],
             "existing_events": event_result["duplicates"],
             "input_duplicate_events": duplicate_events,
@@ -408,6 +539,89 @@ class _CandidateCanonicalBridge:
                 and max_candidate_settlement_updates is not None
                 and settlements_attached >= max_candidate_settlement_updates
             ),
+            "busy_timeout_ms": busy_timeout_ms,
+            "max_transaction_seconds": max_transaction_seconds,
+            "transaction_duration_seconds": transaction_duration_seconds,
+            "wal_before_bytes": wal_before_bytes,
+            "wal_after_bytes": wal_after_bytes,
+        }
+
+    def append_trade_intents(
+        self,
+        intents: Iterable[TradeIntent],
+        *,
+        busy_timeout_ms: int = 5_000,
+        max_transaction_seconds: float | None = 30.0,
+    ) -> dict[str, Any]:
+        """Append non-live TradeIntent facts; this never creates plans/orders/fills."""
+
+        if busy_timeout_ms < 0:
+            raise ValueError("busy_timeout_ms must be non-negative")
+        if max_transaction_seconds is not None and max_transaction_seconds <= 0:
+            raise ValueError("max_transaction_seconds must be positive or None")
+        rows, input_duplicates = _unique_immutable_rows(
+            [_immutable_intent_row(intent) for intent in intents], "intent_id"
+        )
+        wal_before_bytes = _wal_bytes(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=busy_timeout_ms / 1000)
+        transaction_started_at: float | None = None
+        try:
+            conn.execute(f"PRAGMA busy_timeout = {int(busy_timeout_ms)}")
+            if self.initialize_schema:
+                apply_schema_canonical(conn)
+                conn.execute(CANDIDATE_DDL)
+                apply_first_seen_schema(conn)
+            else:
+                self._validate_existing_schema(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            transaction_started_at = time.monotonic()
+            try:
+                candidate_ids = sorted({str(row["candidate_id"]) for row in rows})
+                if candidate_ids:
+                    placeholders = ",".join("?" for _ in candidate_ids)
+                    found = {
+                        str(row[0])
+                        for row in conn.execute(
+                            f"SELECT candidate_id FROM fact_signal_candidates "
+                            f"WHERE candidate_id IN ({placeholders})", candidate_ids
+                        )
+                    }
+                    missing = sorted(set(candidate_ids) - found)
+                    if missing:
+                        raise ValueError(
+                            "TradeIntent requires canonical SignalCandidate facts: "
+                            f"{missing}"
+                        )
+                result = self._append_immutable_rows(
+                    conn,
+                    table="weather_trade_intents",
+                    identity_field="intent_id",
+                    rows=rows,
+                )
+                _assert_transaction_budget(
+                    transaction_started_at, max_transaction_seconds
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        finally:
+            conn.close()
+        return {
+            "raw_trade_intents": len(rows) + input_duplicates,
+            "raw_unique_trade_intents": len(rows),
+            "input_duplicate_trade_intents": input_duplicates,
+            "inserted_trade_intents": result["inserted"],
+            "existing_trade_intents": result["existing"],
+            "busy_timeout_ms": busy_timeout_ms,
+            "max_transaction_seconds": max_transaction_seconds,
+            "transaction_duration_seconds": (
+                time.monotonic() - transaction_started_at
+                if transaction_started_at is not None
+                else 0.0
+            ),
+            "wal_before_bytes": wal_before_bytes,
+            "wal_after_bytes": _wal_bytes(self.db_path),
         }
 
     def candidate_funnels(

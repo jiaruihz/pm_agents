@@ -38,6 +38,59 @@ CREATE TABLE IF NOT EXISTS weather_state_checkpoints (
  feature_version_manifest TEXT NOT NULL, source_profile_id TEXT, pit_provenance TEXT NOT NULL,
  checkpoint_status TEXT NOT NULL, checkpoint_blocker TEXT, created_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS weather_model_outputs (
+ output_id TEXT PRIMARY KEY,
+ checkpoint_id TEXT NOT NULL REFERENCES weather_state_checkpoints(state_checkpoint_id),
+ trigger_event_id TEXT NOT NULL REFERENCES weather_information_events(information_event_id),
+ city TEXT NOT NULL, target_date TEXT NOT NULL, decision_ts_utc TEXT NOT NULL,
+ target_id TEXT NOT NULL, target_kind TEXT NOT NULL,
+ p_model REAL, model_id TEXT NOT NULL, model_artifact_id TEXT NOT NULL,
+ feature_set_id TEXT NOT NULL, input_refs_json TEXT NOT NULL,
+ scorable_status TEXT NOT NULL, blocker_reason TEXT,
+ market_feature_role TEXT NOT NULL, market_feature_clock TEXT NOT NULL,
+ feature_book_snapshot_id TEXT, metadata_json TEXT NOT NULL,
+ schema_version TEXT NOT NULL, payload_hash TEXT NOT NULL,
+ ingested_at_utc TEXT NOT NULL,
+ CHECK (target_kind IN ('physical_path','settlement_outcome','market_expression')),
+ CHECK (scorable_status IN ('scorable','not_scorable')),
+ CHECK ((scorable_status = 'scorable' AND p_model IS NOT NULL)
+        OR (scorable_status = 'not_scorable' AND blocker_reason IS NOT NULL))
+);
+CREATE TABLE IF NOT EXISTS weather_trade_intents (
+ intent_id TEXT PRIMARY KEY,
+ candidate_id TEXT NOT NULL,
+ condition_id TEXT NOT NULL, token_id TEXT NOT NULL, side TEXT NOT NULL,
+ requested_size REAL NOT NULL, sizing_profile TEXT NOT NULL,
+ execution_profile TEXT NOT NULL, max_cost REAL, ttl_seconds INTEGER,
+ dedupe_key TEXT NOT NULL, exposure_bucket TEXT NOT NULL, mode TEXT NOT NULL,
+ metadata_json TEXT NOT NULL, schema_version TEXT NOT NULL,
+ payload_hash TEXT NOT NULL, ingested_at_utc TEXT NOT NULL,
+ CHECK (side IN ('BUY','SELL')),
+ CHECK (mode IN ('research','shadow','zero_notional')),
+ CHECK (requested_size >= 0),
+ CHECK (mode <> 'zero_notional' OR requested_size = 0),
+ CHECK (max_cost IS NULL OR (max_cost >= 0 AND max_cost <= 1))
+);
+CREATE INDEX IF NOT EXISTS idx_weather_model_outputs_checkpoint
+ ON weather_model_outputs(checkpoint_id, decision_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_weather_trade_intents_candidate
+ ON weather_trade_intents(candidate_id, execution_profile, mode);
+CREATE TRIGGER IF NOT EXISTS weather_model_outputs_no_update
+ BEFORE UPDATE ON weather_model_outputs BEGIN
+   SELECT RAISE(ABORT, 'weather_model_outputs is append-only');
+ END;
+CREATE TRIGGER IF NOT EXISTS weather_model_outputs_no_delete
+ BEFORE DELETE ON weather_model_outputs BEGIN
+   SELECT RAISE(ABORT, 'weather_model_outputs is append-only');
+ END;
+CREATE TRIGGER IF NOT EXISTS weather_trade_intents_no_update
+ BEFORE UPDATE ON weather_trade_intents BEGIN
+   SELECT RAISE(ABORT, 'weather_trade_intents is append-only');
+ END;
+CREATE TRIGGER IF NOT EXISTS weather_trade_intents_no_delete
+ BEFORE DELETE ON weather_trade_intents BEGIN
+   SELECT RAISE(ABORT, 'weather_trade_intents is append-only');
+ END;
 CREATE INDEX IF NOT EXISTS idx_weather_information_events_city_available
  ON weather_information_events(city, available_at_utc, event_kind);
 CREATE INDEX IF NOT EXISTS idx_weather_state_checkpoints_trigger
