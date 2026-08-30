@@ -706,6 +706,47 @@ def db_path_matches_canonical(path: str, canonical: Mapping[str, Any]) -> bool:
     return same_file(canonical, observed)
 
 
+def inspect_release_runtime_bindings(
+    spec: WeatherProductionSpec, release: Any
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for binding, target, source in spec.release_runtime_binding_paths(release):
+        if binding == "operational_venv":
+            python = source / "bin/python"
+            source_healthy = (
+                source.is_dir() and python.is_file() and os.access(python, os.X_OK)
+            )
+        else:
+            source_healthy = source.is_file() and os.access(source, os.R_OK)
+        row: dict[str, Any] = {
+            "binding": binding,
+            "target": str(target),
+            "expected_source": str(source),
+            "source_healthy": source_healthy,
+            "target_is_symlink": target.is_symlink(),
+            "status": "healthy",
+        }
+        if not source_healthy:
+            row["status"] = "source_unhealthy"
+        elif not os.path.lexists(target):
+            row["status"] = "target_missing"
+        elif not target.is_symlink():
+            row["status"] = "target_not_symlink"
+        else:
+            try:
+                observed = target.resolve(strict=True)
+                expected = source.resolve(strict=True)
+            except (OSError, RuntimeError):
+                row["status"] = "target_unreadable"
+            else:
+                row["observed_source"] = str(observed)
+                row["expected_source_resolved"] = str(expected)
+                if observed != expected:
+                    row["status"] = "target_mismatch"
+        rows.append(row)
+    return rows
+
+
 def build_manifest(
     *,
     spec: WeatherProductionSpec,
@@ -792,6 +833,24 @@ def build_manifest(
                         "checkout_root": str(root),
                         "expected_git_common_dir": operational_common_dir,
                         "observed_git_common_dir": observed_common_dir,
+                    },
+                )
+            )
+        binding_rows = inspect_release_runtime_bindings(spec, release)
+        metadata.setdefault("runtime_bindings", {})[release.release_id] = binding_rows
+        invalid_bindings = [
+            row for row in binding_rows if row["status"] != "healthy"
+        ]
+        if invalid_bindings:
+            findings.append(
+                finding(
+                    "critical",
+                    "production_release_runtime_binding_mismatch",
+                    "production release runtime bindings differ from their declared sources",
+                    {
+                        "release_id": release.release_id,
+                        "checkout_root": str(root),
+                        "bindings": invalid_bindings,
                     },
                 )
             )

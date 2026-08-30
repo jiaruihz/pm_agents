@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 
 import pytest
@@ -52,6 +53,31 @@ def test_probe_summary_tolerates_one_intermittent_failure():
     )
     assert summary["degraded"] is False
     assert summary["degraded_reasons"] == []
+
+
+def test_probe_openai_records_timeout_as_failed_sample(monkeypatch):
+    def raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(ctl.subprocess, "run", raise_timeout)
+
+    rows = ctl.probe_openai(attempts=2, timeout=1.5)
+
+    assert rows == [
+        {
+            "ok": False,
+            "http_status": 0,
+            "total_sec": 1.5,
+            "error": "TimeoutExpired:3.5",
+        },
+        {
+            "ok": False,
+            "http_status": 0,
+            "total_sec": 1.5,
+            "error": "TimeoutExpired:3.5",
+        },
+    ]
+    assert ctl.probe_summary(rows, slow_seconds=1.5)["degraded"] is True
 
 
 def test_maintain_requires_two_degraded_cycles_before_switch(tmp_path, monkeypatch):

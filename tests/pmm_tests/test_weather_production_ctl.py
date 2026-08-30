@@ -1296,6 +1296,182 @@ def _committed_checkout(tmp_path: Path) -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp_path, text=True).strip()
 
 
+def _release_binding_fixture(
+    tmp_path: Path,
+) -> tuple[WeatherProductionSpec, WeatherManagedRuntimeSpec, Path, Path]:
+    operational = tmp_path / "repo"
+    checkout = tmp_path / "release"
+    operational.mkdir()
+    checkout.mkdir()
+    observed_sha = _committed_checkout(checkout)
+    (checkout / ".venv/bin/python").unlink()
+    (checkout / ".venv/bin").rmdir()
+    (checkout / ".venv").rmdir()
+
+    source_python = operational / ".venv/bin/python"
+    source_python.parent.mkdir(parents=True)
+    source_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    source_python.chmod(0o755)
+    (operational / ".env").write_text("TEST_ONLY=1\n", encoding="utf-8")
+    canonical_db = operational / "weather.db"
+    canonical_db.write_bytes(b"sqlite-test")
+
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        checkout_root=checkout,
+        start_script=Path("start.sh"),
+        release_id="shadow_release",
+        recovery_policy="safe",
+    )
+    base = production_spec(operational, (runtime,))
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "releases": (
+                WeatherProductionReleaseSpec(
+                    release_id="shadow_release",
+                    checkout_root=checkout,
+                    expected_repo_sha=observed_sha,
+                    runtime_bindings=(
+                        "operational_venv",
+                        "canonical_db",
+                        "operational_env",
+                    ),
+                ),
+            ),
+        }
+    )
+    return spec, runtime, operational, checkout
+
+
+def test_release_preflight_provisions_declared_bindings_idempotently(tmp_path):
+    spec, runtime, operational, checkout = _release_binding_fixture(tmp_path)
+
+    assert ctl._checkout_start_preflight(spec, runtime) is None
+    assert (checkout / ".venv").is_symlink()
+    assert (checkout / ".venv").resolve() == (operational / ".venv").resolve()
+    assert (checkout / ".env").is_symlink()
+    assert (checkout / ".env").resolve() == (operational / ".env").resolve()
+    assert (checkout / "runtime/weather.db").is_symlink()
+    assert (checkout / "runtime/weather.db").resolve() == spec.canonical_db_path.resolve()
+    assert ctl._checkout_start_preflight(spec, runtime) is None
+    assert subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=checkout,
+        text=True,
+    ).strip() == ""
+
+
+def test_release_preflight_fails_before_creating_any_binding_when_source_missing(
+    tmp_path,
+):
+    spec, runtime, operational, checkout = _release_binding_fixture(tmp_path)
+    (operational / ".env").unlink()
+
+    result = ctl._checkout_start_preflight(spec, runtime)
+
+    assert result == {
+        "instance_id": "shadow",
+        "status": "error",
+        "reason": (
+            "checkout_runtime_binding_source_unhealthy:operational_env:"
+            f"{operational / '.env'}"
+        ),
+    }
+    assert not os.path.lexists(checkout / ".venv")
+    assert not os.path.lexists(checkout / "runtime/weather.db")
+
+
+def test_release_restart_does_not_stop_session_when_binding_conflicts(
+    monkeypatch, tmp_path
+):
+    spec, runtime, _operational, checkout = _release_binding_fixture(tmp_path)
+    local_db = checkout / "runtime/weather.db"
+    local_db.parent.mkdir(parents=True)
+    local_db.write_bytes(b"not-canonical")
+    calls = []
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: calls.append(args)
+        or subprocess.CompletedProcess(args, 0, "", ""),
+    )
+
+    result = ctl._run_restart(spec, runtime, confirm_live=False)
+
+    assert result == {
+        "instance_id": "shadow",
+        "status": "error",
+        "reason": f"checkout_runtime_binding_conflict:canonical_db:{local_db}",
+    }
+    assert calls == []
+    assert local_db.read_bytes() == b"not-canonical"
+    assert not os.path.lexists(checkout / ".venv")
+
+
+def test_release_preflight_rejects_symlinked_binding_parent(tmp_path):
+    spec, runtime, _operational, checkout = _release_binding_fixture(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (checkout / "runtime").symlink_to(outside, target_is_directory=True)
+
+    result = ctl._checkout_start_preflight(spec, runtime)
+
+    assert result == {
+        "instance_id": "shadow",
+        "status": "error",
+        "reason": (
+            "checkout_runtime_binding_parent_unsafe:canonical_db:"
+            f"{checkout / 'runtime'}"
+        ),
+    }
+    assert not (outside / "weather.db").exists()
+    assert not os.path.lexists(checkout / ".venv")
+
+
+def test_release_preflight_preserves_legacy_start_script_env_check(tmp_path):
+    spec, runtime, operational, checkout = _release_binding_fixture(tmp_path)
+    release = spec.releases[0]
+    (checkout / "start.sh").write_text(
+        '#!/bin/sh\nset -a\n. "$ROOT/.env"\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "start.sh"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "require env"], cwd=checkout, check=True
+    )
+    observed_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+    ).strip()
+    spec = WeatherProductionSpec(
+        **{
+            **spec.__dict__,
+            "releases": (
+                WeatherProductionReleaseSpec(
+                    release_id=release.release_id,
+                    checkout_root=release.checkout_root,
+                    expected_repo_sha=observed_sha,
+                    runtime_bindings=("operational_venv", "canonical_db"),
+                ),
+            ),
+        }
+    )
+    (operational / ".env").unlink()
+
+    result = ctl._checkout_start_preflight(spec, runtime)
+
+    assert result == {
+        "instance_id": "shadow",
+        "status": "error",
+        "reason": f"checkout_bootstrap_missing_env:{checkout / '.env'}",
+    }
+    assert not os.path.lexists(checkout / ".venv")
+    assert not os.path.lexists(checkout / "runtime/weather.db")
+
+
 def test_controller_restart_rejects_dirty_tracked_checkout(tmp_path):
     _committed_checkout(tmp_path)
     (tmp_path / "start.sh").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")

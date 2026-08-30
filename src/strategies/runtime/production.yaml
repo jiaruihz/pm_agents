@@ -11,12 +11,15 @@ production_releases:
   - release_id: fast_source_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
     expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: forecast_collector
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_collector/7192012002e7fbfca05ff4c6597550cf8c6d61b8
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/f5577f378f9f429f3cb4b06e3515c7b8662a030f
     expected_repo_sha: f5577f378f9f429f3cb4b06e3515c7b8662a030f
@@ -26,60 +29,80 @@ production_releases:
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: forecast_capture
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_capture/761a16d80f130b780fe65827ede4ca303548bd40
     expected_repo_sha: 761a16d80f130b780fe65827ede4ca303548bd40
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: wcir
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4
     expected_repo_sha: 64c5805dc8253c928a6dedfbe71c50f2d8e641c4
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: city_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_runtime/5369dbb5751b09f32fa82bc6c31dfad8a02ee2c4
     expected_repo_sha: 5369dbb5751b09f32fa82bc6c31dfad8a02ee2c4
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: city_probability_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c
     expected_repo_sha: f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_observation/331f309ebeea14fd6b61727584a8cf19b40dc6a0
     expected_repo_sha: 331f309ebeea14fd6b61727584a8cf19b40dc6a0
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: tmin_cross_prev_no_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_cross_prev_no_shadow/d3a439356f8346dded3af051df3216b44af9406e
     expected_repo_sha: d3a439356f8346dded3af051df3216b44af9406e
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
     expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: tmin_v2_2_probability_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/b7397b1cc41b3424939727b433f5853c12303f42
     expected_repo_sha: b7397b1cc41b3424939727b433f5853c12303f42
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/c88ee75419660a586af3e70b34a1e71d698caa88
     expected_repo_sha: c88ee75419660a586af3e70b34a1e71d698caa88
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: helsinki_ladder
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/f64728197135caf78b11491395bf23220b3fc872
     expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/5ba155d68f0a2e54284c73626730adc4389105c2
     expected_repo_sha: 5ba155d68f0a2e54284c73626730adc4389105c2
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
     expected_repo_sha: b2b26fd96e8086a2a444e83c66fd4d55ac904705
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_market_state_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/d0c0890c63a7ac49def9303bc35b7c92e63fa451
     expected_repo_sha: d0c0890c63a7ac49def9303bc35b7c92e63fa451
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
     expected_repo_sha: ef64a2d0b14230d21e3544161dbf95a097eeca9c
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+    runtime_binding_sources:
+      operational_env: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi
   - release_id: market_tail
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_tail/b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
     expected_repo_sha: b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/29d2045fd9d748f72b5231b462e1734023071743
     expected_repo_sha: 29d2045fd9d748f72b5231b462e1734023071743
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: paired_bid_mm
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/paired_bid_mm/a977ad07dc348a7b45b86f1c0050b8afcede1db5
     expected_repo_sha: a977ad07dc348a7b45b86f1c0050b8afcede1db5
+    runtime_bindings: [operational_venv, canonical_db]
 
 canonical_refresh_release_id: control_plane
 # The mount name is a compatibility contract; UUID is the physical identity.

@@ -1295,6 +1295,115 @@ def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> N
                 )
 
 
+def _ensure_release_runtime_bindings(
+    spec: WeatherProductionSpec,
+    runtime: WeatherManagedRuntimeSpec,
+) -> dict[str, Any] | None:
+    """Provision declared non-Git release bindings before stopping a runtime."""
+    if runtime.release_id is None:
+        return None
+    release = spec.release(runtime.release_id)
+    try:
+        checkout_resolved = release.checkout_root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return {
+            "instance_id": runtime.instance_id,
+            "status": "error",
+            "reason": f"checkout_runtime_binding_root_unreadable:{release.checkout_root}",
+        }
+    missing: list[tuple[str, Path, Path]] = []
+    for binding, target, source in spec.release_runtime_binding_paths(release):
+        relative_target = target.relative_to(release.checkout_root)
+        cursor = release.checkout_root
+        for part in relative_target.parts[:-1]:
+            cursor /= part
+            if os.path.lexists(cursor) and (
+                cursor.is_symlink() or not cursor.is_dir()
+            ):
+                return {
+                    "instance_id": runtime.instance_id,
+                    "status": "error",
+                    "reason": (
+                        f"checkout_runtime_binding_parent_unsafe:{binding}:{cursor}"
+                    ),
+                }
+        try:
+            parent_resolved = target.parent.resolve(strict=False)
+        except (OSError, RuntimeError):
+            parent_resolved = None
+        if parent_resolved is None or not parent_resolved.is_relative_to(
+            checkout_resolved
+        ):
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": (
+                    f"checkout_runtime_binding_parent_escape:{binding}:{target.parent}"
+                ),
+            }
+        if binding == "operational_venv":
+            python = source / "bin/python"
+            source_healthy = (
+                source.is_dir() and python.is_file() and os.access(python, os.X_OK)
+            )
+        else:
+            source_healthy = source.is_file() and os.access(source, os.R_OK)
+        if not source_healthy:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": (
+                    f"checkout_runtime_binding_source_unhealthy:{binding}:{source}"
+                ),
+            }
+
+        if not os.path.lexists(target):
+            missing.append((binding, target, source))
+            continue
+        if not target.is_symlink():
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": f"checkout_runtime_binding_conflict:{binding}:{target}",
+            }
+        try:
+            observed = target.resolve(strict=True)
+            expected = source.resolve(strict=True)
+        except (OSError, RuntimeError):
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": f"checkout_runtime_binding_unreadable:{binding}:{target}",
+            }
+        if observed != expected:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": (
+                    f"checkout_runtime_binding_mismatch:{binding}:"
+                    f"expected={expected}:observed={observed}"
+                ),
+            }
+
+    for binding, target, source in missing:
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.symlink_to(
+                source,
+                target_is_directory=binding == "operational_venv",
+            )
+        except OSError as exc:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": (
+                    f"checkout_runtime_binding_create_failed:{binding}:"
+                    f"{type(exc).__name__}:{target}"
+                ),
+            }
+    return None
+
+
 def _checkout_start_preflight(
     spec: WeatherProductionSpec,
     runtime: WeatherManagedRuntimeSpec,
@@ -1371,6 +1480,23 @@ def _checkout_start_preflight(
             "status": "error",
             "reason": "checkout_dirty_tracked",
         }
+    if script is not None and script.exists() and runtime.release_id is not None:
+        release = spec.release(runtime.release_id)
+        if "operational_env" not in release.runtime_bindings:
+            try:
+                script_text = script.read_text(encoding="utf-8")
+            except OSError:
+                script_text = ""
+            env_path = checkout / ".env"
+            if ".env" in script_text and not env_path.exists():
+                return {
+                    "instance_id": runtime.instance_id,
+                    "status": "error",
+                    "reason": f"checkout_bootstrap_missing_env:{env_path}",
+                }
+    binding_error = _ensure_release_runtime_bindings(spec, runtime)
+    if binding_error is not None:
+        return binding_error
     python = checkout / ".venv/bin/python"
     if not python.is_file() or not os.access(python, os.X_OK):
         return {
@@ -1378,18 +1504,6 @@ def _checkout_start_preflight(
             "status": "error",
             "reason": f"checkout_bootstrap_missing_venv:{python}",
         }
-    if script is not None and script.exists():
-        try:
-            script_text = script.read_text(encoding="utf-8")
-        except OSError:
-            script_text = ""
-        env_path = checkout / ".env"
-        if ".env" in script_text and not env_path.exists():
-            return {
-                "instance_id": runtime.instance_id,
-                "status": "error",
-                "reason": f"checkout_bootstrap_missing_env:{env_path}",
-            }
     return None
 
 

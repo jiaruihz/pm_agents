@@ -186,7 +186,23 @@ def probe_openai(
             "%{http_code}\t%{time_total}",
             DEFAULT_TEST_URL,
         ]
-        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 2)
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 2,
+            )
+        except subprocess.TimeoutExpired as exc:
+            rows.append(
+                {
+                    "ok": False,
+                    "http_status": 0,
+                    "total_sec": round(timeout, 4),
+                    "error": f"TimeoutExpired:{exc.timeout}",
+                }
+            )
+            continue
         fields = (result.stdout or "").strip().split("\t")
         status = int(fields[0]) if fields and fields[0].isdigit() else 0
         total = float(fields[1]) if len(fields) == 2 else timeout
