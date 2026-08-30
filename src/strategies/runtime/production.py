@@ -21,6 +21,8 @@ class WeatherProductionReleaseSpec:
     release_id: str
     checkout_root: Path
     expected_repo_sha: str
+    runtime_bindings: tuple[str, ...] = ()
+    runtime_binding_sources: tuple[tuple[str, Path], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,6 +122,33 @@ class WeatherProductionSpec:
             if release.release_id == release_id:
                 return release
         raise KeyError(release_id)
+
+    def release_runtime_binding_paths(
+        self, release: WeatherProductionReleaseSpec
+    ) -> tuple[tuple[str, Path, Path], ...]:
+        source_overrides = dict(release.runtime_binding_sources)
+        bindings = {
+            "operational_venv": (
+                release.checkout_root / ".venv",
+                self.operational_repo_root / ".venv",
+            ),
+            "operational_env": (
+                release.checkout_root / ".env",
+                self.operational_repo_root / ".env",
+            ),
+            "canonical_db": (
+                release.checkout_root / "runtime/weather.db",
+                self.canonical_db_path,
+            ),
+        }
+        return tuple(
+            (
+                binding,
+                bindings[binding][0],
+                source_overrides.get(binding, bindings[binding][1]),
+            )
+            for binding in release.runtime_bindings
+        )
 
     def resolved_market_books_root(self) -> Path:
         return self.market_books_root or self.data_feed_runtime_root / "market_books"
@@ -237,10 +266,58 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     for item in releases_raw:
         if not isinstance(item, dict):
             raise ValueError("each production release must be a mapping")
+        bindings_raw = item.get("runtime_bindings", ["operational_venv"])
+        if not isinstance(bindings_raw, list) or not bindings_raw:
+            raise ValueError("production release runtime_bindings must be a non-empty list")
+        runtime_bindings = tuple(str(binding) for binding in bindings_raw)
+        allowed_bindings = {
+            "operational_venv",
+            "operational_env",
+            "canonical_db",
+        }
+        unknown_bindings = sorted(set(runtime_bindings) - allowed_bindings)
+        if unknown_bindings:
+            raise ValueError(
+                "unknown production release runtime_bindings: "
+                f"{unknown_bindings}"
+            )
+        if len(runtime_bindings) != len(set(runtime_bindings)):
+            raise ValueError("duplicate production release runtime_bindings")
+        if "operational_venv" not in runtime_bindings:
+            raise ValueError(
+                "production release runtime_bindings must include operational_venv"
+            )
+        binding_sources_raw = item.get("runtime_binding_sources") or {}
+        if not isinstance(binding_sources_raw, dict):
+            raise ValueError("production release runtime_binding_sources must be a mapping")
+        unknown_source_bindings = sorted(
+            set(str(binding) for binding in binding_sources_raw) - set(runtime_bindings)
+        )
+        if unknown_source_bindings:
+            raise ValueError(
+                "production release runtime_binding_sources reference undeclared bindings: "
+                f"{unknown_source_bindings}"
+            )
+        runtime_binding_sources = tuple(
+            (str(binding), Path(source))
+            for binding, source in binding_sources_raw.items()
+        )
+        non_absolute_sources = [
+            binding
+            for binding, source in runtime_binding_sources
+            if not source.is_absolute()
+        ]
+        if non_absolute_sources:
+            raise ValueError(
+                "production release runtime_binding_sources must be absolute: "
+                f"{non_absolute_sources}"
+            )
         release = WeatherProductionReleaseSpec(
             release_id=str(item["release_id"]),
             checkout_root=Path(item["checkout_root"]),
             expected_repo_sha=str(item["expected_repo_sha"]).lower(),
+            runtime_bindings=runtime_bindings,
+            runtime_binding_sources=runtime_binding_sources,
         )
         if release.release_id in release_by_id:
             raise ValueError(f"duplicate production release_id: {release.release_id}")

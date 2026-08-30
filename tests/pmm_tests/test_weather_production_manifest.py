@@ -53,9 +53,15 @@ def test_committed_production_spec_owns_jrs_canonical_db():
         "1a385699657977adb0f556eff53f7460cc3c5545"
     )
     assert len(spec.release("control_plane").expected_repo_sha) == 40
+    assert spec.release("control_plane").runtime_bindings == ("operational_venv",)
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
         "5ba155d68f0a2e54284c73626730adc4389105c2"
+    )
+    assert spec.release("core_carry_runtime").runtime_bindings == (
+        "operational_venv",
+        "canonical_db",
+        "operational_env",
     )
     assert spec.release("core_carry_market_state_shadow").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/"
@@ -65,6 +71,16 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert spec.release("city_probability_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/"
         "f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c"
+    )
+    assert spec.release("city_probability_runtime").runtime_bindings == (
+        "operational_venv",
+        "canonical_db",
+    )
+    assert dict(spec.release("knmi").runtime_binding_sources)[
+        "operational_env"
+    ] == Path(
+        "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
+        "588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi"
     )
 
 
@@ -77,6 +93,18 @@ def test_production_spec_rejects_release_outside_managed_root(tmp_path):
     candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
 
     with pytest.raises(ValueError, match="production release checkout_root must equal"):
+        load_production_spec(candidate)
+
+
+def test_production_spec_rejects_release_binding_without_operational_venv(tmp_path):
+    raw = yaml.safe_load(
+        (ROOT / "src/strategies/runtime/production.yaml").read_text(encoding="utf-8")
+    )
+    raw["production_releases"][0]["runtime_bindings"] = ["canonical_db"]
+    candidate = tmp_path / "production.yaml"
+    candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must include operational_venv"):
         load_production_spec(candidate)
 
 
@@ -527,6 +555,93 @@ def test_manifest_rejects_release_from_independent_clone(tmp_path, monkeypatch):
     )
     assert finding["severity"] == "critical"
     assert finding["detail"]["release_id"] == "collector"
+
+
+def test_manifest_rejects_declared_release_runtime_binding_conflict(
+    tmp_path, monkeypatch
+):
+    base = production_spec(tmp_path)
+    operational = base.operational_repo_root
+    source_python = operational / ".venv/bin/python"
+    source_python.parent.mkdir(parents=True)
+    source_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    source_python.chmod(0o755)
+    (operational / ".env").write_text("TEST_ONLY=1\n", encoding="utf-8")
+    base.canonical_db_path.parent.mkdir(parents=True)
+    base.canonical_db_path.write_text("canonical", encoding="utf-8")
+    compatibility = operational / "runtime/weather.db"
+    compatibility.parent.mkdir(parents=True)
+    compatibility.symlink_to(base.canonical_db_path)
+
+    release_root = tmp_path / "releases"
+    sha = "a" * 40
+    checkout = release_root / "collector" / sha
+    checkout.mkdir(parents=True)
+    (checkout / ".venv").symlink_to(operational / ".venv", target_is_directory=True)
+    (checkout / ".env").symlink_to(operational / ".env")
+    local_db = checkout / "runtime/weather.db"
+    local_db.parent.mkdir()
+    local_db.write_text("split", encoding="utf-8")
+    release = WeatherProductionReleaseSpec(
+        release_id="collector",
+        checkout_root=checkout,
+        expected_repo_sha=sha,
+        runtime_bindings=(
+            "operational_venv",
+            "canonical_db",
+            "operational_env",
+        ),
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "production_release_root": release_root,
+            "releases": (release,),
+        }
+    )
+    db_route = manifest.inspect_db_route(spec, repo_root=operational)
+    monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(manifest, "inspect_persistent_worktrees", lambda _spec: [])
+
+    def fake_git_metadata(root, cache):
+        payload = {
+            "root": str(root),
+            "head": sha,
+            "branch": "HEAD",
+            "dirty_tracked": False,
+            "git_common_dir": str(operational / ".git"),
+        }
+        cache[str(root)] = payload
+        return payload
+
+    monkeypatch.setattr(manifest, "git_metadata", fake_git_metadata)
+
+    payload = manifest.build_manifest(
+        spec=spec,
+        processes=[],
+        tmux_rows=[],
+        launchctl_rows=[],
+        db_route=db_route,
+        db_consumers={},
+    )
+
+    finding = next(
+        item
+        for item in payload["findings"]
+        if item["kind"] == "production_release_runtime_binding_mismatch"
+    )
+    assert finding["severity"] == "critical"
+    assert finding["detail"]["release_id"] == "collector"
+    assert finding["detail"]["bindings"] == [
+        {
+            "binding": "canonical_db",
+            "target": str(local_db),
+            "expected_source": str(base.canonical_db_path),
+            "source_healthy": True,
+            "target_is_symlink": False,
+            "status": "target_not_symlink",
+        }
+    ]
 
 
 def test_prechange_comparison_fails_when_existing_session_disappears():

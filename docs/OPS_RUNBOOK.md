@@ -139,6 +139,13 @@ manifest 同时读取 session environment；出现
 `managed_session_production_config_not_injected` 表示旧 session 仍可能读取 release-local
 historical config，需要按实例滚动重载，不能把 release checkout 自带配置当第二份 desired state。
 
+release checkout 只承载 immutable code；`.venv`、可选 `.env` 与
+`runtime/weather.db` 都是 `production_releases[].runtime_bindings` 显式声明的非 Git
+运行时绑定，专用环境文件通过 `runtime_binding_sources` 锁定原 source。
+controller 必须在停旧 session 前幂等创建缺失软链接，遇普通文件、错指向或
+source 不健康则 fail closed；manifest 独立只读审计同一合同。禁止复制 `.env`、在 release
+内创建本地 `weather.db`，或靠手工补链接完成常规发布。
+
 如果发现进程仍在其他 socket，只记录并按生产变更流程迁移；涉及 live 的 session
 不得在巡检中自动重启或跨 socket 搬迁。
 
