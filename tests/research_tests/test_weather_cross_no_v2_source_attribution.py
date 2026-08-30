@@ -39,6 +39,8 @@ def test_winner_only_pnl_checkpoint_and_missing_coverage(tmp_path):
     report = attribution.build_report(out, market_books_root=books, canonical_db=db)
     hf, datis, metar = (report["arms"][key] for key in ("metar_ws_hfmetar", "metar_ws_datis", "metar_ws_metar"))
     assert hf["race_winner"] == 1 and datis["race_later_blocked"] == 1
+    assert report["policy_max_no_ask"] == 0.97
+    assert report["generated_at_utc"].endswith("Z")
     assert hf["canonical"]["realized_pnl_usd"] == 2.9 and datis["canonical"]["realized_pnl_usd"] == 0
     assert hf["checkpoint_coverage"]["15"]["coverage"] == 1.0
     assert datis["checkpoint_coverage"]["15"]["coverage"] == 0.0
@@ -79,3 +81,16 @@ def test_no_inputs_are_silent_or_mutated(tmp_path):
     assert report["coverage_blockers"]["market_books"] == "not_requested"
     assert report["canonical_db"]["status"] == "not_requested"
     assert set(report["arms"]) == set(attribution.ARMS)
+
+
+def test_five_share_executable_respects_live_no_ask_cap(tmp_path):
+    out = tmp_path / "out"; out.mkdir()
+    write_jsonl(out / "opportunities.jsonl", [{
+        "source": "metar_ws_hfmetar",
+        "information_event_id": "too-expensive",
+        "book_full_depth_valid": True,
+        "expected_five_share_vwap": 0.98,
+        "worst_ask_for_five_shares": 0.98,
+    }])
+    report = attribution.build_report(out)
+    assert report["arms"]["metar_ws_hfmetar"]["five_share_executable"] == 0
