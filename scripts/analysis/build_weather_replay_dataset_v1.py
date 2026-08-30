@@ -136,6 +136,125 @@ def _partition(
     return splits
 
 
+def _row_identity(row: dict[str, Any]) -> str:
+    identity = row.get("row_id") or row.get("row_identity")
+    if not identity:
+        raise ValueError("every dataset row requires row_id or row_identity")
+    return str(identity)
+
+
+def _clock_fields(value: Any, *, prefix: str = "") -> list[tuple[str, Any]]:
+    """Return nested availability/detection clocks with stable field paths."""
+
+    clocks: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            field = f"{prefix}.{key}" if prefix else str(key)
+            lowered = str(key).lower()
+            if item not in (None, "") and not isinstance(item, (dict, list)):
+                if "available_at" in lowered or "detected_at" in lowered:
+                    clocks.append((field, item))
+            if isinstance(item, (dict, list)):
+                clocks.extend(_clock_fields(item, prefix=field))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            if isinstance(item, (dict, list)):
+                field = f"{prefix}[{index}]" if prefix else f"[{index}]"
+                clocks.extend(_clock_fields(item, prefix=field))
+    return clocks
+
+
+def _validate_clock_not_after(
+    clocks: list[tuple[str, Any]], *, decision_ts_utc: str, context: str
+) -> dict[str, str]:
+    from weather_model_evaluation.contracts import parse_utc, utc_text
+
+    decision = parse_utc(decision_ts_utc)
+    normalized: dict[str, str] = {}
+    for field, value in clocks:
+        parsed = parse_utc(str(value))
+        if parsed > decision:
+            raise ValueError(
+                f"PIT violation: {context}.{field} is after decision_ts_utc"
+            )
+        normalized[field] = utc_text(parsed)
+    return normalized
+
+
+def _build_row_source_refs(
+    rows: list[dict[str, Any]],
+    *,
+    sources: dict[str, tuple[dict[str, Any], dict[str, dict[str, Any]]]],
+    label_available_at_field: str,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
+    """Resolve every row's exact input records and enforce its own PIT clock."""
+    references: dict[str, list[dict[str, Any]]] = {}
+    validations: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        row_id = _row_identity(row)
+        decision_value = row.get("decision_ts_utc")
+        if decision_value in (None, ""):
+            raise ValueError(f"dataset row {row_id} requires decision_ts_utc")
+        decision_ts_utc = str(decision_value)
+        # Labels arrive after a decision by design; every other input clock is
+        # causally constrained to the decision itself.
+        row_clocks = [
+            item
+            for item in _clock_fields(row)
+            if item[0].rsplit(".", 1)[-1] != label_available_at_field
+        ]
+        normalized_row_clocks = _validate_clock_not_after(
+            row_clocks, decision_ts_utc=decision_ts_utc, context=f"row[{row_id}]")
+        raw_refs = row.get("input_refs", row.get("source_refs"))
+        if not isinstance(raw_refs, list) or not raw_refs:
+            raise ValueError(f"dataset row {row_id} requires non-empty input_refs/source_refs")
+        resolved: list[dict[str, Any]] = []
+        for raw_ref in raw_refs:
+            if not isinstance(raw_ref, dict):
+                raise ValueError(f"dataset row {row_id} has non-object source ref")
+            source_id = str(raw_ref.get("source_id") or "")
+            source_row_id = str(raw_ref.get("row_id") or raw_ref.get("row_identity") or "")
+            if source_id not in sources or not source_row_id:
+                raise ValueError(f"dataset row {row_id} source refs require source_id and row_id")
+            source_config, source_index = sources[source_id]
+            source_row = source_index.get(source_row_id)
+            if source_row is None:
+                raise ValueError(
+                    f"dataset row {row_id} references absent source record: {source_id}/{source_row_id}"
+                )
+            ref_clocks = _validate_clock_not_after(
+                [
+                    item
+                    for item in _clock_fields(source_row)
+                    if item[0].rsplit(".", 1)[-1] != label_available_at_field
+                ],
+                decision_ts_utc=decision_ts_utc,
+                context=f"source[{source_id}/{source_row_id}]",
+            )
+            source_clock = str(source_config["available_at_field"])
+            if source_clock not in ref_clocks:
+                raise ValueError(
+                    f"source record {source_id}/{source_row_id} lacks configured availability clock"
+                )
+            resolved.append(
+                {
+                    "source_id": source_id,
+                    "row_id": source_row_id,
+                    "clocks": ref_clocks,
+                }
+            )
+        references[row_id] = sorted(
+            resolved, key=lambda item: (item["source_id"], item["row_id"])
+        )
+        validations[row_id] = {
+            "decision_ts_utc": decision_ts_utc,
+            "row_clocks": normalized_row_clocks,
+            "source_refs_checked": len(resolved),
+            "status": "pass",
+        }
+    return references, validations
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rows-jsonl", required=True, type=Path)
@@ -181,21 +300,33 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("source config requires a non-empty sources list")
     snapshots: list[DataSourceSnapshot] = []
     source_file_identities: list[dict[str, Any]] = []
+    sources: dict[str, tuple[dict[str, Any], dict[str, dict[str, Any]]]] = {}
     for source in source_rows:
         if not isinstance(source, dict):
             raise ValueError("each source config entry must be an object")
         source_path = Path(str(source["path"])).resolve(strict=True)
         materialized_source, physical_identity = _read_stable_jsonl(source_path)
+        source_id = str(source["source_id"])
+        if source_id in sources:
+            raise ValueError(f"duplicate source_id in source config: {source_id}")
+        source_index = {_row_identity(row): row for row in materialized_source}
         source_file_identities.append(physical_identity)
         snapshots.append(
             DataSourceSnapshot.from_rows(
-                str(source["source_id"]),
+                source_id,
                 materialized_source,
                 available_at_field=str(source["available_at_field"]),
                 cutoff_utc=str(source["cutoff_utc"]),
                 source_path=source_path,
             )
         )
+        sources[source_id] = (source, source_index)
+
+    row_source_refs, row_pit_validation = _build_row_source_refs(
+        rows,
+        sources=sources,
+        label_available_at_field=args.label_available_at_field,
+    )
 
     if Path(str(args.db_snapshot) + "-wal").exists() or Path(
         str(args.db_snapshot) + "-shm"
@@ -216,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         label_available_at_field=args.label_available_at_field,
         cutoff_utc=args.cutoff_utc,
         splits=splits,
+        row_source_refs=row_source_refs,
     )
     db_after = canonical_db_identity(
         args.db_snapshot, schema_version=args.db_schema_version
@@ -249,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         "dataset_rows_logical_sha256": manifest.rows_hash,
         "dataset_rows_input_snapshot": rows_input_identity,
         "source_file_snapshots": source_file_identities,
+        "row_pit_validation": row_pit_validation,
         "canonical_db_snapshot": db_after,
         "split_counts": {name: len(members) for name, members in splits.items()},
         "replay_identity": identity.to_dict(),

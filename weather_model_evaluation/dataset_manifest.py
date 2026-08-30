@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from .contracts import parse_utc, stable_sha256
+from .contracts import parse_utc, stable_json, stable_sha256
 
 
 DATASET_MANIFEST_SCHEMA_VERSION = "weather_evaluation_dataset_manifest_v1"
@@ -48,6 +48,101 @@ def _normal_rows(rows: Iterable[Mapping[str, Any]]) -> tuple[dict[str, Any], ...
             raise ValueError(f"duplicate dataset row identity: {identity}")
         identities.add(str(identity))
     return tuple(sorted(normalized, key=lambda row: str(row.get("row_id") or row["row_identity"])))
+
+
+def _row_identity(row: Mapping[str, Any]) -> str:
+    value = row.get("row_id") or row.get("row_identity")
+    if not value:
+        raise ValueError("dataset rows require row_id or row_identity")
+    return str(value)
+
+
+def _availability_clocks(
+    value: Any, *, prefix: str = ""
+) -> list[tuple[str, Any]]:
+    clocks: list[tuple[str, Any]] = []
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            field = f"{prefix}.{key}" if prefix else str(key)
+            lowered = str(key).lower()
+            if item not in (None, "") and not isinstance(item, (Mapping, list, tuple)):
+                if "available_at" in lowered or "detected_at" in lowered:
+                    clocks.append((field, item))
+            if isinstance(item, (Mapping, list, tuple)):
+                clocks.extend(_availability_clocks(item, prefix=field))
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            if isinstance(item, (Mapping, list, tuple)):
+                field = f"{prefix}[{index}]" if prefix else f"[{index}]"
+                clocks.extend(_availability_clocks(item, prefix=field))
+    return clocks
+
+
+def _validate_row_source_refs(
+    rows: Sequence[Mapping[str, Any]],
+    row_source_refs: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    source_ids: set[str],
+    label_available_at_field: str,
+) -> dict[str, tuple[dict[str, Any], ...]]:
+    """Validate the per-decision evidence index persisted with a dataset.
+
+    A source snapshot hash alone cannot prove which records were visible for a
+    particular decision.  The caller supplies the already PIT-checked refs;
+    this layer makes their membership and identity immutable in the manifest.
+    """
+    expected = {_row_identity(row) for row in rows}
+    actual = {str(key) for key in row_source_refs}
+    if actual != expected:
+        raise ValueError("row_source_refs must cover every dataset row exactly once")
+    normalized: dict[str, tuple[dict[str, Any], ...]] = {}
+    decisions: dict[str, Any] = {}
+    for row in rows:
+        row_id = _row_identity(row)
+        decision = row.get("decision_ts_utc")
+        if decision in (None, ""):
+            raise ValueError(f"dataset row {row_id} requires decision_ts_utc")
+        decisions[row_id] = parse_utc(str(decision))
+        for field, value in _availability_clocks(row):
+            if field.rsplit(".", 1)[-1] == label_available_at_field:
+                continue
+            if parse_utc(str(value)) > decisions[row_id]:
+                raise ValueError(
+                    f"PIT violation: row[{row_id}].{field} is after decision_ts_utc"
+                )
+    for row_id in sorted(expected):
+        refs = row_source_refs[row_id]
+        if not isinstance(refs, Sequence) or isinstance(refs, (str, bytes)) or not refs:
+            raise ValueError(f"dataset row {row_id} requires non-empty source refs")
+        seen: set[tuple[str, str]] = set()
+        copied: list[dict[str, Any]] = []
+        for ref in refs:
+            if not isinstance(ref, Mapping):
+                raise ValueError("each source ref must be an object")
+            source_id = str(ref.get("source_id") or "")
+            source_row_id = str(ref.get("row_id") or ref.get("row_identity") or "")
+            if source_id not in source_ids or not source_row_id:
+                raise ValueError("source refs require a known source_id and row_id")
+            clocks = ref.get("clocks")
+            if not isinstance(clocks, Mapping) or not clocks:
+                raise ValueError("source refs require non-empty resolved clocks")
+            for clock_name, clock_value in clocks.items():
+                if clock_value in (None, "") or (
+                    "available_at" not in str(clock_name).lower()
+                    and "detected_at" not in str(clock_name).lower()
+                ):
+                    raise ValueError("source ref clocks must be availability/detection timestamps")
+                if parse_utc(str(clock_value)) > decisions[row_id]:
+                    raise ValueError(
+                        f"PIT violation: source[{source_id}/{source_row_id}].{clock_name} is after decision_ts_utc"
+                    )
+            key = (source_id, source_row_id)
+            if key in seen:
+                raise ValueError(f"duplicate source ref for dataset row {row_id}: {key}")
+            seen.add(key)
+            copied.append(dict(ref))
+        normalized[row_id] = tuple(sorted(copied, key=stable_json))
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -168,6 +263,7 @@ class DatasetManifest:
     label_available_at_field: str
     cutoff_utc: str
     split_membership: Mapping[str, tuple[str, ...]]
+    row_source_refs: Mapping[str, tuple[Mapping[str, Any], ...]]
     schema_version: str = DATASET_MANIFEST_SCHEMA_VERSION
     sealed: bool = True
     immutable: bool = True
@@ -179,6 +275,7 @@ class DatasetManifest:
         measurement_namespace: str, label_value_field: str,
         label_available_at_field: str, cutoff_utc: str,
         splits: Mapping[str, Sequence[Mapping[str, Any]]],
+        row_source_refs: Mapping[str, Sequence[Mapping[str, Any]]],
     ) -> "DatasetManifest":
         materialized = _normal_rows(rows)
         if not catalog_build_id or not code_sha or not label_value_field or not label_available_at_field:
@@ -219,6 +316,12 @@ class DatasetManifest:
         for snapshot in source_snapshots:
             if parse_utc(snapshot.cutoff_utc) > parse_utc(cutoff_utc):
                 raise ValueError("source snapshot cutoff exceeds dataset cutoff")
+        normalized_refs = _validate_row_source_refs(
+            materialized,
+            row_source_refs,
+            source_ids=set(source_ids),
+            label_available_at_field=label_available_at_field,
+        )
         split_manifest_hash = stable_sha256(memberships)
         body = {
             "rows_hash": stable_sha256(materialized), "row_identity_hash": stable_sha256(row_ids),
@@ -229,6 +332,7 @@ class DatasetManifest:
             "measurement_namespace": measurement_namespace,
             "label_value_field": label_value_field, "label_available_at_field": label_available_at_field,
             "cutoff_utc": cutoff_utc, "split_membership": memberships,
+            "row_source_refs": normalized_refs,
         }
         return cls(
             dataset_hash=stable_sha256(body), rows_hash=body["rows_hash"],
@@ -239,7 +343,7 @@ class DatasetManifest:
             measurement_namespace=measurement_namespace,
             label_value_field=label_value_field,
             label_available_at_field=label_available_at_field, cutoff_utc=cutoff_utc,
-            split_membership=memberships,
+            split_membership=memberships, row_source_refs=normalized_refs,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -254,6 +358,10 @@ class DatasetManifest:
             "label_available_at_field": self.label_available_at_field, "cutoff_utc": self.cutoff_utc,
             "split_membership": dict(self.split_membership), "schema_version": self.schema_version,
             "sealed": self.sealed, "immutable": self.immutable,
+        }
+        result["row_source_refs"] = {
+            row_id: [dict(ref) for ref in refs]
+            for row_id, refs in self.row_source_refs.items()
         }
         result["source_snapshots"] = [item.to_dict() for item in self.source_snapshots]
         return result

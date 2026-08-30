@@ -23,18 +23,65 @@ _ZERO_ACCOUNTING_FIELDS = (
 _PROBABILITY_FIELDS = ("p_model", "market_p")
 
 
+def _require_sha256(value: str, *, field: str) -> str:
+    if not isinstance(value, str) or len(value) != 64 or any(
+        character not in "0123456789abcdef" for character in value.lower()
+    ):
+        raise ValueError(f"{field} must be a real SHA-256")
+    return value.lower()
+
+
+def _finite_decimal(value: Any, *, field: str) -> Decimal:
+    if isinstance(value, bool):
+        raise ValueError(f"{field} must be a finite numeric value")
+    try:
+        parsed = Decimal(str(value))
+    except Exception as exc:
+        raise ValueError(f"{field} must be a finite numeric value") from exc
+    if not parsed.is_finite():
+        raise ValueError(f"{field} must be a finite numeric value")
+    return parsed
+
+
+def _require_model_version(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip() or value == "legacy_unbound":
+        raise ValueError("frozen shadow requires an explicit bound model_version")
+    return value.strip()
+
+
 @dataclass(frozen=True)
 class FrozenShadowEpoch:
     epoch_hash: str
     target_dates: tuple[str, ...]
     rows_hash: str
-    dataset_hash: str = "legacy_unbound"
-    split_manifest_hash: str = "legacy_unbound"
-    model_version: str = "legacy_unbound"
-    execution_assumption_hash: str = "legacy_unbound"
+    dataset_hash: str
+    split_manifest_hash: str
+    model_version: str
+    execution_assumption_hash: str
     zero_notional: bool = True
     promotion_authority: bool = False
     evidence_class: str = "shadow_evidence_only"
+
+    def __post_init__(self) -> None:
+        if not self.zero_notional:
+            raise ValueError("frozen shadow epochs must remain zero-notional")
+        if self.promotion_authority:
+            raise ValueError("frozen shadow epochs never have promotion authority")
+        legacy = self.dataset_hash == "legacy_unbound" or self.split_manifest_hash == "legacy_unbound"
+        if legacy:
+            if (
+                self.dataset_hash != "legacy_unbound"
+                or self.split_manifest_hash != "legacy_unbound"
+                or self.evidence_class != "shadow_evidence_only_legacy_unbound"
+            ):
+                raise ValueError("legacy_unbound requires the explicit legacy evidence class")
+            return
+        _require_sha256(self.dataset_hash, field="dataset_hash")
+        _require_sha256(self.split_manifest_hash, field="split_manifest_hash")
+        _require_sha256(
+            self.execution_assumption_hash, field="execution_assumption_hash"
+        )
+        _require_model_version(self.model_version)
 
     @classmethod
     def build(
@@ -42,9 +89,9 @@ class FrozenShadowEpoch:
         rows: Iterable[Mapping[str, Any]],
         *,
         target_dates: Sequence[str],
-        dataset_hash: str = "legacy_unbound",
-        split_manifest_hash: str = "legacy_unbound",
-        model_version: str = "legacy_unbound",
+        dataset_hash: str,
+        split_manifest_hash: str,
+        model_version: str,
         execution_assumptions: Mapping[str, Any] | None = None,
     ) -> "FrozenShadowEpoch":
         data = tuple(dict(row) for row in rows)
@@ -52,6 +99,11 @@ class FrozenShadowEpoch:
         observed = {str(row.get("target_date")) for row in data}
         if not dates or observed != set(dates):
             raise ValueError("epoch rows must cover exactly every frozen target_date")
+        dataset_hash = _require_sha256(dataset_hash, field="dataset_hash")
+        split_manifest_hash = _require_sha256(
+            split_manifest_hash, field="split_manifest_hash"
+        )
+        model_version = _require_model_version(model_version)
         validate_shadow_runtime(data)
         rows_hash = stable_sha256(sorted(data, key=lambda row: stable_sha256(row)))
         assumption_hash = stable_sha256(dict(execution_assumptions or {}))
@@ -65,6 +117,44 @@ class FrozenShadowEpoch:
             "zero_notional": True,
             "promotion_authority": False,
             "evidence_class": "shadow_evidence_only",
+        }
+        return cls(epoch_hash=stable_sha256(body), **body)
+
+    @classmethod
+    def build_legacy_unbound(
+        cls,
+        rows: Iterable[Mapping[str, Any]],
+        *,
+        target_dates: Sequence[str],
+        allow_legacy_unbound: bool = False,
+        model_version: str = "legacy_unbound",
+        execution_assumptions: Mapping[str, Any] | None = None,
+    ) -> "FrozenShadowEpoch":
+        """Read old shadow evidence without making it eligible for promotion.
+
+        The explicit opt-in prevents normal callers from silently creating an
+        unbound epoch after the dataset/split contract became mandatory.
+        """
+        if not allow_legacy_unbound:
+            raise ValueError("legacy_unbound epochs require allow_legacy_unbound=True")
+        data = tuple(dict(row) for row in rows)
+        dates = tuple(sorted(set(target_dates)))
+        observed = {str(row.get("target_date")) for row in data}
+        if not dates or observed != set(dates):
+            raise ValueError("epoch rows must cover exactly every frozen target_date")
+        validate_shadow_runtime(data)
+        rows_hash = stable_sha256(sorted(data, key=lambda row: stable_sha256(row)))
+        assumption_hash = stable_sha256(dict(execution_assumptions or {}))
+        body = {
+            "target_dates": dates,
+            "rows_hash": rows_hash,
+            "dataset_hash": "legacy_unbound",
+            "split_manifest_hash": "legacy_unbound",
+            "model_version": model_version,
+            "execution_assumption_hash": assumption_hash,
+            "zero_notional": True,
+            "promotion_authority": False,
+            "evidence_class": "shadow_evidence_only_legacy_unbound",
         }
         return cls(epoch_hash=stable_sha256(body), **body)
 
@@ -84,20 +174,20 @@ def validate_shadow_runtime(rows: Iterable[Mapping[str, Any]]) -> None:
                 f"frozen shadow lacks zero-accounting evidence: {missing_accounting}"
             )
         for field in _ZERO_ACCOUNTING_FIELDS:
-            value = Decimal(str(row[field]))
-            if not value.is_finite() or value != 0:
+            value = _finite_decimal(row[field], field=field)
+            if value != 0:
                 raise ValueError(f"frozen shadow must be zero-notional: {field}")
         for field in _PROBABILITY_FIELDS:
             if field not in row or row[field] is None:
                 raise ValueError(f"frozen shadow lacks probability evidence: {field}")
-            value = Decimal(str(row[field]))
-            if not value.is_finite() or not Decimal("0") <= value <= Decimal("1"):
+            value = _finite_decimal(row[field], field=field)
+            if not Decimal("0") <= value <= Decimal("1"):
                 raise ValueError(f"{field} must be in [0, 1]")
         score_fields = [field for field in ("settled_score", "label") if field in row]
         if not score_fields:
             raise ValueError("frozen shadow lacks explicit settlement-label evidence")
         scores = [row[field] for field in score_fields if row[field] is not None]
-        if any(Decimal(str(score)) not in (Decimal("0"), Decimal("1")) for score in scores):
+        if any(_finite_decimal(score, field="settled score") not in (Decimal("0"), Decimal("1")) for score in scores):
             raise ValueError("settled score must be binary")
         if len(scores) == 2 and scores[0] != scores[1]:
             raise ValueError("settled_score and label conflict")
@@ -106,17 +196,43 @@ def validate_shadow_runtime(rows: Iterable[Mapping[str, Any]]) -> None:
 def maker_proxy_fill(quote: Mapping[str, Any]) -> bool:
     """A quote touch is not a fill: require sell volume to clear queue + own size."""
     if not quote.get("quote_touched", False):
+        for field in ("sell_volume", "visible_queue", "own_size"):
+            if quote.get(field) is not None:
+                _finite_decimal(quote[field], field=field)
         return False
     required = ("sell_volume", "visible_queue", "own_size")
     missing = [field for field in required if quote.get(field) is None]
     if missing:
         raise ValueError(f"maker proxy lacks queue/volume evidence: {missing}")
-    sell_volume = float(quote["sell_volume"])
-    visible_queue = float(quote["visible_queue"])
-    own_size = float(quote["own_size"])
+    sell_volume = _finite_decimal(quote["sell_volume"], field="sell_volume")
+    visible_queue = _finite_decimal(quote["visible_queue"], field="visible_queue")
+    own_size = _finite_decimal(quote["own_size"], field="own_size")
     if sell_volume < 0 or visible_queue < 0 or own_size <= 0:
         raise ValueError("maker proxy queue/volume must be non-negative and own_size positive")
     return sell_volume >= visible_queue + own_size
+
+
+def _maker_economics(
+    row: Mapping[str, Any],
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
+    size = _finite_decimal(row["own_size"], field="own_size")
+    maker_price = _finite_decimal(row["maker_price"], field="maker_price")
+    taker_price = _finite_decimal(row["taker_price"], field="taker_price")
+    markout_price = _finite_decimal(row["markout_price"], field="markout_price")
+    maker_fee = _finite_decimal(row["maker_fee_usd"], field="maker_fee_usd")
+    taker_fee = _finite_decimal(row["taker_fee_usd"], field="taker_fee_usd")
+    if size <= 0:
+        raise ValueError("maker proxy own_size must be positive")
+    for name, value in (
+        ("maker_price", maker_price),
+        ("taker_price", taker_price),
+        ("markout_price", markout_price),
+    ):
+        if not Decimal("0") <= value <= Decimal("1"):
+            raise ValueError(f"{name} must be in [0, 1]")
+    if maker_fee < 0 or taker_fee < 0:
+        raise ValueError("maker/taker fee evidence must be non-negative")
+    return size, maker_price, taker_price, markout_price, maker_fee, taker_fee
 
 
 def _paired_roles(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Mapping[str, Any]]]:
@@ -190,6 +306,12 @@ def score_frozen_shadow(rows: Iterable[Mapping[str, Any]], *, draws: int = 2000,
         for row in makers
         if all(row.get(field) is not None for field in maker_evidence_fields)
     ]
+    maker_economics = {
+        str(row["row_id"]): _maker_economics(row) for row in maker_evidence
+    }
+    maker_fills = {
+        str(row["row_id"]): maker_proxy_fill(row) for row in maker_evidence
+    }
     result = {
         "evidence_class": "shadow_evidence_only",
         "promotion_authority": False,
@@ -197,7 +319,7 @@ def score_frozen_shadow(rows: Iterable[Mapping[str, Any]], *, draws: int = 2000,
         "settled_rows": len(settled),
         "maker_proxy_rows": len(maker_evidence),
         "maker_proxy_missing_evidence_rows": len(makers) - len(maker_evidence),
-        "maker_proxy_fills": sum(maker_proxy_fill(row) for row in maker_evidence),
+        "maker_proxy_fills": sum(maker_fills.values()),
         "maker_increment_status": (
             "proxy_only"
             if len(maker_evidence) == len(makers)
@@ -220,27 +342,21 @@ def score_frozen_shadow(rows: Iterable[Mapping[str, Any]], *, draws: int = 2000,
     maker_dates: list[str] = []
     maker_markout: list[Decimal] = []
     for row in maker_evidence:
-        if not maker_proxy_fill(row):
+        row_id = str(row["row_id"])
+        if not maker_fills[row_id]:
             continue
         label = row.get("settled_score", row.get("label"))
         if label is None:
             continue
-        size = Decimal(str(row["own_size"]))
-        outcome = Decimal(str(label))
-        maker_price = Decimal(str(row["maker_price"]))
-        taker_price = Decimal(str(row["taker_price"]))
-        markout_price = Decimal(str(row["markout_price"]))
-        for name, value in (
-            ("maker_price", maker_price),
-            ("taker_price", taker_price),
-            ("markout_price", markout_price),
-        ):
-            if not Decimal("0") <= value <= Decimal("1"):
-                raise ValueError(f"{name} must be in [0, 1]")
-        maker_fee = Decimal(str(row["maker_fee_usd"]))
-        taker_fee = Decimal(str(row["taker_fee_usd"]))
-        if maker_fee < 0 or taker_fee < 0:
-            raise ValueError("maker/taker fee evidence must be non-negative")
+        (
+            size,
+            maker_price,
+            taker_price,
+            markout_price,
+            maker_fee,
+            taker_fee,
+        ) = maker_economics[row_id]
+        outcome = _finite_decimal(label, field="settled score")
         maker_pnl.append(size * (outcome - maker_price) - maker_fee)
         taker_pnl.append(size * (outcome - taker_price) - taker_fee)
         maker_markout.append(size * (markout_price - maker_price))
