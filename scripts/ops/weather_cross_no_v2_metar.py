@@ -942,12 +942,20 @@ def run_probe(
         if not bool(strategy_state.get("processed_event_key_migration_complete"))
         else set()
     )
-    legacy_processed_keys = {
-        source_event_identity(row)
-        for row in jsonl_rows((output_dir / "opportunities.jsonl",))
-        if str(row.get("information_event_id") or "") in legacy_processed_ids
-        and source_event_identity(row)
-    }
+    # Rebuild the namespaced denominator from append-only evidence on first
+    # migration, and self-heal a prior partial migration whose key set is empty.
+    if legacy_processed_ids or not bool(
+        strategy_state.get("processed_event_journal_recovery_complete")
+    ):
+        processed_keys.update(
+            source_event_identity(row)
+            for row in jsonl_rows((output_dir / "opportunities.jsonl",))
+            if source_event_identity(row)
+            and (
+                not legacy_processed_ids
+                or str(row.get("information_event_id") or "") in legacy_processed_ids
+            )
+        )
     emitted = orders = fills = blocked = 0
 
     for event in events:
@@ -956,8 +964,6 @@ def run_probe(
         if not event_key or event_key in processed_keys:
             continue
         processed_keys.add(event_key)
-        if event_key in legacy_processed_keys:
-            continue
         blockers, clock_mode = _eligible_event(
             event, allowlist=allowlist, now=now, max_source_age_sec=max_source_age_sec,
             allow_clock_invalid_same_boot_monotonic_probe=allow_clock_invalid_same_boot_monotonic_probe,
@@ -1177,6 +1183,7 @@ def run_probe(
             )[-100_000:],
             "processed_event_keys": sorted(processed_keys)[-100_000:],
             "processed_event_key_migration_complete": True,
+            "processed_event_journal_recovery_complete": True,
         },
     )
     attribution_path = output_dir / "source_attribution_latest.json"

@@ -152,6 +152,35 @@ def test_legacy_bare_id_migration_skips_only_the_source_already_in_old_journal(t
     rows = read(out / "opportunities.jsonl")
     assert len(rows) == 2
     assert rows[-1]["source"] == "metar_ws_hfmetar"
+    state = json.loads((out / "state.json").read_text())
+    assert set(state["processed_event_keys"]) == {
+        "metar_ws_metar|shared1",
+        "metar_ws_hfmetar|shared1",
+    }
+
+
+def test_empty_partial_migration_self_heals_from_append_only_opportunities(tmp_path: Path):
+    books = tmp_path / "books.json"
+    books.write_text(json.dumps(markets()))
+    out = tmp_path / "out"; out.mkdir()
+    old = event("metar_ws_metar", "old1", 26.7)
+    (out / "opportunities.jsonl").write_text(json.dumps(old) + "\n")
+    (out / "state.json").write_text(json.dumps({
+        "processed_event_keys": [],
+        "processed_event_key_migration_complete": True,
+    }))
+    health = cross_no_v2.run_probe(
+        source_events_root=tmp_path,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        events_override=[],
+    )
+    state = json.loads((out / "state.json").read_text())
+    assert state["processed_event_keys"] == ["metar_ws_metar|old1"]
+    assert state["processed_event_journal_recovery_complete"] is True
+    assert health["events_seen_total"] == 1
 
 
 def test_explicit_missing_raw_topic_is_not_synthesized(tmp_path: Path):
