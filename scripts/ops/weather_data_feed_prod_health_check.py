@@ -878,11 +878,18 @@ def check_observation_cache(
         if required_cities is None or str(row.get("city") or "") in required_cities
     ]
     inactive_invalid_rows = [row for row in invalid_rows if row not in blocking_invalid_rows]
+    cache_cities = {
+        str(row.get("city") or "") for row in rows if str(row.get("city") or "")
+    }
+    missing_required_cities = sorted(
+        (required_cities or set()) - cache_cities
+    )
     fail = (
         cache_age_min is None
         or cache_age_min < 0
         or cache_age_min > max_cache_age_min
         or bool(blocking_invalid_rows)
+        or bool(missing_required_cities)
         or bool(unresolved_regressions)
         or not history_exists
         or bool(history_error)
@@ -937,6 +944,8 @@ def check_observation_cache(
         "invalid_record_examples": invalid_rows[:10],
         "blocking_invalid_record_count": len(blocking_invalid_rows),
         "blocking_invalid_record_examples": blocking_invalid_rows[:10],
+        "missing_required_city_count": len(missing_required_cities),
+        "missing_required_cities": missing_required_cities,
         "inactive_invalid_record_count": len(inactive_invalid_rows),
         "inactive_invalid_record_examples": inactive_invalid_rows[:10],
         "required_cities": sorted(required_cities) if required_cities is not None else None,
@@ -1403,15 +1412,18 @@ def required_observation_cities(snapshot_payload: dict[str, Any]) -> set[str]:
             for city, pool in city_pools.items()
             if str(pool) == "t1_trading" and str(city)
         )
-    if isinstance(declared_trading, list) or trading_cities:
-        return same_local_day_cities & trading_cities
-
     declared_active = snapshot_payload.get("active_cities")
     if isinstance(declared_active, list):
-        return same_local_day_cities & {
-            str(city) for city in declared_active if str(city)
-        }
-    return same_local_day_cities
+        active_cities = {str(city) for city in declared_active if str(city)}
+    else:
+        # Current snapshots define the live market universe through records.
+        # The full T1 pool can include cities with no active market, so it is
+        # not safe to require the whole supported registry here.
+        active_cities = same_local_day_cities
+    if trading_cities:
+        return active_cities & trading_cities
+    # Empty or malformed T1 metadata must not turn off every cache gate.
+    return active_cities
 
 
 def main() -> int:
