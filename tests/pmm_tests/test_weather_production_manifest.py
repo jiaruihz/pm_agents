@@ -40,7 +40,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     assert spec.canonical_refresh_checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
-        "b11ca07e7afcde06acee3f12e3d50669a88b0613"
+        "ef97feecd591ab2d0dd08db0f11e4a12a2245e3c"
     )
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
@@ -50,7 +50,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert len(release_ids) == len(set(release_ids))
     assert spec.release("control_plane").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
-        "b11ca07e7afcde06acee3f12e3d50669a88b0613"
+        "ef97feecd591ab2d0dd08db0f11e4a12a2245e3c"
     )
     assert len(spec.release("control_plane").expected_repo_sha) == 40
     assert spec.release("core_carry_runtime").checkout_root == Path(
