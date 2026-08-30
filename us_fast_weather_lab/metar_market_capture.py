@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from src.platform.market_data.capture_demand import CaptureDemand
-from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort
+from us_fast_weather_lab.market_reaction_cohort import MarketReactionCohort, load_market_reaction_cohort
 
 COHORT = load_market_reaction_cohort()
 # Retained as a read-only compatibility alias; eligibility uses COHORT.
@@ -78,7 +78,7 @@ class _MaterializerState:
         )
 
 
-_MATERIALIZER_STATES: dict[tuple[Path, Path, Path, Path], _MaterializerState] = {}
+_MATERIALIZER_STATES: dict[tuple[Path, Path, Path, Path, str], _MaterializerState] = {}
 
 
 def _signature(path: Path) -> tuple[int, int, int, int] | None:
@@ -209,7 +209,7 @@ def _market_rows(path: Path, *, city: str, target_date: str) -> list[dict[str, A
     ]
 
 
-def _hot_strip(rows: list[dict[str, Any]], running_max_f: float) -> tuple[list[dict[str, Any]], str | None]:
+def _hot_strip(rows: list[dict[str, Any]], running_max_market: float) -> tuple[list[dict[str, Any]], str | None]:
     by_bracket: dict[str, list[dict[str, Any]]] = {}
     values: list[tuple[float, str]] = []
     for row in rows:
@@ -223,7 +223,7 @@ def _hot_strip(rows: list[dict[str, Any]], running_max_f: float) -> tuple[list[d
     if not values:
         return [], "market_brackets_unparseable"
     ordered = sorted(values)
-    current_index = min(range(len(ordered)), key=lambda index: abs(ordered[index][0] - running_max_f))
+    current_index = min(range(len(ordered)), key=lambda index: abs(ordered[index][0] - running_max_market))
     selected_brackets = {bracket for _, bracket in ordered[max(0, current_index - 1): current_index + 2]}
     selected = [row for row in rows if str(row.get("bracket")) in selected_brackets]
     for bracket in selected_brackets:
@@ -245,8 +245,8 @@ def _resolution_id(event_id: str, kind: str) -> str:
     return f"{event_id}:{kind}"
 
 
-def _event_candidate(row: Mapping[str, Any]) -> tuple[bool, str | None]:
-    if COHORT.target_for_event(row) is None:
+def _event_candidate(row: Mapping[str, Any], cohort: MarketReactionCohort) -> tuple[bool, str | None]:
+    if cohort.target_for_event(row) is None:
         return False, "city_not_in_fixed_cohort"
     if str(row.get("source")) not in TARGET_SOURCES:
         return False, "source_not_metrar_ws_target"  # stable ledger spelling retained for identity
@@ -273,6 +273,7 @@ def _materialize_events(
     existing_resolutions: set[str],
     existing_event_ids: set[str],
     running_max: dict[tuple[str, str], float],
+    cohort: MarketReactionCohort,
 ) -> dict[str, int]:
     """Append bounded direct-token demands and a complete resolution ledger.
 
@@ -289,7 +290,7 @@ def _materialize_events(
         event_id = str(event.get("information_event_id") or "")
         if not event_id:
             continue
-        accepted, blocker = _event_candidate(event)
+        accepted, blocker = _event_candidate(event, cohort)
         if not accepted:
             rid = _resolution_id(event_id, "event")
             if rid not in existing_resolutions:
@@ -305,11 +306,17 @@ def _materialize_events(
             continue
 
         city, target_date = str(event["city"]), str(event.get("target_date") or "")
-        cohort_target = COHORT.target_for_event(event)
+        cohort_target = cohort.target_for_event(event)
         assert cohort_target is not None
         key = (city, target_date)
-        temperature_f = float(event["temp_c"]) * 9.0 / 5.0 + 32.0
-        running_max[key] = max(running_max.get(key, -math.inf), temperature_f)
+        temperature_market = float(event["temp_c"]) if cohort_target.market_unit == "C" else float(event["temp_c"]) * 9.0 / 5.0 + 32.0
+        running_max[key] = max(running_max.get(key, -math.inf), temperature_market)
+        running_max_metadata = {
+            "running_max_market": running_max[key],
+            "running_max_market_unit": cohort_target.market_unit,
+            # Preserve the legacy field only when its name is truthful.
+            "running_max_f": running_max[key] if cohort_target.market_unit == "F" else None,
+        }
         market_rows = _market_rows(market_books_latest, city=city, target_date=target_date)
         strip, market_blocker = _hot_strip(market_rows, running_max[key]) if market_rows else ([], "market_not_found")
         received = _utc(str(event["transport_received_at_utc"]))
@@ -323,7 +330,7 @@ def _materialize_events(
                     "information_event_id": event_id,
                     "status": "blocked",
                     "blocker": market_blocker,
-                    "running_max_f": running_max[key],
+                    **running_max_metadata,
                     "transport_received_monotonic_ns": event.get("transport_received_monotonic_ns"),
                 })
                 existing_resolutions.add(rid)
@@ -344,13 +351,13 @@ def _materialize_events(
                 trigger_event_id=event_id,
                 metadata={
                     "city": city, "target_date": target_date, "bracket": str(market["bracket"]),
-                    "outcome": str(market["outcome"]).lower(), "running_max_f": running_max[key],
+                    "outcome": str(market["outcome"]).lower(), **running_max_metadata,
                     "transport_received_monotonic_ns": event.get("transport_received_monotonic_ns"),
                     "event_role": event.get("event_role"), "source": event.get("source"),
                     "clock_valid": bool(event.get("clock_valid")),
                     "pit_eligible": bool(event.get("pit_eligible")),
                     "formal_latency_eligible": bool(event.get("clock_valid")) and bool(event.get("pit_eligible")),
-                    **cohort_target.metadata(cohort_id=COHORT.cohort_id),
+                    **cohort_target.metadata(cohort_id=cohort.cohort_id),
                 },
             ).to_dict()
             if demand["demand_id"] not in existing_demands:
@@ -364,7 +371,7 @@ def _materialize_events(
                     "emitted" if bool(event.get("clock_valid")) and bool(event.get("pit_eligible"))
                     else "emitted_clock_invalid_exploratory"
                 ),
-                "demand_count": len(strip), "running_max_f": running_max[key],
+                "demand_count": len(strip), **running_max_metadata,
                 "formal_latency_eligible": bool(event.get("clock_valid")) and bool(event.get("pit_eligible")),
                 "transport_received_monotonic_ns": event.get("transport_received_monotonic_ns"),
             })
@@ -395,13 +402,13 @@ def _materialize_events(
                         desired_transport="REST_WS", requested_checkpoints_seconds=CHECKPOINTS,
                         trigger_event_id=f"{event_id}:next_report_prewindow",
                         metadata={"city": city, "target_date": target_date, "bracket": str(market["bracket"]),
-                            "outcome": str(market["outcome"]).lower(), "running_max_f": running_max[key],
+                            "outcome": str(market["outcome"]).lower(), **running_max_metadata,
                             "prewindow_for_information_event_id": event_id,
                             "schedule_basis": "prior_routine_metar_report_plus_1h",
                             "clock_valid": bool(event.get("clock_valid")),
                             "pit_eligible": bool(event.get("pit_eligible")),
                             "formal_latency_eligible": bool(event.get("clock_valid")) and bool(event.get("pit_eligible")),
-                            **cohort_target.metadata(cohort_id=COHORT.cohort_id)},
+                            **cohort_target.metadata(cohort_id=cohort.cohort_id)},
                     ).to_dict()
                     if demand["demand_id"] not in existing_demands:
                         demands.append(demand); existing_demands.add(str(demand["demand_id"])); scheduled += 1
@@ -480,12 +487,14 @@ def materialize_capture_demands(
     demand_jsonl: Path,
     *,
     resolution_jsonl: Path | None = None,
+    cohort: MarketReactionCohort | None = None,
 ) -> dict[str, int]:
+    cohort = cohort or COHORT
     resolution_jsonl = resolution_jsonl or demand_jsonl.with_name(
         f"{demand_jsonl.stem}_resolution.jsonl"
     )
     state_key = (
-        source_events_root.resolve(), market_books_latest.resolve(), demand_jsonl.resolve(), resolution_jsonl.resolve(),
+        source_events_root.resolve(), market_books_latest.resolve(), demand_jsonl.resolve(), resolution_jsonl.resolve(), cohort.cohort_id,
     )
     lock_path = demand_jsonl.with_name(f".{demand_jsonl.name}.materializer.lock")
     with _exclusive_materializer_lock(lock_path):
@@ -521,6 +530,7 @@ def materialize_capture_demands(
             existing_resolutions=state.existing_resolutions,
             existing_event_ids=state.existing_event_ids,
             running_max=state.running_max,
+            cohort=cohort,
         )
         state.demand_signature = _signature(demand_jsonl)
         state.resolution_signature = _signature(resolution_jsonl)

@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort
+from us_fast_weather_lab.market_reaction_cohort import MarketReactionCohort, load_market_reaction_cohort, load_named_market_reaction_cohort
 
 COHORT = load_market_reaction_cohort()
 TARGET_CITIES = COHORT.reaction_cities
@@ -252,29 +252,34 @@ def _top(levels: Mapping[str, Mapping[float, float]]) -> tuple[float, float]:
 
 
 def _validate_demand_cohort_metadata(
-    event: Mapping[str, Any], demand: Mapping[str, Any]
+    event: Mapping[str, Any], demand: Mapping[str, Any], cohort: MarketReactionCohort
 ) -> None:
-    target = COHORT.target_for_event(event)
+    target = cohort.target_for_event(event)
     if target is None:
         raise ValueError("demand references an event outside the fixed reaction cohort")
     raw_metadata = demand.get("metadata")
     metadata = raw_metadata if isinstance(raw_metadata, Mapping) else {}
     expected = {
         "city": target.city,
-        "cohort_id": COHORT.cohort_id,
+        "cohort_id": cohort.cohort_id,
         "cohort_role": target.role,
         "basis_status": target.basis_status,
         "cohort_source_station": target.source_station,
         "cohort_market_station": target.market_station,
+        "region": target.region,
+        "comparison_class": target.comparison_class,
+        "market_unit": target.market_unit,
     }
     for key, expected_value in expected.items():
+        if cohort.cohort_id != COHORT.cohort_id and key not in metadata:
+            raise ValueError(f"global cohort demand metadata missing required field: {key}")
         if key in metadata and metadata.get(key) != expected_value:
             raise ValueError(f"demand metadata conflicts with fixed cohort field: {key}")
 
 
-def _event_demands(events: Iterable[Mapping[str, Any]], demands: Iterable[Mapping[str, Any]]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+def _event_demands(events: Iterable[Mapping[str, Any]], demands: Iterable[Mapping[str, Any]], cohort: MarketReactionCohort) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     event_by_id = {str(row.get("information_event_id")): dict(row) for row in events
-                   if COHORT.target_for_event(row) is not None and str(row.get("source")) in TARGET_SOURCES}
+                   if cohort.target_for_event(row) is not None and str(row.get("source")) in TARGET_SOURCES}
     output: list[tuple[dict[str, Any], dict[str, Any]]] = []
     seen: set[tuple[str, str]] = set()
     for demand in demands:
@@ -282,7 +287,7 @@ def _event_demands(events: Iterable[Mapping[str, Any]], demands: Iterable[Mappin
             continue
         event_id, token_id = str(demand.get("trigger_event_id") or ""), str(demand.get("token_id") or "")
         if event_id in event_by_id and token_id and (event_id, token_id) not in seen:
-            _validate_demand_cohort_metadata(event_by_id[event_id], demand)
+            _validate_demand_cohort_metadata(event_by_id[event_id], demand, cohort)
             output.append((event_by_id[event_id], dict(demand))); seen.add((event_id, token_id))
     return output
 
@@ -296,7 +301,7 @@ def _bracket_lower(value: Any) -> float | None:
         return None
 
 
-def _event_running_max(events: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+def _event_running_max(events: Iterable[Mapping[str, Any]], cohort: MarketReactionCohort) -> dict[str, dict[str, Any]]:
     """Compare each vendor event with the PIT prior official-METAR maximum.
 
     This is deliberately a source-cross proxy.  U.S. Polymarket temperature
@@ -335,12 +340,14 @@ def _event_running_max(events: Iterable[Mapping[str, Any]]) -> dict[str, dict[st
             and received is not None
             and temp is not None
             and report_time is not None
-            and COHORT.target_for_event(event) is not None
+            and cohort.target_for_event(event) is not None
             and source in TARGET_SOURCES
         ):
             accepted.append((received, event_id, dict(event), temp, report_time))
     output: dict[str, dict[str, Any]] = {}
     for received, event_id, event, temp, report_time in sorted(accepted, key=lambda value: (value[0], value[1])):
+        target = cohort.target_for_event(event)
+        assert target is not None
         station = str(event.get("station_id") or event.get("station") or "")
         city = str(event.get("city") or "")
         target_date = str(event.get("target_date") or "")
@@ -361,8 +368,12 @@ def _event_running_max(events: Iterable[Mapping[str, Any]]) -> dict[str, dict[st
             and -1 <= event_age_sec <= MAX_LIVE_SOURCE_EVENT_AGE_SECONDS
         )
         output[event_id] = {
-            "running_max_f_before": None if before is None else before * 9 / 5 + 32,
-            "running_max_f_after": after * 9 / 5 + 32,
+            "running_max_market_before": None if before is None else (before if target.market_unit == "C" else before * 9 / 5 + 32),
+            "running_max_market_after": after if target.market_unit == "C" else after * 9 / 5 + 32,
+            "running_max_market_unit": target.market_unit,
+            # Legacy aliases remain only for the Fahrenheit US cohort.
+            "running_max_f_before": None if target.market_unit != "F" or before is None else before * 9 / 5 + 32,
+            "running_max_f_after": None if target.market_unit != "F" else after * 9 / 5 + 32,
             "running_max_before_known": before is not None,
             "is_new_running_max": bool(before is not None and temp > before and live_eligible),
             "source_cross_proxy_eligible": live_eligible and before is not None,
@@ -375,11 +386,13 @@ def _event_running_max(events: Iterable[Mapping[str, Any]]) -> dict[str, dict[st
 def analyze_metar_market_reaction(
     source_events_root: Path, demand_jsonl: Path, subscription_epochs_jsonl: Path,
     market_raw_jsonl: Sequence[Path],
+    *, cohort: MarketReactionCohort | None = None,
 ) -> dict[str, Any]:
     """Return complete event×token rows plus a compact exploratory summary."""
+    cohort = cohort or COHORT
     source_events = list(_source_events(source_events_root))
     demands = list(_jsonl(demand_jsonl))
-    running_max = _event_running_max(source_events)
+    running_max = _event_running_max(source_events, cohort)
     epochs = [row for row in _jsonl(subscription_epochs_jsonl)
               if row.get("schema_version") == "weather_market_books_ws_subscription_epoch_v2"]
     epoch_tokens = {
@@ -389,12 +402,12 @@ def analyze_metar_market_reaction(
     }
     frames = _read_frames(market_raw_jsonl)
     rows: list[dict[str, Any]] = []
-    for event, demand in _event_demands(source_events, demands):
+    for event, demand in _event_demands(source_events, demands, cohort):
         event_ns = _ns(event.get("transport_received_monotonic_ns"))
         if event_ns is None:
             continue
         token = str(demand["token_id"]); metadata = demand.get("metadata") if isinstance(demand.get("metadata"), Mapping) else {}
-        cohort_target = COHORT.target_for_event(event)
+        cohort_target = cohort.target_for_event(event)
         assert cohort_target is not None
         subscribed_epochs = [e for e in epochs if token in _epoch_tokens(e)]
         pre_epochs = {str(e.get("subscription_epoch_id")) for e in subscribed_epochs if (_ns(e.get("started_monotonic_ns")) or 10**30) <= event_ns}
@@ -511,7 +524,7 @@ def analyze_metar_market_reaction(
                     checkpoint_books[point] = _copy_book(baseline_book)
         event_max = running_max.get(str(event.get("information_event_id")), {})
         bracket_lower = _bracket_lower(metadata.get("bracket"))
-        before_f, after_f = event_max.get("running_max_f_before"), event_max.get("running_max_f_after")
+        before_f, after_f = event_max.get("running_max_market_before"), event_max.get("running_max_market_after")
         bracket_transition = bool(
             event_max.get("source_cross_proxy_eligible")
             and bracket_lower is not None
@@ -523,11 +536,14 @@ def analyze_metar_market_reaction(
             "schema_version": "metar_market_reaction_v1", "information_event_id": event.get("information_event_id"),
             "demand_id": demand.get("demand_id"), "token_id": token, "condition_id": demand.get("condition_id"),
             "city": cohort_target.city, "bracket": metadata.get("bracket"), "outcome": metadata.get("outcome"),
-            **cohort_target.metadata(cohort_id=COHORT.cohort_id),
+            **cohort_target.metadata(cohort_id=cohort.cohort_id),
             "source": event.get("source"), "station_id": event.get("station_id", event.get("station")),
             "source_report_ts_utc": event.get("source_report_ts_utc"), "temp_c": event.get("temp_c"),
             "event_transport_received_at_utc": event.get("transport_received_at_utc"), "event_transport_received_monotonic_ns": event_ns,
-            "running_max_f_before": before_f, "running_max_f_after": after_f,
+            "running_max_market_before": before_f, "running_max_market_after": after_f,
+            "running_max_market_unit": cohort_target.market_unit,
+            "running_max_f_before": before_f if cohort_target.market_unit == "F" else None,
+            "running_max_f_after": after_f if cohort_target.market_unit == "F" else None,
             "is_new_running_max": event_max.get("is_new_running_max"), "bracket_transition": bracket_transition,
             "running_max_before_known": event_max.get("running_max_before_known"),
             "source_cross_proxy_eligible": event_max.get("source_cross_proxy_eligible"),
@@ -607,7 +623,7 @@ def analyze_metar_market_reaction(
         "event_funnels": {"all_source_events": funnel(all_event_ids),
                           "material_running_max_or_bracket_transition_events": funnel(material_event_ids)},
         "cohort": {
-            "cohort_id": COHORT.cohort_id,
+            "cohort_id": cohort.cohort_id,
             "primary_event_token_denominator": len(primary_rows),
             "basis_mismatch_control_event_token_denominator": len(control_rows),
             "primary_event_count": len({row["information_event_id"] for row in primary_rows}),
@@ -625,8 +641,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--market-raw", required=True, type=Path, nargs="+")
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-csv", required=True, type=Path)
+    parser.add_argument("--market-reaction-cohort", choices=("us_temperature_markets_wide_v1", "europe_asia_core_v1"), default="us_temperature_markets_wide_v1")
     args = parser.parse_args(argv)
-    report = analyze_metar_market_reaction(args.source_events_root, args.market_capture_demands, args.subscription_epochs, args.market_raw)
+    report = analyze_metar_market_reaction(args.source_events_root, args.market_capture_demands, args.subscription_epochs, args.market_raw, cohort=load_named_market_reaction_cohort(args.market_reaction_cohort))
     args.output_json.parent.mkdir(parents=True, exist_ok=True); args.output_json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
     fields = sorted({key for row in report["rows"] for key in row})

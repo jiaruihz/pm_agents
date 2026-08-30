@@ -103,6 +103,18 @@ def test_commercial_only_smoke_skips_public_collectors_and_keeps_key_secret(
     assert "metar.atis.kbkf" not in channels
 
 
+def test_global_cohort_expands_official_hf_but_not_uninvented_atis(tmp_path, monkeypatch):
+    monkeypatch.setenv("METAR_WS_API_KEY", "test-global-secret")
+    monkeypatch.setattr(cli, "MetarWsCollector", _CommercialCollector)
+    monkeypatch.setattr(cli, "command_replay", lambda args: 0)
+    monkeypatch.setattr(cli, "generate_reports", lambda *args, **kwargs: {"counts": {}, "disposition": "BLOCKED"})
+    assert cli.command_smoke(_commercial_args(tmp_path, "--market-reaction-cohort", "europe_asia_core_v1")) == 0
+    _, kwargs = _CommercialCollector.last_init
+    channels = set(kwargs["config"].channels)
+    assert {"metar.obs.efhk", "metar.obs10.rjtt", "metar.obs.vhhh", "metar.obs10.zspd"}.issubset(channels)
+    assert "metar.atis.efhk" not in channels
+
+
 def test_commercial_start_failure_still_seals_run_without_secret(tmp_path, monkeypatch) -> None:
     secret = "test-start-secret-must-not-persist"
     monkeypatch.setenv("METAR_WS_API_KEY", secret)

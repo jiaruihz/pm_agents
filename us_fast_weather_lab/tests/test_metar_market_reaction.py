@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from us_fast_weather_lab.market_reaction_cohort import load_named_market_reaction_cohort
 from us_fast_weather_lab.metar_market_reaction import LEFT_CENSORED, analyze_metar_market_reaction
 
 
@@ -281,3 +282,38 @@ def test_explicit_demand_city_conflict_fails_closed(tmp_path):
     paths[1].write_text("".join(json.dumps(row) + "\n" for row in demand_rows))
     with pytest.raises(ValueError, match="conflicts with fixed cohort field: city"):
         analyze_metar_market_reaction(*paths[:3], [paths[3]])
+
+
+def test_global_reaction_uses_celsius_running_max_and_requires_full_metadata(tmp_path):
+    paths = _inputs(tmp_path, frames=[_frame(90, _book(.40, .60))])
+    source_path = paths[0] / "2026-08-30" / "sources.jsonl"
+    source_rows = [json.loads(line) for line in source_path.read_text().splitlines()]
+    source_rows[0].update(city="Helsinki", station_id="EFHK", temp_c=19.0)
+    source_rows[1].update(city="Helsinki", station_id="EFHK", temp_c=20.0)
+    source_path.write_text("".join(json.dumps(row) + "\n" for row in source_rows))
+    demand_rows = [json.loads(line) for line in paths[1].read_text().splitlines()]
+    demand_rows[0]["metadata"].update({
+        "city": "Helsinki",
+        "bracket": "20",
+        "cohort_id": "europe_asia_core_v1",
+        "cohort_role": "primary",
+        "basis_status": "station_aligned",
+        "cohort_source_station": "EFHK",
+        "cohort_market_station": "EFHK",
+        "region": "Europe",
+        "comparison_class": "station_aligned",
+        "market_unit": "C",
+    })
+    paths[1].write_text("".join(json.dumps(row) + "\n" for row in demand_rows))
+    cohort = load_named_market_reaction_cohort("europe_asia_core_v1")
+    row = analyze_metar_market_reaction(*paths[:3], [paths[3]], cohort=cohort)["rows"][0]
+    assert row["running_max_market_before"] == 19.0
+    assert row["running_max_market_after"] == 20.0
+    assert row["running_max_market_unit"] == "C"
+    assert row["running_max_f_before"] is None and row["running_max_f_after"] is None
+    assert row["bracket_transition"] is True
+
+    demand_rows[0]["metadata"].pop("comparison_class")
+    paths[1].write_text("".join(json.dumps(row) + "\n" for row in demand_rows))
+    with pytest.raises(ValueError, match="missing required field: comparison_class"):
+        analyze_metar_market_reaction(*paths[:3], [paths[3]], cohort=cohort)

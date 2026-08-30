@@ -10,6 +10,7 @@ from us_fast_weather_lab.lab_to_source_events import materialize_lab_events
 from us_fast_weather_lab.metar_market_capture import CHECKPOINTS, materialize_capture_demands
 from us_fast_weather_lab.model import metar_event
 from us_fast_weather_lab.storage import ClockState, EvidenceStore
+from us_fast_weather_lab.market_reaction_cohort import load_named_market_reaction_cohort
 
 
 def _event(*, city: str = "Miami", source: str = "metar_ws_metar", event_id: str = "event-1", valid: bool = True, temp_c: float | None = 30.0, report_kind: str = "METAR"):
@@ -110,6 +111,25 @@ def test_wide_primary_and_chicago_control_retain_cohort_metadata(tmp_path):
     assert metadata["Chicago"]["cohort_role"] == "basis_mismatch_control"
     assert metadata["Chicago"]["basis_status"] == "source_market_station_mismatch"
     assert metadata["Chicago"]["cohort_market_station"] == "KMDW"
+
+
+def test_global_celsius_cohort_uses_celsius_hot_strip_and_metadata(tmp_path):
+    event = {**_event(city="Helsinki", event_id="helsinki", temp_c=20.0), "station_id": "EFHK"}
+    source = _write_events(tmp_path, event)
+    output = tmp_path / "demands.jsonl"
+    market = _market(tmp_path, city="Helsinki")
+    payload = json.loads(market.read_text())
+    for row in payload["records"]:
+        row["bracket"] = str(int(row["bracket"]) - 65)  # 19..23C
+        row["condition_id"] = f"c-{row['condition_id']}"
+    market.write_text(json.dumps(payload))
+    materialize_capture_demands(source, market, output, cohort=load_named_market_reaction_cohort("europe_asia_core_v1"))
+    immediate = [row for row in _rows(output) if row["reason"] == "metar_ws_first_seen_hot_strip"]
+    assert {row["metadata"]["bracket"] for row in immediate} == {"19", "20", "21"}
+    assert {row["metadata"]["market_unit"] for row in immediate} == {"C"}
+    assert {row["metadata"]["running_max_market"] for row in immediate} == {20.0}
+    assert {row["metadata"]["running_max_market_unit"] for row in immediate} == {"C"}
+    assert {row["metadata"]["running_max_f"] for row in immediate} == {None}
 
 
 def test_incomplete_yes_no_pair_fails_closed_for_entire_event(tmp_path):

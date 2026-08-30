@@ -24,7 +24,7 @@ from us_fast_weather_lab.commercial_ws import (
 from us_fast_weather_lab.model import metar_event
 from us_fast_weather_lab.lab_to_source_events import materialize_lab_events
 from us_fast_weather_lab.metar_market_capture import materialize_capture_demands
-from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort
+from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort, load_named_market_reaction_cohort
 from us_fast_weather_lab.reports import generate_reports
 from us_fast_weather_lab.storage import EvidenceStore, canonical_json
 from us_fast_weather_lab.wis2 import Wis2Collector, discover_brokers
@@ -35,6 +35,7 @@ DEFAULT_RUNTIME = Path("runtime/us_fast_weather_lab")
 DEFAULT_REPORTS = LAB_ROOT / "reports"
 COMMERCIAL_CONFIG_PATH = LAB_ROOT / "config" / "commercial_streams.yaml"
 MARKET_REACTION_COHORT_PATH = LAB_ROOT / "config" / "market_reaction_cohort.yaml"
+MARKET_REACTION_COHORT_EUROPE_ASIA_PATH = LAB_ROOT / "config" / "market_reaction_cohort_europe_asia.yaml"
 CONFIG_PATHS = [
     LAB_ROOT / "config" / "airports.yaml",
     LAB_ROOT / "config" / "acceptance_contract.yaml",
@@ -44,6 +45,7 @@ CONFIG_PATHS = [
     LAB_ROOT / "config" / "airport_direct_sensor_inventory.csv",
     COMMERCIAL_CONFIG_PATH,
     MARKET_REACTION_COHORT_PATH,
+    MARKET_REACTION_COHORT_EUROPE_ASIA_PATH,
 ]
 
 
@@ -51,11 +53,13 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return dict(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def config_hash() -> str:
+def config_hash(*, market_reaction_cohort_id: str = "us_temperature_markets_wide_v1") -> str:
     digest = hashlib.sha256()
     for path in CONFIG_PATHS:
         digest.update(path.name.encode("utf-8"))
         digest.update(path.read_bytes())
+    digest.update(b"market_reaction_cohort_id=")
+    digest.update(market_reaction_cohort_id.encode("utf-8"))
     return digest.hexdigest()
 
 
@@ -166,7 +170,7 @@ def command_smoke(args: argparse.Namespace) -> int:
     capture_enabled = all(capture_values)
     source_config = load_yaml(CONFIG_PATHS[2])
     commercial_config = load_yaml(COMMERCIAL_CONFIG_PATH)
-    market_cohort = load_market_reaction_cohort(MARKET_REACTION_COHORT_PATH)
+    market_cohort = load_named_market_reaction_cohort(args.market_reaction_cohort)
     acceptance = load_yaml(CONFIG_PATHS[1])
     station_set = airports()
     metar_ws_key: str | None = None
@@ -210,7 +214,7 @@ def command_smoke(args: argparse.Namespace) -> int:
 
     try:
         store = EvidenceStore(runtime_root)
-        run_id = store.start_run(config_hash=config_hash(), vantage_id=args.vantage_id)
+        run_id = store.start_run(config_hash=config_hash(market_reaction_cohort_id=market_cohort.cohort_id), vantage_id=args.vantage_id)
         store.record_clock(probe_clock(max_offset))
 
         if enable_wis2:
@@ -251,7 +255,7 @@ def command_smoke(args: argparse.Namespace) -> int:
                     user_agent=str(awc_raw["user_agent"]),
                     max_requests_per_minute=int(awc_raw["max_requests_per_minute"]),
                 ),
-                stations=station_set,
+                stations=station_set | set(market_cohort.all_source_stations),
                 vantage_id=args.vantage_id,
                 timeout_seconds=args.http_timeout_sec,
             )
@@ -260,7 +264,7 @@ def command_smoke(args: argparse.Namespace) -> int:
             metar_raw = commercial_config["metar_ws"]
             # Official/HF subscriptions use the versioned reaction cohort;
             # D-ATIS remains strictly the explicit commercial-stream list.
-            commercial_station_set = station_set | set(market_cohort.official_source_stations)
+            commercial_station_set = station_set | set(market_cohort.all_source_stations)
             channels: list[str] = []
             if bool(metar_raw.get("subscribe_primary_official")):
                 channels.extend(
@@ -333,6 +337,7 @@ def command_smoke(args: argparse.Namespace) -> int:
                         Path(args.market_capture_resolution_jsonl)
                         if args.market_capture_resolution_jsonl else None
                     ),
+                    cohort=market_cohort,
                 )
                 next_market_capture += 1.0
             if now >= next_heartbeat:
@@ -452,6 +457,7 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--market-books-latest")
     smoke.add_argument("--market-capture-demands-jsonl")
     smoke.add_argument("--market-capture-resolution-jsonl")
+    smoke.add_argument("--market-reaction-cohort", choices=("us_temperature_markets_wide_v1", "europe_asia_core_v1"), default="us_temperature_markets_wide_v1")
     smoke.set_defaults(func=command_smoke)
     return parser
 
