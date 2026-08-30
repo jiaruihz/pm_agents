@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
+PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-/Volumes/jrs/pm_agents/runtime}"
+OUTPUT_DIR="${WEATHER_FIRST_SELECTIVE_MAKER_V2_1_OUTPUT_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/weather_first_selective_maker_v2_1}"
+ACTIONS="${WEATHER_FIRST_SELECTIVE_MAKER_V2_1_ACTIONS:-$PM_RUNTIME_ROOT/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/maker_policy_actions.jsonl}"
+PACKETS="${WEATHER_FIRST_SELECTIVE_MAKER_V2_1_PACKETS:-$PM_RUNTIME_ROOT/weather_edge_v1/current_yes_core_carry_tiny_live_v2/decision_packets.jsonl}"
+BOOKS="${WEATHER_FIRST_SELECTIVE_MAKER_V2_1_BOOKS:-/Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json}"
+SESSION="weather_first_selective_maker_v2_1_shadow"
+SOCKET="$(weather_jrs_tmux_start_socket "$PM_RUNTIME_ROOT")"
+weather_jrs_tmux_mkdir "$SOCKET" "$OUTPUT_DIR"
+CMD="cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u '$ROOT/scripts/ops/weather_first_selective_maker_v2_1_shadow.py' --actions '$ACTIONS' --packets '$PACKETS' --market-books '$BOOKS' --output-dir '$OUTPUT_DIR' --loop-seconds 15 --maximum-book-age-seconds 5 --taker-fee-rate 0.05 --taker-fee-exponent 1 --capture-ttl-minutes 10 --max-daily-capture-demands 32 --max-active-capture-tokens 16 >> '$OUTPUT_DIR/runner.log' 2>&1"
+weather_jrs_tmux_guarded_replace_session "$SOCKET" "$SESSION" "$CMD"
+echo "started tmux_socket=$SOCKET session=$SESSION output=$OUTPUT_DIR"

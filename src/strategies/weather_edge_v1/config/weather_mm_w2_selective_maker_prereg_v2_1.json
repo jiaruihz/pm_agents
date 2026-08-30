@@ -1,0 +1,149 @@
+{
+  "schema_version": "weather_mm_w2_selective_maker_prereg_v2_1",
+  "report_schema_version": "weather_mm_w2_selective_maker_report_v2_1",
+  "research_status": "w2_v2_1_mechanism_repair_replay_then_frozen_forward",
+  "strategy_family": "weather_first_selective_maker",
+  "stage": "W2_selective_maker_acquisition",
+  "execution_mode": "zero_notional_shadow",
+  "declared_notional": "0",
+  "formal_forward_start_utc": "2026-08-31T00:00:00Z",
+  "denominator": {
+    "source_record": "market_state_decisions.jsonl",
+    "include_event_kind": "first_positive",
+    "identity": "signal_id_else_event_id",
+    "revision_policy": "latest append row within the exact consumed JSONL prefix; identity invariants must remain stable and all revision counts are reported",
+    "unit": "first_positive_signal",
+    "block": "target_date"
+  },
+  "allowed_regimes": [
+    "healthy_passive_candidate",
+    "transient_dislocation_candidate"
+  ],
+  "state_aliases": {
+    "healthy": "healthy_passive_candidate",
+    "healthy_passive": "healthy_passive_candidate",
+    "healthy_passive_candidate": "healthy_passive_candidate",
+    "transient": "transient_dislocation_candidate",
+    "transient_dislocation": "transient_dislocation_candidate",
+    "transient_dislocation_candidate": "transient_dislocation_candidate"
+  },
+  "causal_policy_state_fallback": {
+    "enabled": true,
+    "replace_direct_unknown": true,
+    "stage": "t30",
+    "action": "place_probe_maker",
+    "required_reason": "post_trigger_acute_window_admitted_probe",
+    "information_horizon_seconds": "30",
+    "mapped_state": "transient_dislocation_candidate",
+    "contract": "Uses only the preregistered t30 policy action and its 30-second PIT horizon. It cannot use t120 state, terminal value, public touch, or future fill.",
+    "evidence_status": "exploratory_mechanism_repair_before_formal_forward_start"
+  },
+  "same_stage_baseline": {
+    "decision_stage": "t30",
+    "information_horizon_seconds": 30,
+    "reconstruct_from_ws": true,
+    "reconstructed_taker_key": "t30_immediate_taker",
+    "taker_counterfactual_keys": [
+      "t30_immediate_taker",
+      "same_stage_taker"
+    ],
+    "shares_contract": "maker and taker must have identical target shares at the same t30 book epoch",
+    "missing_policy": "retain row, zero credit, block readiness"
+  },
+  "v2_1_router": {
+    "fair_value_source": "decision_packet.trigger.payload.model_probability_hold",
+    "fair_value_clock": "freeze the PIT t0 weather-model probability through the t30 execution decision",
+    "maximum_book_age_sec": "5",
+    "minimum_retained_edge_usd_per_share": "0.01",
+    "uncertainty_buffer_usd_per_share": "0.005",
+    "inventory_risk_per_share": "0",
+    "transition_hazard_required_for_maker": true,
+    "transition_hazard_penalty_usd_per_share": "0.05",
+    "missing_transition_hazard_policy": "block maker only; keep a same-clock taker or skip eligible",
+    "passive_fill_probability_required_for_profit_route": true,
+    "passive_fill_probability_evidence": "actual_own_order_calibrated_lower_bound",
+    "missing_fill_probability_policy": "candidate may enter explicitly authorized measurement, but maker cannot be selected as the profit route",
+    "nonfill_fallback_edge_usd_per_share": "0",
+    "maker_order_cost_usd_per_share": "0",
+    "maker_selection_margin_over_taker_usd_per_share": "0.005",
+    "incentive_estimates_in_routing": false,
+    "exploratory_sensitivity_only": {
+      "transition_hazard": ["0", "0.25", "0.5", "1"],
+      "conservative_fill_probability": ["0.25", "0.5", "0.75", "1"]
+    }
+  },
+  "baselines": [
+    "same_stage_shared_passive_maker_with_actual_lineage",
+    "same_stage_immediate_taker",
+    "skip"
+  ],
+  "maker_fill_contract": "Only authoritative own-order lifecycle/fill evidence is a maker fill. Quote, touch, cross, displayed depth, and queue simulation are not fills.",
+  "mere": {
+    "frozen": true,
+    "name": "maker_execution_residual_edge",
+    "formula": "((maker_terminal_value-maker_all_in_cost+realized_policy_incentives)-(taker_terminal_value-taker_all_in_cost+realized_policy_incentives))/same_target_shares",
+    "value_usd_per_share": "0.005",
+    "unit": "USD per share on the same signal row",
+    "realized_incentives_only": true
+  },
+  "inference": {
+    "block": "target_date",
+    "bootstrap_repetitions": 5000,
+    "bootstrap_seed": 20260830,
+    "interval": "two-sided 95% deterministic target-date block bootstrap",
+    "pass": "lower confidence bound exceeds frozen MERE and correctness, tail, and capacity gates pass",
+    "futility": "upper confidence bound is below frozen MERE"
+  },
+  "incentive_contract": {
+    "required_execution_namespaces": [
+      "maker_rebate",
+      "taker_rebate"
+    ],
+    "accounting_namespaces": [
+      "maker_rebate",
+      "taker_rebate",
+      "liquidity_reward",
+      "holding_reward"
+    ],
+    "credit_rule": "Only realized ledger entries with immutable payout and eligibility identity plus verified asset are credited; estimates receive zero credit.",
+    "one_time_bonus_in_strategy_ev": false
+  },
+  "staged_gate_contract": {
+    "zero_notional_readiness": "safe deterministic state plus same-stage maker/taker/skip comparison; no actual fill requirement",
+    "micro_live_measurement": "separate explicit funds authorization plus venue, fee, own-order, risk, cancel-all and release truth; no prior fill requirement",
+    "frozen_forward_profitability": "actual fill/nonfill denominator, realized incentives, tail/capacity evidence and target-date confidence interval above MERE"
+  },
+  "promotion_gate": {
+    "minimum_narrow_regime_decisions": 100,
+    "minimum_independent_target_dates": 30,
+    "minimum_actual_maker_fills": 20,
+    "review_cadence_target_dates": 10,
+    "minimum_evidence_coverage": "0.95",
+    "require_private_lifecycle_coverage": "1.00",
+    "require_actual_maker_lineage": true,
+    "minimum_hazard_strata_with_actual_fills": 2,
+    "minimum_price_strata_with_actual_fills": 2,
+    "minimum_depth_strata_with_actual_fills": 2,
+    "require_stage0a_fee_truth": true,
+    "require_stage0b_own_order_truth": true,
+    "require_lower_bound_above_mere": true,
+    "require_tail_risk_evidence": true,
+    "require_capacity_evidence": true,
+    "require_zero_notional": true,
+    "require_no_trade_intent": true,
+    "require_no_venue_call": true
+  },
+  "historical_negative_prior": {
+    "scope": "existing weather broad-maker review; prior only, not a V2.1 outcome",
+    "maker_contribution_usd": "-12.46",
+    "taker_contribution_usd": "10.73",
+    "settled_replay_per_share": {
+      "taker": "0.0261",
+      "ask_1c_maker": "0.0246",
+      "mid_maker": "0.0223",
+      "ask_2c_maker": "0.0199",
+      "bid_maker": "0.0182"
+    },
+    "conclusion": "broad maker remains rejected_for_now; V2.1 is a narrow, causal maker overlay on frozen weather alpha"
+  }
+}
