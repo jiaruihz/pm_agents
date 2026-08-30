@@ -154,6 +154,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     selective_maker = by_id["weather_first_selective_maker_v2_1_shadow"]
     assert selective_maker.execution_mode == "zero_notional_shadow"
+    assert selective_maker.desired_state == "paused"
     assert selective_maker.expected_live is False
     assert selective_maker.recovery_policy == "safe"
     assert selective_maker.dependencies == (
