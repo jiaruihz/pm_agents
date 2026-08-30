@@ -14,6 +14,7 @@ from scripts.ops.weather_data_feed_prod_health_check import (
     check_snapshot_source_model,
     check_telemetry,
     overall_status,
+    required_observation_cities,
 )
 from weather_data_feed.forecast_hourly_curves import build_curve_row, write_forecast_hourly_curve_capture
 
@@ -325,7 +326,16 @@ def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
                         "current_temp_c": 24.9,
                         "running_max_c": 24.9,
                         "age_min": 134.0,
-                    }
+                    },
+                    {
+                        "city": "Shanghai",
+                        "target_date": "2026-08-08",
+                        "station": "ZSPD",
+                        "status": "ok",
+                        "current_temp_c": 31.0,
+                        "running_max_c": 32.0,
+                        "age_min": 5.0,
+                    },
                 ],
             }
     cache.write_text(json.dumps(cache_payload), encoding="utf-8")
@@ -344,6 +354,39 @@ def test_prod_health_check_only_warns_for_stale_inactive_city(tmp_path):
     assert report["invalid_record_count"] == 1
     assert report["blocking_invalid_record_count"] == 0
     assert report["inactive_invalid_record_count"] == 1
+
+
+def test_prod_health_check_fails_when_active_required_city_missing_from_cache(tmp_path):
+    cache = tmp_path / "latest.json"
+    history = tmp_path / "observations.jsonl"
+    cache_payload = {
+        "generated_at_utc": "2026-08-07T17:12:00Z",
+        "records": [
+            {
+                "city": "PanamaCity",
+                "target_date": "2026-08-07",
+                "station": "MPMG",
+                "status": "ok",
+                "current_temp_c": 30.0,
+                "running_max_c": 31.0,
+                "age_min": 5.0,
+            }
+        ],
+    }
+    cache.write_text(json.dumps(cache_payload), encoding="utf-8")
+    _write_observation_history(history, cache_payload)
+
+    report = check_observation_cache(
+        cache,
+        history_path=history,
+        now_utc=datetime(2026, 8, 7, 17, 13, tzinfo=timezone.utc),
+        max_cache_age_min=3.0,
+        max_observation_age_min=120.0,
+        required_cities={"London"},
+    )
+
+    assert report["status"] == "fail"
+    assert report["missing_required_cities"] == ["London"]
 
 
 def test_prod_health_check_warns_during_expected_first_observation_gap(tmp_path):
@@ -494,6 +537,78 @@ def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
     assert report["missing_required_cities"] == ["Manila"]
     assert report["missing_required_by_field"]["metar_current_max_f"] == ["Manila"]
     assert report["missing_required_trading_cities"] == ["Manila"]
+
+
+def test_required_observation_cities_blocks_trading_not_research_pool():
+    payload = {
+        "trading_t1_cities": ["London"],
+        "research_t2_cities": ["PanamaCity"],
+        "city_pools": {
+            "London": "t1_trading",
+            "PanamaCity": "t2_research",
+        },
+        "records": [
+            {
+                "city": city,
+                "target_date": "2026-08-30",
+                "city_local_date_at_snapshot": "2026-08-30",
+                "live_observation_source": "aviationweather_metar",
+            }
+            for city in ("London", "PanamaCity")
+        ],
+    }
+
+    assert required_observation_cities(payload) == {"London"}
+
+
+def test_required_observation_cities_does_not_invent_source_for_missing_record():
+    payload = {
+        "active_cities": ["London", "PanamaCity"],
+        "trading_t1_cities": ["London"],
+        "city_pools": {
+            "London": "t1_trading",
+            "PanamaCity": "t2_research",
+        },
+        "records": [
+            {
+                "city": "PanamaCity",
+                "target_date": "2026-08-30",
+                "city_local_date_at_snapshot": "2026-08-30",
+            }
+        ],
+    }
+
+    assert required_observation_cities(payload) == set()
+
+
+def test_required_observation_cities_empty_t1_metadata_fails_closed():
+    payload = {
+        "trading_t1_cities": [],
+        "city_pools": {},
+        "records": [
+            {
+                "city": "PanamaCity",
+                "target_date": "2026-08-30",
+                "city_local_date_at_snapshot": "2026-08-30",
+            }
+        ],
+    }
+
+    assert required_observation_cities(payload) == {"PanamaCity"}
+
+
+def test_required_observation_cities_legacy_snapshot_fails_closed():
+    payload = {
+        "records": [
+            {
+                "city": "PanamaCity",
+                "target_date": "2026-08-30",
+                "city_local_date_at_snapshot": "2026-08-30",
+            }
+        ]
+    }
+
+    assert required_observation_cities(payload) == {"PanamaCity"}
 
 
 def test_snapshot_source_model_health_validates_lineage_without_rejecting_fallback(tmp_path):

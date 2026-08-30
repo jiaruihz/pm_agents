@@ -12,6 +12,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: cross_no_v2_metar
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/73ace4512717a4e4a7f2fc5407c59f35d0bf81f8
+    expected_repo_sha: 73ace4512717a4e4a7f2fc5407c59f35d0bf81f8
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
     expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -21,11 +25,15 @@ production_releases:
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/f5577f378f9f429f3cb4b06e3515c7b8662a030f
-    expected_repo_sha: f5577f378f9f429f3cb4b06e3515c7b8662a030f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/6690b445e0737da6220c1c665cc8d1f9b40b59e0
+    expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
   - release_id: amsterdam_wcir_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/4b0a7fdaf376fc94ca410de49b72d463b27107e4
     expected_repo_sha: 4b0a7fdaf376fc94ca410de49b72d463b27107e4
+  - release_id: wcir_next_print_frozen
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/d4ecfffec7ff6558a6c21191eeee61d3eafcd300
+    expected_repo_sha: d4ecfffec7ff6558a6c21191eeee61d3eafcd300
+    runtime_bindings: [operational_venv]
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
@@ -78,13 +86,17 @@ production_releases:
     expected_repo_sha: b2b26fd96e8086a2a444e83c66fd4d55ac904705
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_market_state_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/d0c0890c63a7ac49def9303bc35b7c92e63fa451
-    expected_repo_sha: d0c0890c63a7ac49def9303bc35b7c92e63fa451
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/a2cfc619a4c292ab3514895fecbc40a256356333
+    expected_repo_sha: a2cfc619a4c292ab3514895fecbc40a256356333
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     runtime_bindings: [operational_venv, canonical_db]
+  - release_id: weather_first_selective_maker_v2_1
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/6690b445e0737da6220c1c665cc8d1f9b40b59e0
+    expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
+    runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
     expected_repo_sha: ef64a2d0b14230d21e3544161dbf95a097eeca9c
@@ -95,6 +107,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_tail/b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
     expected_repo_sha: b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
     runtime_bindings: [operational_venv, canonical_db]
+  - release_id: europe_d1_distance2_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/0ed49db4602ab7410207070dc0e03da6a11d6c57
+    expected_repo_sha: 0ed49db4602ab7410207070dc0e03da6a11d6c57
+    runtime_bindings: [operational_venv]
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/29d2045fd9d748f72b5231b462e1734023071743
     expected_repo_sha: 29d2045fd9d748f72b5231b462e1734023071743
@@ -264,7 +280,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
@@ -288,6 +304,38 @@ managed_runtimes:
       notional: 0
       forward_epoch_id: wcir_amsterdam_score_only_v2_bb04a8acbeafd66b
     dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, weather_knmi_open_data_jrs]
+    recovery_policy: safe
+
+  - instance_id: weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_probability_only
+    release_id: wcir_next_print_frozen
+    start_script: scripts/ops/start_weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/latest.json
+    health_format: json
+    max_health_age_sec: 180
+    startup_grace_sec: 180
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_key: weather_helsinki_tokyo_wcir_next_print_frozen_v1
+      execution_mode: zero_notional_probability_only
+      policy_status: diagnostic_only
+      live_authority: false
+      forward_epoch_id: wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06
+      safety.signal_candidates: 0
+      safety.trade_intents: 0
+      safety.plans: 0
+      safety.orders: 0
+      safety.fills: 0
+      safety.exchange_calls: 0
+      safety.actual_notional_usd: 0.0
+      orders: 0
+      fills: 0
+      notional: 0
+      actual_notional: 0.0
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, fast_source_prev_no_trial_v1]
     recovery_policy: safe
 
   - instance_id: polymarket_dispute_repricing_zero_notional_v1
@@ -445,6 +493,31 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
     recovery_policy: safe
 
+  - instance_id: weather_first_selective_maker_v2_1_shadow
+    tmux_session: weather_first_selective_maker_v2_1_shadow
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: weather_first_selective_maker_v2_1
+    start_script: scripts/ops/start_weather_first_selective_maker_v2_1_shadow.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/latest.json
+    health_format: json
+    max_health_age_sec: 120
+    startup_grace_sec: 180
+    accepted_health_statuses: [warming, ok]
+    expected_health_fields:
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0
+      trade_intents: 0
+      orders: 0
+      fills: 0
+      exchange_calls: 0
+      venue_call_allowed: false
+      formal_forward_start_utc: "2026-08-31T00:00:00Z"
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, current_yes_core_carry_market_state_shadow_v2, weather_market_books]
+    recovery_policy: safe
+
   - instance_id: fast_source_prev_no_trial_v1
     uses_market_proxy: true
     tmux_session: weather_fast_source_prev_no_trial
@@ -461,9 +534,70 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations, weather_knmi_open_data_jrs]
     recovery_policy: guarded_live
 
-  # Historical D1 multisource/distance-2 shadows are dormant research evidence,
-  # not current production desired state. Their code and dated artifacts remain
-  # available for replay, but the controller must not recreate or health-gate them.
+  - instance_id: cross_no_v2_metar_v1
+    uses_market_proxy: true
+    tmux_session: weather_cross_no_v2_metar_v1
+    role: strategy
+    execution_mode: live
+    release_id: cross_no_v2_metar
+    start_script: scripts/ops/start_weather_cross_no_v2_metar.sh
+    restart_script: scripts/ops/start_weather_cross_no_v2_metar.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/latest.json
+    health_format: json
+    max_health_age_sec: 15
+    startup_grace_sec: 60
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: cross_no_v2_metar_v1
+      execution_mode: live_probe
+      live_enabled: true
+      shares_per_order: 5.0
+      max_orders_per_utc_day: 5
+      max_daily_principal_usd: 25.0
+      max_no_ask: 0.97
+      weather_taker_fee_rate: 0.05
+      clock_invalid_same_boot_override_enabled: true
+      settlement_hard_invalidation: false
+    expected_live: true
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/orders.jsonl
+    dependencies: [weather_jrs_context_keeper, weather_market_books]
+    recovery_policy: guarded_live
+    launch_environment:
+      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_24h_20260830_r2/evidence.sqlite3
+      WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST: /Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json
+      WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1
+      WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/PAUSE
+      WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC: "0.5"
+      WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC: "30"
+      WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC: "5"
+      WEATHER_CROSS_NO_V2_METAR_STOP_AFTER_SEC: "86400"
+      WEATHER_CROSS_NO_V2_METAR_LIVE: "1"
+      WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE: "1"
+      WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE: "1"
+
+  # The old multisource D1 shadow remains dormant research evidence. The
+  # distance-2 dual-NO instance below is a new zero-notional frozen forward;
+  # it records first-lock evidence and has no venue/order path.
+  - instance_id: europe_d1_distance2_dual_no_shadow_v1
+    tmux_session: europe_d1_distance2_dual_no_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: europe_d1_distance2_shadow
+    start_script: scripts/ops/start_europe_d1_distance2_dual_no_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_dual_no_shadow_v1/latest.json
+    health_format: json
+    max_health_age_sec: 900
+    startup_grace_sec: 240
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_distance2_dual_no_shadow_v1
+      execution_mode: zero_notional_shadow
+      orders_submitted: 0
+      actual_notional_usd: 0.0
+      joint_market_probability_max: 0.1
+    dependencies: [weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
 
   # Zero-notional/research services still use their original implementation,
   # but their exact production entrypoint and health identity are controlled

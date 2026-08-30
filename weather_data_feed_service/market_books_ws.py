@@ -438,6 +438,7 @@ def apply_market_capture_demands(
         "reheat_risk.current_yes",
         "weather_amsterdam_wcir_frozen_v2",
         "weather.metar_ws_event_repricing",
+        "weather_first_selective_maker_v2_1",
     ),
 ) -> Selection:
     """Union a revision-centered local strip into the selective WS set.
@@ -1044,6 +1045,7 @@ class Collector:
                     "reheat_risk.current_yes",
                     "weather_amsterdam_wcir_frozen_v2",
                     "weather.metar_ws_event_repricing",
+                    "weather_first_selective_maker_v2_1",
                 ) + (
                     ("polymarket_alpha.p0_offline",)
                     if self.alpha_capture_demand_inbox is not None

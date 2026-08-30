@@ -468,6 +468,39 @@ def test_amsterdam_wcir_direct_token_demand_uses_same_ws_owner() -> None:
     assert selected.token_rows["amsterdam-no-22"]["capture_universe"] == "shared_direct_token"
 
 
+def test_weather_first_selective_maker_direct_token_demand_is_allowlisted() -> None:
+    demand = CaptureDemand.create(
+        consumer_id="weather_first_selective_maker_v2_1",
+        strategy_key="weather_first_selective_maker_v2_1",
+        condition_id="condition-amsterdam-22",
+        token_id="amsterdam-yes-22",
+        reason="v2_1_pit_route_clock_capture",
+        priority="P1",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T03:09:00Z",
+        desired_transport="REST_WS",
+        requested_checkpoints_seconds=(0, 10, 30, 60, 120, 300),
+        trigger_event_id="first-positive-1",
+    ).to_dict()
+    selection = Selection(
+        tokens=set(), token_rows={}, city_token_counts={}, active_brackets={},
+        grace_brackets={}, scheduled_cities=[], research_cities=[], burst_cities=[],
+        missing_observation_cities=[], invalidation_state={},
+    )
+
+    selected = apply_market_capture_demands(
+        selection,
+        market_payload={"records": []},
+        demands=[demand],
+    )
+
+    assert selected.tokens == {"amsterdam-yes-22"}
+    assert selected.capture_demands[0]["resolution_status"] == "resolved_direct_token"
+    assert selected.token_rows["amsterdam-yes-22"]["capture_demand_ids"] == [
+        demand["demand_id"]
+    ]
+
+
 def test_metar_event_direct_token_demand_keeps_us_market_lineage() -> None:
     demand = CaptureDemand.create(
         consumer_id="weather_metar_ws_research",

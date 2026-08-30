@@ -66,7 +66,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert spec.release("core_carry_market_state_shadow").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/"
         "core_carry_market_state_shadow/"
-        "d0c0890c63a7ac49def9303bc35b7c92e63fa451"
+        "a2cfc619a4c292ab3514895fecbc40a256356333"
     )
     assert spec.release("city_probability_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/"

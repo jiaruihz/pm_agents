@@ -19,6 +19,11 @@ REPORT_RE = re.compile(
 TEMP_RE = re.compile(r"(?<!\d)(M?\d{2})/(M?\d{2}|//)(?!\d)")
 WIND_RE = re.compile(r"\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b")
 ALT_RE = re.compile(r"\bA(\d{4})\b")
+VISIBILITY_SM_RE = re.compile(
+    r"(?<!\S)(?:(?P<whole>\d{1,2})\s+)?(?P<qualifier>[PM])?"
+    r"(?:(?P<integer>\d{1,2})|(?P<numerator>\d{1,2})/(?P<denominator>\d{1,2}))SM\b",
+    re.IGNORECASE,
+)
 
 
 def sniff_payload(payload: bytes, content_type: str = "", content_encoding: str = "") -> tuple[str, bytes]:
@@ -46,6 +51,26 @@ def _signed_temperature(token: str) -> float | None:
     if token == "//":
         return None
     return float(-int(token[1:]) if token.startswith("M") else int(token))
+
+
+def _tac_visibility(body: str) -> tuple[float | None, str | None]:
+    match = VISIBILITY_SM_RE.search(body)
+    if match:
+        whole = float(match.group("whole") or 0)
+        if match.group("integer") is not None:
+            miles = whole + float(match.group("integer"))
+        else:
+            denominator = float(match.group("denominator"))
+            if denominator == 0:
+                return None, None
+            miles = whole + float(match.group("numerator")) / denominator
+        qualifier = {"P": "greater_than", "M": "less_than"}.get(
+            str(match.group("qualifier") or "").upper(), "exact"
+        )
+        return round(miles * 1609.344, 3), qualifier
+    if re.search(r"\bCAVOK\b", body, re.IGNORECASE):
+        return 10_000.0, "at_least"
+    return None, None
 
 
 def _observation_datetime(group: str, reference_ns: int) -> str:
@@ -105,6 +130,8 @@ def metar_event(raw: str, *, reference_ns: int, override: dict[str, Any] | None 
     dewpoint = _signed_temperature(temp_match.group(2)) if temp_match else override.get("dewpoint_c")
     wind_match = WIND_RE.search(body)
     alt_match = ALT_RE.search(body)
+    tac_visibility_m, tac_visibility_qualifier = _tac_visibility(body)
+    override_visibility = override.get("visibility_m")
     is_correction = bool(re.search(r"\bCOR\b", normalized)) or bool(override.get("is_correction"))
     fields = {
         "station_id": station,
@@ -117,7 +144,12 @@ def metar_event(raw: str, *, reference_ns: int, override: dict[str, Any] | None 
         if not wind_match or wind_match.group(1) == "VRB"
         else float(wind_match.group(1)),
         "wind_speed_kt": float(wind_match.group(2)) if wind_match else override.get("wind_speed_kt"),
-        "visibility_m": override.get("visibility_m"),
+        "visibility_m": tac_visibility_m
+        if tac_visibility_m is not None
+        else (float(override_visibility) if override_visibility is not None else None),
+        "visibility_qualifier": tac_visibility_qualifier
+        if tac_visibility_m is not None
+        else override.get("visibility_qualifier"),
         "altimeter_hpa": round(int(alt_match.group(1)) / 100.0 * 33.8638866667, 3)
         if alt_match
         else override.get("altimeter_hpa"),

@@ -878,11 +878,18 @@ def check_observation_cache(
         if required_cities is None or str(row.get("city") or "") in required_cities
     ]
     inactive_invalid_rows = [row for row in invalid_rows if row not in blocking_invalid_rows]
+    cache_cities = {
+        str(row.get("city") or "") for row in rows if str(row.get("city") or "")
+    }
+    missing_required_cities = sorted(
+        (required_cities or set()) - cache_cities
+    )
     fail = (
         cache_age_min is None
         or cache_age_min < 0
         or cache_age_min > max_cache_age_min
         or bool(blocking_invalid_rows)
+        or bool(missing_required_cities)
         or bool(unresolved_regressions)
         or not history_exists
         or bool(history_error)
@@ -937,6 +944,8 @@ def check_observation_cache(
         "invalid_record_examples": invalid_rows[:10],
         "blocking_invalid_record_count": len(blocking_invalid_rows),
         "blocking_invalid_record_examples": blocking_invalid_rows[:10],
+        "missing_required_city_count": len(missing_required_cities),
+        "missing_required_cities": missing_required_cities,
         "inactive_invalid_record_count": len(inactive_invalid_rows),
         "inactive_invalid_record_examples": inactive_invalid_rows[:10],
         "required_cities": sorted(required_cities) if required_cities is not None else None,
@@ -1373,6 +1382,59 @@ def overall_status(sections: dict[str, Any]) -> str:
     return "warn" if warn else "ok"
 
 
+def required_observation_cities(snapshot_payload: dict[str, Any]) -> set[str]:
+    """Return the current trading universe whose cache failures block control.
+
+    Research-only cities stay in the observation cache and its evidence
+    denominator, but their source outages must be warnings rather than a
+    stack-wide production critical. A blocking city must also have an explicit
+    live observation source; snapshot coverage owns missing-record/source
+    warnings. Legacy snapshots without a T1 contract remain conservative and
+    require every same-local-day city.
+    """
+
+    same_local_day_rows = [
+        row
+        for row in snapshot_payload.get("records", [])
+        if isinstance(row, dict)
+        and row.get("city")
+        and row.get("target_date") == row.get("city_local_date_at_snapshot")
+    ]
+    same_local_day_cities = {
+        str(row.get("city") or "") for row in same_local_day_rows
+    }
+    observable_cities = {
+        str(row.get("city") or "")
+        for row in same_local_day_rows
+        if str(row.get("live_observation_source") or "")
+    }
+    declared_trading = snapshot_payload.get("trading_t1_cities")
+    city_pools = snapshot_payload.get("city_pools")
+    trading_cities = (
+        {str(city) for city in declared_trading if str(city)}
+        if isinstance(declared_trading, list)
+        else set()
+    )
+    if isinstance(city_pools, dict):
+        trading_cities.update(
+            str(city)
+            for city, pool in city_pools.items()
+            if str(pool) == "t1_trading" and str(city)
+        )
+    declared_active = snapshot_payload.get("active_cities")
+    if isinstance(declared_active, list):
+        active_cities = {str(city) for city in declared_active if str(city)}
+    else:
+        # Current snapshots define the live market universe through records.
+        # The full T1 pool can include cities with no active market, so it is
+        # not safe to require the whole supported registry here.
+        active_cities = same_local_day_cities
+    if trading_cities:
+        return active_cities & trading_cities & observable_cities
+    # Empty or malformed T1 metadata must not turn off every cache gate.
+    return active_cities
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check production weather data feed outputs for stale, bad, or duplicate data.")
     parser.add_argument("--snapshot", default="")
@@ -1405,13 +1467,7 @@ def main() -> int:
     now_utc = datetime.now(timezone.utc)
     snapshot_path = Path(args.snapshot) if args.snapshot else latest_snapshot(Path(args.snapshot_dir))
     snapshot_payload = load_snapshot(snapshot_path)
-    required_observation_cities = {
-        str(row.get("city") or "")
-        for row in snapshot_payload.get("records", [])
-        if isinstance(row, dict)
-        and row.get("city")
-        and row.get("target_date") == row.get("city_local_date_at_snapshot")
-    }
+    blocking_observation_cities = required_observation_cities(snapshot_payload)
     runtime_root = Path(args.runtime_root)
     telemetry_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_TELEMETRY_FILES]
     summary_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_SUMMARY_FILES]
@@ -1448,7 +1504,7 @@ def main() -> int:
             max_cache_age_min=args.max_observation_cache_age_min,
             max_history_age_min=args.max_observation_history_age_min,
             max_observation_age_min=args.max_observation_age_min,
-            required_cities=required_observation_cities,
+            required_cities=blocking_observation_cities,
             history_tail_rows=args.tail_observation_history_rows,
         ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],

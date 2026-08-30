@@ -1,0 +1,24 @@
+contract_version: US_FAST_WEATHER_MARKET_REACTION_COHORT_V1
+cohort_id: us_temperature_markets_wide_v1
+
+# This is the frozen discovery cohort, not a settlement-source assertion.
+# `source_station` is what METAR.ws official/HF subscriptions observe; the
+# market expression remains independently labelled by `market_station`.
+reaction_targets:
+  - {city: Atlanta, source_station: KATL, market_station: KATL, role: primary, basis_status: station_aligned}
+  - {city: Austin, source_station: KAUS, market_station: KAUS, role: primary, basis_status: station_aligned}
+  - {city: Dallas, source_station: KDAL, market_station: KDAL, role: primary, basis_status: station_aligned}
+  - {city: Denver, source_station: KBKF, market_station: KBKF, role: primary, basis_status: station_aligned}
+  - {city: Houston, source_station: KHOU, market_station: KHOU, role: primary, basis_status: station_aligned}
+  - {city: LA, source_station: KLAX, market_station: KLAX, role: primary, basis_status: station_aligned}
+  - {city: Miami, source_station: KMIA, market_station: KMIA, role: primary, basis_status: station_aligned}
+  - {city: NYC, source_station: KLGA, market_station: KLGA, role: primary, basis_status: station_aligned}
+  - {city: SanFrancisco, source_station: KSFO, market_station: KSFO, role: primary, basis_status: station_aligned}
+  - {city: Seattle, source_station: KSEA, market_station: KSEA, role: primary, basis_status: station_aligned}
+  - {city: Chicago, source_station: KORD, market_station: KMDW, role: basis_mismatch_control, basis_status: source_market_station_mismatch}
+
+# Retained as discoverability evidence only. They deliberately never generate
+# capture demands or enter the market-reaction denominator.
+observation_only:
+  - {city: Boston, source_station: KBOS, role: market_unavailable_observation_only, basis_status: market_unavailable}
+  - {city: Minneapolis, source_station: KMSP, role: market_unavailable_observation_only, basis_status: market_unavailable}

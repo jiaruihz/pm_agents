@@ -10,7 +10,7 @@ import math
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -61,6 +61,39 @@ def finite(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if math.isfinite(result) else None
+
+
+def load_market_tail_threshold(config: dict[str, Any]) -> float:
+    """Return the frozen market-implied tail-risk ceiling.
+
+    This is intentionally a config-level policy rather than a weather feature:
+    the weighted probability is calculated from the paired market mids.
+    """
+    frozen_forward = config.get("frozen_forward")
+    if not isinstance(frozen_forward, dict):
+        raise ValueError("frozen_forward configuration is required")
+    threshold = finite(frozen_forward.get("joint_market_probability_max"))
+    if threshold is None or not 0 <= threshold <= 1:
+        raise ValueError(
+            "frozen_forward.joint_market_probability_max must be finite and within [0, 1]"
+        )
+    return threshold
+
+
+def load_allocation_weights(config: dict[str, Any]) -> dict[str, float]:
+    """Validate the frozen two-leg normalized allocation."""
+
+    allocation = config.get("allocation")
+    if not isinstance(allocation, dict):
+        raise ValueError("allocation configuration is required")
+    leg_names = ("low_distance2_no", "high_distance2_no")
+    weights = {name: finite(allocation.get(name)) for name in leg_names}
+    if any(value is None or value < 0 for value in weights.values()):
+        raise ValueError("allocation weights must be finite and non-negative")
+    normalized = {name: float(value) for name, value in weights.items()}
+    if abs(sum(normalized.values()) - 1.0) > 1e-12:
+        raise ValueError("allocation weights must sum to 1")
+    return normalized
 
 
 def latest_file(root: Path) -> Path | None:
@@ -148,7 +181,10 @@ def exact_probability(
 
 
 def load_versions(
-    path: Path, asof: datetime
+    path: Path,
+    asof: datetime,
+    *,
+    target_dates: set[str] | None = None,
 ) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
     history: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     paths = dated_jsonl_paths(
@@ -156,6 +192,22 @@ def load_versions(
         filename="forecast_versions.jsonl",
         allow_missing=True,
     )
+    if target_dates and path.is_dir():
+        wanted_partitions: set[str] = set()
+        for target_date in target_dates:
+            try:
+                target = datetime.fromisoformat(target_date).date()
+            except ValueError:
+                continue
+            wanted_partitions.update(
+                (target - timedelta(days=offset)).isoformat()
+                for offset in range(4)
+            )
+        paths = [
+            candidate
+            for candidate in paths
+            if candidate.parent.name in wanted_partitions
+        ]
     for line in iter_jsonl_lines(paths):
         try:
             row = json.loads(line)
@@ -325,15 +377,28 @@ def build_cycle(
     repo_sha: str = "",
 ) -> dict[str, Any]:
     config = read_json(config_path, {})
+    joint_market_probability_max = load_market_tail_threshold(config)
+    allocation = load_allocation_weights(config)
     city_configs = config.get("cities") or {}
     books = load_no_books(book_path)
-    book_asof = max(
-        (utc(row.get("fetched_at_utc")) for row in books),
-        default=None,
-    )
+    book_times = [
+        value
+        for row in books
+        if (value := utc(row.get("available_at_utc"))) is not None
+    ]
+    book_asof = max(book_times, default=None)
     if book_asof is None:
         return {"status": "missing_book_timestamp", "records": []}
-    versions = load_versions(versions_path, book_asof)
+    versions = load_versions(
+        versions_path,
+        book_asof,
+        target_dates={
+            str(row.get("event_date") or "")
+            for row in books
+            if str(row.get("city") or "") in city_configs
+            and str(row.get("event_date") or "")
+        },
+    )
     calibration, calibration_payload = load_calibration(feature_policy_path)
     model_labels = [
         str(value) for value in config.get("feature_model_labels") or []
@@ -351,10 +416,12 @@ def build_cycle(
         if not isinstance(city_config, dict):
             continue
         europe_groups += 1
-        group_asof = max(
-            (utc(row.get("fetched_at_utc")) for row in group),
-            default=None,
-        )
+        group_times = [
+            value
+            for row in group
+            if (value := utc(row.get("available_at_utc"))) is not None
+        ]
+        group_asof = max(group_times, default=None)
         if group_asof is None:
             continue
         timezone_name = str(city_config["timezone"])
@@ -383,16 +450,33 @@ def build_cycle(
         if low_row is high_row:
             continue
         full_ladder_groups += 1
+        capture_ids = {
+            str(row.get("request_batch_capture_id") or "") for row in group
+        }
+        available_values = {
+            str(row.get("available_at_utc") or "") for row in group
+        }
+        unique_brackets = {
+            str(row.get("bracket") or "") for row in group
+        }
+        paired_book_clock_complete = (
+            len(capture_ids) == 1
+            and "" not in capture_ids
+            and len(available_values) == 1
+            and "" not in available_values
+            and len(unique_brackets) == len(group)
+            and all(row.get("event_time_pit_scorable") is True for row in group)
+            and all(str(row.get("status") or "") == "ok" for row in group)
+        )
         selected_rows = [low_row, high_row]
         decision_times = [
-            utc(row.get("fetched_at_utc")) for row in selected_rows
+            utc(row.get("available_at_utc")) for row in selected_rows
         ]
         if any(value is None for value in decision_times):
             continue
         decision_asof = min(
             value for value in decision_times if value is not None
         )
-        allocation = config.get("allocation") or {}
         leg_names = ("low_distance2_no", "high_distance2_no")
         legs: list[dict[str, Any]] = []
         for name, row in zip(leg_names, selected_rows, strict=True):
@@ -400,7 +484,7 @@ def build_cycle(
             legs.append(
                 {
                     "leg": name,
-                    "allocation_weight": float(allocation.get(name, 0.5)),
+                    "allocation_weight": allocation[name],
                     "distance_from_nearest_endpoint": distance,
                     "rung_index": ordered.index(row),
                     "rung_count": len(ordered),
@@ -413,7 +497,7 @@ def build_cycle(
                     **quote,
                 }
             )
-        paired_executable = all(
+        paired_executable = paired_book_clock_complete and all(
             bool(leg["book_executable"]) for leg in legs
         )
         market_exact = [leg["market_p_exact"] for leg in legs]
@@ -428,6 +512,15 @@ def build_cycle(
         )
         market_combined_mass = (
             sum(float(value) for value in market_exact)
+            if all(value is not None for value in market_exact)
+            else None
+        )
+        joint_market_probability = (
+            sum(
+                float(leg["allocation_weight"])
+                * float(leg["market_p_exact"])
+                for leg in legs
+            )
             if all(value is not None for value in market_exact)
             else None
         )
@@ -452,6 +545,22 @@ def build_cycle(
             model_labels=model_labels,
             training_cutoff=calibration_payload.get("training_cutoff"),
         )
+        market_tail_eligible = (
+            paired_executable
+            and joint_market_probability is not None
+            and joint_market_probability
+            <= joint_market_probability_max + 1e-12
+        )
+        if not paired_book_clock_complete:
+            decision_status = "paired_book_clock_unavailable"
+        elif not paired_executable:
+            decision_status = "paired_book_unexecutable"
+        elif joint_market_probability is None:
+            decision_status = "market_joint_probability_unavailable"
+        elif not market_tail_eligible:
+            decision_status = "market_joint_probability_above_threshold"
+        else:
+            decision_status = "would_shadow_entry"
         records.append(
             {
                 "schema_version": (
@@ -471,12 +580,22 @@ def build_cycle(
                 "book_snapshot_path": str(book_path),
                 "book_asof_utc": book_asof.isoformat(),
                 "decision_asof_utc": decision_asof.isoformat(),
-                "decision_status": (
-                    "would_shadow_entry"
-                    if paired_executable
-                    else "paired_book_unexecutable"
+                "decision_status": decision_status,
+                "request_batch_capture_id": (
+                    next(iter(capture_ids))
+                    if paired_book_clock_complete
+                    else None
                 ),
+                "book_available_at_utc": (
+                    next(iter(available_values))
+                    if paired_book_clock_complete
+                    else None
+                ),
+                "paired_book_clock_complete": paired_book_clock_complete,
                 "paired_book_executable": paired_executable,
+                "joint_market_probability_max": joint_market_probability_max,
+                "joint_market_probability": joint_market_probability,
+                "market_tail_eligible": market_tail_eligible,
                 "normalized_reference_cost": normalized_cost,
                 "market_combined_distance2_exact_mass": (
                     market_combined_mass
@@ -501,6 +620,8 @@ def build_cycle(
         "strategy_instance": STRATEGY_INSTANCE,
         "execution_mode": "zero_notional_shadow",
         "orders_submitted": 0,
+        "actual_notional_usd": 0.0,
+        "joint_market_probability_max": joint_market_probability_max,
         "book_path": str(book_path),
         "book_asof_utc": book_asof.isoformat(),
         "signal_funnel": {
@@ -511,8 +632,14 @@ def build_cycle(
             "candidate_city_dates": len(records),
         },
         "evidence_funnel": {
+            "paired_clock_complete_city_dates": sum(
+                row["paired_book_clock_complete"] for row in records
+            ),
             "paired_executable_city_dates": sum(
                 row["paired_book_executable"] for row in records
+            ),
+            "market_tail_eligible_city_dates": sum(
+                row["market_tail_eligible"] for row in records
             ),
             "forecast_feature_city_dates": sum(
                 row["weather_features"]["feature_status"] == "available"

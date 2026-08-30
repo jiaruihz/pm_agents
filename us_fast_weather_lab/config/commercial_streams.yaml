@@ -6,9 +6,9 @@ metar_ws:
   reconnect_seconds: 3
   subscribe_primary_official: true
   subscribe_primary_hfmetar: true
-  # Settlement-facing stations for the fixed US market-reaction cohort.  KDAL
-  # and KHOU intentionally differ from the broader 20-airport benchmark's
-  # KDFW/KIAH transport controls.
+  # Official/HF stations are loaded from market_reaction_cohort.yaml.  This
+  # list remains only for backwards-compatible readers and must not drive a
+  # subscription universe.
   benchmark_stations: [KMIA, KLAX, KLGA, KHOU, KDAL, KSEA, KSFO, KORD]
   datis_stations:
     - KATL

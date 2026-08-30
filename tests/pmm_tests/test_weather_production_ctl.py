@@ -122,8 +122,13 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "pretrigger_capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
             "scheduled_informed_maker_shadow_v1/capture_demands.jsonl "
+            "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
+            "weather_first_selective_maker_v2_1/capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/"
             "epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/"
+            "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/"
+            "wcir_next_print_helsinki_tokyo_frozen_v1/"
+            "epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/"
             "capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/"
             "us_fast_weather_lab_metarws_pro_market_20260830/"
             "market_capture_demands.jsonl"
@@ -131,6 +136,26 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "96",
     }
+    cross_no_v2 = by_id["cross_no_v2_metar_v1"]
+    assert cross_no_v2.execution_mode == "live"
+    assert cross_no_v2.expected_live is True
+    assert cross_no_v2.recovery_policy == "guarded_live"
+    assert cross_no_v2.release_id == "cross_no_v2_metar"
+    assert cross_no_v2.expected_health_contract() == {
+        "strategy_instance": "cross_no_v2_metar_v1",
+        "execution_mode": "live_probe",
+        "live_enabled": True,
+        "shares_per_order": 5.0,
+        "max_orders_per_utc_day": 5,
+        "max_daily_principal_usd": 25.0,
+        "max_no_ask": 0.97,
+        "weather_taker_fee_rate": 0.05,
+        "clock_invalid_same_boot_override_enabled": True,
+        "settlement_hard_invalidation": False,
+    }
+    assert spec.release("cross_no_v2_metar").expected_repo_sha == (
+        "73ace4512717a4e4a7f2fc5407c59f35d0bf81f8"
+    )
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"
     assert dispute.expected_live is False
@@ -145,7 +170,32 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "f5577f378f9f429f3cb4b06e3515c7b8662a030f"
+        "6690b445e0737da6220c1c665cc8d1f9b40b59e0"
+    )
+    selective_maker = by_id["weather_first_selective_maker_v2_1_shadow"]
+    assert selective_maker.execution_mode == "zero_notional_shadow"
+    assert selective_maker.desired_state == "running"
+    assert selective_maker.expected_live is False
+    assert selective_maker.recovery_policy == "safe"
+    assert selective_maker.dependencies == (
+        "weather_data_feed_jrs",
+        "current_yes_core_carry_tiny_live_v2",
+        "current_yes_core_carry_market_state_shadow_v2",
+        "weather_market_books",
+    )
+    assert selective_maker.expected_health_contract() == {
+        "execution_mode": "zero_notional_shadow",
+        "live_authority": False,
+        "actual_notional": 0,
+        "trade_intents": 0,
+        "orders": 0,
+        "fills": 0,
+        "exchange_calls": 0,
+        "venue_call_allowed": False,
+        "formal_forward_start_utc": "2026-08-31T00:00:00Z",
+    }
+    assert spec.release("weather_first_selective_maker_v2_1").expected_repo_sha == (
+        "6690b445e0737da6220c1c665cc8d1f9b40b59e0"
     )
     amsterdam = by_id["weather_amsterdam_wcir_frozen_shadow_v2"]
     assert amsterdam.execution_mode == "zero_notional_shadow"
@@ -164,6 +214,40 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert spec.release("amsterdam_wcir_shadow").expected_repo_sha == (
         "4b0a7fdaf376fc94ca410de49b72d463b27107e4"
     )
+    wcir_ht = by_id["weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1"]
+    assert wcir_ht.execution_mode == "zero_notional_probability_only"
+    assert wcir_ht.expected_live is False
+    assert wcir_ht.release_id == "wcir_next_print_frozen"
+    assert wcir_ht.dependencies == (
+        "weather_jrs_context_keeper",
+        "weather_data_feed_jrs",
+        "weather_market_books",
+        "weather_live_cross_observations",
+        "fast_source_prev_no_trial_v1",
+    )
+    assert wcir_ht.expected_health_contract() == {
+        "strategy_key": "weather_helsinki_tokyo_wcir_next_print_frozen_v1",
+        "execution_mode": "zero_notional_probability_only",
+        "policy_status": "diagnostic_only",
+        "live_authority": False,
+        "forward_epoch_id": "wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06",
+        "safety.signal_candidates": 0,
+        "safety.trade_intents": 0,
+        "safety.plans": 0,
+        "safety.orders": 0,
+        "safety.fills": 0,
+        "safety.exchange_calls": 0,
+        "safety.actual_notional_usd": 0.0,
+        "orders": 0,
+        "fills": 0,
+        "notional": 0,
+        "actual_notional": 0.0,
+    }
+    wcir_ht_release = spec.release("wcir_next_print_frozen")
+    assert wcir_ht_release.expected_repo_sha == (
+        "d4ecfffec7ff6558a6c21191eeee61d3eafcd300"
+    )
+    assert wcir_ht_release.runtime_bindings == ("operational_venv",)
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (
         "weather_jrs_context_keeper",
@@ -294,7 +378,7 @@ def test_every_business_runtime_has_controller_start_contract():
     assert run_capture.recovery_policy == "safe"
 
 
-def test_current_migrated_runtimes_remain_non_live_and_dormant_d1_is_not_desired():
+def test_current_migrated_runtimes_remain_non_live_and_d1_shadow_is_zero_notional():
     spec = load_production_spec()
     migrated_ids = {
         "low_price_yes_integrated_tail_shadow_v2",
@@ -315,10 +399,28 @@ def test_current_migrated_runtimes_remain_non_live_and_dormant_d1_is_not_desired
     ]
     actual_ids = {item.instance_id for item in spec.managed_runtimes}
 
-    assert {
-        "d1_multisource_consensus_shadow_v1",
-        "europe_d1_distance2_dual_no_shadow_v1",
-    }.isdisjoint(actual_ids)
+    assert "d1_multisource_consensus_shadow_v1" not in actual_ids
+    d1_shadow = next(
+        item
+        for item in spec.managed_runtimes
+        if item.instance_id == "europe_d1_distance2_dual_no_shadow_v1"
+    )
+    assert d1_shadow.role == "shadow"
+    assert d1_shadow.execution_mode == "zero_notional_shadow"
+    assert d1_shadow.expected_live is False
+    assert d1_shadow.recovery_policy == "safe"
+    assert d1_shadow.release_id == "europe_d1_distance2_shadow"
+    assert dict(d1_shadow.expected_health_fields) == {
+        "strategy_instance": "europe_d1_distance2_dual_no_shadow_v1",
+        "execution_mode": "zero_notional_shadow",
+        "orders_submitted": 0,
+        "actual_notional_usd": 0.0,
+        "joint_market_probability_max": 0.1,
+    }
+    assert d1_shadow.dependencies == (
+        "weather_data_feed_jrs",
+        "weather_market_books",
+    )
     assert len(migrated) == len(migrated_ids)
     assert all(item.expected_live is False for item in migrated)
     assert all(item.recovery_policy == "safe" for item in migrated)
