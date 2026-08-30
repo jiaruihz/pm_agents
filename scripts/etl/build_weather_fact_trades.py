@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Any
@@ -23,12 +24,15 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from weather_clock_contract import parse_utc
-
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_clock_contract import parse_utc  # noqa: E402
+
 DB_PATH = ROOT / "runtime" / "weather.db"
 PARQUET_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "research" / "fact_trades.parquet"

@@ -19,6 +19,7 @@ import argparse
 import gzip
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -26,10 +27,12 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from weather_clock_contract import parse_utc_or_none
-
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_clock_contract import parse_utc_or_none  # noqa: E402
+
 DB_PATH = ROOT / "runtime" / "weather.db"
 MARKET_DATA_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data"
 PAPER_SNAPSHOT_DIR = MARKET_DATA_DIR / "paper_snapshots"

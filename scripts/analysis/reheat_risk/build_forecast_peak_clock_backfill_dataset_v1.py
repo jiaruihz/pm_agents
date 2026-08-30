@@ -32,10 +32,14 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 WEATHER_PREDICT_ROOT = ROOT.parent / "weather-predict"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 if str(WEATHER_PREDICT_ROOT) not in sys.path:
     sys.path.insert(0, str(WEATHER_PREDICT_ROOT))
 
 from city_pools import FULL_CITY_CONFIGS  # type: ignore  # noqa: E402
+from weather_clock_contract import local_wall_time_to_utc  # noqa: E402
+from weather_data_feed.city_calendar import city_timezone_name  # noqa: E402
 
 
 DB = ROOT / "runtime/weather.db"
@@ -359,6 +363,7 @@ def derive_peak_rows(
 
     cfg = FULL_CITY_CONFIGS[city]
     offset = int(payload.get("utc_offset_seconds") or 0)
+    timezone_name = str(payload.get("timezone") or city_timezone_name(city) or "")
     rows: list[dict[str, Any]] = []
     for target_date, day_rows in sorted(by_date.items()):
         if target_dates is not None and target_date not in target_dates:
@@ -367,8 +372,11 @@ def derive_peak_rows(
             continue
         max_f = max(value for _, value in day_rows)
         peak_local_time = min(ts for ts, value in day_rows if abs(value - max_f) < 1e-9)
-        local_dt = datetime.fromisoformat(peak_local_time)
-        peak_utc = (local_dt - timedelta(seconds=offset)).replace(tzinfo=timezone.utc)
+        peak_utc = local_wall_time_to_utc(
+            peak_local_time,
+            timezone_name=timezone_name,
+            field="forecast_peak_time_local",
+        )
         max_native = max_f if cfg["unit"] == "F" else (max_f - 32.0) * 5.0 / 9.0
         row = {
             "city": city,

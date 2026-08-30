@@ -1,4 +1,8 @@
 from pathlib import Path
+import subprocess
+import sys
+
+import pytest
 
 from scripts.ops.audit_weather_clock_contracts import _audit_rows, audit_static
 
@@ -36,3 +40,25 @@ def test_clock_affecting_weather_boundaries_use_shared_contract():
     assert result["modules"] >= 48
     assert result["violations"] == []
     assert result["status"] == "pass"
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "scripts/etl/build_weather_fact_trades.py",
+        "scripts/etl/backfill_signal_candidate_decision_windows.py",
+        "scripts/analysis/reheat_risk/build_forecast_peak_clock_backfill_dataset_v1.py",
+        "scripts/analysis/reheat_risk/research_theta_current_yes_forecast_peak_clock_backfill_v3.py",
+    ],
+)
+def test_clock_cli_imports_work_outside_checkout(tmp_path, relative):
+    root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        [sys.executable, str(root / relative), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
