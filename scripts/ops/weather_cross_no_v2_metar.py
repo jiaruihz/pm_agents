@@ -66,6 +66,9 @@ SOURCE_TOPIC_TEMPLATES = {
     "metar_ws_datis": "metar.atis.<icao>",
 }
 ATTRIBUTION_REFRESH_SEC = 30.0
+PRESTART_TRANSITION_HEALTH_FIELDS = frozenset(
+    {"code_identity", "source_attribution_schema_version"}
+)
 
 
 def utc_now() -> datetime:
@@ -120,6 +123,43 @@ def source_event_identity(row: Mapping[str, Any]) -> str:
 
 def economic_cross_id(race_key: str) -> str:
     return "cross_no_v2:" + hashlib.sha256(race_key.encode("utf-8")).hexdigest()
+
+
+def validate_isolated_prestart_manifest(payload: Mapping[str, Any]) -> None:
+    """Allow only this runtime's narrow old-health-to-new-health transition."""
+    critical = [
+        row
+        for row in payload.get("findings", [])
+        if isinstance(row, Mapping) and row.get("severity") == "critical"
+    ]
+    if not critical:
+        raise ValueError("strict manifest failed without a declared critical finding")
+    for row in critical:
+        if row.get("kind") != "runtime_health_contract_mismatch":
+            raise ValueError(f"unrelated prestart manifest critical: {row.get('kind')}")
+        runtimes = (row.get("detail") or {}).get("runtimes") or []
+        if not runtimes:
+            raise ValueError("prestart health exception has no runtime detail")
+        for item in runtimes:
+            if item.get("instance_id") != STRATEGY_ID:
+                raise ValueError("prestart health exception is not isolated to cross_no_v2_metar_v1")
+            status = str(item.get("status") or "")
+            if status == "unreadable":
+                continue
+            mismatches = item.get("mismatches") or []
+            mismatch_fields = {
+                str(mismatch.get("field") or "")
+                for mismatch in mismatches
+                if isinstance(mismatch, Mapping)
+            }
+            if (
+                status != "mismatch"
+                or not mismatch_fields
+                or not mismatch_fields.issubset(PRESTART_TRANSITION_HEALTH_FIELDS)
+            ):
+                raise ValueError(
+                    "prestart health mismatch is outside the source-attribution transition contract"
+                )
 
 
 def append_jsonl(path: Path, row: Mapping[str, Any], *, durable: bool = False) -> None:
