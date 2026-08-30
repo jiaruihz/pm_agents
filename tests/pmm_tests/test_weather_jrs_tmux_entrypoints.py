@@ -397,6 +397,19 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "from scripts.ops.weather_market_proxy_ctl import read_state" in proxy_helper
 
 
+def test_dashboard_api_release_uses_physical_canonical_db_and_operational_logs():
+    text = (OPS / "start_weather_dashboard_api_jrs_tmux.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "load_production_spec().canonical_db_path" in text
+    assert "load_production_spec().operational_repo_root" in text
+    assert 'WEATHER_DB_PATH=$(printf \'%q\' "$CANONICAL_DB_PATH")' in text
+    assert 'WEATHER_DB_PATH=$(printf \'%q\' "$PROJECT_DIR/runtime/weather.db")' not in text
+    assert 'LOG_DIR="$OPERATIONAL_PROJECT_DIR/runtime/_dashboard_logs"' in text
+    assert "canonical dashboard DB missing or non-absolute" in text
+
+
 def test_shared_helper_owns_jrs_oneshot_lifecycle():
     helper = (OPS / "weather_jrs_tmux_env.sh").read_text(encoding="utf-8")
 
