@@ -84,11 +84,20 @@ separate migration proves callers, evidence, and compatibility.
 
 ## Tests
 
-Run focused tests for a change, then the relevant suite:
+Create the development environment from the dev manifest, run focused tests
+for a change, then the relevant suite:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -m pytest -q tests/
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/pre-commit run
+.venv/bin/python scripts/ops/verify_repo.py --profile maintained
 ```
+
+The repository still contains legacy/research formatting debt, so CI runs
+Black and secret/merge checks on changed files rather than silently rewriting
+the checkout. See [CONTRIBUTING.md](CONTRIBUTING.md) for the maintained CI
+suite boundary and research-test routing.
 
 ## License
 

@@ -70,6 +70,25 @@ def test_root_audit_catches_untracked_files_and_respects_explicit_exceptions(
     assert metrics["physical_root_files"] == 4
 
 
+def test_root_audit_ignores_linked_worktree_git_pointer(tmp_path: Path) -> None:
+    (tmp_path / ".git").write_text(
+        "gitdir: /tmp/example/worktrees/review\n", encoding="utf-8"
+    )
+    config = {
+        "tracked_root_directories": {},
+        "tracked_root_files": [],
+        "transient_roots": [],
+        "workspace_only_roots": [],
+        "legacy_or_workspace_config_roots": [],
+        "legacy_untracked_root_files": {},
+    }
+
+    findings, metrics = _audit_roots(tmp_path, config, set())
+
+    assert findings == []
+    assert metrics["physical_root_files"] == 0
+
+
 def test_review_physical_inventory_is_explicitly_deep(tmp_path: Path) -> None:
     tracked = _init_test_repository(tmp_path, "reviews/**\n")
     review_root = tmp_path / "reviews" / "packet"

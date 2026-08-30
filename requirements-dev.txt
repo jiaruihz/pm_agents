@@ -1,0 +1,8 @@
+-r requirements.txt
+
+# Keep CI and local formatting on the same release as pre-commit.
+black==24.4.2
+pre-commit>=4,<5
+
+# Test-only HTTP mocking dependency used by tests/pmm_tests/test_weather_provider.py.
+aioresponses>=0.7,<1

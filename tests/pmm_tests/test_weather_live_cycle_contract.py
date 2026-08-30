@@ -8,7 +8,9 @@ from scripts.ops.weather_live_cycle import _build_live_contract_alerts
 
 class TestWeatherLiveCycleContract(unittest.TestCase):
     def _write_jsonl(self, path: Path, rows):
-        path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+        path.write_text(
+            "\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8"
+        )
 
     def test_contract_alerts_flag_non_t1_and_bad_notional(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -36,7 +38,7 @@ class TestWeatherLiveCycleContract(unittest.TestCase):
                         "city_pool": "t2_research",
                         "entry_price_window": "0.25-0.75",
                         "sizing_mode": "notional",
-                        "notional": 4.2,
+                        "notional": 5.2,
                     }
                 ],
             )
@@ -50,7 +52,7 @@ class TestWeatherLiveCycleContract(unittest.TestCase):
                         "city_pool": "t2_research",
                         "entry_price_window": "0.25-0.75",
                         "sizing_mode": "notional",
-                        "notional": 4.2,
+                        "notional": 5.2,
                     }
                 ],
             )
@@ -77,7 +79,7 @@ class TestWeatherLiveCycleContract(unittest.TestCase):
 
             text = "\n".join(alerts)
             self.assertIn("非 t1_trading city_pool", text)
-            self.assertIn("notional 偏离 5.00", text)
+            self.assertIn("notional 超过上限 5.00", text)
 
     def test_contract_alerts_flag_count_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:

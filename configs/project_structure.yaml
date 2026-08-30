@@ -40,6 +40,7 @@ tracked_root_files:
   - Makefile.weather
   - README.md
   - requirements.txt
+  - requirements-dev.txt
 
 # Existing local-only files whose owner has not yet been migrated. They remain
 # visible warnings, not precedents for adding more root files.

@@ -25,7 +25,15 @@ def _quantize_pair(bid: float, ask: float, tick: float, mode: str):
     return bid, ask
 
 
-def _target_sizes(config: PMMConfig, position: float, usdc_balance: float, bid_price: float):
+def _target_sizes(
+    config: PMMConfig,
+    position: float,
+    usdc_balance: float,
+    bid_price: float,
+    open_buy_qty: float = 0.0,
+    open_sell_qty: float = 0.0,
+):
+    del open_buy_qty, open_sell_qty
     return 10.0, 10.0
 
 
@@ -65,8 +73,12 @@ class TestSmartMoneyFollowV1Strategy(unittest.TestCase):
         sm_quotes = _by_side(smart.generate_quotes(self.quote_input, cfg))
         self.assertEqual(set(base_quotes.keys()), set(sm_quotes.keys()))
         for side in base_quotes.keys():
-            self.assertAlmostEqual(base_quotes[side].price, sm_quotes[side].price, places=8)
-            self.assertAlmostEqual(base_quotes[side].size, sm_quotes[side].size, places=8)
+            self.assertAlmostEqual(
+                base_quotes[side].price, sm_quotes[side].price, places=8
+            )
+            self.assertAlmostEqual(
+                base_quotes[side].size, sm_quotes[side].size, places=8
+            )
 
     def test_positive_signal_increases_buy_bias(self):
         base_cfg = PMMConfig()

@@ -42,7 +42,7 @@ from weather_dashboard.cli.run_create import _current_git_sha, create_run
 from weather_dashboard.cli.universe_register import _universe_id, register_universe
 from weather_dashboard.db.apply_schema import init_db
 from weather_dashboard.db.connection import get_conn
-from scripts.analysis.build_weather_fact_trades import FACT_DDL
+from scripts.etl.build_weather_fact_trades import FACT_DDL
 from weather_dashboard.ingest.ledger_csv import ingest_ledger_csv
 from weather_dashboard.ingest.real_ledger_adapter import adapt_rows
 from weather_dashboard.ingest.settlements import ingest_settlement_rows
@@ -124,7 +124,9 @@ def run_ingest(
         source_path = str(csv_file.resolve())
         n_signals = ingest_ledger_csv(conn, rows, source_path, run_id, cid)
         n_settlements = ingest_settlement_rows(conn, rows, source_path)
-        print(f"Inserted: {n_signals} signal/plan/order/fill rows, {n_settlements} settlement rows")
+        print(
+            f"Inserted: {n_signals} signal/plan/order/fill rows, {n_settlements} settlement rows"
+        )
 
         # Compute and persist metrics
         metrics = save_metrics(conn, run_id)
@@ -142,19 +144,23 @@ def run_ingest(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Ingest a real weather CSV into the dashboard DB")
+    parser = argparse.ArgumentParser(
+        description="Ingest a real weather CSV into the dashboard DB"
+    )
     parser.add_argument("--csv", required=True, help="Path to CSV file")
     parser.add_argument("--db-path", required=True, help="SQLite DB path")
     parser.add_argument("--run-name", required=True, help="Tag/label for this run")
-    parser.add_argument("--execution-mode", required=True,
-                        choices=["snapshot_replay", "paper", "live"])
+    parser.add_argument(
+        "--execution-mode", required=True, choices=["snapshot_replay", "paper", "live"]
+    )
     parser.add_argument("--config-name", default="weather_edge_v1")
     parser.add_argument("--config-params", default="{}", help="JSON object")
     parser.add_argument("--universe-name", default="weather_universe")
     parser.add_argument("--date-range-start")
     parser.add_argument("--date-range-end")
-    parser.add_argument("--state", default="explore",
-                        choices=["explore", "paper", "live", "retired"])
+    parser.add_argument(
+        "--state", default="explore", choices=["explore", "paper", "live", "retired"]
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

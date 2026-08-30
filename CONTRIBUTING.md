@@ -2,26 +2,34 @@
 
 ## Scope
 
-This repository focuses on:
+The active mainline is the weather research, canonical-data, dashboard and
+execution system. PMM/ARB packages remain available as dormant assets; do not
+infer current production behavior from their historical entrypoints.
 
-- `pmm/` market-making engine and backtest framework
-- `pm_arb_bot/` arbitrage bot scaffold
-
-Legacy `agents/` code has been removed.
+Read `AGENTS.md`, `docs/PROJECT_STRUCTURE.md` and the task-specific skill before
+changing production or research behavior.
 
 ## Development Setup
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+pre-commit install
 ```
 
 ## Run Tests
 
 ```bash
-pytest tests/pmm_tests -q
+python scripts/ops/verify_repo.py --profile fast
+python scripts/ops/verify_repo.py --profile maintained
 ```
+
+Run focused tests first. The default CI suites cover maintained production,
+platform, dashboard and strategy contracts. `tests/research_tests` remains a
+separate task-scoped surface because some tests require immutable mounted
+archives or intentionally long research fixtures. Use `--profile full` only
+for the explicit repository-wide audit; it also runs docs and research gates.
 
 ## Pull Request Guidelines
 

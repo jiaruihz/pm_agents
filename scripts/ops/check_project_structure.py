@@ -36,9 +36,9 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _git_paths(repo_root: Path, *args: str) -> set[str]:
-    output = subprocess.check_output(
-        ["git", *args], cwd=repo_root
-    ).decode("utf-8", errors="surrogateescape")
+    output = subprocess.check_output(["git", *args], cwd=repo_root).decode(
+        "utf-8", errors="surrogateescape"
+    )
     return {item for item in output.split("\0") if item}
 
 
@@ -98,19 +98,30 @@ def _audit_roots(
     expected_files = set(config["tracked_root_files"])
     for value in sorted(actual_dirs - expected_dirs):
         findings.append(
-            Finding("error", "unknown_tracked_root", "tracked root is unclassified", value)
+            Finding(
+                "error", "unknown_tracked_root", "tracked root is unclassified", value
+            )
         )
     for value in sorted(expected_dirs - actual_dirs):
         findings.append(
-            Finding("error", "missing_tracked_root", "registered tracked root is absent", value)
+            Finding(
+                "error",
+                "missing_tracked_root",
+                "registered tracked root is absent",
+                value,
+            )
         )
     for value in sorted(actual_files - expected_files):
         findings.append(
-            Finding("error", "unknown_root_file", "tracked root file is unclassified", value)
+            Finding(
+                "error", "unknown_root_file", "tracked root file is unclassified", value
+            )
         )
     for value in sorted(expected_files - actual_files):
         findings.append(
-            Finding("error", "missing_root_file", "registered root file is absent", value)
+            Finding(
+                "error", "missing_root_file", "registered root file is absent", value
+            )
         )
 
     transient = tuple(f"{root}/" for root in config["transient_roots"])
@@ -150,7 +161,7 @@ def _audit_roots(
     physical_files = {
         path.name
         for path in repo_root.iterdir()
-        if path.is_file() or path.is_symlink()
+        if path.name != ".git" and (path.is_file() or path.is_symlink())
     }
     for value in sorted(physical_files - actual_files):
         if is_ignored(repo_root, value):
@@ -246,7 +257,9 @@ def _audit_context(repo_root: Path, config: dict[str, Any]) -> list[Finding]:
     return findings
 
 
-def _audit_skills(repo_root: Path, catalog_path: Path) -> tuple[list[Finding], dict[str, Any]]:
+def _audit_skills(
+    repo_root: Path, catalog_path: Path
+) -> tuple[list[Finding], dict[str, Any]]:
     findings: list[Finding] = []
     catalog = _load_yaml(catalog_path)
     entries = catalog.get("skills")
@@ -352,9 +365,10 @@ def _audit_skills(repo_root: Path, catalog_path: Path) -> tuple[list[Finding], d
                     f"skills/{name}",
                 )
             )
-        if lifecycle == "dormant" and "dormant" not in str(
-            frontmatter.get("description", "")
-        ).lower():
+        if (
+            lifecycle == "dormant"
+            and "dormant" not in str(frontmatter.get("description", "")).lower()
+        ):
             findings.append(
                 Finding(
                     "error",
@@ -376,12 +390,10 @@ def _audit_skills(repo_root: Path, catalog_path: Path) -> tuple[list[Finding], d
     return findings, {
         "skill_count": len(actual),
         "active_skills": sum(
-            (entries.get(name) or {}).get("lifecycle") == "active"
-            for name in declared
+            (entries.get(name) or {}).get("lifecycle") == "active" for name in declared
         ),
         "dormant_skills": sum(
-            (entries.get(name) or {}).get("lifecycle") == "dormant"
-            for name in declared
+            (entries.get(name) or {}).get("lifecycle") == "dormant" for name in declared
         ),
     }
 
@@ -483,12 +495,17 @@ def audit_project(
         )
     else:
         try:
-            from src.research_governance.record import ResearchRecord, validate_record_file
+            from src.research_governance.record import (
+                ResearchRecord,
+                validate_record_file,
+            )
 
             validate_record_file(
                 template,
                 repo_root=repo_root,
-                skill_names=set(_load_yaml(repo_root / config["skill_catalog"])["skills"]),
+                skill_names=set(
+                    _load_yaml(repo_root / config["skill_catalog"])["skills"]
+                ),
             )
         except (OSError, ValueError) as exc:
             findings.append(
