@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -260,6 +261,25 @@ def test_21_append_only_shadow_prediction_is_idempotent(tmp_path: Path) -> None:
         append_shadow_prediction(journal, {**row, "prediction_row_id": "wrong"})
     with pytest.raises(RuntimeError, match="epoch/event"):
         append_shadow_prediction(journal, {**row, "feature_vector_hash": "changed"})
+
+
+def test_21b_concurrent_shadow_prediction_append_has_one_physical_row(tmp_path: Path) -> None:
+    journal = tmp_path / "predictions.jsonl"
+    row = {
+        "forward_epoch_id": "e", "event_id": "event", "decision_vintage_id": "d",
+        "raw_source_lineage": {}, "full_path_lineage": [], "feature_vector": {},
+        "feature_vector_hash": "hash", "B2_PMF": [0.2, 0.8], "M1_PMF": [0.3, 0.7],
+        "M2_PMF": [0.4, 0.6], "market_identity": None, "decision_book": None,
+        "submit_proxy_book": None, "layer_b_prediction": None, "abstain_reasons": [],
+        "data_failure_reasons": [], "future_next_print_label": None, "future_markouts": None,
+        "orders": 0, "fills": 0, "notional": 0,
+    }
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _: append_shadow_prediction(journal, row), range(32)))
+
+    assert results.count("APPENDED") == 1
+    assert results.count("ALREADY_PRESENT_IDENTICAL") == 31
+    assert len(journal.read_text(encoding="utf-8").splitlines()) == 1
 
 
 def test_22_package_missing_extra_hash_and_duplicate_fail_closed(tmp_path: Path) -> None:

@@ -21,8 +21,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/f5577f378f9f429f3cb4b06e3515c7b8662a030f
     expected_repo_sha: f5577f378f9f429f3cb4b06e3515c7b8662a030f
   - release_id: amsterdam_wcir_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/b0034ca1c99dd500966cb1ee935fc59a49a83b98
-    expected_repo_sha: b0034ca1c99dd500966cb1ee935fc59a49a83b98
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/4b0a7fdaf376fc94ca410de49b72d463b27107e4
+    expected_repo_sha: 4b0a7fdaf376fc94ca410de49b72d463b27107e4
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c

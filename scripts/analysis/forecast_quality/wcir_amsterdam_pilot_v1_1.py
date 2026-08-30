@@ -63,6 +63,7 @@ from scripts.analysis.forecast_quality.wcir_amsterdam_pilot_rev2 import (
     sha256,
     train_and_evaluate,
 )
+from weather_city_runtime.jsonl_lock import exclusive_jsonl_lock
 from weather_city_runtime.next_print_contracts import CITY_CONTRACTS
 from weather_modeling.amsterdam_feature_builder_v2 import (
     AmsterdamFeatureBuilderV2,
@@ -232,27 +233,27 @@ def append_shadow_prediction(path: Path, row: dict[str, Any]) -> str:
         raise ValueError("prediction_row_id does not match row content")
     payload["prediction_row_id"] = row_id
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                existing = json.loads(line)
-                same_event = (
-                    existing.get("forward_epoch_id") == payload["forward_epoch_id"]
-                    and existing.get("event_id") == payload["event_id"]
-                )
-                if not same_event and existing.get("prediction_row_id") != row_id:
-                    continue
-                existing_encoded = json.dumps(existing, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-                if existing_encoded != encoded:
-                    raise RuntimeError("conflicting append-only shadow epoch/event")
-                return "ALREADY_PRESENT_IDENTICAL"
-    descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-    try:
-        os.write(descriptor, (encoded + "\n").encode("utf-8"))
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    with exclusive_jsonl_lock(path):
+        if path.exists():
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    existing = json.loads(line)
+                    same_event = (
+                        existing.get("forward_epoch_id") == payload["forward_epoch_id"]
+                        and existing.get("event_id") == payload["event_id"]
+                    )
+                    if not same_event and existing.get("prediction_row_id") != row_id:
+                        continue
+                    existing_encoded = json.dumps(existing, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+                    if existing_encoded != encoded:
+                        raise RuntimeError("conflicting append-only shadow epoch/event")
+                    return "ALREADY_PRESENT_IDENTICAL"
+        descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(descriptor, (encoded + "\n").encode("utf-8"))
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
     return "APPENDED"
 
 

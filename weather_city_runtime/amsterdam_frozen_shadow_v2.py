@@ -18,6 +18,7 @@ import tempfile
 from typing import Any, Iterable
 
 from src.platform.market_data.capture_demand import CaptureDemand
+from weather_city_runtime.jsonl_lock import exclusive_jsonl_lock
 from weather_city_runtime.next_print_contracts import CITY_CONTRACTS
 from weather_clock_contract import parse_utc
 
@@ -102,17 +103,39 @@ class ImmutableJsonl:
     """A small append-only JSONL store keyed by a stable identity field."""
     def __init__(self, path: Path, identity: str) -> None:
         self.path, self.identity = path, identity
-        loaded = read_jsonl(path)
-        self.rows = {str(row[identity]): row for row in loaded}
-        if len(self.rows) != len(loaded):
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.physical_row_count = 0
+        self.duplicate_identity_count = 0
+        self.refresh()
+
+    def _refresh_unlocked(self) -> int:
+        loaded = read_jsonl(self.path)
+        rows = {str(row[self.identity]): row for row in loaded}
+        if len(rows) != len(loaded):
             # Duplicate identities are allowed only when byte-equivalent.
             seen: dict[str, dict[str, Any]] = {}
             for row in loaded:
-                key = str(row[identity])
+                key = str(row[self.identity])
                 if key in seen and seen[key] != row:
-                    raise ValueError(f"immutable payload drift for {identity}: {key}")
+                    raise ValueError(f"immutable payload drift for {self.identity}: {key}")
                 seen[key] = row
-            self.rows = seen
+            rows = seen
+        missing = set(self.rows) - set(rows)
+        if missing:
+            raise ValueError(f"immutable journal truncated for {self.identity}: {sorted(missing)[:5]}")
+        for key, previous in self.rows.items():
+            if rows[key] != previous:
+                raise ValueError(f"immutable payload drift for {self.identity}: {key}")
+        added = len(set(rows) - set(self.rows))
+        self.rows = rows
+        self.physical_row_count = len(loaded)
+        self.duplicate_identity_count = len(loaded) - len(rows)
+        return added
+
+    def refresh(self) -> int:
+        """Reload rows appended by another cooperating writer."""
+        with exclusive_jsonl_lock(self.path):
+            return self._refresh_unlocked()
 
     def put(self, row: Mapping[str, Any]) -> bool:
         payload = json.loads(json.dumps(
@@ -140,6 +163,7 @@ class ImmutableJsonl:
         finally:
             os.close(descriptor)
         self.rows[key] = payload
+        self.physical_row_count += 1
         return True
 
 
@@ -742,14 +766,22 @@ class AmsterdamFrozenShadowRuntime:
         self.markouts = ImmutableJsonl(root / "markouts.jsonl", "markout_row_id")
 
     def ingest_predictions(self, rows: Iterable[Mapping[str, Any]]) -> int:
-        count = 0
-        for item in rows:
-            row = dict(item)
-            row.setdefault("prediction_row_id", prediction_identity(row))
-            if [row.get("orders"), row.get("fills"), row.get("notional")] != [0, 0, 0]:
-                raise ValueError("frozen shadow must remain zero-notional")
-            count += int(self.predictions.put(row))
-        return count
+        # The frozen scorer writes this same journal before the materializer
+        # consumes it. Refresh the in-memory identity index first so those
+        # externally appended rows are observed, not appended a second time.
+        with exclusive_jsonl_lock(self.predictions.path):
+            self.predictions._refresh_unlocked()
+            count = 0
+            for item in rows:
+                row = dict(item)
+                row.setdefault("prediction_row_id", prediction_identity(row))
+                if [row.get("orders"), row.get("fills"), row.get("notional")] != [0, 0, 0]:
+                    raise ValueError("frozen shadow must remain zero-notional")
+                count += int(self.predictions.put(row))
+            return count
+
+    def refresh_predictions(self) -> int:
+        return self.predictions.refresh()
 
     def materialize(self) -> dict[str, int]:
         linked_label_groups: dict[str, list[dict[str, Any]]] = {}
@@ -842,6 +874,7 @@ class AmsterdamFrozenShadowRuntime:
         return result
 
     def health(self, *, epoch: str | None = None, frozen_hashes: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        self.predictions.refresh()
         total = len(self.predictions.rows)
         labels = list(self.labels.rows.values())
         settlements = list(self.settlements.rows.values())
@@ -911,6 +944,8 @@ class AmsterdamFrozenShadowRuntime:
         return {"status": "ok", "execution_mode": "zero_notional_shadow", "live_authority": False,
                 "strategy_key": STRATEGY_KEY, "generated_at_utc": _now(), "forward_epoch_id": epoch,
                 "frozen_hashes": dict(frozen_hashes or {}), "prediction_count": total,
+                "prediction_physical_row_count": self.predictions.physical_row_count,
+                "prediction_duplicate_identity_count": self.predictions.duplicate_identity_count,
                 "label_linked": len(linked_label_predictions), "label_coverage": (len(linked_label_predictions) / total if total else 0.0),
                 "label_target_dates": label_dates,
                 "label_distribution": label_distribution,

@@ -126,6 +126,73 @@ def test_runtime_idempotency_and_payload_drift_fail_closed(tmp_path) -> None:
         runtime.ingest_predictions([drift])
 
 
+def test_external_scorer_append_is_refreshed_without_duplicate(tmp_path) -> None:
+    runtime = AmsterdamFrozenShadowRuntime(tmp_path)
+    journal = tmp_path / "predictions.jsonl"
+    journal.write_text(
+        json.dumps(prediction(), sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    assert runtime.refresh_predictions() == 1
+    assert runtime.ingest_predictions([prediction()]) == 0
+    assert len(journal.read_text(encoding="utf-8").splitlines()) == 1
+    health = runtime.health()
+    assert health["prediction_count"] == 1
+    assert health["prediction_physical_row_count"] == 1
+    assert health["prediction_duplicate_identity_count"] == 0
+
+
+def test_legacy_identical_duplicate_is_counted_at_unique_prediction_grain(tmp_path) -> None:
+    journal = tmp_path / "predictions.jsonl"
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(prediction(), sort_keys=True, separators=(",", ":")) + "\n"
+    journal.write_text(encoded + encoded, encoding="utf-8")
+
+    runtime = AmsterdamFrozenShadowRuntime(tmp_path)
+    health = runtime.health()
+    assert health["prediction_count"] == 1
+    assert health["prediction_physical_row_count"] == 2
+    assert health["prediction_duplicate_identity_count"] == 1
+
+
+def test_prediction_journal_truncation_and_payload_replacement_fail_closed(tmp_path) -> None:
+    runtime = AmsterdamFrozenShadowRuntime(tmp_path)
+    runtime.ingest_predictions([prediction()])
+    journal = tmp_path / "predictions.jsonl"
+    original = journal.read_text(encoding="utf-8")
+
+    journal.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="truncated"):
+        runtime.refresh_predictions()
+
+    drift = prediction()
+    drift["feature_vector"] = {"official_running_max": 99.0}
+    journal.write_text(
+        json.dumps(drift, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="payload drift"):
+        runtime.refresh_predictions()
+
+    journal.write_text(original + '{"prediction_row_id":', encoding="utf-8")
+    with pytest.raises(json.JSONDecodeError):
+        runtime.refresh_predictions()
+
+
+def test_health_refreshes_prediction_rows_appended_by_scorer(tmp_path) -> None:
+    runtime = AmsterdamFrozenShadowRuntime(tmp_path)
+    journal = tmp_path / "predictions.jsonl"
+    journal.write_text(
+        json.dumps(prediction(), sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    health = runtime.health()
+    assert health["prediction_count"] == 1
+    assert health["prediction_physical_row_count"] == 1
+
+
 def test_exact_settlement_join(tmp_path) -> None:
     db = tmp_path / "weather.db"
     conn = sqlite3.connect(db)
