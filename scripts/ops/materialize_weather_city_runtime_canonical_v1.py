@@ -25,10 +25,14 @@ from weather_city_runtime import (  # noqa: E402
     TemporaryCanonicalBridge,
 )
 from weather_data_feed.information_events import canonical_json_hash  # noqa: E402
+from weather_data_feed.cursor_epochs import cursor_epoch_identity  # noqa: E402
 
 
-CURSOR_SCHEMA_VERSION = "wcir_canonical_materializer_cursor_v1"
+CURSOR_SCHEMA_VERSION = "weather_jsonl_cursor_epoch_v1"
+LEGACY_CURSOR_SCHEMA_VERSION = "wcir_canonical_materializer_cursor_v1"
 CURSOR_GUARD_BYTES = 4096
+CURSOR_RECOVERY_OWNER = "canonical_refresh"
+CURSOR_STUCK_SLO_SECONDS = 900
 
 
 def _utc_now() -> str:
@@ -81,9 +85,82 @@ def _load_cursor_state(state_path: Path) -> dict[str, Any] | None:
     if not state_path.exists():
         return None
     raw = json.loads(state_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or raw.get("schema_version") != CURSOR_SCHEMA_VERSION:
+    if not isinstance(raw, dict) or raw.get("schema_version") not in {
+        CURSOR_SCHEMA_VERSION,
+        LEGACY_CURSOR_SCHEMA_VERSION,
+    }:
         raise ValueError(f"invalid WCIR materializer cursor: {state_path}")
+    if raw.get("schema_version") == CURSOR_SCHEMA_VERSION:
+        required = {
+            "cursor_epoch_id",
+            "epoch_started_at_utc",
+            "recovery_owner",
+            "stuck_slo_seconds",
+        }
+        missing = sorted(required - set(raw))
+        if missing:
+            raise ValueError(
+                f"WCIR cursor epoch metadata is incomplete: {state_path}: {missing}"
+            )
+        if int(raw["stuck_slo_seconds"]) <= 0:
+            raise ValueError("WCIR cursor stuck SLO must be positive")
+        predecessor = raw.get("predecessor_epoch_id")
+        if predecessor:
+            receipt_path = Path(str(raw.get("recovery_receipt_path") or ""))
+            receipt_hash = str(raw.get("recovery_receipt_sha256") or "")
+            if not receipt_path.is_absolute() or not receipt_path.is_file():
+                raise ValueError("recovered WCIR cursor requires an immutable receipt")
+            if hashlib.sha256(receipt_path.read_bytes()).hexdigest() != receipt_hash:
+                raise ValueError("WCIR cursor recovery receipt hash mismatch")
     return raw
+
+
+def _epoch_id(path: Path, device: int, inode: int) -> str:
+    return cursor_epoch_identity(path, device=device, inode=inode)
+
+
+def _epoch_metadata(
+    state: dict[str, Any] | None,
+    *,
+    resolved: Path,
+    device: int,
+    inode: int,
+) -> dict[str, Any]:
+    if state is None:
+        return {
+            "cursor_epoch_id": _epoch_id(resolved, device, inode),
+            "predecessor_epoch_id": None,
+            "recovery_receipt_path": None,
+            "recovery_receipt_sha256": None,
+            "epoch_started_at_utc": _utc_now(),
+            "recovery_owner": CURSOR_RECOVERY_OWNER,
+            "stuck_slo_seconds": CURSOR_STUCK_SLO_SECONDS,
+            "migrated_from_schema_version": None,
+        }
+    if state["schema_version"] == LEGACY_CURSOR_SCHEMA_VERSION:
+        return {
+            "cursor_epoch_id": _epoch_id(resolved, device, inode),
+            "predecessor_epoch_id": None,
+            "recovery_receipt_path": None,
+            "recovery_receipt_sha256": None,
+            "epoch_started_at_utc": state.get("updated_at_utc") or _utc_now(),
+            "recovery_owner": CURSOR_RECOVERY_OWNER,
+            "stuck_slo_seconds": CURSOR_STUCK_SLO_SECONDS,
+            "migrated_from_schema_version": LEGACY_CURSOR_SCHEMA_VERSION,
+        }
+    return {
+        key: state.get(key)
+        for key in (
+            "cursor_epoch_id",
+            "predecessor_epoch_id",
+            "recovery_receipt_path",
+            "recovery_receipt_sha256",
+            "epoch_started_at_utc",
+            "recovery_owner",
+            "stuck_slo_seconds",
+            "migrated_from_schema_version",
+        )
+    }
 
 
 def _guard_hash(handle, offset: int) -> tuple[int, str]:
@@ -113,6 +190,19 @@ def _load_cursor_batch(
             "size_bytes": source_stat.st_size,
             "mtime_ns": source_stat.st_mtime_ns,
         }
+        epoch = _epoch_metadata(
+            state,
+            resolved=resolved,
+            device=source_stat.st_dev,
+            inode=source_stat.st_ino,
+        )
+        if (
+            state is not None
+            and state.get("schema_version") == CURSOR_SCHEMA_VERSION
+            and state.get("cursor_epoch_id")
+            != _epoch_id(resolved, source_stat.st_dev, source_stat.st_ino)
+        ):
+            raise ValueError("WCIR cursor epoch identity does not match its input inode")
         if state is None:
             offset_before = 0
             processed_rows_before = 0
@@ -147,7 +237,11 @@ def _load_cursor_batch(
             if line_end > source_stat.st_size or not raw_line.endswith(b"\n"):
                 handle.seek(line_start)
                 break
-            if bundles and batch_bytes + len(raw_line) > max_bytes:
+            if batch_bytes + len(raw_line) > max_bytes:
+                if not bundles:
+                    raise ValueError(
+                        "next complete WCIR JSONL row exceeds --max-new-bytes"
+                    )
                 handle.seek(line_start)
                 break
             batch_bytes += len(raw_line)
@@ -171,6 +265,7 @@ def _load_cursor_batch(
     cursor_before = {
         "offset_bytes": offset_before,
         "processed_rows": processed_rows_before,
+        **epoch,
     }
     cursor_after = {
         "offset_bytes": offset_after,
@@ -178,6 +273,7 @@ def _load_cursor_batch(
         "batch_rows": len(bundles),
         "batch_bytes": offset_after - offset_before,
         "remaining_bytes_at_snapshot": source_stat.st_size - offset_after,
+        **epoch,
     }
     return bundles, snapshot, cursor_before, cursor_after
 
@@ -211,11 +307,32 @@ def _cursor_state_payload(
         "source_size_observed": source_stat.st_size,
         "source_mtime_ns_observed": source_stat.st_mtime_ns,
         "updated_at_utc": _utc_now(),
+        **{
+            key: cursor_after.get(key)
+            for key in (
+                "cursor_epoch_id",
+                "predecessor_epoch_id",
+                "recovery_receipt_path",
+                "recovery_receipt_sha256",
+                "epoch_started_at_utc",
+                "recovery_owner",
+                "stuck_slo_seconds",
+                "migrated_from_schema_version",
+            )
+        },
     }
 
 
 def _write_cursor_state(state_path: Path, payload: dict[str, Any]) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = _load_cursor_state(state_path)
+    if existing is not None and existing.get("schema_version") == CURSOR_SCHEMA_VERSION:
+        if existing.get("cursor_epoch_id") != payload.get("cursor_epoch_id"):
+            raise RuntimeError(
+                "refusing to replace a cursor with a different epoch in place"
+            )
+        if int(payload["offset_bytes"]) < int(existing.get("offset_bytes", -1)):
+            raise RuntimeError("refusing to move a cursor epoch backwards")
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",

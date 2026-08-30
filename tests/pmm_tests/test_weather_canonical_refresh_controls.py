@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+
+from scripts.ops.weather_canonical_refresh_preflight import evaluate_preflight
+from scripts.ops.weather_canonical_refresh_stage import run_stage
+
+
+def _preflight(tmp_path: Path, **overrides):
+    db = tmp_path / "weather.db"
+    db.write_bytes(b"db")
+    values = {
+        "manifest": {"status": "healthy", "db_route": {"status": "healthy"}},
+        "db_path": db,
+        "canonical_db_path": db,
+        "jrs_probe": {"status": "healthy"},
+        "feed_health": {"status": "ok"},
+        "registry_audit": {"ok": True, "registry_build_id": "registry"},
+    }
+    values.update(overrides)
+    return evaluate_preflight(**values)
+
+
+def test_preflight_scopes_migration_blockers_without_skipping_live_accounting(
+    tmp_path: Path,
+) -> None:
+    ready = _preflight(tmp_path)
+    assert ready["status"] == "ready"
+    assert ready["live_accounting_allowed"] is True
+    assert ready["migration_allowed"] is True
+
+    migration_blocked = _preflight(
+        tmp_path,
+        manifest={"status": "critical", "db_route": {"status": "healthy"}},
+        feed_health={"status": "fail"},
+    )
+    assert migration_blocked["status"] == "migration_blocked"
+    assert migration_blocked["live_accounting_allowed"] is True
+    assert migration_blocked["migration_allowed"] is False
+
+
+def test_preflight_blocks_every_write_on_db_identity_or_jrs_failure(
+    tmp_path: Path,
+) -> None:
+    other = tmp_path / "other.db"
+    other.write_bytes(b"other")
+    mismatch = _preflight(tmp_path, canonical_db_path=other)
+    assert mismatch["status"] == "all_writes_blocked"
+    assert mismatch["live_accounting_allowed"] is False
+
+    jrs = _preflight(tmp_path, jrs_probe={"status": "critical"})
+    assert jrs["status"] == "all_writes_blocked"
+
+
+def test_stage_records_pass_timeout_and_wal_growth(tmp_path: Path) -> None:
+    db = tmp_path / "weather.db"
+    db.write_bytes(b"db")
+    report = tmp_path / "reports" / "pass.json"
+    code, payload = run_stage(
+        stage="pass",
+        command=[sys.executable, "-c", "print('ok')"],
+        db_path=db,
+        report_path=report,
+        max_seconds=2,
+        max_wal_bytes=1024,
+        max_wal_growth_bytes=100,
+    )
+    assert code == 0 and payload["status"] == "passed"
+    assert json.loads(report.read_text())["stdout_tail"].strip() == "ok"
+
+    code, payload = run_stage(
+        stage="timeout",
+        command=[sys.executable, "-c", "import time; time.sleep(1)"],
+        db_path=db,
+        report_path=tmp_path / "reports" / "timeout.json",
+        max_seconds=0.02,
+        max_wal_bytes=1024,
+        max_wal_growth_bytes=100,
+    )
+    assert code == 124 and payload["status"] == "timeout"
+
+    wal = Path(str(db) + "-wal")
+    code, payload = run_stage(
+        stage="growth",
+        command=[
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(wal)!r}).write_bytes(b'x' * 20)",
+        ],
+        db_path=db,
+        report_path=tmp_path / "reports" / "growth.json",
+        max_seconds=2,
+        max_wal_bytes=1024,
+        max_wal_growth_bytes=10,
+    )
+    assert code == 75 and payload["status"] == "wal_budget_exceeded"
+
+
+def test_stage_does_not_start_when_absolute_wal_budget_is_already_breached(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "weather.db"
+    db.write_bytes(b"db")
+    Path(str(db) + "-wal").write_bytes(b"x" * 20)
+    marker = tmp_path / "must-not-exist"
+    code, payload = run_stage(
+        stage="preexisting",
+        command=[
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).touch()",
+        ],
+        db_path=db,
+        report_path=tmp_path / "reports" / "preexisting.json",
+        max_seconds=2,
+        max_wal_bytes=10,
+        max_wal_growth_bytes=10,
+    )
+    assert code == 75
+    assert payload["status"] == "blocked_preexisting_wal_budget"
+    assert not marker.exists()
+
+
+def test_launchd_refresh_uses_registry_preflight_and_stage_wrapper() -> None:
+    script = (
+        Path(__file__).resolve().parents[2]
+        / "scripts/ops/run_weather_canonical_refresh_launchd.sh"
+    ).read_text(encoding="utf-8")
+    assert 'physical_path("wcir_decision_bundles")' in script
+    assert 'cursor_state_path("wcir_decision_bundles")' in script
+    assert "weather_canonical_refresh_preflight.py" in script
+    assert "weather_canonical_refresh_stage.py" in script
+    assert "migration_allowed" in script

@@ -71,10 +71,36 @@ CREATE TABLE IF NOT EXISTS weather_trade_intents (
  CHECK (mode <> 'zero_notional' OR requested_size = 0),
  CHECK (max_cost IS NULL OR (max_cost >= 0 AND max_cost <= 1))
 );
+CREATE TABLE IF NOT EXISTS weather_candidate_settlement_labels (
+ label_fact_id TEXT PRIMARY KEY,
+ candidate_id TEXT NOT NULL,
+ condition_id TEXT,
+ city TEXT NOT NULL,
+ target_date TEXT NOT NULL,
+ measurement_namespace TEXT NOT NULL,
+ namespace_status TEXT NOT NULL,
+ settlement_yes REAL NOT NULL,
+ settlement_source_kind TEXT NOT NULL,
+ settlement_source_id TEXT NOT NULL,
+ source_payload_hash TEXT NOT NULL,
+ source_available_at_utc TEXT,
+ label_available_at_utc TEXT,
+ label_availability_status TEXT NOT NULL,
+ created_at_utc TEXT NOT NULL,
+ CHECK (measurement_namespace IN ('tmax','tmin','unknown')),
+ CHECK (namespace_status IN ('explicit_question','unknown')),
+ CHECK (settlement_yes IN (0.0,1.0)),
+ CHECK (settlement_source_kind IN ('settlement_outcome','legacy_candidate_fact')),
+ CHECK (label_availability_status IN ('known','unknown')),
+ UNIQUE (candidate_id, settlement_source_kind, settlement_source_id)
+);
 CREATE INDEX IF NOT EXISTS idx_weather_model_outputs_checkpoint
  ON weather_model_outputs(checkpoint_id, decision_ts_utc);
 CREATE INDEX IF NOT EXISTS idx_weather_trade_intents_candidate
  ON weather_trade_intents(candidate_id, execution_profile, mode);
+CREATE INDEX IF NOT EXISTS idx_weather_candidate_settlement_labels_asof
+ ON weather_candidate_settlement_labels(candidate_id, label_available_at_utc,
+                                         settlement_source_kind);
 CREATE TRIGGER IF NOT EXISTS weather_model_outputs_no_update
  BEFORE UPDATE ON weather_model_outputs BEGIN
    SELECT RAISE(ABORT, 'weather_model_outputs is append-only');
@@ -90,6 +116,14 @@ CREATE TRIGGER IF NOT EXISTS weather_trade_intents_no_update
 CREATE TRIGGER IF NOT EXISTS weather_trade_intents_no_delete
  BEFORE DELETE ON weather_trade_intents BEGIN
    SELECT RAISE(ABORT, 'weather_trade_intents is append-only');
+ END;
+CREATE TRIGGER IF NOT EXISTS weather_candidate_settlement_labels_no_update
+ BEFORE UPDATE ON weather_candidate_settlement_labels BEGIN
+   SELECT RAISE(ABORT, 'weather_candidate_settlement_labels is append-only');
+ END;
+CREATE TRIGGER IF NOT EXISTS weather_candidate_settlement_labels_no_delete
+ BEFORE DELETE ON weather_candidate_settlement_labels BEGIN
+   SELECT RAISE(ABORT, 'weather_candidate_settlement_labels is append-only');
  END;
 CREATE INDEX IF NOT EXISTS idx_weather_information_events_city_available
  ON weather_information_events(city, available_at_utc, event_kind);

@@ -701,6 +701,14 @@ def test_canonical_materializer_cursor_is_bounded_append_only_and_idempotent(
     physical = tmp_path / "cursor-canonical.db"
     TemporaryCanonicalBridge(physical).append([])
 
+    with pytest.raises(ValueError, match="exceeds --max-new-bytes"):
+        canonical_materializer._load_cursor_batch(
+            journal,
+            tmp_path / "too-small-cursor.json",
+            max_rows=1,
+            max_bytes=1,
+        )
+
     def _apply(report_name: str) -> dict:
         report = tmp_path / report_name
         assert canonical_materializer.main([
@@ -742,8 +750,45 @@ def test_canonical_materializer_cursor_is_bounded_append_only_and_idempotent(
     finally:
         conn.close()
     cursor = json.loads(state.read_text())
+    assert cursor["schema_version"] == "weather_jsonl_cursor_epoch_v1"
+    assert len(cursor["cursor_epoch_id"]) == 64
+    assert cursor["predecessor_epoch_id"] is None
+    assert cursor["recovery_owner"] == "canonical_refresh"
+    assert cursor["stuck_slo_seconds"] == 900
     assert cursor["processed_rows"] == 4
     assert cursor["offset_bytes"] == journal.stat().st_size
+
+    legacy_state = tmp_path / "legacy-cursor.json"
+    legacy_payload = {
+        key: value
+        for key, value in cursor.items()
+        if key
+        not in {
+            "cursor_epoch_id",
+            "predecessor_epoch_id",
+            "recovery_receipt_path",
+            "recovery_receipt_sha256",
+            "epoch_started_at_utc",
+            "recovery_owner",
+            "stuck_slo_seconds",
+            "migrated_from_schema_version",
+        }
+    }
+    legacy_payload["schema_version"] = "wcir_canonical_materializer_cursor_v1"
+    legacy_state.write_text(json.dumps(legacy_payload), encoding="utf-8")
+    _, snapshot, _, legacy_after = canonical_materializer._load_cursor_batch(
+        journal,
+        legacy_state,
+        max_rows=1,
+        max_bytes=1024,
+    )
+    migrated = canonical_materializer._cursor_state_payload(
+        journal, legacy_after, snapshot
+    )
+    canonical_materializer._write_cursor_state(legacy_state, migrated)
+    assert json.loads(legacy_state.read_text())["migrated_from_schema_version"] == (
+        "wcir_canonical_materializer_cursor_v1"
+    )
 
     with journal.open("r+b") as handle:
         handle.seek(cursor["offset_bytes"] - 10)

@@ -95,11 +95,37 @@ legacy signal 只能通过显式 adapter 投影，不伪造缺失的 `TradeInten
 settlement PnL 仍以 `fact_trades`/raw exchange lineage 为准。人工 golden casebook、对话时间线和机制案例
 只可作为同一 `candidate_id` 的叙事/证据附件；不能替代全分母，也不能反向决定哪些 row 被保留。
 
-这里的 `ready/full_decision` 是 **catalog 引用层 readiness**；视图明确输出
-`replay_artifact_verification_status='not_checked_by_catalog'`。真正执行 replay 前仍须解析引用、核对 raw/feature/
-model/book artifact 存在且 hash 一致。视图完整性也以 candidate materialization coverage 为上限：尚未 dual-write
+每次 view contract 都绑定 `replay_catalog_build_id`，catalog build 和 artifact verification 都是 append-only。
+这里的 `ready/full_decision` 是 **catalog 引用层 readiness**；新 case 默认输出
+`replay_artifact_verification_status='not_checked_by_catalog'`。真正执行 replay 前，verifier 必须在 registered
+artifact root 内解析 absolute path 并核对真实 file SHA-256；aggregate/source hash 不能冒充 file evidence。
+验证状态固定为 `ready`、`legacy_summary_only`、`blocked_evidence`、`blocked_missing_artifact`、
+`blocked_hash_mismatch` 或 `blocked_unverifiable_artifact`，并绑定 catalog/verifier build id。视图完整性也以
+candidate materialization coverage 为上限：尚未 dual-write
 或 backfill 到 `fact_signal_candidates` 的旧 runner/raw 判断必须列为 coverage gap，不能把“视图里没有”解释成
 “当时没有判断”。
+
+### Immutable dataset / split / label 合同（2026-08-30）
+
+模型完善后的回测不得直接指向仍在增长的 DB 或“最新目录”。一次 dataset seal 必须固定：canonical DB
+realpath/device/inode/schema/file SHA、rows/row-identity hash、每个 raw source 的 logical + physical snapshot
+hash/count/availability clock/cutoff、catalog build、code SHA、label value/availability 字段和 label cutoff。
+`weather_candidate_settlement_labels` 是 append-only correction history；训练/评测只能选择
+`label_available_at_utc <= cutoff` 的一条可知 label，unknown availability 不得补成已知。
+
+split 只按完整 `target_date` block 做，顺序固定为 `train → validation → test → frozen_forward`；同一日期
+不能跨 split，每个 dataset row 必须恰好归属一个 split，且后一个 block 必须严格晚于前一个。Replay run
+identity 固定绑定 `dataset_hash + split_manifest_hash + catalog_build_id + code_sha + source_snapshot_hashes`。
+这样换模型只换 code/model identity，历史 CLOB+天气 evidence 与分母仍可原样重放。
+
+### Frozen shadow / maker 增益合同（2026-08-30）
+
+frozen shadow epoch 必须固定 dataset/split/model/execution-assumption hash 和完整 target-date 清单，且
+orders/fills/notional/runtime_* 全为 0；它只有 evidence authority，没有 promotion authority。maker 对比必须
+与 taker 使用完全相同的 `row_id` 分母。`quote_touched` 不是 fill：maker proxy 至少需要显式
+`sell_volume >= visible_queue + own_size`、正 own size、fee/price/markout 假设，并单列 missing evidence。
+因此 shadow 输出只能称 `proxy_only` 或 blocked；没有真实 queue lifecycle、成交与 adverse-selection
+证据时，不能宣称 maker 已有可兑现增益。
 
 ### 当前研究主口径（2026-07-15）
 

@@ -1,7 +1,7 @@
 # Weather Data Canonical Sources
 
 Status: current-source
-Updated: 2026-08-09 Mac raw, canonical DB and archive identity boundary
+Updated: 2026-08-30 registered products, replay datasets and archive adapters
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -39,11 +39,12 @@ Mac raw runtime + exchange evidence
             ▼
 /Volumes/jrs/pm_agents/runtime/weather.db
   ├─ signals / plans / orders / fills / settlements / runs
-  ├─ fact_signal_candidates   opportunity grain
+  ├─ append-only event / checkpoint / model-output / intent / label facts
+  ├─ fact_signal_candidates   opportunity grain + unified replay-case denominator
   └─ fact_trades              fill grain
             │
             ▼
-analysis / API / dashboard
+immutable dataset + target_date split + replay catalog / analysis / API / dashboard
 
 N100 mirrors + /Volumes/jrs-archive
   └─ historical recovery/replay inputs only; never current fallback
@@ -69,6 +70,11 @@ manifest、对应 Mac raw journal 和 exchange response；问历史机会、绩�
 
 ### Raw product owners
 
+机器可读目录是 `src/strategies/runtime/data_products.yaml`，并由 production loader 绑定到
+`production.yaml` 的 managed runtime 与 pinned release SHA。consumer 只能按 `product_id` 解析路径；
+目录中同时声明 schema、grain/clocks、write semantics、cursor、consumers 与 cutover state。下表是人类摘要，
+不能替代 registry。
+
 | product | owner / 语义 |
 |---|---|
 | `forecast/forecast_hourly_curves/` | forecast collector 的 PIT curve/run evidence |
@@ -77,6 +83,7 @@ manifest、对应 Mac raw journal 和 exchange response；问历史机会、绩�
 | `strategy_snapshots/` | data-feed join 后的策略消费视图 |
 | `market_ladder_snapshots/` | 完整 event/rung/two-sided distribution 与 batch completeness |
 | `production.yaml.historical_paper_snapshot_root` | 旧 collector 时期不可重采的 immutable PIT strategy snapshots；只作历史训练/回放输入，不是 current fallback |
+| `historical_{strategy,full_ladder,targeted}_snapshots` registry products | `legacy_read_only` archive；经 historical adapter 逐 row 分类，不会被强行升级为 current/full replay |
 | production manifest 登记的 live order paths | 当前 strategy order/execution journals |
 | canonical fill cache + authenticated CLOB | order-level fills；public activity 只能作受约束的辅助证据 |
 
@@ -123,6 +130,11 @@ snapshot/rung contract；development、validation、forward 只是模型 split�
 | `fact_signal_candidates` | opportunity/candidate | signal/evidence funnel、漏单、执行质量 |
 | `fact_trades` | fill | fee-adjusted settled PnL 与绩效 |
 | `fact_forecast_hourly_curves` | forecast curve identity/checkpoint | PIT forecast curve feature lineage |
+| `weather_information_events` / `weather_state_checkpoints` | first-seen event / PIT checkpoint | event→decision 输入集合与 availability lineage |
+| `weather_model_outputs` / `weather_trade_intents` | immutable model output / record-only intent | 同模型重放与 zero-notional handoff；不等于 plan/order |
+| `weather_candidate_settlement_labels` | candidate × source correction | availability-aware append-only label history；dataset 以 cutoff 选择 |
+| `weather_replay_cases_v1` | candidate | 正确、错误、blocked、selected/unselected 的统一只读案例目录 |
+| `weather_replay_mistakes_v1` | candidate derived filter | 错题视图；没有独立真相 |
 
 `submitted_notional`、`posted_notional`、`actual_fill_cost`、`open_cost` 与 `realized_pnl` 必须分开。只有 settled fill
 才能发布 `pnl_usd_at_fill`；未结算只能报带 `val_snapshot_ts_utc` 的 MTM。

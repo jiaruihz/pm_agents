@@ -8,6 +8,8 @@ have been validated, so callers cannot invent a parallel physical-root map.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
@@ -30,6 +32,7 @@ class WeatherDataProductSpec:
     product_id: str
     owner_instance_id: str
     producer_release_id: str
+    producer_release_sha: str
     schema_version: str
     root_key: str
     relative_path: Path
@@ -61,6 +64,14 @@ class WeatherDataProductRegistry:
         product = self.product(product_id)
         return self._root_paths[product.root_key] / product.relative_path
 
+    def cursor_state_path(self, product_id: str) -> Path | None:
+        product = self.product(product_id)
+        if not product.cursor or not product.cursor.get("state_relative_path"):
+            return None
+        return self._root_paths[str(product.cursor["state_root_key"])] / Path(
+            str(product.cursor["state_relative_path"])
+        )
+
     def summary(self) -> dict[str, Any]:
         """Return a read-only, JSON-ready inventory for preflight callers."""
         rows = [
@@ -68,6 +79,7 @@ class WeatherDataProductRegistry:
                 "product_id": product.product_id,
                 "owner_instance_id": product.owner_instance_id,
                 "producer_release_id": product.producer_release_id,
+                "producer_release_sha": product.producer_release_sha,
                 "schema_version": product.schema_version,
                 "data_class": product.data_class,
                 "write_semantics": product.write_semantics,
@@ -79,13 +91,31 @@ class WeatherDataProductRegistry:
                 "relative_path": str(product.relative_path),
                 "physical_path": str(self.physical_path(product.product_id)),
                 "cursor": dict(product.cursor) if product.cursor else None,
+                "cursor_state_path": (
+                    str(self.cursor_state_path(product.product_id))
+                    if product.cursor and product.cursor.get("state_relative_path")
+                    else None
+                ),
                 "writer_lock": product.writer_lock,
                 "feature_ready": product.feature_ready,
                 "notes": product.notes,
             }
             for product in self.products
         ]
-        return {"registry_version": self.version, "product_count": len(rows), "products": rows}
+        payload = {
+            "registry_version": self.version,
+            "product_count": len(rows),
+            "products": rows,
+        }
+        payload["registry_build_id"] = hashlib.sha256(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return payload
 
     def audit(self) -> dict[str, Any]:
         """Expose the validated registry as a read-only preflight audit."""
@@ -108,6 +138,9 @@ def _root_paths(spec: WeatherProductionSpec) -> dict[str, Path]:
         "strategy_snapshot_root": spec.resolved_strategy_snapshot_root(),
         "forecast_output_root": spec.resolved_forecast_output_root(),
         "historical_data_feed_runtime_root": spec.resolved_historical_data_feed_runtime_root(),
+        "historical_full_ladder_root": spec.historical_full_ladder_root(),
+        "historical_targeted_root": spec.historical_targeted_root(),
+        "historical_paper_snapshot_root": spec.resolved_historical_paper_snapshot_root(),
         "research_artifact_root": spec.research_artifact_root,
     }
 
@@ -164,6 +197,7 @@ def load_data_product_registry(
         producer_release_id = _required_string(item, "producer_release_id", product_id)
         if runtime.release_id != producer_release_id:
             raise ValueError(f"data product owner/release binding mismatch: {product_id}")
+        producer_release_sha = spec.release(producer_release_id).expected_repo_sha
         root_key = _required_string(item, "root_key", product_id)
         if root_key not in root_paths:
             raise ValueError(f"unknown data product root_key: {product_id}: {root_key}")
@@ -188,6 +222,49 @@ def load_data_product_registry(
         cursor = item.get("cursor")
         if cursor is not None and not isinstance(cursor, dict):
             raise ValueError(f"data product cursor must be a mapping: {product_id}")
+        if write_semantics == "append_only":
+            required_cursor = {
+                "kind",
+                "state_scope",
+                "epoch_semantics",
+                "recovery_owner",
+                "stuck_slo_seconds",
+            }
+            missing_cursor = sorted(required_cursor - set(cursor or {}))
+            if missing_cursor:
+                raise ValueError(
+                    "append-only data product cursor contract incomplete: "
+                    f"{product_id}: {missing_cursor}"
+                )
+            state_scope = str(cursor["state_scope"])
+            if state_scope not in {"single_consumer", "per_consumer"}:
+                raise ValueError(f"unsupported cursor state_scope: {product_id}")
+            if state_scope == "single_consumer":
+                state_root_key = str(cursor.get("state_root_key") or "")
+                state_relative_path = str(cursor.get("state_relative_path") or "")
+                if not state_root_key or not state_relative_path:
+                    raise ValueError(
+                        f"single-consumer cursor state path is incomplete: {product_id}"
+                    )
+                if state_root_key not in root_paths:
+                    raise ValueError(
+                        f"unknown cursor state_root_key: {product_id}: {state_root_key}"
+                    )
+                _relative_path(state_relative_path, product_id)
+            elif cursor.get("state_root_key") or cursor.get("state_relative_path"):
+                raise ValueError(
+                    f"per-consumer cursor must not invent one global state path: {product_id}"
+                )
+            if str(cursor["epoch_semantics"]) != "new_epoch_never_reset_in_place":
+                raise ValueError(
+                    f"append-only cursor must create a new recovery epoch: {product_id}"
+                )
+            if not str(cursor["recovery_owner"]).strip():
+                raise ValueError(f"append-only cursor recovery_owner required: {product_id}")
+            if int(cursor["stuck_slo_seconds"]) <= 0:
+                raise ValueError(
+                    f"append-only cursor stuck SLO must be positive: {product_id}"
+                )
         writer_lock = item.get("writer_lock")
         if writer_lock is not None and (not isinstance(writer_lock, str) or not writer_lock.strip()):
             raise ValueError(f"data product writer_lock must be a non-empty string: {product_id}")
@@ -208,10 +285,19 @@ def load_data_product_registry(
         ):
             raise ValueError(f"derived data product must live under managed storage: {product_id}")
         if write_semantics != "read_only":
-            prior = mutable_targets.get(resolved_target)
-            if prior:
+            prior = next(
+                (
+                    prior_product
+                    for prior_target, prior_product in mutable_targets.items()
+                    if resolved_target == prior_target
+                    or resolved_target.is_relative_to(prior_target)
+                    or prior_target.is_relative_to(resolved_target)
+                ),
+                None,
+            )
+            if prior is not None:
                 raise ValueError(
-                    "multiple mutable data product writers share physical target: "
+                    "multiple mutable data product writers overlap physical target: "
                     f"{prior}, {product_id}"
                 )
             mutable_targets[resolved_target] = product_id
@@ -220,6 +306,7 @@ def load_data_product_registry(
                 product_id=product_id,
                 owner_instance_id=owner,
                 producer_release_id=producer_release_id,
+                producer_release_sha=producer_release_sha,
                 schema_version=_required_string(item, "schema_version", product_id),
                 root_key=root_key,
                 relative_path=relative_path,

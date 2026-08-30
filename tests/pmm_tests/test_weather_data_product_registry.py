@@ -38,10 +38,25 @@ def test_production_loader_is_the_registry_authority_and_exposes_audit() -> None
     )
     audit = registry.audit()
     assert audit["ok"] is True
-    assert audit["product_count"] == 9
+    assert audit["product_count"] == 12
     market_books = next(row for row in audit["products"] if row["product_id"] == "market_books")
     assert market_books["feature_ready"] is False
     assert "full WS book" in market_books["notes"]
+    assert market_books["producer_release_sha"] == spec.release(
+        market_books["producer_release_id"]
+    ).expected_repo_sha
+    assert len(audit["registry_build_id"]) == 64
+    wcir = registry.product("wcir_decision_bundles")
+    assert wcir.cursor["epoch_semantics"] == "new_epoch_never_reset_in_place"
+    assert registry.cursor_state_path("wcir_decision_bundles") == (
+        spec.pm_runtime_root
+        / "weather_edge_v1/canonical_refresh/wcir_candidate_materialization_state.json"
+    )
+    assert registry.cursor_state_path("source_events") is None
+    assert registry.product("source_events").cursor["state_scope"] == "per_consumer"
+    assert registry.physical_path("historical_strategy_snapshots") == (
+        spec.resolved_historical_paper_snapshot_root()
+    )
 
 
 @pytest.mark.parametrize(
@@ -77,6 +92,12 @@ def test_production_loader_is_the_registry_authority_and_exposes_audit() -> None
             lambda payload: payload["products"][0].update(data_class="archive"),
             "archive data product must live under archive storage",
         ),
+        (
+            lambda payload: payload["products"][-4]["cursor"].pop(
+                "recovery_owner"
+            ),
+            "cursor contract incomplete",
+        ),
     ],
 )
 def test_registry_fails_closed_for_invalid_product_contracts(
@@ -96,4 +117,15 @@ def test_registry_rejects_multiple_mutable_writers_for_same_physical_target(tmp_
     payload["products"].append(duplicate)
 
     with pytest.raises(ValueError, match="multiple mutable data product writers"):
+        _load_payload(tmp_path, payload)
+
+
+def test_registry_rejects_nested_mutable_writer_targets(tmp_path: Path) -> None:
+    payload = _registry_payload()
+    duplicate = dict(payload["products"][0])
+    duplicate["product_id"] = "market_books_nested_writer"
+    duplicate["relative_path"] = "nested"
+    payload["products"].append(duplicate)
+
+    with pytest.raises(ValueError, match="overlap physical target"):
         _load_payload(tmp_path, payload)

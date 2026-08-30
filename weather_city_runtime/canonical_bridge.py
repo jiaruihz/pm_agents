@@ -19,6 +19,9 @@ from scripts.etl.materialize_weather_event_signal_candidates import (
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 from weather_dashboard.ingest.information_events import ingest_information_events
+from weather_dashboard.ingest.settlement_labels import (
+    materialize_candidate_settlement_label_facts,
+)
 from weather_dashboard.ingest.state_checkpoints import ingest_state_checkpoints
 from weather_data_feed.information_events import canonical_json_hash
 from weather_model_evaluation.contracts import parse_utc
@@ -313,6 +316,7 @@ class _CandidateCanonicalBridge:
             "weather_state_checkpoints",
             "weather_model_outputs",
             "weather_trade_intents",
+            "weather_candidate_settlement_labels",
             "fact_signal_candidates",
         }
         existing_tables = {
@@ -491,6 +495,19 @@ class _CandidateCanonicalBridge:
                     if attach_candidate_settlements
                     else 0
                 )
+                settlement_label_result = (
+                    materialize_candidate_settlement_label_facts(
+                        conn,
+                        max_rows=(
+                            max_candidate_settlement_updates
+                            if max_candidate_settlement_updates is not None
+                            else 5_000
+                        ),
+                        commit=False,
+                    )
+                    if attach_candidate_settlements
+                    else {"inserted": 0, "direct": 0, "legacy": 0}
+                )
                 _assert_transaction_budget(
                     transaction_started_at, max_transaction_seconds
                 )
@@ -529,6 +546,9 @@ class _CandidateCanonicalBridge:
                 normalized_checkpoint_deliveries
             ),
             "settlements_attached": settlements_attached,
+            "settlement_label_facts_inserted": settlement_label_result["inserted"],
+            "settlement_label_facts_direct": settlement_label_result["direct"],
+            "settlement_label_facts_legacy": settlement_label_result["legacy"],
             "settlement_update_limit": (
                 max_candidate_settlement_updates
                 if attach_candidate_settlements

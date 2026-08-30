@@ -1,7 +1,7 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-08-30 shared clock + execution-evidence contract
+Updated: 2026-08-30 shared clock + execution-evidence + replayable migration v1
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -26,7 +26,13 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 > “更快的源”在本项目中本来就是 predictive evidence，不是 settlement truth；允许 source 与 settlement
 > 不一致，但必须按 source×city×regime 做 basis calibration，并始终用独立 settlement label 评估。
 
-Last updated: 2026-08-11
+Last updated: 2026-08-30
+
+> **2026-08-30 migration v1**：代码层已增加 production-bound data-product registry、严格
+> JSONL quarantine、append-only decision/settlement facts、cursor recovery epoch、统一 replay
+> catalog、immutable dataset/split、artifact verifier 与 zero-notional frozen shadow。该变更采用
+> per-product cutover，不重写现有在线 runner；在生产 release 部署、逐产品 GO 和旧 writer 连续两轮
+> 为 0 之前，旧路径仍原样运行。历史路径只转为 registered read-only input，不删除。
 
 > **2026-08-10 journal storage override**：forecast enrichment、forecast version、
 > observations、AMOS fast lane、source events 以及已停止的历史/probe journal 均已切为只写、只读
@@ -70,6 +76,35 @@ For field-name contracts, [`WEATHER_SYSTEM_CONTRACT.md`](WEATHER_SYSTEM_CONTRACT
 ---
 
 ## 1. TL;DR
+
+Migration v1 的目标链路是：
+
+```text
+registered current raw (weather + CLOB)       registered read-only archive
+        │ strict scan / quarantine                     │ honest adapter
+        └──────────────────┬────────────────────────────┘
+                           ▼
+ EventEnvelope → DecisionContext → ModelOutput → SignalCandidate → TradeIntent
+                           │ append-only canonical + availability-aware label facts
+                           ▼
+             immutable rows + chronological target_date splits
+                           │
+                           ▼
+      replay catalog (all cases; mistakes are a derived view) + artifact verifier
+                           │
+                           ▼
+       backtest / validation / test / frozen-forward zero-notional shadow
+```
+
+物理路径不再由 consumer 猜。`src/strategies/runtime/data_products.yaml` 为产品目录，生产 loader
+将每项绑定到 owner instance、pinned release SHA、schema、root、writer/cursor、consumer 和 cutover
+state；append-only product 的 cursor 必须使用 `new_epoch_never_reset_in_place`。REST 与 reconstructed
+WS 可以投影到同一 logical-book contract，但 feature book 和 execution book 是两个显式引用，缺一即
+blocked，不能互相 fallback。
+
+这不是 big-bang rollout：每个 product 分别 dual-read/核对，只有 same input、row/key/identity/watermark
+parity、至少两个 target-date block、quarantine clear、rollover proof、旧 writer 连续两轮零写入以及
+order/fill/notional/cost/fee/PnL/coverage 全部 0-delta 才是 GO。旧数据保留 read-only，rollback 不靠删除。
 
 Current production has four explicit ownership stages:
 
@@ -676,7 +711,37 @@ The `pm_history_settlements` ingest skips null files automatically.
 scripts/ops/start_weather_canonical_refresh_tmux.sh
 ```
 
-### 8.2 Just check status
+`run_weather_canonical_refresh_launchd.sh` 先执行 strict manifest、canonical DB same-file、canonical
+tmux/JRS write probe、data-feed semantic health 和 data-product registry preflight。DB/JRS identity 失败时
+所有写入停止；仅 migration evidence 失败时仍完成 order → coverage → alias → authenticated fill → fact →
+fill gate 的 live accounting 链，但跳过 schema/WCIR migration。每个阶段都有独立 lock、timeout、absolute
+WAL 和 WAL-growth budget，并在 `runtime/weather_edge_v1/canonical_refresh/stages/` 留 report。
+
+### 8.2 可重放数据与逐产品迁移工具
+
+以下命令只生成 research evidence 或 GO/NO_GO，不会切 writer、重启 runner 或删除旧数据：
+
+```bash
+# archive row -> full_decision/model_only/legacy_summary_only/blocked
+.venv/bin/python scripts/ops/materialize_weather_historical_replay_manifest.py \
+  --product-id historical_full_ladder_snapshots \
+  --output-dir "$REGISTERED_RESEARCH_ARTIFACT_DIR"
+
+# sealed rows + target_date train/validation/test/frozen-forward splits
+.venv/bin/python scripts/analysis/build_weather_replay_dataset_v1.py --help
+
+# reviewed inode rollover: immutable receipt + a distinct zero-offset state path
+.venv/bin/python scripts/ops/plan_weather_cursor_epoch_recovery.py --help
+
+# per-product parity/accounting evidence; output is only GO/NO_GO
+.venv/bin/python scripts/ops/weather_data_product_cutover_audit.py evidence.json
+```
+
+历史 adapter 会给每个 physical row 绑定 file SHA/path/line，坏 JSON/UTF-8 必须进入显式 quarantine；
+`scanned = canonical + duplicate + blocked + quarantined` 必须守恒。新 cursor epoch 需要新 inode、state
+path、receipt path、hash-identical overlap 和 offset 0；不得把旧 state 的 offset 直接清零。
+
+### 8.3 Just check status
 
 ```bash
 scripts/weather_dashboard/run_stack.sh --status
@@ -685,7 +750,7 @@ scripts/weather_dashboard/run_stack.sh --status
 
 全量重建只在明确授权后执行 `scripts/weather_dashboard/run_stack.sh --rebuild`；它不启动或停止 API、FE、collector 或 strategy。
 
-### 8.3 Diagnose "curve doesn't extend to today"
+### 8.4 Diagnose "curve doesn't extend to today"
 
 In order:
 

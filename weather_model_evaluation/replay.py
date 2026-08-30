@@ -16,6 +16,7 @@ from .contracts import (
     utc_text,
     validate_prediction_row,
 )
+from .replay_artifacts import ReplayRunIdentity
 
 
 class InputProvider(Protocol):
@@ -62,10 +63,15 @@ class ReplayRunner:
         input_provider: InputProvider,
         checkpoint_builder: CheckpointBuilder,
         clock: VirtualClock | None = None,
+        run_identity: ReplayRunIdentity | None = None,
+        strict_identity: bool = False,
     ):
         self.input_provider = input_provider
         self.checkpoint_builder = checkpoint_builder
         self.clock = clock or VirtualClock()
+        if strict_identity and run_identity is None:
+            raise ValueError("strict replay requires ReplayRunIdentity")
+        self.run_identity = run_identity
 
     def run(self) -> ReplayResult:
         events = sorted(
@@ -134,6 +140,8 @@ class ReplayRunner:
             ),
             "checkpoint_hash": stable_sha256(checkpoint_ids),
             "output_hash": output_hash,
+            "replay_identity": (self.run_identity.to_dict() if self.run_identity else None),
+            "identity_status": "bound" if self.run_identity else "legacy_unbound",
         }
         return ReplayResult(rows=tuple(rows), manifest=manifest)
 

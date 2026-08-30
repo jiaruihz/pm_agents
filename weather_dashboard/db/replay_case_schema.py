@@ -6,11 +6,73 @@ creating a second fact table or a manually curated "mistake" truth.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import hashlib
+import json
 import sqlite3
+from typing import Any, Mapping
 
 
 REPLAY_CASE_VIEW = "weather_replay_cases_v1"
 REPLAY_MISTAKE_VIEW = "weather_replay_mistakes_v1"
+REPLAY_CATALOG_SCHEMA_VERSION = "weather_replay_catalog_v3"
+REPLAY_CATALOG_BUILD_ID = hashlib.sha256(
+    json.dumps(
+        {
+            "schema_version": REPLAY_CATALOG_SCHEMA_VERSION,
+            "case_view": REPLAY_CASE_VIEW,
+            "mistake_view": REPLAY_MISTAKE_VIEW,
+            "artifact_verifier": "weather_replay_artifact_verifier_v1",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+).hexdigest()
+_ARTIFACT_VERIFICATION_STATUSES = {
+    "ready",
+    "legacy_summary_only",
+    "blocked_evidence",
+    "blocked_missing_artifact",
+    "blocked_hash_mismatch",
+    "blocked_unverifiable_artifact",
+}
+
+REPLAY_CATALOG_STATEMENTS = (
+    """CREATE TABLE IF NOT EXISTS weather_replay_catalog_builds (
+  catalog_build_id TEXT PRIMARY KEY,
+  schema_version TEXT NOT NULL,
+  case_view_name TEXT NOT NULL,
+  mistake_view_name TEXT NOT NULL,
+  artifact_verifier_schema_version TEXT NOT NULL,
+  view_contract_sha256 TEXT NOT NULL,
+  built_at_utc TEXT NOT NULL
+)""",
+    """CREATE TABLE IF NOT EXISTS weather_replay_artifact_verifications (
+  replay_case_id TEXT NOT NULL,
+  catalog_build_id TEXT NOT NULL REFERENCES weather_replay_catalog_builds(catalog_build_id),
+  verifier_build_id TEXT NOT NULL,
+  verification_status TEXT NOT NULL,
+  details_json TEXT NOT NULL,
+  verified_at_utc TEXT NOT NULL,
+  PRIMARY KEY (replay_case_id, catalog_build_id, verifier_build_id)
+)""",
+    """CREATE TRIGGER IF NOT EXISTS weather_replay_catalog_builds_no_update
+BEFORE UPDATE ON weather_replay_catalog_builds
+BEGIN SELECT RAISE(ABORT, 'weather_replay_catalog_builds is append-only'); END""",
+    """CREATE TRIGGER IF NOT EXISTS weather_replay_catalog_builds_no_delete
+BEFORE DELETE ON weather_replay_catalog_builds
+BEGIN SELECT RAISE(ABORT, 'weather_replay_catalog_builds is append-only'); END""",
+    """CREATE TRIGGER IF NOT EXISTS weather_replay_artifact_verifications_no_update
+BEFORE UPDATE ON weather_replay_artifact_verifications
+BEGIN SELECT RAISE(ABORT, 'weather_replay_artifact_verifications is append-only'); END""",
+    """CREATE TRIGGER IF NOT EXISTS weather_replay_artifact_verifications_no_delete
+BEFORE DELETE ON weather_replay_artifact_verifications
+BEGIN SELECT RAISE(ABORT, 'weather_replay_artifact_verifications is append-only'); END""",
+    """CREATE INDEX IF NOT EXISTS idx_weather_replay_artifact_verifications_latest
+ON weather_replay_artifact_verifications (
+  replay_case_id, catalog_build_id, verified_at_utc DESC, verifier_build_id DESC
+)""",
+)
 
 
 # Older tests and partially migrated databases can contain skeletal candidate
@@ -253,6 +315,7 @@ WITH replay_inputs AS (
 SELECT
   replay_classified.*,
   'weather_replay_case_v1' AS replay_contract_version,
+  '{REPLAY_CATALOG_BUILD_ID}' AS replay_catalog_build_id,
   candidate_id AS replay_case_id,
   CASE
     WHEN candidate_grain_version <> 'v2_event_checkpoint'
@@ -268,7 +331,17 @@ SELECT
     WHEN policy_replay_blocker IS NULL THEN 'ready'
     ELSE 'blocked'
   END AS policy_replay_status,
-  'not_checked_by_catalog' AS replay_artifact_verification_status,
+  COALESCE(
+    (
+      SELECT verification_status
+      FROM weather_replay_artifact_verifications AS verification
+      WHERE verification.replay_case_id = replay_classified.candidate_id
+        AND verification.catalog_build_id = '{REPLAY_CATALOG_BUILD_ID}'
+      ORDER BY verification.verified_at_utc DESC, verification.verifier_build_id DESC
+      LIMIT 1
+    ),
+    'not_checked_by_catalog'
+  ) AS replay_artifact_verification_status,
   CASE
     WHEN candidate_status = 'blocked' THEN 'blocked_candidate'
     WHEN final_yes IS NULL THEN 'pending_settlement'
@@ -333,6 +406,42 @@ def apply_replay_case_schema(conn: sqlite3.Connection) -> bool:
         if not required_columns <= actual_columns:
             return False
 
+    for statement in REPLAY_CATALOG_STATEMENTS:
+        conn.execute(statement)
+    view_contract_sha = hashlib.sha256(
+        (REPLAY_CASE_SQL + "\n" + REPLAY_MISTAKE_SQL).encode("utf-8")
+    ).hexdigest()
+    catalog_values = (
+        REPLAY_CATALOG_BUILD_ID,
+        REPLAY_CATALOG_SCHEMA_VERSION,
+        REPLAY_CASE_VIEW,
+        REPLAY_MISTAKE_VIEW,
+        "weather_replay_artifact_verifier_v1",
+        view_contract_sha,
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO weather_replay_catalog_builds (
+          catalog_build_id, schema_version, case_view_name, mistake_view_name,
+          artifact_verifier_schema_version, view_contract_sha256, built_at_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            *catalog_values,
+            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        ),
+    )
+    stored_catalog = conn.execute(
+        """
+        SELECT catalog_build_id, schema_version, case_view_name, mistake_view_name,
+               artifact_verifier_schema_version, view_contract_sha256
+        FROM weather_replay_catalog_builds WHERE catalog_build_id = ?
+        """,
+        (REPLAY_CATALOG_BUILD_ID,),
+    ).fetchone()
+    if stored_catalog is None or tuple(stored_catalog) != catalog_values:
+        raise ValueError("conflicting replay catalog build identity")
+
     if _view_matches(conn, REPLAY_CASE_VIEW, REPLAY_CASE_SQL) and _view_matches(
         conn, REPLAY_MISTAKE_VIEW, REPLAY_MISTAKE_SQL
     ):
@@ -355,4 +464,101 @@ def apply_replay_case_schema(conn: sqlite3.Connection) -> bool:
         conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
         conn.execute(f"RELEASE SAVEPOINT {savepoint}")
         raise
+    return True
+
+
+def record_replay_artifact_verification(
+    conn: sqlite3.Connection,
+    *,
+    replay_case_id: str,
+    verification: Mapping[str, Any],
+    verified_at_utc: str,
+) -> bool:
+    """Append one immutable physical-artifact check for the current catalog."""
+
+    if verification.get("catalog_build_id") != REPLAY_CATALOG_BUILD_ID:
+        raise ValueError("artifact verification catalog_build_id mismatch")
+    verifier_build_id = str(verification.get("verifier_build_id") or "")
+    status = str(verification.get("status") or "")
+    if not replay_case_id or not verifier_build_id or not status:
+        raise ValueError("artifact verification identity and status are required")
+    if verification.get("schema_version") != "weather_replay_artifact_verifier_v1":
+        raise ValueError("artifact verification schema_version mismatch")
+    if len(verifier_build_id) != 64 or any(
+        character not in "0123456789abcdef"
+        for character in verifier_build_id.lower()
+    ):
+        raise ValueError("artifact verifier_build_id must be SHA-256")
+    if status not in _ARTIFACT_VERIFICATION_STATUSES:
+        raise ValueError("unsupported artifact verification status")
+    checks = verification.get("checks")
+    if not isinstance(checks, list) or not checks:
+        raise ValueError("artifact verification requires non-empty checks")
+    if any(
+        not isinstance(check, dict) or not str(check.get("status") or "")
+        for check in checks
+    ):
+        raise ValueError("artifact verification checks must be objects with status")
+    check_statuses = {str(check["status"]) for check in checks}
+    required_check_status = {
+        "ready": "verified",
+        "legacy_summary_only": "legacy_unbound",
+        "blocked_missing_artifact": "missing",
+        "blocked_hash_mismatch": "hash_mismatch",
+        "blocked_unverifiable_artifact": "unverifiable",
+    }.get(status)
+    if required_check_status is not None and required_check_status not in check_statuses:
+        raise ValueError("artifact verification aggregate/check status mismatch")
+    if status == "ready" and check_statuses != {"verified"}:
+        raise ValueError("ready artifact verification contains a blocked check")
+    parsed = datetime.fromisoformat(str(verified_at_utc).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("verified_at_utc must be timezone-aware")
+    verified_at_normalized = parsed.astimezone(timezone.utc).isoformat().replace(
+        "+00:00", "Z"
+    )
+    if conn.execute(
+        "SELECT 1 FROM fact_signal_candidates WHERE candidate_id = ?",
+        (replay_case_id,),
+    ).fetchone() is None:
+        raise ValueError("artifact verification references unknown replay case")
+    if conn.execute(
+        "SELECT 1 FROM weather_replay_catalog_builds WHERE catalog_build_id = ?",
+        (REPLAY_CATALOG_BUILD_ID,),
+    ).fetchone() is None:
+        raise ValueError("replay catalog build is not installed")
+    details = json.dumps(
+        dict(verification),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    existing = conn.execute(
+        """
+        SELECT verifier_build_id, verification_status, details_json
+        FROM weather_replay_artifact_verifications
+        WHERE replay_case_id = ? AND catalog_build_id = ? AND verifier_build_id = ?
+        """,
+        (replay_case_id, REPLAY_CATALOG_BUILD_ID, verifier_build_id),
+    ).fetchone()
+    if existing is not None:
+        if tuple(existing) != (verifier_build_id, status, details):
+            raise ValueError("conflicting replay artifact verification")
+        return False
+    conn.execute(
+        """
+        INSERT INTO weather_replay_artifact_verifications (
+          replay_case_id, catalog_build_id, verifier_build_id,
+          verification_status, details_json, verified_at_utc
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            replay_case_id,
+            REPLAY_CATALOG_BUILD_ID,
+            verifier_build_id,
+            status,
+            details,
+            verified_at_normalized,
+        ),
+    )
     return True

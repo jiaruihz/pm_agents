@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from scripts.etl.build_weather_signal_candidates import CANDIDATE_DDL, write_db
 from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 from weather_dashboard.db.replay_case_schema import (
+    REPLAY_CATALOG_BUILD_ID,
     REPLAY_CASE_VIEW,
     REPLAY_MISTAKE_VIEW,
     apply_replay_case_schema,
+    record_replay_artifact_verification,
 )
+from weather_model_evaluation import REPLAY_ARTIFACT_VERIFIER_BUILD_ID
 
 
 def _insert_event(
@@ -228,6 +233,9 @@ def test_replay_case_view_keeps_the_full_denominator_and_derives_mistakes() -> N
         "legacy-error",
     }
     assert rows["selected-win"]["replay_capability"] == "full_decision"
+    assert rows["selected-win"]["replay_catalog_build_id"] == (
+        REPLAY_CATALOG_BUILD_ID
+    )
     assert rows["selected-win"]["replay_artifact_verification_status"] == (
         "not_checked_by_catalog"
     )
@@ -266,6 +274,74 @@ def test_replay_case_view_keeps_the_full_denominator_and_derives_mistakes() -> N
         )
     }
     assert mistake_ids == {"legacy-error", "paper-unfilled-win", "selected-loss"}
+    conn.close()
+
+
+def test_replay_artifact_verification_is_append_only_and_latest_is_visible() -> None:
+    conn = _populated_db()
+    verification = {
+        "schema_version": "weather_replay_artifact_verifier_v1",
+        "catalog_build_id": REPLAY_CATALOG_BUILD_ID,
+        "verifier_build_id": REPLAY_ARTIFACT_VERIFIER_BUILD_ID,
+        "status": "ready",
+        "checks": [{"status": "verified"}],
+    }
+    assert record_replay_artifact_verification(
+        conn,
+        replay_case_id="selected-win",
+        verification=verification,
+        verified_at_utc="2026-08-30T00:00:00Z",
+    ) is True
+    assert record_replay_artifact_verification(
+        conn,
+        replay_case_id="selected-win",
+        verification=verification,
+        verified_at_utc="2026-08-30T00:01:00Z",
+    ) is False
+    assert conn.execute(
+        f"SELECT replay_artifact_verification_status FROM {REPLAY_CASE_VIEW} "
+        "WHERE candidate_id = 'selected-win'"
+    ).fetchone()[0] == "ready"
+
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        conn.execute(
+            "UPDATE weather_replay_artifact_verifications "
+            "SET verification_status = 'blocked'"
+        )
+    with pytest.raises(ValueError, match="conflicting"):
+        record_replay_artifact_verification(
+            conn,
+            replay_case_id="selected-win",
+            verification={
+                **verification,
+                "status": "blocked_hash_mismatch",
+                "checks": [{"status": "hash_mismatch"}],
+            },
+            verified_at_utc="2026-08-30T00:02:00Z",
+        )
+
+    assert record_replay_artifact_verification(
+        conn,
+        replay_case_id="selected-win",
+        verification={
+            **verification,
+            "verifier_build_id": "b" * 64,
+            "status": "blocked_hash_mismatch",
+            "checks": [{"status": "hash_mismatch"}],
+        },
+        verified_at_utc="2026-08-30T00:03:00Z",
+    ) is True
+    assert conn.execute(
+        f"SELECT replay_artifact_verification_status FROM {REPLAY_CASE_VIEW} "
+        "WHERE candidate_id = 'selected-win'"
+    ).fetchone()[0] == "blocked_hash_mismatch"
+    with pytest.raises(ValueError, match="unknown replay case"):
+        record_replay_artifact_verification(
+            conn,
+            replay_case_id="unknown",
+            verification=verification,
+            verified_at_utc="2026-08-30T00:04:00Z",
+        )
     conn.close()
 
 

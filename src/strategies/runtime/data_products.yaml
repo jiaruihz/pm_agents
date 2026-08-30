@@ -79,7 +79,12 @@ products:
     clocks: {event_at_utc: source_time, captured_at_utc: capture_time}
     consumers: [strategy_runtimes, canonical_refresh, research]
     cutover_state: active
-    cursor: {kind: jsonl_inode_prefix_v1}
+    cursor:
+      kind: jsonl_inode_prefix_v1
+      state_scope: per_consumer
+      epoch_semantics: new_epoch_never_reset_in_place
+      recovery_owner: consuming_runtime
+      stuck_slo_seconds: 900
     writer_lock: weather_data_feed_jrs
   - product_id: live_cross_observations
     owner_instance_id: weather_live_cross_observations
@@ -93,7 +98,12 @@ products:
     clocks: {observed_at_utc: observation_time, captured_at_utc: capture_time}
     consumers: [strategy_runtimes, canonical_refresh]
     cutover_state: active
-    cursor: {kind: jsonl_inode_prefix_v1}
+    cursor:
+      kind: jsonl_inode_prefix_v1
+      state_scope: per_consumer
+      epoch_semantics: new_epoch_never_reset_in_place
+      recovery_owner: consuming_runtime
+      stuck_slo_seconds: 300
     writer_lock: weather_live_cross_observations
   - product_id: knmi_open_data
     owner_instance_id: weather_knmi_open_data_jrs
@@ -107,7 +117,12 @@ products:
     clocks: {published_at_utc: source_time, captured_at_utc: capture_time}
     consumers: [strategy_runtimes, canonical_refresh, research]
     cutover_state: active
-    cursor: {kind: source_revision_v1}
+    cursor:
+      kind: source_revision_v1
+      state_scope: per_consumer
+      epoch_semantics: new_epoch_never_reset_in_place
+      recovery_owner: consuming_runtime
+      stuck_slo_seconds: 900
     writer_lock: weather_knmi_open_data_jrs
   - product_id: wcir_decision_bundles
     owner_instance_id: weather_city_probability_runtime_v3
@@ -121,5 +136,54 @@ products:
     clocks: {decision_ts_utc: decision_time, target_date: target_date}
     consumers: [canonical_refresh, research]
     cutover_state: active
-    cursor: {kind: jsonl_inode_prefix_v1}
+    cursor:
+      kind: jsonl_inode_prefix_v1
+      state_scope: single_consumer
+      state_root_key: pm_runtime_root
+      state_relative_path: weather_edge_v1/canonical_refresh/wcir_candidate_materialization_state.json
+      epoch_semantics: new_epoch_never_reset_in_place
+      recovery_owner: canonical_refresh
+      stuck_slo_seconds: 900
     writer_lock: weather_city_probability_runtime_v3
+  - product_id: historical_strategy_snapshots
+    owner_instance_id: weather_data_feed_jrs
+    producer_release_id: data_feed
+    schema_version: legacy_weather_strategy_snapshot_unbound_v1
+    root_key: historical_paper_snapshot_root
+    relative_path: .
+    data_class: archive
+    write_semantics: read_only
+    grain: legacy_strategy_snapshot
+    clocks: {captured_at_utc: capture_time, target_date: target_date}
+    consumers: [historical_adapter, research]
+    cutover_state: legacy_read_only
+    feature_ready: false
+    notes: "Read-only archive steward; original producer identity remains per-source evidence."
+  - product_id: historical_full_ladder_snapshots
+    owner_instance_id: weather_data_feed_jrs
+    producer_release_id: data_feed
+    schema_version: legacy_full_ladder_snapshot_unbound_v1
+    root_key: historical_full_ladder_root
+    relative_path: .
+    data_class: archive
+    write_semantics: read_only
+    grain: legacy_full_ladder_snapshot
+    clocks: {captured_at_utc: capture_time, target_date: target_date}
+    consumers: [historical_adapter, research]
+    cutover_state: legacy_read_only
+    feature_ready: false
+    notes: "Read-only recovery input; replayability is classified per row."
+  - product_id: historical_targeted_snapshots
+    owner_instance_id: weather_data_feed_jrs
+    producer_release_id: data_feed
+    schema_version: legacy_targeted_snapshot_unbound_v1
+    root_key: historical_targeted_root
+    relative_path: .
+    data_class: archive
+    write_semantics: read_only
+    grain: legacy_targeted_snapshot
+    clocks: {captured_at_utc: capture_time, target_date: target_date}
+    consumers: [historical_adapter, research]
+    cutover_state: legacy_read_only
+    feature_ready: false
+    notes: "Read-only recovery input; never a current-data fallback."

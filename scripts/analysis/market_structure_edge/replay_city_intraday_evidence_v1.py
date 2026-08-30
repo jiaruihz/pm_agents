@@ -29,10 +29,18 @@ def validate_output_dir(path: Path) -> Path:
     """Keep Phase 1 artifacts away from production/canonical runtime paths."""
 
     resolved = path.resolve()
+    runtime_root = (ROOT / "runtime").resolve()
+    research_runtime_root = (ROOT / "runtime" / "research").resolve()
+    # A checkout can itself live below /tmp.  The broad temp allow-list must
+    # never accidentally turn that checkout's runtime/ into an artifact root.
+    if resolved.is_relative_to(runtime_root) and not resolved.is_relative_to(
+        research_runtime_root
+    ):
+        raise ValueError("output-dir must be research/temp only; repo runtime is forbidden")
     allowed_roots = (
         Path(tempfile.gettempdir()).resolve(),
         Path("/tmp").resolve(),
-        (ROOT / "runtime" / "research").resolve(),
+        research_runtime_root,
         (ROOT / "research_outputs").resolve(),
     )
     if not any(resolved.is_relative_to(root) for root in allowed_roots):

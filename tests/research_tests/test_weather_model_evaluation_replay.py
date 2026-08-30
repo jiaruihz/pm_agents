@@ -14,6 +14,7 @@ from weather_model_evaluation import (
     FixtureInputCatalog,
     PREDICTION_SCHEMA_VERSION,
     ReplayRunner,
+    ReplayRunIdentity,
     build_evaluation_report,
     validate_prediction_row,
 )
@@ -105,6 +106,14 @@ def test_prediction_contract_rejects_future_information() -> None:
         validate_prediction_row(
             _prediction_row(event_available_at_utc="2026-08-01T05:01:00Z")
         )
+
+
+def test_strict_replay_requires_bound_identity() -> None:
+    with pytest.raises(ValueError, match="requires ReplayRunIdentity"):
+        ReplayRunner(input_provider=FixtureInputCatalog([]), checkpoint_builder=FixtureCheckpointBuilder(), strict_identity=True)
+    identity = ReplayRunIdentity("dataset", "split", "catalog", "code", ("a" * 64,))
+    result = ReplayRunner(input_provider=FixtureInputCatalog([]), checkpoint_builder=FixtureCheckpointBuilder(), strict_identity=True, run_identity=identity).run()
+    assert result.manifest["identity_status"] == "bound"
 
 
 def test_fixed_report_uses_same_denominator_and_keeps_execution_separate() -> None:

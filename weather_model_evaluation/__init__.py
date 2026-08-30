@@ -77,6 +77,15 @@ from .replay import (
     ReplayRunner,
     VirtualClock,
 )
+from .dataset_manifest import DataSourceSnapshot, DatasetManifest, canonical_db_identity, validate_target_date_split
+from .replay_artifacts import (
+    REPLAY_ARTIFACT_VERIFIER_BUILD_ID,
+    REPLAY_ARTIFACT_VERIFIER_SCHEMA_VERSION,
+    ReplayRunIdentity,
+    artifact_verification_status,
+    verify_replay_artifacts,
+)
+from .frozen_shadow import FrozenShadowEpoch, maker_proxy_fill, score_frozen_shadow, validate_shadow_runtime
 from .reporting import build_evaluation_report
 
 __all__ = [
@@ -142,4 +151,17 @@ __all__ = [
     "source_event_transport_head",
     "select_first_positive_policy",
     "VirtualClock",
+    "DataSourceSnapshot",
+    "DatasetManifest",
+    "canonical_db_identity",
+    "validate_target_date_split",
+    "ReplayRunIdentity",
+    "REPLAY_ARTIFACT_VERIFIER_BUILD_ID",
+    "REPLAY_ARTIFACT_VERIFIER_SCHEMA_VERSION",
+    "artifact_verification_status",
+    "verify_replay_artifacts",
+    "FrozenShadowEpoch",
+    "maker_proxy_fill",
+    "score_frozen_shadow",
+    "validate_shadow_runtime",
 ]
