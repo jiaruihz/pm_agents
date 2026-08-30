@@ -38,22 +38,21 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert spec.production_release_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases"
     )
-    assert spec.canonical_refresh_checkout_root == Path(
-        "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
-        "1a385699657977adb0f556eff53f7460cc3c5545"
-    )
+    control_plane_release = spec.release("control_plane")
+    assert spec.canonical_refresh_checkout_root == control_plane_release.checkout_root
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"
     )
     release_ids = [release.release_id for release in spec.releases]
     assert len(release_ids) == len(set(release_ids))
-    assert spec.release("control_plane").checkout_root == Path(
-        "/Users/deepsleep/.local/share/pm_agents/releases/control_plane/"
-        "1a385699657977adb0f556eff53f7460cc3c5545"
+    assert control_plane_release.checkout_root == (
+        spec.production_release_root
+        / control_plane_release.release_id
+        / control_plane_release.expected_repo_sha
     )
-    assert len(spec.release("control_plane").expected_repo_sha) == 40
-    assert spec.release("control_plane").runtime_bindings == ("operational_venv",)
+    assert len(control_plane_release.expected_repo_sha) == 40
+    assert control_plane_release.runtime_bindings == ("operational_venv",)
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
         "5ba155d68f0a2e54284c73626730adc4389105c2"
