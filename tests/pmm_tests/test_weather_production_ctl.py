@@ -162,7 +162,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "forward_epoch_id": "wcir_amsterdam_score_only_v2_bb04a8acbeafd66b",
     }
     assert spec.release("amsterdam_wcir_shadow").expected_repo_sha == (
-        "b0034ca1c99dd500966cb1ee935fc59a49a83b98"
+        "4b0a7fdaf376fc94ca410de49b72d463b27107e4"
     )
     court = by_id["polymarket_dispute_clarification_court_v1"]
     assert court.dependencies == (
