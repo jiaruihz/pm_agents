@@ -8,6 +8,7 @@ cross is only an *information proxy*, never a settlement invalidation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -59,6 +60,12 @@ CITY_TIMEZONES = {
 SQLITE_SOURCE_MAP = {
     "METAR_WS_METAR": "metar_ws_metar", "METAR_WS_HFMETAR": "metar_ws_hfmetar", "METAR_WS_DATIS": "metar_ws_datis",
 }
+SOURCE_TOPIC_TEMPLATES = {
+    "metar_ws_metar": "metar.obs.<icao>",
+    "metar_ws_hfmetar": "metar.obs10.<icao>",
+    "metar_ws_datis": "metar.atis.<icao>",
+}
+ATTRIBUTION_REFRESH_SEC = 30.0
 
 
 def utc_now() -> datetime:
@@ -82,6 +89,37 @@ def safe_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def source_topic(source: Any, station: Any, explicit_topic: Any = None) -> str | None:
+    """Return an explicit topic or derive one for tests/replay fixtures."""
+    observed = str(explicit_topic or "").strip()
+    if observed:
+        return observed
+    template = SOURCE_TOPIC_TEMPLATES.get(str(source or ""))
+    icao = str(station or "").strip().lower()
+    return template.replace("<icao>", icao) if template and icao else None
+
+
+def source_topic_valid(source: Any, station: Any, observed_topic: Any) -> bool:
+    """Require the raw subscription topic to agree with the decoded source arm."""
+    template = SOURCE_TOPIC_TEMPLATES.get(str(source or ""))
+    icao = str(station or "").strip().lower()
+    observed = str(observed_topic or "").strip()
+    if not template or not icao or not observed:
+        return False
+    return observed == template.replace("<icao>", icao)
+
+
+def source_event_identity(row: Mapping[str, Any]) -> str:
+    """Namespace producer ids by source so equal ids cannot erase another arm."""
+    source = str(row.get("source") or "")
+    event_id = str(row.get("information_event_id") or "")
+    return f"{source}|{event_id}" if source and event_id else ""
+
+
+def economic_cross_id(race_key: str) -> str:
+    return "cross_no_v2:" + hashlib.sha256(race_key.encode("utf-8")).hexdigest()
 
 
 def append_jsonl(path: Path, row: Mapping[str, Any], *, durable: bool = False) -> None:
@@ -281,6 +319,44 @@ def ensure_research_record(
     return path
 
 
+def record_research_code_identity_amendment(output_dir: Path, *, code_identity: str) -> None:
+    """Append an instrumentation-only release transition without rewriting the record."""
+    record = _load_cursor(output_dir / "research_record.json")
+    original = str((record.get("execution") or {}).get("code_identity") or "")
+    if not original or original == code_identity:
+        return
+    path = output_dir / "research_record_amendments.jsonl"
+    prior = {
+        str(row.get("new_code_identity") or "")
+        for row in jsonl_rows((path,))
+    }
+    if code_identity in prior:
+        return
+    append_jsonl(
+        path,
+        {
+            "schema_version": "cross_no_v2_metar_research_record_amendment_v1",
+            "amendment_id": hashlib.sha256(
+                f"{STRATEGY_ID}|{original}|{code_identity}|source_attribution_v1".encode("utf-8")
+            ).hexdigest(),
+            "record_id": record.get("record_id"),
+            "amended_at_utc": iso(),
+            "previous_code_identity": original,
+            "new_code_identity": code_identity,
+            "change_class": "instrumentation_only_source_attribution_v1",
+            "signal_policy_changed": False,
+            "sizing_or_execution_policy_changed": False,
+            "denominator_changed": False,
+            "changes": [
+                "observed METAR.ws topic and fixed source arm lineage",
+                "economic-cross winner versus later-source attribution",
+                "per-source capture demand and derived attribution reporting",
+            ],
+        },
+        durable=True,
+    )
+
+
 def direct_evidence_events(
     evidence_db: Path, *, cursor_path: Path, allowlist: Mapping[str, str],
     collector_run_start_wall_ns: int | None = None, initialize_at_current: bool = True,
@@ -338,6 +414,7 @@ def direct_evidence_events(
                    e.semantic_version_id, e.station_id, e.report_kind, e.observation_time, e.is_correction,
                    e.air_temperature_c, t.transport_message_id, t.received_wall_ns, t.received_monotonic_ns,
                    t.clock_valid AS transport_clock_valid, t.clock_offset_ms AS transport_clock_offset_ms,
+                   t.channel_or_topic AS transport_topic,
                    t.raw_payload_sha256, t.raw_payload_path
               FROM source_observation_seen s
               JOIN observation_event e ON e.observation_version_id=s.observation_version_id
@@ -370,6 +447,9 @@ def direct_evidence_events(
         events.append({
             "information_event_id": f"sqlite:{row['source_seen_id']}", "event_role": "revision" if row.get("is_correction") else "new_content",
             "source": source, "city": city, "target_date": target_date, "station": row["station_id"],
+            # Presence of this field distinguishes a raw missing topic from a
+            # replay fixture that asks _base_row() to derive the expected one.
+            "source_topic": str(row.get("transport_topic") or "").strip() or None,
             "temp_c": row.get("air_temperature_c"), "event_family_id": row["event_family_id"],
             "semantic_version_id": row["semantic_version_id"], "raw_report_id": row.get("raw_report_id"),
             "transport_received_at_utc": iso(received), "transport_received_monotonic_ns": row["received_monotonic_ns"],
@@ -512,8 +592,20 @@ def _capture_demand(
             "city": row.get("city"),
             "target_date": row.get("target_date"),
             "source": row.get("source"),
+            "source_arm": row.get("attribution_source_arm") or row.get("source"),
+            "source_topic": row.get("attribution_source_topic") or row.get("source_topic"),
+            "source_topic_template": row.get("attribution_source_topic_template"),
+            "attribution_role": row.get("attribution_role"),
+            "economic_cross_id": row.get("economic_cross_id"),
+            "execution_race_key": row.get("execution_race_key"),
             "event_family_id": row.get("event_family_id"),
             "semantic_version_id": row.get("semantic_version_id"),
+            "raw_report_id": row.get("raw_report_id"),
+            "station": row.get("station"),
+            "temp_c": row.get("temp_c"),
+            "source_event_ts_utc": row.get("source_event_ts_utc"),
+            "transport_received_at_utc": row.get("transport_received_at_utc"),
+            "transport_received_monotonic_ns": row.get("transport_received_monotonic_ns"),
             "formal_latency_rank_eligible": bool(row.get("formal_latency_rank_eligible")),
             "execution_clock_mode": row.get("execution_clock_mode"),
             "public_trade_is_own_fill": False,
@@ -527,13 +619,26 @@ def _source_age_seconds(row: Mapping[str, Any], now: datetime) -> float | None:
 
 
 def _base_row(row: Mapping[str, Any], *, now: datetime, execution_clock_mode: str = "formal_clock_valid_v1") -> dict[str, Any]:
+    source = str(row.get("source") or "")
+    station = row.get("station") or row.get("station_id")
+    topic = (
+        str(row.get("source_topic") or "").strip() or None
+        if "source_topic" in row
+        else source_topic(source, station)
+    )
     return {
         "schema_version": "cross_no_v2_metar_opportunity_v1",
         "strategy_id": STRATEGY_ID,
         "created_at_utc": iso(now),
         "created_at_monotonic_ns": time.monotonic_ns(),
         "city": row.get("city"), "target_date": row.get("target_date"),
-        "station": row.get("station") or row.get("station_id"), "source": row.get("source"),
+        "station": station, "source": source,
+        "temp_c": row.get("temp_c"),
+        "source_topic": topic,
+        "source_topic_valid": source_topic_valid(source, station, topic),
+        "attribution_source_arm": source,
+        "attribution_source_topic": topic,
+        "attribution_source_topic_template": SOURCE_TOPIC_TEMPLATES.get(source),
         "information_event_id": row.get("information_event_id"),
         "event_family_id": row.get("event_family_id"),
         "semantic_version_id": row.get("semantic_version_id"),
@@ -543,6 +648,8 @@ def _base_row(row: Mapping[str, Any], *, now: datetime, execution_clock_mode: st
         "source_event_ts_utc": row.get("source_event_ts_utc"),
         "source_cross_is_proxy_only": True,
         "settlement_hard_invalidation": False,
+        "economic_cross_id": None,
+        "attribution_role": "denominator_event",
         "terminal_false_cross": bool(row.get("terminal_false_cross", False)),
         "formal_latency_rank_eligible": execution_clock_mode == "formal_clock_valid_v1",
         "execution_clock_mode": execution_clock_mode,
@@ -630,6 +737,115 @@ def _existing_keys(output_dir: Path) -> tuple[set[str], set[tuple[str, str]], di
     return seen, city_dates, order_count, principal
 
 
+def write_runtime_source_attribution(output_dir: Path, *, now: datetime) -> dict[str, Any]:
+    """Materialize a compact derived view without rewriting append-only evidence."""
+    arms: dict[str, dict[str, Any]] = {
+        source: {
+            "source_arm": source,
+            "source_topic_template": SOURCE_TOPIC_TEMPLATES[source],
+            "denominator_events": 0,
+            "formal_latency_eligible_events": 0,
+            "source_cross_events": 0,
+            "candidate_events": 0,
+            "blocked_events": 0,
+            "five_share_executable_events": 0,
+            "execution_race_winner_events": 0,
+            "later_race_blocked_events": 0,
+            "execution_attempts": 0,
+            "orders": 0,
+            "fills": 0,
+            "actual_fill_shares": 0.0,
+            "actual_fill_cost_usd": 0.0,
+            "expected_entry_fees_usd": 0.0,
+            "blockers": {},
+            "markout_status": "pending_or_join_via_capture_demand_id",
+            "canonical_settlement_pnl_status": "pending_canonical_fact_join",
+        }
+        for source in sorted(SOURCE_ARMS)
+    }
+    opportunities = list(jsonl_rows((output_dir / "opportunities.jsonl",)))
+    for row in opportunities:
+        source = str(row.get("attribution_source_arm") or row.get("source") or "")
+        if source not in arms:
+            continue
+        target = arms[source]
+        target["denominator_events"] += 1
+        target["formal_latency_eligible_events"] += int(bool(row.get("formal_latency_rank_eligible")))
+        blockers = [str(value) for value in row.get("blockers") or ()]
+        if str(row.get("status")) == "candidate":
+            target["candidate_events"] += 1
+        else:
+            target["blocked_events"] += 1
+        for blocker in blockers:
+            target["blockers"][blocker] = target["blockers"].get(blocker, 0) + 1
+        if (
+            row.get("previous_official_bracket") is not None
+            and row.get("new_source_bracket") is not None
+            and str(row.get("previous_official_bracket")) != str(row.get("new_source_bracket"))
+        ):
+            target["source_cross_events"] += 1
+        if (
+            bool(row.get("book_full_depth_valid"))
+            and safe_float(row.get("expected_five_share_vwap")) is not None
+            and safe_float(row.get("worst_ask_for_five_shares")) is not None
+            and float(row["worst_ask_for_five_shares"]) <= MAX_NO_ASK
+        ):
+            target["five_share_executable_events"] += 1
+        role = str(row.get("attribution_role") or "")
+        target["later_race_blocked_events"] += int(role == "later_race_blocked")
+
+    journal_specs = (
+        ("execution_attempts.jsonl", "execution_attempts", "execution_attempt_id"),
+        ("orders.jsonl", "orders", "order_id"),
+        ("fills.jsonl", "fills", "order_id"),
+    )
+    for filename, metric, identity_field in journal_specs:
+        seen_ids: set[str] = set()
+        for row in jsonl_rows((output_dir / filename,)):
+            source = str(row.get("attribution_source_arm") or row.get("source") or "")
+            if source not in arms:
+                continue
+            identity = str(row.get(identity_field) or row.get("execution_attempt_id") or "")
+            if identity and identity in seen_ids:
+                continue
+            if identity:
+                seen_ids.add(identity)
+            arms[source][metric] += 1
+            if metric == "execution_attempts":
+                arms[source]["execution_race_winner_events"] += 1
+            if metric == "orders":
+                arms[source]["expected_entry_fees_usd"] += float(
+                    safe_float(row.get("expected_taker_fee_usd")) or 0.0
+                )
+            if metric == "fills":
+                arms[source]["actual_fill_shares"] += float(
+                    safe_float(row.get("actual_fill_shares")) or 0.0
+                )
+                arms[source]["actual_fill_cost_usd"] += float(
+                    safe_float(row.get("actual_fill_cost_usd")) or 0.0
+                )
+
+    for target in arms.values():
+        target["actual_fill_shares"] = round(float(target["actual_fill_shares"]), 8)
+        target["actual_fill_cost_usd"] = round(float(target["actual_fill_cost_usd"]), 8)
+        target["expected_entry_fees_usd"] = round(float(target["expected_entry_fees_usd"]), 8)
+        target["blockers"] = dict(sorted(target["blockers"].items()))
+    payload = {
+        "schema_version": "cross_no_v2_metar_source_attribution_runtime_v1",
+        "strategy_id": STRATEGY_ID,
+        "generated_at_utc": iso(now),
+        "attribution_contract": {
+            "realized_pnl_owner": "first source arm whose economic cross produced the execution attempt",
+            "later_source_role": "counterfactual_later_race_only_never_duplicate_realized_pnl",
+            "public_trade_semantics": "public market trade is not own fill",
+            "settlement_pnl_semantics": "must join canonical fact_trades; absent here is pending not zero",
+        },
+        "source_arms": arms,
+    }
+    _save_strategy_state(output_dir / "source_attribution_latest.json", payload)
+    return payload
+
+
 def run_probe(
     *, source_events_root: Path, market_books_latest: Path, output_dir: Path,
     live: bool = False, confirm_live: bool = False, place_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
@@ -642,6 +858,7 @@ def run_probe(
     boot_monotonic_start_ns: int | None = None, monotonic_now_ns: int | None = None,
     fetch_book_fn: Callable[..., dict[str, Any]] | None = None,
     market_proxy: str = "", book_timeout_sec: float = 5.0,
+    code_identity: str = "unversioned_test",
 ) -> dict[str, Any]:
     """Process a finite replay once; all rejects are emitted as opportunities."""
     now = now or utc_now()
@@ -679,14 +896,28 @@ def run_probe(
         for value in strategy_state.get("source_crossed_brackets") or []
         if str(value).count("|") == 3
     }
-    processed_ids = set(map(str, strategy_state.get("processed_event_ids") or []))
+    processed_keys = set(map(str, strategy_state.get("processed_event_keys") or []))
+    legacy_processed_ids = (
+        set(map(str, strategy_state.get("processed_event_ids") or []))
+        if not bool(strategy_state.get("processed_event_key_migration_complete"))
+        else set()
+    )
+    legacy_processed_keys = {
+        source_event_identity(row)
+        for row in jsonl_rows((output_dir / "opportunities.jsonl",))
+        if str(row.get("information_event_id") or "") in legacy_processed_ids
+        and source_event_identity(row)
+    }
     emitted = orders = fills = blocked = 0
 
     for event in events:
         event_id = str(event.get("information_event_id") or "")
-        if not event_id or event_id in processed_ids:
+        event_key = source_event_identity(event)
+        if not event_key or event_key in processed_keys:
             continue
-        processed_ids.add(event_id)
+        processed_keys.add(event_key)
+        if event_key in legacy_processed_keys:
+            continue
         blockers, clock_mode = _eligible_event(
             event, allowlist=allowlist, now=now, max_source_age_sec=max_source_age_sec,
             allow_clock_invalid_same_boot_monotonic_probe=allow_clock_invalid_same_boot_monotonic_probe,
@@ -699,6 +930,8 @@ def run_probe(
             boot_monotonic_start_ns=boot_monotonic_start_ns, monotonic_now_ns=monotonic_now_ns,
         )
         common = _base_row(event, now=now, execution_clock_mode=clock_mode)
+        if not bool(common.get("source_topic_valid")):
+            blockers.append("source_topic_mismatch_or_missing")
         city_date = (str(event.get("city") or ""), str(event.get("target_date") or ""))
         markets = by_city_date.get(city_date, [])
         temp_c = safe_float(event.get("temp_c"))
@@ -801,7 +1034,8 @@ def run_probe(
             ]
         )
         day = now.date().isoformat()
-        if race_key in seen_races:
+        race_already_executed = race_key in seen_races
+        if race_already_executed:
             candidate_blockers.append("cross_source_race_already_executed")
         if city_date in city_orders:
             candidate_blockers.append("city_target_date_order_cap")
@@ -811,6 +1045,17 @@ def run_probe(
             candidate_blockers.append("pause_file_present")
         if live and not confirm_live:
             candidate_blockers.append("confirm_live_missing")
+        attribution_role = (
+            "later_race_blocked"
+            if race_already_executed
+            else "no_cross"
+            if not source_crossed
+            else "cross_blocked"
+            if candidate_blockers
+            else "execution_candidate"
+            if live_enabled
+            else "first_eligible_cross"
+        )
         row = {**common, "status": "candidate" if not candidate_blockers else "blocked", "blockers": candidate_blockers,
                "prior_official_running_max": prior_official, "source_running_max": source_max[source_key],
                "previous_official_bracket": bracket, "new_source_bracket": source_bracket.get("bracket"),
@@ -825,7 +1070,8 @@ def run_probe(
                    _expected_weather_taker_fee(SHARES_PER_ORDER, float(expected_vwap))
                    if expected_vwap is not None else None
                ),
-               "execution_race_key": race_key, "planned_shares": SHARES_PER_ORDER,
+               "execution_race_key": race_key, "economic_cross_id": economic_cross_id(race_key),
+               "attribution_role": attribution_role, "planned_shares": SHARES_PER_ORDER,
                "max_shares_per_market": SHARES_PER_ORDER, "planned_principal_usd": principal,
                "live_requested": bool(live), "live_enabled": live_enabled}
         append_jsonl(output_dir / "opportunities.jsonl", row); emitted += 1
@@ -845,6 +1091,7 @@ def run_probe(
             reservation = {
                 **intent_row,
                 "status": "reserved_before_submit",
+                "attribution_role": "execution_race_winner",
                 "execution_attempt_id": execution_attempt_id,
                 "reserved_at_utc": iso(),
                 "reserved_at_monotonic_ns": time.monotonic_ns(),
@@ -859,6 +1106,7 @@ def run_probe(
             daily_principal[day] = daily_principal.get(day, 0.0) + float(intent["submitted_notional_usd"])
             result = submit_marketable_gtc(intent_row, place=place_fn)  # type: ignore[arg-type]
             order = {**result["order_row"], "status": "order", "live_attempted_at_utc": iso(),
+                     "attribution_role": "execution_race_winner",
                      "live_attempted_monotonic_ns": time.monotonic_ns(), "exchange_response": result.get("exchange_response"),
                      "order_id": extract_order_id(result.get("exchange_response") or {}),
                      "execution_attempt_id": execution_attempt_id,
@@ -880,18 +1128,39 @@ def run_probe(
             "official_max": {"|".join(key): value for key, value in sorted(official_max.items())},
             "source_max": {"|".join(key): value for key, value in sorted(source_max.items())},
             "source_crossed_brackets": ["|".join(key) for key in sorted(source_crossed_brackets)],
-            "processed_event_ids": sorted(processed_ids)[-100_000:],
+            "processed_event_ids": sorted(
+                {
+                    key.split("|", 1)[1]
+                    for key in processed_keys
+                    if "|" in key
+                }
+            )[-100_000:],
+            "processed_event_keys": sorted(processed_keys)[-100_000:],
+            "processed_event_key_migration_complete": True,
         },
     )
+    attribution_path = output_dir / "source_attribution_latest.json"
+    prior_attribution = _load_strategy_state(attribution_path)
+    prior_generated = parse_utc(prior_attribution.get("generated_at_utc"))
+    attribution_due = (
+        not attribution_path.exists()
+        or prior_generated is None
+        or (now - prior_generated).total_seconds() >= ATTRIBUTION_REFRESH_SEC
+    )
+    if attribution_due:
+        source_attribution = write_runtime_source_attribution(output_dir, now=now)
+    else:
+        source_attribution = prior_attribution
     health = {
         "schema_version": "cross_no_v2_metar_health_v1",
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_ID,
+        "code_identity": code_identity,
         "status": "ok",
         "generated_at_utc": iso(now),
         "generated_at_monotonic_ns": time.monotonic_ns(),
-        "events_seen_total": len(processed_ids),
-        "events_seen": len(processed_ids),
+        "events_seen_total": len(processed_keys),
+        "events_seen": len(processed_keys),
         "events_processed_this_cycle": emitted,
         "opportunities_emitted": emitted,
         "blocked": blocked,
@@ -910,6 +1179,8 @@ def run_probe(
         "weather_taker_fee_rate": WEATHER_TAKER_FEE_RATE,
         "clock_invalid_same_boot_override_enabled": bool(allow_clock_invalid_same_boot_monotonic_probe),
         "settlement_hard_invalidation": False,
+        "source_attribution_schema_version": source_attribution.get("schema_version"),
+        "source_attribution_path": str(attribution_path),
         "pause_file": str(pause_file) if pause_file else "",
         "paused": paused,
     }
@@ -957,6 +1228,10 @@ def main() -> int:
         evidence_db=args.evidence_db,
         market_books_latest=args.market_books_latest,
     )
+    record_research_code_identity_amendment(
+        args.output_dir,
+        code_identity=args.code_identity,
+    )
     place_fn = build_live_taker_gtc_place_fn(args.market_proxy or os.environ.get("WEATHER_MARKET_PROXY_URL", "")) if args.live and args.confirm_live else None
     while True:
         cycle_started = time.monotonic()
@@ -996,6 +1271,7 @@ def main() -> int:
                 fetch_book_fn=fetch_fresh_book,
                 market_proxy=args.market_proxy or os.environ.get("WEATHER_MARKET_PROXY_URL", ""),
                 book_timeout_sec=args.book_timeout_sec,
+                code_identity=args.code_identity,
             )
             if cursor_state is not None:
                 _save_cursor(args.output_dir / "evidence_cursor.json", cursor_state)
