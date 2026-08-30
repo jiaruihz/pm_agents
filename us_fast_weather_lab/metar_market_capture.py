@@ -30,6 +30,92 @@ STRATEGY_KEY = "weather.metar_ws_event_repricing"
 TTL_SECONDS = 330
 
 
+class _TailFile:
+    """The last safe newline boundary observed for one append-only journal."""
+
+    def __init__(self, path: Path, *, offset: int, signature: tuple[int, int, int, int]) -> None:
+        self.path = path
+        self.offset = offset
+        self.signature = signature
+
+
+class _MaterializerState:
+    """Process-local optimization only; a new process always replays cold."""
+
+    def __init__(self, source_paths: tuple[Path, ...], source_files: dict[Path, _TailFile], *,
+                 demand_signature: tuple[int, int, int, int] | None,
+                 resolution_signature: tuple[int, int, int, int] | None,
+                 existing_demands: set[str], existing_resolutions: set[str],
+                 existing_event_ids: set[str], running_max: dict[tuple[str, str], float]) -> None:
+        self.source_paths = source_paths
+        self.source_files = source_files
+        self.demand_signature = demand_signature
+        self.resolution_signature = resolution_signature
+        self.existing_demands = existing_demands
+        self.existing_resolutions = existing_resolutions
+        self.existing_event_ids = existing_event_ids
+        self.running_max = running_max
+
+    def copy(self) -> "_MaterializerState":
+        """Return copy-on-write state so failed output appends cannot advance cursors."""
+
+        return _MaterializerState(
+            self.source_paths,
+            {
+                path: _TailFile(
+                    tail.path,
+                    offset=tail.offset,
+                    signature=tail.signature,
+                )
+                for path, tail in self.source_files.items()
+            },
+            demand_signature=self.demand_signature,
+            resolution_signature=self.resolution_signature,
+            existing_demands=set(self.existing_demands),
+            existing_resolutions=set(self.existing_resolutions),
+            existing_event_ids=set(self.existing_event_ids),
+            running_max=dict(self.running_max),
+        )
+
+
+_MATERIALIZER_STATES: dict[tuple[Path, Path, Path, Path], _MaterializerState] = {}
+
+
+def _signature(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+
+def _source_paths(root: Path) -> tuple[Path, ...]:
+    return tuple(sorted(root.glob("*/sources.jsonl"))) if root.exists() else ()
+
+
+def _tail_rows(state: _TailFile) -> tuple[list[dict[str, Any]], _TailFile]:
+    """Read only complete new JSONL rows, retaining a partial final line."""
+    signature = _signature(state.path)
+    if signature is None:
+        return [], state
+    with state.path.open("rb") as handle:
+        handle.seek(state.offset)
+        data = handle.read()
+    end = data.rfind(b"\n")
+    if end < 0:
+        return [], _TailFile(state.path, offset=state.offset, signature=signature)
+    complete = data[: end + 1]
+    rows: list[dict[str, Any]] = []
+    for line in complete.splitlines():
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, Mapping):
+            rows.append(dict(value))
+    return rows, _TailFile(state.path, offset=state.offset + len(complete), signature=signature)
+
+
 def _utc(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -177,12 +263,16 @@ def _event_candidate(row: Mapping[str, Any]) -> tuple[bool, str | None]:
     return True, None
 
 
-def _materialize_capture_demands_unlocked(
-    source_events_root: Path,
+def _materialize_events(
+    events: Iterable[dict[str, Any]],
     market_books_latest: Path,
     demand_jsonl: Path,
     *,
-    resolution_jsonl: Path | None = None,
+    resolution_jsonl: Path,
+    existing_demands: set[str],
+    existing_resolutions: set[str],
+    existing_event_ids: set[str],
+    running_max: dict[tuple[str, str], float],
 ) -> dict[str, int]:
     """Append bounded direct-token demands and a complete resolution ledger.
 
@@ -191,18 +281,11 @@ def _materialize_capture_demands_unlocked(
     represented in the resolution journal, including events that cannot lead
     to a market capture.
     """
-    resolution_jsonl = resolution_jsonl or demand_jsonl.with_name(
-        f"{demand_jsonl.stem}_resolution.jsonl"
-    )
-    existing_demands = _existing(demand_jsonl, "demand_id")
-    existing_resolutions = _existing(resolution_jsonl, "resolution_id")
-    existing_event_ids = _existing(demand_jsonl, "trigger_event_id")
-    running_max: dict[tuple[str, str], float] = {}
     demands: list[dict[str, Any]] = []
     resolutions: list[dict[str, Any]] = []
     scheduled = 0
 
-    for event in _source_rows(source_events_root):
+    for event in events:
         event_id = str(event.get("information_event_id") or "")
         if not event_id:
             continue
@@ -331,6 +414,62 @@ def _materialize_capture_demands_unlocked(
     }
 
 
+def _cold_replay_state(
+    source_events_root: Path, demand_jsonl: Path, resolution_jsonl: Path,
+) -> tuple[_MaterializerState, list[dict[str, Any]]]:
+    """Build all derived state from disk.  Used on process start and distrust."""
+    paths = _source_paths(source_events_root)
+    files: dict[Path, _TailFile] = {}
+    events: list[dict[str, Any]] = []
+    for path in paths:
+        signature = _signature(path)
+        if signature is None:
+            continue
+        rows, tail = _tail_rows(_TailFile(path, offset=0, signature=signature))
+        events.extend(rows)
+        files[path] = tail
+    return (
+        _MaterializerState(
+            paths, files,
+            demand_signature=_signature(demand_jsonl),
+            resolution_signature=_signature(resolution_jsonl),
+            existing_demands=_existing(demand_jsonl, "demand_id"),
+            existing_resolutions=_existing(resolution_jsonl, "resolution_id"),
+            existing_event_ids=_existing(demand_jsonl, "trigger_event_id"),
+            running_max={},
+        ),
+        events,
+    )
+
+
+def _sources_are_safe_to_tail(state: _MaterializerState, root: Path) -> bool:
+    paths = _source_paths(root)
+    if paths != state.source_paths:
+        return False
+    for index, path in enumerate(paths):
+        previous = state.source_files.get(path)
+        current = _signature(path)
+        if previous is None or current is None:
+            return False
+        same_file = current[:2] == previous.signature[:2]
+        if not same_file or current[2] < previous.signature[2]:
+            return False
+        if current[2] == previous.signature[2] and current[3] != previous.signature[3]:
+            return False  # same-size rewrite/replace
+        # An older journal growing would be replayed before already-consumed
+        # newer paths; replay the whole ordered catalog instead.
+        if current[2] > previous.signature[2] and index != len(paths) - 1:
+            return False
+    return True
+
+
+def _outputs_are_unchanged(state: _MaterializerState, demand_jsonl: Path, resolution_jsonl: Path) -> bool:
+    return (
+        _signature(demand_jsonl) == state.demand_signature
+        and _signature(resolution_jsonl) == state.resolution_signature
+    )
+
+
 def materialize_capture_demands(
     source_events_root: Path,
     market_books_latest: Path,
@@ -338,11 +477,48 @@ def materialize_capture_demands(
     *,
     resolution_jsonl: Path | None = None,
 ) -> dict[str, int]:
+    resolution_jsonl = resolution_jsonl or demand_jsonl.with_name(
+        f"{demand_jsonl.stem}_resolution.jsonl"
+    )
+    state_key = (
+        source_events_root.resolve(), market_books_latest.resolve(), demand_jsonl.resolve(), resolution_jsonl.resolve(),
+    )
     lock_path = demand_jsonl.with_name(f".{demand_jsonl.name}.materializer.lock")
     with _exclusive_materializer_lock(lock_path):
-        return _materialize_capture_demands_unlocked(
-            source_events_root,
+        cached_state = _MATERIALIZER_STATES.get(state_key)
+        if cached_state is None or not _sources_are_safe_to_tail(
+            cached_state, source_events_root
+        ):
+            state, events = _cold_replay_state(source_events_root, demand_jsonl, resolution_jsonl)
+        else:
+            state = cached_state.copy()
+            if not _outputs_are_unchanged(state, demand_jsonl, resolution_jsonl):
+                # Another writer changed an output journal.  Reload dedupe
+                # facts; source tail/running maxima remain valid because the
+                # source identities were already proven append-only above.
+                state.existing_demands = _existing(demand_jsonl, "demand_id")
+                state.existing_resolutions = _existing(
+                    resolution_jsonl, "resolution_id"
+                )
+                state.existing_event_ids = _existing(
+                    demand_jsonl, "trigger_event_id"
+                )
+            events = []
+            for path in state.source_paths:
+                rows, tail = _tail_rows(state.source_files[path])
+                events.extend(rows)
+                state.source_files[path] = tail
+        result = _materialize_events(
+            events,
             market_books_latest,
             demand_jsonl,
             resolution_jsonl=resolution_jsonl,
+            existing_demands=state.existing_demands,
+            existing_resolutions=state.existing_resolutions,
+            existing_event_ids=state.existing_event_ids,
+            running_max=state.running_max,
         )
+        state.demand_signature = _signature(demand_jsonl)
+        state.resolution_signature = _signature(resolution_jsonl)
+        _MATERIALIZER_STATES[state_key] = state
+        return result
