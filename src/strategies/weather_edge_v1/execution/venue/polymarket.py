@@ -20,6 +20,7 @@ from ..contracts import (
     canonical_json,
 )
 from ..quote_engine import round_marketable_price_to_tick, round_price_to_tick
+from weather_clock_contract import parse_utc
 
 
 class VenueAdapterError(ValueError):
@@ -55,13 +56,12 @@ def _required(mapping: Mapping[str, Any], name: str) -> Any:
 
 
 def _parse_utc(value: str) -> datetime:
-    text = str(value).strip()
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    parsed = datetime.fromisoformat(text)
-    if parsed.tzinfo is None:
-        raise VenueAdapterError("timestamp must include timezone")
-    return parsed.astimezone(timezone.utc)
+    try:
+        parsed = parse_utc(value, field="venue_timestamp")
+    except ValueError as exc:
+        raise VenueAdapterError(str(exc)) from exc
+    assert parsed is not None
+    return parsed
 
 
 def _decimal_places(value: Decimal) -> int:

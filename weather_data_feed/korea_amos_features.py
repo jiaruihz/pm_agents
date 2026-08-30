@@ -15,6 +15,7 @@ from typing import Any
 
 from weather_data_feed.observation_sources.fetchers import relative_humidity_pct
 from weather_data_feed.physical_features import metar_physical_features
+from weather_clock_contract import parse_utc_or_none
 
 
 KOREA_AMOS_STATE_SCHEMA_VERSION = "korea_amos_first_seen_state_v1"
@@ -22,16 +23,7 @@ DEFAULT_PATH_WINDOW_MINUTES = (5, 15, 30, 60)
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="korea_amos_clock")
 
 
 def finite_float(value: Any) -> float | None:

@@ -4,22 +4,17 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Mapping
 
+from weather_clock_contract import parse_utc as parse_strict_utc
+
 from .contracts import ExecutionProfile, LifecycleContext, LifecycleDecision, MarketBook, RestingOrderState
 from .quote_engine import round_marketable_price_to_tick, round_price_to_tick
 from .reconciliation import ReconciliationResult, authoritative_remaining_shares, reconcile_replacement
 
 
 def _parse_utc(value: str | datetime) -> datetime:
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        text = str(value or "").strip()
-        if text.endswith("Z"):
-            text = f"{text[:-1]}+00:00"
-        parsed = datetime.fromisoformat(text)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_strict_utc(value)
+    assert parsed is not None
+    return parsed
 
 
 def build_data_update_lifecycle_fields(

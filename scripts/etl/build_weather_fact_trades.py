@@ -23,6 +23,8 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from weather_clock_contract import parse_utc
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -98,13 +100,9 @@ SNAPSHOT_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "paper_sna
 def _ts_to_date(ts_utc: str | None, tz: ZoneInfo) -> str | None:
     if not ts_utc:
         return None
-    try:
-        # Handle ISO strings with or without +00:00
-        ts = ts_utc.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(ts).astimezone(tz)
-        return dt.date().isoformat()
-    except Exception:
-        return None
+    parsed = parse_utc(ts_utc, field="fact_trade_timestamp")
+    assert parsed is not None
+    return parsed.astimezone(tz).date().isoformat()
 
 
 def _safe_float(v: Any) -> float | None:
@@ -381,7 +379,47 @@ SELECT
   s.market_id,
   s.token_id,
   s.hours_to_settle,
-  s.snapshot_ts_utc,
+  s.snapshot_ts_utc AS original_snapshot_ts_utc,
+  COALESCE(signal_clock_adj.corrected_snapshot_ts_utc, s.snapshot_ts_utc)
+    AS snapshot_ts_utc,
+  COALESCE(
+    signal_clock_adj.timestamp_source,
+    s.snapshot_clock_basis,
+    'legacy_unclassified'
+  ) AS signal_clock_basis,
+  COALESCE(
+    signal_clock_adj.timestamp_evidence_class,
+    CASE s.snapshot_lineage_status
+      WHEN 'explicit_causal' THEN 'exact'
+      WHEN 'reconstructed_causal' THEN 'reconstructed'
+      WHEN 'proxy_not_feature_snapshot' THEN 'proxy'
+      WHEN 'blocked_no_signal_snapshot' THEN 'proxy'
+      ELSE 'legacy_unclassified'
+    END
+  ) AS signal_clock_evidence_class,
+  COALESCE(
+    signal_clock_adj.lineage_status,
+    s.snapshot_lineage_status,
+    'legacy_unclassified'
+  ) AS signal_clock_lineage_status,
+  COALESCE(
+    signal_clock_adj.source_snapshot_ref,
+    s.snapshot_source_ref,
+    s.snapshot_file
+  ) AS signal_clock_source_ref,
+
+  execution_evidence.execution_evidence_link_id,
+  execution_evidence.execution_book_snapshot_id,
+  execution_evidence.book_observed_at_utc AS execution_book_observed_at_utc,
+  execution_evidence.book_age_ms AS execution_book_age_ms,
+  execution_evidence.quote_side AS execution_quote_side,
+  execution_evidence.executable_quote_price AS execution_quote_price,
+  execution_evidence.adverse_slippage AS fill_vs_quote_slippage,
+  COALESCE(
+    execution_evidence.evidence_status,
+    'missing_private_fill_plus_causal_public_book_join'
+  ) AS execution_evidence_status,
+  execution_evidence.source_path AS execution_evidence_source_ref,
 
   r.code_version,
   r.execution_mode,
@@ -417,6 +455,10 @@ LEFT JOIN (
 ) fill_totals ON fill_totals.execution_id = o.execution_id
 JOIN plans p         ON p.plan_id      = o.plan_id
 JOIN signals s       ON s.signal_id    = p.signal_id
+LEFT JOIN signal_clock_adjustments signal_clock_adj
+  ON signal_clock_adj.signal_id = s.signal_id
+LEFT JOIN execution_evidence_links execution_evidence
+  ON execution_evidence.fill_id = f.fill_id
 JOIN runs r          ON r.run_id       = o.run_id
 LEFT JOIN strategy_config sc ON sc.config_id = r.config_id
 LEFT JOIN strategy_def sd ON sd.strategy_key = sc.strategy_key
@@ -436,6 +478,8 @@ INCREMENTAL_ROWID_SOURCES = (
     "fill_fee_adjustments",
     "fill_price_adjustments",
     "fill_timestamp_adjustments",
+    "signal_clock_adjustments",
+    "execution_evidence_links",
     "fill_validity_adjustments",
     "order_execution_aliases",
 )
@@ -504,6 +548,26 @@ def _fill_ids_for_executions(
         str(row[0])
         for row in conn.execute(
             f"SELECT fill_id FROM fills WHERE execution_id IN ({placeholders})",
+            values,
+        ).fetchall()
+    }
+
+
+def _fill_ids_for_signals(
+    conn: sqlite3.Connection,
+    signal_ids: set[str],
+) -> set[str]:
+    if not signal_ids:
+        return set()
+    values = sorted(signal_ids)
+    placeholders = ",".join("?" for _ in values)
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT f.fill_id FROM plans p "
+            "JOIN orders o ON o.plan_id=p.plan_id "
+            "JOIN fills f ON f.execution_id=o.execution_id "
+            f"WHERE p.signal_id IN ({placeholders})",
             values,
         ).fetchall()
     }
@@ -612,6 +676,7 @@ def collect_incremental_scope(
         "fill_price_adjustments",
         "fill_timestamp_adjustments",
         "fill_validity_adjustments",
+        "execution_evidence_links",
     ):
         if not _table_exists(conn, table_name):
             continue
@@ -622,6 +687,16 @@ def collect_incremental_scope(
                 (prior_watermarks.get(table_name, 0),),
             ).fetchall()
         )
+
+    if _table_exists(conn, "signal_clock_adjustments"):
+        changed_signals = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT signal_id FROM signal_clock_adjustments WHERE rowid > ?",
+                (prior_watermarks.get("signal_clock_adjustments", 0),),
+            ).fetchall()
+        }
+        affected.update(_fill_ids_for_signals(conn, changed_signals))
 
     if _table_exists(conn, "order_execution_aliases"):
         alias_rows = conn.execute(
@@ -709,7 +784,21 @@ CREATE TABLE IF NOT EXISTS fact_trades (
   order_date_bj        TEXT,
   order_date_local     TEXT,
   fill_ts_utc          TEXT,
+  original_snapshot_ts_utc TEXT,
   snapshot_ts_utc      TEXT,
+  signal_clock_basis   TEXT,
+  signal_clock_evidence_class TEXT,
+  signal_clock_lineage_status TEXT,
+  signal_clock_source_ref TEXT,
+  execution_evidence_link_id TEXT,
+  execution_book_snapshot_id TEXT,
+  execution_book_observed_at_utc TEXT,
+  execution_book_age_ms REAL,
+  execution_quote_side TEXT,
+  execution_quote_price REAL,
+  fill_vs_quote_slippage REAL,
+  execution_evidence_status TEXT,
+  execution_evidence_source_ref TEXT,
   hours_to_settle      REAL,
 
   -- signal measures
@@ -971,7 +1060,33 @@ def build(
             "order_date_bj": order_date_bj,
             "order_date_local": order_date_local,
             "fill_ts_utc": fill_ts_utc,
+            "original_snapshot_ts_utc": b.get("original_snapshot_ts_utc"),
             "snapshot_ts_utc": b.get("snapshot_ts_utc"),
+            "signal_clock_basis": b.get("signal_clock_basis"),
+            "signal_clock_evidence_class": b.get(
+                "signal_clock_evidence_class"
+            ),
+            "signal_clock_lineage_status": b.get(
+                "signal_clock_lineage_status"
+            ),
+            "signal_clock_source_ref": b.get("signal_clock_source_ref"),
+            "execution_evidence_link_id": b.get("execution_evidence_link_id"),
+            "execution_book_snapshot_id": b.get("execution_book_snapshot_id"),
+            "execution_book_observed_at_utc": b.get(
+                "execution_book_observed_at_utc"
+            ),
+            "execution_book_age_ms": _safe_float(
+                b.get("execution_book_age_ms")
+            ),
+            "execution_quote_side": b.get("execution_quote_side"),
+            "execution_quote_price": _safe_float(b.get("execution_quote_price")),
+            "fill_vs_quote_slippage": _safe_float(
+                b.get("fill_vs_quote_slippage")
+            ),
+            "execution_evidence_status": b.get("execution_evidence_status"),
+            "execution_evidence_source_ref": b.get(
+                "execution_evidence_source_ref"
+            ),
             "hours_to_settle": _safe_float(b.get("hours_to_settle")),
             # signal measures
             "model_p_yes": _safe_float(b.get("model_p_yes")),

@@ -71,6 +71,11 @@ from weather_data_feed import (
 )
 from weather_data_feed.observation_sources import build_iem_local_day_params, parse_iem_asos_records
 from weather_data_feed.sky_cover import SKY_COVER_CODE as SKY_CODE
+from weather_clock_contract import (
+    local_wall_time_to_utc,
+    parse_utc_or_none as parse_utc,
+    utc_text,
+)
 
 
 STRATEGY_INSTANCE = os.environ.get("THETA_CURRENT_YES_STRATEGY_INSTANCE", "theta_current_yes_tiny_live_v1")
@@ -409,11 +414,14 @@ def forecast_details_from_open_meteo(payload: dict[str, Any], *, source_model: s
     peak_local_time = min(ts for ts, temp in pairs if abs(temp - max_f) < 1e-9)
     utc_offset_seconds = int(payload.get("utc_offset_seconds") or 0)
     try:
-        local_dt = datetime.fromisoformat(peak_local_time)
-        peak_utc = (local_dt - timedelta(seconds=utc_offset_seconds)).replace(tzinfo=timezone.utc)
-        peak_time_utc = peak_utc.isoformat().replace("+00:00", "Z")
+        peak_utc = local_wall_time_to_utc(
+            peak_local_time,
+            timezone_name=str(payload["timezone"]),
+            field="forecast_peak_time_local",
+        )
+        peak_time_utc = utc_text(peak_utc, timespec="seconds")
         peak_hour_utc = peak_utc.hour
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         peak_time_utc = None
         peak_hour_utc = None
     return {
@@ -630,21 +638,6 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
         "derived_min_edge_after_full_cushion": required_edge,
         "cushion_paid_vs_snapshot": limit_price - snapshot_ask,
     }
-
-
-def parse_utc(value: Any) -> datetime | None:
-    text = safe_str(value)
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
 
 
 def snapshot_dir_candidates() -> tuple[list[Path], bool]:
@@ -2540,13 +2533,11 @@ def enrich_peak_timing_shadow_telemetry(rows: list[dict[str, Any]]) -> tuple[lis
             first_ask = to_float(first.get("first_signal_ask"), np.nan)
             first_seen_ts = safe_str(first.get("first_seen_at_utc"))
             hours_since_first = np.nan
-            try:
-                if first_seen_ts:
-                    hours_since_first = (
-                        datetime.now(timezone.utc) - datetime.fromisoformat(first_seen_ts.replace("Z", "+00:00"))
-                    ).total_seconds() / 3600.0
-            except Exception:
-                hours_since_first = np.nan
+            first_seen_dt = parse_utc(first_seen_ts)
+            if first_seen_dt is not None:
+                hours_since_first = (
+                    datetime.now(timezone.utc) - first_seen_dt
+                ).total_seconds() / 3600.0
             maker_probe_price = max(0.01, price - 0.01) if math.isfinite(price) else np.nan
             item.update(
                 {

@@ -25,6 +25,7 @@ import pandas as pd
 
 from weather_data_feed import city_timezone_name
 from weather_data_feed.market_brackets import bracket_center
+from weather_clock_contract import parse_utc_or_none
 
 
 DIRECT_FIELDS = tuple(
@@ -59,16 +60,7 @@ CACHE_SCHEMA_VERSION = "ladder_snapshot_history_cache_v2"
 
 
 def _utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value)
 
 
 def _finite(value: Any) -> float:

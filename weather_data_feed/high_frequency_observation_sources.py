@@ -27,6 +27,11 @@ import httpx
 from weather_data_feed.observation_sources import FetchSettings, ObservationSourceRequest, fetch_observation_source
 from weather_data_feed.observation_sources.fetchers import arith_round, c_to_f, parse_dt as parse_source_dt
 from weather_data_feed.runway_sources import RunwayFetchSettings, fetch_amos_runway
+from weather_clock_contract import (
+    local_wall_time_to_utc,
+    parse_utc,
+    parse_utc_or_none,
+)
 
 
 SINGAPORE_MSS_TEMP_URL = "https://api.data.gov.sg/v1/environment/air-temperature"
@@ -378,7 +383,10 @@ def _jma_obs_time_from_key(value: Any) -> datetime | None:
     if len(raw) != 14 or not raw.isdigit():
         return None
     try:
-        return datetime.strptime(raw, "%Y%m%d%H%M%S").replace(tzinfo=timezone(timedelta(hours=9))).astimezone(timezone.utc)
+        local = datetime.strptime(raw, "%Y%m%d%H%M%S")
+        return local_wall_time_to_utc(
+            local, timezone_name="Asia/Tokyo", field="jma_amedas_wall_time"
+        )
     except ValueError:
         return None
 
@@ -492,7 +500,9 @@ def fetch_jma_amedas(city: str, *, settings: HighFrequencyFetchSettings | None =
     meta = HIGH_FREQUENCY_CITY_SOURCES["jma_amedas"][city]
     start = datetime.now(timezone.utc)
     latest_text = _http_get(f"{JMA_AMEDAS_BASE}/bosai/amedas/data/latest_time.txt", settings=settings).text.strip()
-    latest_dt = datetime.fromisoformat(latest_text)
+    latest_dt = parse_utc(latest_text, field="jma_latest_time")
+    assert latest_dt is not None
+    latest_dt = latest_dt.astimezone(ZoneInfo("Asia/Tokyo"))
     bucket_hour = (latest_dt.hour // 3) * 3
     bucket_key = f"{latest_dt.strftime('%Y%m%d')}_{bucket_hour:02d}"
     payload = _http_get(f"{JMA_AMEDAS_BASE}/bosai/amedas/data/point/{meta['station']}/{bucket_key}.json", settings=settings).json()
@@ -506,7 +516,10 @@ def _hko_obs_time_to_utc(value: Any) -> datetime | None:
     if len(raw) != 12 or not raw.isdigit():
         return None
     try:
-        return datetime.strptime(raw, "%Y%m%d%H%M").replace(tzinfo=timezone(timedelta(hours=8))).astimezone(timezone.utc)
+        local = datetime.strptime(raw, "%Y%m%d%H%M")
+        return local_wall_time_to_utc(
+            local, timezone_name="Asia/Hong_Kong", field="hko_wall_time"
+        )
     except ValueError:
         return None
 
@@ -552,13 +565,17 @@ def _cowin_obs_time_to_utc(value: Any) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
         return None
+    aware = parse_utc_or_none(raw, field="cowin_observation_time")
+    if aware is not None:
+        return aware
     try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return local_wall_time_to_utc(
+            raw,
+            timezone_name="Asia/Hong_Kong",
+            field="cowin_observation_wall_time",
+        )
     except ValueError:
         return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
-    return dt.astimezone(timezone.utc)
 
 
 def parse_cowin_payload(payload: dict[str, Any], *, city: str = "Hong Kong", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
@@ -588,7 +605,7 @@ def parse_cowin_payload(payload: dict[str, Any], *, city: str = "Hong Kong", tar
 
 
 def fetch_cowin_obs(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
-    now = datetime.now(timezone(timedelta(hours=8)))
+    now = datetime.now(ZoneInfo("Asia/Hong_Kong"))
     params = {
         "station_id": "6087",
         "element_id": "temp",
@@ -653,30 +670,34 @@ def _valid_mgm_value(value: Any) -> float | None:
     return out if out is not None and out > -9000 else None
 
 
-def _local_iso_to_utc(value: Any, offset_hours: int) -> datetime | None:
+def _local_iso_to_utc(value: Any, timezone_name: str) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
         return None
+    aware = parse_utc_or_none(raw, field="provider_observation_time")
+    if aware is not None:
+        return aware
     try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return local_wall_time_to_utc(
+            raw, timezone_name=timezone_name, field="provider_observation_wall_time"
+        )
     except ValueError:
         return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone(timedelta(hours=offset_hours)))
-    return dt.astimezone(timezone.utc)
 
 
 def _zoned_iso_to_utc(value: Any, timezone_name: str) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
         return None
+    aware = parse_utc_or_none(raw, field="zoned_observation_time")
+    if aware is not None:
+        return aware
     try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return local_wall_time_to_utc(
+            raw, timezone_name=timezone_name, field="zoned_observation_wall_time"
+        )
     except ValueError:
         return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo(timezone_name))
-    return dt.astimezone(timezone.utc)
 
 
 def fetch_mgm(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
@@ -693,7 +714,7 @@ def fetch_mgm(city: str, *, settings: HighFrequencyFetchSettings | None = None, 
     records: list[dict[str, Any]] = []
     if isinstance(raw, dict):
         temp = _valid_mgm_value(raw.get("sicaklik"))
-        obs_dt = _local_iso_to_utc(raw.get("veriZamani"), 3)
+        obs_dt = _local_iso_to_utc(raw.get("veriZamani"), "Europe/Istanbul")
         if temp is not None and obs_dt:
             wind_kmh = _valid_mgm_value(raw.get("ruzgarHiz"))
             records.append(
@@ -731,7 +752,7 @@ def fetch_ims_lod(city: str, *, settings: HighFrequencyFetchSettings | None = No
         latest_time = sorted(obs_map)[-1]
         latest = (obs_map.get(latest_time) or {}).get(meta["station"]) or {}
         temp = safe_float(latest.get("TD"))
-        obs_dt = _local_iso_to_utc(latest_time, 3)
+        obs_dt = _local_iso_to_utc(latest_time, "Europe/Istanbul")
         if temp is not None and obs_dt:
             wind_ms = safe_float(latest.get("WS"))
             records.append(
@@ -1055,7 +1076,12 @@ def parse_dwd_10m_zip(content: bytes, *, city: str = "Munich", target_date: str 
     for raw in csv.DictReader(io.StringIO(text), delimiter=";"):
         normalized = {str(key or "").strip(): value.strip() if isinstance(value, str) else value for key, value in raw.items()}
         try:
-            obs_dt = datetime.strptime(str(normalized.get("MESS_DATUM") or ""), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+            local = datetime.strptime(
+                str(normalized.get("MESS_DATUM") or ""), "%Y%m%d%H%M"
+            )
+            obs_dt = local_wall_time_to_utc(
+                local, timezone_name="Etc/UTC", field="dwd_mess_datum_utc"
+            )
         except ValueError:
             continue
         temp = safe_float(normalized.get("TT_10"))
@@ -1099,7 +1125,10 @@ def parse_bom_aws_payload(payload: Any, *, city: str, target_date: str = "", fet
         temp_c = safe_float(raw.get("air_temp"))
         timestamp = str(raw.get("aifstime_utc") or "").strip()
         try:
-            obs_dt = datetime.strptime(timestamp, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+            local = datetime.strptime(timestamp, "%Y%m%d%H%M%S")
+            obs_dt = local_wall_time_to_utc(
+                local, timezone_name="Etc/UTC", field="bom_aifstime_utc"
+            )
         except ValueError:
             obs_dt = None
         if temp_c is None or obs_dt is None:

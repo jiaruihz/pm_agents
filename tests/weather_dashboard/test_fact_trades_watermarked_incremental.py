@@ -115,6 +115,37 @@ def test_new_partial_fill_invalidates_existing_sibling_fill():
         conn.close()
 
 
+def test_new_signal_clock_adjustment_invalidates_all_descendant_fills():
+    conn = _conn()
+    try:
+        conn.execute("CREATE TABLE plans (plan_id TEXT PRIMARY KEY, signal_id TEXT)")
+        conn.execute(
+            "CREATE TABLE orders (execution_id TEXT PRIMARY KEY, plan_id TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE signal_clock_adjustments ("
+            "adjustment_id TEXT PRIMARY KEY, signal_id TEXT UNIQUE)"
+        )
+        conn.execute("INSERT INTO plans VALUES ('plan-1','signal-1')")
+        conn.execute("INSERT INTO orders VALUES ('exec-1','plan-1')")
+        conn.execute("INSERT INTO fills VALUES ('fill-1','exec-1','filled')")
+        conn.execute("INSERT INTO fact_trades(fill_id) VALUES ('fill-1')")
+        conn.commit()
+        scope, watermarks = collect_incremental_scope(conn)
+        assert scope == set()
+        write_db_watermarked_incremental(conn, [], scope, watermarks)
+
+        conn.execute(
+            "INSERT INTO signal_clock_adjustments VALUES ('adjustment-1','signal-1')"
+        )
+        conn.commit()
+
+        scope, _ = collect_incremental_scope(conn)
+        assert scope == {"fill-1"}
+    finally:
+        conn.close()
+
+
 def test_watermarked_incremental_preserves_older_schema_and_extra_columns():
     conn = sqlite3.connect(":memory:")
     try:

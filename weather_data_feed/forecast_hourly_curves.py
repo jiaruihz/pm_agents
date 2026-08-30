@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from weather_clock_contract import parse_utc_or_none
+
 from weather_data_feed.information_events import build_information_event
 from weather_data_feed.source_lineage import (
     build_source_capture_lineage,
@@ -176,15 +178,7 @@ def build_curve_row(
 
 
 def _parse_utc(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def _utc_string(value: datetime) -> str:

@@ -24,6 +24,7 @@ from weather_model_evaluation.busan_market_prior import (
     RUNTIME_ARTIFACT_SCHEMA_VERSION,
     logit_shrunk_probability,
 )
+from weather_clock_contract import parse_utc_or_none
 
 from .core import CityScore, InputNotReady
 
@@ -33,15 +34,7 @@ CHECKPOINT_SCHEMA_VERSION = "korea_amos_first_seen_state_v1"
 
 
 def _parse_utc(value: Any) -> datetime | None:
-    if value in (None, ""):
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value, field="busan_probability_timestamp")
 
 
 def _sha256_json(value: Any) -> str:

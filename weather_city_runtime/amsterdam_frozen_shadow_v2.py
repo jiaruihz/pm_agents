@@ -19,6 +19,7 @@ from typing import Any, Iterable
 
 from src.platform.market_data.capture_demand import CaptureDemand
 from weather_city_runtime.next_print_contracts import CITY_CONTRACTS
+from weather_clock_contract import parse_utc
 
 UTC = timezone.utc
 STRATEGY_KEY = "weather_amsterdam_wcir_frozen_v2"
@@ -33,10 +34,9 @@ def _now() -> str:
 
 
 def _parse(value: str) -> datetime:
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("timestamp must be timezone aware")
-    return parsed.astimezone(UTC)
+    parsed = parse_utc(value, field="amsterdam_frozen_shadow_timestamp")
+    assert parsed is not None
+    return parsed
 
 
 def _hash(value: Mapping[str, Any]) -> str:

@@ -11,6 +11,8 @@ from typing import Any, Iterator, Mapping, Protocol
 
 import fcntl
 
+from weather_clock_contract import parse_utc_or_none
+
 
 ORPHAN_CLAIM_RETRY_AFTER_SEC = 60
 
@@ -126,14 +128,9 @@ class JsonlExecutionJournal:
             latest_claim_at = None
             if claim_rows:
                 raw_claim_at = str(claim_rows[-1].get("recorded_at_utc") or "")
-                try:
-                    latest_claim_at = datetime.fromisoformat(
-                        raw_claim_at.replace("Z", "+00:00")
-                    )
-                    if latest_claim_at.tzinfo is None:
-                        latest_claim_at = latest_claim_at.replace(tzinfo=timezone.utc)
-                except ValueError:
-                    latest_claim_at = None
+                latest_claim_at = parse_utc_or_none(
+                    raw_claim_at, field="execution_journal_recorded_at_utc"
+                )
             orphan_reclaim = bool(
                 prior_claim
                 and not attempt_exists

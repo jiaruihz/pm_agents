@@ -7,6 +7,7 @@ import json
 from typing import Any, Mapping
 
 from weather_data_feed.information_events import canonical_json_hash
+from weather_clock_contract import DECISION_CLOCK_ORDER, validate_clock_order
 from weather_model_evaluation.contracts import parse_utc, utc_text
 
 
@@ -71,6 +72,10 @@ class ModelOutput:
         ):
             raise ValueError("ModelOutput identity fields are required")
         parse_utc(self.decision_ts_utc)
+        validate_clock_order(
+            {"decision_ts_utc": self.decision_ts_utc, **dict(self.metadata)},
+            DECISION_CLOCK_ORDER,
+        )
         if self.target_kind not in TARGET_KINDS:
             raise ValueError(f"unsupported target_kind: {self.target_kind}")
         if self.scorable_status not in SCORABLE_STATUSES:
@@ -189,6 +194,10 @@ class SignalCandidate:
         if self.candidate_status not in CANDIDATE_STATUSES:
             raise ValueError(f"unsupported candidate_status: {self.candidate_status}")
         parse_utc(self.decision_ts_utc)
+        validate_clock_order(
+            {"decision_ts_utc": self.decision_ts_utc, **dict(self.metadata)},
+            DECISION_CLOCK_ORDER,
+        )
         _probability(self.p_model, "p_model")
         _probability(self.market_p, "market_p")
         if self.executable_cost is not None and not 0.0 <= float(self.executable_cost) <= 1.0:

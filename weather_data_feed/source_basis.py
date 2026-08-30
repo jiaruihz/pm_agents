@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from weather_clock_contract import parse_utc_or_none
+
 
 FAST_SOURCE_FIELDS: dict[str, tuple[str, ...]] = {
     "iem_asos_madishf_latest": ("temp_round_f", "main_round_f", "rmk_round_f"),
@@ -85,13 +87,7 @@ def float_or_none(value: Any) -> float | None:
 
 
 def parse_dt(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def lag_sec(left: Any, right: Any) -> float | None:

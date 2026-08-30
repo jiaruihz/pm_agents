@@ -23,6 +23,7 @@ from weather_data_feed.ws_incremental_book import (  # noqa: E402
     materialize_reconstructed_books,
 )
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from weather_clock_contract import parse_utc_or_none  # noqa: E402
 
 
 SCHEMA_VERSION = "helsinki_fmi_metar_ws_linkage_v1"
@@ -43,15 +44,8 @@ def default_input_paths() -> dict[str, Path]:
 
 
 def _timestamp(value: str | None) -> float | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return None
-    return parsed.timestamp()
+    parsed = parse_utc_or_none(value, field="source_event_ws_timestamp")
+    return parsed.timestamp() if parsed is not None else None
 
 
 def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:

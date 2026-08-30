@@ -13,6 +13,8 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from weather_clock_contract import parse_utc_or_none
+
 
 _CLOUD_RE = re.compile(r"\b(FEW|SCT|BKN|OVC|VV)(\d{3}|///)?\b")
 _WIND_RE = re.compile(r"\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b")
@@ -41,18 +43,7 @@ def _first_float(record: Mapping[str, Any], *keys: str) -> float | None:
 
 
 def _parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def metar_physical_features(raw_metar: Any, present_weather: Any = None) -> dict[str, Any]:

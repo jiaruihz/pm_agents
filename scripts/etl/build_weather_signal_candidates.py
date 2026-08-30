@@ -41,6 +41,7 @@ if str(ROOT) not in sys.path:
 
 from weather_data_feed import city_timezone_name
 from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 DB_PATH = ROOT / "runtime" / "weather.db"
 PARQUET_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "research"
@@ -94,18 +95,7 @@ def _first_present(*values: Any) -> Any:
 
 
 def _parse_utc_ts(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="signal_candidate_clock")
 
 
 def _forecast_source_model(value: Any) -> str | None:
@@ -214,16 +204,19 @@ class _ForecastPeakIndex:
                 temp = float(raw_temp)
             except Exception:
                 continue
-            try:
-                naive = datetime.fromisoformat(str(raw_ts))
-            except ValueError:
-                continue
-            if naive.tzinfo is not None:
-                local_dt = naive.astimezone(city_tz)
-            elif payload_is_utc:
-                local_dt = naive.replace(tzinfo=timezone.utc).astimezone(city_tz)
+            parsed_utc = parse_utc_or_none(raw_ts, field="forecast_hourly_time")
+            if parsed_utc is not None:
+                local_dt = parsed_utc.astimezone(city_tz)
             else:
-                local_dt = naive.replace(tzinfo=city_tz)
+                source_timezone = "UTC" if payload_is_utc else payload_tz or tz_name
+                try:
+                    local_dt = local_wall_time_to_utc(
+                        str(raw_ts),
+                        timezone_name=source_timezone,
+                        field="forecast_hourly_local_time",
+                    ).astimezone(city_tz)
+                except ValueError:
+                    continue
             by_local_date.setdefault(local_dt.date().isoformat(), []).append((local_dt, temp))
 
         out: dict[tuple[str, str, str], dict[str, Any]] = {}

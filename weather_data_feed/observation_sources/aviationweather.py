@@ -7,16 +7,11 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from weather_data_feed.observation_sources.metar import parse_metar_report_time
+from weather_clock_contract import parse_utc_or_none
 
 
 def parse_dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return parse_utc_or_none(value, field="aviationweather_timestamp")
 
 
 def parse_aviationweather_records(

@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
+from weather_clock_contract import parse_utc as parse_strict_utc
+
 
 CITY_TIMEZONE: dict[str, str] = {
     "Amsterdam": "Europe/Amsterdam",
@@ -75,16 +77,9 @@ class StationLike:
 def parse_now_utc(value: str | datetime | None = None) -> datetime:
     if value is None:
         return datetime.now(timezone.utc)
-    if isinstance(value, datetime):
-        dt = value
-    else:
-        raw = str(value).strip()
-        if raw.endswith("Z"):
-            raw = raw[:-1] + "+00:00"
-        dt = datetime.fromisoformat(raw)
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    parsed = parse_strict_utc(value, field="now_utc")
+    assert parsed is not None
+    return parsed
 
 
 def city_timezone_name(city_key: str | None) -> str | None:

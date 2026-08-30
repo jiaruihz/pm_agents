@@ -12,11 +12,17 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from src.platform.market_data.identity import canonical_json_hash
+from weather_clock_contract import (
+    ORDERBOOK_CLOCK_ORDER,
+    parse_utc,
+    validate_clock_order,
+)
 
 
 ORDERBOOK_CAPTURE_SCHEMA_VERSION = "weather_orderbook_capture_v3"
 LEGACY_MISSING_RESPONSE_CLOCK = "legacy_missing_response_clock"
 COLLECTOR_EXACT_RESPONSE_CLOCK = "collector_exact_response_clock"
+INVALID_COLLECTOR_CLOCK = "invalid_collector_clock"
 
 
 def utc_now_text() -> str:
@@ -56,6 +62,14 @@ def materialize_orderbook_capture(
 ) -> dict[str, Any]:
     """Return the strict clocks/identity for one book in a batch response."""
 
+    clock_values = {
+        "request_started_at_utc": request_started_at_utc,
+        "response_received_at_utc": response_received_at_utc,
+        "parsed_at_utc": parsed_at_utc,
+        "available_at_utc": response_received_at_utc,
+    }
+    validate_clock_order(clock_values, ORDERBOOK_CLOCK_ORDER)
+
     raw_exchange_timestamp = raw_book.get("timestamp")
     raw_payload_hash = canonical_json_hash(dict(raw_book))
     exchange_hash = raw_book.get("hash")
@@ -67,17 +81,17 @@ def materialize_orderbook_capture(
             "raw_payload_hash": raw_payload_hash,
         }
     )
-    try:
-        request_duration_ms = round(
-            (
-                datetime.fromisoformat(response_received_at_utc.replace("Z", "+00:00"))
-                - datetime.fromisoformat(request_started_at_utc.replace("Z", "+00:00"))
-            ).total_seconds()
-            * 1000.0,
-            3,
-        )
-    except ValueError:
-        request_duration_ms = None
+    request_started = parse_utc(
+        request_started_at_utc, field="request_started_at_utc"
+    )
+    response_received = parse_utc(
+        response_received_at_utc, field="response_received_at_utc"
+    )
+    assert request_started is not None and response_received is not None
+    request_duration_ms = round(
+        (response_received - request_started).total_seconds() * 1000.0,
+        3,
+    )
     return {
         "schema_version": ORDERBOOK_CAPTURE_SCHEMA_VERSION,
         "token_id": str(token_id),
@@ -109,6 +123,25 @@ def classify_orderbook_clock(row: Mapping[str, Any]) -> dict[str, Any]:
     response_received = row.get("response_received_at_utc")
     parsed = row.get("parsed_at_utc")
     if request_started and response_received and parsed:
+        try:
+            validate_clock_order(
+                {
+                    "request_started_at_utc": request_started,
+                    "response_received_at_utc": response_received,
+                    "parsed_at_utc": parsed,
+                    "available_at_utc": response_received,
+                },
+                ORDERBOOK_CLOCK_ORDER,
+            )
+        except ValueError as exc:
+            return {
+                "request_started_at_utc": str(request_started),
+                "response_received_at_utc": str(response_received),
+                "parsed_at_utc": str(parsed),
+                "clock_lineage_status": INVALID_COLLECTOR_CLOCK,
+                "event_time_pit_scorable": False,
+                "clock_lineage_blockers": [str(exc)],
+            }
         return {
             "request_started_at_utc": str(request_started),
             "response_received_at_utc": str(response_received),

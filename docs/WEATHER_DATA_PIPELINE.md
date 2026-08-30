@@ -1,9 +1,30 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-08-11 production-contract and proxy-route ownership audit
+Updated: 2026-08-30 shared clock + execution-evidence contract
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
+> **2026-08-30 project-wide clock contract**：所有 source/detect/available/decision/snapshot/order/fill
+> 边界统一走 `weather_clock_contract.py`，只接受 timezone-aware UTC；当地 wall time 必须携带 IANA
+> timezone，禁止 `.replace(tzinfo=...)` 和固定 offset 推断。历史 signal clock 不原地改写，修正进入
+> append-only `signal_clock_adjustments`，fact 层同时保留 original/effective clock、basis、status、ref。
+> 8/30 审计定位到 31 signals / 50 fact rows / 44 executions 的 signal-snapshot-after-order 污染，覆盖
+> 2026-06-18..2026-07-15、fill cost `$32.971566`、settled PnL `$8.187404`；其中 29 条可因果重建，
+> 2 条因缺 exact feature snapshot fail closed。exchange 秒级 fill clock 相对本地高精度 order 的 4 条
+> `<1s` 反序单列为 precision-only，不篡改事实。
+
+> **2026-08-30 execution-evidence contract**：盘口快照只证明 public book state，不证明 own fill、queue
+> position 或 execution。WS raw owner 现在从同一增量流派生 public trade prints、重建 book 与
+> baseline/requested/10s-changed-state checkpoints；private authenticated fill 继续作为成交 truth，二者只在
+> append-only `execution_evidence_links` 合成。派生层保留 epoch/gap、top-5/sweep、raw ref/hash，并有每日
+> 1GB hard budget，预算耗尽不得拖垮 raw capture。2026-08-29 全量回放输入 1,910,274 frames
+>（2.45GB），产出 43,522 books、1,577 public prints、7,399 requested checkpoints（155.7MB）；919 条
+> parity 前 reconstruction error 全部 fail closed，没有猜盘。durable artifact：
+> `/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/execution_evidence_backfill_v1/run=2026-08-29_5f676262`。
+
+> “更快的源”在本项目中本来就是 predictive evidence，不是 settlement truth；允许 source 与 settlement
+> 不一致，但必须按 source×city×regime 做 basis calibration，并始终用独立 settlement label 评估。
 
 Last updated: 2026-08-11
 

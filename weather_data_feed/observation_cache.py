@@ -6,23 +6,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from weather_clock_contract import parse_utc_or_none
+
 
 OBSERVATION_CACHE_SCHEMA_VERSION = "weather_data_feed_observation_cache_v1"
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = "" if value is None else str(value).strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def finite_float(value: Any) -> float | None:

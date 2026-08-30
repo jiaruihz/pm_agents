@@ -78,6 +78,7 @@ def test_runtime_order_uses_selected_token_probability_for_core_carry_signal():
             "model_p_yes_used": 0.0,
             "best_ask": 0.91,
             "edge": 0.0,
+            "created_at_utc": "2026-08-05T00:00:00Z",
         },
         None,
     )
@@ -342,10 +343,10 @@ def test_migrate_mac_live_sell_yes_exit_order(tmp_path):
 
 
 def test_snapshot_lookup_skips_rows_with_complete_market_lineage(monkeypatch):
-    def fail_snapshot_scan(_target_date):
+    def fail_snapshot_scan(_cutoff):
         raise AssertionError("snapshot scan should not run")
 
-    monkeypatch.setattr(strategy_runtime_orders, "_snapshot_files_for_date", fail_snapshot_scan)
+    monkeypatch.setattr(strategy_runtime_orders, "_snapshot_files_before", fail_snapshot_scan)
     lookup = strategy_runtime_orders._build_snapshot_lookup(
         [
             {
@@ -449,11 +450,128 @@ def test_enrich_runtime_order_recovers_condition_hash_from_market_id(monkeypatch
             "target_date": "2026-07-11",
             "city": "Seoul",
             "token_id": "token",
+            "created_at_utc": "2026-07-11T00:00:00Z",
         },
         None,
     )
 
     assert row["condition_id"] == condition_id
+
+
+def test_snapshot_filename_uses_beijing_wall_clock():
+    path = strategy_runtime_orders.Path("snapshot_20260704_2248.json")
+    assert strategy_runtime_orders._snapshot_file_ts(path).isoformat() == (
+        "2026-07-04T14:48:00+00:00"
+    )
+
+
+def test_snapshot_lookup_uses_latest_record_before_first_signal_order(
+    tmp_path, monkeypatch
+):
+    snapshot_root = tmp_path / "snapshots"
+    snapshot_root.mkdir()
+    token = "token-causal"
+    base_record = {
+        "city": "Shanghai",
+        "event_date": "2026-07-05",
+        "bracket": "35",
+        "token_id": token,
+        "model_prob": 0.4022,
+    }
+    (snapshot_root / "snapshot_20260704_2248.json").write_text(
+        json.dumps(
+            {
+                "records": [
+                    {**base_record, "snapshot_ts_utc": "2026-07-04T14:48:08Z"}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (snapshot_root / "snapshot_20260704_2304.json").write_text(
+        json.dumps(
+            {
+                "records": [
+                    {**base_record, "snapshot_ts_utc": "2026-07-04T15:04:23Z"}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(strategy_runtime_orders, "SNAPSHOT_DIRS", (snapshot_root,))
+    rows = [
+        {
+            "signal_id": "same-signal",
+            "execution_id": "execution-1",
+            "city": "Shanghai",
+            "target_date": "2026-07-05",
+            "bracket": "35",
+            "token_id": token,
+            "model_p_yes_used": 0.4022,
+            "created_at_utc": "2026-07-04T15:00:22Z",
+        },
+        {
+            "signal_id": "same-signal",
+            "execution_id": "execution-2",
+            "city": "Shanghai",
+            "target_date": "2026-07-05",
+            "bracket": "35",
+            "token_id": token,
+            "model_p_yes_used": 0.4022,
+            "created_at_utc": "2026-07-04T15:03:00Z",
+        },
+    ]
+
+    lookup = strategy_runtime_orders._build_snapshot_lookup(rows)
+
+    assert set(lookup) == {"execution_id:execution-1", "execution_id:execution-2"}
+    assert {
+        row["snapshot_ts_utc"] for row in lookup.values()
+    } == {"2026-07-04T14:48:08Z"}
+    assert {
+        strategy_runtime_orders._enrich_runtime_order(row, lookup[f"execution_id:{row['execution_id']}"])[
+            "signal_snapshot_lineage_status"
+        ]
+        for row in rows
+    } == {"reconstructed_causal"}
+
+
+def test_snapshot_lookup_never_falls_forward(tmp_path, monkeypatch):
+    snapshot_root = tmp_path / "snapshots"
+    snapshot_root.mkdir()
+    (snapshot_root / "snapshot_20260704_2304.json").write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Shanghai",
+                        "event_date": "2026-07-05",
+                        "bracket": "35",
+                        "token_id": "token-future",
+                        "snapshot_ts_utc": "2026-07-04T15:04:23Z",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(strategy_runtime_orders, "SNAPSHOT_DIRS", (snapshot_root,))
+    row = {
+        "signal_id": "future-signal",
+        "execution_id": "future-execution",
+        "city": "Shanghai",
+        "target_date": "2026-07-05",
+        "bracket": "35",
+        "token_id": "token-future",
+        "created_at_utc": "2026-07-04T15:00:22Z",
+    }
+
+    assert strategy_runtime_orders._build_snapshot_lookup([row]) == {}
+    enriched = strategy_runtime_orders._enrich_runtime_order(row, None)
+    assert enriched["snapshot_ts_utc"] == "2026-07-04T15:00:22Z"
+    assert enriched["signal_snapshot_lineage_status"] == (
+        "blocked_no_signal_snapshot"
+    )
 
 
 def test_fact_trades_uses_sell_side_cashflow_and_pnl(tmp_path):
@@ -525,6 +643,21 @@ def test_fact_trades_uses_sell_side_cashflow_and_pnl(tmp_path):
             """,
             ("fee-adjustment", "fill-sell", 0.05, "public_activity_tx_exact", "exact", "0xtx", "{}"),
         )
+        signal_id = conn.execute("SELECT signal_id FROM signals").fetchone()[0]
+        conn.execute(
+            """
+            INSERT INTO signal_clock_adjustments (
+                adjustment_id, signal_id, corrected_snapshot_ts_utc,
+                timestamp_source, timestamp_evidence_class, lineage_status,
+                source_snapshot_ref, evidence_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "clock-adjustment", signal_id, "2026-07-03T20:20:00Z",
+                "strategy_snapshot_record", "reconstructed",
+                "reconstructed_causal", "/snapshot.json", "{}",
+            ),
+        )
 
         rows, alerts = build_fact_trades(conn)
         assert not [alert for alert in alerts if alert.startswith("SIDE_MISMATCH")]
@@ -537,6 +670,10 @@ def test_fact_trades_uses_sell_side_cashflow_and_pnl(tmp_path):
         assert rows[0]["fee_adjustment_usd"] == 0.05
         assert rows[0]["fees_usd"] == 0.05
         assert rows[0]["pnl_usd_at_fill"] == 1.95
+        assert rows[0]["original_snapshot_ts_utc"] == "2026-07-03T20:21:59Z"
+        assert rows[0]["snapshot_ts_utc"] == "2026-07-03T20:20:00Z"
+        assert rows[0]["signal_clock_evidence_class"] == "reconstructed"
+        assert rows[0]["signal_clock_lineage_status"] == "reconstructed_causal"
 
         targeted_rows, targeted_alerts = build_fact_trades(
             conn,

@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone
 
+from weather_clock_contract import local_wall_time_to_utc
+
 
 METAR_TEMP_RE = re.compile(r"\s(M?\d{2})/(M?\d{2}|//)")
 METAR_REPORT_TIME_RE = re.compile(r"\b[A-Z0-9]{4}\s+(\d{2})(\d{2})(\d{2})Z\b")
@@ -19,7 +21,10 @@ def parse_metar_temp_c(raw: str) -> float | None:
 def parse_tgftp_header_time(text: str) -> datetime | None:
     first = next((line.strip() for line in text.splitlines() if line.strip()), "")
     try:
-        return datetime.strptime(first, "%Y/%m/%d %H:%M").replace(tzinfo=timezone.utc)
+        local = datetime.strptime(first, "%Y/%m/%d %H:%M")
+        return local_wall_time_to_utc(
+            local, timezone_name="Etc/UTC", field="tgftp_header_utc_wall_time"
+        )
     except ValueError:
         return None
 

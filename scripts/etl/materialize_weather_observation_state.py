@@ -28,6 +28,10 @@ if str(ROOT) not in sys.path:
 
 from scripts.analysis.observed_max.research_m3_observed_max_residual import CITY_TIMEZONE  # noqa: E402
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical  # noqa: E402
+from weather_clock_contract import (  # noqa: E402
+    local_wall_time_to_utc,
+    parse_utc_or_none,
+)
 
 
 DEFAULT_DB = ROOT / "runtime/weather.db"
@@ -64,18 +68,7 @@ def utc_now() -> str:
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="observation_state_clock")
 
 
 def as_float(value: Any) -> float | None:
@@ -282,14 +275,17 @@ def build_state_rows(
             continue
         station = str(day_rows[0]["icao"])
         timezone_name = str(day_rows[0]["timezone"] or CITY_TIMEZONE.get(city) or "UTC")
-        tz = ZoneInfo(timezone_name)
         final_max_f = max(float(row["temp_f"]) for row in day_rows if row["temp_f"] is not None)
         final_max_c = f_to_c(final_max_f)
         first_obs = str(day_rows[0]["obs_ts_utc"])
         last_obs = str(day_rows[-1]["obs_ts_utc"])
         for hour in hours:
-            cutoff_local = datetime.fromisoformat(f"{target_date}T{hour:02d}:00:00").replace(tzinfo=tz)
-            cutoff_utc = cutoff_local.astimezone(timezone.utc)
+            cutoff_utc = local_wall_time_to_utc(
+                f"{target_date}T{hour:02d}:00:00",
+                timezone_name=timezone_name,
+                field="decision_hour_local",
+            )
+            cutoff_local = cutoff_utc.astimezone(ZoneInfo(timezone_name))
             prefix = [row for row in day_rows if (parse_utc(row["obs_ts_utc"]) or datetime.max.replace(tzinfo=timezone.utc)) <= cutoff_utc]
             if not prefix:
                 continue

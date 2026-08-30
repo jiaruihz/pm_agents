@@ -18,6 +18,7 @@ from html import unescape
 from typing import Any
 
 import httpx
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 
 
 AMSC_AWOS_API = "https://www.amsc.net.cn/gateway/api/saas/rest/amc/AwosController/getWindPlate"
@@ -146,20 +147,21 @@ def safe_float(value: Any) -> float | None:
     return out if math.isfinite(out) and -80.0 < out < 80.0 else None
 
 
-def parse_dt(value: Any) -> datetime | None:
+def parse_dt(value: Any, *, timezone_name: str = "Asia/Shanghai") -> datetime | None:
     if not value:
         return None
     text = str(value).strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
+    parsed = parse_utc_or_none(text, field="runway_observation_clock")
+    if parsed is not None:
+        return parsed
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return local_wall_time_to_utc(
+            text,
+            timezone_name=timezone_name,
+            field="runway_observation_local_clock",
+        )
     except ValueError:
         return None
-    return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _normalize_runway(value: Any) -> str:
@@ -375,8 +377,13 @@ def _extract_amos_observation_time(text: str, station: str) -> tuple[str, str]:
             continue
         try:
             year, month, day, hour, minute = [int(part) for part in match.groups()[:5]]
-            local_dt = datetime(year, month, day, hour, minute, tzinfo=timezone(timedelta(hours=9)))
-            return local_dt.astimezone(timezone.utc).isoformat(), local_dt.strftime("%Y-%m-%d %H:%M:%S")
+            local_naive = datetime(year, month, day, hour, minute)
+            utc_dt = local_wall_time_to_utc(
+                local_naive,
+                timezone_name="Asia/Seoul",
+                field="amos_observation_local_clock",
+            )
+            return utc_dt.isoformat(), local_naive.strftime("%Y-%m-%d %H:%M:%S")
         except (TypeError, ValueError):
             continue
     return "", ""

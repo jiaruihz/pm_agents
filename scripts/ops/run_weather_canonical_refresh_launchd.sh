@@ -44,6 +44,16 @@ WCIR_BUNDLES_PATH="$(
   PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
     'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().data_feed_output_root() / "city_probability_runtime_v3" / "decision_bundles.jsonl")'
 )"
+DATA_FEED_RUNTIME_ROOT="$(
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().data_feed_runtime_root)'
+)"
+PM_RUNTIME_ROOT="$(
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().pm_runtime_root)'
+)"
+SIGNAL_CLOCK_ADJUSTMENT_JOURNAL="$PM_RUNTIME_ROOT/weather_edge_v1/signal_clock_adjustments.jsonl"
+EXECUTION_PUBLIC_BOOKS_ROOT="$DATA_FEED_RUNTIME_ROOT/market_books/ws_incremental/execution_evidence_v1/public_books"
 "$PROJECT_DIR/.venv/bin/python" -c \
   "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$DB_PATH')"
 "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders \
@@ -75,6 +85,23 @@ done
 if [[ "$clob_synced" != "1" ]]; then
   echo "clob fill sync failed after 3 attempts" >&2
   exit 1
+fi
+"$PROJECT_DIR/.venv/bin/python" scripts/ops/reconcile_weather_signal_clocks.py \
+  --db-path "$DB_PATH" \
+  --expected-db "$CANONICAL_DB_PATH" \
+  --journal "$SIGNAL_CLOCK_ADJUSTMENT_JOURNAL" \
+  --report "$RUNTIME_DIR/signal_clock_reconciliation.json" \
+  --apply
+if [[ -d "$EXECUTION_PUBLIC_BOOKS_ROOT" ]]; then
+  "$PROJECT_DIR/.venv/bin/python" scripts/ops/materialize_weather_execution_evidence.py \
+    --db-path "$DB_PATH" \
+    --public-books-root "$EXECUTION_PUBLIC_BOOKS_ROOT" \
+    --fill-date "$(date -u +%F)" \
+    --fill-date "$(date -u -v-1d +%F)" \
+    --max-unlinked-fills 500 \
+    --max-book-age-sec 120 \
+    --report "$RUNTIME_DIR/execution_evidence_materialization.json" \
+    --apply
 fi
 "$PROJECT_DIR/.venv/bin/python" scripts/etl/build_weather_fact_trades.py \
   --db-path "$DB_PATH" --incremental --no-parquet

@@ -13,11 +13,14 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from weather_data_feed.observation_cache import parse_utc
+from weather_data_feed.city_calendar import city_timezone_name
 from weather_data_feed.sky_cover import SKY_COVER_CODE
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 from weather_feature_layer.contracts import (
     DEFAULT_FEATURE_VERSION_MANIFEST,
     FEATURE_FRAME_SCHEMA_VERSION,
@@ -557,10 +560,19 @@ def _decision_hour(snapshot: Mapping[str, Any]) -> float | None:
         return peak + delta
     local_value = snapshot.get("city_local_ts") or snapshot.get("snapshot_local_ts") or snapshot.get("ts_local")
     if local_value:
-        try:
-            local_ts = datetime.fromisoformat(str(local_value).replace("Z", "+00:00"))
-        except ValueError:
-            local_ts = None
+        local_ts = parse_utc_or_none(local_value, field="feature_snapshot_local_clock")
+        timezone_name = city_timezone_name(str(snapshot.get("city") or ""))
+        if local_ts is not None and timezone_name:
+            local_ts = local_ts.astimezone(ZoneInfo(timezone_name))
+        elif local_ts is None and timezone_name:
+            try:
+                local_ts = local_wall_time_to_utc(
+                    str(local_value),
+                    timezone_name=timezone_name,
+                    field="feature_snapshot_local_wall_clock",
+                ).astimezone(ZoneInfo(timezone_name))
+            except ValueError:
+                local_ts = None
         if local_ts is not None:
             return local_ts.hour + local_ts.minute / 60.0 + local_ts.second / 3600.0
     return None

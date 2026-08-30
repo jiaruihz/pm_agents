@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.strategies.weather_edge_v1.ids import make_fill_id, make_paper_order_id, make_plan_id, make_signal_id
+from weather_clock_contract import parse_utc, parse_utc_or_none, utc_text
 from weather_dashboard.contract import CanonicalValidationError
 from weather_dashboard.ingest.canonical import (
     ingest_canonical_fills,
@@ -180,12 +181,7 @@ def _snapshot_ts(row: dict[str, Any]) -> str:
 
 
 def _parse_dt(value: str) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
-    except ValueError:
-        return None
+    return parse_utc_or_none(value)
 
 
 def _hours_to_settle(row: dict[str, Any]) -> float:
@@ -415,7 +411,16 @@ def _canonical_signal(raw: dict[str, Any], *, producer_system: str, cycle_id: st
     city = str(raw.get("city") or "").strip()
     signal_side = _signal_side(raw)
     condition_id = _condition_id(raw)
-    snapshot_ts_utc = _snapshot_ts(raw)
+    snapshot_ts_utc = utc_text(
+        parse_utc(_snapshot_ts(raw), field="snapshot_ts_utc"),
+        field="snapshot_ts_utc",
+        timespec="auto",
+    )
+    created_at = parse_utc(
+        raw.get("created_at_utc"), field="created_at_utc", allow_none=True
+    )
+    if created_at is not None and parse_utc(snapshot_ts_utc) > created_at:
+        raise ValueError("snapshot_ts_utc cannot be after created_at_utc")
     signal_id = make_signal_id(
         target_date=str(raw.get("target_date") or "").strip(),
         city=city,
@@ -432,6 +437,18 @@ def _canonical_signal(raw: dict[str, Any], *, producer_system: str, cycle_id: st
         "producer_run_id": str(raw.get("source_run_id") or cycle_id).strip(),
         "snapshot_ts_utc": snapshot_ts_utc,
         "snapshot_file": str(raw.get("source_run_id") or "").strip() or None,
+        "snapshot_clock_basis": str(
+            raw.get("signal_snapshot_clock_basis") or "legacy_unclassified"
+        ).strip(),
+        "snapshot_lineage_status": str(
+            raw.get("signal_snapshot_lineage_status") or "legacy_unclassified"
+        ).strip(),
+        "snapshot_source_ref": str(
+            raw.get("signal_snapshot_source_ref")
+            or raw.get("source_snapshot_path")
+            or ""
+        ).strip()
+        or None,
         "target_date": str(raw.get("target_date") or "").strip(),
         "city": city,
         "city_pool": str(raw.get("city_pool") or "t1_trading").strip(),

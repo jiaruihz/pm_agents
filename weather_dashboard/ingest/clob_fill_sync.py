@@ -86,6 +86,7 @@ from weather_dashboard.ingest.clob_fill_validity_adjustments import (
     DEFAULT_VALIDITY_ADJUSTMENT_PATH,
     import_validity_adjustments,
 )
+from weather_clock_contract import parse_utc_or_none, utc_text
 
 log = logging.getLogger(__name__)
 EXTERNAL_FETCH_ERRORS: list[str] = []
@@ -185,12 +186,8 @@ def _ts_to_iso(ts_raw: Any) -> str | None:
         return None
     # Already an ISO string (pass through after sanity check)
     if isinstance(ts_raw, str) and not ts_raw.isdigit():
-        try:
-            from datetime import datetime as _dt
-            _dt.fromisoformat(ts_raw.replace("Z", "+00:00"))
-            return ts_raw  # valid ISO
-        except ValueError:
-            pass
+        parsed = parse_utc_or_none(ts_raw, field="clob_fill_timestamp")
+        return utc_text(parsed, timespec="auto") if parsed is not None else None
     try:
         val = float(ts_raw)
         # If the float looks like seconds (9-10 digit), use directly.
@@ -199,7 +196,7 @@ def _ts_to_iso(ts_raw: Any) -> str | None:
             val = val / 1000.0
         return datetime.fromtimestamp(val, tz=timezone.utc).isoformat()
     except (ValueError, TypeError, OSError):
-        return str(ts_raw)
+        return None
 
 
 def _as_decimal(value: Any) -> Decimal | None:

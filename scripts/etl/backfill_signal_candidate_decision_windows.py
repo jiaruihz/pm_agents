@@ -26,6 +26,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from weather_clock_contract import parse_utc_or_none
+
 
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "runtime" / "weather.db"
@@ -49,18 +51,7 @@ BACKFILL_COLUMNS = {
 
 
 def parse_ts(value: Any) -> datetime | None:
-    if not value:
-        return None
-    text = str(value)
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="decision_window_clock")
 
 
 def iso_z(dt: datetime | None) -> str | None:

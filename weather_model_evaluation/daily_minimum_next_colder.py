@@ -47,6 +47,7 @@ from .probability import (
     ordinal_loss_values,
     ordinal_score,
 )
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 
 
 SCHEMA_VERSION = "weather_daily_minimum_next_colder_no_development_v2"
@@ -222,14 +223,21 @@ def _future_forecast_features(
         temperature_f = _float(item.get("temperature_f"))
         if not raw_time or temperature_f is None:
             continue
-        try:
-            local = datetime.fromisoformat(raw_time)
-        except ValueError:
-            continue
-        if local.tzinfo is None:
-            local = local.replace(tzinfo=timezone)
+        parsed_utc = parse_utc_or_none(raw_time, field="tmin_forecast_curve_time")
+        if parsed_utc is not None:
+            local = parsed_utc.astimezone(timezone)
         else:
-            local = local.astimezone(timezone)
+            timezone_name = getattr(timezone, "key", None)
+            if not timezone_name:
+                continue
+            try:
+                local = local_wall_time_to_utc(
+                    raw_time,
+                    timezone_name=timezone_name,
+                    field="tmin_forecast_curve_time_local",
+                ).astimezone(timezone)
+            except ValueError:
+                continue
         if local.date() != decision_local.date() or local < decision_local:
             continue
         values.append((local, (temperature_f - 32.0) * 5.0 / 9.0))

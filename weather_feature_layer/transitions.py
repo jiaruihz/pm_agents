@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from weather_data_feed.forecast_sources import build_taf_signal
+from weather_clock_contract import parse_utc_or_none
 
 
 def _utc(value: Any) -> datetime | None:
@@ -22,18 +23,7 @@ def _utc(value: Any) -> datetime | None:
             return datetime.fromtimestamp(float(value), tz=timezone.utc)
         except (OverflowError, OSError, ValueError):
             return None
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="forecast_transition_timestamp")
 
 
 def _finite(value: Any) -> float | None:
@@ -181,6 +171,7 @@ def forecast_transition_timing_features(
                 utc_offset_seconds=0,
                 first_peak_hour=12,
                 last_peak_hour=13,
+                timezone_name=str(forecast_enrichment.get("timezone_name") or ""),
             )
             windows = signal.get("transition_windows") if isinstance(signal.get("transition_windows"), list) else []
             reparsed = bool(windows)

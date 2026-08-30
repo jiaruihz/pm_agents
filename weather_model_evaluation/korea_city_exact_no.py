@@ -35,6 +35,7 @@ from .probability import (
     composite_grain_weights,
     date_block_bootstrap_delta,
 )
+from weather_clock_contract import parse_utc_or_none
 
 
 UTC_ZONE = ZoneInfo("UTC")
@@ -118,16 +119,7 @@ class ExperimentConfig:
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value, field="korea_exact_no_clock")
 
 
 def finite(value: Any) -> float | None:

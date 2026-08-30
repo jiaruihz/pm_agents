@@ -396,6 +396,7 @@ def test_taf_signal_extracts_peak_window_cloud_rain_and_wind_shift():
         utc_offset_seconds=28800,
         first_peak_hour=12,
         last_peak_hour=13,
+        timezone_name="Asia/Shanghai",
     )
 
     assert signal["available"] is True
@@ -415,6 +416,7 @@ def test_taf_prob_tempo_remains_one_probability_bearing_transition_window():
         utc_offset_seconds=28800,
         first_peak_hour=13,
         last_peak_hour=14,
+        timezone_name="Asia/Kuala_Lumpur",
     )
 
     windows = signal["transition_windows"]

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Iterable
 
 from weather_data_feed import city_in_local_hour_window, city_local_hour
+from weather_clock_contract import parse_utc_or_none
 
 
 @dataclass(frozen=True)
@@ -56,13 +57,7 @@ def filter_jobs_by_local_window(
 
 
 def parse_utc(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def filter_jobs_by_min_interval(

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from weather_data_feed.city_calendar import city_timezone_name
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 
 
 def forecast_hourly_daily_max_local(payload: dict[str, Any], *, city: str) -> dict[str, float]:
@@ -22,11 +22,11 @@ def forecast_hourly_daily_max_local(payload: dict[str, Any], *, city: str) -> di
     source_tz_name = str(payload.get("timezone") or "").strip()
     if source_tz_name:
         try:
-            source_tz = ZoneInfo(source_tz_name)
+            ZoneInfo(source_tz_name)
         except Exception as exc:
             raise ValueError(f"invalid forecast archive timezone={source_tz_name!r}") from exc
     else:
-        source_tz = timezone(timedelta(seconds=int(payload.get("utc_offset_seconds") or 0)))
+        raise ValueError("forecast archive requires an IANA source timezone")
 
     hourly = payload.get("hourly") if isinstance(payload.get("hourly"), dict) else {}
     times = hourly.get("time") or []
@@ -36,12 +36,16 @@ def forecast_hourly_daily_max_local(payload: dict[str, Any], *, city: str) -> di
         if temperature is None:
             continue
         try:
-            observed = datetime.fromisoformat(str(value))
-            if observed.tzinfo is None:
-                observed = observed.replace(tzinfo=source_tz)
-            else:
-                observed = observed.astimezone(source_tz)
-            local_date = observed.astimezone(target_tz).date().isoformat()
+            observed_utc = parse_utc_or_none(
+                value, field="forecast_archive_hourly_time"
+            )
+            if observed_utc is None:
+                observed_utc = local_wall_time_to_utc(
+                    str(value),
+                    timezone_name=source_tz_name,
+                    field="forecast_archive_hourly_local_time",
+                )
+            local_date = observed_utc.astimezone(target_tz).date().isoformat()
             temp = float(temperature)
         except (TypeError, ValueError):
             continue

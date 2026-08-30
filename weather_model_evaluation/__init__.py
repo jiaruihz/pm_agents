@@ -65,6 +65,11 @@ from .probability import (
     ordinal_loss_values,
     ordinal_score,
 )
+from .selection_increment import (
+    paired_policy_increment,
+    select_first_positive_policy,
+)
+from .source_basis import build_inference_source_basis
 from .replay import (
     FixtureCheckpointBuilder,
     FixtureInputCatalog,
@@ -82,6 +87,7 @@ __all__ = [
     "binary_loss_values",
     "binary_score",
     "build_evaluation_report",
+    "build_inference_source_basis",
     "build_checkpoint_grain",
     "build_state_entry_grain",
     "build_transition_grain",
@@ -113,6 +119,7 @@ __all__ = [
     "ordinal_loss_values",
     "ordinal_score",
     "OrderedThresholdClassifier",
+    "paired_policy_increment",
     "PREDICTION_SCHEMA_VERSION",
     "predict_simplex_logit_calibrator",
     "ProbabilityHeadKind",
@@ -133,5 +140,6 @@ __all__ = [
     "validate_prediction_row",
     "validate_hypothesis_registry",
     "source_event_transport_head",
+    "select_first_positive_policy",
     "VirtualClock",
 ]

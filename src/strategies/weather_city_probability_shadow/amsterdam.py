@@ -27,15 +27,15 @@ from weather_model_evaluation.market_offset_probability import (
     predict_fixed_market_offset,
 )
 from weather_data_feed.input_catalog import JsonlInputCatalog
+from weather_clock_contract import parse_utc
 
 from .core import CityScore, InputNotReady
 
 
 def _parse(value: Any) -> datetime:
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_utc(value, field="amsterdam_probability_timestamp")
+    assert parsed is not None
+    return parsed
 
 
 def _available(row: dict[str, Any]) -> datetime:

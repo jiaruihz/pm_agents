@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import pandas as pd
+from weather_clock_contract import parse_utc_or_none
 
 
 @dataclass(frozen=True)
@@ -44,16 +45,7 @@ def _finite(value: Any) -> float | None:
 
 
 def _parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="rest_quote_clock")
 
 
 def _utc_text(epoch: float) -> str:

@@ -9,7 +9,7 @@ from weather_dashboard.db.connection import get_conn
 from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 
 def _create_table_sql(schema_text: str, table: str) -> str:
@@ -192,6 +192,50 @@ def _ensure_fill_fee_lineage_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE fills ADD COLUMN {column} {decl}")
 
 
+def _ensure_signal_clock_lineage_columns(conn: sqlite3.Connection) -> None:
+    """Add causal-clock lineage without rewriting immutable signal rows."""
+
+    existing_tables = {
+        str(row[0])
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "signals" in existing_tables:
+        existing = _column_names(conn, "signals")
+        additions = {
+            "snapshot_clock_basis": "TEXT",
+            "snapshot_lineage_status": "TEXT",
+            "snapshot_source_ref": "TEXT",
+        }
+        for column, declaration in additions.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE signals ADD COLUMN {column} {declaration}")
+
+    # fact_trades is a materialized derivative created by the ETL rather than
+    # schema_canonical.sql. Additive migration lets bounded refresh publish the
+    # corrected rows without a table-wide rebuild.
+    if "fact_trades" in existing_tables:
+        existing = _column_names(conn, "fact_trades")
+        additions = {
+            "original_snapshot_ts_utc": "TEXT",
+            "signal_clock_basis": "TEXT",
+            "signal_clock_evidence_class": "TEXT",
+            "signal_clock_lineage_status": "TEXT",
+            "signal_clock_source_ref": "TEXT",
+            "execution_evidence_link_id": "TEXT",
+            "execution_book_snapshot_id": "TEXT",
+            "execution_book_observed_at_utc": "TEXT",
+            "execution_book_age_ms": "REAL",
+            "execution_quote_side": "TEXT",
+            "execution_quote_price": "REAL",
+            "fill_vs_quote_slippage": "REAL",
+            "execution_evidence_status": "TEXT",
+            "execution_evidence_source_ref": "TEXT",
+        }
+        for column, declaration in additions.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE fact_trades ADD COLUMN {column} {declaration}")
+
+
 def _ensure_execution_profile_columns(conn: sqlite3.Connection) -> None:
     """Add normalized execution-module identity to canonical plans."""
 
@@ -269,6 +313,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     _ensure_strategy_instance_columns(conn)
     _ensure_strategy_instance_runtime_columns(conn)
     _ensure_fill_fee_lineage_columns(conn)
+    _ensure_signal_clock_lineage_columns(conn)
     _ensure_execution_profile_columns(conn)
     _ensure_tmax_v2_lineage_columns(conn)
     apply_first_seen_schema(conn)
@@ -280,7 +325,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "canonical lineage, fee, execution, runtime registry, and replay-case contracts",
+                "canonical lineage, signal clocks, fee, execution, runtime registry, and replay-case contracts",
             ),
         )
     conn.commit()

@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 import hashlib
 import json
 from typing import Any, Mapping
 
+from weather_clock_contract import (
+    DECISION_CLOCK_ORDER,
+    SOURCE_CLOCK_ORDER,
+    parse_utc as parse_strict_utc,
+    utc_text as canonical_utc_text,
+    validate_clock_order,
+)
 
-UTC = timezone.utc
+
 EVENT_SCHEMA_VERSION = "weather_city_event_envelope_v1"
 PREDICTION_SCHEMA_VERSION = "weather_city_prediction_row_v1"
 
@@ -32,19 +39,13 @@ def stable_sha256(value: Any) -> str:
 
 
 def parse_utc(value: Any) -> datetime:
-    if value in (None, ""):
-        raise ValueError("timestamp is required")
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    parsed = parse_strict_utc(value)
+    assert parsed is not None
+    return parsed
 
 
 def utc_text(value: datetime | str) -> str:
-    parsed = value if isinstance(value, datetime) else parse_utc(value)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    return canonical_utc_text(value)
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,14 @@ class EventEnvelope:
         parse_utc(self.first_seen_at_utc)
         if self.observed_at_utc is not None:
             parse_utc(self.observed_at_utc)
+        validate_clock_order(
+            {
+                "observed_at_utc": self.observed_at_utc,
+                "first_seen_at_utc": self.first_seen_at_utc,
+                "available_at_utc": self.available_at_utc,
+            },
+            SOURCE_CLOCK_ORDER,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -122,10 +131,12 @@ def validate_prediction_row(row: Mapping[str, Any]) -> dict[str, Any]:
     normalized["event_available_at_utc"] = utc_text(
         normalized["event_available_at_utc"]
     )
-    if parse_utc(normalized["event_available_at_utc"]) > parse_utc(
-        normalized["decision_ts_utc"]
-    ):
-        raise ValueError("event is not available at decision_ts_utc")
+    try:
+        validate_clock_order(normalized, DECISION_CLOCK_ORDER)
+    except ValueError as exc:
+        if "event_available_at_utc" in str(exc):
+            raise ValueError("event is not available at decision_ts_utc") from exc
+        raise
     for field in ("p_model", "market_p"):
         value = normalized.get(field)
         if value is not None and not 0.0 <= float(value) <= 1.0:

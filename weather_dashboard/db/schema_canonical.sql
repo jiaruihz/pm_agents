@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS signals (
     producer_run_id TEXT NOT NULL,
     snapshot_ts_utc TEXT NOT NULL,
     snapshot_file TEXT,
+    snapshot_clock_basis TEXT,
+    snapshot_lineage_status TEXT,
+    snapshot_source_ref TEXT,
     target_date TEXT NOT NULL,
     city TEXT NOT NULL,
     city_pool TEXT NOT NULL CHECK (city_pool IN ('t1_trading','t2_research')),
@@ -254,6 +257,62 @@ CREATE TABLE IF NOT EXISTS fill_timestamp_adjustments (
     timestamp_evidence_class TEXT NOT NULL CHECK (timestamp_evidence_class IN ('exact','estimate')),
     evidence_json TEXT NOT NULL,
     source_path TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Signals are immutable. Causal-clock corrections preserve the imported row
+-- and replace its clock only in derived facts.  A single signal adjustment
+-- applies to every lifecycle order/fill descended from that decision.
+CREATE TABLE IF NOT EXISTS signal_clock_adjustments (
+    adjustment_id TEXT PRIMARY KEY,
+    signal_id TEXT NOT NULL UNIQUE REFERENCES signals(signal_id),
+    corrected_snapshot_ts_utc TEXT NOT NULL,
+    timestamp_source TEXT NOT NULL,
+    timestamp_evidence_class TEXT NOT NULL CHECK (
+        timestamp_evidence_class IN ('exact','reconstructed','proxy')
+    ),
+    lineage_status TEXT NOT NULL CHECK (
+        lineage_status IN (
+            'explicit_causal','reconstructed_causal',
+            'proxy_not_feature_snapshot','blocked_no_signal_snapshot'
+        )
+    ),
+    source_snapshot_ref TEXT,
+    evidence_json TEXT NOT NULL,
+    source_path TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Composite execution evidence links a causal reconstructed public book to an
+-- authenticated private fill.  The public book alone remains explicitly
+-- insufficient: queue position and own fill truth come only from the private
+-- order/fill lineage referenced by fill_id/execution_id.
+CREATE TABLE IF NOT EXISTS execution_evidence_links (
+    execution_evidence_link_id TEXT PRIMARY KEY,
+    fill_id TEXT NOT NULL UNIQUE REFERENCES fills(fill_id),
+    execution_id TEXT NOT NULL REFERENCES orders(execution_id),
+    order_id TEXT,
+    token_id TEXT NOT NULL,
+    order_ts_utc TEXT NOT NULL,
+    fill_ts_utc TEXT NOT NULL,
+    public_book_evidence_id TEXT NOT NULL,
+    execution_book_snapshot_id TEXT NOT NULL,
+    book_observed_at_utc TEXT NOT NULL,
+    book_age_ms REAL NOT NULL CHECK (book_age_ms >= 0),
+    quote_side TEXT NOT NULL CHECK (quote_side IN ('ask','bid')),
+    executable_quote_price REAL NOT NULL CHECK (
+        executable_quote_price >= 0 AND executable_quote_price <= 1
+    ),
+    fill_price REAL NOT NULL CHECK (fill_price > 0 AND fill_price <= 1),
+    adverse_slippage REAL NOT NULL,
+    evidence_status TEXT NOT NULL CHECK (
+        evidence_status='private_fill_plus_causal_public_book'
+    ),
+    public_book_semantics TEXT NOT NULL,
+    private_fill_evidence_class TEXT NOT NULL,
+    raw_lineage_json TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    source_path TEXT NOT NULL,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
@@ -930,6 +989,12 @@ CREATE INDEX IF NOT EXISTS idx_fill_price_adjustments_fill_id
     ON fill_price_adjustments(fill_id);
 CREATE INDEX IF NOT EXISTS idx_fill_timestamp_adjustments_fill_id
     ON fill_timestamp_adjustments(fill_id);
+CREATE INDEX IF NOT EXISTS idx_signal_clock_adjustments_signal_id
+    ON signal_clock_adjustments(signal_id);
+CREATE INDEX IF NOT EXISTS idx_execution_evidence_links_execution_id
+    ON execution_evidence_links(execution_id);
+CREATE INDEX IF NOT EXISTS idx_execution_evidence_links_book
+    ON execution_evidence_links(execution_book_snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_tmax_v2_ladder_snapshot_city_date_decision
     ON tmax_v2_ladder_snapshots(city, target_date, source_snapshot_ts_utc);
 CREATE INDEX IF NOT EXISTS idx_tmax_v2_ladder_rung_snapshot
@@ -1221,6 +1286,30 @@ CREATE TRIGGER IF NOT EXISTS fill_timestamp_adjustments_canonical_before_delete
 BEFORE DELETE ON fill_timestamp_adjustments
 BEGIN
     SELECT RAISE(ABORT, 'fill_timestamp_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS signal_clock_adjustments_canonical_before_update
+BEFORE UPDATE ON signal_clock_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'signal_clock_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS signal_clock_adjustments_canonical_before_delete
+BEFORE DELETE ON signal_clock_adjustments
+BEGIN
+    SELECT RAISE(ABORT, 'signal_clock_adjustments is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS execution_evidence_links_canonical_before_update
+BEFORE UPDATE ON execution_evidence_links
+BEGIN
+    SELECT RAISE(ABORT, 'execution_evidence_links is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS execution_evidence_links_canonical_before_delete
+BEFORE DELETE ON execution_evidence_links
+BEGIN
+    SELECT RAISE(ABORT, 'execution_evidence_links is append-only');
 END;
 
 CREATE TRIGGER IF NOT EXISTS settlements_canonical_before_update

@@ -65,6 +65,7 @@ from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (  # noq
     maker_resting_price,
 )
 from weather_data_feed.observation_cache import index_observation_cache  # noqa: E402
+from weather_clock_contract import parse_utc_or_none  # noqa: E402
 
 
 STRATEGY_ID = "current_yes_core_carry_v3"
@@ -197,16 +198,7 @@ def assert_runtime_contract() -> None:
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def stable_hash(payload: Mapping[str, Any]) -> str:

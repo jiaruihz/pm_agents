@@ -18,22 +18,14 @@ from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
 from weather_data_feed.source_registry import load_source_profiles
+from weather_clock_contract import parse_utc_or_none
 
 
 FULL_LADDER_REASONS = {"scheduled_full_ladder_snapshot", "full_market_ladder"}
 
 
 def _utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value, field="market_ladder_timestamp")
 
 
 def _text(value: Any) -> str | None:

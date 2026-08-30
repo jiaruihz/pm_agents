@@ -71,6 +71,11 @@ from weather_data_feed.observation_cache import (
 )
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
+from weather_clock_contract import (
+    local_wall_time_to_utc,
+    parse_utc_or_none,
+    utc_text,
+)
 
 PM_GAMMA_URL = "https://gamma-api.polymarket.com"
 PM_CLOB_URL = "https://clob.polymarket.com"
@@ -626,17 +631,16 @@ def load_canonical_orderbook_latest(path, *, now_utc, max_age_sec):
             "path": str(source),
         }
     available_raw = payload.get("available_at_utc")
-    try:
-        available = datetime.fromisoformat(str(available_raw).replace("Z", "+00:00"))
-        if available.tzinfo is None:
-            available = available.replace(tzinfo=timezone.utc)
-        age_sec = max(0.0, (now_utc - available.astimezone(timezone.utc)).total_seconds())
-    except (TypeError, ValueError):
+    available = parse_utc_or_none(
+        available_raw, field="canonical_market_books_available_at_utc"
+    )
+    if available is None:
         return {}, {
             "status": "invalid",
             "reason": "canonical_market_books_missing_available_clock",
             "path": str(source),
         }
+    age_sec = max(0.0, (now_utc - available).total_seconds())
     if max_age_sec >= 0 and age_sec > max_age_sec:
         return {}, {
             "status": "stale",
@@ -1035,11 +1039,14 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
     peak_hour_local = int(peak_local_time[11:13])
     utc_offset_seconds = int(payload.get("utc_offset_seconds") or 0)
     try:
-        peak_local_dt = datetime.fromisoformat(peak_local_time)
-        peak_utc_dt = (peak_local_dt - timedelta(seconds=utc_offset_seconds)).replace(tzinfo=timezone.utc)
-        peak_time_utc = peak_utc_dt.isoformat().replace("+00:00", "Z")
+        peak_utc_dt = local_wall_time_to_utc(
+            peak_local_time,
+            timezone_name=str(payload["timezone"]),
+            field="forecast_peak_time_local",
+        )
+        peak_time_utc = utc_text(peak_utc_dt, timespec="seconds")
         peak_hour_utc = peak_utc_dt.hour
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         peak_time_utc = None
         peak_hour_utc = None
 
@@ -1132,17 +1139,15 @@ def _load_forecast_curve_cache():
             )
             if not all(key) or key in cache:
                 continue
-            row_age_sec = age_sec
-            try:
-                row_ts = datetime.fromisoformat(
-                    str(row.get("snapshot_ts_utc") or "").replace("Z", "+00:00")
-                )
-                row_age_sec = max(
-                    0.0,
-                    datetime.now(timezone.utc).timestamp() - row_ts.timestamp(),
-                )
-            except (TypeError, ValueError):
-                pass
+            row_ts = parse_utc_or_none(
+                row.get("snapshot_ts_utc"), field="forecast_curve_snapshot_ts_utc"
+            )
+            if row_ts is None:
+                continue
+            row_age_sec = max(
+                0.0,
+                datetime.now(timezone.utc).timestamp() - row_ts.timestamp(),
+            )
             if row_age_sec > FORECAST_CURVE_CACHE_MAX_AGE_SEC:
                 continue
             details = _forecast_details_from_curve_row(
@@ -1651,7 +1656,11 @@ def fetch_live_metar_state(client, icao, target_date_local, city, now_utc):
                         continue
                     try:
                         if isinstance(obs_time, str):
-                            obs_dt = datetime.fromisoformat(obs_time.replace("Z", "+00:00"))
+                            obs_dt = parse_utc_or_none(
+                                obs_time, field="aviationweather_observation_time"
+                            )
+                            if obs_dt is None:
+                                continue
                             obs_key = obs_time
                         elif isinstance(obs_time, (int, float)):
                             obs_dt = datetime.fromtimestamp(float(obs_time), timezone.utc)

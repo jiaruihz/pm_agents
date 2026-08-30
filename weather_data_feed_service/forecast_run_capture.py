@@ -31,6 +31,7 @@ from weather_data_feed.historical_forecast_runs import (
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
 from weather_data_feed_service.forecast_enrichment import city_coordinates
 from weather_data_feed_service.io_utils import append_jsonl, read_json, write_json
+from weather_clock_contract import parse_utc
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_run_capture"
@@ -158,9 +159,10 @@ def materialize_capture(
         )
         response_complete = metadata.get("source_fetch_clock_status") == "response_complete"
         available_text = str(metadata.get("source_fetch_end_utc") or captured_text)
-        available_utc = datetime.fromisoformat(
-            available_text.replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
+        available_utc = parse_utc(
+            available_text, field="forecast_source_fetch_end_utc"
+        )
+        assert available_utc is not None
         for city_input, response in zip(city_inputs, responses):
             local_today = available_utc.astimezone(
                 ZoneInfo(str(city_input["timezone_name"]))
@@ -378,9 +380,10 @@ def build_d1_market_capture_demands(
         unit = unit_by_city[city]
         to_native = lambda value: value if unit == "F" else (value - 32.0) * 5.0 / 9.0
         requested_at = max(str(row["available_at_utc"]) for row in members)
-        requested_clock = datetime.fromisoformat(
-            requested_at.replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
+        requested_clock = parse_utc(
+            requested_at, field="market_capture_requested_at_utc"
+        )
+        assert requested_clock is not None
         model_events = [
             {
                 "model_key": str(row.get("model_key") or ""),
@@ -457,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     if bool(args.run) == bool(args.candidate_latest_cycle):
         raise SystemExit("specify exactly one of --run or --candidate-latest-cycle")
     now_utc = (
-        datetime.fromisoformat(args.now_utc.replace("Z", "+00:00")).astimezone(timezone.utc)
+        parse_utc(args.now_utc, field="now_utc")
         if args.now_utc
         else datetime.now(timezone.utc)
     )

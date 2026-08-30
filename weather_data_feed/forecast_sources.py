@@ -13,8 +13,11 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
+
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 
 
 OPEN_METEO_FORECAST_API = "https://api.open-meteo.com/v1/forecast"
@@ -113,13 +116,7 @@ def stable_hash(payload: Any) -> str:
 
 
 def parse_dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return parse_utc_or_none(value, field="forecast_source_timestamp")
 
 
 def safe_float(value: Any) -> float | None:
@@ -762,6 +759,7 @@ def build_taf_signal(
     utc_offset_seconds: int,
     first_peak_hour: int,
     last_peak_hour: int,
+    timezone_name: str | None = None,
 ) -> dict[str, Any]:
     raw_taf = re.sub(r"\s+", " ", str(taf_payload.get("raw_taf") or "").upper().strip())
     if not raw_taf:
@@ -825,9 +823,27 @@ def build_taf_signal(
             end_utc = start_utc + timedelta(hours=1)
         segments.append({"type": seg_type, "start_utc": start_utc, "end_utc": end_utc, "tokens": tokens[payload_start:end_idx]})
 
-    local_tz = timezone(timedelta(seconds=int(utc_offset_seconds or 0)))
-    peak_start = datetime.strptime(f"{target_date} {max(0, int(first_peak_hour) - 2):02d}:00", "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
-    peak_end = datetime.strptime(f"{target_date} {min(23, int(last_peak_hour) + 1):02d}:00", "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
+    resolved_timezone = str(timezone_name or "").strip()
+    if not resolved_timezone:
+        if int(utc_offset_seconds or 0) == 0:
+            resolved_timezone = "UTC"
+        else:
+            return {
+                "available": False,
+                "status": "missing_iana_timezone",
+                "raw_taf": raw_taf,
+            }
+    local_tz = ZoneInfo(resolved_timezone)
+    peak_start = local_wall_time_to_utc(
+        f"{target_date}T{max(0, int(first_peak_hour) - 2):02d}:00:00",
+        timezone_name=resolved_timezone,
+        field="taf_peak_window_start_local",
+    )
+    peak_end = local_wall_time_to_utc(
+        f"{target_date}T{min(23, int(last_peak_hour) + 1):02d}:00:00",
+        timezone_name=resolved_timezone,
+        field="taf_peak_window_end_local",
+    )
     precip_rank = {"low": 0, "medium": 1, "high": 2}
     suppression_level = "low"
     disruption_level = "low"

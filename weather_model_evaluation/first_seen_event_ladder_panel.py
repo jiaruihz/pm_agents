@@ -21,6 +21,7 @@ import pandas as pd
 
 from weather_data_feed.city_calendar import city_local_date
 from weather_data_feed.forecast_run_contract import stable_content_hash
+from weather_clock_contract import parse_utc_or_none, utc_text as canonical_utc_text
 
 
 PANEL_SCHEMA_VERSION = "first_seen_event_ladder_panel_v1"
@@ -43,22 +44,11 @@ SLOT_TOLERANCE_SECONDS = {
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value, field="first_seen_panel_clock")
 
 
 def utc_text(value: datetime | None) -> str | None:
-    return value.astimezone(UTC).isoformat(timespec="microseconds").replace(
-        "+00:00", "Z"
-    ) if value else None
+    return canonical_utc_text(value) if value else None
 
 
 def _read_jsonl(path: Path) -> Iterable[dict[str, Any]]:

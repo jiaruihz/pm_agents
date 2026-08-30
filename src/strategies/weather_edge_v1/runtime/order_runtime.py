@@ -25,6 +25,7 @@ from src.strategies.weather_edge_v1.execution.lifecycle import evaluate_order_li
 from src.strategies.weather_edge_v1.execution.profiles import get_execution_profile
 from src.strategies.weather_edge_v1.execution.reconciliation import reconcile_replacement
 from src.strategies.weather_edge_v1.runtime.execution_journal import ExecutionJournal
+from weather_clock_contract import parse_utc
 
 
 def json_ready(value: Any) -> Any:
@@ -343,7 +344,13 @@ class OrderRuntime:
         capabilities = self.venue.fetch_capabilities()
         fee_schedule = self.venue.fetch_fee_schedule()
         book = self.venue.fetch_market_book(intent.token_id)
-        children = self.planner(intent, profile, book, capabilities, fee_schedule, datetime.fromisoformat(run_context.invoked_at_utc.replace("Z", "+00:00")))
+        invoked_at = parse_utc(
+            run_context.invoked_at_utc, field="execution_run_invoked_at_utc"
+        )
+        assert invoked_at is not None
+        children = self.planner(
+            intent, profile, book, capabilities, fee_schedule, invoked_at
+        )
         aggregate = {"intent": intent, "children": tuple(children), "open_or_reserved_exposure": self.journal.open_or_reserved_exposure()}
         if not self._risk_allows(stage="initial_aggregate", payload=aggregate):
             return ExecutionRuntimeResult(status="blocked", actions=(RuntimeActionResult(status="blocked", reason="aggregate_risk_rejected"),))

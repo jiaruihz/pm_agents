@@ -14,6 +14,7 @@ from src.strategies.weather_edge_v1.tools.execution_policy import (
     build_execution_quote,
     build_execution_quotes,
 )
+from weather_clock_contract import parse_utc_or_none
 
 
 DEFAULT_RUNTIME_ROOT = Path("runtime/weather_edge_v1")
@@ -574,18 +575,7 @@ def _execution_id(plan: Dict[str, Any], venue: str) -> str:
 
 
 def _parse_utc(value: Any) -> Optional[datetime]:
-    text = safe_str(value)
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="execution_pipeline_clock")
 
 
 def _extract_live_order_id(row: Dict[str, Any]) -> str:

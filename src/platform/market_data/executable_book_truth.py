@@ -16,6 +16,7 @@ import math
 from typing import Any, Iterable, Mapping, Sequence
 
 from .ws_incremental_book import ReconstructedBook
+from weather_clock_contract import parse_utc
 
 
 EXECUTABLE_BOOK_TRUTH_SCHEMA_VERSION = "weather_executable_book_truth_v1"
@@ -31,10 +32,9 @@ def _hash(value: Any) -> str:
 
 
 def _parse_utc(value: str) -> datetime:
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_utc(value, field="executable_book_timestamp")
+    assert parsed is not None
+    return parsed
 
 
 def weather_taker_fee(*, shares: float, price: float) -> float:

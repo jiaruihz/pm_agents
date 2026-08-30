@@ -7,9 +7,10 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 from weather_dashboard.contract import CanonicalValidationError
 from weather_dashboard.ingest.canonical import (
@@ -25,6 +26,7 @@ from weather_dashboard.ingest.canonical import (
 from src.strategies.runtime.ownership import strategy_key_for_params
 from src.strategies.runtime.production import load_production_spec
 from src.strategies.weather_edge_v1.ids import make_execution_id
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none, utc_text
 from weather_dashboard.legacy_migration.live_cycle import (
     CITY_ICAO,
     _canonical_order,
@@ -56,6 +58,8 @@ GAMMA_HOST = os.getenv("POLYMARKET_GAMMA_HOST", "https://gamma-api.polymarket.co
 _GAMMA_MARKET_CACHE: dict[str, dict[str, Any] | None] = {}
 _CONDITION_ID_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 _SNAPSHOT_FILE_TS_RE = re.compile(r"snapshot_(\d{8})_(\d{4})\.json$")
+_SNAPSHOT_FILENAME_TIMEZONE = "Asia/Shanghai"
+_SNAPSHOT_LOOKBACK_DAYS = 2
 
 
 @dataclass
@@ -142,20 +146,13 @@ def _run_id(order_path: Path, producer_system: str) -> str:
 
 
 def _parse_dt(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
-def _snapshot_files_for_date(target_date: str) -> list[Path]:
-    ymd = target_date.replace("-", "")
+def _snapshot_files_for_local_date(local_date: str) -> list[Path]:
+    """Return one physical copy per Beijing capture-date filename."""
+
+    ymd = local_date.replace("-", "")
     if not ymd:
         return []
     by_name: dict[str, Path] = {}
@@ -167,13 +164,41 @@ def _snapshot_files_for_date(target_date: str) -> list[Path]:
 
 
 def _snapshot_file_ts(path: Path) -> datetime | None:
+    """Parse the legacy filename clock through its real IANA timezone.
+
+    ``snapshot_YYYYMMDD_HHMM`` is a Beijing wall clock.  Treating that suffix
+    as UTC was one of the causes of future snapshots entering migrated signals.
+    """
+
     match = _SNAPSHOT_FILE_TS_RE.fullmatch(path.name)
     if not match:
         return None
     try:
-        return datetime.strptime("".join(match.groups()), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+        local = datetime.strptime("".join(match.groups()), "%Y%m%d%H%M")
     except ValueError:
         return None
+    return local_wall_time_to_utc(
+        local,
+        timezone_name=_SNAPSHOT_FILENAME_TIMEZONE,
+        field="snapshot_filename_wall_time",
+    )
+
+
+def _snapshot_files_before(cutoff_utc: datetime) -> list[Path]:
+    """Return newest-first snapshot files in a bounded causal lookback."""
+
+    local_cutoff = cutoff_utc.astimezone(ZoneInfo(_SNAPSHOT_FILENAME_TIMEZONE))
+    by_name: dict[str, Path] = {}
+    for days_back in range(_SNAPSHOT_LOOKBACK_DAYS + 1):
+        local_date = (local_cutoff.date() - timedelta(days=days_back)).isoformat()
+        for path in _snapshot_files_for_local_date(local_date):
+            by_name.setdefault(path.name, path)
+    causal = [
+        path
+        for path in by_name.values()
+        if (_snapshot_file_ts(path) is not None and _snapshot_file_ts(path) <= cutoff_utc)
+    ]
+    return sorted(causal, key=lambda path: (_snapshot_file_ts(path), path.name), reverse=True)
 
 
 def _row_token_ids(row: dict[str, Any]) -> set[str]:
@@ -188,10 +213,15 @@ def _row_token_ids(row: dict[str, Any]) -> set[str]:
 def _needs_snapshot_lookup(row: dict[str, Any]) -> bool:
     if not str(row.get("token_id") or "").strip():
         return False
+    has_explicit_clock = any(
+        _parse_dt(row.get(key)) is not None
+        for key in ("decision_snapshot_ts_utc", "snapshot_ts_utc")
+    )
     has_condition = bool(str(row.get("condition_id") or "").strip())
     has_question = bool(str(row.get("question") or "").strip())
     has_bracket = bool(str(row.get("bracket") or row.get("t_minus_1_no_bracket_c") or "").strip())
-    return not (has_condition and has_question and has_bracket)
+    has_static_lineage = has_condition and has_question and has_bracket
+    return not has_explicit_clock or not has_static_lineage
 
 
 def _fetch_gamma_market(market_id: str) -> dict[str, Any] | None:
@@ -233,73 +263,138 @@ def _enrich_from_gamma_market(row: dict[str, Any]) -> None:
             row[key] = market.get(key)
 
 
-def _build_snapshot_lookup(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
-    """Return best snapshot record by (target_date, token_id).
+def _snapshot_lookup_key(row: dict[str, Any]) -> str:
+    for key in ("execution_id", "order_id", "signal_id"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return f"{key}:{value}"
+    return "row:" + hashlib.sha256(
+        json.dumps(row, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
-    The strategy-local runner intentionally keeps compact order rows. Canonical
-    ingest needs static market lineage such as condition_id and forecast_source;
-    those are recovered from the paper snapshot mirror using the order token.
-    Prefer the latest snapshot at or before order placement to preserve PIT
-    semantics. If no prior snapshot exists, use the first matching snapshot.
-    """
-    wanted: dict[str, list[tuple[str, datetime | None]]] = {}
-    for row in rows:
-        if not _needs_snapshot_lookup(row):
-            continue
-        target_date = str(row.get("target_date") or "").strip()
-        token_id = str(row.get("token_id") or "").strip()
-        if target_date and token_id:
-            wanted.setdefault(target_date, []).append(
-                (
-                    token_id,
-                    _parse_dt(
-                        row.get("decision_snapshot_ts_utc")
-                        or row.get("snapshot_ts_utc")
-                        or row.get("created_at_utc")
-                    ),
-                )
-            )
 
-    lookup: dict[tuple[str, str], dict[str, Any]] = {}
-    for target_date, token_orders in wanted.items():
-        token_set = {token for token, _ in token_orders}
-        order_cutoffs = {token: cutoff for token, cutoff in token_orders}
-        fallback: dict[str, dict[str, Any]] = {}
-        pending = set(token_set)
-        # A snapshot contains the full ladder, so scanning newest-to-oldest can
-        # stop as soon as every token has its latest row at/before the decision
-        # clock.  The old full-day scan parsed gigabytes for one runtime file.
-        for path in reversed(_snapshot_files_for_date(target_date)):
-            file_ts = _snapshot_file_ts(path)
-            pending_cutoffs = [order_cutoffs[token] for token in pending if order_cutoffs.get(token) is not None]
-            if file_ts is not None and pending_cutoffs and file_ts > max(pending_cutoffs):
+def _source_signal_key(row: dict[str, Any]) -> str:
+    signal_id = str(row.get("signal_id") or "").strip()
+    if signal_id:
+        return f"signal_id:{signal_id}"
+    return _snapshot_lookup_key(row)
+
+
+def _record_matches_runtime_order(
+    record: dict[str, Any], row: dict[str, Any]
+) -> bool:
+    token_id = str(row.get("token_id") or "").strip()
+    if not token_id or token_id not in _row_token_ids(record):
+        return False
+    comparisons = (
+        ("city", "city"),
+        ("target_date", "event_date"),
+        ("bracket", "bracket"),
+    )
+    for row_key, record_key in comparisons:
+        expected = str(row.get(row_key) or "").strip()
+        actual = str(record.get(record_key) or record.get(row_key) or "").strip()
+        if expected and actual and expected != actual:
+            return False
+    def first_probability(candidate: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            if candidate.get(key) in (None, ""):
                 continue
             try:
+                return float(candidate[key])
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    raw_probability = first_probability(
+        row,
+        (
+            "model_p_yes",
+            "model_p_yes_used",
+            "model_p_yes_raw",
+            "model_token_probability",
+        ),
+    )
+    snapshot_probability = first_probability(record, ("model_prob", "model_p_yes"))
+    if (
+        raw_probability is not None
+        and raw_probability > 0.0
+        and snapshot_probability is not None
+        and abs(raw_probability - snapshot_probability) > 1e-9
+    ):
+        return False
+    return True
+
+
+def _build_snapshot_lookup(
+    rows: list[dict[str, Any]], *, force: bool = False
+) -> dict[str, dict[str, Any]]:
+    """Recover one causal source snapshot per original runtime signal.
+
+    Multiple lifecycle orders may share a signal.  They must inherit the
+    snapshot available before the *first* order, not one later token/day row.
+    Snapshot filenames are only an index; record clocks remain authoritative.
+    A future record is never used as a static-lineage fallback.
+    """
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if force or _needs_snapshot_lookup(row):
+            groups.setdefault(_source_signal_key(row), []).append(row)
+
+    lookup: dict[str, dict[str, Any]] = {}
+    for grouped_rows in groups.values():
+        cutoffs = [
+            value
+            for row in grouped_rows
+            if (
+                value := _parse_dt(
+                    row.get("created_at_utc")
+                    or row.get("live_attempt_ts_utc")
+                    or row.get("ts_utc")
+                )
+            )
+            is not None
+        ]
+        if not cutoffs:
+            continue
+        cutoff = min(cutoffs)
+        representative = min(
+            grouped_rows,
+            key=lambda row: _parse_dt(
+                row.get("created_at_utc")
+                or row.get("live_attempt_ts_utc")
+                or row.get("ts_utc")
+            )
+            or datetime.max.replace(tzinfo=timezone.utc),
+        )
+        matched: dict[str, Any] | None = None
+        for path in _snapshot_files_before(cutoff):
+            try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, json.JSONDecodeError):
                 continue
             records = payload.get("records") if isinstance(payload, dict) else None
             if not isinstance(records, list):
                 continue
-            for rec in records:
-                if not isinstance(rec, dict):
+            for raw_record in records:
+                if not isinstance(raw_record, dict):
                     continue
-                tokens = _row_token_ids(rec) & pending
-                if not tokens:
+                record_ts = _parse_dt(
+                    raw_record.get("snapshot_ts_utc") or raw_record.get("ts_utc")
+                )
+                if record_ts is None or record_ts > cutoff:
                     continue
-                rec_ts = _parse_dt(rec.get("snapshot_ts_utc") or rec.get("ts_utc"))
-                for token in tokens:
-                    key = (target_date, token)
-                    cutoff = order_cutoffs.get(token)
-                    fallback.setdefault(token, rec)
-                    if cutoff is None or (rec_ts is not None and rec_ts <= cutoff):
-                        lookup[key] = rec
-                        pending.discard(token)
-            if not pending:
+                if not _record_matches_runtime_order(raw_record, representative):
+                    continue
+                matched = dict(raw_record)
+                matched["_snapshot_source_path"] = str(path)
                 break
-        for token in pending:
-            if token in fallback:
-                lookup[(target_date, token)] = fallback[token]
+            if matched is not None:
+                break
+        if matched is not None:
+            for row in grouped_rows:
+                lookup[_snapshot_lookup_key(row)] = matched
     return lookup
 
 
@@ -384,6 +479,69 @@ def physical_exchange_order_id(raw: dict[str, Any]) -> str:
     return ""
 
 
+def _resolve_signal_snapshot_clock(
+    row: dict[str, Any], snapshot: dict[str, Any]
+) -> tuple[str, str, str, str | None]:
+    """Resolve a causal signal clock without relabeling a future or order clock."""
+
+    order_clock = _parse_dt(
+        row.get("created_at_utc")
+        or row.get("live_attempt_ts_utc")
+        or row.get("ts_utc")
+    )
+    for field in ("decision_snapshot_ts_utc", "snapshot_ts_utc"):
+        raw_value = row.get(field)
+        if raw_value in (None, ""):
+            continue
+        parsed = _parse_dt(raw_value)
+        if parsed is None:
+            raise ValueError(f"{field} must be timezone-aware ISO-8601")
+        if order_clock is not None and parsed > order_clock:
+            raise ValueError(f"{field} cannot be after created_at_utc")
+        return (
+            utc_text(parsed, field=field, timespec="auto"),
+            field,
+            "explicit_causal",
+            str(row.get("source_snapshot_path") or "").strip() or None,
+        )
+
+    snapshot_value = snapshot.get("snapshot_ts_utc") or snapshot.get("ts_utc")
+    if snapshot_value not in (None, ""):
+        parsed = _parse_dt(snapshot_value)
+        if parsed is None:
+            raise ValueError("reconstructed snapshot clock is invalid")
+        if order_clock is not None and parsed > order_clock:
+            raise ValueError("reconstructed snapshot clock cannot be after order clock")
+        return (
+            utc_text(parsed, field="snapshot_ts_utc", timespec="auto"),
+            "strategy_snapshot_record",
+            "reconstructed_causal",
+            str(snapshot.get("_snapshot_source_path") or "").strip() or None,
+        )
+
+    # Some source-event runtimes expose a decision/event clock but no feature
+    # snapshot. Preserve the clock while keeping the weaker semantics explicit.
+    decision_proxy = _parse_dt(row.get("ts_utc"))
+    if decision_proxy is not None:
+        if order_clock is not None and decision_proxy > order_clock:
+            raise ValueError("ts_utc cannot be after created_at_utc")
+        return (
+            utc_text(decision_proxy, field="ts_utc", timespec="auto"),
+            "decision_clock_proxy",
+            "proxy_not_feature_snapshot",
+            str(row.get("source_snapshot_path") or "").strip() or None,
+        )
+
+    if order_clock is not None:
+        return (
+            utc_text(order_clock, field="created_at_utc", timespec="auto"),
+            "order_clock_placeholder",
+            "blocked_no_signal_snapshot",
+            None,
+        )
+    raise ValueError("missing causal signal, decision, and order clock")
+
+
 def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) -> dict[str, Any]:
     row = dict(raw)
     snap = snapshot or {}
@@ -413,14 +571,15 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
         if not row.get(key) and snap.get(key) is not None:
             row[key] = snap.get(key)
 
-    row["created_at_utc"] = row.get("created_at_utc") or row.get("live_attempt_ts_utc") or row.get("ts_utc")
-    row["snapshot_ts_utc"] = (
-        row.get("decision_snapshot_ts_utc")
-        or row.get("snapshot_ts_utc")
-        or snap.get("snapshot_ts_utc")
-        or snap.get("ts_utc")
-        or row.get("created_at_utc")
+    row["created_at_utc"] = (
+        row.get("created_at_utc") or row.get("live_attempt_ts_utc") or row.get("ts_utc")
     )
+    (
+        row["snapshot_ts_utc"],
+        row["signal_snapshot_clock_basis"],
+        row["signal_snapshot_lineage_status"],
+        row["signal_snapshot_source_ref"],
+    ) = _resolve_signal_snapshot_clock(row, snap)
     row["venue"] = row.get("venue") or "polymarket_clob"
     row["status"] = _runtime_order_status(row)
     row["bracket"] = row.get("bracket") or row.get("t_minus_1_no_bracket_c")
@@ -507,13 +666,19 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
         return report
 
     snapshot_lookup = _build_snapshot_lookup(migration_orders)
-    enriched = [
-        _enrich_runtime_order(
-            raw,
-            snapshot_lookup.get((str(raw.get("target_date") or ""), str(raw.get("token_id") or ""))),
-        )
-        for raw in migration_orders
-    ]
+    enriched: list[dict[str, Any]] = []
+    for raw in migration_orders:
+        try:
+            enriched.append(
+                _enrich_runtime_order(
+                    raw,
+                    snapshot_lookup.get(_snapshot_lookup_key(raw)),
+                )
+            )
+        except ValueError as exc:
+            report.skip(f"runtime_order_clock:{exc}")
+    if not enriched:
+        return report
 
     strategy_params = _strategy_params({}, enriched)
     declared_config_ids = {

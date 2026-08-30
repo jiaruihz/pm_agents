@@ -19,6 +19,7 @@ from weather_data_feed.forecast_sources import (
     OPEN_METEO_SINGLE_RUN_API,
     stable_hash,
 )
+from weather_clock_contract import parse_utc as parse_strict_utc
 
 
 DEFAULT_GLOBAL_SINGLE_RUN_MODELS: tuple[str, ...] = (
@@ -54,10 +55,9 @@ class ModelRunUnavailable(RuntimeError):
 
 
 def parse_utc(value: str) -> datetime:
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_strict_utc(value)
+    assert parsed is not None
+    return parsed
 
 
 def conservative_available_run(

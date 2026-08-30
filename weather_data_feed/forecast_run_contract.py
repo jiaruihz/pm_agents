@@ -15,6 +15,8 @@ from statistics import mean, median
 from typing import Any, Iterable, Mapping, Sequence
 
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
+from weather_clock_contract import parse_utc as parse_strict_utc
+from weather_clock_contract import utc_text as canonical_utc_text
 
 
 FORECAST_ROW_SCHEMA = "weather_forecast_run_row_v3"
@@ -35,19 +37,13 @@ def stable_content_hash(value: Any) -> str:
 
 
 def parse_utc(value: Any, *, field: str) -> datetime:
-    if value in (None, ""):
-        raise ValueError(f"{field} is required")
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError(f"{field} must be ISO-8601") from exc
-    if parsed.tzinfo is None:
-        raise ValueError(f"{field} must include timezone")
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_strict_utc(value, field=field)
+    assert parsed is not None
+    return parsed
 
 
 def utc_text(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    return canonical_utc_text(value)
 
 
 def run_lineage_evidence(

@@ -41,6 +41,7 @@ from weather_model_evaluation.probability import (
     date_block_bootstrap_delta,
     ordinal_score,
 )
+from weather_clock_contract import parse_utc
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,11 +120,9 @@ TOKYO_V3_BLEND_ALPHAS = (0.0, 0.05, 0.1, 0.25, 0.5, 1.0)
 
 
 def parse_ts(value: Any) -> datetime:
-    text = str(value or "").strip().replace("Z", "+00:00")
-    parsed = datetime.fromisoformat(text)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    parsed = parse_utc(value, field="tokyo_market_prior_clock")
+    assert parsed is not None
+    return parsed
 
 
 def finite(value: Any) -> float | None:

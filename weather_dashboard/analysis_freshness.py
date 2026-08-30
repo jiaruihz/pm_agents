@@ -14,24 +14,15 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from weather_clock_contract import parse_utc_or_none
+
 
 def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat(timespec="seconds").replace("+00:00", "Z") if dt else None
 
 
 def _parse_dt(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="analysis_freshness_timestamp")
 
 
 def _parse_date(value: Any) -> date | None:

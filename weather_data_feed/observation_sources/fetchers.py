@@ -31,6 +31,7 @@ from weather_data_feed.observation_sources.metar import (
     parse_tgftp_header_time,
 )
 from weather_data_feed.observation_sources.router import ObservationSourceRequest, ObservationSourceResult
+from weather_clock_contract import local_wall_time_to_utc, parse_utc, parse_utc_or_none
 
 
 METAR_API = "https://aviationweather.gov/api/data/metar"
@@ -111,13 +112,7 @@ def stable_hash(payload: Any) -> str:
 
 
 def parse_dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return parse_utc_or_none(value, field="observation_source_timestamp")
 
 
 def arith_round(value: float) -> int:
@@ -307,9 +302,9 @@ def observation_path_features(
     high without changing the legacy last-equal-high fields.
     """
 
-    as_of = parse_dt(as_of_utc) if isinstance(as_of_utc, str) else as_of_utc
-    if as_of is not None:
-        as_of = as_of.replace(tzinfo=timezone.utc) if as_of.tzinfo is None else as_of.astimezone(timezone.utc)
+    as_of = parse_utc(
+        as_of_utc, field="observation_path_as_of_utc", allow_none=True
+    )
 
     ordered: list[tuple[datetime, ObservationRecord]] = []
     for record in records:
@@ -678,7 +673,11 @@ def _iem_asos_raw_records(text: str, tz: ZoneInfo, local_date: Any, *, family: s
         if family == "routine" and source_family == "madishf":
             continue
         try:
-            dt = datetime.fromisoformat(str(raw_ts).replace(" ", "T")).replace(tzinfo=timezone.utc)
+            dt = local_wall_time_to_utc(
+                str(raw_ts).replace(" ", "T"),
+                timezone_name="Etc/UTC",
+                field="iem_asos_valid_utc_wall_time",
+            )
         except ValueError:
             continue
         if dt.astimezone(tz).date().isoformat() != str(local_date):

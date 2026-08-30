@@ -1,12 +1,24 @@
 # Weather 策略总账（我们到底试过哪些 · 灵感/规则 · 是否可行 · 血缘归属）
 
 Status: `current-reference`
-Updated: 2026-08-26 Core Carry scheduled-maker WS capture lineage closure
+Updated: 2026-08-30 selected-ROI/model-increment denominator repair
 Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入口
 
 这份是"我们一共研究过哪些策略"的单页总账。每条策略：**灵感/盈利规则 → 当前状态 → 是否可行 →
 属于量化血缘哪一层**。状态/结论的权威来源是评估层 living docs（`docs/analysis/*.md`），本表汇总它们，
 有冲突以 living doc 为准。
+
+> **2026-08-30 denominator override**：Selected ROI 只保留为描述性结果，不再充当模型增量证据。
+> Core Carry 与 Tmin 已在固定 executable universe 上按“未选择=0”、每 city-date 首次动作、
+> `target_date` paired bootstrap 重算，并与同 rows market proper score 分开报告。两支共同暴露的核心模式是
+> **selection expansion into expensive favorites**：新增交易大多获胜、Selected ROI 为正，但成本集中在
+> `0.88–0.99`，且模型同分母 Brier/logloss 没有改善。Core challenger 相对 incumbent 每 10 股只增加
+> `+$5.52` PnL、同时增加 `$84.48` 成本，Brier/logloss 反而 `+0.000065/+0.000936`；Tmin V1
+> 19 笔 ROI `+5.72%`，但全 P0 Brier/logloss 相对 market `+0.00702/+0.00527`，17 笔新增里
+> 9 笔成本 `>0.98`。因此 Core incumbent 不替换，Tmin challenger 继续 zero-notional；Cross-NO 缺
+> same-opportunity ledger、WCIR 缺 next-print→exact-token action map，二者 execution increment 明确记为
+> `unidentifiable`，不再用 selected fills 补造结论。统一审计入口：
+> `scripts/analysis/audit_weather_selected_increment_v2.py`。
 
 ## 2026-07-15 当前总判断
 

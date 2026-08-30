@@ -17,6 +17,7 @@ from typing import Any
 
 from weather_data_feed.fast_event_source_policy import FastEventSourceProfile, market_value_from_temp_c
 from weather_data_feed.source_policy import canonical_city_name
+from weather_clock_contract import parse_utc_or_none
 
 
 STATE_SCHEMA = "weather_source_event_incremental_state_v1"
@@ -32,15 +33,7 @@ METAR_LIKE_SOURCES = {
 
 
 def parse_utc(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def finite_float(value: Any) -> float | None:

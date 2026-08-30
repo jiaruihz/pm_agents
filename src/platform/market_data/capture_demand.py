@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
 from src.platform.market_data.identity import canonical_json_hash
+from weather_clock_contract import parse_utc
 
 
 CAPTURE_DEMAND_SCHEMA_VERSION = "polymarket_capture_demand_v1"
@@ -21,10 +22,9 @@ TRANSPORTS = frozenset({"REST", "WS", "REST_WS"})
 
 
 def _parse_utc(value: str) -> datetime:
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("capture-demand clocks must be timezone-aware")
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_utc(value, field="capture_demand_timestamp")
+    assert parsed is not None
+    return parsed
 
 
 @dataclass(frozen=True)

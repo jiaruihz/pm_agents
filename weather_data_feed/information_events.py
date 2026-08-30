@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from weather_data_feed.observation_sources.aliases import normalize_source_name
+from weather_clock_contract import SOURCE_CLOCK_ORDER, validate_clock_order
 
 
 PIT_LINEAGE_CLASSES = frozenset(
@@ -135,8 +136,7 @@ def validate_information_event_lineage(event: Mapping[str, Any]) -> None:
         # The first raw delivery has detected_at == first_seen_at.  A replayed
         # delivery may be detected later while retaining the original event's
         # earlier first-seen clock, so only publication ordering is universal.
-        if not str(first_seen) <= str(available) or not str(detected) <= str(available):
-            raise ValueError("collector_exact requires first_seen_at_utc and detected_at_utc not after available_at_utc")
+        validate_clock_order(event, SOURCE_CLOCK_ORDER)
         return
 
     if lineage_class == "late_backfill_first_seen_unknown":
@@ -151,6 +151,7 @@ def validate_information_event_lineage(event: Mapping[str, Any]) -> None:
         raise ValueError("archive_known_available requires available_at_utc")
     if first_seen is not None:
         raise ValueError("archive_known_available must not claim exact first_seen_at_utc")
+    validate_clock_order(event, SOURCE_CLOCK_ORDER)
 
 
 def build_information_event(

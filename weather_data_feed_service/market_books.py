@@ -23,6 +23,7 @@ from weather_data_feed import city_scan_dates, city_local_datetime, local_settle
 from weather_data_feed.information_events import canonical_json_hash
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed_service.legacy_weather_predict import paper_snapshot as legacy
+from weather_clock_contract import parse_utc_or_none
 
 
 SCHEMA_VERSION = "weather_market_books_batch_v1"
@@ -88,13 +89,7 @@ def _load_observation_index(path: Path | None) -> dict[tuple[str, str], dict[str
 
 
 def _parse_utc(value: Any) -> datetime | None:
-    try:
-        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def _strategy_targets_for_entries(

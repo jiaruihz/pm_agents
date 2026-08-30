@@ -13,10 +13,11 @@ independent parity observation only.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
 from typing import Any, Iterable, Mapping, Sequence
+
+from weather_clock_contract import parse_utc
 
 
 # These are wire-format versions, not ownership declarations.  They remain
@@ -327,14 +328,16 @@ def _receive_order(envelope: Mapping[str, Any]) -> int:
     received_ns = _int_or_none(envelope.get("received_at_ns"))
     if received_ns is not None:
         return received_ns
-    text = str(envelope.get("received_at_utc") or "")
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = parse_utc(
+            envelope.get("received_at_utc"), field="received_at_utc"
+        )
     except ValueError as exc:
-        raise BookReconstructionError("WS envelope has an invalid received_at_utc") from exc
-    if parsed.tzinfo is None:
-        raise BookReconstructionError("WS envelope received_at_utc must be timezone-aware")
-    return int(parsed.astimezone(timezone.utc).timestamp() * 1_000_000_000)
+        raise BookReconstructionError(
+            "WS envelope has an invalid timezone-aware received_at_utc"
+        ) from exc
+    assert parsed is not None
+    return int(parsed.timestamp() * 1_000_000_000)
 
 
 def _message_sequence(message: Mapping[str, Any], change: Mapping[str, Any] | None = None) -> int | None:
@@ -664,8 +667,14 @@ class IncrementalBookReconstructor:
         token_id = str(token_id)
         if requested_shares <= 0:
             raise ValueError("requested_shares must be positive")
-        if book_role not in {"model_feature", "execution_quote"}:
-            raise ValueError("book_role must be model_feature or execution_quote")
+        if book_role not in {
+            "model_feature",
+            "execution_quote",
+            "market_state_evidence",
+        }:
+            raise ValueError(
+                "book_role must be model_feature, execution_quote, or market_state_evidence"
+            )
         if token_id in self.blocked_tokens:
             raise BookReconstructionError(
                 f"token={token_id} is not reconstructable: {self.blocked_tokens[token_id]}"

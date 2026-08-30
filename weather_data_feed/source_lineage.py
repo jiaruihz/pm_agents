@@ -4,30 +4,28 @@ from __future__ import annotations
 
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from weather_data_feed.information_events import canonical_json_hash
+from weather_clock_contract import (
+    SOURCE_CLOCK_ORDER,
+    parse_utc as parse_strict_utc,
+    utc_text as canonical_utc_text,
+    validate_clock_order,
+)
 
 
 SOURCE_CAPTURE_LINEAGE_SCHEMA_VERSION = "weather_source_capture_lineage_v1"
 
 
 def parse_utc(value: Any) -> datetime | None:
-    if value in (None, ""):
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_strict_utc(value, allow_none=True)
 
 
 def utc_text(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    return canonical_utc_text(value)
 
 
 def producer_build_id(repo_root: Path | None = None) -> tuple[str | None, str]:
@@ -92,22 +90,19 @@ def build_source_capture_lineage(
     """
     if not producer or not capture_id or not batch_capture_id or not lineage_status:
         raise ValueError("producer, capture_id, batch_capture_id, and lineage_status are required")
-    start = parse_utc(source_fetch_start_utc)
-    end = parse_utc(source_fetch_end_utc)
-    detected = parse_utc(detected_at_utc)
-    first_seen = parse_utc(first_seen_at_utc)
-    available = parse_utc(available_at_utc)
-    ingested = parse_utc(ingested_at_utc)
-    if start and end and start > end:
-        raise ValueError("source_fetch_start_utc cannot be after source_fetch_end_utc")
-    if end and detected and end > detected:
-        raise ValueError("source_fetch_end_utc cannot be after detected_at_utc")
-    if detected and available and detected > available:
-        raise ValueError("detected_at_utc cannot be after available_at_utc")
-    if first_seen and available and first_seen > available:
-        raise ValueError("first_seen_at_utc cannot be after available_at_utc")
-    if available and ingested and available > ingested:
-        raise ValueError("available_at_utc cannot be after ingested_at_utc")
+    validate_clock_order(
+        {
+            "source_event_ts_utc": source_event_ts_utc,
+            "issued_at_utc": issued_at_utc,
+            "source_fetch_start_utc": source_fetch_start_utc,
+            "source_fetch_end_utc": source_fetch_end_utc,
+            "detected_at_utc": detected_at_utc,
+            "first_seen_at_utc": first_seen_at_utc,
+            "available_at_utc": available_at_utc,
+            "ingested_at_utc": ingested_at_utc,
+        },
+        SOURCE_CLOCK_ORDER,
+    )
     return {
         "source_capture_lineage_schema_version": SOURCE_CAPTURE_LINEAGE_SCHEMA_VERSION,
         "producer": producer,

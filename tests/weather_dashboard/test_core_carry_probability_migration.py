@@ -19,6 +19,7 @@ def test_selected_token_probability_survives_runtime_migration() -> None:
             "model_p_yes_used": 0.0,
             "best_ask": 0.91,
             "edge": 0.0,
+            "created_at_utc": "2026-08-05T00:00:00Z",
         },
         None,
     )

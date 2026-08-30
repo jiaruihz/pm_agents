@@ -13,6 +13,11 @@ from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
 import numpy as np
+from weather_clock_contract import (
+    local_wall_time_to_utc,
+    parse_utc,
+    parse_utc_or_none,
+)
 
 
 LOCAL_TZ = ZoneInfo("Europe/Helsinki")
@@ -28,8 +33,11 @@ def _finite(value: Any) -> float | None:
 
 
 def _timestamp(row: dict[str, Any]) -> datetime:
-    value = str(row["observation_time_utc"]).replace("Z", "+00:00")
-    return datetime.fromisoformat(value)
+    parsed = parse_utc(
+        row["observation_time_utc"], field="helsinki_observation_time_utc"
+    )
+    assert parsed is not None
+    return parsed
 
 
 def _raw_value(row: dict[str, Any], *names: str) -> float | None:
@@ -319,7 +327,17 @@ def build_forecast_remaining_heat_features(
 
     local_now = decision.astimezone(LOCAL_TZ).replace(tzinfo=None)
     curve = list(row["hourly_curve"])
-    times = [datetime.fromisoformat(str(item["time_local"])) for item in curve]
+    times = []
+    for item in curve:
+        raw_time = item["time_local"]
+        aware = parse_utc_or_none(raw_time, field="helsinki_curve_time")
+        if aware is None:
+            aware = local_wall_time_to_utc(
+                str(raw_time),
+                timezone_name="Europe/Helsinki",
+                field="helsinki_curve_time_local",
+            )
+        times.append(aware.astimezone(LOCAL_TZ).replace(tzinfo=None))
     hours = np.asarray(
         [(timestamp - local_now).total_seconds() / 3600 for timestamp in times],
         dtype=float,
@@ -380,9 +398,10 @@ def build_forecast_remaining_heat_features(
 
     temp_1h = horizon_temperature(1.0)
     temp_2h = horizon_temperature(2.0)
-    available = datetime.fromisoformat(
-        str(row["available_at_utc"]).replace("Z", "+00:00")
+    available = parse_utc(
+        row["available_at_utc"], field="helsinki_forecast_available_at_utc"
     )
+    assert available is not None
     return {
         "forecast_available": 1.0,
         "forecast_run_age_h": (decision - available).total_seconds() / 3600.0,

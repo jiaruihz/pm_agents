@@ -34,6 +34,7 @@ from weather_model_evaluation import (
     binary_loss_values,
     binary_score,
     date_block_bootstrap_delta,
+    paired_policy_increment,
 )
 
 
@@ -524,6 +525,33 @@ def render_report(payload: dict[str, Any]) -> str:
             f"| {name} | {metrics['entries']} | {metrics['wins']}-{metrics['losses']} | "
             f"${metrics['pnl_usd_10_shares']:+.2f} | {roi} |"
         )
+    paired = payload["holdout_selected_increment"]["challenger_vs_core"]
+    increment = paired["paired_increment"]
+    relation = paired["selection_relation"]
+    lines.extend(
+        [
+            "",
+            "## 同机会集 selected increment（主交易诊断）",
+            "",
+            (
+                f"固定可执行分母 {paired['fixed_universe']['opportunities']} checkpoints / "
+                f"{paired['fixed_universe']['policy_groups']} city-days / "
+                f"{paired['fixed_universe']['target_dates']} dates；未交易记 0。"
+            ),
+            (
+                f"challenger − Core 配对 PnL 为 `{increment['pnl_per_share']:+.6f}`/share，"
+                f"date-equal mean CI "
+                f"`[{increment['date_equal_mean_pnl_ci95'][0]:+.6f},"
+                f"{increment['date_equal_mean_pnl_ci95'][1]:+.6f}]`。"
+            ),
+            (
+                f"选择关系：same={relation['same']}、switched={relation['switched']}、"
+                f"challenger-only={relation['challenger_only']}、"
+                f"Core-only={relation['baseline_only']}。"
+            ),
+            "selected ROI 只保留为各自资金分母上的描述性比率，不再作为模型增量。",
+        ]
+    )
     lines.extend(
         [
             "",
@@ -602,6 +630,32 @@ def main() -> int:
             )
             trade_replay[f"{label}_{floor_label}"] = trade_metrics(entries)
 
+    fixed_executable = holdout[
+        holdout["ten_share_executable"].fillna(False).astype(bool)
+        & exact_bounded(holdout)
+        & pd.to_numeric(
+            holdout["ten_share_cost_per_share"], errors="coerce"
+        ).notna()
+    ].copy()
+    increment_vs_core, paired_vs_core = paired_policy_increment(
+        fixed_executable,
+        challenger_probability_column="p_challenger",
+        baseline_probability_column="p_core_hold",
+        cost_column="ten_share_cost_per_share",
+        time_column="decision_snapshot_dt",
+        bootstrap_draws=BOOTSTRAP_DRAWS,
+        bootstrap_seed=SEED + 200,
+    )
+    increment_vs_market, paired_vs_market = paired_policy_increment(
+        fixed_executable,
+        challenger_probability_column="p_challenger",
+        baseline_probability_column="p_market_hold",
+        cost_column="ten_share_cost_per_share",
+        time_column="decision_snapshot_dt",
+        bootstrap_draws=BOOTSTRAP_DRAWS,
+        bootstrap_seed=SEED + 300,
+    )
+
     if significance and baseline and same_sign_core:
         status = "historical_holdout_pass_clean_forward_required"
         conclusion = "shadow_candidate"
@@ -659,6 +713,12 @@ def main() -> int:
     pd.DataFrame(selection).to_csv(
         output_dir / "candidate_selection.csv", index=False
     )
+    paired_vs_core.to_csv(
+        output_dir / "selected_increment_challenger_vs_core.csv", index=False
+    )
+    paired_vs_market.to_csv(
+        output_dir / "selected_increment_challenger_vs_market.csv", index=False
+    )
     joblib.dump(frozen_bundle, output_dir / "frozen_challenger.joblib")
 
     payload = {
@@ -699,6 +759,15 @@ def main() -> int:
         "holdout_comparisons": comparisons,
         "holdout_probability_by_mid_band": probability_by_mid_band(holdout),
         "holdout_trade_replay": trade_replay,
+        "holdout_selected_increment": {
+            "challenger_vs_core": increment_vs_core,
+            "challenger_vs_market": increment_vs_market,
+            "primary": "challenger_vs_core",
+            "market_selector_note": (
+                "same-row market probability remains the probability baseline; a market-mid "
+                "selector may correctly choose no trade at the executable ask"
+            ),
+        },
         "gates": {
             "significance": "PASS" if significance else "FAIL",
             "baseline": "PASS" if baseline else "FAIL",

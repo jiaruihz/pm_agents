@@ -9,20 +9,14 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 from zoneinfo import ZoneInfo
 
+from weather_clock_contract import parse_utc_or_none
+
 
 UTC = timezone.utc
 
 
 def parse_utc(value: Any) -> datetime | None:
-    if value in (None, ""):
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value)
 
 
 @dataclass(frozen=True)

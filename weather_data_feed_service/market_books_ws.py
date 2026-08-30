@@ -30,6 +30,8 @@ from src.platform.market_data.capture_inbox import (
     DEFAULT_ALPHA_CONSUMER,
     CaptureDemandInbox,
 )
+from src.platform.market_data.execution_evidence import ExecutionEvidenceRecorder
+from weather_clock_contract import parse_utc_or_none
 from weather_data_feed.market_brackets import MarketBracket, parse_market_bracket
 from weather_data_feed.source_lineage import producer_build_id
 from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
@@ -37,7 +39,7 @@ from weather_data_feed.ws_incremental_book import canonical_ws_frame_id
 
 SCHEMA_VERSION = "weather_market_books_ws_increment_v1"
 HEALTH_SCHEMA_VERSION = "weather_market_books_combined_health_v1"
-SELECTOR_VERSION = "tiered_hot_strip_plus_atomic_full_ladder_demand_v7"
+SELECTOR_VERSION = "tiered_hot_strip_plus_atomic_full_ladder_demand_v8"
 PRODUCER = "weather_data_feed_service.market_books_ws"
 PRODUCER_BUILD_ID, PRODUCER_BUILD_ID_BASIS = producer_build_id(
     Path(__file__).resolve().parents[1]
@@ -81,16 +83,7 @@ def _utc_text(value: datetime | None = None) -> str:
 
 
 def _parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -444,6 +437,7 @@ def apply_market_capture_demands(
         "rule_lawyer.dispute_repricing",
         "reheat_risk.current_yes",
         "weather_amsterdam_wcir_frozen_v2",
+        "weather.metar_ws_event_repricing",
     ),
 ) -> Selection:
     """Union a revision-centered local strip into the selective WS set.
@@ -454,10 +448,13 @@ def apply_market_capture_demands(
     """
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    market_rows_by_token: dict[str, dict[str, Any]] = {}
     allowed_city_set = set(allowed_cities or ())
     for source in market_payload.get("records") or []:
         if not isinstance(source, dict) or str(source.get("extreme_kind") or "max") != "max":
             continue
+        if source.get("token_id"):
+            market_rows_by_token[str(source["token_id"])] = source
         key = (str(source.get("city") or ""), str(source.get("event_date") or ""))
         grouped[key].append(source)
     resolved: list[dict[str, Any]] = []
@@ -518,7 +515,21 @@ def apply_market_capture_demands(
             else:
                 active_demand_tokens.add(token_id)
                 selection.tokens.add(token_id)
-                token_row = dict(selection.token_rows.get(token_id) or {})
+                token_row = dict(market_rows_by_token.get(token_id) or {})
+                token_row.update(selection.token_rows.get(token_id) or {})
+                metadata = demand.get("metadata")
+                if isinstance(metadata, Mapping):
+                    for source_key, target_key in (
+                        ("city", "city"),
+                        ("target_date", "event_date"),
+                        ("event_date", "event_date"),
+                        ("bracket", "bracket"),
+                        ("outcome", "outcome"),
+                    ):
+                        if metadata.get(source_key) is not None:
+                            token_row[target_key] = metadata[source_key]
+                    if token_row.get("outcome") is None and metadata.get("side") is not None:
+                        token_row["outcome"] = str(metadata["side"]).lower()
                 demand_ids = {
                     str(value)
                     for value in token_row.get("capture_demand_ids") or ()
@@ -813,6 +824,8 @@ class HourlyWriter:
         self.hour = ""
         self.path: Path | None = None
         self.fd: int | None = None
+        self.line_number = 0
+        self.last_line_number: int | None = None
 
     def write(self, payload: dict[str, Any], now_utc: datetime) -> Path:
         hour = now_utc.strftime("%Y%m%d_%H")
@@ -827,6 +840,7 @@ class HourlyWriter:
                 0o644,
             )
             self.hour = hour
+            self.line_number = 0
         encoded = (
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
         ).encode("utf-8")
@@ -834,6 +848,8 @@ class HourlyWriter:
         while pending:
             written = os.write(self.fd, pending)
             pending = pending[written:]
+        self.line_number += 1
+        self.last_line_number = self.line_number
         return self.path
 
     def close(self) -> None:
@@ -916,6 +932,18 @@ class Collector:
         self.archive_path: str | None = None
         self.writer = HourlyWriter(self.output_root)
         self.subscription_writer = SubscriptionEpochWriter(self.output_root)
+        evidence_root = (
+            Path(args.execution_evidence_output_root)
+            if args.execution_evidence_output_root
+            else self.output_root / "execution_evidence_v1"
+        )
+        self.execution_evidence = ExecutionEvidenceRecorder(
+            evidence_root,
+            min_periodic_interval_sec=args.execution_evidence_min_interval_sec,
+            checkpoint_grace_sec=args.execution_evidence_checkpoint_grace_sec,
+            daily_budget_bytes=args.execution_evidence_daily_budget_bytes,
+            enabled=not args.disable_execution_evidence,
+        )
         self.connection_sequence = 0
         self.subscription_epoch_id: str | None = None
         self.subscription_manifest_path: str | None = None
@@ -949,6 +977,18 @@ class Collector:
         )
         self.connected = False
         self.connection_error: str | None = None
+
+    def _execution_evidence_call(
+        self, method_name: str, *args: Any, **kwargs: Any
+    ) -> Any:
+        """Keep the derived evidence layer isolated from the raw WS owner."""
+
+        try:
+            method = getattr(self.execution_evidence, method_name)
+            return method(*args, **kwargs)
+        except Exception as exc:
+            self.execution_evidence.note_integration_error(exc)
+            return None
 
     def _reset_day(self, now_utc: datetime) -> None:
         today = now_utc.date().isoformat()
@@ -1003,6 +1043,7 @@ class Collector:
                     "rule_lawyer.dispute_repricing",
                     "reheat_risk.current_yes",
                     "weather_amsterdam_wcir_frozen_v2",
+                    "weather.metar_ws_event_repricing",
                 ) + (
                     ("polymarket_alpha.p0_offline",)
                     if self.alpha_capture_demand_inbox is not None
@@ -1010,6 +1051,10 @@ class Collector:
                 ),
             )
         self.invalidation_state = self.selection.invalidation_state
+        self._execution_evidence_call(
+            "register_capture_demands",
+            self.selection.capture_demands,
+        )
         _publish_json_atomic(
             self.state_path,
             {
@@ -1027,12 +1072,19 @@ class Collector:
         *,
         reason: str,
     ) -> dict[str, Any]:
+        started_wall_ns = time.time_ns()
+        started_monotonic_ns = time.monotonic_ns()
+        started_at_utc = datetime.fromtimestamp(
+            started_wall_ns / 1_000_000_000,
+            tz=timezone.utc,
+        )
         self.connection_sequence += 1
         token_rows = {
             token: {
                 key: self.selection.token_rows.get(token, {}).get(key)
                 for key in (
                     "city", "event_date", "bracket", "outcome", "condition_id",
+                    "market_id",
                     "strategy_key", "capture_demand_id", "capture_demand_ids",
                     "capture_universe",
                 )
@@ -1054,6 +1106,14 @@ class Collector:
                 "weather_market_capture_demand_v1",
                 "polymarket_capture_demand_v1",
             ],
+            "execution_evidence": {
+                "enabled": not self.args.disable_execution_evidence,
+                "schema_version": "weather_public_book_evidence_v1",
+                "min_periodic_interval_sec": self.args.execution_evidence_min_interval_sec,
+                "checkpoint_grace_sec": self.args.execution_evidence_checkpoint_grace_sec,
+                "daily_budget_bytes": self.args.execution_evidence_daily_budget_bytes,
+                "semantics": "public_book_and_tape_not_fill_or_queue",
+            },
         }
         token_map_id = hashlib.sha256(
             json.dumps(token_rows, sort_keys=True, separators=(",", ":")).encode()
@@ -1067,7 +1127,7 @@ class Collector:
         identity_basis = {
             "producer_build_id": PRODUCER_BUILD_ID,
             "selector_version": SELECTOR_VERSION,
-            "started_at_utc": _utc_text(now_utc),
+            "started_at_utc": _utc_text(started_at_utc),
             "connection_sequence": self.connection_sequence,
             "token_map_id": token_map_id,
             "capture_policy_id": capture_policy_id,
@@ -1083,7 +1143,9 @@ class Collector:
             "selector_version": SELECTOR_VERSION,
             "subscription_epoch_id": epoch_id,
             "previous_subscription_epoch_id": self.subscription_epoch_id,
-            "started_at_utc": _utc_text(now_utc),
+            "started_at_utc": _utc_text(started_at_utc),
+            "started_wall_ns": started_wall_ns,
+            "started_monotonic_ns": started_monotonic_ns,
             "reason": reason,
             "connection_sequence": self.connection_sequence,
             "token_ids": sorted(tokens),
@@ -1098,9 +1160,12 @@ class Collector:
             "burst_cities": self.selection.burst_cities,
             "capture_demands": self.selection.capture_demands,
         }
+        # Keep the caller's UTC shard contract for deterministic replay/tests;
+        # the exact transport-adjacent clock is carried inside the payload.
         path = self.subscription_writer.write(payload, now_utc)
         self.subscription_epoch_id = epoch_id
         self.subscription_manifest_path = str(path)
+        self._execution_evidence_call("activate_epoch", payload)
         return payload
 
     def publish_health(self, now_utc: datetime, *, status_override: str | None = None) -> None:
@@ -1109,6 +1174,21 @@ class Collector:
             now_utc=now_utc,
             max_age_sec=self.args.rest_max_age_sec,
         )
+        execution_evidence = self._execution_evidence_call("health", now_utc)
+        if not isinstance(execution_evidence, dict):
+            execution_evidence = {
+                "schema_version": "weather_execution_evidence_health_v1",
+                "status": "degraded",
+                "enabled": not self.args.disable_execution_evidence,
+                "last_integration_error": self.execution_evidence.last_integration_error,
+                "semantics": {
+                    "public_trade_print": "exchange match not own fill",
+                    "public_book": "quote state not queue or execution",
+                    "execution_evidence": (
+                        "requires decision plus private order lifecycle join"
+                    ),
+                },
+            }
         budget_exhausted = self.day_payload_bytes >= self.args.daily_payload_budget_bytes
         if status_override:
             status = status_override
@@ -1174,6 +1254,7 @@ class Collector:
                 "archive_path": self.archive_path,
                 "rest_collector": rest,
                 "market_proxy_configured": bool(self.args.market_proxy),
+                "execution_evidence": execution_evidence,
             },
         )
 
@@ -1209,6 +1290,7 @@ class Collector:
                     retry_sec = min(30.0, retry_sec * 2.0)
         finally:
             self.writer.close()
+            self.execution_evidence.close()
 
     async def _run_connection(self, initial_tokens: set[str]) -> None:
         connect_kwargs: dict[str, Any] = {
@@ -1244,7 +1326,15 @@ class Collector:
                     raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
                 except asyncio.TimeoutError:
                     raw = None
-                now_utc = _utc_now()
+                if raw is not None:
+                    transport_received_wall_ns = time.time_ns()
+                    transport_received_monotonic_ns = time.monotonic_ns()
+                    now_utc = datetime.fromtimestamp(
+                        transport_received_wall_ns / 1_000_000_000,
+                        tz=timezone.utc,
+                    )
+                else:
+                    now_utc = _utc_now()
                 self._reset_day(now_utc)
                 if raw is not None:
                     raw_bytes = raw if isinstance(raw, bytes) else raw.encode()
@@ -1254,13 +1344,14 @@ class Collector:
                         message = raw.decode(errors="replace") if isinstance(raw, bytes) else raw
                     message_tokens = _message_token_ids(message)
                     if not message_tokens or message_tokens.intersection(subscribed):
-                        received_ns = time.time_ns()
                         record = {
                             "schema_version": SCHEMA_VERSION,
                             "producer": PRODUCER,
                             "producer_build_id": PRODUCER_BUILD_ID,
                             "received_at_utc": _utc_text(now_utc),
-                            "received_at_ns": received_ns,
+                            "received_at_ns": transport_received_wall_ns,
+                            "transport_received_wall_ns": transport_received_wall_ns,
+                            "transport_received_monotonic_ns": transport_received_monotonic_ns,
                             "subscription_token_count": len(subscribed),
                             "subscription_epoch_id": self.subscription_epoch_id,
                             "selector_version": SELECTOR_VERSION,
@@ -1270,6 +1361,11 @@ class Collector:
                         record["raw_frame_id"] = canonical_ws_frame_id(record)
                         archive_path = self.writer.write(record, now_utc)
                         self.archive_path = str(archive_path)
+                        record["_raw_path"] = str(archive_path)
+                        record["_line_number"] = self.writer.last_line_number
+                        self._execution_evidence_call(
+                            "ingest", record, now_utc=now_utc
+                        )
                         self.session_payload_bytes += len(raw_bytes)
                         self.day_payload_bytes += len(raw_bytes)
                         self.session_frames += 1
@@ -1359,6 +1455,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--health-interval-sec", type=float, default=10.0)
     parser.add_argument("--rest-max-age-sec", type=float, default=420.0)
     parser.add_argument("--daily-payload-budget-bytes", type=int, default=3_000_000_000)
+    parser.add_argument("--execution-evidence-output-root", default="")
+    parser.add_argument(
+        "--execution-evidence-min-interval-sec", type=float, default=10.0
+    )
+    parser.add_argument(
+        "--execution-evidence-checkpoint-grace-sec", type=float, default=20.0
+    )
+    parser.add_argument(
+        "--execution-evidence-daily-budget-bytes", type=int, default=1_000_000_000
+    )
+    parser.add_argument("--disable-execution-evidence", action="store_true")
     parser.add_argument("--select-once", action="store_true")
     return parser
 

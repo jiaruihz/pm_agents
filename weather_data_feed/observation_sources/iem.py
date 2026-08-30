@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from weather_clock_contract import local_wall_time_to_utc
+
 
 IEM_ASOS_API = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
 DEFAULT_IEM_REPORT_TYPES = ("1", "2", "3", "4")
@@ -87,7 +89,11 @@ def parse_iem_asos_records(
         if raw_temp in {None, "", "M"} or not raw_ts:
             continue
         try:
-            dt = datetime.fromisoformat(str(raw_ts).replace(" ", "T")).replace(tzinfo=timezone.utc)
+            dt = local_wall_time_to_utc(
+                str(raw_ts).replace(" ", "T"),
+                timezone_name="Etc/UTC",
+                field="iem_valid_utc_wall_time",
+            )
             temp = float(raw_temp)
         except ValueError:
             continue

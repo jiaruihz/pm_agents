@@ -14,6 +14,7 @@ import numpy as np
 
 from weather_data_feed.input_catalog import JsonlInputCatalog
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict
+from weather_clock_contract import parse_utc
 
 from .core import CityScore, InputNotReady, iter_compatible_evaluations
 
@@ -24,10 +25,9 @@ EPS = 1e-8
 
 
 def _parse_ts(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    parsed = parse_utc(value, field="tokyo_probability_timestamp")
+    assert parsed is not None
+    return parsed
 
 
 def _sha256(path: Path) -> str:

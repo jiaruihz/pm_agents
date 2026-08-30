@@ -24,6 +24,7 @@ from weather_data_feed.ws_incremental_book import (
     canonical_ws_frame_id,
     extract_market_trade_prints,
 )
+from weather_clock_contract import parse_utc
 
 
 SCHEMA_VERSION = "forecast_repricing_tape_execution_v2"
@@ -39,11 +40,8 @@ def weather_fee_per_share(price: float) -> float:
 
 
 def _timestamp(value: str) -> float:
-    from datetime import datetime
-
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
+    parsed = parse_utc(value, field="forecast_repricing_tape_clock")
+    assert parsed is not None
     return parsed.timestamp()
 
 
@@ -629,8 +627,11 @@ def merge_raw_frames(
 
 
 def _physical_paths(root: Path, start_utc: str, end_utc: str) -> list[Path]:
-    start = datetime.fromisoformat(start_utc.replace("Z", "+00:00")).date()
-    end = datetime.fromisoformat(end_utc.replace("Z", "+00:00")).date()
+    start_clock = parse_utc(start_utc, field="tape_start_utc")
+    end_clock = parse_utc(end_utc, field="tape_end_utc")
+    assert start_clock is not None and end_clock is not None
+    start = start_clock.date()
+    end = end_clock.date()
     output: list[Path] = []
     current = start
     while current <= end:

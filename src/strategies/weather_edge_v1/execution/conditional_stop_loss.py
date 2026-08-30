@@ -15,15 +15,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
+from weather_clock_contract import parse_utc
+
 
 def _parse_utc(value: Any) -> datetime:
-    text = str(value or "").strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    parsed = datetime.fromisoformat(text)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    parsed = parse_utc(value, field="stop_loss_event_clock")
+    assert parsed is not None
+    return parsed
 
 
 def _stable_id(payload: Mapping[str, Any]) -> str:

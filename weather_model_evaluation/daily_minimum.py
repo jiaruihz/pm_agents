@@ -18,6 +18,8 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from weather_clock_contract import parse_utc_or_none
+
 
 SCHEMA_VERSION = "weather_daily_minimum_development_v1"
 MECHANISM_ID = "daily_low_temperature_exact_bracket_v1"
@@ -25,13 +27,7 @@ LABEL_BASIS = "observation_cache_intraday_min_proxy_not_settlement"
 
 
 def _parse_ts(value: Any) -> datetime | None:
-    try:
-        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return parse_utc_or_none(value, field="daily_minimum_timestamp")
 
 
 def _jsonl_rows(paths: Iterable[Path]) -> Iterable[dict[str, Any]]:

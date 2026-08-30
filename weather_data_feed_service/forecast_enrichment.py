@@ -56,6 +56,7 @@ from weather_data_feed_service.io_utils import (
     write_json,
     write_latest_and_daily_jsonl,
 )
+from weather_clock_contract import parse_utc_or_none
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_enrichment"
@@ -65,15 +66,7 @@ DEFAULT_OPEN_METEO_REFRESH_SEC = int(
 
 
 def _parse_cache_utc(value: Any) -> datetime | None:
-    if value is None or value == "":
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value)
 
 
 def _taf_valid_time(value: Any) -> str | None:
@@ -929,6 +922,7 @@ def fetch_city_forecast_enrichment(
                 ),
                 first_peak_hour=int(first_peak_hour),
                 last_peak_hour=int(last_peak_hour),
+                timezone_name=cfg.timezone_name,
             )
         except Exception as exc:  # noqa: BLE001
             taf_result = _failed_result("aviationweather_taf", exc)

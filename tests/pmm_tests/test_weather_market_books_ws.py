@@ -468,6 +468,47 @@ def test_amsterdam_wcir_direct_token_demand_uses_same_ws_owner() -> None:
     assert selected.token_rows["amsterdam-no-22"]["capture_universe"] == "shared_direct_token"
 
 
+def test_metar_event_direct_token_demand_keeps_us_market_lineage() -> None:
+    demand = CaptureDemand.create(
+        consumer_id="weather_metar_ws_research",
+        strategy_key="weather.metar_ws_event_repricing",
+        condition_id="condition-miami-90",
+        token_id="Miami-90-no",
+        reason="metar_first_seen_market_repricing",
+        priority="P0",
+        requested_at_utc="2026-08-09T02:59:00Z",
+        expires_at_utc="2026-08-09T03:04:30Z",
+        desired_transport="REST_WS",
+        requested_checkpoints_seconds=(0, 15, 30, 60, 120, 300),
+        trigger_event_id="metar-event-1",
+        metadata={
+            "city": "Miami",
+            "target_date": "2026-08-09",
+            "bracket": "90",
+            "side": "NO",
+        },
+    ).to_dict()
+    selection = Selection(
+        tokens=set(), token_rows={}, city_token_counts={}, active_brackets={},
+        grace_brackets={}, scheduled_cities=[], research_cities=[], burst_cities=[],
+        missing_observation_cities=[], invalidation_state={},
+    )
+
+    selected = apply_market_capture_demands(
+        selection,
+        market_payload=_market_payload(city="Miami"),
+        demands=[demand],
+    )
+
+    assert selected.tokens == {"Miami-90-no"}
+    row = selected.token_rows["Miami-90-no"]
+    assert row["city"] == "Miami"
+    assert row["event_date"] == "2026-08-09"
+    assert row["bracket"] == "90"
+    assert row["outcome"] == "no"
+    assert row["strategy_key"] == "weather.metar_ws_event_repricing"
+
+
 def test_core_carry_full_ladder_demand_is_allowed_by_shared_ws_owner() -> None:
     demand = CaptureDemand.create(
         consumer_id="current_yes_core_carry_tiny_live_v2",
@@ -687,8 +728,84 @@ def test_collector_publishes_append_only_subscription_epoch_lineage(tmp_path) ->
     rows = [json.loads(line) for line in path.read_text().splitlines()]
     assert rows == [first, second]
     assert first["schema_version"] == "weather_market_books_ws_subscription_epoch_v2"
+    assert isinstance(first["started_wall_ns"], int)
+    assert isinstance(first["started_monotonic_ns"], int)
     assert first["token_map_id"]
     assert first["capture_policy_id"]
     assert first["subscription_set_id"]
     assert second["previous_subscription_epoch_id"] == first["subscription_epoch_id"]
-    apply_market_capture_demands,
+    assert first["capture_policy"]["execution_evidence"]["enabled"] is True
+    assert collector.execution_evidence.engine.epoch_id == second["subscription_epoch_id"]
+    collector.execution_evidence.close()
+
+
+def test_collector_health_states_public_market_evidence_semantics(tmp_path) -> None:
+    args = build_parser().parse_args(
+        [
+            "--market-books-latest", str(tmp_path / "latest.json"),
+            "--observation-cache", str(tmp_path / "observations.json"),
+            "--source-events-jsonl", str(tmp_path / "sources.jsonl"),
+            "--output-root", str(tmp_path / "ws"),
+            "--health-path", str(tmp_path / "health.json"),
+        ]
+    )
+    collector = Collector(args)
+
+    collector.publish_health(NOW)
+
+    health = json.loads((tmp_path / "health.json").read_text())
+    assert health["execution_evidence"]["semantics"] == {
+        "public_trade_print": "exchange match not own fill",
+        "public_book": "quote state not queue or execution",
+        "execution_evidence": "requires decision plus private order lifecycle join",
+    }
+    collector.execution_evidence.close()
+
+
+def test_derived_evidence_fault_does_not_rollback_raw_epoch(
+    tmp_path, monkeypatch
+) -> None:
+    args = build_parser().parse_args(
+        [
+            "--market-books-latest", str(tmp_path / "latest.json"),
+            "--observation-cache", str(tmp_path / "observations.json"),
+            "--source-events-jsonl", str(tmp_path / "sources.jsonl"),
+            "--output-root", str(tmp_path / "ws"),
+            "--health-path", str(tmp_path / "health.json"),
+        ]
+    )
+    collector = Collector(args)
+    collector.selection = Selection(
+        tokens={"yes-token"},
+        token_rows={"yes-token": {"city": "Helsinki"}},
+        city_token_counts={"Helsinki": 1},
+        active_brackets={"Helsinki": ["22"]},
+        grace_brackets={"Helsinki": []},
+        scheduled_cities=["Helsinki"],
+        research_cities=[],
+        burst_cities=[],
+        missing_observation_cities=[],
+        invalidation_state={},
+    )
+
+    def fail_derived(_payload) -> None:
+        raise RuntimeError("derived writer unavailable")
+
+    monkeypatch.setattr(collector.execution_evidence, "activate_epoch", fail_derived)
+    payload = collector.publish_subscription_epoch(
+        {"yes-token"}, NOW, reason="connect"
+    )
+
+    epoch_path = (
+        tmp_path
+        / "ws"
+        / "subscription_epochs"
+        / "subscription_epochs_2026-08-09.jsonl"
+    )
+    assert json.loads(epoch_path.read_text()) == payload
+    assert collector.subscription_epoch_id == payload["subscription_epoch_id"]
+    assert collector.execution_evidence.integration_errors == 1
+    assert "derived writer unavailable" in (
+        collector.execution_evidence.last_integration_error or ""
+    )
+    collector.execution_evidence.close()

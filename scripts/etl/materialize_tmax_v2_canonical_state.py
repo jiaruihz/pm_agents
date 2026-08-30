@@ -17,7 +17,7 @@ import re
 import sqlite3
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
 
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from src.strategies.runtime.production import load_production_spec
+from weather_clock_contract import local_wall_time_to_utc, parse_utc_or_none
 
 
 _PRODUCTION = load_production_spec()
@@ -58,18 +59,7 @@ def utc_now() -> str:
 
 
 def parse_utc(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return None
-    return parsed.astimezone(timezone.utc)
+    return parse_utc_or_none(value, field="tmax_v2_clock")
 
 
 def canonical_ts(value: Any) -> str | None:
@@ -153,20 +143,23 @@ def ladder_market_metadata(records: list[dict[str, Any]]) -> dict[str, Any]:
 def normalize_hourly_curve_times(
     curve: list[dict[str, Any]], forecast_timezone: str | None, utc_offset_seconds: int | None
 ) -> tuple[list[dict[str, Any]], str, str | None]:
-    tzinfo = None
+    timezone_name = None
     basis = None
     missing_reasons: list[str] = []
     if forecast_timezone:
         try:
-            tzinfo = ZoneInfo(forecast_timezone)
-            basis = "source_time_local_plus_forecast_timezone"
+            ZoneInfo(forecast_timezone)
+            timezone_name = forecast_timezone
+            basis = "source_time_local_plus_iana_forecast_timezone"
         except ZoneInfoNotFoundError:
             missing_reasons.append("invalid_forecast_timezone")
-    if tzinfo is None and utc_offset_seconds is not None:
-        tzinfo = timezone(timedelta(seconds=utc_offset_seconds))
-        basis = "source_time_local_plus_forecast_utc_offset_seconds"
-    if tzinfo is None:
-        missing_reasons.append("missing_timezone_and_utc_offset")
+    if timezone_name is None:
+        missing_reasons.append("missing_iana_forecast_timezone")
+        missing_reasons.append(
+            "missing_timezone_and_utc_offset"
+            if utc_offset_seconds is None
+            else "fixed_offset_not_accepted_without_iana_timezone"
+        )
 
     normalized: list[dict[str, Any]] = []
     utc_count = 0
@@ -175,12 +168,18 @@ def normalize_hourly_curve_times(
         local_value = text_value(point.get("valid_time_local") or point.get("time_local"))
         output["valid_time_local"] = local_value
         output["valid_time_utc"] = None
-        if local_value and tzinfo is not None:
+        if local_value and timezone_name is not None:
             try:
-                local_dt = datetime.fromisoformat(local_value)
-                if local_dt.tzinfo is None:
-                    local_dt = local_dt.replace(tzinfo=tzinfo)
-                output["valid_time_utc"] = canonical_ts(local_dt.astimezone(timezone.utc))
+                parsed_utc = parse_utc_or_none(
+                    local_value, field="forecast_curve_valid_time"
+                )
+                if parsed_utc is None:
+                    parsed_utc = local_wall_time_to_utc(
+                        local_value,
+                        timezone_name=timezone_name,
+                        field="forecast_curve_valid_time_local",
+                    )
+                output["valid_time_utc"] = canonical_ts(parsed_utc)
                 utc_count += int(output["valid_time_utc"] is not None)
             except ValueError:
                 missing_reasons.append("invalid_curve_local_time")
