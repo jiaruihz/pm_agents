@@ -4,6 +4,7 @@ schema_version: pm_agents_project_structure_v1
 # batch. The checker rejects new unclassified roots while migration stays
 # incremental and import-compatible.
 tracked_root_directories:
+  .agents: agent_client_adapters
   .codex: agent_configuration
   .github: repository_automation
   chatgpt-web-bot: local_tool_project
