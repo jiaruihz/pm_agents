@@ -358,7 +358,7 @@ def test_every_business_runtime_has_controller_start_contract():
     assert run_capture.recovery_policy == "safe"
 
 
-def test_current_migrated_runtimes_remain_non_live_and_dormant_d1_is_not_desired():
+def test_current_migrated_runtimes_remain_non_live_and_d1_shadow_is_zero_notional():
     spec = load_production_spec()
     migrated_ids = {
         "low_price_yes_integrated_tail_shadow_v2",
@@ -379,10 +379,28 @@ def test_current_migrated_runtimes_remain_non_live_and_dormant_d1_is_not_desired
     ]
     actual_ids = {item.instance_id for item in spec.managed_runtimes}
 
-    assert {
-        "d1_multisource_consensus_shadow_v1",
-        "europe_d1_distance2_dual_no_shadow_v1",
-    }.isdisjoint(actual_ids)
+    assert "d1_multisource_consensus_shadow_v1" not in actual_ids
+    d1_shadow = next(
+        item
+        for item in spec.managed_runtimes
+        if item.instance_id == "europe_d1_distance2_dual_no_shadow_v1"
+    )
+    assert d1_shadow.role == "shadow"
+    assert d1_shadow.execution_mode == "zero_notional_shadow"
+    assert d1_shadow.expected_live is False
+    assert d1_shadow.recovery_policy == "safe"
+    assert d1_shadow.release_id == "europe_d1_distance2_shadow"
+    assert dict(d1_shadow.expected_health_fields) == {
+        "strategy_instance": "europe_d1_distance2_dual_no_shadow_v1",
+        "execution_mode": "zero_notional_shadow",
+        "orders_submitted": 0,
+        "actual_notional_usd": 0.0,
+        "joint_market_probability_max": 0.1,
+    }
+    assert d1_shadow.dependencies == (
+        "weather_data_feed_jrs",
+        "weather_market_books",
+    )
     assert len(migrated) == len(migrated_ids)
     assert all(item.expected_live is False for item in migrated)
     assert all(item.recovery_policy == "safe" for item in migrated)

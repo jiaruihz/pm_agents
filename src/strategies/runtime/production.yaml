@@ -103,6 +103,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_tail/b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
     expected_repo_sha: b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
     runtime_bindings: [operational_venv, canonical_db]
+  - release_id: europe_d1_distance2_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/0ed49db4602ab7410207070dc0e03da6a11d6c57
+    expected_repo_sha: 0ed49db4602ab7410207070dc0e03da6a11d6c57
+    runtime_bindings: [operational_venv]
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/29d2045fd9d748f72b5231b462e1734023071743
     expected_repo_sha: 29d2045fd9d748f72b5231b462e1734023071743
@@ -526,9 +530,29 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations, weather_knmi_open_data_jrs]
     recovery_policy: guarded_live
 
-  # Historical D1 multisource/distance-2 shadows are dormant research evidence,
-  # not current production desired state. Their code and dated artifacts remain
-  # available for replay, but the controller must not recreate or health-gate them.
+  # The old multisource D1 shadow remains dormant research evidence. The
+  # distance-2 dual-NO instance below is a new zero-notional frozen forward;
+  # it records first-lock evidence and has no venue/order path.
+  - instance_id: europe_d1_distance2_dual_no_shadow_v1
+    tmux_session: europe_d1_distance2_dual_no_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: europe_d1_distance2_shadow
+    start_script: scripts/ops/start_europe_d1_distance2_dual_no_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_dual_no_shadow_v1/latest.json
+    health_format: json
+    max_health_age_sec: 900
+    startup_grace_sec: 240
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_distance2_dual_no_shadow_v1
+      execution_mode: zero_notional_shadow
+      orders_submitted: 0
+      actual_notional_usd: 0.0
+      joint_market_probability_max: 0.1
+    dependencies: [weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
 
   # Zero-notional/research services still use their original implementation,
   # but their exact production entrypoint and health identity are controlled
