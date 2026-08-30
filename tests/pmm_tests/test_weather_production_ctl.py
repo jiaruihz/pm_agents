@@ -131,8 +131,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/"
             "capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/"
             "us_fast_weather_lab_metarws_pro_market_20260830/"
-            "market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/"
-            "output/cross_no_v2_metar_v1/capture_demands.jsonl"
+            "market_capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "96",
