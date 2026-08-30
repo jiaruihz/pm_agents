@@ -125,25 +125,19 @@ set -e
 if [[ "$MANIFEST_RC" -ne 0 ]]; then
   # Immediately before this process exists, its own health file is allowed to
   # be unreadable. No other production critical is tolerated.
-  "$PROJECT_DIR/.venv/bin/python" - "$PRESTART_MANIFEST" <<'PY'
+  "$PROJECT_DIR/.venv/bin/python" - "$PRESTART_MANIFEST" "$PROJECT_DIR" <<'PY'
 import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, sys.argv[2])
+from scripts.ops.weather_cross_no_v2_metar import validate_isolated_prestart_manifest
+
 payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-critical = [row for row in payload.get("findings", []) if row.get("severity") == "critical"]
-if not critical:
-    raise SystemExit("strict manifest failed without a declared critical finding")
-for row in critical:
-    if row.get("kind") != "runtime_health_contract_mismatch":
-        raise SystemExit(f"unrelated prestart manifest critical: {row.get('kind')}")
-    runtimes = (row.get("detail") or {}).get("runtimes") or []
-    if not runtimes or any(
-        item.get("instance_id") != "cross_no_v2_metar_v1"
-        or item.get("status") != "unreadable"
-        for item in runtimes
-    ):
-        raise SystemExit("prestart health exception is not isolated to cross_no_v2_metar_v1")
+try:
+    validate_isolated_prestart_manifest(payload)
+except ValueError as exc:
+    raise SystemExit(str(exc)) from exc
 PY
 fi
 

@@ -163,6 +163,32 @@ def test_explicit_missing_raw_topic_is_not_synthesized(tmp_path: Path):
     assert "source_topic_mismatch_or_missing" in row["blockers"]
 
 
+def test_prestart_manifest_allows_only_narrow_self_health_schema_transition():
+    finding = {
+        "severity": "critical",
+        "kind": "runtime_health_contract_mismatch",
+        "detail": {
+            "runtimes": [{
+                "instance_id": "cross_no_v2_metar_v1",
+                "status": "mismatch",
+                "mismatches": [
+                    {"field": "code_identity"},
+                    {"field": "source_attribution_schema_version"},
+                ],
+            }]
+        },
+    }
+    cross_no_v2.validate_isolated_prestart_manifest({"findings": [finding]})
+    bad = json.loads(json.dumps(finding))
+    bad["detail"]["runtimes"][0]["mismatches"].append({"field": "live_enabled"})
+    try:
+        cross_no_v2.validate_isolated_prestart_manifest({"findings": [bad]})
+    except ValueError as exc:
+        assert "outside" in str(exc)
+    else:
+        raise AssertionError("unrelated live health mismatch must fail closed")
+
+
 def test_fail_closed_on_invalid_clock_and_missing_depth(tmp_path: Path):
     bad = event("metar_ws_datis", "bad2", 27.8, valid=False)
     result = run(tmp_path, [event("metar_ws_metar", "official1", 26.7), bad])
