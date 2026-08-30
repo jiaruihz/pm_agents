@@ -1,8 +1,8 @@
 # Weather-first Market Making：Stage 0A–W2.1 执行总账
 
-Status: `current-source / Selective Maker V2.1 zero-notional ready / profitability INCONCLUSIVE / no-live-change`
+Status: `current-source / Selective Maker V2.1 zero-notional forward RUNNING (warming until 2026-08-31T00:00:00Z) / profitability INCONCLUSIVE / no micro-live authority`
 
-Updated: `2026-08-30`
+Updated: `2026-08-31`
 
 Scope: Weather execution truth、defensive inventory lifecycle、weather-alpha acquisition 的 maker/taker/skip 路由；不包含 W3 连续双边报价或 generic MM live。
 
@@ -305,21 +305,29 @@ V2.1 首次 `20260830T113000Z` artifact 暴露出 packet revision conflict 未�
 | 字段 | 冻结值 |
 |---|---|
 | host / process owner | Mac current production / `weather_production_ctl.py` |
-| release / instance / session | `weather_first_selective_maker_v2_1@73f7e603505829158f64a78ed8049101fc6f0b2c` / `weather_first_selective_maker_v2_1_shadow` / 同名 canonical JRS tmux session |
+| release / instance / session | `weather_first_selective_maker_v2_1@6690b445e0737da6220c1c665cc8d1f9b40b59e0` / `weather_first_selective_maker_v2_1_shadow` / `desired_state=running`，canonical JRS session present |
 | execution mode | `zero_notional_shadow`；`live_authority=false`，notional、TradeIntent、plan、order、fill、exchange call 恒为 0 |
 | upstream | `current_yes_core_carry_market_state_shadow_v2`、`current_yes_core_carry_tiny_live_v2` decision packets、`weather_market_books` |
-| formal forward start | `2026-08-31T00:00:00Z`；此前只报 `warming`，不回填旧行 |
+| formal forward start | 预冻结为 `2026-08-31T00:00:00Z`；此前只报 `warming`，不回填旧行。若 collector 与 observer 未能在该边界前健康上线，必须提交一个新的未来边界，不允许延迟启动后补写旧行 |
 | denominator | 每个 append-only `first_positive × t30` signal；unknown、缺 book、缺 packet、skip 与 non-fill 均保留 |
 | state | 仅严格因果 `place_probe_maker + post_trigger_acute_window_admitted_probe + 30s` 映射 transient；其他为 unknown |
 | sizing / price | maker 与 taker 使用同一 token、同一 route clock、同一 venue minimum shares；价格上限由 frozen fair value、uncertainty、inventory risk 和 MERE 共同决定 |
-| fee / incentive | taker fee 只保存带 provenance 的 forecast；maker rebate、LP 与 holding reward 在 realized payout 前一律记 0 |
+| fee / incentive | per-market CLOB fee metadata 完整时才计算主口径；缺失或畸形时 fail closed。Weather 类别 fallback 只做 typed sensitivity；maker rebate、LP 与 holding reward 在 realized payout 前一律记 0 |
 | dependencies | `weather_data_feed_jrs`、`current_yes_core_carry_tiny_live_v2`、`current_yes_core_carry_market_state_shadow_v2`、`weather_market_books` |
 | output root | `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1` |
 | rollback | controller 精确 stop 本 safe shadow；不停止上游，不撤改 live 单，不删除 append-only raw |
 
-该 runtime 对同一 signal 只允许一次有效 append；后续 revision 保留 lineage。signal/token/model probability identity 变化时 fail closed，不用 last-wins 静默覆盖。route clock 之后才 available 的 REST/WS book 禁止进入本行；book age 超过 5 秒、epoch/gap/parity 不完整或单边盘口均保留 blocker。
+截至 `2026-08-30T16:07:24Z`，hardened runner 与 shared collector 均运行 immutable SHA `6690b445e0737da6220c1c665cc8d1f9b40b59e0`；runner 与 collector 文件 SHA-256 分别为 `f14553522cc428ae4fe953f5ed313750dbafc1ed95d4532ccbc74b3f88237c82`、`bc5aa613f05f57eed8686f5f8ae14084e4304803120787564b3db592d51dbce0`。本轮最终 production/config suite 为 `163 passed`，独立只读 review findings 已修复并复测。activation commit 是 `c2f90c06`；controller reconcile 只启动了这一个 `expected_live=false` observer，return code 0、`converged=true`、`final_issues=[]`。启动后的 strict manifest compare exit 0、无 critical finding，`weather_market_books` 与本 observer 的 health contracts 均为 healthy，既有 canonical session 没有丢失。
 
-decision packet 比 t30 action 更早出现，因此 capture demand 在 packet 首次可见时即发出，而不是等到 t30 action 落盘；共享 market-books 的原始记录同时按 capture identity 复制进本 runtime 的 append-only `book_snapshots.jsonl`。t30 route 只从这份 journal 中选择 `available_at <= route_clock` 的最后一帧，避免 action 延迟造成 future-book look-ahead。
+shared `weather_market_books` 在最终 preflight 时已经收敛到 `6690b445...`，因此没有再次执行会影响共享消费者的手工 restart。collector health 为 `ok/connected`，producer build 为 `6690b445...`，V2.1 `capture_demands.jsonl` 已进入实际 loaded shared inbox，inbox errors 为空；当前 subscription epoch 为 `a5a687540e21117a84095c00add1c7ab6b01550fc3664a9fe37723df35502a45`，execution-evidence health 为 `ok`、missed requested checkpoints 为 0。个别 token 的 best-quote parity mismatch 与 reconstruction error 仍按 token 显式 blocked，不能因 collector 总体 `ok` 而纳入 evidence 分子。
+
+observer 当前按预期处于 `warming`：看到 32 条 boundary 前 action，但 denominator、decision、demand、REST snapshot、capture receipt 与 checkpoint receipt 均为 0；`missing_inputs=[]`、revision conflicts 为空，`live_authority=false`、`venue_call_allowed=false`，actual notional、TradeIntent、order、fill、exchange call 全部为 0。旧 `73f7e603...` observer 已在切换前由 controller 精确停止；本次没有重启 live runner，也没有产生订单或资金变化。
+
+当前 JRS canonical tmux write probe 已通过，TAG proxy route 为 `healthy`、3/3 probes 且 Polymarket trading allowed。controller overall 仍因 `observation_cache_not_ok` 的 data-feed semantic health 报 `critical`，但 `critical_runtimes=[]`、`critical_manifest_findings=[]`；此前已核实 PanamaCity settlement station MPMG 的 AWC/NOAA 最新报文停在 `2026-08-29T23:00:00Z`，MPTO 不是 settlement station，禁止代换。该缺口必须保留 fail-closed，不能为了让全局状态变绿而伪造 observation，也不改变本 observer 的 zero-notional 权限边界。
+
+对应 forward research record 已更新为 `lifecycle_status=running`，位于 `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/research_record.json`，SHA-256 为 `ea8a64e10074c453fbf4203d435a00d957ba3f1b94f7f06dfc01a883d2597811`。formal boundary 仍是 `2026-08-31T00:00:00Z`；如果在边界前发生 runtime/evidence contract failure，必须 stop 并提交新的未来 start，绝不 backfill。
+
+runner 的本地 `book_snapshots.jsonl` 只保存 exact REST response candidates，不复制也不冒充 authoritative WS raw。WS 原始 baseline/delta/frame 仍由 shared collector 保存；runner 必须用 exact subscription epoch receipt、t30 checkpoint completion receipt 与 canonical raw frame refs 做 join，并等待 20 秒 checkpoint grace 后才 append-only finalization。缺 receipt、future clock、gap、parity、freshness、单边盘口或 identity conflict 均保留 blocker。同一 signal 只允许一次有效 final append，后续 revision 只保留 lineage，不用 last-wins 静默改写。
 
 ### 11.2 必采数据
 
@@ -327,16 +335,16 @@ decision packet 比 t30 action 更早出现，因此 capture demand 在 packet �
 |---|---|---|
 | denominator | 每个 first-positive t30 signal；signal/event id、city、target_date、append revision/hash、producer SHA、四时钟 | 固定 signal funnel，阻止删 non-fill 或坏样本 |
 | frozen weather value | packet id、model/artifact/config id、`model_probability_hold`、token/condition/market、feature clock | weather-only fair value 与 market baseline |
-| execution book | route clock 前最后一个 immutable REST/WS reconstruction；完整 bids/asks、tick、minimum shares、snapshot/batch/epoch/raw refs、age、gap/parity、`feesEnabled` 与 per-market `fd={r,e,to}` | 同钟 maker/taker/skip 与 full-depth taker VWAP；不靠全局默认猜市场参数 |
+| execution book | route clock 前最后一个 exact REST candidate 或 receipt-joined WS reconstruction；完整 bids/asks、tick、minimum shares、snapshot/batch/epoch/raw refs、age、gap/parity；per-market fee metadata 有则保留 provenance，无则显式 missing | 同钟 maker/taker/skip 与 full-depth taker VWAP；当前 raw 未暴露每个市场的 `feesEnabled/fd`，fallback 仅做 sensitivity，不能支持盈利结论 |
 | route arms | maker quote、queue level、taker VWAP/fee、skip、每臂 retained edge、选路与全部 blockers | 执行表达 A/B；不把 future touch 当 fill |
-| selective WS tape | token、subscription epoch、baseline/delta refs、add/cancel/replace、public prints、0/10/30/60/120/300s checkpoint | spread/depth/quote-state、transition 与 markout labels；public activity 不是 own fill |
+| selective WS tape | token、capture identity、subscription epoch receipt、baseline/delta raw refs、checkpoint completion receipt、add/cancel/replace、public prints、0/10/30/60/120/300s checkpoint | spread/depth/quote-state、transition 与 markout labels；每个 checkpoint 必须可回到 canonical raw frame，public activity 不是 own fill |
 | safety / health | live authority、notional、intent/plan/order/fill/exchange-call counters、cursor、source freshness、daily bytes/messages | 证明 zero-notional 与捕获健康 |
 | settlement | condition id join canonical settlement；final outcome、settlement source/build | probability quality 与 taker/skip terminal value；不进入事前路由 |
 | future micro-live only | private User WS、REST reconciliation、submit/ack/partial/cancel/fill、own price/size/queue-ahead proxy、non-fill censor clock | authoritative fill probability、生存时间、adverse selection；必须另行资金授权 |
 | realized economics only | fill fee、maker/taker rebate payout、LP/holding payout、eligibility/allocation identity、asset | fee-adjusted residual；估计奖励不入主结论。官方当前 Weather 类别 forecast 为 taker rate `0.05`、maker fee `0`、rebate pool `25%`，但每个市场仍以 CLOB market info 为准 |
 | inventory / risk | decision-time inventory snapshot、open/reserved exposure、city-date/market/daily caps、loss state | 解释库存惩罚与容量，不把 open cost 当亏损 |
 
-选择性 capture 不扩大静态城市池或 full-ladder 配置，只为进入分母的当前 token 发有界 demand。冻结 checkpoints 为 `[0,10,30,60,120,300]` 秒，单 demand TTL 10 分钟、V2.1 active token 上限 16、daily signal 上限 32；沿用 market-books 总 payload `3 GB/day` 与 execution-evidence `1 GB/day` 硬预算，V2.1 子预算为 proxy `100 MB/day`、hot disk `250 MB/day`。raw hot 保留 14 天后只按既有 archive policy 迁移，不由策略 runner 删除。达到任一预算、gap/parity 失败或 capture receipt 缺失时停止新增 demand并保留 coverage blocker。
+选择性 capture 不扩大静态城市池或 full-ladder 配置，只为进入分母的当前 token 发有界 demand。冻结 checkpoints 为 `[0,10,30,60,120,300]` 秒，单 demand TTL 10 分钟、checkpoint grace 20 秒、V2.1 active token 上限 16、daily signal 上限 32；沿用 market-books 总 payload `3 GB/day` 与 execution-evidence `1 GB/day` 硬预算，V2.1 子预算为 proxy `100 MB/day`、hot disk `250 MB/day`。raw hot 保留 14 天后只按既有 archive policy 迁移，不由策略 runner 删除。达到任一预算、gap/parity 失败或 capture receipt 缺失时停止新增 demand并保留 coverage blocker。
 
 fee 公式与类别参数依据 [Polymarket Fees](https://docs.polymarket.com/trading/fees)；maker rebate 只在 [Maker Rebates](https://docs.polymarket.com/market-makers/maker-rebates) 的实际日结 payout 出现后入账。`0.05 × shares × p × (1-p)` 在 runner 中只是 Weather 类别 route forecast，绝不伪装成单市场实际 fee 或 rebate。
 
@@ -352,6 +360,8 @@ fee 公式与类别参数依据 [Polymarket Fees](https://docs.polymarket.com/tr
 6. **经济 A/B**：同一 signal、同一 shares 比较实际 maker wealth、同钟 full-depth taker counterfactual 与 skip；只入 realized fee/incentive。主指标是 maker 相对 taker的 fee-adjusted residual USD/share，按 target_date block bootstrap 95% CI。
 7. **promotion**：必须同时满足 `100 decisions / 30 target dates / 20 authoritative maker fills`、evidence coverage ≥95%、private lifecycle=100%、hazard/price/depth strata、tail/capacity完整，且 residual lower bound严格高于 `$0.005/share` MERE。否则维持 `inconclusive`。
 
+固定交付节奏是：每个 UTC 日生成一份 coverage/health machine summary；每新增 10 个独立 `target_date` 生成一次 frozen readout；达到 `100 decisions / 30 target_dates` 时只做 zero-notional gate review。只有另行授权 controlled micro-live 后，才按每 20 个 authoritative maker fills 更新 fill survival 与经济 A/B；未达到 promotion gate 不做参数搜索，不删除 blocked/non-fill rows，也不把 conditional maker edge 写成可盈利。
+
 ### 11.4 启停门禁
 
-controller/manifest critical、DB route/JRS probe失败、上游 source/book stale、formal forward identity变化、revision conflict、未来 book 泄漏、任一 safety counter非零或预算超限，均立即 fail closed。zero-notional 部署不授权 micro-live；micro-live 仍需 Stage 0A/0B、production health、独立 sleeve/caps/loss/cancel-all/rollback 和用户对真实资金的再次显式授权。
+本实例或任一直接依赖 runtime critical、manifest critical finding、DB route/JRS probe失败、上游 source/book stale、formal forward identity变化、revision conflict、未来 book 泄漏、任一 safety counter非零或预算超限，均立即 fail closed。与本行无关的全局 city/source semantic critical 不扩散成伪数据，也不必停止 zero-notional process：受影响 city/row 保留 blocker，且全局 health 未恢复前禁止任何 micro-live/promotion。zero-notional 部署不授权 micro-live；micro-live 仍需 Stage 0A/0B、production health、独立 sleeve/caps/loss/cancel-all/rollback 和用户对真实资金的再次显式授权。
