@@ -150,7 +150,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "f5577f378f9f429f3cb4b06e3515c7b8662a030f"
+        "6690b445e0737da6220c1c665cc8d1f9b40b59e0"
     )
     selective_maker = by_id["weather_first_selective_maker_v2_1_shadow"]
     assert selective_maker.execution_mode == "zero_notional_shadow"
@@ -174,7 +174,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "formal_forward_start_utc": "2026-08-31T00:00:00Z",
     }
     assert spec.release("weather_first_selective_maker_v2_1").expected_repo_sha == (
-        "73f7e603505829158f64a78ed8049101fc6f0b2c"
+        "6690b445e0737da6220c1c665cc8d1f9b40b59e0"
     )
     amsterdam = by_id["weather_amsterdam_wcir_frozen_shadow_v2"]
     assert amsterdam.execution_mode == "zero_notional_shadow"

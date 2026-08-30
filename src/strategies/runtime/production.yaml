@@ -21,8 +21,8 @@ production_releases:
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/f5577f378f9f429f3cb4b06e3515c7b8662a030f
-    expected_repo_sha: f5577f378f9f429f3cb4b06e3515c7b8662a030f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/6690b445e0737da6220c1c665cc8d1f9b40b59e0
+    expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
   - release_id: amsterdam_wcir_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/4b0a7fdaf376fc94ca410de49b72d463b27107e4
     expected_repo_sha: 4b0a7fdaf376fc94ca410de49b72d463b27107e4
@@ -90,8 +90,8 @@ production_releases:
     expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: weather_first_selective_maker_v2_1
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/73f7e603505829158f64a78ed8049101fc6f0b2c
-    expected_repo_sha: 73f7e603505829158f64a78ed8049101fc6f0b2c
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/6690b445e0737da6220c1c665cc8d1f9b40b59e0
+    expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
     runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
