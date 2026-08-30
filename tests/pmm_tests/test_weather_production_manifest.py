@@ -55,7 +55,16 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert len(spec.release("control_plane").expected_repo_sha) == 40
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "264cf84d6a1b70994682253de815aba9b944d9a2"
+        "5ba155d68f0a2e54284c73626730adc4389105c2"
+    )
+    assert spec.release("core_carry_market_state_shadow").checkout_root == Path(
+        "/Users/deepsleep/.local/share/pm_agents/releases/"
+        "core_carry_market_state_shadow/"
+        "d0c0890c63a7ac49def9303bc35b7c92e63fa451"
+    )
+    assert spec.release("city_probability_runtime").checkout_root == Path(
+        "/Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/"
+        "f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c"
     )
 
 

@@ -36,8 +36,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_runtime/5369dbb5751b09f32fa82bc6c31dfad8a02ee2c4
     expected_repo_sha: 5369dbb5751b09f32fa82bc6c31dfad8a02ee2c4
   - release_id: city_probability_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/da87d3c1569854e213c2a4c39f4c1d4cfe6befa0
-    expected_repo_sha: da87d3c1569854e213c2a4c39f4c1d4cfe6befa0
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c
+    expected_repo_sha: f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_observation/331f309ebeea14fd6b61727584a8cf19b40dc6a0
     expected_repo_sha: 331f309ebeea14fd6b61727584a8cf19b40dc6a0
@@ -57,14 +57,14 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/f64728197135caf78b11491395bf23220b3fc872
     expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
   - release_id: core_carry_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/264cf84d6a1b70994682253de815aba9b944d9a2
-    expected_repo_sha: 264cf84d6a1b70994682253de815aba9b944d9a2
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/5ba155d68f0a2e54284c73626730adc4389105c2
+    expected_repo_sha: 5ba155d68f0a2e54284c73626730adc4389105c2
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
     expected_repo_sha: b2b26fd96e8086a2a444e83c66fd4d55ac904705
   - release_id: core_carry_market_state_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/f818c0fd99336df5b66666c9e239f984ffb0367e
-    expected_repo_sha: f818c0fd99336df5b66666c9e239f984ffb0367e
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/d0c0890c63a7ac49def9303bc35b7c92e63fa451
+    expected_repo_sha: d0c0890c63a7ac49def9303bc35b7c92e63fa451
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3

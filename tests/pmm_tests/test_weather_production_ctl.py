@@ -70,7 +70,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["current_yes_core_carry_tiny_live_v2"].release_id == "core_carry_runtime"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "264cf84d6a1b70994682253de815aba9b944d9a2/scripts/ops/"
+        "5ba155d68f0a2e54284c73626730adc4389105c2/scripts/ops/"
         "start_weather_current_yes_core_carry_tiny_live_v2.sh"
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
