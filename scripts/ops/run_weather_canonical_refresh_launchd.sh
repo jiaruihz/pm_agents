@@ -16,19 +16,23 @@ trap cleanup EXIT INT TERM
 
 cd "$PROJECT_DIR"
 
-if [[ -f "$PROJECT_DIR/.env" ]]; then
+# Immutable releases deliberately do not carry mutable credentials.  Resolve
+# the production-declared operational root before authenticated fill sync and
+# load its local environment without copying secrets into the release.
+OPERATIONAL_PROJECT_DIR="$(
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().operational_repo_root)'
+)"
+if [[ -f "$OPERATIONAL_PROJECT_DIR/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
+  source "$OPERATIONAL_PROJECT_DIR/.env"
   set +a
 fi
 # Resolve the same mutable control-plane state as every market consumer.  A
 # proxy switch must also move fill reconciliation; keeping a local default here
 # would create a second route that the controller cannot change or audit.
-PROXY_CONTROL_ROOT="$(
-  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
-    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().operational_repo_root)'
-)"
+PROXY_CONTROL_ROOT="$OPERATIONAL_PROJECT_DIR"
 MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"
 weather_export_market_proxy_env "$MARKET_PROXY"
 

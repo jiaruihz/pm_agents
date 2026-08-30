@@ -363,6 +363,9 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     )
     assert "weather_market_proxy_env.sh" in refresh
     assert "load_production_spec().operational_repo_root" in refresh
+    assert 'source "$OPERATIONAL_PROJECT_DIR/.env"' in refresh
+    assert 'source "$PROJECT_DIR/.env"' not in refresh
+    assert 'PROXY_CONTROL_ROOT="$OPERATIONAL_PROJECT_DIR"' in refresh
     assert 'MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"' in refresh
     assert 'weather_export_market_proxy_env "$MARKET_PROXY"' in refresh
     assert "materialize_weather_city_runtime_canonical_v1.py" in refresh
