@@ -23,9 +23,11 @@ MAX_WAL_GROWTH_BYTES="${WEATHER_CANONICAL_REFRESH_MAX_WAL_GROWTH_BYTES:-13421772
 # Immutable releases deliberately do not carry mutable credentials.  Resolve
 # the production-declared operational root before authenticated fill sync and
 # load its local environment without copying secrets into the release.
+BUNDLED_PRODUCTION_SPEC="$PROJECT_DIR/src/strategies/runtime/production.yaml"
 OPERATIONAL_PROJECT_DIR="$(
   PYTHONPATH="$PROJECT_DIR" "$PYTHON_BIN" -c \
-    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().operational_repo_root)'
+    'from pathlib import Path; import sys; from src.strategies.runtime.production import load_production_spec; print(load_production_spec(Path(sys.argv[1])).operational_repo_root)' \
+    "$BUNDLED_PRODUCTION_SPEC"
 )"
 if [[ -f "$OPERATIONAL_PROJECT_DIR/.env" ]]; then
   set -a
@@ -33,6 +35,33 @@ if [[ -f "$OPERATIONAL_PROJECT_DIR/.env" ]]; then
   source "$OPERATIONAL_PROJECT_DIR/.env"
   set +a
 fi
+PRODUCTION_SPEC_SOURCE="$OPERATIONAL_PROJECT_DIR/src/strategies/runtime/production.yaml"
+if [[ ! -f "$PRODUCTION_SPEC_SOURCE" ]]; then
+  echo "operational production spec missing: $PRODUCTION_SPEC_SOURCE" >&2
+  exit 1
+fi
+# The immutable checkout owns code, while the operational repository owns the
+# mutable production topology and current release pins.  Freeze one stable
+# topology for the whole bounded run so nested loaders cannot mix revisions.
+PRODUCTION_SPEC_PATH="$RUNTIME_DIR/production_spec_snapshot.yaml"
+PRODUCTION_SPEC_REPORT="$RUNTIME_DIR/production_spec_snapshot.json"
+"$PYTHON_BIN" scripts/ops/weather_production_spec_snapshot.py capture \
+  --source "$PRODUCTION_SPEC_SOURCE" \
+  --snapshot "$PRODUCTION_SPEC_PATH" \
+  --report "$PRODUCTION_SPEC_REPORT" >/dev/null
+PRODUCTION_SPEC_SHA256="$(
+  "$PYTHON_BIN" -c \
+    'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["sha256"])' \
+    "$PRODUCTION_SPEC_REPORT"
+)"
+export WEATHER_PRODUCTION_CONFIG="$PRODUCTION_SPEC_PATH"
+
+assert_production_spec_unchanged() {
+  "$PYTHON_BIN" scripts/ops/weather_production_spec_snapshot.py verify \
+    --source "$PRODUCTION_SPEC_SOURCE" \
+    --expected-sha256 "$PRODUCTION_SPEC_SHA256" >/dev/null
+}
+
 DASHBOARD_LOG_DIR="$OPERATIONAL_PROJECT_DIR/runtime/_dashboard_logs"
 mkdir -p "$DASHBOARD_LOG_DIR"
 # Resolve the same mutable control-plane state as every market consumer.  A
@@ -87,7 +116,9 @@ EXECUTION_PUBLIC_BOOKS_ROOT="$DATA_FEED_RUNTIME_ROOT/market_books/ws_incremental
 run_refresh_stage() {
   local stage="$1"
   local max_seconds="$2"
+  local stage_rc=0
   shift 2
+  assert_production_spec_unchanged
   "$PYTHON_BIN" scripts/ops/weather_canonical_refresh_stage.py \
     --stage "$stage" \
     --db "$DB_PATH" \
@@ -95,15 +126,20 @@ run_refresh_stage() {
     --max-seconds "$max_seconds" \
     --max-wal-bytes "$MAX_WAL_BYTES" \
     --max-wal-growth-bytes "$MAX_WAL_GROWTH_BYTES" \
-    -- "$@"
+    -- "$@" || stage_rc="$?"
+  assert_production_spec_unchanged
+  return "$stage_rc"
 }
 
 preflight_rc=0
+assert_production_spec_unchanged
 "$PYTHON_BIN" scripts/ops/weather_canonical_refresh_preflight.py \
   --db "$DB_PATH" \
   --report "$RUNTIME_DIR/preflight.json" \
   --manifest-report "$RUNTIME_DIR/production_manifest.json" \
-  --feed-health-report "$RUNTIME_DIR/data_feed_health.json" || preflight_rc="$?"
+  --feed-health-report "$RUNTIME_DIR/data_feed_health.json" \
+  --production-spec "$PRODUCTION_SPEC_PATH" || preflight_rc="$?"
+assert_production_spec_unchanged
 case "$preflight_rc" in
   0) migration_allowed=1 ;;
   10)
@@ -209,3 +245,4 @@ if [[ "$migration_allowed" == "1" ]]; then
     --apply \
     --report "$RUNTIME_DIR/wcir_candidate_materialization.json"
 fi
+assert_production_spec_unchanged

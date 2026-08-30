@@ -2,10 +2,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import sys
+
+import pytest
 
 from scripts.ops.weather_canonical_refresh_preflight import evaluate_preflight
 from scripts.ops.weather_canonical_refresh_stage import run_stage
+from scripts.ops.weather_production_spec_snapshot import (
+    ProductionSpecSnapshotError,
+    capture_production_spec_snapshot,
+    verify_production_spec_source,
+)
+from src.strategies.runtime.production import load_production_spec
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _preflight(tmp_path: Path, **overrides):
@@ -166,6 +178,49 @@ def test_stage_does_not_start_when_absolute_wal_budget_is_already_breached(
     assert not marker.exists()
 
 
+def test_production_spec_snapshot_is_stable_and_detects_later_changes(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    source = repo / "src/strategies/runtime/production.yaml"
+    source.parent.mkdir(parents=True)
+    source.write_text("version: test\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    snapshot = repo / "runtime/production_spec_snapshot.yaml"
+    report = repo / "runtime/production_spec_snapshot.json"
+
+    payload = capture_production_spec_snapshot(
+        source=source,
+        snapshot=snapshot,
+        report=report,
+    )
+    assert payload["ok"] is True
+    assert snapshot.read_text(encoding="utf-8") == "version: test\n"
+    assert json.loads(report.read_text(encoding="utf-8"))["sha256"] == payload[
+        "sha256"
+    ]
+    assert verify_production_spec_source(
+        source=source,
+        expected_sha256=payload["sha256"],
+    )["ok"] is True
+
+    source.write_text("version: changed\n", encoding="utf-8")
+    with pytest.raises(
+        ProductionSpecSnapshotError,
+        match="changed during canonical refresh",
+    ):
+        verify_production_spec_source(
+            source=source,
+            expected_sha256=payload["sha256"],
+        )
+
+
+def test_explicit_bundled_spec_ignores_inherited_config(monkeypatch) -> None:
+    monkeypatch.setenv("WEATHER_PRODUCTION_CONFIG", "/tmp/must-not-be-loaded.yaml")
+    spec = load_production_spec(ROOT / "src/strategies/runtime/production.yaml")
+    assert spec.operational_repo_root == Path("/Users/deepsleep/projects/pm_agents")
+
+
 def test_launchd_refresh_uses_registry_preflight_and_stage_wrapper() -> None:
     script = (
         Path(__file__).resolve().parents[2]
@@ -177,3 +232,10 @@ def test_launchd_refresh_uses_registry_preflight_and_stage_wrapper() -> None:
     assert "weather_canonical_refresh_stage.py" in script
     assert "migration_allowed" in script
     assert "--require-existing-schema" in script
+    assert 'BUNDLED_PRODUCTION_SPEC="$PROJECT_DIR/' in script
+    assert "load_production_spec(Path(sys.argv[1]))" in script
+    assert 'PRODUCTION_SPEC_SOURCE="$OPERATIONAL_PROJECT_DIR/' in script
+    assert "weather_production_spec_snapshot.py capture" in script
+    assert "weather_production_spec_snapshot.py verify" in script
+    assert 'export WEATHER_PRODUCTION_CONFIG="$PRODUCTION_SPEC_PATH"' in script
+    assert '--production-spec "$PRODUCTION_SPEC_PATH"' in script
