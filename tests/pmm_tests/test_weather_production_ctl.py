@@ -155,7 +155,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "settlement_hard_invalidation": False,
     }
     assert spec.release("cross_no_v2_metar").expected_repo_sha == (
-        "0415d8673049caf6b22ff873068c339511c7fb70"
+        "73ace4512717a4e4a7f2fc5407c59f35d0bf81f8"
     )
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"
