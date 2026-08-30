@@ -366,6 +366,10 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert 'source "$OPERATIONAL_PROJECT_DIR/.env"' in refresh
     assert 'source "$PROJECT_DIR/.env"' not in refresh
     assert 'PROXY_CONTROL_ROOT="$OPERATIONAL_PROJECT_DIR"' in refresh
+    assert 'DASHBOARD_LOG_DIR="$OPERATIONAL_PROJECT_DIR/runtime/_dashboard_logs"' in refresh
+    assert '"$DASHBOARD_LOG_DIR/clob_fill_coverage_gate.json"' in refresh
+    assert '"$PROJECT_DIR/runtime/_dashboard_logs/clob_fill_coverage_gate.json"' not in refresh
+    assert '"$RUNTIME_DIR/order_migration_reports"' in refresh
     assert 'MARKET_PROXY="$(weather_resolve_market_proxy "$PROXY_CONTROL_ROOT")"' in refresh
     assert 'weather_export_market_proxy_env "$MARKET_PROXY"' in refresh
     assert "materialize_weather_city_runtime_canonical_v1.py" in refresh

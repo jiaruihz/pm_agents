@@ -29,6 +29,8 @@ if [[ -f "$OPERATIONAL_PROJECT_DIR/.env" ]]; then
   source "$OPERATIONAL_PROJECT_DIR/.env"
   set +a
 fi
+DASHBOARD_LOG_DIR="$OPERATIONAL_PROJECT_DIR/runtime/_dashboard_logs"
+mkdir -p "$DASHBOARD_LOG_DIR"
 # Resolve the same mutable control-plane state as every market consumer.  A
 # proxy switch must also move fill reconciliation; keeping a local default here
 # would create a second route that the controller cannot change or audit.
@@ -78,6 +80,7 @@ EXECUTION_PUBLIC_BOOKS_ROOT="$DATA_FEED_RUNTIME_ROOT/market_books/ws_incremental
 "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders \
   --db-path "$DB_PATH" \
   --active-live-only \
+  --report-dir "$RUNTIME_DIR/order_migration_reports" \
   --project-root "$PROJECT_DIR"
 "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.cli.check_strategy_runtime_order_coverage \
   --db-path "$DB_PATH" \
@@ -86,7 +89,7 @@ EXECUTION_PUBLIC_BOOKS_ROOT="$DATA_FEED_RUNTIME_ROOT/market_books/ws_incremental
 "$PROJECT_DIR/.venv/bin/python" scripts/ops/reconcile_weather_order_execution_aliases.py \
   --db-path "$DB_PATH" \
   --apply \
-  --json-out "$PROJECT_DIR/runtime/_dashboard_logs/order_execution_aliases.json"
+  --json-out "$DASHBOARD_LOG_DIR/order_execution_aliases.json"
 clob_synced=0
 for attempt in 1 2 3; do
   if "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.ingest.clob_fill_sync \
@@ -126,7 +129,7 @@ fi
   --db-path "$DB_PATH" --incremental --no-parquet
 "$PROJECT_DIR/.venv/bin/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
   --db "$DB_PATH" \
-  --json-out "$PROJECT_DIR/runtime/_dashboard_logs/clob_fill_coverage_gate.json"
+  --json-out "$DASHBOARD_LOG_DIR/clob_fill_coverage_gate.json"
 
 # Candidate replay is append-only and zero-notional.  Keep it after the live
 # fill/fact/gate chain so a concurrently appended shadow journal can fail and
