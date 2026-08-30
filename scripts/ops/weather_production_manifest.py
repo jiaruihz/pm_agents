@@ -49,6 +49,20 @@ PROCESS_MARKERS = (
 DB_OPTIONS = {"--db", "--db-path", "--runtime-db", "--weather-db"}
 OUTPUT_OPTIONS = {"--output-dir", "--out", "--runtime-dir"}
 SECRET_OPTIONS = ("secret", "password", "private-key", "private_key", "token")
+BOUNDED_TMUX_HELPER_PATTERNS = (
+    re.compile(r"weather_reliability_worker_[0-9]+_[0-9]+"),
+    re.compile(r"weather_controller_(?:health_read|health_mtime|feed_health)_[0-9]+_[0-9]+"),
+    re.compile(r"weather_storage_migration_(?:probe|cutover)_[0-9]+_[0-9]+"),
+    re.compile(r"weather_jrs_(?:write_probe|mkdir|status_bridge)_[0-9]+_[0-9]+"),
+)
+
+
+def bounded_tmux_helper_session(name: str) -> bool:
+    """Return true only for registered-shape, self-terminating helper sessions."""
+
+    return name == "weather_canonical_refresh" or any(
+        pattern.fullmatch(name) for pattern in BOUNDED_TMUX_HELPER_PATTERNS
+    )
 
 
 def utc_now() -> str:
@@ -1101,6 +1115,7 @@ def build_manifest(
         for row in tmux_rows
         if not row["registered_strategy_session"]
         and row["session"] not in spec.allowed_unmanaged_sessions
+        and not bounded_tmux_helper_session(str(row["session"]))
     ]
     if unregistered_sessions:
         findings.append(
@@ -1212,10 +1227,7 @@ def compare_prechange_manifest(
     """
 
     def persistent_session(name: str) -> bool:
-        # The reliability supervisor creates one bounded tmux worker per cycle
-        # and removes it on completion.  It is not a persistent production
-        # runtime and must not contaminate a deployment's session-set baseline.
-        return not name.startswith("weather_reliability_worker_")
+        return not bounded_tmux_helper_session(name)
 
     baseline_sessions = {
         str(row.get("session"))

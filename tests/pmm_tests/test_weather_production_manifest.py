@@ -367,7 +367,17 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
         spec=spec,
         processes=[],
         tmux_rows=[
-            {"session": "weather_unregistered", "panes": [], "process_pids": []}
+            {"session": "weather_unregistered", "panes": [], "process_pids": []},
+            {
+                "session": "weather_reliability_worker_123_456",
+                "panes": [],
+                "process_pids": [],
+            },
+            {
+                "session": "weather_controller_health_read_123_456",
+                "panes": [],
+                "process_pids": [],
+            },
         ],
         launchctl_rows=[
             {
@@ -385,6 +395,9 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
         findings["tmux_sessions_missing_from_instance_registry"]["severity"]
         == "warning"
     )
+    assert findings["tmux_sessions_missing_from_instance_registry"]["detail"][
+        "sessions"
+    ] == ["weather_unregistered"]
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
     assert findings["unregistered_persistent_worktrees"]["severity"] == "warning"
 
