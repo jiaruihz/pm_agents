@@ -48,8 +48,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
     expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
   - release_id: tmin_v2_2_probability_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/d82732f701618837076e690b92bade626661e921
-    expected_repo_sha: d82732f701618837076e690b92bade626661e921
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/b7397b1cc41b3424939727b433f5853c12303f42
+    expected_repo_sha: b7397b1cc41b3424939727b433f5853c12303f42
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/c88ee75419660a586af3e70b34a1e71d698caa88
     expected_repo_sha: c88ee75419660a586af3e70b34a1e71d698caa88
