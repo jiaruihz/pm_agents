@@ -47,6 +47,9 @@ production_releases:
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
     expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
+  - release_id: tmin_v2_2_probability_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/d82732f701618837076e690b92bade626661e921
+    expected_repo_sha: d82732f701618837076e690b92bade626661e921
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/c88ee75419660a586af3e70b34a1e71d698caa88
     expected_repo_sha: c88ee75419660a586af3e70b34a1e71d698caa88
@@ -604,6 +607,30 @@ managed_runtimes:
     health_format: json
     max_health_age_sec: 180
     accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
+    recovery_policy: safe
+  - instance_id: weather_tmin_v2_2_probability_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_tmin_v2_2_probability_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_probability_only
+    release_id: tmin_v2_2_probability_shadow
+    start_script: scripts/ops/start_weather_tmin_v2_2_probability_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tmin_v2_2_probability_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    startup_grace_sec: 180
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: weather_tmin_v2_2_probability_shadow_v1
+      execution_mode: zero_notional_probability_only
+      live_authorization: false
+      safety.notional_usd: 0.0
+      safety.signal_candidates: 0
+      safety.trade_intents: 0
+      safety.orders: 0
+      safety.fills: 0
+      safety.exchange_calls: 0
     dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
     recovery_policy: safe
   - instance_id: market_implied_tail_residual_shadow_v1
