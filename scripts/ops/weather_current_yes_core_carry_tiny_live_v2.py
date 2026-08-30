@@ -39,6 +39,7 @@ import time
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -427,6 +428,240 @@ def append_decision_packet(path: Path, packet: Mapping[str, Any]) -> None:
         )
 
 
+@dataclass
+class _JsonlTailFile:
+    """Process-local view of an append-only JSONL file.
+
+    The offset advances only past complete newline-terminated records.  This is
+    deliberately not persisted: a restarted runner takes the same full replay
+    path as the old implementation, while a long-lived loop avoids rereading
+    its growing journals every interval.
+    """
+
+    identity: tuple[int, int] | None = None
+    offset: int = 0
+    indexed_size: int = 0
+    mtime_ns: int | None = None
+    rows: list[dict[str, Any]] | None = None
+
+    def refresh(self, path: Path) -> tuple[list[dict[str, Any]], bool]:
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            changed = self.identity is not None or bool(self.rows)
+            self.identity = None
+            self.offset = 0
+            self.indexed_size = 0
+            self.mtime_ns = None
+            self.rows = []
+            return [], changed
+
+        identity = (stat.st_dev, stat.st_ino)
+        reset = (
+            self.identity != identity
+            or stat.st_size < self.offset
+            # A same-size mtime change cannot be an append.  Treat it as a
+            # rewrite so a truncate-and-replace that preserves byte length is
+            # never missed.  Normal appends have a larger size.
+            or (
+                self.identity == identity
+                and stat.st_size == self.indexed_size
+                and self.mtime_ns is not None
+                and stat.st_mtime_ns != self.mtime_ns
+            )
+        )
+        if reset:
+            self.offset = 0
+            self.rows = []
+
+        rows = self.rows if self.rows is not None else []
+        new_rows: list[dict[str, Any]] = []
+        complete_offset = self.offset
+        with path.open("rb") as handle:
+            handle.seek(self.offset)
+            while True:
+                raw = handle.readline()
+                if not raw:
+                    break
+                if not raw.endswith(b"\n"):
+                    break
+                complete_offset = handle.tell()
+                try:
+                    row = json.loads(raw)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(row, dict):
+                    parsed = dict(row)
+                    rows.append(parsed)
+                    new_rows.append(parsed)
+
+        self.identity = identity
+        self.offset = complete_offset
+        self.indexed_size = stat.st_size
+        self.mtime_ns = stat.st_mtime_ns
+        self.rows = rows
+        return new_rows, reset
+
+
+_HISTORICAL_SCORE_FIELDS = (
+    "checkpoint_key",
+    "city",
+    "target_date",
+    "decision_snapshot_ts_utc",
+    "as_of_ts_utc",
+    "created_at_utc",
+    "model_probability_hold",
+    "current_yes_bid",
+    "current_yes_ask",
+    "eligible",
+    "reasons",
+)
+
+
+@dataclass(frozen=True)
+class _ScoreRowReference:
+    offset: int
+    length: int
+    compact: dict[str, Any]
+
+
+class _ScoreTailFile:
+    """Compact byte-offset index over the large pre-live score journal."""
+
+    def __init__(self) -> None:
+        self.identity: tuple[int, int] | None = None
+        self.offset = 0
+        self.indexed_size = 0
+        self.mtime_ns: int | None = None
+        self.path: Path | None = None
+        self.references: list[_ScoreRowReference] = []
+        self.latest_by_checkpoint: dict[str, _ScoreRowReference] = {}
+
+    def refresh(self, path: Path) -> bool:
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            changed = self.identity is not None or bool(self.references)
+            self.identity = None
+            self.offset = 0
+            self.indexed_size = 0
+            self.mtime_ns = None
+            self.path = path
+            self.references = []
+            self.latest_by_checkpoint = {}
+            return changed
+
+        identity = (stat.st_dev, stat.st_ino)
+        reset = (
+            self.identity != identity
+            or stat.st_size < self.offset
+            or (
+                self.identity == identity
+                and stat.st_size == self.indexed_size
+                and self.mtime_ns is not None
+                and stat.st_mtime_ns != self.mtime_ns
+            )
+        )
+        if reset:
+            self.offset = 0
+            self.references = []
+            self.latest_by_checkpoint = {}
+
+        complete_offset = self.offset
+        with path.open("rb") as handle:
+            handle.seek(self.offset)
+            while True:
+                start = handle.tell()
+                raw = handle.readline()
+                if not raw:
+                    break
+                if not raw.endswith(b"\n"):
+                    break
+                complete_offset = handle.tell()
+                try:
+                    row = json.loads(raw)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                compact = {
+                    field: row.get(field) for field in _HISTORICAL_SCORE_FIELDS
+                }
+                reference = _ScoreRowReference(
+                    offset=start,
+                    length=len(raw),
+                    compact=compact,
+                )
+                self.references.append(reference)
+                checkpoint_key = str(row.get("checkpoint_key") or "")
+                if checkpoint_key:
+                    self.latest_by_checkpoint[checkpoint_key] = reference
+
+        self.identity = identity
+        self.offset = complete_offset
+        self.indexed_size = stat.st_size
+        self.mtime_ns = stat.st_mtime_ns
+        self.path = path
+        return reset
+
+    def historical_scores(self) -> list[dict[str, Any]]:
+        return [reference.compact for reference in self.references]
+
+    def trigger(self, checkpoint_key: str) -> dict[str, Any] | None:
+        reference = self.latest_by_checkpoint.get(checkpoint_key)
+        if reference is None or self.path is None:
+            return None
+        with self.path.open("rb") as handle:
+            handle.seek(reference.offset)
+            raw = handle.read(reference.length)
+        try:
+            row = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        return dict(row) if isinstance(row, dict) else None
+
+
+class DecisionPacketTailIndex:
+    """In-memory tail index for the first-positive decision-packet path."""
+
+    def __init__(self) -> None:
+        self._scores = _ScoreTailFile()
+        self._would_orders = _JsonlTailFile()
+        self._journal = _JsonlTailFile()
+        self._pending_would_positions: set[int] = set()
+
+    def refresh(
+        self, output_dir: Path
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[str], bool]:
+        scores_reset = self._scores.refresh(output_dir / "pre_live_scores.jsonl")
+        would_new, would_reset = self._would_orders.refresh(output_dir / "would_orders.jsonl")
+        _journal_new, journal_reset = self._journal.refresh(output_dir / "decision_packets.jsonl")
+        scores = self._scores.historical_scores()
+        would_orders = self._would_orders.rows or []
+        existing = {
+            str(row.get("packet_id") or "")
+            for row in (self._journal.rows or [])
+        }
+        if scores_reset or would_reset or journal_reset:
+            self._pending_would_positions = set(range(len(would_orders)))
+        else:
+            start = len(would_orders) - len(would_new)
+            self._pending_would_positions.update(range(start, len(would_orders)))
+        pending = [would_orders[index] for index in sorted(self._pending_would_positions)]
+        return scores, pending, existing, bool(scores_reset or would_reset or journal_reset)
+
+    def trigger(self, checkpoint_key: str) -> dict[str, Any] | None:
+        return self._scores.trigger(checkpoint_key)
+
+    def mark_processed(self, would: Mapping[str, Any]) -> None:
+        # Identity is stable because ``pending`` contains references from the
+        # retained row list; equality would be ambiguous for duplicate rows.
+        for index in self._pending_would_positions.copy():
+            if (self._would_orders.rows or [])[index] is would:
+                self._pending_would_positions.remove(index)
+                return
+
+
 def _packet_value(
     row: Mapping[str, Any],
     *fields: str,
@@ -616,26 +851,30 @@ def build_decision_packet(
     }
 
 
-def write_new_decision_packets(output_dir: Path) -> dict[str, Any]:
+def write_new_decision_packets(
+    output_dir: Path,
+    *,
+    tail_index: DecisionPacketTailIndex | None = None,
+) -> dict[str, Any]:
     """Append first positive signals, while preserving the execution path on failure."""
 
     journal = output_dir / "decision_packets.jsonl"
-    existing = {str(row.get("packet_id") or "") for row in iter_jsonl(journal)}
-    scores = list(iter_jsonl(output_dir / "pre_live_scores.jsonl"))
+    # Direct callers deliberately get a cold full replay, matching a process
+    # restart.  The service loop supplies one shared index for hot iterations.
+    index = tail_index or DecisionPacketTailIndex()
+    scores, would_orders, existing, _reset = index.refresh(output_dir)
     written = 0
     written_packets: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
-    for would in iter_jsonl(output_dir / "would_orders.jsonl"):
+    for would in would_orders:
         checkpoint_key = str(would.get("checkpoint_key") or "")
-        trigger = next(
-            (row for row in reversed(scores) if str(row.get("checkpoint_key") or "") == checkpoint_key),
-            None,
-        )
+        trigger = index.trigger(checkpoint_key)
         if trigger is None:
             alerts.append({"status": "alert", "reason": "decision_packet_trigger_score_missing", "checkpoint_key": checkpoint_key})
             continue
         packet = build_decision_packet(trigger, historical_scores=scores)
         if packet["packet_id"] in existing:
+            index.mark_processed(would)
             continue
         try:
             append_decision_packet(journal, packet)
@@ -650,6 +889,7 @@ def write_new_decision_packets(output_dir: Path) -> dict[str, Any]:
             )
             continue
         existing.add(packet["packet_id"])
+        index.mark_processed(would)
         written += 1
         written_packets.append(packet)
     for alert in alerts:
@@ -3176,7 +3416,11 @@ def validate_runtime_arguments(args: argparse.Namespace) -> None:
         raise RuntimeError("near-Core maker probe requires exactly 5 shares")
 
 
-def run_once(args: argparse.Namespace) -> dict[str, Any]:
+def run_once(
+    args: argparse.Namespace,
+    *,
+    decision_packet_tail_index: DecisionPacketTailIndex | None = None,
+) -> dict[str, Any]:
     assert_runtime_contract()
     validate_runtime_arguments(args)
     output_dir = Path(args.output_dir)
@@ -3184,7 +3428,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     configure_signal_runner(output_dir)
     signal_summary = signal_runner.run_once(args)
     now = datetime.now(timezone.utc)
-    decision_packets = write_new_decision_packets(output_dir)
+    decision_packets = write_new_decision_packets(
+        output_dir, tail_index=decision_packet_tail_index
+    )
     capture_demands = write_capture_demands(
         output_dir,
         packets=decision_packets["written_packets"],
@@ -3402,9 +3648,17 @@ def main() -> int:
     if args.command == "run":
         print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True))
         return 0
+    decision_packet_tail_index = DecisionPacketTailIndex()
     while True:
         try:
-            print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True), flush=True)
+            print(
+                json.dumps(
+                    run_once(args, decision_packet_tail_index=decision_packet_tail_index),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
         except Exception as exc:  # noqa: BLE001
             error = publish_loop_error(args, exc)
             print(json.dumps(error, ensure_ascii=False, sort_keys=True), flush=True)

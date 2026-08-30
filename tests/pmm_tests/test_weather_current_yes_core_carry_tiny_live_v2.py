@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
@@ -1829,6 +1830,110 @@ def test_decision_packet_is_idempotent_across_repeat_checkpoint_or_restart(tmp_p
     assert runner.write_new_decision_packets(tmp_path)["written"] == 1
     assert runner.write_new_decision_packets(tmp_path)["written"] == 0
     assert len(list(runner.iter_jsonl(tmp_path / "decision_packets.jsonl"))) == 1
+
+
+def test_decision_packet_tail_index_cold_and_hot_replay_are_equivalent(tmp_path) -> None:
+    prior = {
+        **score_row(),
+        "checkpoint_key": "Busan|2026-07-24|12",
+        "decision_snapshot_ts_utc": "2026-07-24T03:30:00Z",
+        "eligible": False,
+    }
+    _write_positive_taker_ev_signal(tmp_path, prior_rows=[prior])
+    cold = runner.write_new_decision_packets(tmp_path)
+    cold_packet = list(runner.iter_jsonl(tmp_path / "decision_packets.jsonl"))[0]
+    (tmp_path / "decision_packets.jsonl").unlink()
+
+    index = runner.DecisionPacketTailIndex()
+    hot = runner.write_new_decision_packets(tmp_path, tail_index=index)
+    hot_packet = list(runner.iter_jsonl(tmp_path / "decision_packets.jsonl"))[0]
+
+    assert cold["written"] == hot["written"] == 1
+    assert cold_packet == hot_packet
+    assert runner.write_new_decision_packets(tmp_path, tail_index=index)["written"] == 0
+    # A fresh index is the restart full-replay path and remains idempotent.
+    assert runner.write_new_decision_packets(tmp_path, tail_index=runner.DecisionPacketTailIndex())["written"] == 0
+
+
+def test_decision_packet_tail_index_processes_appended_complete_records(tmp_path) -> None:
+    first = _write_positive_taker_ev_signal(tmp_path)
+    index = runner.DecisionPacketTailIndex()
+    assert runner.write_new_decision_packets(tmp_path, tail_index=index)["written"] == 1
+    second = {
+        **first,
+        "city": "Tokyo",
+        "target_date": "2026-07-25",
+        "checkpoint_key": "Tokyo|2026-07-25|13",
+    }
+    runner.append_jsonl(tmp_path / "pre_live_scores.jsonl", second)
+    runner.append_jsonl(
+        tmp_path / "would_orders.jsonl", {"checkpoint_key": second["checkpoint_key"]}
+    )
+
+    result = runner.write_new_decision_packets(tmp_path, tail_index=index)
+
+    assert result["written"] == 1
+    assert {row["trigger"]["payload"]["city"] for row in runner.iter_jsonl(tmp_path / "decision_packets.jsonl")} == {"Busan", "Tokyo"}
+
+
+def test_decision_packet_tail_index_waits_for_partial_score_tail(tmp_path) -> None:
+    index = runner.DecisionPacketTailIndex()
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [])
+    trigger = {
+        **score_row(),
+        "eligible": True,
+        "created_at_utc": "2026-07-24T04:30:01Z",
+        "artifact_hash": "artifact-hash",
+    }
+    with (tmp_path / "pre_live_scores.jsonl").open("ab") as handle:
+        handle.write(json.dumps(trigger).encode("utf-8"))
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl", [{"checkpoint_key": trigger["checkpoint_key"]}]
+    )
+
+    partial = runner.write_new_decision_packets(tmp_path, tail_index=index)
+    with (tmp_path / "pre_live_scores.jsonl").open("ab") as handle:
+        handle.write(b"\n")
+    complete = runner.write_new_decision_packets(tmp_path, tail_index=index)
+
+    assert partial["written"] == 0
+    assert partial["alerts"][0]["reason"] == "decision_packet_trigger_score_missing"
+    assert complete["written"] == 1
+
+
+def test_jsonl_tail_index_rebuilds_after_truncate_inode_and_same_size_mtime_rewrite(tmp_path) -> None:
+    source = tmp_path / "source.jsonl"
+    tail = runner._JsonlTailFile()
+    old = {"marker": "old"}
+    runner.write_jsonl(source, [old])
+    assert tail.refresh(source) == ([old], True)
+
+    # Same inode and byte length: mtime detects a non-append rewrite.
+    replacement = {"marker": "new"}
+    before = source.stat()
+    runner.write_jsonl(source, [replacement])
+    os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
+    rows, reset = tail.refresh(source)
+    assert reset is True
+    assert rows == [replacement]
+    assert tail.rows == [replacement]
+
+    # A shorter replacement triggers the truncate path.
+    runner.write_jsonl(source, [])
+    rows, reset = tail.refresh(source)
+    assert rows == []
+    assert reset is True
+    assert tail.rows == []
+
+    # Atomic replacement changes inode even when the new file is valid JSONL.
+    replacement_path = tmp_path / "replacement.jsonl"
+    inode_row = {"marker": "inode"}
+    runner.write_jsonl(replacement_path, [inode_row])
+    replacement_path.replace(source)
+    rows, reset = tail.refresh(source)
+    assert rows == [inode_row]
+    assert reset is True
+    assert tail.rows == [inode_row]
 
 
 def test_decision_packet_marks_degraded_last_negative_and_missing_lineage(tmp_path) -> None:
