@@ -319,7 +319,7 @@ V2.1 首次 `20260830T113000Z` artifact 暴露出 packet revision conflict 未�
 
 截至 `2026-08-30T16:07:24Z`，hardened runner 与 shared collector 均运行 immutable SHA `6690b445e0737da6220c1c665cc8d1f9b40b59e0`；runner 与 collector 文件 SHA-256 分别为 `f14553522cc428ae4fe953f5ed313750dbafc1ed95d4532ccbc74b3f88237c82`、`bc5aa613f05f57eed8686f5f8ae14084e4304803120787564b3db592d51dbce0`。本轮最终 production/config suite 为 `163 passed`，独立只读 review findings 已修复并复测。activation commit 是 `c2f90c06`；controller reconcile 只启动了这一个 `expected_live=false` observer，return code 0、`converged=true`、`final_issues=[]`。启动后的 strict manifest compare exit 0、无 critical finding，`weather_market_books` 与本 observer 的 health contracts 均为 healthy，既有 canonical session 没有丢失。
 
-shared `weather_market_books` 在最终 preflight 时已经收敛到 `6690b445...`，因此没有再次执行会影响共享消费者的手工 restart。collector health 为 `ok/connected`，producer build 为 `6690b445...`，V2.1 `capture_demands.jsonl` 已进入实际 loaded shared inbox，inbox errors 为空；当前 subscription epoch 为 `a5a687540e21117a84095c00add1c7ab6b01550fc3664a9fe37723df35502a45`，execution-evidence health 为 `ok`、missed requested checkpoints 为 0。个别 token 的 best-quote parity mismatch 与 reconstruction error 仍按 token 显式 blocked，不能因 collector 总体 `ok` 而纳入 evidence 分子。
+shared `weather_market_books` 在最终 preflight 时已经收敛到 `6690b445...`，因此没有再次执行会影响共享消费者的手工 restart。collector health 为 `ok/connected`，producer build 为 `6690b445...`，V2.1 `capture_demands.jsonl` 已进入实际 loaded shared inbox，inbox errors 为空。启动验收快照的 epoch 为 `a5a687...`、missed requested checkpoints=0；到 `2026-08-30T16:12:53Z`，demand set 变化使 epoch 正常滚动为 `776e75...`，collector-wide missed requested checkpoints 增至3。此时 V2.1 仍为 denominator=0、demands=0，因此这3条不是 V2.1 样本；但 aggregate health 不提供其 identity，必须记作共享 collector coverage debt。V2.1 分子只认逐行 exact completion receipt，不能把 collector 总体 `ok`、epoch在线或其他 consumer 的 evidence 当作本策略覆盖。个别 token 的 best-quote parity mismatch 与 reconstruction error 同样按 token 显式 blocked。
 
 observer 当前按预期处于 `warming`：看到 32 条 boundary 前 action，但 denominator、decision、demand、REST snapshot、capture receipt 与 checkpoint receipt 均为 0；`missing_inputs=[]`、revision conflicts 为空，`live_authority=false`、`venue_call_allowed=false`，actual notional、TradeIntent、order、fill、exchange call 全部为 0。旧 `73f7e603...` observer 已在切换前由 controller 精确停止；本次没有重启 live runner，也没有产生订单或资金变化。
 
@@ -352,7 +352,7 @@ fee 公式与类别参数依据 [Polymarket Fees](https://docs.polymarket.com/tr
 
 分析不重新挑城市、price band 或 state，统一按 `target_date` 等权：
 
-1. **每日 coverage audit**：分别输出 signal funnel 与 evidence funnel；核对 denominator、packet join、PIT book、WS epoch/gap/parity、route readiness 和 safety counters。任何 side effect 非 0 立即停止实例。
+1. **每日 coverage audit**：分别输出 signal funnel 与 evidence funnel；核对 denominator、packet join、PIT book、逐行 subscription/checkpoint receipt、WS epoch/gap/parity、collector-wide missed-checkpoint coverage debt、route readiness 和 safety counters。任何 side effect 非 0 立即停止实例。
 2. **每 10 个新 target dates 固定复核**：在同 rows 上报告 `weather-only`、market probability、maker/taker/skip；maker 缺 calibrated fill/hazard 时只报告 conditional edge 与 sensitivity，不给盈利信用。
 3. **概率层**：settled 后比较 frozen weather probability 与同钟 market 的 logloss、Brier 和 calibration；blocked rows保留在 coverage 分母，不进入 score 分子。
 4. **微结构层**：按固定 checkpoints 估计 spread/depth、support withdrawal、transition probability 与 taker markout；frame/message 不等权，先落到 signal/checkpoint，再在 target_date 内等权。
