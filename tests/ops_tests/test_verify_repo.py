@@ -21,6 +21,18 @@ def test_profiles_expand_without_silently_dropping_maintained_suites() -> None:
     assert any("tests/research_tests" in command for command in full)
 
 
+def test_maintained_profile_references_only_committed_paths() -> None:
+    for path in verify_repo.MAINTAINED_TEST_PATHS:
+        completed = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", path],
+            cwd=verify_repo.ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, path
+
+
 def test_runner_stops_at_first_failure_and_sets_isolated_python_env(
     monkeypatch, tmp_path: Path
 ) -> None:
