@@ -766,7 +766,12 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
 
     return replace(
         spec,
-        data_product_registry=load_data_product_registry(spec, source.parent),
+        # The mutable operational topology may be supplied through
+        # WEATHER_PRODUCTION_CONFIG, but the registry is a versioned code
+        # artifact owned by the currently executing immutable release.  Do
+        # not resolve it next to the operational config or a newly pinned
+        # release will depend on an unversioned copy in that checkout.
+        data_product_registry=load_data_product_registry(spec),
     )
 
 

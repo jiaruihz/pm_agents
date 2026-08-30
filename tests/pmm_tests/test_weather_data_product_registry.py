@@ -15,6 +15,7 @@ from src.strategies.runtime.production import load_production_spec
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_SOURCE = ROOT / "src/strategies/runtime" / REGISTRY_FILENAME
+PRODUCTION_SOURCE = ROOT / "src/strategies/runtime/production.yaml"
 
 
 def _registry_payload() -> dict:
@@ -56,6 +57,22 @@ def test_production_loader_is_the_registry_authority_and_exposes_audit() -> None
     assert registry.product("source_events").cursor["state_scope"] == "per_consumer"
     assert registry.physical_path("historical_strategy_snapshots") == (
         spec.resolved_historical_paper_snapshot_root()
+    )
+
+
+def test_external_operational_config_uses_release_bundled_registry(
+    tmp_path: Path,
+) -> None:
+    external_config = tmp_path / "production.yaml"
+    external_config.write_text(
+        PRODUCTION_SOURCE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
+    spec = load_production_spec(external_config)
+
+    assert not (tmp_path / REGISTRY_FILENAME).exists()
+    assert production_data_product_registry(spec).product("market_books").product_id == (
+        "market_books"
     )
 
 
