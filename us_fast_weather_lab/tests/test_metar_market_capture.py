@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import pytest
+
+import us_fast_weather_lab.metar_market_capture as capture
 from us_fast_weather_lab.lab_to_source_events import materialize_lab_events
 from us_fast_weather_lab.metar_market_capture import CHECKPOINTS, materialize_capture_demands
 from us_fast_weather_lab.model import metar_event
@@ -22,6 +25,12 @@ def _write_events(tmp_path, *events):
     root = tmp_path / "events" / "2026-08-30"; root.mkdir(parents=True)
     (root / "sources.jsonl").write_text("".join(json.dumps(row) + "\n" for row in events))
     return root.parent
+
+
+def _append_events(root, *events):
+    path = next(root.glob("*/sources.jsonl"))
+    with path.open("a") as handle:
+        handle.write("".join(json.dumps(row) + "\n" for row in events))
 
 
 def _market(tmp_path, city="Miami"):
@@ -112,9 +121,128 @@ def test_restart_is_idempotent(tmp_path):
     source = _write_events(tmp_path, _event())
     output = tmp_path / "demands.jsonl"; market = _market(tmp_path)
     first = materialize_capture_demands(source, market, output)
+    capture._MATERIALIZER_STATES.clear()
     second = materialize_capture_demands(source, market, output)
     assert first["capture_demands_written"] == 12
     assert second == {"capture_demands_written": 0, "resolution_rows_written": 0, "scheduled_prewindow_demands_written": 0}
+
+
+def test_hot_tail_matches_cold_replay_and_reads_current_market_for_new_event(tmp_path):
+    source = _write_events(tmp_path, _event(event_id="one", temp_c=29.0))
+    market = _market(tmp_path)
+    hot_output = tmp_path / "hot.jsonl"
+    materialize_capture_demands(source, market, hot_output)
+    _append_events(source, _event(event_id="two", temp_c=30.0))
+    materialize_capture_demands(source, market, hot_output)
+    cold_output = tmp_path / "cold.jsonl"
+    materialize_capture_demands(source, market, cold_output)
+    assert _rows(hot_output) == _rows(cold_output)
+    payload = json.loads(market.read_text())
+    for row in payload["records"]:
+        row["token_id"] = f"fresh-{row['token_id']}"
+    market.write_text(json.dumps(payload))
+    _append_events(source, _event(event_id="three", temp_c=31.0))
+    materialize_capture_demands(source, market, hot_output)
+    assert any(row["trigger_event_id"] == "three" and row["token_id"].startswith("fresh-") for row in _rows(hot_output))
+
+
+def test_partial_tail_is_deferred_until_newline(tmp_path):
+    source = _write_events(tmp_path)
+    path = next(source.glob("*/sources.jsonl"))
+    path.write_text(json.dumps(_event(event_id="partial"))[:-1])
+    output = tmp_path / "demands.jsonl"
+    assert materialize_capture_demands(source, _market(tmp_path), output)["capture_demands_written"] == 0
+    with path.open("a") as handle:
+        handle.write("}\n")
+    assert materialize_capture_demands(source, _market(tmp_path), output)["capture_demands_written"] == 12
+
+
+def test_same_size_rewrite_replace_and_truncate_rebuild_tail_state(tmp_path):
+    source = _write_events(tmp_path, _event(event_id="old", temp_c=31.0))
+    output = tmp_path / "demands.jsonl"
+    materialize_capture_demands(source, _market(tmp_path), output)
+    path = next(source.glob("*/sources.jsonl"))
+    replacement = _event(event_id="new", temp_c=20.0)
+    original = path.read_text()
+    revised = json.dumps(replacement) + "\n"
+    assert len(revised) == len(original)
+    path.write_text(revised)
+    result = materialize_capture_demands(source, _market(tmp_path), output)
+    assert result["capture_demands_written"] == 8
+    replacement_path = path.with_name("replacement.jsonl")
+    replacement_path.write_text(json.dumps(_event(event_id="rep", temp_c=21.0)) + "\n")
+    replacement_path.replace(path)
+    assert materialize_capture_demands(source, _market(tmp_path), output)["capture_demands_written"] == 8
+    path.write_text("")
+    assert materialize_capture_demands(source, _market(tmp_path), output)["capture_demands_written"] == 0
+
+
+def test_catalog_earlier_path_forces_safe_full_rebuild(tmp_path):
+    source = _write_events(tmp_path, _event(event_id="late", temp_c=31.0))
+    output = tmp_path / "demands.jsonl"
+    market = _market(tmp_path)
+    materialize_capture_demands(source, market, output)
+    earlier = source / "2026-08-29"; earlier.mkdir()
+    (earlier / "sources.jsonl").write_text(json.dumps(_event(event_id="early", temp_c=20.0)) + "\n")
+    materialize_capture_demands(source, market, output)
+    state = next(state for key, state in capture._MATERIALIZER_STATES.items() if key[2] == output.resolve())
+    assert state.source_paths == tuple(sorted(source.glob("*/sources.jsonl")))
+    assert state.running_max[("Miami", "2026-08-30")] == 87.8
+
+
+def test_output_drift_reloads_dedupe_before_new_tail_event(tmp_path):
+    source = _write_events(tmp_path, _event(event_id="one"))
+    output = tmp_path / "demands.jsonl"; market = _market(tmp_path)
+    materialize_capture_demands(source, market, output)
+    first = _rows(output)[0]
+    with output.open("a") as handle:
+        handle.write(json.dumps(first) + "\n")
+    _append_events(source, _event(event_id="two", temp_c=31.0))
+    result = materialize_capture_demands(source, market, output)
+    assert result["capture_demands_written"] == 8
+    assert len([row for row in _rows(output) if row["demand_id"] == first["demand_id"]]) == 2
+
+
+def test_failed_second_output_append_does_not_advance_source_cursor(
+    tmp_path, monkeypatch
+):
+    source = _write_events(tmp_path, _event(event_id="one"))
+    output = tmp_path / "demands.jsonl"
+    resolution = tmp_path / "resolution.jsonl"
+    market = _market(tmp_path)
+    materialize_capture_demands(
+        source, market, output, resolution_jsonl=resolution
+    )
+    _append_events(source, _event(event_id="two", temp_c=31.0))
+    original_append = capture._append
+    calls = 0
+
+    def fail_resolution_append(path, values):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated resolution append failure")
+        return original_append(path, values)
+
+    monkeypatch.setattr(capture, "_append", fail_resolution_append)
+    with pytest.raises(OSError, match="simulated resolution append failure"):
+        materialize_capture_demands(
+            source, market, output, resolution_jsonl=resolution
+        )
+    monkeypatch.setattr(capture, "_append", original_append)
+
+    recovered = materialize_capture_demands(
+        source, market, output, resolution_jsonl=resolution
+    )
+
+    assert recovered["capture_demands_written"] == 0
+    assert recovered["resolution_rows_written"] == 2
+    assert {row["information_event_id"] for row in _rows(resolution)} == {
+        "one",
+        "two",
+    }
+    demand_ids = [row["demand_id"] for row in _rows(output)]
+    assert len(demand_ids) == len(set(demand_ids))
 
 
 def test_chicago_uses_kord_official_profile_mapping(tmp_path):
