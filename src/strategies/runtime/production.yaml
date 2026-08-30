@@ -6,8 +6,8 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
   - release_id: control_plane
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/ef97feecd591ab2d0dd08db0f11e4a12a2245e3c
-    expected_repo_sha: ef97feecd591ab2d0dd08db0f11e4a12a2245e3c
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/cf1324990fe564d95550f19247d116ed4d55597e
+    expected_repo_sha: cf1324990fe564d95550f19247d116ed4d55597e
   - release_id: fast_source_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
