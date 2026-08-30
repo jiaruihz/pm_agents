@@ -12,6 +12,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: cross_no_v2_metar
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/0415d8673049caf6b22ff873068c339511c7fb70
+    expected_repo_sha: 0415d8673049caf6b22ff873068c339511c7fb70
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
     expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -276,7 +280,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
@@ -529,6 +533,47 @@ managed_runtimes:
     live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/orders.jsonl
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations, weather_knmi_open_data_jrs]
     recovery_policy: guarded_live
+
+  - instance_id: cross_no_v2_metar_v1
+    uses_market_proxy: true
+    tmux_session: weather_cross_no_v2_metar_v1
+    role: strategy
+    execution_mode: live
+    release_id: cross_no_v2_metar
+    start_script: scripts/ops/start_weather_cross_no_v2_metar.sh
+    restart_script: scripts/ops/start_weather_cross_no_v2_metar.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/latest.json
+    health_format: json
+    max_health_age_sec: 15
+    startup_grace_sec: 60
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: cross_no_v2_metar_v1
+      execution_mode: live_probe
+      live_enabled: true
+      shares_per_order: 5.0
+      max_orders_per_utc_day: 5
+      max_daily_principal_usd: 25.0
+      max_no_ask: 0.97
+      weather_taker_fee_rate: 0.05
+      clock_invalid_same_boot_override_enabled: true
+      settlement_hard_invalidation: false
+    expected_live: true
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/orders.jsonl
+    dependencies: [weather_jrs_context_keeper, weather_market_books]
+    recovery_policy: guarded_live
+    launch_environment:
+      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_24h_20260830_r2/evidence.sqlite3
+      WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST: /Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json
+      WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1
+      WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/PAUSE
+      WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC: "0.5"
+      WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC: "30"
+      WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC: "5"
+      WEATHER_CROSS_NO_V2_METAR_STOP_AFTER_SEC: "86400"
+      WEATHER_CROSS_NO_V2_METAR_LIVE: "1"
+      WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE: "1"
+      WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE: "1"
 
   # The old multisource D1 shadow remains dormant research evidence. The
   # distance-2 dual-NO instance below is a new zero-notional frozen forward;
