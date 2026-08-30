@@ -23,6 +23,7 @@ MAINTAINED_TEST_PATHS = (
     "tests/alpha_capital_agent",
     "tests/weather_data_feed",
     "tests/weather_dashboard",
+    "us_fast_weather_lab/tests",
     "tests/test_platform_market_data_contracts.py",
     "tests/test_platform_storage_jsonl.py",
     "tests/test_weather_clock_contract.py",

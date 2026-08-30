@@ -30,9 +30,10 @@ for an explicit physical file/byte inventory of `reviews/`.
 
 Use this decision order before creating a file:
 
-1. Reusable Python implementation goes under `src/`. The seven existing
-   top-level weather packages are registered legacy roots; do not create an
-   eighth. Move them only after caller/import parity is proven.
+1. Reusable Python implementation goes under `src/`. Eight existing top-level
+   Python packages are registered legacy roots; `us_fast_weather_lab` is a
+   bounded research exception added for an active benchmark. Do not create a
+   ninth. Move them only after caller/import and active-run parity is proven.
 2. A stable user/operator entrypoint goes under `scripts/ops/`; a reusable
    offline research runner goes under the matching `scripts/analysis/<family>/`.
    City/date/parameter variants use config plus `run_id`, not copied scripts.
@@ -98,7 +99,7 @@ skill entry stays short; detailed methods remain in its references.
 | Research metadata | project research record v1 | adopt on new/repeated runs before backfilling history |
 | `reviews/` | large local staging plus 148 tracked legacy files | archive by manifest after explicit cleanup authorization; do not delete blindly |
 | `docs/analysis/generated` | 220 tracked legacy artifacts | migrate only after consumer/reference audit |
-| Root Python packages | seven registered legacy packages | build caller catalog, then move one package at a time with compatibility imports |
+| Root Python packages | eight registered legacy packages; `us_fast_weather_lab` is a bounded active-benchmark exception | move one package at a time after caller and active-run parity, with compatibility imports |
 | `config/` vs `configs/` | `configs/` canonical; `config/` workspace/legacy | identify owners and secrets before any merge |
 
 Directory cleanup is complete only when imports, consumers, reproducibility,

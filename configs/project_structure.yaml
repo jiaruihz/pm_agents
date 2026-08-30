@@ -18,6 +18,7 @@ tracked_root_directories:
   src: canonical_python_source
   tasks: project_state
   tests: verification
+  us_fast_weather_lab: bounded_research_lab_legacy_root
   weather_city_runtime: legacy_root_python_package
   weather_dashboard: legacy_root_python_package
   weather_data_feed: legacy_root_python_package
@@ -57,6 +58,7 @@ canonical_roots:
   tests: tests
 
 legacy_python_roots:
+  - us_fast_weather_lab
   - weather_city_runtime
   - weather_dashboard
   - weather_data_feed
