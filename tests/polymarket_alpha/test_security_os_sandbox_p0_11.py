@@ -10,14 +10,30 @@ import sys
 import pytest
 
 
-SANDBOX_EXEC = shutil.which("sandbox-exec")
+def _usable_sandbox_exec() -> str | None:
+    sandbox_exec = shutil.which("sandbox-exec")
+    if platform.system() != "Darwin" or sandbox_exec is None:
+        return None
+    probe = subprocess.run(
+        [sandbox_exec, "-p", "(version 1) (allow default)", "/usr/bin/true"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return sandbox_exec if probe.returncode == 0 else None
+
+
+SANDBOX_EXEC = _usable_sandbox_exec()
 pytestmark = pytest.mark.skipif(
-    platform.system() != "Darwin" or SANDBOX_EXEC is None,
-    reason="OS-level proof uses the macOS sandbox available on the production host family",
+    SANDBOX_EXEC is None,
+    reason="OS-level proof requires a usable macOS sandbox-exec capability",
 )
 
 
-def _sandboxed(code: str, *, deny_process_exec: bool = False) -> subprocess.CompletedProcess[str]:
+def _sandboxed(
+    code: str, *, deny_process_exec: bool = False
+) -> subprocess.CompletedProcess[str]:
     assert SANDBOX_EXEC is not None
     policy = "(version 1) (allow default) (deny network*)"
     if deny_process_exec:

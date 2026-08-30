@@ -30,7 +30,23 @@ NOW = datetime(2026, 8, 27, 0, 0, tzinfo=UTC)
 ALPHA_ROOT = ROOT / "src" / "polymarket_alpha"
 
 
-def _canary(capability: str, outcome: CanaryOutcome = CanaryOutcome.DENIED) -> CapabilityCanaryReceipt:
+def _usable_sandbox_exec() -> str | None:
+    sandbox_exec = shutil.which("sandbox-exec")
+    if platform.system() != "Darwin" or sandbox_exec is None:
+        return None
+    probe = subprocess.run(
+        [sandbox_exec, "-p", "(version 1) (allow default)", "/usr/bin/true"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return sandbox_exec if probe.returncode == 0 else None
+
+
+def _canary(
+    capability: str, outcome: CanaryOutcome = CanaryOutcome.DENIED
+) -> CapabilityCanaryReceipt:
     return CapabilityCanaryReceipt.observed(
         capability=capability,
         outcome=outcome,
@@ -51,7 +67,11 @@ def _passing_inputs() -> tuple[object, object, tuple[CapabilityCanaryReceipt, ..
     )
 
 
-def _proof(*, canaries: tuple[CapabilityCanaryReceipt, ...] | None = None, environment: EnvironmentPolicyReceipt | None = None):
+def _proof(
+    *,
+    canaries: tuple[CapabilityCanaryReceipt, ...] | None = None,
+    environment: EnvironmentPolicyReceipt | None = None,
+):
     source_audit, default_environment, default_canaries = _passing_inputs()
     return build_final_offline_proof(
         run_id="run-p0-11-final",
@@ -90,7 +110,10 @@ def test_clean_alpha_tree_and_all_explicit_denials_seal_offline_only() -> None:
         ("import os\nos.system('never-run')\n", "os_system"),
         ("import py_clob_client\n", "known_execution_import"),
         ("from src.platform.execution import order_client\n", "known_execution_import"),
-        ("from src.strategies.rule_lawyer.auto_order import submit\n", "signing_import"),
+        (
+            "from src.strategies.rule_lawyer.auto_order import submit\n",
+            "signing_import",
+        ),
     ],
 )
 def test_injected_bypass_sources_make_static_full_tree_proof_fail(
@@ -121,20 +144,36 @@ def test_missing_skipped_unknown_or_allowed_canary_cannot_pass() -> None:
     missing = _proof(canaries=canaries[1:])
     skipped = _proof(
         canaries=tuple(
-            _canary(item, CanaryOutcome.SKIPPED if item == "process_canary" else CanaryOutcome.DENIED)
+            _canary(
+                item,
+                (
+                    CanaryOutcome.SKIPPED
+                    if item == "process_canary"
+                    else CanaryOutcome.DENIED
+                ),
+            )
             for item in sorted(REQUIRED_CAPABILITIES)
         )
     )
     unknown = _proof(canaries=canaries + (_canary("future_bypass"),))
     allowed = _proof(
         canaries=tuple(
-            _canary(item, CanaryOutcome.ALLOWED if item == "network_canary" else CanaryOutcome.DENIED)
+            _canary(
+                item,
+                (
+                    CanaryOutcome.ALLOWED
+                    if item == "network_canary"
+                    else CanaryOutcome.DENIED
+                ),
+            )
             for item in sorted(REQUIRED_CAPABILITIES)
         )
     )
 
     assert not missing.passed
-    assert any(item.startswith("MISSING_CAPABILITY_") for item in missing.failure_reasons)
+    assert any(
+        item.startswith("MISSING_CAPABILITY_") for item in missing.failure_reasons
+    )
     assert not skipped.passed
     assert "CANARY_NOT_DENIED_process_canary_SKIPPED" in skipped.failure_reasons
     assert not unknown.passed
@@ -167,7 +206,9 @@ def test_tampered_canary_or_proof_is_rejected_or_fails_closed() -> None:
     canary = _canary("requests")
     tampered = canary.model_copy(update={"detail": "changed after observation"})
     _, environment, canaries = _passing_inputs()
-    replaced = tuple(tampered if item.capability == "requests" else item for item in canaries)
+    replaced = tuple(
+        tampered if item.capability == "requests" else item for item in canaries
+    )
 
     proof = _proof(canaries=replaced)
     assert not proof.passed
@@ -176,19 +217,24 @@ def test_tampered_canary_or_proof_is_rejected_or_fails_closed() -> None:
 
     good = _proof()
     with pytest.raises(ValidationError, match="proof_sha256"):
-        type(good).model_validate(good.model_dump(mode="python") | {"decision": ProofDecision.FAIL})
+        type(good).model_validate(
+            good.model_dump(mode="python") | {"decision": ProofDecision.FAIL}
+        )
 
 
 def test_os_sandbox_canary_is_explicitly_not_run_without_sandbox_exec() -> None:
     # This is intentionally test-only: production proof.py never imports a
     # process or network module.  The raw socket attempt must fail inside the
     # macOS process boundary rather than merely being monkeypatched in Python.
-    sandbox_exec = shutil.which("sandbox-exec")
-    has_sandbox_exec = platform.system() == "Darwin" and sandbox_exec is not None
+    sandbox_exec = _usable_sandbox_exec()
+    has_sandbox_exec = sandbox_exec is not None
     network_outcome = CanaryOutcome.NOT_RUN
     process_outcome = CanaryOutcome.NOT_RUN
     if has_sandbox_exec:
-        safe_env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "PYTHONPATH": str(ROOT)}
+        safe_env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "PYTHONPATH": str(ROOT),
+        }
         network = subprocess.run(
             [
                 sandbox_exec,
@@ -216,7 +262,14 @@ def test_os_sandbox_canary_is_explicitly_not_run_without_sandbox_exec() -> None:
         network_outcome = CanaryOutcome.DENIED
 
         process = subprocess.run(
-            [sandbox_exec, "-p", "(version 1) (allow default) (deny process-exec*)", sys.executable, "-c", "pass"],
+            [
+                sandbox_exec,
+                "-p",
+                "(version 1) (allow default) (deny process-exec*)",
+                sys.executable,
+                "-c",
+                "pass",
+            ],
             check=False,
             capture_output=True,
             text=True,
@@ -230,11 +283,15 @@ def test_os_sandbox_canary_is_explicitly_not_run_without_sandbox_exec() -> None:
         canaries=tuple(
             _canary(
                 item,
-                network_outcome
-                if item == "network_canary"
-                else process_outcome
-                if item == "process_canary"
-                else CanaryOutcome.DENIED,
+                (
+                    network_outcome
+                    if item == "network_canary"
+                    else (
+                        process_outcome
+                        if item == "process_canary"
+                        else CanaryOutcome.DENIED
+                    )
+                ),
             )
             for item in sorted(REQUIRED_CAPABILITIES)
         )

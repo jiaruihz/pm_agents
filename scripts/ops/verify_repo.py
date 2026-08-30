@@ -27,6 +27,14 @@ MAINTAINED_TEST_PATHS = (
     "tests/test_platform_storage_jsonl.py",
 )
 
+# These contracts intentionally compare this checkout with the separately
+# pinned Mac production release. They remain in the full audit, but are not a
+# portable GitHub gate while release convergence is owned by an active task.
+RELEASE_CONVERGENCE_TEST_PATHS = (
+    "tests/pmm_tests/test_weather_core_carry_runtime_counter.py",
+    "tests/pmm_tests/test_weather_production_ctl.py",
+)
+
 
 def validation_commands(profile: str, python: str) -> list[list[str]]:
     commands = [
@@ -51,12 +59,22 @@ def validation_commands(profile: str, python: str) -> list[list[str]]:
                 "-p",
                 "no:cacheprovider",
                 "-q",
+                *(f"--ignore={path}" for path in RELEASE_CONVERGENCE_TEST_PATHS),
                 *MAINTAINED_TEST_PATHS,
             ]
         )
     if profile == "full":
         commands.extend(
             [
+                [
+                    python,
+                    "-m",
+                    "pytest",
+                    "-p",
+                    "no:cacheprovider",
+                    "-q",
+                    *RELEASE_CONVERGENCE_TEST_PATHS,
+                ],
                 [python, "scripts/ops/check_weather_docs.py"],
                 [
                     python,

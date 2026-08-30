@@ -15,6 +15,13 @@ def test_profiles_expand_without_silently_dropping_maintained_suites() -> None:
     assert full[: len(maintained)] == maintained
     maintained_paths = set(maintained[-1])
     assert set(verify_repo.MAINTAINED_TEST_PATHS) <= maintained_paths
+    assert {
+        f"--ignore={path}" for path in verify_repo.RELEASE_CONVERGENCE_TEST_PATHS
+    } <= maintained_paths
+    assert any(
+        set(verify_repo.RELEASE_CONVERGENCE_TEST_PATHS) <= set(command)
+        for command in full
+    )
     assert any(
         token.endswith("check_weather_docs.py") for command in full for token in command
     )
@@ -22,7 +29,11 @@ def test_profiles_expand_without_silently_dropping_maintained_suites() -> None:
 
 
 def test_maintained_profile_references_only_committed_paths() -> None:
-    for path in verify_repo.MAINTAINED_TEST_PATHS:
+    paths = (
+        *verify_repo.MAINTAINED_TEST_PATHS,
+        *verify_repo.RELEASE_CONVERGENCE_TEST_PATHS,
+    )
+    for path in paths:
         completed = subprocess.run(
             ["git", "ls-files", "--error-unmatch", "--", path],
             cwd=verify_repo.ROOT,

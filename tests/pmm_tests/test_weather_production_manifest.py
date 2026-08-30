@@ -55,7 +55,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert len(spec.release("control_plane").expected_repo_sha) == 40
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "8c973d32d4315c07ff7180f3b66b5b3024b4ae60"
+        "264cf84d6a1b70994682253de815aba9b944d9a2"
     )
 
 
@@ -242,8 +242,14 @@ def test_process_parser_and_execution_mode_are_present_state_based():
 
     assert [row["pid"] for row in rows] == [14098, 62952]
     assert manifest.classify_execution_mode(rows[0]["command"]) == "live_confirmed"
-    assert manifest.classify_execution_mode("python weather.py --live") == "live_unconfirmed"
-    assert manifest.classify_execution_mode("python weather_shadow.py") == "zero_notional_shadow"
+    assert (
+        manifest.classify_execution_mode("python weather.py --live")
+        == "live_unconfirmed"
+    )
+    assert (
+        manifest.classify_execution_mode("python weather_shadow.py")
+        == "zero_notional_shadow"
+    )
 
 
 def test_lsof_parser_keeps_physical_db_consumers():
@@ -263,7 +269,10 @@ def test_lsof_parser_keeps_physical_db_consumers():
 def test_redaction_hides_secret_arguments():
     command = "python weather.py --api-token abc --city Tokyo"
 
-    assert manifest.redact_command(command) == "python weather.py --api-token '<redacted>' --city Tokyo"
+    assert (
+        manifest.redact_command(command)
+        == "python weather.py --api-token '<redacted>' --city Tokyo"
+    )
 
 
 def test_manifest_flags_noncanonical_db_consumers(tmp_path, monkeypatch):
@@ -336,12 +345,17 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     )
 
     findings = {item["kind"]: item for item in payload["findings"]}
-    assert findings["tmux_sessions_missing_from_instance_registry"]["severity"] == "warning"
+    assert (
+        findings["tmux_sessions_missing_from_instance_registry"]["severity"]
+        == "warning"
+    )
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
     assert findings["unregistered_persistent_worktrees"]["severity"] == "warning"
 
 
-def test_manifest_reports_managed_session_without_controller_contract(tmp_path, monkeypatch):
+def test_manifest_reports_managed_session_without_controller_contract(
+    tmp_path, monkeypatch
+):
     base = production_spec(tmp_path)
     runtime = WeatherManagedRuntimeSpec(
         instance_id="collector",
@@ -350,9 +364,7 @@ def test_manifest_reports_managed_session_without_controller_contract(tmp_path, 
         execution_mode="collector",
         release_id="collector_release",
     )
-    spec = WeatherProductionSpec(
-        **{**base.__dict__, "managed_runtimes": (runtime,)}
-    )
+    spec = WeatherProductionSpec(**{**base.__dict__, "managed_runtimes": (runtime,)})
     spec.canonical_db_path.parent.mkdir(parents=True)
     spec.canonical_db_path.write_text("canonical", encoding="utf-8")
     local = tmp_path / "repo/runtime/weather.db"
@@ -387,7 +399,9 @@ def test_manifest_reports_managed_session_without_controller_contract(tmp_path, 
     assert finding["detail"]["sessions"][0]["instance_id"] == "collector"
 
 
-def test_manifest_warns_when_declared_production_checkout_is_dirty(tmp_path, monkeypatch):
+def test_manifest_warns_when_declared_production_checkout_is_dirty(
+    tmp_path, monkeypatch
+):
     checkout = tmp_path / "prod"
     spec = WeatherProductionSpec(
         **{

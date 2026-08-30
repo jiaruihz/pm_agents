@@ -29,7 +29,11 @@ Run focused tests first. The default CI suites cover maintained production,
 platform, dashboard and strategy contracts. `tests/research_tests` remains a
 separate task-scoped surface because some tests require immutable mounted
 archives or intentionally long research fixtures. Use `--profile full` only
-for the explicit repository-wide audit; it also runs docs and research gates.
+for the explicit repository-wide audit; it also runs docs, research and the
+two Mac release-convergence contracts. Those two contracts compare this
+checkout with a separately pinned production release and are therefore kept
+visible in the full audit instead of making the portable GitHub gate depend on
+an in-progress production convergence task.
 
 ## Pull Request Guidelines
 
