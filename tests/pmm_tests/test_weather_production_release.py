@@ -136,14 +136,15 @@ def test_rejects_production_spec_copy_outside_operational_repo(
         )
 
 
-def test_release_root_rejects_symlink_components(tmp_path: Path) -> None:
+def test_release_root_resolves_parent_symlink_and_rejects_namespace_symlink(
+    tmp_path: Path,
+) -> None:
     real_root = tmp_path / "real-releases"
     real_root.mkdir()
     alias = tmp_path / "release-alias"
     alias.symlink_to(real_root, target_is_directory=True)
 
-    with pytest.raises(ReleaseError, match="symlink component"):
-        _resolve_release_root(alias)
+    assert _resolve_release_root(alias) == real_root.resolve()
 
     namespace_target = real_root / "real-control-plane"
     namespace_target.mkdir()
@@ -151,7 +152,7 @@ def test_release_root_rejects_symlink_components(tmp_path: Path) -> None:
         namespace_target, target_is_directory=True
     )
     with pytest.raises(ReleaseError, match="namespace must not be a symlink"):
-        _resolve_release_namespace(real_root, "control_plane")
+        _resolve_release_namespace(real_root, real_root, "control_plane")
 
 
 def test_checkout_rejects_non_runtime_untracked_files(tmp_path: Path) -> None:

@@ -113,24 +113,23 @@ def _exclusive_release_lock(production_spec: Path):
 def _resolve_release_root(path: Path) -> Path:
     if not path.is_absolute():
         raise ReleaseError("production_release_root must be absolute")
-    current = Path(path.anchor)
-    for part in path.parts[1:]:
-        current /= part
-        if current.is_symlink():
-            raise ReleaseError(
-                f"production_release_root contains a symlink component: {current}"
-            )
-        if not current.exists():
-            raise ReleaseError(
-                f"production_release_root component does not exist: {current}"
-            )
-    if not current.is_dir():
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise ReleaseError(
+            f"production_release_root does not resolve: {path}: {exc}"
+        ) from exc
+    if not resolved.is_dir():
         raise ReleaseError("production_release_root must be a directory")
-    return current.resolve(strict=True)
+    return resolved
 
 
-def _resolve_release_namespace(release_root: Path, release_id: str) -> Path:
-    namespace = release_root / release_id
+def _resolve_release_namespace(
+    declared_release_root: Path,
+    resolved_release_root: Path,
+    release_id: str,
+) -> Path:
+    namespace = declared_release_root / release_id
     if namespace.is_symlink():
         raise ReleaseError(f"release namespace must not be a symlink: {namespace}")
     if not namespace.is_dir():
@@ -138,9 +137,27 @@ def _resolve_release_namespace(release_root: Path, release_id: str) -> Path:
             f"release namespace must be an existing directory: {namespace}"
         )
     resolved = namespace.resolve(strict=True)
-    if resolved.parent != release_root:
+    if resolved.parent != resolved_release_root:
         raise ReleaseError(f"release namespace escapes production root: {namespace}")
     return resolved
+
+
+def _verify_release_root_identity(
+    declared_release_root: Path,
+    resolved_release_root: Path,
+    expected_identity: tuple[int, int],
+) -> None:
+    try:
+        current = declared_release_root.resolve(strict=True)
+        stat = current.stat()
+    except OSError as exc:
+        raise ReleaseError(
+            "production_release_root changed or disappeared during release"
+        ) from exc
+    if current != resolved_release_root or (stat.st_dev, stat.st_ino) != expected_identity:
+        raise ReleaseError(
+            "production_release_root physical identity changed during release"
+        )
 
 
 def _verify_checkout(
@@ -251,7 +268,7 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
     if old_sha != expected_old_sha:
         raise ReleaseError(f"expected-old-sha mismatch: spec has {old_sha}, requested {expected_old_sha}")
     operational_repo = Path(str(spec.get("operational_repo_root") or ""))
-    release_root = Path(str(spec.get("production_release_root") or ""))
+    declared_release_root = Path(str(spec.get("production_release_root") or ""))
     if not operational_repo.is_absolute() or not operational_repo.is_dir():
         raise ReleaseError("operational_repo_root must be an existing absolute directory")
     operational_repo = operational_repo.resolve(strict=True)
@@ -263,14 +280,26 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
             "production spec must be the operational repository production.yaml: "
             f"{expected_spec_path}"
         )
-    release_root = _resolve_release_root(release_root)
+    resolved_release_root = _resolve_release_root(declared_release_root)
+    release_root_stat = resolved_release_root.stat()
+    release_root_identity = (release_root_stat.st_dev, release_root_stat.st_ino)
     old_root = Path(str(release["checkout_root"]))
-    release_namespace = _resolve_release_namespace(release_root, release_id)
-    expected_old_root = release_namespace / old_sha
+    declared_namespace = declared_release_root / release_id
+    resolved_namespace = _resolve_release_namespace(
+        declared_release_root, resolved_release_root, release_id
+    )
+    expected_old_root = declared_namespace / old_sha
     if old_root != expected_old_root:
         raise ReleaseError("existing checkout_root does not match the immutable release layout")
-    target = release_namespace / source_sha
-    if target != target.absolute() or target.parent.parent != release_root:
+    if old_root.resolve(strict=True).parent != resolved_namespace:
+        raise ReleaseError("existing checkout_root escapes the physical release namespace")
+    target = declared_namespace / source_sha
+    physical_target = resolved_namespace / source_sha
+    if (
+        target != target.absolute()
+        or target.parent.parent != declared_release_root
+        or physical_target.parent != resolved_namespace
+    ):
         raise ReleaseError("computed release target escapes production_release_root")
 
     resolved_source = _git(operational_repo, "rev-parse", f"{source_sha}^{{commit}}").lower()
@@ -291,20 +320,22 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
         "source_resolves_exactly": True,
         "operational_head_is_ancestor": True,
         "target_layout": str(target),
+        "physical_release_root": str(resolved_release_root),
+        "physical_target": str(physical_target),
         "old_checkout": _verify_checkout(
             old_root, old_sha, operational_common_git_dir
         ),
     }
-    existed = target.exists() or target.is_symlink()
+    existed = physical_target.exists() or physical_target.is_symlink()
     if existed:
         checks["existing_checkout"] = _verify_checkout(
-            target, source_sha, operational_common_git_dir
+            physical_target, source_sha, operational_common_git_dir
         )
     else:
         checks["existing_checkout"] = "will_create"
 
     venv_target = operational_repo / ".venv"
-    venv_link = target / ".venv"
+    venv_link = physical_target / ".venv"
     if venv_link.exists() or venv_link.is_symlink():
         if not venv_link.is_symlink() or venv_link.resolve() != venv_target.resolve():
             raise ReleaseError(f"release .venv conflicts with required operational symlink: {venv_link}")
@@ -355,11 +386,20 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
 
     if _git(operational_repo, "rev-parse", "HEAD").lower() != operational_head:
         raise ReleaseError("operational HEAD changed after validation; retry dry-run")
+    _verify_release_root_identity(
+        declared_release_root, resolved_release_root, release_root_identity
+    )
     if not existed:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        _git(operational_repo, "worktree", "add", "--detach", str(target), source_sha)
+        _git(
+            operational_repo,
+            "worktree",
+            "add",
+            "--detach",
+            str(physical_target),
+            source_sha,
+        )
         report["worktree_created"] = True
-    _verify_checkout(target, source_sha, operational_common_git_dir)
+    _verify_checkout(physical_target, source_sha, operational_common_git_dir)
     if not (venv_link.exists() or venv_link.is_symlink()):
         os.symlink(venv_target, venv_link)
         report["venv_symlink_created"] = True
@@ -367,6 +407,9 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
         raise ReleaseError(
             "operational HEAD changed while creating release; pin remains unchanged"
         )
+    _verify_release_root_identity(
+        declared_release_root, resolved_release_root, release_root_identity
+    )
     if production_spec.read_text(encoding="utf-8") != text["raw_text"]:
         raise ReleaseError(
             "production spec changed while creating release; pin remains unchanged"
