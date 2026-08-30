@@ -489,7 +489,7 @@ managed_runtimes:
     tmux_session: weather_first_selective_maker_v2_1_shadow
     role: shadow
     execution_mode: zero_notional_shadow
-    desired_state: paused
+    desired_state: running
     release_id: weather_first_selective_maker_v2_1
     start_script: scripts/ops/start_weather_first_selective_maker_v2_1_shadow.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/latest.json
