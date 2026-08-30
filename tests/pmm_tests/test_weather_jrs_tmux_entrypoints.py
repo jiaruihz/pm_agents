@@ -368,6 +368,9 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "materialize_weather_city_runtime_canonical_v1.py" in refresh
     assert "WCIR_BUNDLES_PATH" in refresh
     assert "--expected-db" in refresh
+    assert 'DB_PATH="$CANONICAL_DB_PATH"' in refresh
+    assert 'DB_PATH="$PROJECT_DIR/runtime/weather.db"' not in refresh
+    assert "canonical DB file missing" in refresh
     assert "--state" in refresh
     assert "--max-new-rows 5000" in refresh
     assert "--max-new-bytes 67108864" in refresh

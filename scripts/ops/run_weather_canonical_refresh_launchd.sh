@@ -15,7 +15,6 @@ cleanup() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
 cd "$PROJECT_DIR"
-DB_PATH="$PROJECT_DIR/runtime/weather.db"
 
 if [[ -f "$PROJECT_DIR/.env" ]]; then
   set -a
@@ -40,6 +39,22 @@ CANONICAL_DB_PATH="$(
   PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
     'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().canonical_db_path)'
 )"
+# A release checkout is immutable code, not a data root.  Using
+# "$PROJECT_DIR/runtime/weather.db" here silently created a split database in
+# every new control-plane release before the later identity check could run.
+# Bind every writer to the production-declared physical canonical path from
+# the first schema operation onward and fail closed if that file is missing.
+DB_PATH="$CANONICAL_DB_PATH"
+"$PROJECT_DIR/.venv/bin/python" - "$DB_PATH" <<'PY'
+from pathlib import Path
+import sys
+
+db_path = Path(sys.argv[1])
+if not db_path.is_absolute():
+    raise SystemExit(f"canonical DB path must be absolute: {db_path}")
+if not db_path.is_file():
+    raise SystemExit(f"canonical DB file missing: {db_path}")
+PY
 WCIR_BUNDLES_PATH="$(
   PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
     'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().data_feed_output_root() / "city_probability_runtime_v3" / "decision_bundles.jsonl")'
