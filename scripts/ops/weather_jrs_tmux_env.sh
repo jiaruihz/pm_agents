@@ -316,9 +316,22 @@ weather_jrs_tmux_guarded_replace_session() {
   )"
   while IFS= read -r peer; do
     [[ -z "$peer" || "$peer" == "$session" ]] && continue
+    if weather_jrs_tmux_session_is_bounded "$peer"; then
+      continue
+    fi
     if ! grep -Fxq "$peer" <<<"$after_sessions"; then
       echo "unrelated JRS tmux session disappeared while replacing $session: $peer" >&2
       return 1
     fi
   done <<<"$before_sessions"
+}
+
+weather_jrs_tmux_session_is_bounded() {
+  local session="${1:-}"
+  [[ "$session" == "weather_canonical_refresh" ]] && return 0
+  [[ "$session" =~ ^weather_reliability_worker_[0-9]+_[0-9]+$ ]] && return 0
+  [[ "$session" =~ ^weather_controller_(health_read|health_mtime|feed_health)_[0-9]+_[0-9]+$ ]] && return 0
+  [[ "$session" =~ ^weather_storage_migration_(probe|cutover)_[0-9]+_[0-9]+$ ]] && return 0
+  [[ "$session" =~ ^weather_jrs_(write_probe|mkdir|status_bridge)_[0-9]+_[0-9]+$ ]] && return 0
+  return 1
 }

@@ -765,6 +765,8 @@ def test_recovery_retries_canonical_server_start(monkeypatch, tmp_path):
 
     def fake_tmux(_spec, *args):
         calls.append(args)
+        if args == ("list-sessions",):
+            return Result()
         if args == ("kill-server",):
             return Result()
         if args[0] == "new-session":

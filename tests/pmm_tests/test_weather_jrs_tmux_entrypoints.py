@@ -128,6 +128,32 @@ def test_shared_helper_pins_full_disk_access_tmux_binary():
     assert "weather_jrs_tmux_guarded_replace_session()" in helper_text
 
 
+def test_guarded_replace_classifies_only_registered_bounded_sessions() -> None:
+    helper = OPS / "weather_jrs_tmux_env.sh"
+    command = (
+        f"source {shlex.quote(str(helper))}; "
+        "for name in "
+        "weather_canonical_refresh "
+        "weather_reliability_worker_1_2 "
+        "weather_controller_feed_health_1_2 "
+        "weather_jrs_write_probe_1_2; do "
+        "weather_jrs_tmux_session_is_bounded \"$name\" || exit 10; "
+        "done; "
+        "weather_jrs_tmux_session_is_bounded weather_data_feed_jrs && exit 11; "
+        "weather_jrs_tmux_session_is_bounded weather_reliability_worker_persistent && exit 12; "
+        "exit 0"
+    )
+
+    result = subprocess.run(
+        ["bash", "-c", command],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_shared_helper_rejects_tmux_binary_override_outside_tests(tmp_path):
     fake_tmux = tmp_path / "tmux"
     fake_tmux.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")

@@ -46,6 +46,7 @@ class WeatherManagedRuntimeSpec:
     release_id: str | None = None
     launch_environment: tuple[tuple[str, str], ...] = ()
     expected_health_fields: tuple[tuple[str, Any], ...] = ()
+    startup_grace_sec: float = 180.0
 
     def expected_health_contract(self) -> dict[str, Any]:
         return dict(self.expected_health_fields)
@@ -354,6 +355,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     (str(key), value)
                     for key, value in expected_health_raw.items()
                 ),
+                startup_grace_sec=float(item.get("startup_grace_sec", 180.0)),
             )
         )
     allowed_unmanaged = raw.get("allowed_unmanaged_sessions") or []
@@ -598,6 +600,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"unsupported recovery_policy for {item.instance_id}: "
                 f"{item.recovery_policy}"
+            )
+        if not 0 <= item.startup_grace_sec <= 1800:
+            raise ValueError(
+                f"startup_grace_sec must be between 0 and 1800 for "
+                f"{item.instance_id}: {item.startup_grace_sec}"
             )
         if item.health_format not in {"json", "mtime", "http_json"}:
             raise ValueError(

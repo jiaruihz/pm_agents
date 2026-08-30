@@ -256,6 +256,7 @@ def evaluate_production_health(
             "recovery_policy": runtime.recovery_policy,
             "expected_live": runtime.expected_live,
             "dependencies": list(runtime.dependencies),
+            "startup_grace_sec": runtime.startup_grace_sec,
         }
         runtime_rows.append(row)
         by_instance[runtime.instance_id] = row
@@ -799,10 +800,40 @@ def recover_jrs_context(
             "prospective tmux host cannot write JRS; canonical server preserved: "
             f"{prospective['output']}"
         )
-    killed = _tmux(spec, "kill-server")
-    actions.append(
-        {"action": "kill_server", "returncode": killed.returncode, "output": killed.stdout[-1000:].strip()}
+    existing_server = _tmux(spec, "list-sessions")
+    existing_output = existing_server.stdout[-1000:].strip()
+    server_absent = existing_server.returncode != 0 and any(
+        marker in existing_output.lower()
+        for marker in ("no server running", "failed to connect to server")
     )
+    if existing_server.returncode != 0 and not server_absent:
+        raise RuntimeError(
+            "cannot determine canonical tmux server state; server preserved: "
+            f"{existing_output}"
+        )
+    if server_absent:
+        actions.append(
+            {
+                "action": "kill_server",
+                "returncode": 0,
+                "output": "canonical server already absent",
+                "skipped": True,
+            }
+        )
+    else:
+        killed = _tmux(spec, "kill-server")
+        actions.append(
+            {
+                "action": "kill_server",
+                "returncode": killed.returncode,
+                "output": killed.stdout[-1000:].strip(),
+            }
+        )
+        if killed.returncode != 0:
+            raise RuntimeError(
+                "failed to stop canonical tmux server; recovery aborted: "
+                f"{killed.stdout[-1000:].strip()}"
+            )
     started: subprocess.CompletedProcess[str] | None = None
     for _ in range(10):
         started = _tmux(
@@ -1249,6 +1280,12 @@ def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> N
         print(f"[WARNING] {warning}")
     for reason in semantic.get("critical_reasons", []):
         print(f"[CRITICAL] {reason}")
+    for row in payload.get("recovery_preflight", []):
+        if row.get("status") == "error":
+            print(
+                f"[PREFLIGHT ERROR] {row.get('instance_id')} "
+                f"reason={row.get('reason')}"
+            )
     if include_plan:
         for action in payload.get("plan", []):
             if action["action"] != "none":
@@ -1265,7 +1302,28 @@ def _checkout_start_preflight(
     """Validate a git production checkout before an existing session is stopped."""
     checkout = runtime.checkout_root
     script = runtime.resolved_start_script()
-    if checkout is None or not (checkout / ".git").exists():
+    if script is not None:
+        if not script.is_file():
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": f"start_script_missing:{script}",
+            }
+        if not os.access(script, os.X_OK):
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": f"start_script_not_executable:{script}",
+            }
+    if checkout is None:
+        return None
+    if not (checkout / ".git").exists():
+        if runtime.release_id:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": f"checkout_release_missing:{checkout}",
+            }
         return None
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -1314,7 +1372,7 @@ def _checkout_start_preflight(
             "reason": "checkout_dirty_tracked",
         }
     python = checkout / ".venv/bin/python"
-    if not python.exists():
+    if not python.is_file() or not os.access(python, os.X_OK):
         return {
             "instance_id": runtime.instance_id,
             "status": "error",
@@ -1333,6 +1391,76 @@ def _checkout_start_preflight(
                 "reason": f"checkout_bootstrap_missing_env:{env_path}",
             }
     return None
+
+
+def collect_recovery_preflight(
+    spec: WeatherProductionSpec,
+    instance_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Validate every runtime that a recovery transaction may need to start.
+
+    This is intentionally completed before ``recover-jrs-context`` can kill the
+    canonical server. Existing JSON health is used as a schema witness when a
+    runtime declares expected health fields; age is ignored for this check.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for runtime in spec.managed_runtimes:
+        if runtime.desired_state != "running":
+            continue
+        if instance_ids is not None and runtime.instance_id not in instance_ids:
+            continue
+        if runtime.recovery_policy == "manual":
+            rows.append(
+                {
+                    "instance_id": runtime.instance_id,
+                    "status": "skipped",
+                    "reason": "manual_recovery_contract",
+                }
+            )
+            continue
+        error = _checkout_start_preflight(spec, runtime)
+        if error is not None:
+            rows.append(error)
+            continue
+        if (
+            runtime.expected_health_fields
+            and runtime.health_format == "json"
+            and runtime.health_path is not None
+            and runtime.health_path.exists()
+        ):
+            payload, health_error = _read_json(
+                runtime.health_path, canonical_spec=spec
+            )
+            if health_error:
+                rows.append(
+                    {
+                        "instance_id": runtime.instance_id,
+                        "status": "error",
+                        "reason": f"health_contract_probe_failed:{health_error}",
+                    }
+                )
+                continue
+            assert payload is not None
+            mismatches = health_contract_mismatches(runtime, payload)
+            if mismatches:
+                rows.append(
+                    {
+                        "instance_id": runtime.instance_id,
+                        "status": "error",
+                        "reason": "health_contract_incompatible_with_last_artifact",
+                        "mismatches": mismatches,
+                    }
+                )
+                continue
+        rows.append(
+            {
+                "instance_id": runtime.instance_id,
+                "status": "passed",
+                "reason": "release_start_contract_ready",
+            }
+        )
+    return rows
 
 
 MARKET_PROXY_RUNTIME_ENV_KEYS = (
@@ -1450,6 +1578,7 @@ def _run_start(
             "status": "error",
             "reason": str(exc),
         }
+    started_at_epoch = time.time()
     result = subprocess.run(
         [str(script)],
         cwd=str(runtime.checkout_root or ROOT),
@@ -1460,12 +1589,126 @@ def _run_start(
         timeout=120,
         check=False,
     )
+    if result.returncode == 0:
+        status = "started"
+    else:
+        session_present = _tmux(
+            spec, "has-session", "-t", f"={runtime.tmux_session}"
+        ).returncode == 0
+        status = "warming" if session_present else "error"
     return {
         "instance_id": runtime.instance_id,
-        "status": "started" if result.returncode == 0 else "error",
+        "status": status,
         "returncode": result.returncode,
         "output": result.stdout[-2000:].strip(),
+        "started_at_epoch": started_at_epoch,
+        "startup_grace_sec": runtime.startup_grace_sec,
+        "session_present_after_start": (
+            True if result.returncode == 0 else session_present
+        ),
     }
+
+
+def _startup_artifact_refreshed(
+    spec: WeatherProductionSpec,
+    runtime: WeatherManagedRuntimeSpec,
+    started_at_epoch: float,
+) -> bool:
+    if runtime.health_path is None:
+        return True
+    try:
+        mtime_ns = runtime.health_path.stat().st_mtime_ns
+    except OSError:
+        python = spec.operational_repo_root / ".venv/bin/python"
+        command = shlex.join(
+            [
+                str(python),
+                "-c",
+                "import os,sys; print(os.stat(sys.argv[1]).st_mtime_ns)",
+                str(runtime.health_path),
+            ]
+        )
+        result = _run_tmux_checked(
+            spec,
+            spec.canonical_tmux_socket,
+            "weather_controller_health_mtime",
+            command,
+            timeout_sec=15,
+        )
+        if result.returncode != 0:
+            return False
+        try:
+            mtime_ns = int(result.stdout.strip())
+        except ValueError:
+            return False
+    return mtime_ns > int(started_at_epoch * 1_000_000_000)
+
+
+def wait_for_startup_convergence(
+    spec: WeatherProductionSpec,
+    actions: list[dict[str, Any]],
+    *,
+    poll_interval_sec: float = 1.0,
+) -> None:
+    """Turn launcher success into verified runtime freshness.
+
+    A launcher may return non-zero after creating a healthy tmux session, or it
+    may return zero before the first health artifact is published. Both remain
+    ``warming`` until the runtime is present, healthy, and has produced
+    post-start evidence within its declared grace period.
+    """
+
+    runtimes = {runtime.instance_id: runtime for runtime in spec.managed_runtimes}
+    pending: dict[str, dict[str, Any]] = {}
+    now = time.monotonic()
+    for action in actions:
+        if action.get("status") not in {"started", "warming"}:
+            continue
+        runtime = runtimes[str(action["instance_id"])]
+        grace = max(0.0, float(runtime.startup_grace_sec))
+        action["status"] = "warming"
+        action["converged"] = False
+        pending[runtime.instance_id] = {
+            "action": action,
+            "runtime": runtime,
+            "deadline": now + grace,
+        }
+
+    while pending:
+        snapshot = manifest_tool.collect_manifest(spec)
+        report = evaluate_production_health(spec, snapshot)
+        by_instance = {
+            str(row["instance_id"]): row for row in report.get("runtimes", [])
+        }
+        current = time.monotonic()
+        for instance_id, state in list(pending.items()):
+            action = state["action"]
+            runtime = state["runtime"]
+            row = by_instance[instance_id]
+            if not row.get("present"):
+                action["status"] = "error"
+                action["reason"] = "session_exited_during_startup"
+                action["final_issues"] = list(row.get("issues") or [])
+                pending.pop(instance_id)
+                continue
+            artifact_refreshed = _startup_artifact_refreshed(
+                spec, runtime, float(action["started_at_epoch"])
+            )
+            if row.get("status") == "healthy" and artifact_refreshed:
+                action["status"] = "started"
+                action["converged"] = True
+                action["final_issues"] = []
+                pending.pop(instance_id)
+                continue
+            if current >= float(state["deadline"]):
+                action["status"] = "error"
+                action["reason"] = "startup_convergence_timeout"
+                action["artifact_refreshed"] = artifact_refreshed
+                action["final_issues"] = list(row.get("issues") or [])
+                pending.pop(instance_id)
+        if pending:
+            next_deadline = min(float(state["deadline"]) for state in pending.values())
+            time.sleep(max(0.0, min(poll_interval_sec, next_deadline - time.monotonic())))
 
 
 def _run_restart(
@@ -1474,9 +1717,6 @@ def _run_restart(
     *,
     confirm_live: bool,
 ) -> dict[str, Any]:
-    preflight_error = _checkout_start_preflight(spec, runtime)
-    if preflight_error is not None:
-        return preflight_error
     script = runtime.resolved_restart_script()
     if script is None:
         if runtime.expected_live or runtime.recovery_policy != "safe":
@@ -1491,6 +1731,9 @@ def _run_restart(
                 "status": "blocked",
                 "reason": "start_contract_missing",
             }
+        preflight_error = _checkout_start_preflight(spec, runtime)
+        if preflight_error is not None:
+            return preflight_error
         try:
             launch_env = _runtime_launch_env(
                 spec, runtime, confirm_live=False
@@ -1529,6 +1772,9 @@ def _run_restart(
                 else "controller_stop_then_registered_start"
             ),
         }
+    preflight_error = _checkout_start_preflight(spec, runtime)
+    if preflight_error is not None:
+        return preflight_error
     if runtime.expected_live and not confirm_live:
         return {
             "instance_id": runtime.instance_id,
@@ -1899,6 +2145,27 @@ def main() -> int:
             raise SystemExit(f"{args.command} --apply requires --reason")
         specs = {item.instance_id: item for item in spec.managed_runtimes}
         actions: list[dict[str, Any]] = []
+        preflight_ids = (
+            None
+            if args.command == "recover-jrs-context"
+            else {
+                str(item["instance_id"])
+                for item in health["plan"]
+                if item.get("action") == "start"
+            }
+        )
+        recovery_preflight = collect_recovery_preflight(spec, preflight_ids)
+        health["recovery_preflight"] = recovery_preflight
+        if any(row.get("status") == "error" for row in recovery_preflight):
+            health["status"] = "critical"
+            health["reason"] = args.reason
+            health["actions"] = []
+            if args.json:
+                print(json.dumps(health, ensure_ascii=False, indent=2, sort_keys=True))
+            else:
+                _print_human(health, include_plan=True)
+            return 2
+        recovery_started_at_epoch = time.time()
         if args.command == "recover-jrs-context":
             recovery_before = before
             recovery_manifest_path: Path
@@ -1937,6 +2204,30 @@ def main() -> int:
                     confirm_live=bool(args.confirm_live),
                 )
             )
+        if args.command == "recover-jrs-context":
+            runtime_action_ids = {
+                str(action.get("instance_id"))
+                for action in actions
+                if action.get("instance_id")
+            }
+            for runtime in spec.managed_runtimes:
+                if (
+                    runtime.desired_state != "running"
+                    or runtime.recovery_policy == "manual"
+                    or runtime.instance_id in runtime_action_ids
+                ):
+                    continue
+                actions.append(
+                    {
+                        "action": "verify_restored_runtime",
+                        "instance_id": runtime.instance_id,
+                        "status": "warming",
+                        "started_at_epoch": recovery_started_at_epoch,
+                        "startup_grace_sec": runtime.startup_grace_sec,
+                        "output": "restored from saved pane topology",
+                    }
+                )
+        wait_for_startup_convergence(spec, actions)
         after = manifest_tool.collect_manifest(spec)
         comparison_before = (
             recovery_before
@@ -1959,6 +2250,7 @@ def main() -> int:
         health["apply"] = True
         health["reason"] = args.reason
         health["actions"] = actions
+        health["recovery_preflight"] = recovery_preflight
         if args.command == "recover-jrs-context":
             health["recovery_manifest"] = str(recovery_manifest_path)
         health["plan"] = build_plan(spec, health)

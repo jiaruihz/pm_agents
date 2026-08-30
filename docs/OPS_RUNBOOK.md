@@ -199,15 +199,24 @@ Dashboard 页面与端口见
 scripts/ops/after_reboot.sh
 ```
 
-无参数只执行 manifest/controller health+plan，不启停任何服务。显式恢复使用 `--apply`；live 恢复还必须带 `--confirm-live`。canonical JRS permission host 重建只用 `--recover-jrs-context --apply`。
+无参数只执行 manifest/controller health+plan，不启停任何服务。显式恢复使用 `--apply`；live 恢复还必须带 `--confirm-live`。`--apply` 会根据当前存在的 managed session 自动选择：没有任何 managed session 时走 `recover-jrs-context`；存在 managed session 且 canonical JRS write probe 健康时走 `reconcile`。若 session 尚在但 JRS probe 失败，自动模式会 fail closed，要求先检查或显式选择 `--recover-jrs-context`，不会把权限主机故障误当成普通缺 session。仍可用 `--recover-jrs-context` 或 `--reconcile` 显式覆盖模式。
 
 分项运行：
 
 ```bash
 scripts/ops/after_reboot.sh
-scripts/ops/after_reboot.sh --apply
+scripts/ops/after_reboot.sh --apply --confirm-live
+scripts/ops/after_reboot.sh --apply --confirm-live --restore-manifest /tmp/pre-reboot-manifest.json
 scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 ```
+
+恢复事务在任何 tmux 重建或 runtime 启动前，统一检查所有可能启动的 pinned checkout：full SHA、tracked cleanliness、可执行 start script、`.venv/bin/python`、启动脚本依赖的 `.env`，以及已有 health artifact 是否满足 `expected_health_fields`。任一项不满足即整体 fail closed，不允许先恢复一半拓扑再发现 release 不可启动。
+
+启动器返回不等于 runtime 已恢复。Controller 会把“session 已创建但 launcher 非零”标为 `warming`，并在每个 runtime 的 `startup_grace_sec` 内等待：session 仍存在、health 合同通过、且 health artifact 的 mtime 晚于本次启动。只有三项同时满足才转为 `started/converged`；超时或 session 退出均返回 `critical`。data-feed 因完整首轮较慢使用独立 900 秒 grace，market-books 使用 180 秒，其他 runtime 默认 180 秒。
+
+`--restore-manifest` 只用于确实保存过的本机 pre-reboot/pre-change manifest；不得自动选择不明日期的旧 manifest。没有可靠 manifest 时让 controller 按当前 `production.yaml` desired state 启动 pinned release，不能从旧 pane 命令猜生产状态。
+
+成功验收至少包括：JRS prospective/current probe、所有 desired-running session、每个新启 runtime 的 post-start health、paused session 未被恢复、无 extra persistent session，以及 live order/fill/open-order evidence。authenticated open-order 不可用时必须记为 `unknown`，不能推断为零。Manifest strict 的 critical exit code 是 `1`，controller health/plan 的 critical exit code 是 `2`；wrapper 只对各自正确的 documented code 放行，其他错误会停止恢复。
 
 ## 5. 常用入口
 

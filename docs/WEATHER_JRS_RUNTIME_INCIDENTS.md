@@ -308,3 +308,75 @@ pre-change sessions, controller and storage identity were healthy, and the
 fill coverage gate passed with `1,567/1,567` DB/raw fills and zero cost delta.
 No strategy configuration, release pin, runtime root, order journal, fill,
 position or execution mode changed; order/fill impact is zero.
+
+## 2026-08-30 Host Reboot Recovery With Pre-existing Health Contract Drift
+
+The Mac rebooted at `2026-08-30 13:46:45 +0800`.  After login the production
+JRS volume UUID and canonical DB identity were healthy, but the canonical
+`weather-data-feed-jrs` permission host and every registered runtime session
+were absent.  The user explicitly authorized restoration of the full topology,
+including the two guarded live instances.  A strict manifest was saved on the
+internal disk and the controller ran the bounded recovery with
+`recover-jrs-context --apply --confirm-live --restore-manifest`.
+
+The prospective host and the recreated canonical host both passed JRS write
+and canonical DB read probes.  Controller reconciliation restored 33 desired
+running sessions; the two user-paused dispute/court zero-notional instances
+remained stopped.  The newly pinned market-books release initially failed
+closed because its release checkout was missing the standard `.venv` bootstrap
+symlink.  Adding the same operational-repo venv link used by the other managed
+release checkouts allowed the registered launcher to start without changing
+the pinned SHA or market-books policy.
+
+### Impact and acceptance evidence
+
+- The host booted at `05:46:45Z`; the canonical data-feed loop restarted at
+  `05:53:31Z`.  The last completed pre-reboot market-book batch ended at
+  `05:42:11Z` in degraded state, and the first recovered healthy batch ended at
+  `05:55:43Z` with `2,090/2,090` books and zero failures.  The completion gap
+  was `812s`; the reboot-to-healthy-book interval was `538s`.
+- The last full strategy snapshot completed at about `05:29:46Z`.  The
+  `05:42Z` attempt was interrupted by the reboot; the first post-recovery
+  attempt at `05:54Z` was correctly archived as non-publishable partial because
+  it preceded the first healthy market-book batch.  The first recovered full
+  snapshot published at `06:05:08Z` with `1,007` records, `47` cities and `89`
+  city-date pairs.  The two missing/non-publishable attempts remain PIT coverage
+  gaps and are not relabelled as zero signals.  The recovered full epoch had
+  zero BUY_YES and zero BUY_NO records.
+- From the start of the recovery transaction (`05:52Z`) through acceptance,
+  both live journals added zero order rows and the canonical fill cache added
+  zero fill rows.  The fill coverage gate passed with `1,595/1,595` effective
+  live fills, zero DB/cache ID delta, zero DB/fact cost delta, zero missing-order
+  rows, zero over-order keys and zero unknown fee lineage.  The standalone
+  authenticated open-order check failed during client initialization, so the
+  current reserved/open-order count was not inferred from local submitted
+  notional.
+- Both guarded live summaries were fresh with `status=ok` and
+  `live_enabled=true`; API `:8000` and FE `:5174` were listening.  Strict
+  manifest comparison showed all 33 canonical sessions, healthy DB/storage
+  identity, and canonical-refresh last exit `0`.
+
+Production health remains `critical` for one pre-existing contract drift: the
+dirty operational `production.yaml` expects execution-evidence
+`enabled/schema_version/daily_budget_bytes`, while pinned market-books release
+`bced50c33328a7b0d2d987a5d44b05d68d279b5f` publishes only the two semantics
+fields.  The running collector itself is fresh and `status=ok`; dependents are
+marked critical only by propagation from this contract mismatch.  The recovery
+did not deploy the unrelated uncommitted execution-evidence implementation or
+weaken the expected-health contract.  This event is `recovery improved`, not
+root-cause elimination of the macOS TCC permission-host dependency.
+
+Follow-up hardening from this reboot keeps the same safety boundary while
+making the operator path deterministic.  The wrapper now auto-selects full
+context recovery only when zero managed sessions are observed; when managed
+sessions remain it requires a healthy canonical JRS write probe before using
+reconcile, and otherwise fails closed for inspection or explicit recovery.  It
+can also forward an explicit saved restore manifest.  The
+controller performs a whole-plan release/bootstrap/health-contract preflight
+before any canonical server mutation, treats a non-zero launcher with a live
+target session as warming rather than immediate failure, and requires a fresh
+post-start health artifact within a per-runtime grace period.  Guarded session
+replacement now excludes only the explicitly classified controller,
+reliability and canonical-refresh bounded sessions from peer-loss comparison;
+persistent registered sessions remain fail-closed.  The explicit live
+confirmation and prospective-host JRS probe are unchanged.

@@ -154,6 +154,7 @@ managed_runtimes:
     start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
     max_health_age_sec: 1800
+    startup_grace_sec: 900
     dependencies: [weather_market_books, weather_forecast_curve_collector_v1]
     recovery_policy: safe
 
@@ -210,6 +211,7 @@ managed_runtimes:
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
     health_format: json
     max_health_age_sec: 420
+    startup_grace_sec: 180
     accepted_health_statuses: [ok, ok_with_discovery_reuse]
     expected_health_fields:
       configured_cities: [Amsterdam, Tokyo, Helsinki, Busan]
