@@ -24,6 +24,7 @@ TOPICS = {
     "metar_ws_datis": "metar.atis.<icao>",
 }
 CHECKPOINTS = (0, 15, 30, 60, 120, 300)
+POLICY_MAX_NO_ASK = 0.97
 
 
 def num(value: Any) -> float | None:
@@ -233,7 +234,13 @@ def build_report(output_dir: Path, *, market_books_root: Path | None = None, can
         crossed = row.get("previous_official_bracket") not in (None, "") and row.get("new_source_bracket") not in (None, "") and str(row.get("previous_official_bracket")) != str(row.get("new_source_bracket"))
         if crossed: current["crosses"] += 1
         if row.get("status") == "candidate": current["candidates"] += 1
-        executable = bool(row.get("book_full_depth_valid")) and num(row.get("expected_five_share_vwap")) is not None and num(row.get("worst_ask_for_five_shares")) is not None
+        worst_ask = num(row.get("worst_ask_for_five_shares"))
+        executable = (
+            bool(row.get("book_full_depth_valid"))
+            and num(row.get("expected_five_share_vwap")) is not None
+            and worst_ask is not None
+            and worst_ask <= POLICY_MAX_NO_ASK
+        )
         if executable: current["five_share_executable"] += 1
     # Only a durable reservation/execution claim owns actual economics.  A
     # merely executable opportunity is not a winner and never receives PnL.
@@ -386,8 +393,10 @@ def build_report(output_dir: Path, *, market_books_root: Path | None = None, can
         arm[source]["observed_source_topics"].sort()
     return {
         "schema_version": "weather_cross_no_v2_source_attribution_v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "read_only": True,
         "denominator_scope": "unique source-arm + information_event_id in supplied Cross NO V2 output journals",
+        "policy_max_no_ask": POLICY_MAX_NO_ASK,
         "race_attribution_contract": "earliest durable reservation wins; opportunities never own actual PnL",
         "race_attribution_conflicts": race_conflicts,
         "arms": arm,
