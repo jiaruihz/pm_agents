@@ -66,3 +66,21 @@ def test_metar_ws_publication_wrapper_is_decoded() -> None:
     assert len(events) == 1
     assert events[0]["station_id"] == "KATL"
     assert events[0]["air_temperature_c"] == 24.0
+
+
+def test_metar_ws_report_type_preserves_speci_semantics_without_tac_prefix() -> None:
+    payload = b'''{
+      "type":"publication",
+      "channel":"metar.obs.kphx",
+      "data":{
+        "station":"KPHX",
+        "report_time":"2026-08-30T06:44:00Z",
+        "report_type":"SPECI",
+        "temp_c":"32",
+        "raw":"KPHX 300644Z 12012G20KT 10SM FEW130 32/18 A2984"
+      }
+    }'''
+    events = events_from_json(payload, reference_ns=REFERENCE_NS, stations={"KPHX"})
+    assert len(events) == 1
+    assert events[0]["report_kind"] == "SPECI"
+    assert events[0]["station_id"] == "KPHX"

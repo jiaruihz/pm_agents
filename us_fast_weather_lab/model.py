@@ -196,7 +196,12 @@ def events_from_json(payload: bytes, *, reference_ns: int, stations: set[str]) -
         override = {
             "station_id": station,
             "observation_time": observation_time,
-            "report_kind": row.get("metarType") or row.get("report_kind") or "METAR",
+            "report_kind": (
+                row.get("metarType")
+                or row.get("report_type")
+                or row.get("report_kind")
+                or "METAR"
+            ),
             "force_report_kind": row.get("force_report_kind"),
             "air_temperature_c": next(
                 (
