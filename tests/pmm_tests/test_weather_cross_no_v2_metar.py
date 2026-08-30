@@ -20,6 +20,7 @@ NOW = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
 def event(source: str, event_id: str, temp_c: float, *, family: str = "family-1", role: str = "new_content", valid: bool = True) -> dict:
     return {"information_event_id": event_id, "source": source, "event_role": role, "city": "Miami", "target_date": "2026-08-31",
             "station": "KMIA", "temp_c": temp_c, "clock_valid": valid, "pit_eligible": valid,
+            "source_topic": cross_no_v2.source_topic(source, "KMIA"),
             "transport_received_at_utc": "2026-08-31T11:59:30Z", "transport_received_monotonic_ns": int(event_id[-1]) * 100,
             "event_family_id": family, "semantic_version_id": event_id, "source_event_ts_utc": "2026-08-31T11:59:00Z"}
 
@@ -70,7 +71,96 @@ def test_live_exactly_five_shares_and_cross_source_race_dedupes(tmp_path: Path):
     assert result["orders"] == 1 and len(calls) == 1
     assert orders[0]["size"] == 5.0 and orders[0]["actual_fill_shares"] == 5.0
     assert orders[0]["public_trade_is_own_fill"] is False
-    assert "cross_source_race_already_executed" in read(tmp_path / "out/opportunities.jsonl")[-1]["blockers"]
+    opportunities = read(tmp_path / "out/opportunities.jsonl")
+    assert orders[0]["attribution_source_arm"] == "metar_ws_datis"
+    assert orders[0]["attribution_source_topic"] == "metar.atis.kmia"
+    assert orders[0]["attribution_role"] == "execution_race_winner"
+    assert opportunities[-1]["attribution_role"] == "later_race_blocked"
+    assert opportunities[-1]["economic_cross_id"] == orders[0]["economic_cross_id"]
+    assert "cross_source_race_already_executed" in opportunities[-1]["blockers"]
+    summary = json.loads((tmp_path / "out/source_attribution_latest.json").read_text())
+    assert summary["source_arms"]["metar_ws_datis"]["orders"] == 1
+    assert summary["source_arms"]["metar_ws_datis"]["fills"] == 1
+    assert summary["source_arms"]["metar_ws_hfmetar"]["later_race_blocked_events"] == 1
+
+
+def test_three_topics_are_explicit_source_arms_and_capture_metadata_is_attributed(tmp_path: Path):
+    assert cross_no_v2.source_topic("metar_ws_metar", "KJFK") == "metar.obs.kjfk"
+    assert cross_no_v2.source_topic("metar_ws_hfmetar", "KJFK") == "metar.obs10.kjfk"
+    assert cross_no_v2.source_topic("metar_ws_datis", "KJFK") == "metar.atis.kjfk"
+    run(
+        tmp_path,
+        [event("metar_ws_metar", "official1", 26.7), event("metar_ws_hfmetar", "hf2", 27.8)],
+    )
+    demand = read(tmp_path / "out/capture_demands.jsonl")[0]
+    assert demand["metadata"]["source_arm"] == "metar_ws_hfmetar"
+    assert demand["metadata"]["source_topic"] == "metar.obs10.kmia"
+    assert demand["metadata"]["economic_cross_id"].startswith("cross_no_v2:")
+
+
+def test_topic_mismatch_is_preserved_but_fail_closed(tmp_path: Path):
+    mismatched = {
+        **event("metar_ws_hfmetar", "hf2", 27.8),
+        "source_topic": "metar.atis.kmia",
+    }
+    result = run(tmp_path, [event("metar_ws_metar", "official1", 26.7), mismatched])
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0
+    assert row["source_topic"] == "metar.atis.kmia"
+    assert row["source_topic_valid"] is False
+    assert "source_topic_mismatch_or_missing" in row["blockers"]
+
+
+def test_equal_producer_event_ids_from_different_sources_are_both_denominator_rows(tmp_path: Path):
+    run(
+        tmp_path,
+        [
+            event("metar_ws_metar", "shared1", 26.7),
+            event("metar_ws_hfmetar", "shared1", 27.8),
+        ],
+    )
+    rows = read(tmp_path / "out/opportunities.jsonl")
+    assert len(rows) == 2
+    state = json.loads((tmp_path / "out/state.json").read_text())
+    assert state["processed_event_keys"] == [
+        "metar_ws_hfmetar|shared1",
+        "metar_ws_metar|shared1",
+    ]
+
+
+def test_legacy_bare_id_migration_skips_only_the_source_already_in_old_journal(tmp_path: Path):
+    books = tmp_path / "books.json"
+    books.write_text(json.dumps(markets()))
+    out = tmp_path / "out"; out.mkdir()
+    old = event("metar_ws_metar", "shared1", 26.7)
+    (out / "opportunities.jsonl").write_text(json.dumps(old) + "\n")
+    (out / "state.json").write_text(json.dumps({
+        "processed_event_ids": ["shared1"],
+        "official_max": {"Miami|2026-08-31": 80.06},
+    }))
+    cross_no_v2.run_probe(
+        source_events_root=tmp_path,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        events_override=[
+            old,
+            event("metar_ws_hfmetar", "shared1", 27.8),
+        ],
+    )
+    rows = read(out / "opportunities.jsonl")
+    assert len(rows) == 2
+    assert rows[-1]["source"] == "metar_ws_hfmetar"
+
+
+def test_explicit_missing_raw_topic_is_not_synthesized(tmp_path: Path):
+    missing = {**event("metar_ws_hfmetar", "hf2", 27.8), "source_topic": None}
+    run(tmp_path, [event("metar_ws_metar", "official1", 26.7), missing])
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert row["source_topic"] is None
+    assert row["source_topic_valid"] is False
+    assert "source_topic_mismatch_or_missing" in row["blockers"]
 
 
 def test_fail_closed_on_invalid_clock_and_missing_depth(tmp_path: Path):
