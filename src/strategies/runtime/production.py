@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlparse
@@ -114,6 +114,9 @@ class WeatherProductionSpec:
     releases: tuple[WeatherProductionReleaseSpec, ...] = field(default_factory=tuple)
     allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
     production_release_root: Path | None = None
+    # Loaded only by ``load_production_spec``.  Keeping the registry on the
+    # production spec makes that loader the sole authority for product roots.
+    data_product_registry: Any | None = None
 
     def release(self, release_id: str) -> WeatherProductionReleaseSpec:
         for release in self.releases:
@@ -680,7 +683,14 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"unknown dependencies for {item.instance_id}: "
                 f"{sorted(missing_dependencies)}"
             )
-    return spec
+    # Import late to avoid a module cycle: the registry validates itself
+    # against this fully parsed production topology.
+    from src.strategies.runtime.data_products import load_data_product_registry
+
+    return replace(
+        spec,
+        data_product_registry=load_data_product_registry(spec, source.parent),
+    )
 
 
 def health_contract_mismatches(

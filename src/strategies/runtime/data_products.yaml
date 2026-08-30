@@ -1,0 +1,125 @@
+version: weather_data_products_v1
+products:
+  - product_id: market_books
+    owner_instance_id: weather_market_books
+    producer_release_id: market_books
+    schema_version: weather_market_books_v1
+    root_key: market_books_root
+    relative_path: .
+    data_class: current
+    write_semantics: replace_latest
+    grain: market_snapshot
+    clocks: {captured_at_utc: capture_time}
+    consumers: [strategy_runtimes, canonical_refresh]
+    cutover_state: active
+    writer_lock: weather_market_books
+    feature_ready: false
+    notes: "Selective capture product; it does not claim a feature-ready full WS book."
+  - product_id: market_ladder
+    owner_instance_id: weather_market_books
+    producer_release_id: market_books
+    schema_version: weather_market_ladder_v1
+    root_key: market_ladder_snapshot_root
+    relative_path: .
+    data_class: current
+    write_semantics: replace_latest
+    grain: market_ladder_snapshot
+    clocks: {captured_at_utc: capture_time}
+    consumers: [strategy_runtimes, canonical_refresh]
+    cutover_state: active
+    writer_lock: weather_market_books
+  - product_id: strategy_snapshots
+    owner_instance_id: weather_data_feed_jrs
+    producer_release_id: data_feed
+    schema_version: weather_strategy_snapshot_v1
+    root_key: strategy_snapshot_root
+    relative_path: .
+    data_class: current
+    write_semantics: immutable_partition
+    grain: strategy_snapshot
+    clocks: {captured_at_utc: capture_time, target_date: target_date}
+    consumers: [strategy_runtimes, canonical_refresh, research]
+    cutover_state: active
+    writer_lock: weather_data_feed_jrs
+  - product_id: forecast_curves
+    owner_instance_id: weather_forecast_curve_collector_v1
+    producer_release_id: forecast_collector
+    schema_version: weather_forecast_hourly_curve_v1
+    root_key: forecast_output_root
+    relative_path: forecast_hourly_curves
+    data_class: current
+    write_semantics: immutable_partition
+    grain: forecast_run_curve
+    clocks: {captured_at_utc: capture_time, forecast_valid_at_utc: valid_time}
+    consumers: [strategy_runtimes, canonical_refresh, research]
+    cutover_state: active
+    writer_lock: weather_forecast_curve_collector_v1
+  - product_id: observations
+    owner_instance_id: weather_data_feed_jrs
+    producer_release_id: data_feed
+    schema_version: weather_observation_v1
+    root_key: data_feed_runtime_root
+    relative_path: output/observations
+    data_class: current
+    write_semantics: replace_latest
+    grain: station_observation
+    clocks: {observed_at_utc: observation_time, captured_at_utc: capture_time}
+    consumers: [strategy_runtimes, canonical_refresh]
+    cutover_state: active
+    writer_lock: weather_data_feed_jrs
+  - product_id: source_events
+    owner_instance_id: weather_data_feed_jrs
+    producer_release_id: data_feed
+    schema_version: weather_source_event_v1
+    root_key: data_feed_runtime_root
+    relative_path: output/source_events
+    data_class: current
+    write_semantics: append_only
+    grain: source_event
+    clocks: {event_at_utc: source_time, captured_at_utc: capture_time}
+    consumers: [strategy_runtimes, canonical_refresh, research]
+    cutover_state: active
+    cursor: {kind: jsonl_inode_prefix_v1}
+    writer_lock: weather_data_feed_jrs
+  - product_id: live_cross_observations
+    owner_instance_id: weather_live_cross_observations
+    producer_release_id: wcir
+    schema_version: weather_live_cross_observation_v1
+    root_key: data_feed_runtime_root
+    relative_path: output/live_cross_observations
+    data_class: current
+    write_semantics: append_only
+    grain: high_frequency_observation
+    clocks: {observed_at_utc: observation_time, captured_at_utc: capture_time}
+    consumers: [strategy_runtimes, canonical_refresh]
+    cutover_state: active
+    cursor: {kind: jsonl_inode_prefix_v1}
+    writer_lock: weather_live_cross_observations
+  - product_id: knmi_open_data
+    owner_instance_id: weather_knmi_open_data_jrs
+    producer_release_id: knmi
+    schema_version: weather_knmi_open_data_v1
+    root_key: data_feed_runtime_root
+    relative_path: output/knmi_open_data
+    data_class: current
+    write_semantics: append_only
+    grain: knmi_file_revision
+    clocks: {published_at_utc: source_time, captured_at_utc: capture_time}
+    consumers: [strategy_runtimes, canonical_refresh, research]
+    cutover_state: active
+    cursor: {kind: source_revision_v1}
+    writer_lock: weather_knmi_open_data_jrs
+  - product_id: wcir_decision_bundles
+    owner_instance_id: weather_city_probability_runtime_v3
+    producer_release_id: city_probability_runtime
+    schema_version: weather_wcir_decision_bundle_v1
+    root_key: data_feed_runtime_root
+    relative_path: output/city_probability_runtime_v3/decision_bundles.jsonl
+    data_class: current
+    write_semantics: append_only
+    grain: decision_bundle
+    clocks: {decision_ts_utc: decision_time, target_date: target_date}
+    consumers: [canonical_refresh, research]
+    cutover_state: active
+    cursor: {kind: jsonl_inode_prefix_v1}
+    writer_lock: weather_city_probability_runtime_v3
