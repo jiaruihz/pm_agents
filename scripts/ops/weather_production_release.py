@@ -270,6 +270,8 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
     if not apply:
         return report
 
+    if _git(operational_repo, "rev-parse", "HEAD").lower() != operational_head:
+        raise ReleaseError("operational HEAD changed after validation; retry dry-run")
     if not existed:
         target.parent.mkdir(parents=True, exist_ok=True)
         _git(operational_repo, "worktree", "add", "--detach", str(target), source_sha)
@@ -278,6 +280,14 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
     if not (venv_link.exists() or venv_link.is_symlink()):
         os.symlink(venv_target, venv_link)
         report["venv_symlink_created"] = True
+    if _git(operational_repo, "rev-parse", "HEAD").lower() != operational_head:
+        raise ReleaseError(
+            "operational HEAD changed while creating release; pin remains unchanged"
+        )
+    if production_spec.read_text(encoding="utf-8") != text["raw_text"]:
+        raise ReleaseError(
+            "production spec changed while creating release; pin remains unchanged"
+        )
     _atomic_write(production_spec, replacement)
     report["pin_updated"] = True
     return report
