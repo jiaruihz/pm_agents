@@ -89,6 +89,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
     runtime_bindings: [operational_venv, canonical_db]
+  - release_id: weather_first_selective_maker_v2_1
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/73f7e603505829158f64a78ed8049101fc6f0b2c
+    expected_repo_sha: 73f7e603505829158f64a78ed8049101fc6f0b2c
+    runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
     expected_repo_sha: ef64a2d0b14230d21e3544161dbf95a097eeca9c
@@ -268,7 +272,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
@@ -479,6 +483,30 @@ managed_runtimes:
     max_health_age_sec: 60
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
+    recovery_policy: safe
+
+  - instance_id: weather_first_selective_maker_v2_1_shadow
+    tmux_session: weather_first_selective_maker_v2_1_shadow
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: weather_first_selective_maker_v2_1
+    start_script: scripts/ops/start_weather_first_selective_maker_v2_1_shadow.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/latest.json
+    health_format: json
+    max_health_age_sec: 120
+    startup_grace_sec: 180
+    accepted_health_statuses: [warming, ok]
+    expected_health_fields:
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0
+      trade_intents: 0
+      orders: 0
+      fills: 0
+      exchange_calls: 0
+      venue_call_allowed: false
+      formal_forward_start_utc: "2026-08-31T00:00:00Z"
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, current_yes_core_carry_market_state_shadow_v2, weather_market_books]
     recovery_policy: safe
 
   - instance_id: fast_source_prev_no_trial_v1

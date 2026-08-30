@@ -122,6 +122,8 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "pretrigger_capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
             "scheduled_informed_maker_shadow_v1/capture_demands.jsonl "
+            "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
+            "weather_first_selective_maker_v2_1/capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/"
             "epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/"
             "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/"
@@ -149,6 +151,30 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert spec.release("market_books").expected_repo_sha == (
         "f5577f378f9f429f3cb4b06e3515c7b8662a030f"
+    )
+    selective_maker = by_id["weather_first_selective_maker_v2_1_shadow"]
+    assert selective_maker.execution_mode == "zero_notional_shadow"
+    assert selective_maker.expected_live is False
+    assert selective_maker.recovery_policy == "safe"
+    assert selective_maker.dependencies == (
+        "weather_data_feed_jrs",
+        "current_yes_core_carry_tiny_live_v2",
+        "current_yes_core_carry_market_state_shadow_v2",
+        "weather_market_books",
+    )
+    assert selective_maker.expected_health_contract() == {
+        "execution_mode": "zero_notional_shadow",
+        "live_authority": False,
+        "actual_notional": 0,
+        "trade_intents": 0,
+        "orders": 0,
+        "fills": 0,
+        "exchange_calls": 0,
+        "venue_call_allowed": False,
+        "formal_forward_start_utc": "2026-08-31T00:00:00Z",
+    }
+    assert spec.release("weather_first_selective_maker_v2_1").expected_repo_sha == (
+        "73f7e603505829158f64a78ed8049101fc6f0b2c"
     )
     amsterdam = by_id["weather_amsterdam_wcir_frozen_shadow_v2"]
     assert amsterdam.execution_mode == "zero_notional_shadow"
