@@ -17,8 +17,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort
 
-TARGET_CITIES = frozenset({"Miami", "LA", "NYC", "Houston", "Dallas", "Seattle", "SanFrancisco", "Chicago"})
+COHORT = load_market_reaction_cohort()
+TARGET_CITIES = COHORT.reaction_cities
 TARGET_SOURCES = frozenset({"metar_ws_metar", "metar_ws_hfmetar", "metar_ws_datis"})
 CHECKPOINTS_SECONDS = (0, 15, 30, 60, 120, 300)
 EXECUTABLE_SIZES = (1, 5, 10)
@@ -249,9 +251,30 @@ def _top(levels: Mapping[str, Mapping[float, float]]) -> tuple[float, float]:
     return (max(levels["bids"], default=0.0), min(levels["asks"], default=1.0))
 
 
+def _validate_demand_cohort_metadata(
+    event: Mapping[str, Any], demand: Mapping[str, Any]
+) -> None:
+    target = COHORT.target_for_event(event)
+    if target is None:
+        raise ValueError("demand references an event outside the fixed reaction cohort")
+    raw_metadata = demand.get("metadata")
+    metadata = raw_metadata if isinstance(raw_metadata, Mapping) else {}
+    expected = {
+        "city": target.city,
+        "cohort_id": COHORT.cohort_id,
+        "cohort_role": target.role,
+        "basis_status": target.basis_status,
+        "cohort_source_station": target.source_station,
+        "cohort_market_station": target.market_station,
+    }
+    for key, expected_value in expected.items():
+        if key in metadata and metadata.get(key) != expected_value:
+            raise ValueError(f"demand metadata conflicts with fixed cohort field: {key}")
+
+
 def _event_demands(events: Iterable[Mapping[str, Any]], demands: Iterable[Mapping[str, Any]]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     event_by_id = {str(row.get("information_event_id")): dict(row) for row in events
-                   if str(row.get("city")) in TARGET_CITIES and str(row.get("source")) in TARGET_SOURCES}
+                   if COHORT.target_for_event(row) is not None and str(row.get("source")) in TARGET_SOURCES}
     output: list[tuple[dict[str, Any], dict[str, Any]]] = []
     seen: set[tuple[str, str]] = set()
     for demand in demands:
@@ -259,6 +282,7 @@ def _event_demands(events: Iterable[Mapping[str, Any]], demands: Iterable[Mappin
             continue
         event_id, token_id = str(demand.get("trigger_event_id") or ""), str(demand.get("token_id") or "")
         if event_id in event_by_id and token_id and (event_id, token_id) not in seen:
+            _validate_demand_cohort_metadata(event_by_id[event_id], demand)
             output.append((event_by_id[event_id], dict(demand))); seen.add((event_id, token_id))
     return output
 
@@ -311,7 +335,7 @@ def _event_running_max(events: Iterable[Mapping[str, Any]]) -> dict[str, dict[st
             and received is not None
             and temp is not None
             and report_time is not None
-            and str(event.get("city")) in TARGET_CITIES
+            and COHORT.target_for_event(event) is not None
             and source in TARGET_SOURCES
         ):
             accepted.append((received, event_id, dict(event), temp, report_time))
@@ -370,6 +394,8 @@ def analyze_metar_market_reaction(
         if event_ns is None:
             continue
         token = str(demand["token_id"]); metadata = demand.get("metadata") if isinstance(demand.get("metadata"), Mapping) else {}
+        cohort_target = COHORT.target_for_event(event)
+        assert cohort_target is not None
         subscribed_epochs = [e for e in epochs if token in _epoch_tokens(e)]
         pre_epochs = {str(e.get("subscription_epoch_id")) for e in subscribed_epochs if (_ns(e.get("started_monotonic_ns")) or 10**30) <= event_ns}
         state: dict[str, dict[str, dict[float, float]]] = {}
@@ -496,7 +522,8 @@ def analyze_metar_market_reaction(
         row: dict[str, Any] = {
             "schema_version": "metar_market_reaction_v1", "information_event_id": event.get("information_event_id"),
             "demand_id": demand.get("demand_id"), "token_id": token, "condition_id": demand.get("condition_id"),
-            "city": metadata.get("city", event.get("city")), "bracket": metadata.get("bracket"), "outcome": metadata.get("outcome"),
+            "city": cohort_target.city, "bracket": metadata.get("bracket"), "outcome": metadata.get("outcome"),
+            **cohort_target.metadata(cohort_id=COHORT.cohort_id),
             "source": event.get("source"), "station_id": event.get("station_id", event.get("station")),
             "source_report_ts_utc": event.get("source_report_ts_utc"), "temp_c": event.get("temp_c"),
             "event_transport_received_at_utc": event.get("transport_received_at_utc"), "event_transport_received_monotonic_ns": event_ns,
@@ -547,6 +574,8 @@ def analyze_metar_market_reaction(
         scoped_observed = [row for row in scoped if row["status"] == "OBSERVED"]
         return {"event_count": len(event_ids), "event_token_denominator": len(scoped),
                 "pre_event_baseline_coverage": len(scoped_observed) / len(scoped) if scoped else None}
+    primary_rows = [row for row in rows if row["cohort_role"] == "primary"]
+    control_rows = [row for row in rows if row["cohort_role"] != "primary"]
     summary = {
         "event_count": len({row["information_event_id"] for row in rows}), "event_token_denominator": len(rows),
         "pre_event_baseline_coverage": len(observed) / len(rows) if rows else None,
@@ -577,6 +606,13 @@ def analyze_metar_market_reaction(
         "public_trade_print_semantics": "public trade print != own fill",
         "event_funnels": {"all_source_events": funnel(all_event_ids),
                           "material_running_max_or_bracket_transition_events": funnel(material_event_ids)},
+        "cohort": {
+            "cohort_id": COHORT.cohort_id,
+            "primary_event_token_denominator": len(primary_rows),
+            "basis_mismatch_control_event_token_denominator": len(control_rows),
+            "primary_event_count": len({row["information_event_id"] for row in primary_rows}),
+            "basis_mismatch_control_event_count": len({row["information_event_id"] for row in control_rows}),
+        },
     }
     return {"schema_version": "metar_market_reaction_report_v1", "summary": summary, "rows": rows}
 

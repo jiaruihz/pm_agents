@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 from datetime import datetime, timezone
 
 from us_fast_weather_lab.model import events_from_json, events_from_tac, metar_event, sniff_payload
@@ -84,3 +85,41 @@ def test_metar_ws_report_type_preserves_speci_semantics_without_tac_prefix() -> 
     assert len(events) == 1
     assert events[0]["report_kind"] == "SPECI"
     assert events[0]["station_id"] == "KPHX"
+
+
+def test_optional_metar_prefix_and_source_visibility_override_share_semantic_identity() -> None:
+    body = "KATL 300852Z 11004KT 10SM FEW110 23/21 A3015"
+    vendor = metar_event(body, reference_ns=REFERENCE_NS, override={"visibility_m": 9999})
+    public = metar_event(f"METAR {body}", reference_ns=REFERENCE_NS)
+    assert vendor is not None and public is not None
+    assert vendor["semantic_version_id"] == public["semantic_version_id"]
+    assert vendor["normalized_fields_json"] == public["normalized_fields_json"]
+    assert vendor["raw_report_id"] != public["raw_report_id"]
+    assert vendor["observation_version_id"] != public["observation_version_id"]
+
+
+def test_report_kind_and_correction_remain_distinct_semantics() -> None:
+    body = "KATL 300852Z 11004KT 10SM FEW110 23/21 A3015"
+    routine = metar_event(f"METAR {body}", reference_ns=REFERENCE_NS)
+    special = metar_event(f"SPECI {body}", reference_ns=REFERENCE_NS)
+    correction = metar_event(f"METAR KATL 300852Z COR 11004KT 10SM FEW110 23/21 A3015", reference_ns=REFERENCE_NS)
+    assert routine is not None and special is not None and correction is not None
+    assert len({routine["semantic_version_id"], special["semantic_version_id"], correction["semantic_version_id"]}) == 3
+
+
+def test_tac_visibility_forms_are_normalized_with_units_and_qualifier() -> None:
+    cases = {
+        "10SM": (16_093.44, "exact"),
+        "1 1/2SM": (2_414.016, "exact"),
+        "P6SM": (9_656.064, "greater_than"),
+        "M1/4SM": (402.336, "less_than"),
+        "CAVOK": (10_000.0, "at_least"),
+    }
+    for token, expected in cases.items():
+        event = metar_event(
+            f"METAR KATL 300852Z 11004KT {token} FEW110 23/21 A3015",
+            reference_ns=REFERENCE_NS,
+        )
+        assert event is not None
+        fields = json.loads(event["normalized_fields_json"])
+        assert (fields["visibility_m"], fields["visibility_qualifier"]) == expected

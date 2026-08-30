@@ -24,6 +24,7 @@ from us_fast_weather_lab.commercial_ws import (
 from us_fast_weather_lab.model import metar_event
 from us_fast_weather_lab.lab_to_source_events import materialize_lab_events
 from us_fast_weather_lab.metar_market_capture import materialize_capture_demands
+from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort
 from us_fast_weather_lab.reports import generate_reports
 from us_fast_weather_lab.storage import EvidenceStore, canonical_json
 from us_fast_weather_lab.wis2 import Wis2Collector, discover_brokers
@@ -33,6 +34,7 @@ LAB_ROOT = Path(__file__).resolve().parent
 DEFAULT_RUNTIME = Path("runtime/us_fast_weather_lab")
 DEFAULT_REPORTS = LAB_ROOT / "reports"
 COMMERCIAL_CONFIG_PATH = LAB_ROOT / "config" / "commercial_streams.yaml"
+MARKET_REACTION_COHORT_PATH = LAB_ROOT / "config" / "market_reaction_cohort.yaml"
 CONFIG_PATHS = [
     LAB_ROOT / "config" / "airports.yaml",
     LAB_ROOT / "config" / "acceptance_contract.yaml",
@@ -41,6 +43,7 @@ CONFIG_PATHS = [
     LAB_ROOT / "config" / "source_ledger_seed.csv",
     LAB_ROOT / "config" / "airport_direct_sensor_inventory.csv",
     COMMERCIAL_CONFIG_PATH,
+    MARKET_REACTION_COHORT_PATH,
 ]
 
 
@@ -163,6 +166,7 @@ def command_smoke(args: argparse.Namespace) -> int:
     capture_enabled = all(capture_values)
     source_config = load_yaml(CONFIG_PATHS[2])
     commercial_config = load_yaml(COMMERCIAL_CONFIG_PATH)
+    market_cohort = load_market_reaction_cohort(MARKET_REACTION_COHORT_PATH)
     acceptance = load_yaml(CONFIG_PATHS[1])
     station_set = airports()
     metar_ws_key: str | None = None
@@ -254,11 +258,9 @@ def command_smoke(args: argparse.Namespace) -> int:
 
         if metar_ws_key:
             metar_raw = commercial_config["metar_ws"]
-            commercial_station_set = station_set | {
-                str(value).strip().upper()
-                for value in metar_raw.get("benchmark_stations", ())
-                if str(value).strip()
-            }
+            # Official/HF subscriptions use the versioned reaction cohort;
+            # D-ATIS remains strictly the explicit commercial-stream list.
+            commercial_station_set = station_set | set(market_cohort.official_source_stations)
             channels: list[str] = []
             if bool(metar_raw.get("subscribe_primary_official")):
                 channels.extend(

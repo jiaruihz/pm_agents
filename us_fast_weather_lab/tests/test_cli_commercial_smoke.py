@@ -96,6 +96,11 @@ def test_commercial_only_smoke_skips_public_collectors_and_keeps_key_secret(
     assert {"metar.obs.kdal", "metar.obs.khou", "metar.obs10.kdal", "metar.obs10.khou"}.issubset(
         set(init_kwargs["config"].channels)
     )
+    channels = set(init_kwargs["config"].channels)
+    # The versioned wide cohort adds stations absent from the legacy eight-city
+    # list, but D-ATIS is deliberately still the explicit commercial list.
+    assert {"metar.obs.katl", "metar.obs.kbkf", "metar.obs10.katl", "metar.obs10.kbkf"}.issubset(channels)
+    assert "metar.atis.kbkf" not in channels
 
 
 def test_commercial_start_failure_still_seals_run_without_secret(tmp_path, monkeypatch) -> None:

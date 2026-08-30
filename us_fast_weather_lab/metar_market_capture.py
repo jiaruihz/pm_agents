@@ -18,11 +18,11 @@ from pathlib import Path
 from typing import Any
 
 from src.platform.market_data.capture_demand import CaptureDemand
+from us_fast_weather_lab.market_reaction_cohort import load_market_reaction_cohort
 
-
-TARGET_CITIES = frozenset(
-    {"Miami", "LA", "NYC", "Houston", "Dallas", "Seattle", "SanFrancisco", "Chicago"}
-)
+COHORT = load_market_reaction_cohort()
+# Retained as a read-only compatibility alias; eligibility uses COHORT.
+TARGET_CITIES = COHORT.reaction_cities
 TARGET_SOURCES = frozenset({"metar_ws_metar", "metar_ws_hfmetar", "metar_ws_datis"})
 CHECKPOINTS = (0, 15, 30, 60, 120, 300)
 CONSUMER_ID = "weather_metar_ws_research"
@@ -246,7 +246,7 @@ def _resolution_id(event_id: str, kind: str) -> str:
 
 
 def _event_candidate(row: Mapping[str, Any]) -> tuple[bool, str | None]:
-    if str(row.get("city")) not in TARGET_CITIES:
+    if COHORT.target_for_event(row) is None:
         return False, "city_not_in_fixed_cohort"
     if str(row.get("source")) not in TARGET_SOURCES:
         return False, "source_not_metrar_ws_target"  # stable ledger spelling retained for identity
@@ -305,6 +305,8 @@ def _materialize_events(
             continue
 
         city, target_date = str(event["city"]), str(event.get("target_date") or "")
+        cohort_target = COHORT.target_for_event(event)
+        assert cohort_target is not None
         key = (city, target_date)
         temperature_f = float(event["temp_c"]) * 9.0 / 5.0 + 32.0
         running_max[key] = max(running_max.get(key, -math.inf), temperature_f)
@@ -348,6 +350,7 @@ def _materialize_events(
                     "clock_valid": bool(event.get("clock_valid")),
                     "pit_eligible": bool(event.get("pit_eligible")),
                     "formal_latency_eligible": bool(event.get("clock_valid")) and bool(event.get("pit_eligible")),
+                    **cohort_target.metadata(cohort_id=COHORT.cohort_id),
                 },
             ).to_dict()
             if demand["demand_id"] not in existing_demands:
@@ -397,7 +400,8 @@ def _materialize_events(
                             "schedule_basis": "prior_routine_metar_report_plus_1h",
                             "clock_valid": bool(event.get("clock_valid")),
                             "pit_eligible": bool(event.get("pit_eligible")),
-                            "formal_latency_eligible": bool(event.get("clock_valid")) and bool(event.get("pit_eligible"))},
+                            "formal_latency_eligible": bool(event.get("clock_valid")) and bool(event.get("pit_eligible")),
+                            **cohort_target.metadata(cohort_id=COHORT.cohort_id)},
                     ).to_dict()
                     if demand["demand_id"] not in existing_demands:
                         demands.append(demand); existing_demands.add(str(demand["demand_id"])); scheduled += 1

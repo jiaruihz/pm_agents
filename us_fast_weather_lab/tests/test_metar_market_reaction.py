@@ -255,3 +255,29 @@ def test_equal_monotonic_frames_replay_deterministically(tmp_path):
     reversed_inputs = analyze_metar_market_reaction(*paths[:3], [second_raw, paths[3]])
     assert forward == reversed_inputs
     assert forward["rows"][0]["checkpoint_15s_bid"] == .40
+
+
+def test_chicago_is_explicit_control_not_primary_efficacy(tmp_path):
+    paths = _inputs(tmp_path, frames=[_frame(90, _book(.40, .60))])
+    source_path = paths[0] / "2026-08-30" / "sources.jsonl"
+    rows = [json.loads(line) for line in source_path.read_text().splitlines()]
+    rows[0]["city"] = "Chicago"; rows[0]["station_id"] = "KORD"
+    rows[1]["city"] = "Chicago"; rows[1]["station_id"] = "KORD"
+    source_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    demand_rows = [json.loads(line) for line in paths[1].read_text().splitlines()]
+    demand_rows[0]["metadata"]["city"] = "Chicago"
+    paths[1].write_text("".join(json.dumps(row) + "\n" for row in demand_rows))
+    report = analyze_metar_market_reaction(*paths[:3], [paths[3]])
+    assert report["rows"][0]["cohort_role"] == "basis_mismatch_control"
+    assert report["rows"][0]["basis_status"] == "source_market_station_mismatch"
+    assert report["summary"]["cohort"]["primary_event_token_denominator"] == 0
+    assert report["summary"]["cohort"]["basis_mismatch_control_event_token_denominator"] == 1
+
+
+def test_explicit_demand_city_conflict_fails_closed(tmp_path):
+    paths = _inputs(tmp_path, frames=[_frame(90, _book(.40, .60))])
+    demand_rows = [json.loads(line) for line in paths[1].read_text().splitlines()]
+    demand_rows[0]["metadata"]["city"] = "Chicago"
+    paths[1].write_text("".join(json.dumps(row) + "\n" for row in demand_rows))
+    with pytest.raises(ValueError, match="conflicts with fixed cohort field: city"):
+        analyze_metar_market_reaction(*paths[:3], [paths[3]])

@@ -88,6 +88,30 @@ def test_unmapped_or_incomplete_rows_are_ledgered_without_demand(tmp_path):
     assert {row["blocker"] for row in resolution} == {"temperature_missing", "city_not_in_fixed_cohort"}
 
 
+def test_wide_primary_and_chicago_control_retain_cohort_metadata(tmp_path):
+    source = _write_events(
+        tmp_path,
+        _event(city="Denver", event_id="denver"),
+        {**_event(city="Chicago", event_id="chicago"), "station_id": "KORD"},
+    )
+    output = tmp_path / "demands.jsonl"
+    market = _market(tmp_path, city="Denver")
+    payload = json.loads(market.read_text())
+    payload["records"].extend([
+        {**row, "city": "Chicago", "condition_id": f"chicago-{row['condition_id']}", "token_id": f"chicago-{row['token_id']}"}
+        for row in list(payload["records"])
+    ])
+    market.write_text(json.dumps(payload))
+    materialize_capture_demands(source, market, output)
+    immediate = [row for row in _rows(output) if row["reason"] == "metar_ws_first_seen_hot_strip"]
+    metadata = {row["metadata"]["city"]: row["metadata"] for row in immediate}
+    assert metadata["Denver"]["cohort_role"] == "primary"
+    assert metadata["Denver"]["cohort_source_station"] == "KBKF"
+    assert metadata["Chicago"]["cohort_role"] == "basis_mismatch_control"
+    assert metadata["Chicago"]["basis_status"] == "source_market_station_mismatch"
+    assert metadata["Chicago"]["cohort_market_station"] == "KMDW"
+
+
 def test_incomplete_yes_no_pair_fails_closed_for_entire_event(tmp_path):
     source = _write_events(tmp_path, _event())
     market = _market(tmp_path)
