@@ -145,7 +145,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert cross_no_v2.release_id == "cross_no_v2_metar"
     assert cross_no_v2.expected_health_contract() == {
         "strategy_instance": "cross_no_v2_metar_v1",
-        "code_identity": "390bc9d2531a327d896b75c0767ddad759515f36",
+        "code_identity": "c577198241648132891dfdbc19e6e298a6e8ca78",
         "execution_mode": "live_probe",
         "live_enabled": True,
         "shares_per_order": 5.0,
@@ -158,7 +158,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "source_attribution_schema_version": "cross_no_v2_metar_source_attribution_runtime_v1",
     }
     assert spec.release("cross_no_v2_metar").expected_repo_sha == (
-        "390bc9d2531a327d896b75c0767ddad759515f36"
+        "c577198241648132891dfdbc19e6e298a6e8ca78"
     )
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"
