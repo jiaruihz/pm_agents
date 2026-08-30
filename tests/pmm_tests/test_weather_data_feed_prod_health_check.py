@@ -14,6 +14,7 @@ from scripts.ops.weather_data_feed_prod_health_check import (
     check_snapshot_source_model,
     check_telemetry,
     overall_status,
+    required_observation_cities,
 )
 from weather_data_feed.forecast_hourly_curves import build_curve_row, write_forecast_hourly_curve_capture
 
@@ -494,6 +495,41 @@ def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
     assert report["missing_required_cities"] == ["Manila"]
     assert report["missing_required_by_field"]["metar_current_max_f"] == ["Manila"]
     assert report["missing_required_trading_cities"] == ["Manila"]
+
+
+def test_required_observation_cities_blocks_trading_not_research_pool():
+    payload = {
+        "trading_t1_cities": ["London"],
+        "research_t2_cities": ["PanamaCity"],
+        "city_pools": {
+            "London": "t1_trading",
+            "PanamaCity": "t2_research",
+        },
+        "records": [
+            {
+                "city": city,
+                "target_date": "2026-08-30",
+                "city_local_date_at_snapshot": "2026-08-30",
+            }
+            for city in ("London", "PanamaCity")
+        ],
+    }
+
+    assert required_observation_cities(payload) == {"London"}
+
+
+def test_required_observation_cities_legacy_snapshot_fails_closed():
+    payload = {
+        "records": [
+            {
+                "city": "PanamaCity",
+                "target_date": "2026-08-30",
+                "city_local_date_at_snapshot": "2026-08-30",
+            }
+        ]
+    }
+
+    assert required_observation_cities(payload) == {"PanamaCity"}
 
 
 def test_snapshot_source_model_health_validates_lineage_without_rejecting_fallback(tmp_path):

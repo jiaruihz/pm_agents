@@ -1373,6 +1373,47 @@ def overall_status(sections: dict[str, Any]) -> str:
     return "warn" if warn else "ok"
 
 
+def required_observation_cities(snapshot_payload: dict[str, Any]) -> set[str]:
+    """Return the current trading universe whose cache failures block control.
+
+    Research-only cities stay in the observation cache and its evidence
+    denominator, but their source outages must be warnings rather than a
+    stack-wide production critical. Prefer the producer's explicit T1 list,
+    then the city-pool contract; legacy snapshots without either remain
+    conservative and require every same-local-day city.
+    """
+
+    same_local_day_cities = {
+        str(row.get("city") or "")
+        for row in snapshot_payload.get("records", [])
+        if isinstance(row, dict)
+        and row.get("city")
+        and row.get("target_date") == row.get("city_local_date_at_snapshot")
+    }
+    declared_trading = snapshot_payload.get("trading_t1_cities")
+    city_pools = snapshot_payload.get("city_pools")
+    trading_cities = (
+        {str(city) for city in declared_trading if str(city)}
+        if isinstance(declared_trading, list)
+        else set()
+    )
+    if isinstance(city_pools, dict):
+        trading_cities.update(
+            str(city)
+            for city, pool in city_pools.items()
+            if str(pool) == "t1_trading" and str(city)
+        )
+    if isinstance(declared_trading, list) or trading_cities:
+        return same_local_day_cities & trading_cities
+
+    declared_active = snapshot_payload.get("active_cities")
+    if isinstance(declared_active, list):
+        return same_local_day_cities & {
+            str(city) for city in declared_active if str(city)
+        }
+    return same_local_day_cities
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check production weather data feed outputs for stale, bad, or duplicate data.")
     parser.add_argument("--snapshot", default="")
@@ -1405,13 +1446,7 @@ def main() -> int:
     now_utc = datetime.now(timezone.utc)
     snapshot_path = Path(args.snapshot) if args.snapshot else latest_snapshot(Path(args.snapshot_dir))
     snapshot_payload = load_snapshot(snapshot_path)
-    required_observation_cities = {
-        str(row.get("city") or "")
-        for row in snapshot_payload.get("records", [])
-        if isinstance(row, dict)
-        and row.get("city")
-        and row.get("target_date") == row.get("city_local_date_at_snapshot")
-    }
+    blocking_observation_cities = required_observation_cities(snapshot_payload)
     runtime_root = Path(args.runtime_root)
     telemetry_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_TELEMETRY_FILES]
     summary_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_SUMMARY_FILES]
@@ -1448,7 +1483,7 @@ def main() -> int:
             max_cache_age_min=args.max_observation_cache_age_min,
             max_history_age_min=args.max_observation_history_age_min,
             max_observation_age_min=args.max_observation_age_min,
-            required_cities=required_observation_cities,
+            required_cities=blocking_observation_cities,
             history_tail_rows=args.tail_observation_history_rows,
         ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],

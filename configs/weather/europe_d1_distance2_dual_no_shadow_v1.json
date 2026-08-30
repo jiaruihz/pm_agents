@@ -12,7 +12,7 @@
     "low_distance2_no": 0.5,
     "high_distance2_no": 0.5
   },
-  "eligibility_policy": "fixed_europe_all_only",
+  "eligibility_policy": "fixed_europe_all_with_market_tail_risk_overlay",
   "weather_feature_policy": "telemetry_only_never_filters",
   "feature_model_labels": [
     "ECMWF",
@@ -64,10 +64,12 @@
     }
   },
   "frozen_forward": {
+    "formal_forward_start_utc": "2026-08-30T16:42:11Z",
     "historical_blind_dates": 8,
     "minimum_new_target_dates": 15,
     "remaining_at_registration": 7,
     "city_set_may_change": false,
-    "weather_features_may_filter": false
+    "weather_features_may_filter": false,
+    "joint_market_probability_max": 0.1
   }
 }

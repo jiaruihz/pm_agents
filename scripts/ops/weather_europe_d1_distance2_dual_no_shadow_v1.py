@@ -63,6 +63,23 @@ def finite(value: Any) -> float | None:
     return result if math.isfinite(result) else None
 
 
+def load_market_tail_threshold(config: dict[str, Any]) -> float:
+    """Return the frozen market-implied tail-risk ceiling.
+
+    This is intentionally a config-level policy rather than a weather feature:
+    the weighted probability is calculated from the paired market mids.
+    """
+    frozen_forward = config.get("frozen_forward")
+    if not isinstance(frozen_forward, dict):
+        raise ValueError("frozen_forward configuration is required")
+    threshold = finite(frozen_forward.get("joint_market_probability_max"))
+    if threshold is None or not 0 <= threshold <= 1:
+        raise ValueError(
+            "frozen_forward.joint_market_probability_max must be finite and within [0, 1]"
+        )
+    return threshold
+
+
 def latest_file(root: Path) -> Path | None:
     paths = list(root.glob("**/*.jsonl.gz"))
     return max(paths, key=lambda path: path.stat().st_mtime) if paths else None
@@ -325,6 +342,7 @@ def build_cycle(
     repo_sha: str = "",
 ) -> dict[str, Any]:
     config = read_json(config_path, {})
+    joint_market_probability_max = load_market_tail_threshold(config)
     city_configs = config.get("cities") or {}
     books = load_no_books(book_path)
     book_asof = max(
@@ -431,6 +449,15 @@ def build_cycle(
             if all(value is not None for value in market_exact)
             else None
         )
+        joint_market_probability = (
+            sum(
+                float(leg["allocation_weight"])
+                * float(leg["market_p_exact"])
+                for leg in legs
+            )
+            if all(value is not None for value in market_exact)
+            else None
+        )
         normalized_expected_payout = (
             1
             - sum(
@@ -452,6 +479,20 @@ def build_cycle(
             model_labels=model_labels,
             training_cutoff=calibration_payload.get("training_cutoff"),
         )
+        market_tail_eligible = (
+            paired_executable
+            and joint_market_probability is not None
+            and joint_market_probability
+            <= joint_market_probability_max + 1e-12
+        )
+        if not paired_executable:
+            decision_status = "paired_book_unexecutable"
+        elif joint_market_probability is None:
+            decision_status = "market_joint_probability_unavailable"
+        elif not market_tail_eligible:
+            decision_status = "market_joint_probability_above_threshold"
+        else:
+            decision_status = "would_shadow_entry"
         records.append(
             {
                 "schema_version": (
@@ -471,12 +512,11 @@ def build_cycle(
                 "book_snapshot_path": str(book_path),
                 "book_asof_utc": book_asof.isoformat(),
                 "decision_asof_utc": decision_asof.isoformat(),
-                "decision_status": (
-                    "would_shadow_entry"
-                    if paired_executable
-                    else "paired_book_unexecutable"
-                ),
+                "decision_status": decision_status,
                 "paired_book_executable": paired_executable,
+                "joint_market_probability_max": joint_market_probability_max,
+                "joint_market_probability": joint_market_probability,
+                "market_tail_eligible": market_tail_eligible,
                 "normalized_reference_cost": normalized_cost,
                 "market_combined_distance2_exact_mass": (
                     market_combined_mass
@@ -501,6 +541,8 @@ def build_cycle(
         "strategy_instance": STRATEGY_INSTANCE,
         "execution_mode": "zero_notional_shadow",
         "orders_submitted": 0,
+        "actual_notional_usd": 0.0,
+        "joint_market_probability_max": joint_market_probability_max,
         "book_path": str(book_path),
         "book_asof_utc": book_asof.isoformat(),
         "signal_funnel": {
@@ -513,6 +555,9 @@ def build_cycle(
         "evidence_funnel": {
             "paired_executable_city_dates": sum(
                 row["paired_book_executable"] for row in records
+            ),
+            "market_tail_eligible_city_dates": sum(
+                row["market_tail_eligible"] for row in records
             ),
             "forecast_feature_city_dates": sum(
                 row["weather_features"]["feature_status"] == "available"
