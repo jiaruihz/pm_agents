@@ -61,7 +61,9 @@ def main() -> int:
                                   observations_root=args.observations_root, decisions=args.decisions, max_events=args.max_events)
         if str(score.get("forward_epoch_id") or "") != epoch:
             raise RuntimeError("scorer returned unexpected frozen epoch")
-        runtime.ingest_predictions(read_jsonl(root / "predictions.jsonl"))
+        # score_shadow_once appends directly to the epoch journal. Refresh the
+        # materializer's identity index instead of re-ingesting the same rows.
+        runtime.refresh_predictions()
         result = runtime.materialize()
         health = runtime.write_health(epoch=epoch, frozen_hashes={
             "feature_builder_hash": epoch_manifest.get("feature_builder_hash"),
