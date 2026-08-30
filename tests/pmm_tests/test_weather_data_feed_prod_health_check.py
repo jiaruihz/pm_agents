@@ -552,6 +552,7 @@ def test_required_observation_cities_blocks_trading_not_research_pool():
                 "city": city,
                 "target_date": "2026-08-30",
                 "city_local_date_at_snapshot": "2026-08-30",
+                "live_observation_source": "aviationweather_metar",
             }
             for city in ("London", "PanamaCity")
         ],
@@ -560,7 +561,7 @@ def test_required_observation_cities_blocks_trading_not_research_pool():
     assert required_observation_cities(payload) == {"London"}
 
 
-def test_required_observation_cities_honors_active_city_missing_from_records():
+def test_required_observation_cities_does_not_invent_source_for_missing_record():
     payload = {
         "active_cities": ["London", "PanamaCity"],
         "trading_t1_cities": ["London"],
@@ -577,7 +578,7 @@ def test_required_observation_cities_honors_active_city_missing_from_records():
         ],
     }
 
-    assert required_observation_cities(payload) == {"London"}
+    assert required_observation_cities(payload) == set()
 
 
 def test_required_observation_cities_empty_t1_metadata_fails_closed():

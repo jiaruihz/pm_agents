@@ -1387,17 +1387,26 @@ def required_observation_cities(snapshot_payload: dict[str, Any]) -> set[str]:
 
     Research-only cities stay in the observation cache and its evidence
     denominator, but their source outages must be warnings rather than a
-    stack-wide production critical. Prefer the producer's explicit T1 list,
-    then the city-pool contract; legacy snapshots without either remain
-    conservative and require every same-local-day city.
+    stack-wide production critical. A blocking city must also have an explicit
+    live observation source; snapshot coverage owns missing-record/source
+    warnings. Legacy snapshots without a T1 contract remain conservative and
+    require every same-local-day city.
     """
 
-    same_local_day_cities = {
-        str(row.get("city") or "")
+    same_local_day_rows = [
+        row
         for row in snapshot_payload.get("records", [])
         if isinstance(row, dict)
         and row.get("city")
         and row.get("target_date") == row.get("city_local_date_at_snapshot")
+    ]
+    same_local_day_cities = {
+        str(row.get("city") or "") for row in same_local_day_rows
+    }
+    observable_cities = {
+        str(row.get("city") or "")
+        for row in same_local_day_rows
+        if str(row.get("live_observation_source") or "")
     }
     declared_trading = snapshot_payload.get("trading_t1_cities")
     city_pools = snapshot_payload.get("city_pools")
@@ -1421,7 +1430,7 @@ def required_observation_cities(snapshot_payload: dict[str, Any]) -> set[str]:
         # not safe to require the whole supported registry here.
         active_cities = same_local_day_cities
     if trading_cities:
-        return active_cities & trading_cities
+        return active_cities & trading_cities & observable_cities
     # Empty or malformed T1 metadata must not turn off every cache gate.
     return active_cities
 
