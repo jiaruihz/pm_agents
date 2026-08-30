@@ -70,7 +70,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["current_yes_core_carry_tiny_live_v2"].release_id == "core_carry_runtime"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "8c973d32d4315c07ff7180f3b66b5b3024b4ae60/scripts/ops/"
+        "264cf84d6a1b70994682253de815aba9b944d9a2/scripts/ops/"
         "start_weather_current_yes_core_carry_tiny_live_v2.sh"
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
@@ -93,6 +93,11 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "event_bracket_count": 3,
         "research_sample_modulus": 6,
         "daily_payload_budget_bytes": 3_000_000_000,
+        "execution_evidence.enabled": True,
+        "execution_evidence.schema_version": "weather_execution_evidence_health_v1",
+        "execution_evidence.daily_budget_bytes": 1_000_000_000,
+        "execution_evidence.semantics.public_trade_print": "exchange match not own fill",
+        "execution_evidence.semantics.public_book": "quote state not queue or execution",
     }
     assert dict(by_id["weather_market_books"].launch_environment) == {
         "WEATHER_MARKET_BOOKS_WS_CITIES": "Amsterdam Tokyo Helsinki Busan",
@@ -101,6 +106,9 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "WEATHER_MARKET_BOOKS_WS_EVENT_BRACKETS": "3",
         "WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS": "6",
         "WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES": "3000000000",
+        "WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_MIN_INTERVAL_SEC": "10",
+        "WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC": "20",
+        "WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES": "1000000000",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS": (
             "/Volumes/jrs/weather_data_feed_service_runtime/output/"
             "forecast_run_capture/market_capture_demands.jsonl"
@@ -116,7 +124,9 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "scheduled_informed_maker_shadow_v1/capture_demands.jsonl "
             "/Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/"
             "epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/"
-            "capture_demands.jsonl"
+            "capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/"
+            "us_fast_weather_lab_metarws_pro_market_20260830/"
+            "market_capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS": "96",
@@ -135,7 +145,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "b0034ca1c99dd500966cb1ee935fc59a49a83b98"
+        "f5577f378f9f429f3cb4b06e3515c7b8662a030f"
     )
     amsterdam = by_id["weather_amsterdam_wcir_frozen_shadow_v2"]
     assert amsterdam.execution_mode == "zero_notional_shadow"
