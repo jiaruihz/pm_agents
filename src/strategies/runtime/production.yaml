@@ -13,8 +13,8 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/73ace4512717a4e4a7f2fc5407c59f35d0bf81f8
-    expected_repo_sha: 73ace4512717a4e4a7f2fc5407c59f35d0bf81f8
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/390bc9d2531a327d896b75c0767ddad759515f36
+    expected_repo_sha: 390bc9d2531a327d896b75c0767ddad759515f36
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -280,7 +280,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
@@ -549,6 +549,7 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_instance: cross_no_v2_metar_v1
+      code_identity: 390bc9d2531a327d896b75c0767ddad759515f36
       execution_mode: live_probe
       live_enabled: true
       shares_per_order: 5.0
@@ -558,6 +559,7 @@ managed_runtimes:
       weather_taker_fee_rate: 0.05
       clock_invalid_same_boot_override_enabled: true
       settlement_hard_invalidation: false
+      source_attribution_schema_version: cross_no_v2_metar_source_attribution_runtime_v1
     expected_live: true
     live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/orders.jsonl
     dependencies: [weather_jrs_context_keeper, weather_market_books]
