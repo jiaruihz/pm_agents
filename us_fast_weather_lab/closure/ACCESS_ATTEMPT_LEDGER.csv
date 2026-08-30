@@ -1,0 +1,44 @@
+attempted_at_utc,source_id,action,target,status,evidence_id,next_action
+2026-08-28T15:21:00Z,WIS2_NOAA_GLOBAL_BROKER,TLS verify,wis2broker.globaldata.nws.noaa.gov:8883,SUCCESS,sha256:43651006e1c7a86d5f02c778d35dec07bbf0788e39e1d1f5df24b8859d0502dc,bounded MQTT subscription
+2026-08-28T15:21:00Z,WIS2_NOAA_GLOBAL_CACHE,TLS verify,wis2cache.globaldata.nws.noaa.gov:8883,SUCCESS,sha256:f672e7fb56f93077a657d45518e75f82621771897b3a524e03f839cce8f6c418,bounded MQTT subscription
+2026-08-28T15:24:50Z,WIS2_ALL,MQTT 125-second exact and wildcard topic probe,7 broker/node endpoints,CONNECTED_12_OF_14_SUBACK_11_ZERO_MESSAGES,run_1787930689988279000_a6f9ffc5,await NOAA response and repeat long capture
+2026-08-28T15:27:25Z,WIS2_NOAA_NODE,GET advertised collection,/collections/metar_features,HTTP_404,sha256:662dd2fef7b17c1eb1fe4a13a6383ad876b3a87c0734545f6069e5b2b844d1f4,NOAA defect/status inquiry
+2026-08-28T15:29:00Z,WMSCR_AWI,RFI email,jaydon.arslanian@adbsafegate.com,SENT,gmail:1a048fd120991c9e,monitor reply
+2026-08-28T15:29:04Z,WMSCR_DBT,RFI email,CS@DBTTranServ.com,SENT,gmail:1a048fd23b14860f,monitor reply
+2026-08-28T15:29:08Z,WMSCR_ANYAWOS,RFI email,support@anyawos.com,SENT,gmail:1a048fd35c2130e0,monitor reply
+2026-08-28T15:29:12Z,WMSCR_RSI,RFI email,tnichols@remotesys.com,SENT,gmail:1a048fd438412912,monitor reply
+2026-08-28T15:29:15Z,WMSCR_URF,RFI email,awos@urf.com,SENT,gmail:1a048fd507bfced1,monitor reply
+2026-08-28T15:29:19Z,SYNOPTIC_PUSH,RFI email,sales@synopticdata.com,SENT,gmail:1a048fd5c4991024,monitor reply and activate existing-account trial manually
+2026-08-28T15:29:22Z,METAR_WS,RFI email,hello@metar.ws,SENT,gmail:1a048fd6ad4feb3c,monitor reply and trial credentials
+2026-08-28T15:31:00Z,WIS2_NOAA_NODE,technical status email,ncep.pmb.dm@noaa.gov,SENT,gmail:1a048fe3a8e19953,monitor reply
+2026-08-28T15:31:00Z,UNIDATA_IDD_NTEXT,access-path email,support-idd@unidata.ucar.edu,SENT,gmail:1a048fe48f94dabc,monitor reply; provision host only after acceptance
+2026-08-28T15:30:17Z,WIS2_NOAA_NODE,delivery status,ncep.pmb.dm@noaa.gov,BOUNCED_550_UNRECOGNIZED_ADDRESS,gmail:1a048fe45f49e3e6,use current NOAA WIS2 feedback contacts
+2026-08-28T15:29:17Z,WMSCR_URF,delivery status,awos@urf.com,BOUNCED_NO_MAIL_DOMAIN,gmail:1a048fd5b88ea7af,request current contact from FAA program office
+2026-08-28T15:33:00Z,WIS2_NOAA_NODE,technical status email,"nws.webfeedback@noaa.gov; steve.r.olson@noaa.gov",SENT,gmail:1a049011686043d6,monitor reply
+2026-08-28T15:33:00Z,WMSCR_URF,current-contact and access-path email,Non-Federal-Program@faa.gov,SENT,gmail:1a04901271478413,monitor reply
+2026-08-28T15:35:00Z,NOAAPORT_NOVRA_S300N,budgetary RFQ,sales@novra.com,SENT,gmail:1a04901f57104398,monitor BOM price lead time and hosted alternative
+2026-08-28T15:36:01Z,METAR_WS,provider reply,hello@metar.ws,TRIAL_OFFERED,gmail:1a04903b8dd6c4f6,"US mostly NOAAPort; 7-day Starter 10 stations EUR49/mo or 72-hour Professional all stations+D-ATIS EUR199/mo"
+2026-08-28T15:38:01Z,UNIDATA_IDD_NTEXT,ticket acknowledgement,support-idd@unidata.ucar.edu,TICKET_OPEN_YMO_1566450,gmail:1a0490558822e813,await substantive upstream response
+2026-08-28T15:33:31Z,WIS2_NOAA_NODE,automatic acknowledgement,nws.webfeedback@noaa.gov,ACKNOWLEDGED,gmail:1a04901397179b2e,await substantive response within seven business days
+2026-08-28T15:40:00Z,METAR_WS,schema and deferred-activation reply,hello@metar.ws,SENT,gmail:1a04906a85ee53f9,receive sample and timestamp definitions before starting 72-hour trial
+2026-08-28T15:41:29Z,METAR_WS,provider documentation reply,hello@metar.ws,DOCUMENTATION_PROVIDED_TRIAL_READY,gmail:1a04908b99e0dfd0,collector implemented; obtain API key then explicitly start 72-hour trial
+2026-08-28T15:41:53Z,SYNOPTIC_PUSH,provider trial reply,sales@synopticdata.com,EXISTING_ACCOUNT_CONFIRMATION_REQUESTED,gmail:1a04908e8e43607c,explicit user authorization required before one-time trial activation
+2026-08-28T16:04:17Z,WIS2_AWC_24H,continuous smoke start,ASIA_CN_MAC,RUNNING_CLOCK_INVALID,run_1787934417858506000_f1909926,continue raw collection; correct host clock before latency ranking
+2026-08-28T17:40:44Z,WMSCR_URF,FAA Non-Federal Program reply,Non-Federal-Program@faa.gov,URF_BOUNCE_CONFIRMED_AND_TECHNICAL_REFERRAL,gmail:1a04975c0eb72f47,contact Stewart Stepney for downstream receive-path determination
+2026-08-28T18:41:00Z,WMSCR_DOWNSTREAM,FAA referred receive-path inquiry,Stewart.Stepney@faa.gov,SENT,gmail:1a049aee722670f9,await authoritative WMSCR downstream or alternative service answer
+2026-08-28T18:41:47Z,WIS2_AWC_24H,stale-run audit and partial seal,ASIA_CN_MAC,ORPHANED_EXEC_SESSION_LOST_REPLAY_62_OF_62,run_1787934417858506000_f1909926,partial reports saved; start non-overlapping persistent retry
+2026-08-28T18:42:09Z,WIS2_AWC_24H,continuous smoke persistent retry,ASIA_CN_MAC,RUNNING_CLOCK_INVALID,run_1787942529236808000_1daa49aa,continue in persistent tmux; do not merge with orphaned partial run
+2026-08-28T22:41:00Z,AWC_API,long-run health audit,ASIA_CN_MAC,POOL_SATURATED_AFTER_TRANSPORT_ERRORS_NO_SUCCESS_FOR_12_MINUTES,run_1787942529236808000_1daa49aa,cleanly stop r1; fix client-pool root cause; preserve partial evidence
+2026-08-28T22:42:33Z,WIS2_AWC_24H,clean partial-run seal,ASIA_CN_MAC,STOPPED_SIGNAL_REPLAY_110_OF_110,run_1787942529236808000_1daa49aa,exclude from 24h acceptance; validate pool fix then start non-overlapping r2
+2026-08-28T22:44:45Z,AWC_POOL_FIX,bounded 120-second network canary,ASIA_CN_MAC,PASS_58_API_2_CACHE_ZERO_ERRORS_REPLAY_20_OF_20,run_1787957085527999000_d09c62c0,start corrected persistent r2
+2026-08-28T22:48:53Z,WIS2_AWC_24H,corrected persistent run,ASIA_CN_MAC,RUNNING_CLOCK_INVALID,run_1787957333862002000_630d16c2,continue 24h; verify pool resets and no sustained transport gap
+2026-08-29T01:52:29Z,AWC_API,transient-success-gap audit,aviationweather.gov,RECOVERED_56_816_SECOND_GAP_AFTER_SSL_EOF_BURST,run_1787957333862002000_630d16c2,retain as upstream/network health evidence; pool reset worked and successful polling resumed
+2026-08-29T17:08:30Z,METAR_WS,free-trial activation reply,hello@metar.ws,FREE_TRIAL_ACTIVATION_REQUEST_SENT_NO_AUTO_CONVERSION,gmail:1a04e7e35353d290,await provider UTC activation/expiry confirmation and retrieve API key only through secure account console
+2026-08-29T17:08:30Z,SYNOPTIC_PUSH,free-trial activation reply,sales@synopticdata.com,FREE_TRIAL_ACTIVATION_REQUEST_SENT_NO_AUTO_CONVERSION,gmail:1a04e7e4412277ee,await provider UTC activation/expiry confirmation and use existing Data Credentials console token
+2026-08-29T17:11:35Z,METAR_WS,provider account check,hello@metar.ws,ACCOUNT_NOT_FOUND_REGISTRATION_AND_SELF_SERVICE_KEY_REQUIRED,gmail:1a04e81933d6f5c3,create the project account after human credential entry; then create one API key through the console and request the promised 72-hour Professional grant
+2026-08-29T17:31:26Z,METAR_WS,official free-plan capability audit,docs.metar.ws,SANDBOX_HAS_NO_MEASURED_WEATHER,official-docs:2026-08-29,"free sandbox can validate protocol only; METAR/HF-METAR/D-ATIS latency requires Starter or Professional trial"
+2026-08-29T17:31:26Z,WIS2_AWC_24H,live health and preliminary same-provider pairing,ASIA_CN_MAC,RUNNING_INTEGRITY_OK_CLOCK_INVALID_WIS2_ZERO_AWC_API_CACHE_463_PAIRS,run_1787957333862002000_630d16c2,"do not seal active run; AWC API minus full-cache median lead 0.464s and win rate 0.5464 are exploratory only"
+2026-08-29T17:39:08Z,METAR_WS,user account and key creation,app.metar.ws,ACCOUNT_CREATED_KEY_CREATED_BUT_DISCLOSED_KEY_REQUIRES_ROTATION,user-reported:2026-08-29T17:39:08Z,"revoke disclosed key; create replacement; inject replacement only through a non-echoing local prompt"
+2026-08-29T17:39:08Z,METAR_WS,Professional trial activation follow-up,hello@metar.ws,SENT_ACCOUNT_READY_NO_PAID_CONVERSION,gmail:1a04e9a764b700d0,await provider UTC activation and expiry confirmation; do not start self-service Starter trial
+2026-08-29T17:55:21Z,METAR_WS,replacement key handling audit,app.metar.ws,SECOND_KEY_DISCLOSED_TO_BROWSER_TOOL_TRANSCRIPT_REQUIRES_ROTATION,local-browser-audit:2026-08-29T17:55:21Z,"do not use or record token value; revoke both disclosed keys; create a third key and paste it only into the local non-echoing shell prompt"
+2026-08-29T18:04:13Z,METAR_WS,third key local injection,user shell,REPLACEMENT_KEY_CREATED_AND_INJECTED_WITH_NON_ECHOING_PROMPT,user-reported:2026-08-29T18:04:13Z,"key value not observed or recorded; commercial-only canary command supplied for launch from the same shell"

@@ -1,0 +1,12 @@
+{
+  "files": [
+    {
+      "bytes": 240,
+      "path": "us_fast_weather_lab/reports/STAGE6_EXECUTION_SUMMARY.md",
+      "sha256": "b2f606877b011b587f4f6d65b18bb7ac51164c40a327c444e9afb71557200e17"
+    }
+  ],
+  "generated_at_ns": 1787917509648014000,
+  "stage": 6,
+  "status": "BLOCKED"
+}

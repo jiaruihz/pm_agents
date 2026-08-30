@@ -1,0 +1,33 @@
+contract_version: US_FAST_WEATHER_COMMERCIAL_STREAMS_V1
+
+metar_ws:
+  endpoint: wss://stream.metar.ws/v1/ws
+  api_key_env: METAR_WS_API_KEY
+  reconnect_seconds: 3
+  subscribe_primary_official: true
+  subscribe_primary_hfmetar: true
+  # Settlement-facing stations for the fixed US market-reaction cohort.  KDAL
+  # and KHOU intentionally differ from the broader 20-airport benchmark's
+  # KDFW/KIAH transport controls.
+  benchmark_stations: [KMIA, KLAX, KLGA, KHOU, KDAL, KSEA, KSFO, KORD]
+  datis_stations:
+    - KATL
+    - KORD
+    - KLAX
+    - KSFO
+    - KLGA
+    - KMIA
+    - KDAL
+    - KAUS
+    - KHOU
+    - KSEA
+    - KBOS
+    - KMSP
+
+synoptic_push:
+  endpoint_base: wss://push.synopticdata.com/feed
+  api_token_env: SYNOPTIC_API_TOKEN
+  reconnect_seconds: 3
+  variables:
+    - air_temp
+  units: metric

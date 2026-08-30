@@ -1,0 +1,31 @@
+contract_id: US_FAST_WEATHER_SOURCE_RESEARCH_V1
+frozen_at: 2026-08-28
+scope:
+  objective: identify fastest sustainable US METAR/SPECI/ASOS data path
+  live_orders: false
+  trading_execution: false
+  frontend_build: false
+  auth_bypass: false
+  stolen_credentials: false
+clock:
+  max_abs_offset_ms_for_valid_sample: 20
+  health_sample_interval_seconds: 60
+minimum_samples:
+  smoke_hours: 24
+  first_ranking_hours: 72
+  final_days: 7
+  preferred_final_days: 14
+  minimum_paired_events_final: 500
+thresholds:
+  wis2_material_vs_awc: {median_lead_seconds: 20, win_rate: 0.70}
+  swift_primary_vs_best_wis2: {median_lead_seconds: 10, win_rate: 0.70, min_capture_rate: 0.99}
+  paid_relay_worthwhile_vs_best_free:
+    {median_lead_seconds: 15, win_rate: 0.75, min_capture_rate: 0.995, require_p90_not_worse: true}
+  omo_presignal: {min_share_reports_with_30s_lead: 0.60}
+allowed_final_dispositions:
+  - ADOPT_WIS2_PUBLIC_FAST_PATH
+  - ADOPT_SWIFT_PRIMARY_WIS2_FALLBACK
+  - ADOPT_PAID_RELAY_WITH_PROVEN_EDGE
+  - NO_MATERIAL_FAST_SOURCE_ADVANTAGE
+  - BLOCKED_BY_ACCESS_OR_INSUFFICIENT_EVIDENCE
+

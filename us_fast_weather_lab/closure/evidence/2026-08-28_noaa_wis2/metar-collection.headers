@@ -1,0 +1,13 @@
+HTTP/1.1 200 Connection established
+
+HTTP/2 404 
+date: Fri, 28 Aug 2026 15:27:25 GMT
+content-type: application/json
+content-length: 90
+set-cookie: AWSALB=Cx4Gi9vsjmwxLipc0iNpr+4Csb4Iv/xUtsvSqbXzVFei8OzgqrfKFEQrMMLbVX7stmZrblkl6K0Bu94CgVCx8GBiPGksHvvqY+UP6SC2MjV87Q5Pf9qzVgTurynn; Expires=Fri, 04 Sep 2026 15:27:25 GMT; Path=/
+set-cookie: AWSALBCORS=Cx4Gi9vsjmwxLipc0iNpr+4Csb4Iv/xUtsvSqbXzVFei8OzgqrfKFEQrMMLbVX7stmZrblkl6K0Bu94CgVCx8GBiPGksHvvqY+UP6SC2MjV87Q5Pf9qzVgTurynn; Expires=Fri, 04 Sep 2026 15:27:25 GMT; Path=/; SameSite=None; Secure
+server: gunicorn
+x-powered-by: pygeoapi 0.23.4
+content-language: en-US
+access-control-allow-origin: *
+

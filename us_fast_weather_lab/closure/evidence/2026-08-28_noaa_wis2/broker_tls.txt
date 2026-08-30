@@ -1,0 +1,12 @@
+Connecting to 137.75.108.132
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.2
+Ciphersuite: ECDHE-RSA-AES128-GCM-SHA256
+Peer certificate: CN=wis2broker.globaldata.nws.noaa.gov
+Hash used: SHA256
+Signature type: rsa_pkcs1_sha256
+Verification: OK
+Verified peername: wis2broker.globaldata.nws.noaa.gov
+Supported Elliptic Curve Point Formats: uncompressed
+Peer Temp Key: ECDH, prime256v1, 256 bits
+DONE

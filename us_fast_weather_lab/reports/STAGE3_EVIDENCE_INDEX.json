@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "bytes": 392,
+      "path": "us_fast_weather_lab/reports/latency_ranking_72h.md",
+      "sha256": "377d568a3f9e071e0d9419ec53afdc55a72311559c0a8389eb2d6dae4090137a"
+    },
+    {
+      "bytes": 152,
+      "path": "us_fast_weather_lab/reports/unmatched_events.md",
+      "sha256": "839dc10018969c9cbc5f3951c3252e95b149b7af35bcfa04c15ac000f23abc01"
+    },
+    {
+      "bytes": 825,
+      "path": "us_fast_weather_lab/reports/clock_audit.md",
+      "sha256": "87ac692c2b39bb55a749b5dedc4c343b4a0bdd9a76157ab8853aca420eb84f76"
+    },
+    {
+      "bytes": 244,
+      "path": "us_fast_weather_lab/reports/STAGE3_EXECUTION_SUMMARY.md",
+      "sha256": "2b1303d5d298588fd66acb733d5a668a8578e1437ad13ebd70b0e8912885e0a9"
+    }
+  ],
+  "generated_at_ns": 1787917509646518000,
+  "stage": 3,
+  "status": "BLOCKED"
+}
