@@ -25,6 +25,38 @@ from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 PREFLIGHT_SCHEMA_VERSION = "weather_canonical_refresh_preflight_v1"
+MIGRATION_SAFE_MANIFEST_WARNINGS = frozenset(
+    {
+        # Historical/non-production worktrees do not change the loaded release,
+        # canonical DB route, or JRS write authority.  Every other warning stays
+        # fail-closed until it is explicitly classified.
+        "unregistered_persistent_worktrees",
+    }
+)
+
+
+def _manifest_allows_migration(manifest: Mapping[str, Any]) -> tuple[bool, list[str]]:
+    status = manifest.get("status")
+    if status == "healthy":
+        return True, []
+    if status != "warning":
+        return False, []
+    findings = manifest.get("findings")
+    if not isinstance(findings, list) or not findings:
+        return False, []
+    kinds: list[str] = []
+    for finding in findings:
+        if not isinstance(finding, Mapping):
+            return False, kinds
+        kind = finding.get("kind")
+        if (
+            finding.get("severity") != "warning"
+            or not isinstance(kind, str)
+            or kind not in MIGRATION_SAFE_MANIFEST_WARNINGS
+        ):
+            return False, kinds
+        kinds.append(kind)
+    return True, kinds
 
 
 def _run_json(
@@ -107,7 +139,10 @@ def evaluate_preflight(
         failures.append({"kind": "manifest_db_route_unhealthy", "scope": "all_writes"})
     if jrs_probe.get("status") != "healthy":
         failures.append({"kind": "canonical_jrs_write_probe_failed", "scope": "all_writes"})
-    if manifest.get("status") != "healthy":
+    manifest_allows_migration, allowed_manifest_warnings = (
+        _manifest_allows_migration(manifest)
+    )
+    if not manifest_allows_migration:
         migration_blockers.append(
             {"kind": "production_manifest_not_healthy", "scope": "migration_only"}
         )
@@ -140,6 +175,7 @@ def evaluate_preflight(
             "same_file": db_same_file,
         },
         "manifest_status": manifest.get("status"),
+        "allowed_manifest_warnings": allowed_manifest_warnings,
         "db_route_status": (manifest.get("db_route") or {}).get("status"),
         "jrs_probe": dict(jrs_probe),
         "data_feed_status": feed_health.get("status"),

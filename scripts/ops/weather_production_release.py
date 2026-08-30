@@ -73,8 +73,17 @@ def _release_block(spec: dict[str, Any], release_id: str) -> dict[str, Any]:
     return item
 
 
-def _verify_checkout(checkout: Path, expected_sha: str) -> dict[str, str]:
-    if not checkout.is_dir():
+def _git_common_dir(repo: Path) -> Path:
+    common = Path(_git(repo, "rev-parse", "--git-common-dir"))
+    if not common.is_absolute():
+        common = repo / common
+    return common.resolve(strict=True)
+
+
+def _verify_checkout(
+    checkout: Path, expected_sha: str, expected_common_git_dir: Path
+) -> dict[str, str]:
+    if checkout.is_symlink() or not checkout.is_dir():
         raise ReleaseError(f"release checkout is not a directory: {checkout}")
     head = _git(checkout, "rev-parse", "HEAD").lower()
     if head != expected_sha:
@@ -82,7 +91,17 @@ def _verify_checkout(checkout: Path, expected_sha: str) -> dict[str, str]:
     tracked_status = _git(checkout, "status", "--porcelain", "--untracked-files=no")
     if tracked_status:
         raise ReleaseError(f"existing release has tracked changes: {checkout}")
-    return {"head": head, "tracked_clean": "true"}
+    common_git_dir = _git_common_dir(checkout)
+    if common_git_dir != expected_common_git_dir:
+        raise ReleaseError(
+            "release checkout is not registered to the operational repository: "
+            f"{checkout}"
+        )
+    return {
+        "head": head,
+        "tracked_clean": "true",
+        "common_git_dir": str(common_git_dir),
+    }
 
 
 def _replace_release_pin(raw_text: str, release_id: str, old_root: Path, old_sha: str, new_root: Path, new_sha: str) -> str:
@@ -139,7 +158,10 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
     if apply and (not confirm_production or not reason.strip()):
         raise ReleaseError("--apply requires --confirm-production and a non-empty --reason")
 
-    production_spec = production_spec.absolute()
+    try:
+        production_spec = production_spec.resolve(strict=True)
+    except OSError as exc:
+        raise ReleaseError(f"production spec does not exist: {production_spec}") from exc
     spec, text = _load_spec(production_spec)
     release = _release_block(spec, release_id)
     old_sha = _full_sha(str(release["expected_repo_sha"]), "existing expected_repo_sha")
@@ -149,6 +171,15 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
     release_root = Path(str(spec.get("production_release_root") or ""))
     if not operational_repo.is_absolute() or not operational_repo.is_dir():
         raise ReleaseError("operational_repo_root must be an existing absolute directory")
+    operational_repo = operational_repo.resolve(strict=True)
+    expected_spec_path = (
+        operational_repo / "src/strategies/runtime/production.yaml"
+    ).resolve(strict=False)
+    if production_spec != expected_spec_path:
+        raise ReleaseError(
+            "production spec must be the operational repository production.yaml: "
+            f"{expected_spec_path}"
+        )
     if not release_root.is_absolute():
         raise ReleaseError("production_release_root must be absolute")
     old_root = Path(str(release["checkout_root"]))
@@ -163,6 +194,7 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
     if resolved_source != source_sha:
         raise ReleaseError(f"source SHA does not resolve exactly: {source_sha} -> {resolved_source}")
     operational_head = _git(operational_repo, "rev-parse", "HEAD").lower()
+    operational_common_git_dir = _git_common_dir(operational_repo)
     ancestor = subprocess.run(
         ["git", "-C", str(operational_repo), "merge-base", "--is-ancestor", operational_head, source_sha],
         check=False,
@@ -176,10 +208,15 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
         "source_resolves_exactly": True,
         "operational_head_is_ancestor": True,
         "target_layout": str(target),
+        "old_checkout": _verify_checkout(
+            old_root, old_sha, operational_common_git_dir
+        ),
     }
     existed = target.exists() or target.is_symlink()
     if existed:
-        checks["existing_checkout"] = _verify_checkout(target, source_sha)
+        checks["existing_checkout"] = _verify_checkout(
+            target, source_sha, operational_common_git_dir
+        )
     else:
         checks["existing_checkout"] = "will_create"
 
@@ -195,6 +232,28 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
         checks["venv"] = "will_create_symlink"
 
     replacement = _replace_release_pin(text["raw_text"], release_id, old_root, old_sha, target, source_sha)
+    relative_spec = production_spec.relative_to(operational_repo)
+    _git(
+        operational_repo,
+        "ls-files",
+        "--error-unmatch",
+        "--",
+        str(relative_spec),
+    )
+    spec_status = _git(
+        operational_repo,
+        "status",
+        "--porcelain",
+        "--",
+        str(relative_spec),
+    )
+    if spec_status and replacement != text["raw_text"]:
+        raise ReleaseError(
+            "production spec has pre-existing changes; refusing to overwrite them"
+        )
+    checks["production_spec_status"] = (
+        "already_pinned" if replacement == text["raw_text"] else "tracked_clean"
+    )
     checks["pin_text_replacement"] = True
     report: dict[str, Any] = {
         "schema_version": "weather_production_release_v1",
@@ -215,7 +274,7 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
         target.parent.mkdir(parents=True, exist_ok=True)
         _git(operational_repo, "worktree", "add", "--detach", str(target), source_sha)
         report["worktree_created"] = True
-    _verify_checkout(target, source_sha)
+    _verify_checkout(target, source_sha, operational_common_git_dir)
     if not (venv_link.exists() or venv_link.is_symlink()):
         os.symlink(venv_target, venv_link)
         report["venv_symlink_created"] = True

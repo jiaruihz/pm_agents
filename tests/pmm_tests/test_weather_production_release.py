@@ -26,14 +26,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, str, str]:
     _git(repo, "config", "user.email", "test@example.com")
     _git(repo, "config", "user.name", "Test")
     old = _commit(repo, "old")
-    new = _commit(repo, "new")
-    _git(repo, "checkout", "--detach", old)
     (repo / ".venv").mkdir()
     releases = tmp_path / "releases"
     old_checkout = releases / "control_plane" / old
     old_checkout.parent.mkdir(parents=True)
-    _git(repo, "worktree", "add", "--detach", str(old_checkout), old)
-    spec = tmp_path / "production.yaml"
+    spec = repo / "src/strategies/runtime/production.yaml"
+    spec.parent.mkdir(parents=True)
     spec.write_text(
         "operational_repo_root: " + str(repo) + "\n"
         "production_release_root: " + str(releases) + "\n"
@@ -42,6 +40,10 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, str, str]:
         "    checkout_root: " + str(old_checkout) + "\n"
         "    expected_repo_sha: " + old + "\n"
     )
+    _git(repo, "add", str(spec.relative_to(repo)))
+    _git(repo, "commit", "-m", "production config")
+    new = _commit(repo, "new")
+    _git(repo, "worktree", "add", "--detach", str(old_checkout), old)
     return repo, spec, old, new
 
 
@@ -91,3 +93,38 @@ def test_apply_requires_explicit_confirmation_and_reason(tmp_path: Path) -> None
     _, spec, old, new = _fixture(tmp_path)
     with pytest.raises(ReleaseError, match="requires --confirm-production"):
         run_release(release_id="control_plane", source_sha=new, expected_old_sha=old, production_spec=spec, apply=True, confirm_production=False, reason="")
+
+
+def test_apply_rejects_preexisting_production_spec_changes(tmp_path: Path) -> None:
+    _, spec, old, new = _fixture(tmp_path)
+    spec.write_text(spec.read_text() + "unrelated: user-change\n")
+
+    with pytest.raises(ReleaseError, match="pre-existing changes"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=spec,
+            apply=True,
+            confirm_production=True,
+            reason="must not overwrite user work",
+        )
+
+
+def test_rejects_production_spec_copy_outside_operational_repo(
+    tmp_path: Path,
+) -> None:
+    _, spec, old, new = _fixture(tmp_path)
+    copied = tmp_path / "production-copy.yaml"
+    copied.write_text(spec.read_text())
+
+    with pytest.raises(ReleaseError, match="operational repository production.yaml"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=copied,
+            apply=False,
+            confirm_production=False,
+            reason="",
+        )

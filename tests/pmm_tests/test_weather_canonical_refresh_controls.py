@@ -54,6 +54,49 @@ def test_preflight_blocks_every_write_on_db_identity_or_jrs_failure(
     assert jrs["status"] == "all_writes_blocked"
 
 
+def test_preflight_allows_only_explicitly_safe_manifest_warnings(
+    tmp_path: Path,
+) -> None:
+    benign = _preflight(
+        tmp_path,
+        manifest={
+            "status": "warning",
+            "db_route": {"status": "healthy"},
+            "findings": [
+                {
+                    "kind": "unregistered_persistent_worktrees",
+                    "severity": "warning",
+                }
+            ],
+        },
+    )
+    assert benign["migration_allowed"] is True
+    assert benign["allowed_manifest_warnings"] == [
+        "unregistered_persistent_worktrees"
+    ]
+
+    unknown = _preflight(
+        tmp_path,
+        manifest={
+            "status": "warning",
+            "db_route": {"status": "healthy"},
+            "findings": [{"kind": "new_warning", "severity": "warning"}],
+        },
+    )
+    assert unknown["migration_allowed"] is False
+    assert unknown["allowed_manifest_warnings"] == []
+
+    malformed = _preflight(
+        tmp_path,
+        manifest={
+            "status": "warning",
+            "db_route": {"status": "healthy"},
+            "findings": [],
+        },
+    )
+    assert malformed["migration_allowed"] is False
+
+
 def test_stage_records_pass_timeout_and_wal_growth(tmp_path: Path) -> None:
     db = tmp_path / "weather.db"
     db.write_bytes(b"db")
