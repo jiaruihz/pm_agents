@@ -716,6 +716,9 @@ tmux/JRS write probe、data-feed semantic health 和 data-product registry prefl
 所有写入停止；仅 migration evidence 失败时仍完成 order → coverage → alias → authenticated fill → fact →
 fill gate 的 live accounting 链，但跳过 schema/WCIR migration。每个阶段都有独立 lock、timeout、absolute
 WAL 和 WAL-growth budget，并在 `runtime/weather_edge_v1/canonical_refresh/stages/` 留 report。
+`ingest_runtime_orders` 固定使用 `--require-existing-schema`，以 `mode=rw` 复用已经存在且已是 WAL 的 DB，
+并在同一连接上校验 schema 后执行 accounting；因此不能创建 DB、切 journal mode 或间接调用 canonical
+schema initializer 绕过 migration gate。
 
 ### 8.2 可重放数据与逐产品迁移工具
 

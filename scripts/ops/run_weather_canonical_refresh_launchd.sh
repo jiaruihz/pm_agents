@@ -129,6 +129,7 @@ fi
 run_refresh_stage ingest_runtime_orders 180 \
   "$PYTHON_BIN" -m weather_dashboard.cli.ingest_strategy_runtime_orders \
   --db-path "$DB_PATH" \
+  --require-existing-schema \
   --active-live-only \
   --report-dir "$RUNTIME_DIR/order_migration_reports" \
   --project-root "$PROJECT_DIR"

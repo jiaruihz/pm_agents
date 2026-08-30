@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sqlite3
+from typing import Sequence
 
 from weather_dashboard.db.apply_schema_canonical import init_db_canonical
-from weather_dashboard.db.connection import get_conn
+from weather_dashboard.db.connection import get_conn, get_existing_wal_conn
 from src.strategies.runtime.sync import sync_instance_specs
 from src.strategies.runtime.production import WeatherProductionSpec, load_production_spec
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
@@ -14,6 +16,38 @@ from weather_dashboard.legacy_migration.strategy_runtime_orders import (
     migrate_strategy_runtime_orders,
     write_report,
 )
+
+
+_REQUIRED_EXISTING_TABLES = frozenset(
+    {
+        "code_versions",
+        "strategy_config",
+        "universes",
+        "runs",
+        "strategy_instance",
+        "signals",
+        "plans",
+        "orders",
+        "fills",
+    }
+)
+
+
+def require_existing_order_ingest_schema(conn: sqlite3.Connection) -> None:
+    """Validate the accounting schema on the exact connection used for DML."""
+
+    tables = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    missing = sorted(_REQUIRED_EXISTING_TABLES - tables)
+    if missing:
+        raise RuntimeError(
+            "existing canonical order-ingest schema is incomplete: "
+            + ", ".join(missing)
+        )
 
 
 def resolve_active_live_order_paths(
@@ -51,7 +85,7 @@ def resolve_order_paths(
     return paths
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Migrate strategy-local runtime order JSONL into canonical DB")
     parser.add_argument("--db-path", default="runtime/weather.db")
     parser.add_argument("--report-dir", default="runtime/weather_dashboard_migration/reports")
@@ -75,10 +109,26 @@ def main() -> None:
         default=".",
         help="Base directory for relative strategy_instance.runtime_dir values.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--require-existing-schema",
+        action="store_true",
+        help=(
+            "Do not initialize or migrate schema; fail unless the existing "
+            "canonical order-ingest tables are already present."
+        ),
+    )
+    args = parser.parse_args(argv)
 
-    init_db_canonical(args.db_path)
-    conn = get_conn(args.db_path)
+    if args.require_existing_schema:
+        conn = get_existing_wal_conn(args.db_path)
+        try:
+            require_existing_order_ingest_schema(conn)
+        except Exception:
+            conn.close()
+            raise
+    else:
+        init_db_canonical(args.db_path)
+        conn = get_conn(args.db_path)
     try:
         if args.active_live_only:
             paths = resolve_active_live_order_paths(args.project_root)

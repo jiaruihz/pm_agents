@@ -9,8 +9,11 @@ DB_PATH = (
     or str(ROOT / "runtime" / "weather.db")
 )
 
-def apply_pragmas(conn: sqlite3.Connection) -> None:
-    conn.execute("PRAGMA journal_mode = WAL")
+def apply_pragmas(
+    conn: sqlite3.Connection, *, configure_journal_mode: bool = True
+) -> None:
+    if configure_journal_mode:
+        conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = FULL")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA wal_autocheckpoint = 1000")
@@ -21,6 +24,29 @@ def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     apply_pragmas(conn)
+    return conn
+
+
+def get_existing_wal_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
+    """Open an existing writable WAL database without creating or converting it."""
+
+    path = Path(db_path).resolve(strict=True)
+    conn = sqlite3.connect(
+        f"file:{path}?mode=rw",
+        uri=True,
+        check_same_thread=False,
+    )
+    conn.row_factory = sqlite3.Row
+    try:
+        journal_mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+        if journal_mode != "wal":
+            raise RuntimeError(
+                f"existing canonical database must already use WAL mode: {journal_mode}"
+            )
+        apply_pragmas(conn, configure_journal_mode=False)
+    except Exception:
+        conn.close()
+        raise
     return conn
 
 

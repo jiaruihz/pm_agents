@@ -176,3 +176,4 @@ def test_launchd_refresh_uses_registry_preflight_and_stage_wrapper() -> None:
     assert "weather_canonical_refresh_preflight.py" in script
     assert "weather_canonical_refresh_stage.py" in script
     assert "migration_allowed" in script
+    assert "--require-existing-schema" in script

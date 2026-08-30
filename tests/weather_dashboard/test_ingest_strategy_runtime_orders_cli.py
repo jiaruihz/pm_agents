@@ -1,4 +1,7 @@
+import sqlite3
 from pathlib import Path
+
+import pytest
 
 from weather_dashboard.cli import ingest_strategy_runtime_orders as cli
 from src.strategies.runtime.production import WeatherManagedRuntimeSpec, WeatherProductionSpec
@@ -63,3 +66,86 @@ def test_active_live_order_paths_follow_production_manifest(tmp_path) -> None:
         active_orders,
         external_orders,
     ]
+
+
+def _existing_order_ingest_db(path: Path) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        assert conn.execute("PRAGMA journal_mode = WAL").fetchone()[0] == "wal"
+        for table in sorted(cli._REQUIRED_EXISTING_TABLES):
+            conn.execute(f"CREATE TABLE {table} (id TEXT)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_require_existing_order_ingest_schema_is_read_only_and_fail_closed(
+    tmp_path,
+) -> None:
+    db = tmp_path / "weather.db"
+    _existing_order_ingest_db(db)
+    before = db.read_bytes()
+
+    conn = cli.get_existing_wal_conn(db)
+    try:
+        cli.require_existing_order_ingest_schema(conn)
+    finally:
+        conn.close()
+
+    assert db.read_bytes() == before
+    conn = sqlite3.connect(db)
+    conn.execute("DROP TABLE orders")
+    conn.commit()
+    conn.close()
+    with pytest.raises(RuntimeError, match="orders"):
+        conn = cli.get_existing_wal_conn(db)
+        try:
+            cli.require_existing_order_ingest_schema(conn)
+        finally:
+            conn.close()
+
+
+def test_existing_order_ingest_connection_does_not_convert_journal_mode(
+    tmp_path,
+) -> None:
+    db = tmp_path / "weather.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE sentinel (id TEXT)")
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(RuntimeError, match="must already use WAL"):
+        cli.get_existing_wal_conn(db)
+
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    finally:
+        conn.close()
+
+
+def test_cli_require_existing_schema_never_calls_schema_initializer(
+    tmp_path, monkeypatch
+) -> None:
+    db = tmp_path / "weather.db"
+    _existing_order_ingest_db(db)
+    monkeypatch.setattr(
+        cli,
+        "init_db_canonical",
+        lambda _path: pytest.fail("schema initializer must not run"),
+    )
+    monkeypatch.setattr(cli, "resolve_active_live_order_paths", lambda *_a, **_kw: [])
+    monkeypatch.setattr(cli, "write_report", lambda *_a, **_kw: tmp_path / "report.json")
+
+    cli.main(
+        [
+            "--db-path",
+            str(db),
+            "--report-dir",
+            str(tmp_path),
+            "--project-root",
+            str(tmp_path),
+            "--active-live-only",
+            "--require-existing-schema",
+        ]
+    )
