@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import fcntl
 from pathlib import Path
 import subprocess
 
 import pytest
 
-from scripts.ops.weather_production_release import ReleaseError, run_release
+from scripts.ops.weather_production_release import (
+    ReleaseError,
+    _resolve_release_namespace,
+    _resolve_release_root,
+    run_release,
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -128,3 +134,56 @@ def test_rejects_production_spec_copy_outside_operational_repo(
             confirm_production=False,
             reason="",
         )
+
+
+def test_release_root_rejects_symlink_components(tmp_path: Path) -> None:
+    real_root = tmp_path / "real-releases"
+    real_root.mkdir()
+    alias = tmp_path / "release-alias"
+    alias.symlink_to(real_root, target_is_directory=True)
+
+    with pytest.raises(ReleaseError, match="symlink component"):
+        _resolve_release_root(alias)
+
+    namespace_target = real_root / "real-control-plane"
+    namespace_target.mkdir()
+    (real_root / "control_plane").symlink_to(
+        namespace_target, target_is_directory=True
+    )
+    with pytest.raises(ReleaseError, match="namespace must not be a symlink"):
+        _resolve_release_namespace(real_root, "control_plane")
+
+
+def test_checkout_rejects_non_runtime_untracked_files(tmp_path: Path) -> None:
+    _, spec, old, new = _fixture(tmp_path)
+    old_checkout = tmp_path / "releases/control_plane" / old
+    (old_checkout / "unexpected.py").write_text("raise RuntimeError\n")
+
+    with pytest.raises(ReleaseError, match="unsafe tracked/untracked changes"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=spec,
+            apply=False,
+            confirm_production=False,
+            reason="",
+        )
+
+
+def test_apply_refuses_concurrent_release_operation(tmp_path: Path) -> None:
+    repo, spec, old, new = _fixture(tmp_path)
+    lock_path = repo / ".git/weather-production-release.lock"
+    with lock_path.open("a+") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(ReleaseError, match="holds the lock"):
+            run_release(
+                release_id="control_plane",
+                source_sha=new,
+                expected_old_sha=old,
+                production_spec=spec,
+                apply=True,
+                confirm_production=True,
+                reason="concurrency test",
+            )
+    assert old in spec.read_text()

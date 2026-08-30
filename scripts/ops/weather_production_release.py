@@ -9,6 +9,8 @@ It never restarts a runtime and defaults to a no-write dry run.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import json
 import os
 import re
@@ -80,6 +82,67 @@ def _git_common_dir(repo: Path) -> Path:
     return common.resolve(strict=True)
 
 
+@contextmanager
+def _exclusive_release_lock(production_spec: Path):
+    """Serialize validation, checkout creation, and pin replacement per repo."""
+
+    try:
+        spec_path = production_spec.resolve(strict=True)
+        repo = Path(
+            _git(spec_path.parent, "rev-parse", "--show-toplevel")
+        ).resolve(strict=True)
+        lock_path = _git_common_dir(repo) / "weather-production-release.lock"
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    except (OSError, ReleaseError) as exc:
+        raise ReleaseError(f"cannot open production release lock: {exc}") from exc
+    try:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ReleaseError(
+                "another production release operation holds the lock; retry"
+            ) from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
+
+
+def _resolve_release_root(path: Path) -> Path:
+    if not path.is_absolute():
+        raise ReleaseError("production_release_root must be absolute")
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise ReleaseError(
+                f"production_release_root contains a symlink component: {current}"
+            )
+        if not current.exists():
+            raise ReleaseError(
+                f"production_release_root component does not exist: {current}"
+            )
+    if not current.is_dir():
+        raise ReleaseError("production_release_root must be a directory")
+    return current.resolve(strict=True)
+
+
+def _resolve_release_namespace(release_root: Path, release_id: str) -> Path:
+    namespace = release_root / release_id
+    if namespace.is_symlink():
+        raise ReleaseError(f"release namespace must not be a symlink: {namespace}")
+    if not namespace.is_dir():
+        raise ReleaseError(
+            f"release namespace must be an existing directory: {namespace}"
+        )
+    resolved = namespace.resolve(strict=True)
+    if resolved.parent != release_root:
+        raise ReleaseError(f"release namespace escapes production root: {namespace}")
+    return resolved
+
+
 def _verify_checkout(
     checkout: Path, expected_sha: str, expected_common_git_dir: Path
 ) -> dict[str, str]:
@@ -88,9 +151,28 @@ def _verify_checkout(
     head = _git(checkout, "rev-parse", "HEAD").lower()
     if head != expected_sha:
         raise ReleaseError(f"existing release HEAD mismatch: expected {expected_sha}, observed {head}")
-    tracked_status = _git(checkout, "status", "--porcelain", "--untracked-files=no")
-    if tracked_status:
-        raise ReleaseError(f"existing release has tracked changes: {checkout}")
+    status = _git(
+        checkout,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+    )
+    allowed_untracked: list[str] = []
+    unsafe_status: list[str] = []
+    for line in status.splitlines():
+        code = line[:2]
+        relative = line[3:] if len(line) > 3 else ""
+        if code == "??" and (
+            relative == ".venv" or relative.startswith("runtime/")
+        ):
+            allowed_untracked.append(relative)
+        else:
+            unsafe_status.append(line)
+    if unsafe_status:
+        raise ReleaseError(
+            f"existing release has unsafe tracked/untracked changes: {checkout}: "
+            + "; ".join(unsafe_status[:10])
+        )
     common_git_dir = _git_common_dir(checkout)
     if common_git_dir != expected_common_git_dir:
         raise ReleaseError(
@@ -100,6 +182,7 @@ def _verify_checkout(
     return {
         "head": head,
         "tracked_clean": "true",
+        "allowed_untracked": ",".join(allowed_untracked),
         "common_git_dir": str(common_git_dir),
     }
 
@@ -150,7 +233,7 @@ def _atomic_write(path: Path, content: str) -> None:
         raise
 
 
-def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, production_spec: Path, apply: bool, confirm_production: bool, reason: str) -> dict[str, Any]:
+def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str, production_spec: Path, apply: bool, confirm_production: bool, reason: str) -> dict[str, Any]:
     if not RELEASE_ID_RE.fullmatch(release_id):
         raise ReleaseError("release_id may contain only letters, digits, _ and -")
     source_sha = _full_sha(source_sha, "source_sha")
@@ -180,13 +263,13 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
             "production spec must be the operational repository production.yaml: "
             f"{expected_spec_path}"
         )
-    if not release_root.is_absolute():
-        raise ReleaseError("production_release_root must be absolute")
+    release_root = _resolve_release_root(release_root)
     old_root = Path(str(release["checkout_root"]))
-    expected_old_root = release_root / release_id / old_sha
+    release_namespace = _resolve_release_namespace(release_root, release_id)
+    expected_old_root = release_namespace / old_sha
     if old_root != expected_old_root:
         raise ReleaseError("existing checkout_root does not match the immutable release layout")
-    target = release_root / release_id / source_sha
+    target = release_namespace / source_sha
     if target != target.absolute() or target.parent.parent != release_root:
         raise ReleaseError("computed release target escapes production_release_root")
 
@@ -291,6 +374,42 @@ def run_release(*, release_id: str, source_sha: str, expected_old_sha: str, prod
     _atomic_write(production_spec, replacement)
     report["pin_updated"] = True
     return report
+
+
+def run_release(
+    *,
+    release_id: str,
+    source_sha: str,
+    expected_old_sha: str,
+    production_spec: Path,
+    apply: bool,
+    confirm_production: bool,
+    reason: str,
+) -> dict[str, Any]:
+    if apply and (not confirm_production or not reason.strip()):
+        raise ReleaseError(
+            "--apply requires --confirm-production and a non-empty --reason"
+        )
+    if apply:
+        with _exclusive_release_lock(production_spec):
+            return _run_release_impl(
+                release_id=release_id,
+                source_sha=source_sha,
+                expected_old_sha=expected_old_sha,
+                production_spec=production_spec,
+                apply=apply,
+                confirm_production=confirm_production,
+                reason=reason,
+            )
+    return _run_release_impl(
+        release_id=release_id,
+        source_sha=source_sha,
+        expected_old_sha=expected_old_sha,
+        production_spec=production_spec,
+        apply=apply,
+        confirm_production=confirm_production,
+        reason=reason,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
