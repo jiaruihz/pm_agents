@@ -17,7 +17,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Collection, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,11 +38,8 @@ from weather_data_feed.market_brackets import parse_market_bracket
 STRATEGY_ID = "cross_no_v2_metar_v1"
 SOURCE_ARMS = frozenset({"metar_ws_datis", "metar_ws_hfmetar", "metar_ws_metar"})
 SHARES_PER_ORDER = 5.0
-MAX_ORDERS_PER_UTC_DAY = 5
-MAX_DAILY_SHARES = 25.0
 MAX_ORDER_PRINCIPAL_USD = 5.0
-MAX_DAILY_PRINCIPAL_USD = 25.0
-MAX_NO_ASK = 0.97
+MAX_NO_ASK = 0.99
 WEATHER_TAKER_FEE_RATE = 0.05
 CAPTURE_CHECKPOINTS = (0, 15, 30, 60, 120, 300)
 # Deliberately omit KORD: the current Chicago contract basis is not KORD.
@@ -69,6 +66,37 @@ ATTRIBUTION_REFRESH_SEC = 30.0
 PRESTART_TRANSITION_HEALTH_FIELDS = frozenset(
     {"code_identity", "source_attribution_schema_version"}
 )
+
+
+def load_universe_config(path: Path) -> tuple[dict[str, str], dict[str, str], frozenset[str]]:
+    """Load the frozen collection universe and its independent live eligibility."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("schema_version") != "cross_no_v2_metar_universe_v1":
+        raise ValueError("cross NO V2 universe schema mismatch")
+    targets = raw.get("targets")
+    if not isinstance(targets, list) or not targets:
+        raise ValueError("cross NO V2 universe targets are required")
+    allowlist: dict[str, str] = {}
+    timezones: dict[str, str] = {}
+    live_eligible: set[str] = set()
+    seen_stations: set[str] = set()
+    for target in targets:
+        if not isinstance(target, Mapping):
+            raise ValueError("cross NO V2 universe target must be a mapping")
+        city = str(target.get("city") or "").strip()
+        station = str(target.get("station") or "").strip().upper()
+        timezone_name = str(target.get("timezone") or "").strip()
+        if not city or len(station) != 4 or not station.isalnum() or not timezone_name:
+            raise ValueError("cross NO V2 universe city/station/timezone is invalid")
+        if city in allowlist or station in seen_stations:
+            raise ValueError("cross NO V2 universe city and station must be unique")
+        ZoneInfo(timezone_name)
+        allowlist[city] = station
+        timezones[city] = timezone_name
+        seen_stations.add(station)
+        if target.get("live_eligible") is True:
+            live_eligible.add(city)
+    return allowlist, timezones, frozenset(live_eligible)
 
 
 def utc_now() -> datetime:
@@ -239,7 +267,7 @@ def enforce_experiment_deadline(
         pause_file.write_text(
             json.dumps(
                 {
-                    "reason": "one_day_probe_deadline_reached",
+                    "reason": "bounded_probe_deadline_reached",
                     "paused_at_utc": iso(),
                     "experiment_control": str(control_path),
                 },
@@ -304,13 +332,13 @@ def ensure_research_record(
                 "AWC paired receipt",
                 "same-token decision-time executable market price",
             ],
-            "forward_policy": "Freeze source arms, allowlist, five-share sizing and caps for 24 hours; do not tune from intraday anecdotes.",
+            "forward_policy": "Freeze the three source arms, market-city universe and five-share sizing for 48 hours; do not tune from intraday anecdotes.",
             "acceptance_gates": [
                 "one day is probe evidence only and cannot confirm alpha",
                 "paid adoption still requires the existing 72h/7d, 500-pair, two-vantage and clock-valid gates",
                 "every real order must have a durable pre-submit reservation and fresh five-share depth",
             ],
-            "fee_and_execution_basis": "Five-share marketable GTC capped at 0.97 worst ask; Weather taker fee shares*0.05*p*(1-p); no maker child and no retry after a reserved attempt.",
+            "fee_and_execution_basis": "Five-share marketable GTC capped at 0.99 worst ask; no daily order/principal cap; one execution per condition token and per economic cross; Weather taker fee shares*0.05*p*(1-p); no maker child and no retry after a reserved attempt.",
         },
         "inputs": [
             {
@@ -329,7 +357,7 @@ def ensure_research_record(
                 "kind": "rest_map_plus_fresh_book_and_shared_ws",
                 "locator": "production://weather_market_books/latest.json",
                 "identity": "production weather_market_books sole owner",
-                "coverage": "fixed U.S. event ladders and event-triggered markout demand",
+                "coverage": "frozen Polymarket temperature-market city universe and event-triggered markout demand",
                 "observed_at_utc": None,
             },
         ],
@@ -337,7 +365,7 @@ def ensure_research_record(
             "producer": "scripts/ops/weather_cross_no_v2_metar.py",
             "code_identity": code_identity,
             "config_locator": "src/strategies/runtime/production.yaml",
-            "config_identity": "cross_no_v2_metar_live_probe_caps_v1",
+            "config_identity": "cross_no_v2_metar_polymarket_48h_uncapped_daily_v1",
             "reproduce_command": "scripts/ops/start_weather_cross_no_v2_metar.sh (controller-managed registered release only)",
         },
         "outputs": {
@@ -351,7 +379,7 @@ def ensure_research_record(
             "registry_or_index": "docs/WEATHER_STRATEGY_REGISTRY.md",
             "dated_snapshot": None,
             "durable_conclusion": None,
-            "action": "Run one bounded five-share live probe; do not promote or purchase from one-day evidence alone.",
+            "action": "Run the bounded 48-hour paid-source live economics and depth probe; do not promote the source from this window alone.",
             "superseded_record_ids": [],
         },
     }
@@ -399,6 +427,7 @@ def record_research_code_identity_amendment(output_dir: Path, *, code_identity: 
 
 def direct_evidence_events(
     evidence_db: Path, *, cursor_path: Path, allowlist: Mapping[str, str],
+    city_timezones: Mapping[str, str] = CITY_TIMEZONES,
     collector_run_start_wall_ns: int | None = None, initialize_at_current: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read only new METAR.ws arrivals after a durable SQLite rowid watermark.
@@ -482,7 +511,10 @@ def direct_evidence_events(
         received_ns = int(row["received_wall_ns"])
         received = datetime.fromtimestamp(received_ns / 1_000_000_000, tz=timezone.utc)
         observation = parse_utc(row.get("observation_time")) or received
-        target_date = observation.astimezone(ZoneInfo(CITY_TIMEZONES[city])).date().isoformat()
+        timezone_name = city_timezones.get(city)
+        if not timezone_name:
+            continue
+        target_date = observation.astimezone(ZoneInfo(timezone_name)).date().isoformat()
         clock_valid = bool(row.get("seen_clock_valid")) and bool(row.get("transport_clock_valid"))
         events.append({
             "information_event_id": f"sqlite:{row['source_seen_id']}", "event_role": "revision" if row.get("is_correction") else "new_content",
@@ -747,9 +779,9 @@ def _eligible_event(
     return blockers, clock_mode
 
 
-def _existing_keys(output_dir: Path) -> tuple[set[str], set[tuple[str, str]], dict[str, int], dict[str, float]]:
+def _existing_keys(output_dir: Path) -> tuple[set[str], set[str], dict[str, int], dict[str, float]]:
     seen: set[str] = set()
-    city_dates: set[tuple[str, str]] = set()
+    executed_tokens: set[str] = set()
     order_count: dict[str, int] = {}
     principal: dict[str, float] = {}
     paths = (
@@ -764,7 +796,9 @@ def _existing_keys(output_dir: Path) -> tuple[set[str], set[tuple[str, str]], di
         event_key = str(row.get("execution_race_key") or "")
         if event_key:
             seen.add(event_key)
-        city_dates.add((str(row.get("city")), str(row.get("target_date"))))
+        token_id = str(row.get("token_id") or "")
+        if token_id:
+            executed_tokens.add(token_id)
         attempt_id = str(row.get("execution_attempt_id") or event_key)
         if not attempt_id or attempt_id in counted_attempts:
             continue
@@ -774,7 +808,7 @@ def _existing_keys(output_dir: Path) -> tuple[set[str], set[tuple[str, str]], di
         principal[day] = principal.get(day, 0.0) + float(
             row.get("reserved_principal_usd") or row.get("submitted_notional_usd") or 0.0
         )
-    return seen, city_dates, order_count, principal
+    return seen, executed_tokens, order_count, principal
 
 
 def write_runtime_source_attribution(output_dir: Path, *, now: datetime) -> dict[str, Any]:
@@ -893,6 +927,8 @@ def run_probe(
     official_fee_rate: float | None = WEATHER_TAKER_FEE_RATE,
     official_fee_bps: float | None = None,
     allowlist: Mapping[str, str] = DEFAULT_CITY_STATIONS, pause_file: Path | None = None,
+    live_eligible_cities: Collection[str] | None = None,
+    capture_demands_jsonl: Path | None = None,
     events_override: Iterable[Mapping[str, Any]] | None = None,
     allow_clock_invalid_same_boot_monotonic_probe: bool = False, clock_uncertainty_ms: float | None = None,
     boot_monotonic_start_ns: int | None = None, monotonic_now_ns: int | None = None,
@@ -917,7 +953,10 @@ def run_probe(
     for market in books:
         key = (str(market.get("city") or ""), str(market.get("event_date") or market.get("target_date") or ""))
         by_city_date.setdefault(key, []).append(market)
-    seen_races, city_orders, daily_counts, daily_principal = _existing_keys(output_dir)
+    seen_races, executed_tokens, daily_counts, daily_principal = _existing_keys(output_dir)
+    eligible_cities = frozenset(
+        allowlist.keys() if live_eligible_cities is None else live_eligible_cities
+    )
     events = sorted((dict(row) for row in events_override) if events_override is not None else jsonl_rows(event_paths(source_events_root)), key=_event_sort_key)
     strategy_state_path = output_dir / "state.json"
     strategy_state = _load_strategy_state(strategy_state_path)
@@ -1014,6 +1053,8 @@ def run_probe(
         bracket = str(prior_market.get("bracket"))
         cross_key = (source_key[0], source_key[1], source_key[2], bracket)
         candidate_blockers: list[str] = []
+        if city_date[0] not in eligible_cities:
+            candidate_blockers.append("city_not_live_eligible")
         source_crossed = bool(
             source_max[source_key] > prior_official
             and str(source_bracket.get("bracket")) != bracket
@@ -1083,10 +1124,8 @@ def run_probe(
         race_already_executed = race_key in seen_races
         if race_already_executed:
             candidate_blockers.append("cross_source_race_already_executed")
-        if city_date in city_orders:
-            candidate_blockers.append("city_target_date_order_cap")
-        if daily_counts.get(day, 0) >= MAX_ORDERS_PER_UTC_DAY or daily_principal.get(day, 0.0) + principal > MAX_DAILY_PRINCIPAL_USD + 1e-9:
-            candidate_blockers.append("daily_order_or_principal_cap")
+        if token_id in executed_tokens:
+            candidate_blockers.append("condition_token_already_executed")
         if paused:
             candidate_blockers.append("pause_file_present")
         if live and not confirm_live:
@@ -1125,7 +1164,7 @@ def run_probe(
             blocked += 1
         else:
             append_jsonl(
-                output_dir / "capture_demands.jsonl",
+                capture_demands_jsonl or (output_dir / "capture_demands.jsonl"),
                 _capture_demand(row=row, condition_id=condition_id, token_id=token_id, now=now),
                 durable=True,
             )
@@ -1147,7 +1186,7 @@ def run_probe(
             append_jsonl(output_dir / "intents.jsonl", intent_row, durable=True)
             append_jsonl(output_dir / "execution_attempts.jsonl", reservation, durable=True)
             seen_races.add(race_key)
-            city_orders.add(city_date)
+            executed_tokens.add(token_id)
             daily_counts[day] = daily_counts.get(day, 0) + 1
             daily_principal[day] = daily_principal.get(day, 0.0) + float(intent["submitted_notional_usd"])
             result = submit_marketable_gtc(intent_row, place=place_fn)  # type: ignore[arg-type]
@@ -1220,8 +1259,8 @@ def run_probe(
         "live_enabled": live_enabled,
         "execution_mode": "live_probe" if live_enabled else "shadow",
         "shares_per_order": SHARES_PER_ORDER,
-        "max_orders_per_utc_day": MAX_ORDERS_PER_UTC_DAY,
-        "max_daily_principal_usd": MAX_DAILY_PRINCIPAL_USD,
+        "daily_order_cap_enabled": False,
+        "daily_principal_cap_enabled": False,
         "max_no_ask": MAX_NO_ASK,
         "weather_taker_fee_rate": WEATHER_TAKER_FEE_RATE,
         "clock_invalid_same_boot_override_enabled": bool(allow_clock_invalid_same_boot_monotonic_probe),
@@ -1242,6 +1281,8 @@ def main() -> int:
     source_input.add_argument("--source-events-root", type=Path)
     source_input.add_argument("--evidence-db", type=Path)
     parser.add_argument("--market-books-latest", type=Path, required=True)
+    parser.add_argument("--universe-config", type=Path)
+    parser.add_argument("--capture-demands-jsonl", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-source-age-sec", type=float, default=30.0)
     parser.add_argument("--official-fee-rate", type=float, default=WEATHER_TAKER_FEE_RATE)
@@ -1269,6 +1310,13 @@ def main() -> int:
     if args.stop_after_sec <= 0:
         raise SystemExit("--stop-after-sec must be positive")
     args.pause_file = args.pause_file or (args.output_dir / "PAUSE")
+    allowlist = DEFAULT_CITY_STATIONS
+    city_timezones = CITY_TIMEZONES
+    live_eligible_cities: Collection[str] = frozenset(DEFAULT_CITY_STATIONS)
+    if args.universe_config:
+        allowlist, city_timezones, live_eligible_cities = load_universe_config(
+            args.universe_config
+        )
     ensure_research_record(
         args.output_dir,
         code_identity=args.code_identity,
@@ -1283,21 +1331,24 @@ def main() -> int:
     while True:
         cycle_started = time.monotonic()
         try:
-            enforce_experiment_deadline(
+            experiment_control = enforce_experiment_deadline(
                 args.output_dir,
                 pause_file=args.pause_file,
                 stop_after_sec=args.stop_after_sec,
             )
             direct_events = None
             cursor_state = None
-            if args.evidence_db:
+            if args.evidence_db and not experiment_control["expired"]:
                 direct_events, cursor_state = direct_evidence_events(
                     args.evidence_db,
                     cursor_path=args.output_dir / "evidence_cursor.json",
-                    allowlist=DEFAULT_CITY_STATIONS,
+                    allowlist=allowlist,
+                    city_timezones=city_timezones,
                     collector_run_start_wall_ns=args.collector_run_start_wall_ns,
                     initialize_at_current=not args.initialize_evidence_from_start,
                 )
+            elif experiment_control["expired"]:
+                direct_events = []
             result = run_probe(
                 source_events_root=args.source_events_root or Path("."),
                 market_books_latest=args.market_books_latest,
@@ -1307,6 +1358,9 @@ def main() -> int:
                 place_fn=place_fn,
                 max_source_age_sec=args.max_source_age_sec,
                 official_fee_rate=args.official_fee_rate,
+                allowlist=allowlist,
+                live_eligible_cities=live_eligible_cities,
+                capture_demands_jsonl=args.capture_demands_jsonl,
                 pause_file=args.pause_file,
                 events_override=direct_events,
                 allow_clock_invalid_same_boot_monotonic_probe=args.allow_clock_invalid_same_boot_monotonic_probe,

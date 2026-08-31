@@ -10,6 +10,7 @@ RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_s
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 TMUX_SESSION="${WEATHER_CROSS_NO_V2_METAR_TMUX_SESSION:-weather_cross_no_v2_metar_v1}"
 OUTPUT_DIR="${WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR:-$RUNTIME_ROOT/output/cross_no_v2_metar_v1}"
+CAPTURE_DEMANDS_JSONL="${WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL:-$OUTPUT_DIR/capture_demands.jsonl}"
 EVIDENCE_DB="${WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB:?WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB is required}"
 MARKET_BOOKS_LATEST="${WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST:-$RUNTIME_ROOT/market_books/latest.json}"
 PAUSE_FILE="${WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE:-$OUTPUT_DIR/PAUSE}"
@@ -17,6 +18,12 @@ INTERVAL_SEC="${WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC:-0.5}"
 MAX_SOURCE_AGE_SEC="${WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC:-30}"
 BOOK_TIMEOUT_SEC="${WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC:-5}"
 STOP_AFTER_SEC="${WEATHER_CROSS_NO_V2_METAR_STOP_AFTER_SEC:-86400}"
+UNIVERSE_CONFIG_REL="${WEATHER_CROSS_NO_V2_METAR_UNIVERSE_CONFIG:-}"
+UNIVERSE_CONFIG="$PROJECT_DIR/$UNIVERSE_CONFIG_REL"
+START_COLLECTOR="${WEATHER_CROSS_NO_V2_METAR_START_COLLECTOR:-0}"
+COLLECTOR_RUNTIME_ROOT="${WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT:-}"
+COLLECTOR_LOG="${WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG:-$RUNTIME_ROOT/loop/cross_no_v2_metar_collector.log}"
+SOURCE_ENV_FILE="${WEATHER_CROSS_NO_V2_METAR_SOURCE_ENV_FILE:-}"
 ENABLE_LIVE="${WEATHER_CROSS_NO_V2_METAR_LIVE:-0}"
 CONFIRM_LIVE="${WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE:-0}"
 ALLOW_CLOCK_OVERRIDE="${WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE:-0}"
@@ -25,7 +32,13 @@ PID_FILE="${WEATHER_CROSS_NO_V2_METAR_PID_FILE:-$RUNTIME_ROOT/loop/cross_no_v2_m
 MARKET_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
 CODE_IDENTITY="$(git -C "$PROJECT_DIR" rev-parse HEAD)"
 
-[[ -f "$EVIDENCE_DB" ]] || { echo "missing evidence DB: $EVIDENCE_DB" >&2; exit 1; }
+if [[ "$START_COLLECTOR" != "1" ]]; then
+  [[ -f "$EVIDENCE_DB" ]] || { echo "missing evidence DB: $EVIDENCE_DB" >&2; exit 1; }
+else
+  [[ -n "$COLLECTOR_RUNTIME_ROOT" ]] || { echo "collector runtime root is required" >&2; exit 1; }
+  [[ -f "$SOURCE_ENV_FILE" ]] || { echo "missing paid source env file" >&2; exit 1; }
+  [[ -f "$UNIVERSE_CONFIG" ]] || { echo "missing universe config: $UNIVERSE_CONFIG" >&2; exit 1; }
+fi
 [[ -f "$MARKET_BOOKS_LATEST" ]] || { echo "missing market books: $MARKET_BOOKS_LATEST" >&2; exit 1; }
 if [[ "$ENABLE_LIVE" == "1" && "$CONFIRM_LIVE" != "1" ]]; then
   echo "live mode requires WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE=1" >&2
@@ -39,7 +52,9 @@ fi
   "$PROJECT_DIR" "$PRODUCTION_SPEC" "$CODE_IDENTITY" \
   "$EVIDENCE_DB" "$MARKET_BOOKS_LATEST" "$OUTPUT_DIR" "$PAUSE_FILE" \
   "$INTERVAL_SEC" "$MAX_SOURCE_AGE_SEC" "$BOOK_TIMEOUT_SEC" "$STOP_AFTER_SEC" \
-  "$ENABLE_LIVE" "$CONFIRM_LIVE" "$ALLOW_CLOCK_OVERRIDE" <<'PY'
+  "$ENABLE_LIVE" "$CONFIRM_LIVE" "$ALLOW_CLOCK_OVERRIDE" \
+  "$UNIVERSE_CONFIG_REL" "$START_COLLECTOR" "$COLLECTOR_RUNTIME_ROOT" \
+  "$COLLECTOR_LOG" "$SOURCE_ENV_FILE" "$CAPTURE_DEMANDS_JSONL" <<'PY'
 import subprocess
 import sys
 from pathlib import Path
@@ -61,6 +76,12 @@ import yaml
     enable_live,
     confirm_live,
     allow_clock_override,
+    universe_config,
+    start_collector,
+    collector_runtime_root,
+    collector_log,
+    source_env_file,
+    capture_demands_jsonl,
 ) = sys.argv[1:]
 
 payload = yaml.safe_load(Path(production_spec).read_text(encoding="utf-8"))
@@ -105,6 +126,12 @@ actual = {
     "WEATHER_CROSS_NO_V2_METAR_LIVE": enable_live,
     "WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE": confirm_live,
     "WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE": allow_clock_override,
+    "WEATHER_CROSS_NO_V2_METAR_UNIVERSE_CONFIG": universe_config,
+    "WEATHER_CROSS_NO_V2_METAR_START_COLLECTOR": start_collector,
+    "WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT": collector_runtime_root,
+    "WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG": collector_log,
+    "WEATHER_CROSS_NO_V2_METAR_SOURCE_ENV_FILE": source_env_file,
+    "WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL": capture_demands_jsonl,
 }
 registered = runtime.get("launch_environment") or {}
 for key, value in actual.items():
@@ -141,32 +168,51 @@ except ValueError as exc:
 PY
 fi
 
-cmd=(
-  "$PROJECT_DIR/.venv/bin/python"
-  "$PROJECT_DIR/scripts/ops/weather_cross_no_v2_metar.py"
-  --loop
-  --evidence-db "$EVIDENCE_DB"
-  --market-books-latest "$MARKET_BOOKS_LATEST"
-  --output-dir "$OUTPUT_DIR"
-  --pause-file "$PAUSE_FILE"
-  --interval-sec "$INTERVAL_SEC"
-  --max-source-age-sec "$MAX_SOURCE_AGE_SEC"
-  --book-timeout-sec "$BOOK_TIMEOUT_SEC"
-  --stop-after-sec "$STOP_AFTER_SEC"
-  --official-fee-rate 0.05
-  --code-identity "$CODE_IDENTITY"
-)
-if [[ -n "$MARKET_PROXY" ]]; then
-  cmd+=(--market-proxy "$MARKET_PROXY")
-fi
-if [[ "$ENABLE_LIVE" == "1" ]]; then
-  cmd+=(--live)
-fi
-if [[ "$CONFIRM_LIVE" == "1" ]]; then
-  cmd+=(--confirm-live)
-fi
-if [[ "$ALLOW_CLOCK_OVERRIDE" == "1" ]]; then
-  cmd+=(--allow-clock-invalid-same-boot-monotonic-probe)
+if [[ "$START_COLLECTOR" == "1" ]]; then
+  cmd=(
+    env
+    "PROJECT_DIR=$PROJECT_DIR"
+    "WEATHER_CROSS_NO_V2_METAR_PYTHON_BIN=$PROJECT_DIR/.venv/bin/python"
+    "WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB=$EVIDENCE_DB"
+    "WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST=$MARKET_BOOKS_LATEST"
+    "WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR=$OUTPUT_DIR"
+    "WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL=$CAPTURE_DEMANDS_JSONL"
+    "WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE=$PAUSE_FILE"
+    "WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC=$INTERVAL_SEC"
+    "WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC=$MAX_SOURCE_AGE_SEC"
+    "WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC=$BOOK_TIMEOUT_SEC"
+    "WEATHER_CROSS_NO_V2_METAR_STOP_AFTER_SEC=$STOP_AFTER_SEC"
+    "WEATHER_CROSS_NO_V2_METAR_LIVE=$ENABLE_LIVE"
+    "WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE=$CONFIRM_LIVE"
+    "WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE=$ALLOW_CLOCK_OVERRIDE"
+    "WEATHER_CROSS_NO_V2_METAR_UNIVERSE_CONFIG=$UNIVERSE_CONFIG"
+    "WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT=$COLLECTOR_RUNTIME_ROOT"
+    "WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG=$COLLECTOR_LOG"
+    "WEATHER_CROSS_NO_V2_METAR_SOURCE_ENV_FILE=$SOURCE_ENV_FILE"
+    "WEATHER_CROSS_NO_V2_METAR_CODE_IDENTITY=$CODE_IDENTITY"
+    "$PROJECT_DIR/scripts/ops/run_weather_cross_no_v2_metar_with_collector.sh"
+  )
+  # These explicit inert wrapper arguments preserve the controller's pane-level
+  # expected-live audit; the real flags are rebuilt from the validated env.
+  if [[ "$ENABLE_LIVE" == "1" ]]; then cmd+=(--live); fi
+  if [[ "$CONFIRM_LIVE" == "1" ]]; then cmd+=(--confirm-live); fi
+else
+  cmd=(
+    "$PROJECT_DIR/.venv/bin/python"
+    "$PROJECT_DIR/scripts/ops/weather_cross_no_v2_metar.py"
+    --loop --evidence-db "$EVIDENCE_DB"
+    --market-books-latest "$MARKET_BOOKS_LATEST"
+    --output-dir "$OUTPUT_DIR" --pause-file "$PAUSE_FILE"
+    --capture-demands-jsonl "$CAPTURE_DEMANDS_JSONL"
+    --interval-sec "$INTERVAL_SEC" --max-source-age-sec "$MAX_SOURCE_AGE_SEC"
+    --book-timeout-sec "$BOOK_TIMEOUT_SEC" --stop-after-sec "$STOP_AFTER_SEC"
+    --official-fee-rate 0.05 --code-identity "$CODE_IDENTITY"
+  )
+  if [[ -n "$UNIVERSE_CONFIG_REL" ]]; then cmd+=(--universe-config "$UNIVERSE_CONFIG"); fi
+  if [[ -n "$MARKET_PROXY" ]]; then cmd+=(--market-proxy "$MARKET_PROXY"); fi
+  if [[ "$ENABLE_LIVE" == "1" ]]; then cmd+=(--live); fi
+  if [[ "$CONFIRM_LIVE" == "1" ]]; then cmd+=(--confirm-live); fi
+  if [[ "$ALLOW_CLOCK_OVERRIDE" == "1" ]]; then cmd+=(--allow-clock-invalid-same-boot-monotonic-probe); fi
 fi
 
 printf -v quoted_cmd '%q ' "${cmd[@]}"
@@ -205,11 +251,12 @@ payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert payload.get("status") == "ok", payload
 assert bool(payload.get("live_enabled")) is (sys.argv[2] == "1"), payload
 assert payload.get("shares_per_order") == 5.0, payload
-assert payload.get("max_orders_per_utc_day") == 5, payload
-assert payload.get("max_daily_principal_usd") == 25.0, payload
+assert payload.get("daily_order_cap_enabled") is False, payload
+assert payload.get("daily_principal_cap_enabled") is False, payload
+assert payload.get("max_no_ask") == 0.99, payload
 PY
 
 echo "started cross_no_v2_metar_v1 tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
-echo "execution=5_share_taker_only max_orders_per_utc_day=5 max_daily_principal_usd=25"
+echo "execution=5_share_taker_only daily_order_cap=off daily_principal_cap=off max_no_ask=0.99"
 echo "live=$ENABLE_LIVE confirm_live=$CONFIRM_LIVE clock_override=$ALLOW_CLOCK_OVERRIDE"
 echo "evidence_db=$EVIDENCE_DB output_dir=$OUTPUT_DIR pause_file=$PAUSE_FILE"
