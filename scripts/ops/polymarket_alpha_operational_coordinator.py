@@ -385,6 +385,14 @@ def _stage_market_resume(args: argparse.Namespace) -> None:
         version=str(rank_payload["version"]),
         watch_threshold=Decimal(str(rank_payload["watch_threshold"])),
         simulate_threshold=Decimal(str(rank_payload["simulate_threshold"])),
+        fee_slippage_cost_policy_id=str(
+            rank_payload["fee_slippage_cost_policy_id"]
+        ),
+        fee_slippage_cost_policy_version=str(
+            rank_payload["fee_slippage_cost_policy_version"]
+        ),
+        fee_rate=Decimal(str(rank_payload["fee_rate"])),
+        slippage_buffer=Decimal(str(rank_payload["slippage_buffer"])),
     )
     inputs = MarketResumeStageInputs(
         result_locator=str(manifest["result_locator"]),

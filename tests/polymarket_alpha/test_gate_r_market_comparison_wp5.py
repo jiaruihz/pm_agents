@@ -9,10 +9,12 @@ import pytest
 from pydantic import ValidationError
 
 from src.polymarket_alpha.contracts import (
-    CandidateState, MarketComparison, canonical_json, content_sha256,
+    BookLevel, CandidateState, MarketComparison, MarketComparisonV2,
+    canonical_json, content_sha256,
     stable_record_id,
 )
 from src.polymarket_alpha.decision import DecisionLedgerError, RankConfig, build_ranked_ledger
+from src.polymarket_alpha.books import EXECUTABLE_COST_VERSION
 from src.polymarket_alpha.research import (
     DeterministicMarketAssessmentCompiler,
     MarketComparisonError,
@@ -49,6 +51,19 @@ def _assessment(*, values=None, policy=None, seconds=5):
     ), packet, values
 
 
+def _reseal_v2(raw: dict[str, object]) -> MarketComparisonV2:
+    payload = {
+        key: value
+        for key, value in raw.items()
+        if key not in {"record_id", "comparison_id", "comparison_sha256"}
+    }
+    raw["record_id"] = raw["comparison_id"] = stable_record_id(
+        "market_comparison", payload
+    )
+    raw["comparison_sha256"] = content_sha256(payload)
+    return MarketComparisonV2.model_validate(raw)
+
+
 def test_ready_comparison_recomputes_content_identity_and_imports_existing_market_path() -> None:
     assessment, packet, values = _assessment()
     assert assessment.result is not None
@@ -59,7 +74,11 @@ def test_ready_comparison_recomputes_content_identity_and_imports_existing_marke
     assert comparison.rule_hash == packet.rule_contract.rule_hash
     assert comparison.yes_edge_low <= comparison.yes_edge_mid <= comparison.yes_edge_high
     assert comparison.no_edge_low <= comparison.no_edge_mid <= comparison.no_edge_high
-    replay = MarketComparison.model_validate(comparison.model_dump(mode="python"))
+    assert comparison.fee_model_version == EXECUTABLE_COST_VERSION
+    assert comparison.yes_buy_vwap == Decimal("0.50")
+    assert comparison.yes_taker_fee == Decimal("0.0250")
+    assert comparison.yes_all_in_buy_price == Decimal("0.5075")
+    replay = MarketComparisonV2.model_validate(comparison.model_dump(mode="python"))
     assert replay.record_id == comparison.record_id and replay.comparison_sha256 == comparison.comparison_sha256
     imported = import_research_result(packet=packet, submitted_bytes=canonical_json(assessment.result).encode(),
         source_contents={}, imported_at=NOW + timedelta(seconds=8), run_id="wp5-import", submitted_artifact_locator="results/market.json")
@@ -83,7 +102,7 @@ def test_content_binding_tamper_is_rejected(mutation: str) -> None:
     else:
         raw["orderbook_snapshot_sha256"] = "3" * 64
     with pytest.raises(ValidationError, match="recomputed"):
-        MarketComparison.model_validate(raw)
+        MarketComparisonV2.model_validate(raw)
 
 
 def test_semantic_edge_forgery_fails_even_with_recomputed_identity() -> None:
@@ -95,7 +114,49 @@ def test_semantic_edge_forgery_fails_even_with_recomputed_identity() -> None:
     raw["record_id"] = raw["comparison_id"] = stable_record_id("market_comparison", payload)
     raw["comparison_sha256"] = content_sha256(payload)
     with pytest.raises(ValidationError, match="deterministically recomputed"):
-        MarketComparison.model_validate(raw)
+        MarketComparisonV2.model_validate(raw)
+
+
+def test_released_v1_market_comparison_payload_remains_parseable() -> None:
+    assessment, _, _ = _assessment()
+    raw = assessment.comparison.model_dump(mode="python")
+    for field in (
+        "yes_buy_fills",
+        "no_buy_fills",
+        "yes_taker_fee",
+        "no_taker_fee",
+        "yes_all_in_buy_price",
+        "no_all_in_buy_price",
+        "fee_model_version",
+    ):
+        raw.pop(field)
+    raw["source_version"] = "gate_r_wp5_v1"
+    yes_cost = raw["yes_buy_vwap"] * (Decimal("1") + raw["fee_rate"]) + raw[
+        "slippage_buffer"
+    ]
+    no_cost = raw["no_buy_vwap"] * (Decimal("1") + raw["fee_rate"]) + raw[
+        "slippage_buffer"
+    ]
+    raw.update(
+        yes_edge_low=raw["blind_p_yes_low"] - yes_cost,
+        yes_edge_mid=raw["blind_p_yes_mid"] - yes_cost,
+        yes_edge_high=raw["blind_p_yes_high"] - yes_cost,
+        no_edge_low=(Decimal("1") - raw["blind_p_yes_high"]) - no_cost,
+        no_edge_mid=(Decimal("1") - raw["blind_p_yes_mid"]) - no_cost,
+        no_edge_high=(Decimal("1") - raw["blind_p_yes_low"]) - no_cost,
+    )
+    payload = {
+        key: value
+        for key, value in raw.items()
+        if key not in {"record_id", "comparison_id", "comparison_sha256"}
+    }
+    raw["record_id"] = raw["comparison_id"] = stable_record_id(
+        "market_comparison", payload
+    )
+    raw["comparison_sha256"] = content_sha256(payload)
+    legacy = MarketComparison.model_validate(raw)
+    assert legacy.source_version == "gate_r_wp5_v1"
+    assert not hasattr(legacy, "fee_model_version")
 
 
 @pytest.mark.parametrize("case", ["ttl_boundary", "policy_depth"])
@@ -207,7 +268,15 @@ def test_compiled_result_reaches_rule_b_and_no_order_prediction_ledger() -> None
         contract=values[1], gate_a=values[2], gate_b=gate_b,
         blind_result=values[4], blind_receipt=values[5], market_packet=packet,
         market_result=imported.result, market_receipt=imported.receipt, book=values[8],
-        config=RankConfig(version="wp5", simulation_target_size=Decimal("10")),
+        market_comparison=assessment.comparison,
+        config=RankConfig(
+            version="wp5",
+            simulation_target_size=Decimal("10"),
+            fee_slippage_cost_policy_id="fee_slippage",
+            fee_slippage_cost_policy_version="v1",
+            fee_rate=Decimal("0.01"),
+            slippage_buffer=Decimal("0.005"),
+        ),
         as_of=NOW + timedelta(seconds=10), run_id="wp5-ledger",
     )
     assert ranked.decision.execution == "NO_ORDER"
@@ -234,6 +303,135 @@ def test_compiled_result_reaches_rule_b_and_no_order_prediction_ledger() -> None
             contract=values[1], gate_a=values[2], gate_b=gate_b,
             blind_result=values[4], blind_receipt=values[5], market_packet=packet,
             market_result=overwritten_result, market_receipt=overwritten_receipt,
-            book=values[8], config=RankConfig(version="wp5", simulation_target_size=Decimal("10")),
+            book=values[8], market_comparison=assessment.comparison,
+            config=RankConfig(
+                version="wp5",
+                simulation_target_size=Decimal("10"),
+                fee_slippage_cost_policy_id="fee_slippage",
+                fee_slippage_cost_policy_version="v1",
+                fee_rate=Decimal("0.01"),
+                slippage_buffer=Decimal("0.005"),
+            ),
             as_of=NOW + timedelta(seconds=10), run_id="wp5-overwrite-ledger",
+        )
+
+
+def test_ranker_rejects_cost_policy_drift_from_sealed_comparison() -> None:
+    assessment, packet, values = _assessment()
+    assert assessment.result is not None
+    imported = import_research_result(
+        packet=packet,
+        submitted_bytes=canonical_json(assessment.result).encode(),
+        source_contents={},
+        imported_at=NOW + timedelta(seconds=8),
+        run_id="wp5-cost-drift-import",
+        submitted_artifact_locator="results/market-cost-drift.json",
+    )
+    assert imported.result is not None
+    gate_b = evaluate_gate_b(
+        values[1], values[2], market_packet_id=packet.record_id,
+        market_packet_rule_hash=packet.rule_contract.rule_hash,
+        market_packet_contract_revision_id=packet.rule_contract.contract_revision_id,
+        run_id="wp5-cost-drift-gate-b", evaluated_at=NOW + timedelta(seconds=9),
+    )
+    with pytest.raises(DecisionLedgerError, match="cost policies differ"):
+        build_ranked_ledger(
+            candidate=values[0].model_copy(update={"state": CandidateState.RULE_B_PASSED}),
+            contract=values[1], gate_a=values[2], gate_b=gate_b,
+            blind_result=values[4], blind_receipt=values[5], market_packet=packet,
+            market_result=imported.result, market_receipt=imported.receipt,
+            book=values[8], market_comparison=assessment.comparison,
+            config=RankConfig(
+                version="wrong-fee", simulation_target_size=Decimal("10"),
+                fee_slippage_cost_policy_id="fee_slippage",
+                fee_slippage_cost_policy_version="v1", fee_rate=Decimal("0.04"),
+                slippage_buffer=Decimal("0.005"),
+            ),
+            as_of=NOW + timedelta(seconds=10), run_id="wp5-cost-drift-ledger",
+        )
+
+
+def test_ranker_recomputes_fills_against_the_frozen_orderbook() -> None:
+    values = list(_demand_and_book())
+    values[8] = values[8].model_copy(update={"quality_flags": ()})
+    values[7] = values[7].model_copy(
+        update={"orderbook_snapshot_sha256": values[8].canonical_sha256}
+    )
+    assessment, packet, values = _assessment(values=tuple(values))
+    assert assessment.result is not None
+    imported = import_research_result(
+        packet=packet,
+        submitted_bytes=canonical_json(assessment.result).encode(),
+        source_contents={},
+        imported_at=NOW + timedelta(seconds=8),
+        run_id="wp5-fill-binding-import",
+        submitted_artifact_locator="results/market-fill-binding.json",
+    )
+    assert imported.result is not None
+    gate_b = evaluate_gate_b(
+        values[1],
+        values[2],
+        market_packet_id=packet.record_id,
+        market_packet_rule_hash=packet.rule_contract.rule_hash,
+        market_packet_contract_revision_id=packet.rule_contract.contract_revision_id,
+        run_id="wp5-fill-binding-gate-b",
+        evaluated_at=NOW + timedelta(seconds=9),
+    )
+
+    raw = assessment.comparison.model_dump(mode="python")
+    forged_price = Decimal("0.51")
+    target = raw["policy_size"]
+    fee = target * raw["fee_rate"] * forged_price * (Decimal("1") - forged_price)
+    all_in = forged_price + (fee / target) + raw["slippage_buffer"]
+    raw.update(
+        yes_ask=forged_price,
+        yes_buy_fills=(BookLevel(price=forged_price, size=target),),
+        yes_buy_vwap=forged_price,
+        yes_taker_fee=fee,
+        yes_all_in_buy_price=all_in,
+        yes_edge_low=raw["blind_p_yes_low"] - all_in,
+        yes_edge_mid=raw["blind_p_yes_mid"] - all_in,
+        yes_edge_high=raw["blind_p_yes_high"] - all_in,
+    )
+    forged_comparison = _reseal_v2(raw)
+    forged_result = imported.result.model_copy(
+        update={
+            "extensions": {
+                **imported.result.extensions,
+                "market_comparison_id": forged_comparison.record_id,
+                "market_comparison_sha256": forged_comparison.comparison_sha256,
+            }
+        }
+    )
+    forged_receipt = imported.receipt.model_copy(
+        update={"accepted_result_sha256": forged_result.canonical_sha256}
+    )
+    with pytest.raises(
+        DecisionLedgerError,
+        match="fills/costs do not match sealed orderbook",
+    ):
+        build_ranked_ledger(
+            candidate=values[0].model_copy(
+                update={"state": CandidateState.RULE_B_PASSED}
+            ),
+            contract=values[1],
+            gate_a=values[2],
+            gate_b=gate_b,
+            blind_result=values[4],
+            blind_receipt=values[5],
+            market_packet=packet,
+            market_result=forged_result,
+            market_receipt=forged_receipt,
+            book=values[8],
+            market_comparison=forged_comparison,
+            config=RankConfig(
+                version="wp5",
+                simulation_target_size=Decimal("10"),
+                fee_slippage_cost_policy_id="fee_slippage",
+                fee_slippage_cost_policy_version="v1",
+                fee_rate=Decimal("0.01"),
+                slippage_buffer=Decimal("0.005"),
+            ),
+            as_of=NOW + timedelta(seconds=10),
+            run_id="wp5-fill-binding-ledger",
         )

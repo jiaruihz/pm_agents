@@ -28,6 +28,18 @@ NOW = datetime(2026, 8, 27, 15, 0, tzinfo=UTC)
 SHA = "a" * 64
 
 
+def _rank_config(**updates: object) -> RankConfig:
+    values: dict[str, object] = {
+        "version": "fixture-v1",
+        "fee_slippage_cost_policy_id": "fixture_fee_free",
+        "fee_slippage_cost_policy_version": "v1",
+        "fee_rate": Decimal("0"),
+        "slippage_buffer": Decimal("0"),
+    }
+    values.update(updates)
+    return RankConfig(**values)
+
+
 def _env(record_id: str, *, run: str = "decision-run", source: str = "fixture", at: datetime = NOW) -> dict[str, object]:
     return {"record_id": record_id, "run_id": run, "created_at": at, "source": source,
             "source_version": "fixture-v1", "provenance": (), "extensions": {}}
@@ -152,7 +164,7 @@ def _inputs() -> dict[str, object]:
         completed_at=NOW - timedelta(minutes=2), imported_at=NOW - timedelta(minutes=1))
     return dict(candidate=candidate, contract=contract, gate_a=gate_a, gate_b=gate_b, blind_result=blind_result,
         blind_receipt=blind_receipt, market_packet=packet, market_result=market_result, market_receipt=market_receipt,
-        book=book, config=RankConfig(version="golden-v1", simulate_threshold=Decimal("0.60")), as_of=NOW, run_id="decision-run")
+        book=book, config=_rank_config(version="golden-v1", simulate_threshold=Decimal("0.60")), as_of=NOW, run_id="decision-run")
 
 
 def test_rank_golden_and_replay_are_deterministic() -> None:
@@ -168,6 +180,11 @@ def test_rank_golden_and_replay_are_deterministic() -> None:
     assert first.decision.execution == "NO_ORDER"
     assert first.decision.target_size == Decimal("10")
     assert first.prediction.position_state.value == "SIMULATED"
+
+
+def test_rank_config_requires_an_explicit_cost_policy() -> None:
+    with pytest.raises(ValueError, match="fee_slippage_cost_policy"):
+        RankConfig(version="implicit-cost-is-forbidden")
 
 
 def test_mismatch_and_stale_inputs_fail_closed() -> None:
@@ -193,7 +210,7 @@ def test_mismatch_and_stale_inputs_fail_closed() -> None:
         build_ranked_ledger(**inputs)
 
     inputs = _inputs()
-    inputs["config"] = RankConfig(version="missing-depth", simulation_target_size=Decimal("25"))
+    inputs["config"] = _rank_config(version="missing-depth", simulation_target_size=Decimal("25"))
     with pytest.raises(DecisionLedgerError, match="configured paired target depth"):
         build_ranked_ledger(**inputs)
 
@@ -217,7 +234,7 @@ def test_protocol_chronology_and_attempt_identity_are_enforced() -> None:
 
 def test_watchlist_and_idempotent_repository_replay(tmp_path) -> None:
     inputs = _inputs()
-    inputs["config"] = RankConfig(version="watch-v1", simulate_threshold=Decimal("0.90"))
+    inputs["config"] = _rank_config(version="watch-v1", simulate_threshold=Decimal("0.90"))
     outcome = build_ranked_ledger(**inputs)
     assert outcome.decision.action == ReviewAction.WATCH
     assert outcome.prediction.position_state.value == "NO_POSITION"

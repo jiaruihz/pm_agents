@@ -208,7 +208,8 @@ def test_place_uses_deterministic_identity_and_preserves_fee_protocol_provenance
     assert result["expected_venue_order_id"] == "expected-venue-1"
     assert result["protocol_version"] == "clob-v2"
     assert result["collateral_asset"] == "USDC"
-    assert result["estimated_fee_usd"] == Decimal("0.09010")
+    # 5 * 0.02 * (0.901 * 0.099), rounded to five decimal places.
+    assert result["estimated_fee_usd"] == Decimal("0.00892")
     assert result["realized_maker_rebate_usd"] is None
 
 
@@ -243,7 +244,8 @@ def test_maker_rebate_is_an_estimate_never_realized_cash():
     result = adapter.place(intent=intent, child=_child(intent, maker_only=True), market_book=book, capabilities=capabilities, fee_schedule=fees)
 
     assert result["status"] == "submitted"
-    assert result["estimated_maker_rebate_usd"] == Decimal("0.04505")
+    assert result["estimated_fee_usd"] == Decimal("0")
+    assert result["estimated_maker_rebate_usd"] == Decimal("0.00446")
     assert result["realized_maker_rebate_usd"] is None
     assert transport.post_calls[0][2] is True
 

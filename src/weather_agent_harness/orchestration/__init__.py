@@ -26,7 +26,7 @@ from .receipt import build_run_receipt
 from .pricing import RATE_CARD_ID, canonical_model, models_match, price_usage
 from .router import RequestRouter
 from .store import OrchestrationStore
-from .usage import usage_from_codex_session
+from .usage import find_codex_session, usage_from_codex_session
 from .verification import TrustedVerifierRunner, verify_evidence_record
 
 __all__ = [
@@ -59,5 +59,6 @@ __all__ = [
     "models_match",
     "price_usage",
     "usage_from_codex_session",
+    "find_codex_session",
     "verify_evidence_record",
 ]

@@ -9,6 +9,7 @@ class FakeClient:
         self.book = SimpleNamespace(
             hash="book-1",
             timestamp="1",
+            condition_id="condition-1",
             tick_size="0.01",
             min_order_size="5",
             bids=[
@@ -38,6 +39,10 @@ class FakeClient:
 
     def get_fee_rate_bps(self, _token_id):
         return 150
+
+    def get_clob_market_info(self, market_or_condition_id):
+        assert market_or_condition_id == "condition-1"
+        return {"fd": {"r": "0.05", "e": "1", "to": True}}
 
     def create_order(self, args):
         return {"signed": True, "args": args}
@@ -77,7 +82,7 @@ def _transport():
     )
 
 
-def test_book_is_sorted_and_token_fee_is_explicit():
+def test_book_is_sorted_and_token_v2_fee_keeps_raw_truth_and_secondary_endpoint():
     transport = _transport()
 
     book = transport.fetch_market_book("token-1")
@@ -85,8 +90,23 @@ def test_book_is_sorted_and_token_fee_is_explicit():
 
     assert [row["price"] for row in book["bids"]] == ["0.81", "0.80"]
     assert [row["price"] for row in book["asks"]] == ["0.84", "0.85"]
-    assert fees["taker_fee_parameters"]["fee_rate_bps"] == 150
-    assert fees["taker_fee_parameters"]["rate"] == "0.015"
+    assert fees["taker_fee_parameters"]["raw_fee_details"] == {
+        "r": "0.05", "e": "1", "to": True
+    }
+    assert fees["taker_fee_parameters"]["secondary_fee_rate_bps"] == 150
+    assert fees["taker_fee_parameters"]["rate"] == "0.05"
+    assert fees["taker_fee_parameters"]["exponent"] == "1"
+    assert transport.fetch_capabilities()["collateral_asset"] == "pUSD"
+
+
+def test_token_v2_fee_fails_closed_when_raw_fd_is_missing():
+    transport = _transport()
+    transport.client.get_clob_market_info = lambda _market_or_condition_id: {"base_fee": 150}
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="missing raw V2 fee details"):
+        transport.fetch_fee_schedule_for_token("token-1")
 
 
 def test_submit_registry_reconstructs_partial_fill_remaining_shares():

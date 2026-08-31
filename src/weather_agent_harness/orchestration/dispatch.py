@@ -14,8 +14,11 @@ class CodexDispatchAdapter:
 
     def instruction(self, order: WorkOrder, role: RoleSpec) -> dict[str, Any]:
         profile = compile_execution_profile(role, order)
+        task_identity = "_".join(
+            item for item in (order.parent_run_id, order.work_order_id) if item
+        )
         return {
-            "task_name": order.work_order_id.replace("-", "_"),
+            "task_name": task_identity.replace("-", "_"),
             "fork_turns": "none",
             "agent_type": profile.agent_type,
             "model": role.requested_model,

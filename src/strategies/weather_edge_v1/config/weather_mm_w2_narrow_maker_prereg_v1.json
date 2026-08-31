@@ -1,0 +1,85 @@
+{
+  "schema_version": "weather_mm_w2_narrow_maker_prereg_v1",
+  "strategy_family": "weather_first_mm",
+  "stage": "W2_narrow_maker_acquisition",
+  "execution_mode": "zero_notional_shadow",
+  "declared_notional": "0",
+  "denominator": {
+    "source_record": "market_state_decisions.jsonl",
+    "include_event_kind": "first_positive",
+    "identity": "signal_id_else_event_id",
+    "revision_policy": "latest append row within the exact consumed JSONL prefix; identity invariants must remain stable and all revision counts are reported",
+    "unit": "first_positive_signal",
+    "block": "target_date"
+  },
+  "allowed_regimes": [
+    "healthy_passive_candidate",
+    "transient_dislocation_candidate"
+  ],
+  "state_aliases": {
+    "healthy_passive": "healthy_passive_candidate",
+    "healthy_passive_candidate": "healthy_passive_candidate",
+    "transient_dislocation": "transient_dislocation_candidate",
+    "transient_dislocation_candidate": "transient_dislocation_candidate"
+  },
+  "baselines": [
+    "execution_counterfactuals.shared_passive_maker_with_actual_lineage",
+    "same_row_immediate_taker",
+    "skip"
+  ],
+  "maker_fill_contract": "Only authoritative own-order lifecycle/fill evidence is a maker fill. Quote, touch, cross, displayed depth, and queue simulation are not fills.",
+  "mere": {
+    "frozen": true,
+    "name": "maker_execution_residual_edge",
+    "formula": "((maker_terminal_value-maker_all_in_cost+realized_maker_rebate)-(taker_terminal_value-taker_all_in_cost+realized_taker_rebate))/same_target_shares",
+    "value_usd_per_share": "0.005",
+    "unit": "USD per share on the same signal row",
+    "realized_rebate_only": true
+  },
+  "inference": {
+    "block": "target_date",
+    "bootstrap_repetitions": 5000,
+    "bootstrap_seed": 20260830,
+    "interval": "two-sided 95% deterministic target-date block bootstrap",
+    "pass": "lower confidence bound exceeds frozen MERE and correctness, tail, and capacity gates pass",
+    "futility": "upper confidence bound is below frozen MERE"
+  },
+  "incentive_contract": {
+    "required_namespaces": ["maker_rebate", "taker_rebate"],
+    "credit_rule": "Only a realized row with immutable payout_or_eligibility_identity is credited; missing evidence receives zero credit and blocks promotion.",
+    "one_time_bonus_in_strategy_ev": false
+  },
+  "promotion_gate": {
+    "minimum_narrow_regime_decisions": 100,
+    "minimum_independent_target_dates": 30,
+    "minimum_actual_maker_fills": 20,
+    "review_cadence_target_dates": 10,
+    "minimum_evidence_coverage": "0.95",
+    "require_private_lifecycle_coverage": "1.00",
+    "require_actual_maker_lineage": true,
+    "minimum_hazard_strata_with_actual_fills": 2,
+    "minimum_price_strata_with_actual_fills": 2,
+    "minimum_depth_strata_with_actual_fills": 2,
+    "require_stage0a_fee_truth": true,
+    "require_stage0b_own_order_truth": true,
+    "require_lower_bound_above_mere": true,
+    "require_tail_risk_evidence": true,
+    "require_capacity_evidence": true,
+    "require_zero_notional": true,
+    "require_no_trade_intent": true,
+    "require_no_venue_call": true
+  },
+  "historical_negative_prior": {
+    "scope": "existing weather maker review; not a W2 outcome",
+    "maker_contribution_usd": "-12.46",
+    "taker_contribution_usd": "10.73",
+    "settled_replay_per_share": {
+      "taker": "0.0261",
+      "ask_1c_maker": "0.0246",
+      "mid_maker": "0.0223",
+      "ask_2c_maker": "0.0199",
+      "bid_maker": "0.0182"
+    },
+    "conclusion": "broad maker remains rejected_for_now; W2 is a narrow falsification shadow only"
+  }
+}
