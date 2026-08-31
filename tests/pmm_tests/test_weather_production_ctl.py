@@ -132,7 +132,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/"
             "us_fast_weather_lab_metarws_pro_market_20260830/"
             "market_capture_demands.jsonl /Volumes/jrs/"
-            "weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/"
+            "weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/"
             "capture_demands.jsonl"
         ),
         "WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN": "120",
@@ -145,7 +145,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert cross_no_v2.release_id == "cross_no_v2_metar"
     assert cross_no_v2.expected_health_contract() == {
         "strategy_instance": "cross_no_v2_metar_v1",
-        "code_identity": "a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430",
+        "code_identity": "1ac0edf698bd6e0dc57d66b3f862683064b63dfb",
         "execution_mode": "live_probe",
         "live_enabled": True,
         "shares_per_order": 5.0,
@@ -156,9 +156,12 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "clock_invalid_same_boot_override_enabled": True,
         "settlement_hard_invalidation": False,
         "source_attribution_schema_version": "cross_no_v2_metar_source_attribution_runtime_v1",
+        "source_stream_monitor_enabled": True,
+        "market_unit_contract": "universe_config_required_v1",
+        "native_lattice_contract": "round_half_up_integer_market_unit_v1",
     }
     assert spec.release("cross_no_v2_metar").expected_repo_sha == (
-        "a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430"
+        "1ac0edf698bd6e0dc57d66b3f862683064b63dfb"
     )
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"

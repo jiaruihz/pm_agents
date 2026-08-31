@@ -13,8 +13,8 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430
-    expected_repo_sha: a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/1ac0edf698bd6e0dc57d66b3f862683064b63dfb
+    expected_repo_sha: 1ac0edf698bd6e0dc57d66b3f862683064b63dfb
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -280,7 +280,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
@@ -542,14 +542,14 @@ managed_runtimes:
     release_id: cross_no_v2_metar
     start_script: scripts/ops/start_weather_cross_no_v2_metar.sh
     restart_script: scripts/ops/start_weather_cross_no_v2_metar.sh
-    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v1/latest.json
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/latest.json
     health_format: json
     max_health_age_sec: 15
     startup_grace_sec: 60
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_instance: cross_no_v2_metar_v1
-      code_identity: a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430
+      code_identity: 1ac0edf698bd6e0dc57d66b3f862683064b63dfb
       execution_mode: live_probe
       live_enabled: true
       shares_per_order: 5.0
@@ -560,18 +560,23 @@ managed_runtimes:
       clock_invalid_same_boot_override_enabled: true
       settlement_hard_invalidation: false
       source_attribution_schema_version: cross_no_v2_metar_source_attribution_runtime_v1
+      source_stream_monitor_enabled: true
+      market_unit_contract: universe_config_required_v1
+      native_lattice_contract: round_half_up_integer_market_unit_v1
     expected_live: true
-    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v1/orders.jsonl
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/orders.jsonl
     dependencies: [weather_jrs_context_keeper, weather_market_books]
     recovery_policy: guarded_live
     launch_environment:
-      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260831_v1/evidence.sqlite3
+      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v2/evidence.sqlite3
       WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST: /Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json
-      WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v1
-      WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v1/capture_demands.jsonl
-      WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v1/PAUSE
+      WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2
+      WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl
+      WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/PAUSE
       WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC: "0.5"
       WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC: "30"
+      WEATHER_CROSS_NO_V2_METAR_MAX_OBSERVATION_DELAY_SEC: "3600"
+      WEATHER_CROSS_NO_V2_METAR_MAX_STREAM_SILENCE_SEC: "120"
       WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC: "5"
       WEATHER_CROSS_NO_V2_METAR_STOP_AFTER_SEC: "172800"
       WEATHER_CROSS_NO_V2_METAR_LIVE: "1"
@@ -579,8 +584,8 @@ managed_runtimes:
       WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE: "1"
       WEATHER_CROSS_NO_V2_METAR_UNIVERSE_CONFIG: configs/weather/cross_no_v2_metar_polymarket_48h_v1.json
       WEATHER_CROSS_NO_V2_METAR_START_COLLECTOR: "1"
-      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260831_v1
-      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG: /Volumes/jrs/weather_data_feed_service_runtime/loop/metarws_polymarket_48h_20260831_v1.log
+      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v2
+      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG: /Volumes/jrs/weather_data_feed_service_runtime/loop/metarws_polymarket_48h_20260901_v2.log
       WEATHER_CROSS_NO_V2_METAR_SOURCE_ENV_FILE: /Users/deepsleep/.config/pm_agents/metar_ws.env
 
   # The old multisource D1 shadow remains dormant research evidence. The
