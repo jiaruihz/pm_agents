@@ -204,6 +204,10 @@ def test_unified_four_route_handoff_book_rule_b_and_ledger(tmp_path: Path) -> No
             version="unified-offline-v1",
             watch_threshold=Decimal("0.05"),
             simulate_threshold=Decimal("0.10"),
+            fee_slippage_cost_policy_id="unified_fixture_fee_free",
+            fee_slippage_cost_policy_version="v1",
+            fee_rate=Decimal("0"),
+            slippage_buffer=Decimal("0"),
         ),
     )
     assert completed.final is not None
@@ -227,6 +231,10 @@ def test_unified_four_route_handoff_book_rule_b_and_ledger(tmp_path: Path) -> No
             version="unified-offline-v1",
             watch_threshold=Decimal("0.05"),
             simulate_threshold=Decimal("0.10"),
+            fee_slippage_cost_policy_id="unified_fixture_fee_free",
+            fee_slippage_cost_policy_version="v1",
+            fee_rate=Decimal("0"),
+            slippage_buffer=Decimal("0"),
         ),
     )
     assert completed_retry.final is not None

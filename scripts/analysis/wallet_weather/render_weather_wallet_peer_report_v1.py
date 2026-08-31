@@ -41,8 +41,24 @@ def peer_name(row: dict[str, Any]) -> str:
 
 def mechanism(row: dict[str, Any]) -> str:
     expression = row["copyability"]["dominant_expression"]
-    target_day = row["replication_inputs"]["target_day_buy_cost_share"] or 0
-    horizon = "D0 日内" if target_day >= 0.8 else "D-1/D0 混合" if target_day >= 0.4 else "偏 D-1"
+    horizon_key = (
+        row["replication_inputs"].get("horizon_profile") or {}
+    ).get("dominant_horizon")
+    horizon = {
+        "d2_or_earlier": "偏 D-2/更早",
+        "d1": "偏 D-1",
+        "d0": "D0 日内",
+        "later_or_unknown": "跨时点/未知",
+    }.get(horizon_key)
+    if not horizon:
+        target_day = row["replication_inputs"]["target_day_buy_cost_share"] or 0
+        horizon = (
+            "D0 日内"
+            if target_day >= 0.8
+            else "D-1/D0 混合"
+            if target_day >= 0.4
+            else "偏 D-1"
+        )
     labels = {
         "yes_strip": "连续 YES bounded-range",
         "single_yes": "单档 YES selector",
@@ -57,7 +73,27 @@ def mechanism(row: dict[str, Any]) -> str:
         if effective_cities <= 4
         else "跨城市"
     )
-    return f"{city_scope} {horizon} {labels.get(expression, expression)}"
+    return (
+        f"{city_scope} {horizon} {labels.get(expression, expression)}"
+        f" + {exit_mechanism(row)}"
+    )
+
+
+def exit_mechanism(row: dict[str, Any]) -> str:
+    inputs = row["replication_inputs"]
+    sell_share = inputs.get("sell_event_share") or 0
+    settlement_share = inputs.get("settlement_without_sell_share") or 0
+    near_settlement_sell = inputs.get("sell_proceeds_share_ge_95c") or 0
+    median_hours = inputs.get("median_first_buy_to_first_sell_hours")
+    if settlement_share >= 0.8:
+        return "主要持有到结算"
+    if sell_share >= 0.8 and near_settlement_sell >= 0.8:
+        return "近结算高价退出"
+    if sell_share >= 0.8 and median_hours is not None and median_hours <= 12:
+        return "短周期 repricing 主动退出"
+    if sell_share >= 0.5:
+        return "主动退出与结算混合"
+    return "偏结算持有"
 
 
 def borrowing_direction(row: dict[str, Any]) -> str:
@@ -103,7 +139,19 @@ def historical_evidence(row: dict[str, Any]) -> tuple[str, int, list[str]]:
 
 def decision(row: dict[str, Any], evidence_score: int) -> str:
     copyable = row["copyability"]["copyable_for_our_execution"]
-    if copyable and evidence_score >= 5:
+    ci_low = row["stability"]["target_date_block_ci95"][0]
+    robust_without_top_five = (
+        row["stability"]["without_top_five_pnl_dates"]["turnover_roi"] or 0
+    ) > 0
+    enough_dates = row["coverage"]["independent_target_dates"] >= 30
+    if (
+        copyable
+        and evidence_score >= 5
+        and ci_low is not None
+        and ci_low > 0
+        and robust_without_top_five
+        and enough_dates
+    ):
         return "优先做同分母 shadow"
     if copyable and evidence_score >= 3:
         return "次优 shadow 候选"
@@ -140,12 +188,22 @@ def assessment_rows(peer: dict[str, Any], comparison: dict[str, Any]) -> list[di
             "late_half_roi": item["stability"]["late_half"]["turnover_roi"],
             "latest_30_roi": item["stability"]["latest_30_target_dates"]["turnover_roi"],
             "without_top_five_roi": item["stability"]["without_top_five_pnl_dates"]["turnover_roi"],
+            "top_one_positive_date_pnl_share": item["stability"].get(
+                "top_one_positive_date_pnl_share"
+            ),
+            "top_five_positive_date_pnl_share": item["stability"].get(
+                "top_five_positive_date_pnl_share"
+            ),
+            "positive_active_month_share": item["stability"].get(
+                "positive_active_month_share"
+            ),
             "median_event_buy_cost": item["replication_inputs"]["median_event_buy_cost"],
             "p90_event_buy_cost": item["replication_inputs"]["p90_event_buy_cost"],
             "median_unique_buy_transactions": item["replication_inputs"]["median_unique_buy_transactions"],
             "median_buy_sessions_gap_gt_5m": item["replication_inputs"]["median_buy_sessions_gap_gt_5m"],
             "median_buy_span_minutes": item["replication_inputs"]["median_buy_span_minutes"],
             "target_day_buy_cost_share": item["replication_inputs"]["target_day_buy_cost_share"],
+            "horizon_profile": item["replication_inputs"].get("horizon_profile"),
             "buy_cost_share_by_target_day_offset": item["replication_inputs"][
                 "buy_cost_share_by_target_day_offset"
             ],
@@ -159,6 +217,21 @@ def assessment_rows(peer: dict[str, Any], comparison: dict[str, Any]) -> list[di
                 "buy_cost_share_ge_99c"
             ],
             "sell_proceeds_share_ge_95c": item["replication_inputs"]["sell_proceeds_share_ge_95c"],
+            "sell_proceeds_share_ge_99c": item["replication_inputs"]["sell_proceeds_share_ge_99c"],
+            "sell_event_share": item["replication_inputs"]["sell_event_share"],
+            "settlement_without_sell_share": item["replication_inputs"][
+                "settlement_without_sell_share"
+            ],
+            "sell_proceeds_over_buy_cost": item["replication_inputs"].get(
+                "sell_proceeds_over_buy_cost"
+            ),
+            "sell_price_cost_weighted": item["replication_inputs"].get(
+                "sell_price_cost_weighted"
+            ),
+            "median_first_buy_to_first_sell_hours": item["replication_inputs"][
+                "median_first_buy_to_first_sell_hours"
+            ],
+            "exit_style_counts": item["replication_inputs"].get("exit_style_counts"),
             "dominant_expression": item["copyability"]["dominant_expression"],
             "dominant_expression_share": item["copyability"]["dominant_expression_share"],
             "execution_style": item["copyability"]["execution_style"],
@@ -214,7 +287,7 @@ def write_markdown(path: Path, rows: list[dict[str, Any]], peer: dict[str, Any])
     total_events = sum(int(row["cashflow_complete_events"]) for row in rows)
     metadata_gaps = sum(int(row["metadata_incomplete_portfolios"]) for row in rows)
     lines = [
-        "# 新 26 个 weather 钱包：低频与小资金可复制性审计",
+        f"# 新 {len(rows)} 个 weather 钱包：低频与小资金可复制性审计",
         "",
         "Status: research-only / selected-fill evidence",
         "",
@@ -222,11 +295,12 @@ def write_markdown(path: Path, rows: list[dict[str, Any]], peer: dict[str, Any])
         "",
         "## 结论",
         "",
-        f"本轮从 120 个未研究 leaderboard 地址中初筛 26 个并完成全历史 weather 回放；"
+        f"本轮从 {peer['denominator_scope']['profiled_wallets']} 个未研究 leaderboard 地址中"
+        f"初筛 {len(rows)} 个并完成完整可分页 weather 历史回放；"
         f"合计 {total_activity:,} 条 weather activity、{total_events:,} 个 cashflow-complete city × target_date ladder；"
         f"另有 {metadata_gaps:,} 个 portfolio 缺完整 Gamma ladder metadata，已单列而非伪装完整。",
         "",
-        f"执行与资金口径通过 {len(copyable)}/26；其中历史 selected-fill 证据较完整、"
+        f"执行与资金口径通过 {len(copyable)}/{len(rows)}；其中历史 selected-fill 证据较完整、"
         f"可进入同分母 shadow 的优先候选 {len(priority)} 个，次优候选 {len(secondary)} 个。"
         "这里的‘候选’不是地址跟单，更不是 live gate。",
         "",
@@ -250,7 +324,8 @@ def write_markdown(path: Path, rows: list[dict[str, Any]], peer: dict[str, Any])
                 f"{money_text(row['median_event_buy_cost'])}、P90 {money_text(row['p90_event_buy_cost'])}。",
                 f"   - 历史：{row['cashflow_complete_events']} events / "
                 f"{row['independent_target_dates']} dates，ROI {ratio_text(row['turnover_roi'])}，"
-                f"target-date CI {ci}，{row['historical_evidence']}。",
+                f"target-date CI {ci}，去 top-5 日期 ROI "
+                f"{ratio_text(row['without_top_five_roi'])}，{row['historical_evidence']}。",
             ]
         )
     if not priority and not secondary:
@@ -291,7 +366,9 @@ def write_markdown(path: Path, rows: list[dict[str, Any]], peer: dict[str, Any])
             "",
             "## 证据边界",
             "",
-            "- 初筛是 research-priority screen，不是 alpha gate；未入选的 94 个地址只完成近期 profile，没有伪装成全历史结论。",
+            f"- 初筛是 research-priority screen，不是 alpha gate；未入选的 "
+            f"{peer['denominator_scope']['profiled_wallets'] - len(rows)} 个地址只完成近期 "
+            "profile，没有伪装成全历史结论。",
             "- 钱包公开 timestamp 是 fill time，不是 signal/order-post time；看不到未成交单、私有模型和真实队列。",
             "- PnL 是 cashflow-complete resolved ladder 的历史 selected fills；没有我们的全机会分母与同刻 market baseline。",
             "- 每个钱包按 city × target_date 合并完整互斥 ladder；不把单腿盈利冒充整套策略。",
@@ -300,9 +377,8 @@ def write_markdown(path: Path, rows: list[dict[str, Any]], peer: dict[str, Any])
             "## 可复跑产物",
             "",
             f"- peer scan schema: `{peer['schema_version']}`；snapshot `{peer['snapshot_utc']}`。",
-            "- `wallet_assessments.csv`：逐地址可排序表。",
-            "- `wallet_assessments.json`：完整指标、blocker、机制与研究动作。",
-            "- comparison JSON/CSV：cashflow-complete whole-ladder 同口径输出。",
+            "- `wallet_assessments.json`：完整指标、blocker、机制与研究动作（唯一 canonical machine result）。",
+            "- comparison JSON：cashflow-complete whole-ladder 同口径输入。",
             "",
         ]
     )
@@ -314,13 +390,16 @@ def main() -> int:
     parser.add_argument("--peer-scan", type=Path, required=True)
     parser.add_argument("--comparison", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--minimum-wallets", type=int, default=20)
     args = parser.parse_args()
 
     peer = json.loads(args.peer_scan.read_text(encoding="utf-8"))
     comparison = json.loads(args.comparison.read_text(encoding="utf-8"))
     rows = assessment_rows(peer, comparison)
-    if len(rows) < 20:
-        raise RuntimeError(f"expected at least 20 fully replayed wallets, got {len(rows)}")
+    if len(rows) < args.minimum_wallets:
+        raise RuntimeError(
+            f"expected at least {args.minimum_wallets} fully replayed wallets, got {len(rows)}"
+        )
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -333,7 +412,6 @@ def main() -> int:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    write_csv(output / "wallet_assessments.csv", rows)
     write_markdown(output / "report.md", rows, peer)
     print(
         json.dumps(

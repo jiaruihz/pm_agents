@@ -310,7 +310,7 @@ def test_submit_failure_reservation_prevents_retry(tmp_path: Path):
     assert second["orders_attempted_this_cycle"] == 0
 
 
-def test_five_reserved_attempts_survive_restart_and_block_daily_cap(tmp_path: Path):
+def test_prior_daily_reservations_do_not_cap_a_new_economic_cross(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
     rows = [event("metar_ws_metar", "official1", 26.7), event("metar_ws_hfmetar", "hf2", 27.8)]
@@ -344,10 +344,61 @@ def test_five_reserved_attempts_survive_restart_and_block_daily_cap(tmp_path: Pa
         official_fee_rate=0.05,
         live=True,
         confirm_live=True,
-        place_fn=lambda _: (_ for _ in ()).throw(AssertionError("daily cap must block placement")),
+        place_fn=lambda _: {
+            "order_id": "new-order",
+            "place": {"success": True, "status": "matched", "order_id": "new-order", "takingAmount": "5", "makingAmount": "2.5"},
+        },
+    )
+    assert result["orders_attempted_this_cycle"] == 1
+    assert result["orders_reserved_utc_day"] == 6
+    assert result["daily_order_cap_enabled"] is False
+    assert result["daily_principal_cap_enabled"] is False
+
+
+def test_same_condition_token_is_not_bought_twice(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "information_events.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in [event("metar_ws_metar", "official1", 26.7), event("metar_ws_hfmetar", "hf2", 27.8)]) + "\n"
+    )
+    books = tmp_path / "books.json"
+    books.write_text(json.dumps(markets()))
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "execution_attempts.jsonl").write_text(
+        json.dumps({
+            "strategy_id": cross_no_v2.STRATEGY_ID,
+            "execution_attempt_id": "prior-token",
+            "execution_race_key": "different-race",
+            "token_id": "n80",
+            "created_at_utc": "2026-08-31T01:00:00Z",
+        }) + "\n"
+    )
+    result = cross_no_v2.run_probe(
+        source_events_root=source,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        live=True,
+        confirm_live=True,
+        place_fn=lambda _: (_ for _ in ()).throw(AssertionError("same token must not be placed twice")),
     )
     assert result["orders_attempted_this_cycle"] == 0
-    assert "daily_order_or_principal_cap" in read(out / "opportunities.jsonl")[-1]["blockers"]
+    assert "condition_token_already_executed" in read(out / "opportunities.jsonl")[-1]["blockers"]
+
+
+def test_non_live_eligible_city_is_collected_but_cannot_execute(tmp_path: Path):
+    result = run(
+        tmp_path,
+        [event("metar_ws_metar", "official1", 26.7), event("metar_ws_hfmetar", "hf2", 27.8)],
+        live=True,
+        confirm_live=True,
+        live_eligible_cities=set(),
+        place_fn=lambda _: (_ for _ in ()).throw(AssertionError("ineligible city must fail closed")),
+    )
+    assert result["orders_attempted_this_cycle"] == 0
+    assert "city_not_live_eligible" in read(tmp_path / "out/opportunities.jsonl")[-1]["blockers"]
 
 
 def test_expired_experiment_creates_pause_and_blocks_candidate(tmp_path: Path):

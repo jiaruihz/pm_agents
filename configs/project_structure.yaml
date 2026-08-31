@@ -8,6 +8,7 @@ tracked_root_directories:
   .codex: agent_configuration
   .github: repository_automation
   chatgpt-web-bot: local_tool_project
+  config: legacy_configuration
   configs: canonical_configuration
   data: small_versioned_inputs
   deploy: deployment_assets
@@ -43,12 +44,12 @@ tracked_root_files:
   - README.md
   - requirements.txt
   - requirements-dev.txt
+  - weather_clock_contract.py
 
 # Existing local-only files whose owner has not yet been migrated. They remain
 # visible warnings, not precedents for adding more root files.
 legacy_untracked_root_files:
   claude_code_env.sh: pending shell-environment owner and placement decision
-  weather_clock_contract.py: pending canonical source-package placement
 
 canonical_roots:
   python_source: src
@@ -89,6 +90,9 @@ context_contract:
   # AGENTS/CLAUDE context-reduction change lands, then it should be lowered.
   target_entrypoint_lines: 120
   max_entrypoint_lines: 260
+  skill_target_lines: 180
+  skill_max_lines: 240
+  skill_default_prompt_max_chars: 280
   required_files:
     - AGENTS.md
     - docs/PROJECT_STRUCTURE.md

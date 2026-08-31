@@ -1,5 +1,9 @@
 # 尾部策略研究结果说明（2026-07-03）
 
+Status: `historical-snapshot / superseded-for-current-action`
+Source of truth: no
+Current authority: `docs/WEATHER_DOCS_INDEX.md` and the corresponding family living docs
+
 > 给人看的版本。技术细节和完整数字见 `docs/analysis/2026-07/` 里对应的报告，
 > 这份文档只讲人话：我们在测什么、结果说明了什么、接下来该做什么。
 > 先说结论：**两条线都还不能拿去加大仓位或改现有 live 策略，只是把"值得继续盯"的部分做成了自动记录。**

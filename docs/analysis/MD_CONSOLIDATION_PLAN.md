@@ -1,7 +1,7 @@
 # Weather 文档清理账本
 
 Status: current-reference
-Updated: 2026-08-10
+Updated: 2026-08-31
 Source of truth: no
 Used by: `WEATHER_DOCS_INDEX.md`; `docs/analysis/` living docs
 
@@ -154,6 +154,17 @@ system contract 和 ops runbook。
   code-version 断点、两个可疑历史提交、side-probability 非单调桶，以及 candidate-vs-fill 不同向这四项独有证据；
   删除平行报告及其无消费者一次性 producer。city×model 与 forecast-timing 报告因 denominator/机制不同继续保留，
   没有为减少文件数而把不同归因混成一篇。
+- 2026-08-31：先收口明确历史区，不触碰 8 月仍在写的研究。新增 `docs/archive/README.md` 作为唯一 archive
+  家族索引，把 PMM、ARB、research platform、unified dashboard、weather lineage 与 execution 旧计划映射到当前 owner；
+  `docs/dev_logs` 三份 PR 日志和根目录 7/03 人类摘要均补历史状态。`docs/pmm` 修复坏链接、旧主机路径和错误环境变量名，
+  并把 legacy PMM 无配置默认从 `live` 改为 `paper`。独立 review 进一步发现未知 mode 会绕过 broker/SafetyGuard
+  落到 raw HTTP client；现已删除该 fallback，只有精确 `paper`/`live` 可进入执行路由，其他值在 client 初始化前失败；
+  102 个直接相关测试通过。`tests/pmm_tests/README.md` 同步承认该目录
+  已是 200+ 文件的 mixed maintained root，禁止按目录名整包归档。
+- 2026-08-31：完成 archive 顶层第一轮 consumer audit。`architecture_refactoring_plan.md`、
+  `WEATHER_DASHBOARD_LINEAGE_REFACTOR_PLAN.md`、`WEATHER_DASHBOARD_CANONICAL_FINAL_STATE_PLAN.md`、
+  `WEATHER_EXECUTION_CLEANUP_PLAN.md` 没有历史区外消费者；`STRATEGY_DASHBOARD_PLAN.md` 只有同 archive 的旧执行日志引用。
+  五份均已被当前 architecture/dashboard/system/execution 合同覆盖，列为物理删除候选，但在用户明确授权前保留。
 
 ## 仍有效的历史边界
 

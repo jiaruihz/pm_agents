@@ -6,7 +6,10 @@ from .contracts import EffectiveExecutionProfile, RoleSpec, WorkOrder
 
 
 _NATIVE_AGENT_SANDBOX = {
+    "luna_scanner": "read-only",
+    "luna_checker": "read-only",
     "luna_verifier": "read-only",
+    "terra_reviewer": "read-only",
     "terra_worker": "workspace-write",
 }
 

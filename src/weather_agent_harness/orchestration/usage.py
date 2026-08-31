@@ -2,11 +2,70 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
 from .contracts import UsageRecord
+
+
+DEFAULT_CODEX_SESSION_ROOTS = (
+    Path.home() / ".codex" / "sessions",
+    Path.home() / ".codex" / "archived_sessions",
+)
+
+
+def _timestamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def find_codex_session(
+    thread_identity: str,
+    *,
+    started_at_utc: str | None = None,
+    roots: tuple[Path, ...] = DEFAULT_CODEX_SESSION_ROOTS,
+) -> Path:
+    """Find the newest Codex session by thread UUID or spawned agent path."""
+
+    normalized = "/" + thread_identity.strip("/")
+    started_at = _timestamp(started_at_utc) if started_at_utc else None
+    matches: list[tuple[datetime, Path]] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.jsonl"):
+            try:
+                with path.open(encoding="utf-8") as handle:
+                    item = json.loads(handle.readline())
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if item.get("type") != "session_meta":
+                continue
+            payload = item.get("payload") or {}
+            source = payload.get("source") or {}
+            spawn = (
+                ((source.get("subagent") or {}).get("thread_spawn") or {})
+                if isinstance(source, dict)
+                else {}
+            )
+            if (
+                payload.get("id") != thread_identity
+                and payload.get("session_id") != thread_identity
+                and spawn.get("agent_path") != normalized
+            ):
+                continue
+            created_at = _timestamp(item.get("timestamp") or "1970-01-01T00:00:00Z")
+            # The session file is created before the coordinator records the spawn.
+            if started_at and created_at < started_at - timedelta(minutes=10):
+                continue
+            matches.append((created_at, path))
+    if not matches:
+        boundary = f" after {started_at_utc}" if started_at_utc else ""
+        raise FileNotFoundError(
+            f"no Codex session for thread_identity={thread_identity}{boundary}"
+        )
+    return max(matches, key=lambda item: item[0])[1]
 
 
 def usage_from_codex_session(path: Path) -> tuple[UsageRecord, str, float, int]:
@@ -43,8 +102,8 @@ def usage_from_codex_session(path: Path) -> tuple[UsageRecord, str, float, int]:
         raise ValueError("Codex session has no token_count event")
     if first_timestamp is None or last_timestamp is None:
         raise ValueError("Codex session has no timestamp range")
-    start = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00"))
-    finish = datetime.fromisoformat(last_timestamp.replace("Z", "+00:00"))
+    start = _timestamp(first_timestamp)
+    finish = _timestamp(last_timestamp)
     usage = UsageRecord(
         source=f"codex_session:{path.resolve()}",
         input_tokens=int(totals["input_tokens"]),
@@ -54,4 +113,4 @@ def usage_from_codex_session(path: Path) -> tuple[UsageRecord, str, float, int]:
     return usage, observed_model, (finish - start).total_seconds(), tool_calls
 
 
-__all__ = ["usage_from_codex_session"]
+__all__ = ["DEFAULT_CODEX_SESSION_ROOTS", "find_codex_session", "usage_from_codex_session"]

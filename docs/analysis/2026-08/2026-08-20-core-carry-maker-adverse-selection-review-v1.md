@@ -71,9 +71,35 @@ canonical `fill_ts` 是 **cancel 流程 order-lookup 的观察时刻**,不是成
 
 打平条件:ask−1c 口径需 fill rate ≈ 88%(实际 41%)。4 个 loss 中 3 个(Singapore/Busan/Lucknow)窗口内 prints 未低至任何挂价(不 fill),仅 Chengdu 全档 fill(min print 0.10,崩到底)——亏损 signal 一旦 fill 即被扫穿,与 live 观察一致。
 
+### 补充:early-maker replay("p 一算出来就挂,不等价格触线")
+
+数据修正:`pre_live_scores.jsonl` 共 4708 行 = 92 触发行 + **4616 个未触发 checkpoint 评分行**(每新报文 checkpoint 算完 p 即写行,含盘口)——此前"checkpoint 级评分未存"的说法有误,early 假设可全量回测。规则:posted = min(p−0.01, ask−0.01),窗口 = 评分时刻→obs−90s;label 用 feed METAR 当地日最终 running_max 落档(与 canonical 结算交叉验证一致率 95.1%,8 个分歧全为官方源边界差、方向一致偏保守)。
+
+分母:1772 个 checkpoint(27 天,日均 65.6),win rate 90.1%,平均挂价 0.942(59% 落在 0.95+ 带);prints 抽样 369 行(320 condition-day)判定 fill:
+
+| 价带 | n | fill% | win|fill | win|未fill | 实际 EV/股 |
+|---|---|---|---|---|---|
+| 0.80-0.85 | 132 | 45.5% | **68%** | 88% | **-0.0645** |
+| 0.85-0.90 | 70 | 44.3% | 80% | 89% | -0.0321 |
+| 0.90-0.95 | 40 | 35.0% | 78% | 88% | -0.0494 |
+| 0.95+ | 90 | 10.0% | 100%(9笔) | 96% | +0.0029 |
+| 全部 | 369 | 37.1% | 75.2% | 91.4% | **-0.0351** |
+
+**结论:early maker 实际 EV -0.0351/股 vs taker +0.0261,每股差 6c;必成交口径同样 -0.037。** 两层机制:(a) 必成交口径下,post-only 挂价被当时 ask 锁死(提前挂时市场多在 0.99,挂 0.98 赢 2c/输 98c),且价格触发线被绕过后胜率从 94.5% 稀释到 90.1%——**价格触发线不是摩擦而是有效过滤器**;(b) 实际口径下,fill 的 37% 条件胜率仅 75.2%(对手选择性卖给你),未成交的 91.4% 才是好单。早期 168 行子集的 +0.04 为 selection bias,全量后消失。唯一非负的是 0.95+ 带(EV≈0,fill 10%)。
+
 ## staged vs pullback A/B(8/13–8/18 初步,未满契约)
 
 staged 5/8 成交(62.5%,均 0.902)vs pullback 3/9(33%,均 0.87);同 signal 内 staged 比 pullback 高的 1c 恰为成交/不成交分界(Manila 8/15、Wellington 8/17)。settled PnL staged +1.271 / pullback +0.90;加 Warsaw 后 -2.83 / -3.25。A/B 期间 staged 爬价改价落地 0 次(never_down+1-tick drift+保队列约束);全史 82 次 reprice(v1/v2 follow_best_bid)成交率 7.3%,均为防守性跟价。追价收益上界(6 天未成交单全赢、全部追到)≈ +$1.6,对照 Warsaw 单次 maker -8.25。
+
+## 2026-08-22 Shanghai 复发与机制处置
+
+Shanghai `30 YES` 的冻结 Core 信号于 `06:51:36Z` 触发，model p=`0.90441`，当时 book=`0.85/0.87`。canonical/raw 对账确认三笔真实 fill：taker `10 @0.87`（`06:51:45Z`，fee `$0.05655`）、staged maker `5 @0.86`（`06:54:24Z`）、pullback maker `5 @0.85`（`06:59:54Z`），合计 **20 shares、principal `$17.25`**。`06:58:23Z` book 已降至 `0.78/0.85`，撤单于 `06:58:44Z` 才触发：staged 已成交，pullback 正在首触成交竞态中。该 market 当前 canonical 为 `missing_bracket`，因此这里只报未结算 exposure，不把它写成 realized loss。
+
+这次不是 `<0.84` 漏网，而是两个独立 maker arm 同时拥有加仓权：resting maker 的首次被吃本身就是 adverse-selection 事件，基于后续 quote 的 cancel 无法保护第一口；两个 arm 又把同一错误状态的 exposure 从 10 taker 放大到 20。**撤销 Core maker live authority只能作为立即止血候选，不是执行机制的最终答案，也不解决成交覆盖与价格改善。** 最终方向应是把第二 sleeve 从固定 maker 改造成 event-time execution router：根据 first-positive 的 weather-driven/quote-driven 来源、触发前后主动流、full-ladder 上方质量迁移和 quote resilience，在 `passive maker / 30–120s confirm 后执行 / next-bracket hedge / skip` 间选择；所有模式共享最多 5-share incremental budget，不能叠加。
+
+影响半径（target_date `>=2026-08-13`、dual-maker policy）：15 条 maker fill、71.78 shares、principal `$64.3588`；其中 staged 8 条/36.78 shares/`$33.1588`，pullback 7 条/35 shares/`$31.20`。按 maker-shadow-only 反事实，这 15 条均不会发生；Shanghai 本次会从 20 shares 降为 10 shares，少暴露 **10 shares / `$8.55` principal**。fill coverage gate 通过：DB/raw `1534/1534`，两侧 orphan=0、missing order=0、fill-cost delta=0。
+
+纯止血实现已冻结为 commit `d81ab1e33058a4f107a24d7c6c80efe45e92119c`（config `..._maker_shadow_only_v7`），focused tests **74 passed**，但它只作为 containment fallback 保留，**不视为机制完成且当前不部署**。当前 production SHA `24099162...` 仍是 `10 taker + 5 staged + 5 pullback`。下一研究动作是补齐 candidate-stage pre-trigger tape，再按 GPT Pro 的 `candidate → core → confirm/hedge` 路由做 P2 固定 A/B。
 
 ## Tape/结构 shadow 采集设计(用户确认的约束:非全量、分档+触发式)
 

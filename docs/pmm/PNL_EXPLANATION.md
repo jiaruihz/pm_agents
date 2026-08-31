@@ -1,5 +1,7 @@
 # Backtest PnL Analysis: Investigation Report
 
+Status: `historical-snapshot`（特定 legacy PMM synthetic scenarios；不可外推到当前 PnL）
+
 > **Issue**: User reported consistent negative PnL (e.g., -4.88) across all scenarios, even with 0 fills.
 
 ## Investigation Findings

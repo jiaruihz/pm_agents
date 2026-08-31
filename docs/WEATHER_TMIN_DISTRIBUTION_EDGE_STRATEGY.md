@@ -1,7 +1,7 @@
 # Weather Daily Minimum Temperature Strategy
 
 Status: current-reference
-Updated: 2026-08-13 frozen cross-prev-NO policy deployed to zero-notional shadow
+Updated: 2026-08-27 next-alpha challenger freeze; neither strategy is live-ready
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md;
 WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md
@@ -24,7 +24,7 @@ design = frozen_v1
 collection_runtime = active central market_books Tmin full ladder for HongKong/Seoul/Tokyo
 model_implementation = D-1 18:00 PIT panel + W0 weather residual development baseline
 probability_artifact = none
-forward = running for tmin_cross_prev_no_cap90_first_cityday_v1; probability model forward not_started
+forward = incumbent shadows running; two prospective challengers freeze from target_date 2026-08-28
 runtime = central full-ladder collection + cross-prev-NO zero-notional shadow; zero orders
 promotion = no live
 ```
@@ -300,6 +300,86 @@ remaining-cooling `0/1/2/3+` hurdle head 在 98 OOF rows / 15 dates 的 proxy la
 physical feature，不是可交易 probability artifact。完整口径见
 [2026-08-12 follow-up](analysis/2026-08/2026-08-12-tmin-depth-and-cross-prev-no-followup-v1.md)。
 
+### 2026-08-17 首轮 frozen-forward 官方结算与口径修正
+
+cap90 frozen forward 首轮官方结算（canonical `settlements`，Tmin 走 source_system=`polymarket_api`）：
+
+| decision | entry | settle | 结果 | PnL(5sh,含官方fee公式) |
+|---|---|---|---|---|
+| Tokyo 8/14 NO@24 | ask 0.47 | 23 | win | `+$2.5877` |
+| Seoul 8/16 NO@24 | ask 0.85 | 24 | loss | `-$4.2819` |
+| Seoul 8/17 NO@25 | ask 0.86 | 24 | win | `+$0.6699` |
+
+合计 `-$1.0243` / 投入 `$11.0242` = `-9.29%`，2胜1负；n=3 维持 `INCONCLUSIVE`，不改 30-settled-date gate。
+
+**Seoul source→settlement basis 反例（blocker 级证据）**：8/16、8/17 两夜 RKSI
+`amos_runway` 10-min `temp_c` 最低均为 `23.4`，但 "Seoul (Incheon)" 官方结算均为 `24`；
+同窗 `metar_temp_c` 恰为 `24.0`。即 Seoul 结算基准对齐 METAR/climate 口径，10-min lane 的
+strict cross 可能是 settlement-false：8/16 跨入 23 触发 NO@24，结算留在 24 直接亏损。
+Tokyo 三夜 lane 与结算一致（`23.1→23`、`23.6→24`、`23.3→23`）。观测 lane 永远只作 proxy；
+shadow 结算 join 必须走 canonical `settlements` 的 condition_id/market_id，不得用
+(city, target_date, bracket)——Tmax/Tmin 同档同域会串。
+
+**cap 0.90→0.95 敏感性**：14 个候选的 NO ask 分布两极（`<=0.86` 或 `>=0.96`），无任何一笔落在
+`(0.90,0.95]`，选择集与结果完全不变。当前真正约束是 5/14 候选无 raw executable ask、至少一笔
+（Seoul 8/15 NO@25 @0.82）倒在 depth gate；放宽上限不增加样本，`>=0.96` 的 favorite fee 后
+payout 每股 `<=0.038`，无意义。
+
+**Tmin settlement 入库路径（新增）**：`scripts/ops/backfill_weather_pm_history.py --extreme min`
+拉 Gamma lowest-temperature 事件到 `cache/pm_history_lowest/`（bracket 内嵌 condition/market id），
+`scripts/ops/ingest_weather_lowest_settlements.py` 写入 `settlement_outcomes`
+（source_system=`polymarket_api`、id 带 `|lowest` 后缀避免与 Tmax 撞 id）与 `settlements`。
+未翻 `closed` 的市场 fail-closed 跳过（如 Seoul 8/17 b24 `0.9995` 未关闭，待重跑）。
+Mac 直连 gamma-api 为 DNS 污染，需 `--proxy http://127.0.0.1:7890`。
+
+**no-further-cooling 同期官方结算**：11 行/10 city-date 全胜，费前 `+~$1.97 / $53.58 ≈ +3.7%`，
+全部 0.92–0.998 favorite；单笔 miss 需约 20 胜回本，维持 coverage/research 定位。另发现 journal
+口径问题：Seoul 8/12 同 city-day 出现两条 `shadow_would_enter=true`（once-per-city-date 未在
+journal 层生效），按行累计会重复计数，待修。
+
+**shadow 盘点 recipe**（本轮流程绕路的教训）：实例 journal 路径从
+`src/strategies/runtime/production.yaml` 各 instance 的 `health_path` 同目录取
+（`shadow_decisions.jsonl`/`signal_candidates.jsonl`/`decision_bundles.jsonl` 与
+`latest_summary.json` 的 funnel 字段）；结算 join 用 condition_id/market_id 查 canonical
+`settlements`；settlement 链当前无 Mac 侧 owner——`pm_history` 缓存 8/12 起停更（原 owner 为
+N100 daily_pipeline），2026-08-17 已手动补 8/12–8/17，长期需把 backfill+ingest 并入 canonical
+refresh one-shot（待审批，不另建 scheduler）。
+
+**2026-08-18..20 更新（含触发条件反事实的样本外修正）**：新增 8 个 strict cross 与第 4 笔
+decision（Seoul 8/19 NO@26@0.53 → settle 25 → win `+$2.2877`）；累计 4 decisions 3胜1负、
+PnL `+$1.2634`/`$13.6865`=`+9.23%`。Seoul lane 假突破扩为连续三晚（8/16–8/18 lane 均只探到
+`23.4`、metar 全夜 `24.0`、结算均为 24）；metar 夜最低连续五晚与结算完全一致
+（24/24/24/25/25），证实 Seoul 结算基准=METAR/climate 口径、10-min lane 夜间系统性偏冷
+~0.6°C。触发合同反事实：margin/连续确认/触发时刻 metar 确认均不能区分真假——8/16–8/18 的
+假突破与 8/19 的真突破同为"贴边 0.1、仅 2 条 print"的浅穿透（8/19 cross print 恰为 26.4），
+任何深度/持续性规则在挡掉三晚假突破的同时也会挡掉 8/19 的最大赢单；"lane 继续下探与否"
+本质是前瞻概率问题（即 BLOCKED_FOR_FIT 的 next-colder/pre-cross head），不是过滤器缺陷。
+结论维持：不改 frozen policy；研究方向为 basis 校准的概率模型，标签与回放一律用
+metar/settlement 口径。
+
+**2026-08-20 METAR-basis 历史重放（机制定标，signal-level）**：两市市场结算源均为 WU Daily
+Observations（RKSI/RJTT）；**IEM METAR 档案 18/18 夜复现结算标签**，标签可历史回补（canonical
+`settlements` 已入 4/15–8/20 共 2,885 条 Tmin 行）。lane 内 `metar_temp_c` 字段与官方 METAR 档案
+存在不一致（8/15 反例），不得再当标签源。重放核心数字（393 cross / 352 标注）：**NO-loss 基础比率
+Seoul 19.4% CI[14.7,24.3]、Tokyo 21.1% CI[16.2,26.3]**；按时段强结构：00–03 点 12%/6% vs
+03–06 点 27%/34% vs 傍晚 28%/31% → flat cap90 在凌晨段按基础比率为负 EV（保本 ask≈0.66–0.73），
+深夜段保本 ask≈0.88–0.94；Seoul 8/16 的 lane 假突破输单在 METAR 基准下不存在该信号。完整口径与
+限制见 [METAR-basis replay](analysis/2026-08/2026-08-20-tmin-cross-metar-basis-replay-v1.md) ·
+artifact `runtime/research/tmin_cross_metar_basis_replay_v1/`。
+
+**2026-08-24 frozen-forward 与 canonical 更新**：补抓并增量入库 Seoul/Tokyo 8/19–24 Tmin
+settlement 后，第 5 笔 decision 为 Seoul 8/22 `NO@25 @0.74`，结算24，费后 `+$1.2519`。
+累计 5 decisions / 5 target dates、4胜1负、cost `$17.4846`、PnL `+$2.5154`、ROI `+14.39%`，
+按 target_date bootstrap 95% CI `[-49.72%, +78.61%]`。Tokyo 仅1笔贡献 `+$2.5877`；Seoul
+4笔合计 `-$0.0724`、ROI `-0.48%`，不能把总正收益解释为跨城市稳定 alpha。全 signal funnel 为
+33 strict-cross candidates / 11 dates（Seoul 19、Tokyo 14），22有 direct entry price，30已结算；
+frozen policy 只产生5条 zero-notional decision，仍为0 intent/order/fill。此前 canonical 只物化1条，
+本轮用共享 WCIR 增量入口补32条，raw/canonical=`33/33`、delta=0，二次 apply inserted=0。
+三门均未过：significance FAIL、无 frozen probability-vs-market baseline、forward 仅5/30 dates；
+结论维持 `INCONCLUSIVE / zero-notional shadow / not live-ready`。机器结果见
+`tmin_cross_prev_no_forward/run=20260824_0037_bj/summary.json`。
+
+
 ### 首轮实现与真实 denominator
 
 中央 collector 已实现 `extreme_kind=max|min` 三元 event contract identity，避免同城同日 Tmax/Tmin
@@ -469,6 +549,305 @@ fill/post-decision execution。结论维持 `INCONCLUSIVE / promising zero-notio
 使本runner被controller标为dependency critical；已产出的历史结果不受影响，但恢复前新增checkpoint可能缺
 forecast evidence。机器结果更新为
 `/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_no_further_cooling_shadow_performance_v1/2026-08-25/summary.json`。
+
+## 2026-08-27 双策略 tiny-live readiness 复核
+
+### 结论与数据边界
+
+本轮只检验两个可运行的 zero-notional policy：
+`weather.tmin.no_further_cooling` 与 `weather.tmin.cross_prev_no`。结论是 **两者均不支持 tiny live**；
+no-further-cooling 是更值得优先继续积累的 challenger，但仍未过同分母 market baseline、30 个新
+settled target dates 和真实执行证据三门。cross-prev-NO 继续作为机制/collector shadow，不应把
+flat `ask<=0.90` 的小样本结果解释为可交易 probability edge。
+
+分析冻结到 2026-08-27 当前 raw byte boundary：no-further candidate input SHA
+`c1e7619189b1f6c7657cc50f8d8ac7556a9d31758a3cab8d3826fa85f92469d6`，cross candidate SHA
+`cd99d5b15196bd10911c2d315b1122afbb99b9b8d4c93d30446c56773ffa08e2`，cross repricing quote SHA
+`13f4e52e81dcfe9d67aca25a61edc49ad72d1080a578ae67e77eb5f58f0a05d9`。canonical physical DB
+identity 为 `/Volumes/jrs/pm_agents/runtime/weather.db`、device/inode `16777244/54444`；为避免生产
+write，本轮把 8 城 8/25–26 共16个 closed Gamma events（176 rungs）只增量写入临时 evaluation DB，
+没有改 canonical。严格 production/controller health 快照仍为 critical，包含 JRS canonical tmux
+write probe/session health 问题；因此本轮不恢复进程、不部署、不改变 live behavior。
+
+### 固定分母与三门
+
+| policy | signal / evidence funnel | fee-adjusted 5-share replay | probability / baseline | forward / execution | tiny live |
+|---|---|---|---|---|---|
+| no-further-cooling | 655 checkpoints / 16 observed dates；115 scored，111 same-row settled / 15 dates；20 selected 中19 settled / 12 active dates | 19胜0负；cost `$89.8589`，PnL `+$5.1411`，ROI `+5.72%`，date CI `[+2.14%,+14.06%]` | model/market logloss `0.26960/0.26367`、Brier `0.09188/0.08450`；model-minus-market delta `+0.02046/+0.01280`，CI均跨0，baseline FAIL | 15/30 settled dates；19/19静态快照可扫5股，但0 fill、无post-decision book，精确`book_capture_id`未直接持久化 | **NO** |
+| cross-prev-NO | 40 strict candidates / 14 dates；36 closed labels，26 direct asks；严格校验 underlying fetch age 后23条有fresh ask+>=5股depth、21条settled+executable / 10 dates | 全可执行分母18胜3负；cost `$94.8245`，PnL `-$4.8245`，ROI `-5.09%`，CI `[-15.97%,+7.34%]`。冻结cap90首笔policy修正为4决策、3胜1负、ROI `+1.54%`，CI `[-69.87%,+72.91%]` | 无 frozen settlement probability model，无法做same-row model-vs-market baseline | 仅4个有效decision dates，0 fill；另有独立60m repricing challenger从8/28开始 | **NO** |
+
+no-further 的正交易回放不是 admission 充分条件：Tokyo 8/21 `YES@0.49` 单笔贡献48.4%总PnL；
+去掉最大赢家仍为 `+3.04%`，但额外1个binary loss后只剩 `+0.16%`，2个loss即为 `-5.41%`。
+更关键的是完整同分母 proper score 点估仍输 market，而不是只看 selected rows 的19/19。cross 的
+全可执行表达已经点负；10分钟 all-entry repricing ROI `-13.89%`、CI上界仅`+3.75%`。first-city-day
+120/240分钟 point-positive 约`+5.35%`虽有正CI下界，但属于开发结果，不能当作已验证alpha；本轮后续
+只允许从新的冻结边界验证一个固定60m exit，不再从旧样本继续选horizon。多腿篮子同样样本太小或无
+三腿under-1，不进入 shadow promotion。
+
+### 改进方向与实践顺序
+
+1. **no-further 先修“概率选择”而不是加价格 gate。** 在全部相同 checkpoint/label/quote rows 上冻结
+   `market selector` 与当前 model selector 的 paired A/B，primary 仍为 logloss/Brier（完整分布可再报
+   RPS），trade层报官方fee后的paired excess；继续收集到至少30个**冻结后新增**settled target dates。
+   保留 top-winner-removed、1-loss、2-loss stress，不能按当前全胜切片调阈值。
+2. **cross 把 flat cap90 替换成可校准的 physical probability challenger。** 预注册连续特征：
+   city、local-time、cross rank、source→settlement basis、remaining-cooling depth、forecast revision；
+   先在全 strict-cross denominator 上胜同刻 market，再冻结 expression。历史 METAR-basis 的时段差异
+   只可作 prior，不能事后加 hard time filter；cap grid、basket 和120/240m exit 均保留 exploratory。
+3. **补齐 execution lineage。** 两条策略都直接持久化 raw `book_capture_id`，并在决策后固定采集
+   `t0/+15/+30/+60s` 5-share sweep/depth/markout；先做 zero-notional submit-time revalidation，建立
+   would-submit→executable→fill denominator。静态t0 depth不能替代 latency、queue 或actual fill。
+4. **评估工具先补合同再做下一次 admission review。** no-further evaluator缺专门回归测试；需覆盖
+   condition-id settlement join、byte-boundary freeze、city-date dedupe、loss stress和book identity。
+   cross evaluator当前把运行中的冻结policy标成`forward_not_started`且仍依赖raw Gamma slug join；应改为
+   condition-id canonical join并准确区分historical frozen decisions与freeze后新增forward decisions。
+
+只有 probability-vs-market、30-date frozen forward、fee/execution 三门同时通过后，才单独申请生产
+变更；届时初始实践应固定5 shares、每city-date最多一笔、submit前重抓book并重算fee后edge，不同时引入
+maker、basket或动态sizing。当前动作仍是 `keep zero-notional shadow / no live change`。
+
+Output routing：本轮结论合并进本 living doc 与 registry/index，不新增重复 dated snapshot；机器结果
+保持单一 JSON evaluator 输出，临时 settlement DB 不作为新的 canonical truth。
+
+## 2026-08-27 下一波 alpha challenger freeze
+
+### 裁决
+
+下一波不是继续给两个 incumbent 调价格阈值，而是冻结两个目标更清楚的 challenger：
+
+| family | frozen challenger | 开发证据 | frozen 资格 | forward |
+|---|---|---|---|---|
+| no-further-cooling | `tmin_no_further_cooling_window_routed_alpha010_v1` | 111 same-row settled scores / 15 dates；相对market的date-equal logloss/Brier delta `-0.004136/-0.000506`，前后两个固定时间段均点改善 | **eligible for prospective zero-notional freeze**；CI仍跨0，不是confirmed alpha | `target_date>=2026-08-28`，当前0行 / not started |
+| cross-prev-NO | `tmin_cross_prev_no_first_cityday_exit60m_v1` | 15 first-city-date entries / 11 dates；双边官方fee后PnL `+$3.8005`、ROI `+5.35%`、date CI `[+1.27%,+13.20%]`；15/15 fresh exit coverage | **eligible for prospective zero-notional freeze**；旧数据用于选型，不能回算成forward | `target_date>=2026-08-28`，当前0行 / not started |
+
+两者的 `eligible` 只表示“规则、分母、边界和主指标已经足够清楚，可以开始一次不可回调的零资金
+forward”。它不表示通过 tiny-live admission；生产实例、订单开关和live行为均未改变。
+
+### no-further：把物理残差只留在仍由冷却主导的窗口
+
+当前 incumbent 用 `alpha=0.50` 在所有窗口向 market logit 叠加 physical innovation，完整同分母的
+proper score 反而输 market。新 challenger 固定为：
+
+```text
+p_challenger = logistic(
+  logit(p_market)
+  + 0.10 * physical_innovation_logit
+    * I(cooling_window_state in {morning_cooling, post_sunrise_provisional_low})
+)
+```
+
+`daytime_warming / evening_reopening / late_evening_finalizing` 三段严格回到同刻 market probability；
+不是把它们删出分母。开发时只比较了 `alpha={0.10,0.25,0.50}` 三个新 routed variants，并披露
+incumbent 训练时原有5档 alpha grid；不把未校正搜索结果称为显著。
+
+在固定111 rows / 15 dates上，challenger/market 的 row-level logloss 为 `0.260064/0.263675`，Brier
+为 `0.084069/0.084502`；date-equal delta 的95% CI分别为 `[-0.010126,+0.001412]` 与
+`[-0.002484,+0.001475]`。相对 incumbent 的date-equal logloss/Brier delta为
+`-0.024601/-0.013301`，但CI同样跨0。固定前段8/12–20与后段8/21–26均同时点胜market，说明方向
+比全窗alpha=.50更合理；强度仍不足以升live。按5-share full-book重放只有2笔/2日全胜、ROI `+6.61%`，
+样本太小，仅作执行可还原性检查，不作为freeze主因。
+
+forward 主指标锁为全部same-row scored checkpoints上的 challenger-minus-market date-equal logloss与
+Brier；交易层只作secondary。至少30个冻结后新增settled target dates、两项CI上界均小于0、且fee/execution
+门同时过，才允许重新讨论资金表达。
+
+### cross：放弃 settlement-hold 拟合，改测可证伪的60分钟市场反应
+
+先做的 settlement probability challenger 没有过门：用历史METAR prior与当前alternate-source basis
+更新后，在当前36个closed labels上 logloss/Brier=`0.38239/0.11846`，同rows market为
+`0.27349/0.09247`；正edge只选3笔/3日、2胜1负。它不能冻结，也说明 AMOS/JMA 的cross触发不应
+直接借用METAR的hold-to-settlement胜率。
+
+可冻结的是另一个 target：source event 后的短时 repricing。规则固定为同一 city-target_date 第一条
+strict cross，在exact-checkpoint fresh NO ask有至少5股时以taker买入；在`+60..+72m`第一条
+underlying fetch age不超过300秒、top bid至少5股的quote上taker退出，entry与exit都计官方Weather fee，
+无price cap。开发检查了5个horizon × all/first-entry两种cohort，共10个比较；30m虽有正CI下界但缺
+1/15 exit，按固定分母合同不合格。60/120/240均完整，选择最早的60m以减少basis暴露，未来不再改。
+
+60m开发分母15笔/11 dates，12笔正PnL、3笔负PnL，cost `$71.0946`、PnL `+$3.8005`、ROI `+5.35%`，
+target-date bootstrap CI `[+1.27%,+13.20%]`。Seoul为10笔、ROI `+1.85%`；Tokyo为5笔、ROI
+`+13.11%`，两市点正但都很小。entry/exit underlying quote最大age分别293.96/294.32秒，candidate ask
+与exact quote、token identity均15/15一致。forward主指标锁为同样完整signal denominator上的双边fee
+60m round-trip ROI；需至少30个新target dates、CI下界大于0、fresh exit coverage完整且城市集中度可接受。
+
+### stale quote 根因修复与影响半径
+
+cross evaluator此前只校验quote wrapper timestamp与candidate exact join，没有校验wrapper内
+`fresh_fetched_at_utc`。Seoul 2026-08-19 candidate
+`39dcc60e50a20cbd061315cb90004dc947e91f44a05e0bba3b3972eaba0b64fe` 的wrapper虽在decision时刻，
+内部NO book实际已陈旧13,559.01秒（约3小时46分）；旧回放错误计入 `NO@0.53` 的 `+$2.2877` winner。
+
+修复后所有entry/exit均要求 `fresh_status=ok`、`0<=wrapper-fetched_at<=300s`、token一致、candidate ask
+与exact quote一致并有5-share top depth。影响窗口和逐条反事实只有上述1笔、0真实order/fill：
+
+- cap90 incumbent 从5笔4胜1负、PnL `+$2.5154`、ROI `+14.39%`，修正为4笔3胜1负、PnL
+  `+$0.22765`、ROI `+1.54%`；
+- 全settled+executable分母从22笔、PnL `-$2.5367`、ROI `-2.60%`，修正为21笔、PnL
+  `-$4.82445`、ROI `-5.09%`；
+- 该污染行不在60m first-city-date challenger分母内，因此新challenger的15笔结果不变。
+
+机器结果：
+
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_no_further_cooling_shadow_performance_v1/2026-08-27-challenger-freeze/summary.json`
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/tmin_cross_prev_no_performance/2026-08-27-challenger-freeze/summary.json`
+
+artifact SHA分别为 `d60c7d885e15…` 与 `8e8cc8e889ae…`；cross唯一machine frame
+`candidate_evaluation.csv.gz` SHA为 `a7a1c23c22ff…`。冻结development前缀为：no-further candidate
+`1,339,926 bytes / c1e7619189b1…`；cross candidate `126,204 bytes / cd99d5b15196…`、quote
+`60,975,035 bytes / 735048ec1422…`。未来复跑必须继续传这些development byte boundaries；full journal
+可以继续追加forward rows，迟到的旧target-date行不能改写development分母，重复candidate/exact quote key会
+显式失败。
+
+复跑器分别为 `scripts/analysis/tmin/evaluate_tmin_no_further_cooling_shadow_v1.py` 与
+`scripts/analysis/tmin/evaluate_tmin_cross_prev_no_shadow_v1.py`。现有raw journals足以从冻结边界继续计算，
+无需为了这次research freeze改production runner；production/controller health仍critical，因此本轮也不做部署。
+
+## 2026-08-28 no-further evaluator amendment 与 V2/V3 裁决
+
+旧111-row headline错误地把`candidate_status=scored`（实际包含direct ask/freshness可用性）带入了
+probability denominator。修复后固定四层：P0只要求`p_market+p_model+settled label+PIT/identity`，共
+168 rows/15 dates；P1为两个active windows，共52/14；E0为execution-clean，共111/15；T0仍是冻结
+selector的19笔/12日。旧111分母保留为historical reproduction，不能再代表全概率分母。
+
+在P0上，raw market LogLoss/Brier=`0.191774/0.059820`；incumbent alpha=.50为
+`0.193811/0.064940`，date-equal delta=`+0.005268/+0.007017`；冻结alpha=.10 routed为
+`0.189310/0.059531`，date-equal delta=`-0.003546/-0.000497`，但date-block CI仍跨0。8/28 amendment
+seal前已有12条当日prediction、0 selected，canonical settlement max date为8/27，因此没有成熟8/28 outcome
+被用于开发；`CONFIRMATORY_FORWARD_START`保持`2026-08-28`，原alpha/window/feature/selector不变。
+
+V2只用8个事前mechanism features、strong L2=10、strict prior-date OOF和market offset；相对market的
+date-equal LogLoss/Brier delta=`+0.000475/+0.000129`，不通过。shrink-to-identity calibration也未提供
+稳定改善。负类只有12个checkpoint、7个city-date，forecast uncertainty判为
+`FORECAST_UNCERTAINTY_DATA_INSUFFICIENT`，不制造crossing probability。V3所需的next-colder首次穿越时间
+没有settlement-native truth，故停止训练，不用observation-cache proxy冒充hazard label。最终
+`KEEP_V1_FORWARD_ONLY`：只继续现有零资金V1 forward，不冻结V2/V3，不改production/live。轻量结果包为
+`reviews/tmin_model_layer_v2_v3_research_v1/`。
+
+## 2026-08-29 V2.1/V3 truth-gated closure
+
+本轮先关闭 V1 诊断合同，再按预注册 gate 判断是否允许拟合 V2.1/V3。P0 仍为168 rows/15 dates，
+P1为52/14。修正后的alpha=0 score-gradient使用
+`physical_innovation × I(active_window) × (y-p_market)`；P1外116行全部严格为0，date-equal mean
+`0.03802073`，20,000次target-date bootstrap 95% CI `[-0.00823715,+0.09133851]`。同一P0上
+alpha=.10/.25/.50 routed相对market的date-equal LogLoss delta分别为
+`-0.003546/-0.008011/-0.013631`，Brier delta为
+`-0.000497/-0.001024/-0.001527`，三者CI均跨0；只完成routing与alpha强度的正交诊断，不追认
+历史promotion。
+
+`TMIN_SETTLEMENT_SOURCE_PATH_TRUTH_V1`以IANA Asia/Seoul/Tokyo本地日重建4/15–8/20路径。
+230个exchange-resolved city-days全部有路径，但exact final-rung只有226/230（98.26%），低于项目
+预注册99%门槛。四个Seoul争议日均另抓direct WU hourly history；WU与IEM路径一致，仍与exchange
+resolved rung不一致，因此不能用“换成官方API”消除差异。另有3个Gamma cache日期没有唯一winner，
+单独列为exchange-unresolved，不混入exact denominator。
+
+审计同时发现旧`tmin_cross_metar_basis_replay_v1`用`UTC-15h`分配Asia target_date；正确映射为
+`UTC+09h`。旧报告的18/18复现与历史cross统计在单独重建前不得继续作为有效证据，本轮不覆盖旧
+artifact。
+
+最终 disposition 为`STOP_SETTLEMENT_SOURCE_TRUTH_BLOCKED`。V2.1 physical/forecast transfer
+与V3 1-hour hazard均未拟合；这不是`NO_INCREMENTAL_WEATHER_ALPHA_FOUND`。现有alpha=.10
+zero-notional forward保持2026-08-28边界；.25/.50只建立从2026-08-29开始、无回填、无selector/order
+的probability diagnostic preregistration。轻量可复现包：
+`reviews/tmin_model_layer_v2_1_v3_research_v1/`；知识入口：
+[Tmin model-layer knowledge](knowledge/tmin/README.md)。
+
+## 2026-08-29 V2.1/V3 diagnostic completion and strategy readout
+
+truth exact gate 仍为226/230（98.26%），因此新模型没有 promotion 资格；但为完成策略层闭环，已在
+research-only sensitivity contract 下同时保留全部四个争议日、以及全部排除四日，完成实际拟合、
+strict prior-date OOF 与冻结 selector replay。两种 truth 处理的结论一致。
+
+weather-only panel 为1,536 checkpoints、256 independent Seoul/Tokyo city-days、51 next-colder
+event city-days。V2.1 使用strongly regularized binary EOD physical foundation；canonical forecast
+archive虽有9,703 curves/96 city-days，但06:00/09:00 active windows没有一致prior-vintage覆盖，因此
+forecast uncertainty arm固定`gamma=0` fail closed。V3使用预注册1h interval discrete hazard，并将
+逐小时survival product作为单一nonnegative market-residual innovation。两个adaptor都只读此前
+target_date settlement labels，P1外概率严格等于market。
+
+在完整P0 168 rows/15 dates上，market date-equal LogLoss/Brier为`0.241535/0.077412`；V2.1为
+`0.241552/0.077416`，delta=`+0.000016/+0.000005`；V3为`0.241626/0.077446`，delta=
+`+0.000091/+0.000034`。V2.1在fixed validation/test均未稳定胜clock；V3在validation退化、test仅
+小幅点改善，不能称稳定foundation alpha。争议日全排除版本同样没有方向改变。
+
+同一168 settled probability rows、111 execution-clean rows、direct YES ask、官方
+`0.05*p*(1-p)` fee、两个active windows和每city-date首个正edge下，V2.1与V3都是0 positive-edge
+checkpoints、0 trades。对照V1 incumbent为30 positive-edge checkpoints→19 trades/12 target dates，
+19胜0负，5-share cost`$89.85885325`、PnL`+$5.14114675`、ROI`5.72%`；冻结alpha=.10 routed为
+2 trades/2 dates、2胜、PnL`+$0.619625`、ROI`6.61%`。V1的19笔按window分别为morning 6、
+post-sunrise 5、daytime 3、evening 4、late-evening 1，全部获胜；其中唯一`ask<=.60`交易贡献
+`+$2.487525`，高价`ask>.98`十笔合计只贡献`+$0.318397`，说明全胜不等于各价格带收益相同。
+
+旧cross replay的`UTC-15h`也已按`UTC+09h`重跑：Seoul 186个labeled strict crosses中NO side
+184胜，first-of-night 101/101；Tokyo 165/165，first-of-night 93/93。该结果只量化日期bug影响，
+不与no-further YES selector的19-trade PnL混算。
+
+当前 disposition 为`KEEP_V1_FORWARD_ONLY`：保留现有V1 zero-notional forward；不冻结V2.1/V3、
+不调selector/threshold、不部署。轻量机器证据和最短复跑命令位于
+`reviews/tmin_v2_1_v3_strategy_readout_v1/`。
+
+## 2026-08-29 V2.2 forecast-threshold residual evidence gate
+
+外部复核后的权威解释覆盖上一节中对V2.1/V3范围的过度表述：V2.1只完成了physical-only
+diagnostic，该diagnostic失败；full forecast V2.1没有被测试，因此不能写成`V2.1_FULL_FAILED`，也
+不能建立`NO_WEATHER_ALPHA_EXISTS`。当前V3固定为`STOP_CURRENT_V3`，不继续调static checkpoint
+hazard。操作结论保持`KEEP_V1_FORWARD_ONLY`。
+
+本轮从冻结observation messages逐row重建P0 168/168 checkpoints的exact raw running minimum、
+observation event/available clocks、current native rung、next-colder lattice boundary与distance；全部
+raw minimum与persisted rung一致，之后的V2.2训练和scoring均不再使用固定`0.5` safety-margin proxy。
+
+V2.2模型合同冻结为06:00/09:00 prior-date forecast-error empirical CDF，经city×checkpoint向checkpoint
+global以30强度收缩，再减去20强度clock logit，形成`z_weather`；market adaptor只估
+`alpha>=0, HalfNormal(.25)`，posterior objective为各target_date内Bernoulli log likelihood均值之和加
+prior。route仍只含morning/post-sunrise；不学习continuous gate。实现包含native-vintage latest-PIT
+选择、target-date-block fold、posterior interval、score-gradient 20,000 date bootstrap及unsupported/
+outside-route market fallback。
+
+当前输入不允许拟合：forecast inventory虽有9,703 curves/96 city-days，但可验证native model run、
+issue time、available_at和full remaining path的eligible city-days为0/120；06:00/09:00 usable coverage
+为0%，native available-at coverage为0%。settlement truth仍为226/230=`98.26%`，低于99%。两份命名的
+prior external evidence原件也未随知识包提供，现有gap record不冒充原件。因此V2.2在data gate前
+停止，P0 168行全部byte-equal回到raw market；zero delta只证明fail-closed，不是model result。
+
+当前研究disposition为`BLOCKED_EVIDENCE_OR_DATA`，操作上仍为`KEEP_V1_FORWARD_ONLY`与
+`NO_MORE_MODEL_COMPLEXITY`。V2.2 prospective start预注册为evidence seal之后的首个target date
+`2026-08-30`且不得回填；由于data gate未过，该arm状态为`BLOCKED_NOT_STARTED_NO_BACKFILL`。
+完整证据以append-only修复版
+`reviews/tmin_v2_2_forecast_threshold_residual_v1_r2/`为准；它封装最小frozen inputs并验证
+base-SHA+binary-patch→source snapshot及空目录63文件hash replay。旧`..._v1/`与`..._r1/`
+保留作审计历史，但不再用于reproduction裁决。
+
+## 2026-08-30 V2.2 可拟合修复与 probability-only freeze
+
+本节 supersede 上一节的“V2.2 未拟合/全部回 market”作为当前研究裁决，但保留上一节作为旧
+strict-gate 审计历史。模型公式、06:00/09:00 route、HalfNormal(.25) adaptor、V1 selector、
+threshold、price cap、size 与 execution 均未改变；修复只把数据可用 gate 与模型 freeze/promotion
+diagnostic 分开。Primary forecast-error history 只使用 exact reconciled truth：256 个有 native forecast
+的 city-days 中纳入226，排除23个无 reconciliation row、3个 exchange-rung unresolved 与4个已逐条
+审计的 Seoul source mismatch。排除后仍有45个 next-colder event city-days且 native available-at
+coverage 100%，因此 fit data gate 通过；全源 truth 仍诚实保留226/230=`98.26%`，不冒充99%通过。
+
+固定 P0 仍为8/12–26的168 rows/15 dates。V2.2 supported active route为50 rows/13 dates；由于
+prior-date gate要求至少10 dates、5个negative city-date episodes，只有8/23–26的16 rows/4 dates
+真正 expanding OOF fit。该切片V2.2-minus-market date-equal ΔLogLoss=`-0.00296845`、95% CI
+`[-0.01290120,+0.00719918]`，ΔBrier=`-0.00005911`、CI
+`[-0.00248702,+0.00255904]`：两项点估改善但区间均跨0。最终开发快照 posterior alpha mean/
+median=`0.197536/0.167290`；这不是 live admission。
+
+在原168-row direct-ask/fee/selector replay上，V2.2为1 signal→1 trade/1 date、1/1，5-share
+cost`$4.7141`、PnL`+$0.2859`、ROI`6.06%`；V1 incumbent仍为30 signals→19 trades/12 dates、
+19/19、PnL`+$5.14114675`，alpha=.10 routed为2/2、PnL`+$0.619625`。PnL未用于选模。
+V1的19笔只有9笔处于V2.2的Seoul/Tokyo active route，另10笔在scope外，因此V2.2不是V1
+全窗口替代。
+
+研究动作是`FREEZE_V2_2_PROBABILITY_CHALLENGER`：规格和参数artifact已冻结，`2026-08-31`是
+no-backfill最早允许target date；但当前runtime为`PREREGISTERED_NOT_STARTED`，尚无consumer或
+append-only journal，不能写成已经开始采集。若后续显式授权部署，只与`RAW_MARKET`、既有
+`V1_ALPHA010_ROUTED`共同记录同分母 probability，不生成selector/order。操作状态仍为
+`KEEP_V1_FORWARD_ONLY`，`tiny_live_eligible=false`；满30个新settled target dates、180 P0 rows、
+80 P1 rows及预注册negative/city coverage后再裁决。当前轻量权威包为
+`reviews/tmin_v2_2_frozen_candidate_readout_v1_r5/`，日期摘要见
+[2026-08-30 V2.2 fitted freeze](analysis/2026-08/2026-08-30-tmin-v2-2-fitted-frozen-candidate-v1.md)。
 
 ## 血缘与落地边界
 

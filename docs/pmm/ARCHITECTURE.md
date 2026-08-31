@@ -1,6 +1,9 @@
 # PMM 架构说明
 
 > **最近更新**：2026-05-12
+>
+> **状态**：`dormant-reference`。本文描述 legacy PMM，不是当前 weather 生产架构；
+> PMM 默认 `paper`，真实执行必须显式设置 `PMM_EXECUTION_MODE=live`。
 
 ## 概览
 
@@ -145,7 +148,7 @@ utils/（通用基础）
 
 ## 执行模式
 
-由环境变量 `PMM_EXEC_MODE` 控制：
+由环境变量 `PMM_EXECUTION_MODE` 控制：
 
 | 模式 | Broker | 用途 |
 |------|--------|------|
@@ -221,7 +224,7 @@ python scripts/python/pmm_orderbook_capture.py convert \
 ```bash
 # 基础
 PMM_TOKEN_IDS="token1,token2"
-PMM_EXEC_MODE="paper"  # or "live"
+PMM_EXECUTION_MODE="paper"  # legacy live 必须显式 opt-in
 PMM_MARKET_DATA_SOURCE="ws"  # or "rest"
 PMM_STRATEGY_KEY="multi_level_v1"
 
@@ -242,7 +245,7 @@ PMM_MAX_DAILY_LOSS=50.0
 每个 tick 会向 `src/strategies/pmm/backtest/.artifacts/logs/metrics.jsonl` 追加一行 JSON。
 字段规范见：`METRICS_FORMAT.md`。
 
-## 当前状态
+## 历史实现截面（2026-05-12）
 
 已完成：
 
@@ -254,8 +257,8 @@ PMM_MAX_DAILY_LOSS=50.0
 - OFI + 动量信号
 - SafetyGuard + CircuitBreaker
 
-进行中：
+当时尚未完成：
 
 - `LiveBroker` API 细化接入
 
-后续路线：见 `TODO_IMPROVEMENTS.md`。
+历史 backlog：见 `TODO_IMPROVEMENTS.md`；它不是当前 roadmap。

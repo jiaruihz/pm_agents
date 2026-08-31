@@ -2,7 +2,7 @@
 
 Status: current-reference
 
-Updated: 2026-08-12 low-frequency peer cohort
+Updated: 2026-08-29 D-1 early repricing collector deploy
 
 Source of truth: external-wallet research register, not production strategy truth
 
@@ -19,6 +19,7 @@ Source of truth: external-wallet research register, not production strategy trut
 
 | 钱包 / 家族 | 已吸收的耐久机制 | 当前可复用部分 | 当前状态 / 详细证据 |
 |---|---|---|---|
+| 2026-08-13 新 30 地址低频 cohort | `slr07` 型 D-2/D-1 单 YES / 窄 YES strip，数小时内主动 SELL 的 early repricing；另有 Madrid、London/Moscow 等 D0 sparse selector / state router | early-repricing 接现有 D-1 probability revision 与 PIT market residual；D0 只进 WCIR 独立 city adapter | `collector deployed / awaiting first unseen run / formal forward blocked / no-live-change`；8/29最小clock release已加载，见下文与 [readiness](analysis/2026-08/2026-08-29-d1-early-repricing-readiness-v1.md) |
 | 2026-08-12 新 26 地址低频 cohort | 低交易笔数、小 event capital 的 sparse exact-bracket selector；首选 `fildoro` D-1 NO，次选 `0xfc179…886a` D-2/D-1 NO | 接现有 D-1 probability + first_seen/PIT；每 city-day 最多一个 fee 后 max-EV YES/NO，并与 market/full-distribution/0x43cb strip 同分母比较 | `research-only / 26 complete / no-live-change`；见下文耐久结论，机器明细见 JRS manifest `weather_wallet_peer_scan_20260812_v1.json` |
 | `yourthos` | Seoul/RKSI source-event 后动态切换 current NO、current YES 与 upper YES，并用 NegRisk/SELL 释放资金 | source-event 后重算整条 ladder；钱包方向只作 confirmation/veto | `inconclusive / 秒级执行不可跟单`；见下文 |
 | `Gptball` | Chengdu/ZUUU 日内 path-state router，NO pass-through 后切 current YES | 单城 source/basis adapter、状态切换而非单腿模仿 | `inconclusive / research-only`；见下文 |
@@ -42,6 +43,79 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
 
 ## 已完整研究
 
+### 2026-08-29 D-1 early repricing 启动审计
+
+- 已复用现有 run-aware D-1 runner 做全分母 coverage audit：911,176条 raw forecast rows、
+  43,588个provider-run keys、16,198个D-1 transitions（primary 18–24h为3,968），对应
+  399,228个market checkpoints；60m legacy markout可评分3,150行/23 dates。
+- 历史formal forward为0：全部D-1 transitions均是legacy earliest-observed，response-complete signal、
+  executable expression、order、fill均为0；旧rows不可回填成clean evidence。production collector已于
+  16:33 UTC从 `e943e956…d0d5f` 切到最小clock release `761a16d8…bd40`。
+- legacy primary consensus revision在60m有89 events/20 dates、61.80%方向一致率、mean
+  directional rung shift `+2.074pp`，只作为继续采集的机制诊断，不覆盖钱包的selected-fill边界，
+  也不支持shadow/live。
+- 部署首轮新增1,020 rows，request/response clocks完整1,020/1,020、ordering violation=0、
+  orders/fills delta=0/0；因全部是已见run的复poll，append-only status保留旧值。下一unseen provider
+  run开始formal clean收集；累计至少30个clean settled target dates后，再跑固定60m、同rows market
+  baseline和双边fee/depth A/B。
+  详见 [readiness report](analysis/2026-08/2026-08-29-d1-early-repricing-readiness-v1.md)。
+
+### 2026-08-13 第二批低频 cohort
+
+- 分母：WEATHER leaderboard `ALL / MONTH / WEEK` 各取 500 行，排除 100 个既有研究
+  地址后，对 260 个新地址做近期 profile；53 个通过预筛，按预注册 score 取前 30 个，
+  30/30 完成固定截止 `2026-08-12T18:00:00Z` 的完整可分页历史。合计 87,384 条
+  weather activity、14,155 个 cashflow-complete `city × target_date` ladder，另有 4 个
+  metadata gap 单列。全历史复核后 19/30 通过低频、小资金、非 near-binary、非亚小时
+  timing 与每日市场宽度口径；其中 8 个只获得“同分母 shadow 优先级”，不代表 alpha 已确认。
+- **最强新机制是 `slr07`**
+  （`0xe3a6d0e60433fff19ffbdd7b1daa53f593769e63`）的 early repricing，而不是持有到结算：
+  368 events / 128 dates，selected-fill ROI `+13.32%`、date-block CI
+  `[+9.02%,+19.17%]`，去 top-5 日期仍 `+10.34%`；中位 event cost `$9.06`、
+  3 个 BUY tx / 2 sessions。59.23% BUY cost 在 D-2 或更早；D-2+ 切片 258 events /
+  99 dates、ROI `+15.21%`、CI `[+10.49%,+21.88%]`，D-1 为 `+10.94%`，D0
+  反而 `-6.30%`。94.91% event 主动 SELL，BUY→首 SELL 中位 3.44h，SELL proceeds
+  仅 2.24% 在 `>=95c`，因此利润主要来自概率/价格重定价，不是确定性 carry。
+  single-YES 280/108 为 `+11.15%`，窄 YES-strip 61/52 为 `+28.87%`；后者仍需
+  full-ladder 同分母验证，不能把 selected strip 直接当策略。
+- `slr07` 也不是无条件强：前/后半 ROI `+25.35%/+8.84%`，最近 30 dates
+  `+6.46%`，收益明显衰减；Lucknow 占成本 43.64%，其余主要是 Miami、Seoul、LA。
+  公开数据只有 fill clock，看不到下单/撤单和未成交单。它适合研究“小时级 convergence
+  exit”，不支持按地址成交跟单，也不支持复制成 settlement selector。
+- **D0 的两个可研究 control**：
+  `alpha4-4`（`0x50e11a…c79c`）是 Madrid 单城 sparse YES，58/58、ROI `+21.41%`、
+  CI `[+0.90%,+42.19%]`、去 top-5 `+8.35%`，但纯 D0 子集仅 44 dates、ROI
+  `+11.01%` 且 CI 跨 0，必须作为 Madrid WCIR adapter 单独验证；`Temp.me`
+  （`0x5fe79a…1ea9`）集中 London/Moscow，D0 mixed YES/NO state router 为 229/141、
+  ROI `+12.61%`、CI `[+3.37%,+23.43%]`、去 top-5 `+3.52%`，但中位 event cost
+  `$206.57`，不与 sparse D-1 headline 合并。
+- **看似低频但仍不适合我们的地址**：`0x5d0f…085c`（ROI `+17.21%`）BUY→SELL
+  中位约 5 分钟，`0xce071…5c3c`（`+15.98%`）约 37 分钟，`SKCS`
+  （`+5.99%`）约 28 分钟；它们交易笔数不多，却依赖亚小时 repricing timing，已从
+  可复制名单剔除。`Mr.Z.` 虽有 218 dates、ROI `+2.41%`，但约 27 events/date 且
+  中位 BUY span 14.7h，也不属于低频执行。
+- **D-1 settlement 线没有找到更强替代者**：`Laury2` headline 为 130/52、ROI
+  `+9.43%`，但 D-1 子集 CI 跨 0且中位 BUY span 8.2h；`kely77` 只有 21 dates、
+  去 top-5 后为负；`0x234c…90db` 与 `superpipp` 分别为 `-0.63%/-0.73%`。
+  因而 `fildoro` 仍是 D-1 sparse-NO 的较长样本机制先验，`0xfc179…886a` 仍是
+  高边际但小样本、主要持有结算的 challenger；第二批没有改变这个排序。
+- 与旧 benchmark 的角色区别：`0x43cb` 最稳定（2,966/113、ROI `+4.85%`、CI
+  `[+4.07%,+5.64%]`）但每 event 中位 34 个 BUY tx，执行不可复制；`fildoro`
+  是 D-1 低频 NO、83% event 有 SELL 但 98.86% SELL proceeds 已在 `>=95c`，本质接近
+  结算兑现；`0xfc179…` 95.29% event 无主动 SELL；`slr07` 则以 3.44h、约 40.8c
+  的主动 SELL 完成真正的中途 repricing。三者不能共享同一个 PnL 归因。
+- 耐久动作分成两条：① D-1 sparse-NO 继续原定同分母验证，不因新 cohort 改方向；
+  ② early-repricing已在同一个D-1 runner完成coverage audit，production response-complete clock
+  release已加载，但首个unseen provider run尚未到达，formal head保持BLOCKED。clean epoch产生首条后，才用
+  forecast revision、同刻market residual和预注册convergence/time-stop exit研究D-1 YES/窄strip；
+  D-2/D0不并入首轮。Madrid与London/Moscow只进入WCIR city adapter control。全部先过market
+  baseline、ask/depth/fee与frozen forward，钱包成交不作trigger，当前不改shadow/live production。
+- 机器产物：
+  `/Volumes/jrs-archive/pm_agents/research/wallet_peer_scan/run=20260813_v2/`，其中
+  `profile.json` 为候选分母，`batch_manifest.json` 为 30 个 immutable snapshot/replay
+  血缘，`full_history_comparison/comparison.json` 与 `report/wallet_assessments.json`
+  为 canonical 机器结果，`report/report.md` 为逐地址人类报告。
+
 ### 2026-08-12 低频 cohort
 
 - 分母：从 WEATHER leaderboard 的 ALL / MONTH / WEEK 各 250 行排除既有研究对象，
@@ -52,6 +126,14 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
   跨城市 D-1 NO exclusion，802 events / 104 target dates / 30 cities；每 event
   中位 1 笔、成本 `$43.47`，selected-fill ROI `+7.89%`，target-date block CI
   `[+5.19%, +11.06%]`，去掉 top-5 盈利事件仍 `+5.53%`。
+- 机制拆分修正：账户 headline 不是一个静态 NO 模型。核心 `no_only` 为
+  655 complete events / 104 dates，cost-weighted entry 82.89c、ROI `+6.51%`，
+  date-block CI `[+3.89%,+9.07%]`；只取 D-1 no-only 为638 events、ROI `+7.33%`。
+  但 no-only 前/后52 dates分别仅 `+0.34%/+8.62%`，存在明显版本或 regime 漂移。
+  8月新增的109个 single-YES贡献 `+29.01%`，却只有14 dates、正 event 48.6%、
+  event median ROI为负，属于高方差次级头，不并入可复制核心。D0 entries ROI
+  `-16.41%`，明确不作为借鉴。NO 主体去掉 top-5 dates 后仍 `+4.67%`；若公开
+  cashflow尚未含官方fee，按双边taker fee机械stress后约 `+5.59%`。
 - 第二 challenger `0xfc17946b7bedc82eb11329e67d0f2d3a76c1886a`：D-2/D-1
   NO-only，81 events / 36 dates / 27 cities；中位 1 笔、成本 `$48.83`，
   selected-fill ROI `+19.72%`、CI `[+2.81%, +32.60%]`，但独立日期较少。
@@ -59,7 +141,9 @@ exit accounting`，不是地址跟单。钱包报告中的价格带、城市偏�
   sparse selector、Kuala Lumpur 单城 router 和 0x43cb bounded strip；不各建 runner。
 - 耐久研究动作：复用同一个 D-1 runner，在同一 PIT city-day 分母比较 market、当前
   full-distribution、sparse NO、sparse YES、bounded strip 五臂；每 city-day 最多表达
-  一个 fee 后 max-EV exact YES/NO，至少等 15 个全新 settled target dates。
+  一个 fee 后 max-EV exact YES/NO。先积累30个 collector-exact development dates训练
+  偏离可靠性与abstention，再冻结并至少等15个全新 settled target dates；D0与single-YES
+  只作独立control，不共享headline。
 - 边界：上述 ROI 是钱包 selected fills，没有我们的全机会分母、私有信号、未成交单和
   同刻可执行 baseline；只能作为 expression prior，不能用地址成交触发或升级 live。
 - 机器明细已归档到

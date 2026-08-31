@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather Strategy Deploy"
   short_description: "通过 controller 安全部署 Mac 天气生产变更"
-  default_prompt: "Use $weather-strategy-deploy to apply a scoped Mac weather production change only through production.yaml, storage identity checks, and registered controller contracts."
+  default_prompt: "Use $weather-strategy-deploy to verify and prepare a scoped Mac weather change through production.yaml and registered controller contracts; execute production mutations only when this request explicitly authorizes them."

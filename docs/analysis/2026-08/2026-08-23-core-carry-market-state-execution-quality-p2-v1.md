@@ -151,18 +151,29 @@ maker 只有在同分母净 surplus 为正时才是 execution alpha；“成交�
 | 项目 | 状态 |
 |---|---|
 | 共享 5-share maker exposure | live，已验收 |
-| first-positive 后 full ladder | P0 active，等待新 trigger |
-| candidate-stage current token | deployed，等待新有效 candidate |
-| candidate-stage full ladder | deployed，按 P1/atomic budget 等待新有效 candidate |
+| first-positive 后 full ladder | P0 active；已收到 San Francisco 1 条，但 1800s transport 不完整，不能计为有效 forward evidence |
+| candidate-stage current token | deployed；持续收到 candidate |
+| candidate-stage full ladder | deployed；按 P1/atomic budget 采集 |
 | priority-safe WS allocation | live selector v8 |
 | Shanghai current quote/fills | complete |
 | Shanghai trade side/full ladder/actor | unavailable；当时未订阅 |
 | market-state router | zero-notional 已部署；release `56c04c05`，controller health healthy |
 | deterministic reconstruction | 复用 `ws_incremental_book` 唯一 truth；epoch/gap/reconnect/parity fail closed |
 | 同分母 action replay | immediate taker / actual shared maker / 120s confirm / next hedge / skip 已冻结 |
-| performance gate | 0 first-positive / 0 target dates；gate fail，正 notional 禁止 |
+| performance gate | 固定分母 1 first-positive；有效 complete=0、target dates=0；gate fail，正 notional 禁止 |
 
 生产 runtime 每60秒自动刷新 feature、真实 maker order/fill join、1800秒 fee-adjusted implementation
 surplus、target-date block CI 与 promotion gate。晋升仍要求至少30个独立 forward target dates、coverage
 不低于95%、同分母 paired surplus 完整且CI下界大于0；在此之前不能声称已识别出稳定状态 alpha，
 也不会创建 TradeIntent、plan、order 或 venue call。
+
+## 2026-08-23 二次外部审阅检查点
+
+当前实现复核确认：coverage/reconstruction、market-state inference 与 execution policy 是三层不同问题；
+1800s fail-closed 修复只处理第一层，不能作为盘口状态机制已完成的证据。现有 v1 已计算 120s current
+shock/recovery、exchange-reported current flow 与 ladder `q_up/q1/alpha1`，但 edge 穿越归因、add/cancel OFI、
+support survival、up-rung active flow、maker queue/fill hazard 和 information-risk context 尚未完成，且 one-sided
+horizon book 仍可误落 `healthy`。逐条对照上次 GPT Pro 意见、当前实际采纳状态、Seattle/San Francisco 反例及
+可直接复制的二次审阅提示词，见
+[Core Carry 外部二次审阅包](2026-08-23-core-carry-external-consult-round2-prompt-v1.md)。在该审阅收口前，
+保持 router zero-notional，不把 candidate state 接入真实 shared maker sleeve。

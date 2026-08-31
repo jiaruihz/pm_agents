@@ -1,4 +1,4 @@
 interface:
   display_name: "Polymarket Profile Audit"
   short_description: "Audit a Polymarket account and its history"
-  default_prompt: "Use $polymarket-profile-audit to audit this Polymarket account and summarize its historical performance."
+  default_prompt: "Use $polymarket-profile-audit to audit the public account window and its limits; keep one-off output in runtime and write a governed handoff only if the account thesis changes."

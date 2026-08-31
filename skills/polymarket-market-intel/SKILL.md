@@ -49,3 +49,6 @@ description: 分析一个 Polymarket 市场的评论区、top holders、smart wa
 - 评论情绪不能代替规则分析。
 - 关键钱包历史质量要和当前市场偏向分开描述。
 - `profile_audit_mode=full` 只表示在公开端点和当前代码上限内尽量分页，不保证账户全历史；报告返回数量、覆盖窗口和已知缺口。
+
+默认产物是一次性 `runtime/` 调查，不自动成为长期知识。如果结论改变策略、规则库或账户 thesis，必须创建
+`research_record.json`，并回写已有 family living doc/registry/index；不要只新增一份孤立报告。

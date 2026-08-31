@@ -9,6 +9,7 @@ It never creates a plan, order, fill, or execution recommendation.
 from __future__ import annotations
 
 import argparse
+import ast
 from collections import Counter
 import csv
 from datetime import datetime, timedelta, timezone
@@ -1092,6 +1093,410 @@ def revision_execution_candidates(
                     }
                 )
     return output
+
+
+def _stream_csv_rows(
+    path: Path,
+    *,
+    include_columns: Iterable[str] | None = None,
+) -> Iterable[dict[str, Any]]:
+    """Yield CSV rows in bounded batches rather than loading market history."""
+
+    try:
+        import pyarrow.csv as pyarrow_csv
+    except ImportError as exc:  # pragma: no cover - the project runtime supplies pyarrow
+        raise RuntimeError(
+            "build_legacy_development_executable_rung_panel requires pyarrow "
+            "to stream market_checkpoints.csv; install the project analysis dependencies."
+        ) from exc
+    try:
+        columns = list(include_columns) if include_columns is not None else None
+        reader = pyarrow_csv.open_csv(
+            path,
+            read_options=pyarrow_csv.ReadOptions(block_size=64 << 20),
+            convert_options=pyarrow_csv.ConvertOptions(include_columns=columns),
+        )
+        for batch in reader:
+            for row in batch.to_pylist():
+                yield {
+                    str(key): (value.decode("utf-8") if isinstance(value, bytes) else value)
+                    for key, value in row.items()
+                }
+    except Exception as exc:
+        raise RuntimeError(f"cannot stream CSV artifact {path}: {exc}") from exc
+
+
+def _csv_bool(value: Any) -> bool:
+    return value is True or str(value).strip().lower() == "true"
+
+
+def _csv_number(value: Any) -> float | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _manifest_from_csv(row: dict[str, Any]) -> list[dict[str, Any]] | None:
+    raw = row.get("rung_manifest")
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        parsed = ast.literal_eval(str(raw))
+    except (SyntaxError, ValueError):
+        return None
+    if not isinstance(parsed, list) or not all(isinstance(item, dict) for item in parsed):
+        return None
+    return [dict(item) for item in parsed]
+
+
+def _aligned_rung_manifests(
+    *manifests: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], ...]] | None:
+    """Align persisted ladder rows by both immutable condition and label."""
+
+    indexed: list[dict[tuple[str, str], dict[str, Any]]] = []
+    for manifest in manifests:
+        mapping: dict[tuple[str, str], dict[str, Any]] = {}
+        for rung in manifest:
+            condition_id = str(rung.get("condition_id") or "")
+            label = str(rung.get("label") or "")
+            if not condition_id or not label or (condition_id, label) in mapping:
+                return None
+            mapping[(condition_id, label)] = rung
+        indexed.append(mapping)
+    ordered_keys = list(indexed[0]) if indexed else []
+    keys = set(ordered_keys)
+    if not keys or any(
+        set(mapping) != keys or list(mapping) != ordered_keys
+        for mapping in indexed[1:]
+    ):
+        return None
+    return [tuple(mapping[key] for mapping in indexed) for key in ordered_keys]
+
+
+def _official_weather_fee(price: float) -> float:
+    return WEATHER_TAKER_FEE_RATE * price * (1.0 - price)
+
+
+def build_legacy_development_executable_rung_panel(
+    artifact_dir: Path | str,
+    *,
+    horizon_min: int = 60,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Materialize all D-1 legacy 60m YES/NO executable rung observations.
+
+    This is intentionally a data panel, not a selector.  It preserves every
+    eligible transition's blockers in the returned summary, while one shared
+    pre/post/exit book move is represented only once regardless of how many
+    provider rows generated that transition.
+    """
+
+    artifact = Path(artifact_dir)
+    events_path = artifact / "revision_events.csv"
+    checkpoints_path = artifact / "market_checkpoints.csv"
+    if not events_path.exists() or not checkpoints_path.exists():
+        missing = [str(path) for path in (events_path, checkpoints_path) if not path.exists()]
+        raise FileNotFoundError("missing D-1 study artifact(s): " + ", ".join(missing))
+    if horizon_min <= 0:
+        raise ValueError("horizon_min must be positive")
+
+    status_field = f"markout_{horizon_min}m_status"
+    exit_id_field = f"markout_{horizon_min}m_snapshot_id"
+    event_class = "legacy_provider_run_earliest_observed"
+    blockers: Counter[str] = Counter()
+    funnel: Counter[str] = Counter()
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
+    for event in _stream_csv_rows(events_path):
+        funnel["event_rows_input"] += 1
+        if event.get("event_class") != event_class:
+            continue
+        funnel["event_class_match"] += 1
+        if event.get("checkpoint_policy") != "D-1_18_24":
+            continue
+        funnel["checkpoint_policy_match"] += 1
+        if event.get(status_field) != "scoreable":
+            continue
+        funnel["horizon_scoreable"] += 1
+        pre_id = str(event.get("pre_book_snapshot_id") or "")
+        post_id = str(event.get("post_book_snapshot_id") or "")
+        exit_id = str(event.get(exit_id_field) or "")
+        if not pre_id or not post_id or not exit_id:
+            blockers["missing_transition_snapshot_id"] += 1
+            continue
+        key = (str(event.get("city") or ""), str(event.get("target_date") or ""), pre_id, post_id, exit_id)
+        grouped.setdefault(key, []).append(event)
+    funnel["independent_transitions"] = len(grouped)
+
+    wanted_ids = {snapshot_id for key in grouped for snapshot_id in key[2:]}
+    checkpoints: dict[str, dict[str, Any]] = {}
+    for checkpoint in _stream_csv_rows(
+        checkpoints_path,
+        include_columns=(
+            "feature_book_snapshot_id",
+            "source_contract",
+            "event_time_pit_scorable",
+            "market_distribution_complete",
+            "rung_manifest",
+        ),
+    ):
+        snapshot_id = str(checkpoint.get("feature_book_snapshot_id") or "")
+        if snapshot_id in wanted_ids:
+            checkpoints.setdefault(snapshot_id, checkpoint)
+    funnel["market_snapshot_rows_retained"] = len(checkpoints)
+
+    rows: list[dict[str, Any]] = []
+    accepted_transitions = 0
+    unit_by_city = {
+        config.city: config.unit
+        for config in load_city_configs(include_station_diff=False)
+    }
+    for (city, target_date, pre_id, post_id, exit_id), members in sorted(grouped.items()):
+        books = [checkpoints.get(snapshot_id) for snapshot_id in (pre_id, post_id, exit_id)]
+        if any(book is None for book in books):
+            blockers["missing_market_checkpoint"] += 1
+            continue
+        if any(book.get("source_contract") != "canonical_market_books_v1" for book in books if book):
+            blockers["noncanonical_market_checkpoint"] += 1
+            continue
+        if any(not _csv_bool(book.get("event_time_pit_scorable")) for book in books if book):
+            blockers["inexact_market_clock"] += 1
+            continue
+        if any(not _csv_bool(book.get("market_distribution_complete")) for book in books if book):
+            blockers["incomplete_market_distribution"] += 1
+            continue
+        manifests = [_manifest_from_csv(book) for book in books if book]
+        if any(manifest is None for manifest in manifests):
+            blockers["invalid_rung_manifest"] += 1
+            continue
+        aligned = _aligned_rung_manifests(*manifests)  # type: ignore[arg-type]
+        if aligned is None:
+            blockers["misaligned_rung_manifest"] += 1
+            continue
+
+        ordered = sorted(members, key=lambda row: str(row.get("event_available_at_utc") or ""))
+        first, last = ordered[0], ordered[-1]
+        median_before = _csv_number(first.get("consensus_median_before_f"))
+        median_after = _csv_number(last.get("consensus_median_after_f"))
+        if median_before is None or median_after is None:
+            blockers["missing_rolling_consensus"] += 1
+            continue
+        mean_before = _csv_number(first.get("consensus_mean_before_f"))
+        mean_after = _csv_number(last.get("consensus_mean_after_f"))
+        mean_before = median_before if mean_before is None else mean_before
+        mean_after = median_after if mean_after is None else mean_after
+        revisions = [_csv_number(row.get("model_revision_f")) for row in ordered]
+        signs = {1 if value > 0 else -1 for value in revisions if value is not None and value != 0}
+        direction_conflict = len(signs) > 1
+        iqr_before = _csv_number(first.get("consensus_iqr_before_f"))
+        iqr_after = _csv_number(last.get("consensus_iqr_after_f"))
+        transition_id = stable_content_hash(
+            {
+                "event_class": event_class,
+                "city": city,
+                "target_date": target_date,
+                "pre": pre_id,
+                "post": post_id,
+                "exit": exit_id,
+                "horizon_min": horizon_min,
+            }
+        )
+        theoretical_deltas: dict[float, list[float]] = {}
+        manifest_for_distribution = manifests[1]  # post-entry native ladder
+        if city in unit_by_city:
+            try:
+                unit = unit_by_city[city]
+                for sigma_f in EXECUTION_SIGMA_F:
+                    sigma_native = sigma_f if unit == "F" else sigma_f * 5.0 / 9.0
+                    before_probabilities = _shift_probabilities(
+                        manifest_for_distribution,  # type: ignore[arg-type]
+                        mean_native=_native_temperature(mean_before, unit),
+                        sigma_native=sigma_native,
+                    )
+                    after_probabilities = _shift_probabilities(
+                        manifest_for_distribution,  # type: ignore[arg-type]
+                        mean_native=_native_temperature(mean_after, unit),
+                        sigma_native=sigma_native,
+                    )
+                    theoretical_deltas[sigma_f] = [
+                        after - before
+                        for before, after in zip(before_probabilities, after_probabilities)
+                    ]
+            except (KeyError, TypeError, ValueError):
+                theoretical_deltas = {}
+        common = {
+            "transition_id": transition_id,
+            "horizon_min": horizon_min,
+            "city": city,
+            "target_date": target_date,
+            "pre_book_snapshot_id": pre_id,
+            "post_book_snapshot_id": post_id,
+            "exit_snapshot_id": exit_id,
+            "provider_event_count": len(ordered),
+            "rolling_consensus_median_before_f": median_before,
+            "rolling_consensus_median_after_f": median_after,
+            "rolling_consensus_net_revision_f": median_after - median_before,
+            "rolling_consensus_mean_before_f": mean_before,
+            "rolling_consensus_mean_after_f": mean_after,
+            "rolling_consensus_mean_net_revision_f": mean_after - mean_before,
+            "rolling_consensus_iqr_before_f": iqr_before,
+            "rolling_consensus_iqr_after_f": iqr_after,
+            "rolling_consensus_iqr_delta_f": (
+                iqr_after - iqr_before
+                if iqr_before is not None and iqr_after is not None
+                else None
+            ),
+            "provider_absolute_revision_sum_f": sum(
+                abs(value) for value in revisions if value is not None
+            ),
+            "provider_nonzero_revision_count": sum(
+                value is not None and abs(value) > 1e-12 for value in revisions
+            ),
+            "direction_conflict": direction_conflict,
+            "first_event_available_at_utc": first.get("event_available_at_utc"),
+            "last_event_available_at_utc": last.get("event_available_at_utc"),
+            "first_local_hours_from_target_midnight": _csv_number(
+                first.get("local_hours_from_target_midnight")
+            ),
+            "last_local_hours_from_target_midnight": _csv_number(
+                last.get("local_hours_from_target_midnight")
+            ),
+            "event_class": event_class,
+            "checkpoint_policy": "D-1_18_24",
+        }
+        transition_rows = 0
+        for rung_index, (pre, post, exit_book) in enumerate(aligned):
+            condition_id = str(post["condition_id"])
+            label = str(post["label"])
+            pre_probability = _csv_number(pre.get("normalized_market_probability"))
+            post_probability = _csv_number(post.get("normalized_market_probability"))
+            exit_probability = _csv_number(exit_book.get("normalized_market_probability"))
+            yes_entry_bid = _csv_number(post.get("yes_best_bid"))
+            yes_entry_ask = _csv_number(post.get("yes_best_ask"))
+            yes_exit_bid = _csv_number(exit_book.get("yes_best_bid"))
+            yes_exit_ask = _csv_number(exit_book.get("yes_best_ask"))
+            expressions = (
+                (
+                    "YES",
+                    yes_entry_ask,
+                    yes_exit_bid,
+                    post.get("yes_best_ask_size"),
+                    exit_book.get("yes_best_bid_size"),
+                    1.0,
+                ),
+                (
+                    "NO",
+                    1.0 - yes_entry_bid if yes_entry_bid is not None else None,
+                    1.0 - yes_exit_ask if yes_exit_ask is not None else None,
+                    post.get("yes_best_bid_size"),
+                    exit_book.get("yes_best_ask_size"),
+                    -1.0,
+                ),
+            )
+            for side, entry, exit_price, entry_depth, exit_depth, side_sign in expressions:
+                entry_depth_value = _csv_number(entry_depth)
+                exit_depth_value = _csv_number(exit_depth)
+                if entry is None or exit_price is None or entry_depth_value is None or exit_depth_value is None:
+                    blockers["missing_executable_quote_or_depth"] += 1
+                    continue
+                if entry_depth_value <= 0.0 or exit_depth_value <= 0.0:
+                    blockers["nonpositive_executable_depth"] += 1
+                    continue
+                if not (0.0 < entry < 1.0 and 0.0 < exit_price < 1.0):
+                    blockers["invalid_executable_quote"] += 1
+                    continue
+                entry_fee = _official_weather_fee(entry)
+                exit_fee = _official_weather_fee(exit_price)
+                fee_cost = entry + entry_fee
+                fee_proceeds = exit_price - exit_fee
+                fee_pnl = fee_proceeds - fee_cost
+                rows.append(
+                    {
+                        **common,
+                        "condition_id": condition_id,
+                        "bracket": label,
+                        "rung_position": int(post.get("position", rung_index)),
+                        "rung_low": _csv_number(post.get("low")),
+                        "rung_high": _csv_number(post.get("high")),
+                        "rung_bottom": bool(post.get("bottom")),
+                        "rung_top": bool(post.get("top")),
+                        "side": side,
+                        "pre_market_probability": (
+                            None
+                            if pre_probability is None
+                            else pre_probability if side == "YES" else 1.0 - pre_probability
+                        ),
+                        "entry_market_probability": (
+                            None
+                            if post_probability is None
+                            else post_probability if side == "YES" else 1.0 - post_probability
+                        ),
+                        "exit_market_probability": (
+                            None
+                            if exit_probability is None
+                            else exit_probability if side == "YES" else 1.0 - exit_probability
+                        ),
+                        "immediate_market_probability_delta": (
+                            side_sign * (post_probability - pre_probability)
+                            if pre_probability is not None and post_probability is not None
+                            else None
+                        ),
+                        "future_market_probability_delta": (
+                            side_sign * (exit_probability - post_probability)
+                            if post_probability is not None and exit_probability is not None
+                            else None
+                        ),
+                        **{
+                            f"weather_probability_delta_sigma_{str(sigma_f).replace('.', '_')}": (
+                                side_sign * theoretical_deltas[sigma_f][rung_index]
+                                if sigma_f in theoretical_deltas
+                                else None
+                            )
+                            for sigma_f in EXECUTION_SIGMA_F
+                        },
+                        "yes_entry_bid": yes_entry_bid,
+                        "yes_entry_ask": yes_entry_ask,
+                        "yes_exit_bid": yes_exit_bid,
+                        "yes_exit_ask": yes_exit_ask,
+                        "entry_spread": (
+                            yes_entry_ask - yes_entry_bid
+                            if yes_entry_bid is not None and yes_entry_ask is not None
+                            else None
+                        ),
+                        "entry_price": entry,
+                        "exit_price": exit_price,
+                        "entry_depth": entry_depth_value,
+                        "exit_depth": exit_depth_value,
+                        "entry_fee": entry_fee,
+                        "exit_fee": exit_fee,
+                        "fee_only_entry_cost": fee_cost,
+                        "fee_only_exit_proceeds": fee_proceeds,
+                        "fee_only_pnl_per_share": fee_pnl,
+                        "one_cent_per_side_stress_pnl_per_share": fee_pnl - 2.0 * EXECUTION_SLIPPAGE_PER_SIDE,
+                    }
+                )
+                transition_rows += 1
+        if transition_rows:
+            accepted_transitions += 1
+    funnel["accepted_transitions"] = accepted_transitions
+    funnel["executable_rung_side_rows"] = len(rows)
+    return rows, {
+        "signal_evidence_funnel": dict(funnel),
+        "date_range": {
+            "start": min((str(row["target_date"]) for row in rows), default=None),
+            "end": max((str(row["target_date"]) for row in rows), default=None),
+            "target_dates": len({str(row["target_date"]) for row in rows}),
+        },
+        "cities": sorted({str(row["city"]) for row in rows}),
+        "input_paths": {"revision_events": str(events_path), "market_checkpoints": str(checkpoints_path)},
+        "horizon_min": horizon_min,
+        "event_class": event_class,
+        "checkpoint_policy": "D-1_18_24",
+        "blocker_counts": dict(sorted(blockers.items())),
+        "action_grain": "one row per independent legacy pre/post/exit transition, condition_id/label, and YES or NO side",
+    }
 
 
 def summarize_revision_execution(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

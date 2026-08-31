@@ -1,5 +1,7 @@
 # 指标日志（metrics.jsonl）格式说明
 
+Status: `dormant-reference`（只描述 legacy PMM metrics，不是 canonical weather schema）
+
 `src/strategies/pmm/backtest/.artifacts/logs/metrics.jsonl` 使用 JSON Lines 格式：每一行对应一个 tick 快照。
 
 ## 字段结构

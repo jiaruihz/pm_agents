@@ -5,6 +5,19 @@ from dataclasses import dataclass, field
 from typing import List
 
 
+VALID_EXECUTION_MODES = frozenset({"paper", "live"})
+
+
+def validate_execution_mode(value: str) -> str:
+    """Return an explicitly supported mode or fail closed."""
+    if value not in VALID_EXECUTION_MODES:
+        allowed = ", ".join(sorted(VALID_EXECUTION_MODES))
+        raise ValueError(
+            f"Unsupported PMM_EXECUTION_MODE={value!r}; expected one of: {allowed}"
+        )
+    return value
+
+
 @dataclass
 class MarketConfig:
     """Per-market configuration.
@@ -25,7 +38,9 @@ class PMMConfig:
     tick_interval_sec: float = 2.0
     max_ticks: int = 0
     dry_run: bool = False
-    execution_mode: str = "live"  # live | paper
+    # Dormant PMM must fail safe when no mode is supplied.  Live execution is
+    # opt-in through the exact PMM_EXECUTION_MODE=live variable.
+    execution_mode: str = "paper"  # live | paper
     strategy_key: str = "single_level_v1"
     strategy_params: dict = field(default_factory=dict)
 
@@ -208,13 +223,16 @@ class PMMConfig:
                 DeprecationWarning,
                 stacklevel=2,
             )
+        execution_mode = validate_execution_mode(
+            os.getenv("PMM_EXECUTION_MODE", "paper")
+        )
         return PMMConfig(
             api_base_url=os.getenv("PM_API_BASE_URL", "http://localhost:8000"),
             api_key=os.getenv("PM_API_KEY", ""),
             tick_interval_sec=float(os.getenv("PMM_TICK_INTERVAL_SEC", "2")),
             max_ticks=int(os.getenv("PMM_MAX_TICKS", "0")),
             dry_run=os.getenv("PMM_DRY_RUN", "0") == "1",
-            execution_mode=os.getenv("PMM_EXECUTION_MODE", "live"),
+            execution_mode=execution_mode,
             strategy_key=os.getenv("PMM_STRATEGY_KEY", "single_level_v1"),
             strategy_params=strategy_params,
             paper_initial_usdc=float(os.getenv("PMM_PAPER_INITIAL_USDC", "1000")),

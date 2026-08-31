@@ -1,0 +1,8 @@
+{
+  "schema_version": "tmin_prior_external_evidence_gap_v1",
+  "expected_authoritative_source": "TMIN_MODEL_LAYER_V2_EXTERNAL_AUDIT_20260828.json",
+  "status": "SOURCE_NOT_SUPPLIED",
+  "is_reconstruction": false,
+  "searched_on": "2026-08-29",
+  "resolution": "supply original bytes and provenance"
+}

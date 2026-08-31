@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Mapping, Protocol
 
+from ..economics import FeeEstimateError, estimate_polymarket_v2_fee
 from ..contracts import (
     BookLevel,
     ChildOrderPlan,
@@ -305,10 +306,33 @@ class PolymarketVenueAdapter:
             crosses = (request.venue_side == "BUY" and normalized_price >= best_ask) or (request.venue_side == "SELL" and normalized_price <= best_bid)
             if crosses:
                 return PreparedPolymarketOrder("blocked", "post_only_crosses_book", request, normalized_price, current_book, None, None, None)
-        parameters = fee_schedule.maker_fee_parameters if request.post_only else fee_schedule.taker_fee_parameters
-        rate = _decimal(parameters.get("rate", "0"), "fee rate")
-        rebate_rate = _decimal(fee_schedule.maker_fee_parameters.get("rebate_rate", "0"), "maker rebate rate") if request.post_only else Decimal("0")
-        notional = normalized_price * request.shares
+        taker_parameters = fee_schedule.taker_fee_parameters
+        maker_parameters = fee_schedule.maker_fee_parameters
+        try:
+            estimated_fee = (
+                Decimal("0")
+                if request.post_only
+                else estimate_polymarket_v2_fee(
+                    shares=request.shares,
+                    rate=taker_parameters.get("rate", "0"),
+                    price=normalized_price,
+                    exponent=taker_parameters.get("exponent", "1"),
+                )
+            )
+            # A maker rebate is a sensitivity forecast, not a receivable.  Keep
+            # it separate from the guaranteed maker fee of zero.
+            estimated_rebate = (
+                estimate_polymarket_v2_fee(
+                    shares=request.shares,
+                    rate=maker_parameters["rebate_rate"],
+                    price=normalized_price,
+                    exponent=maker_parameters.get("rebate_exponent", maker_parameters.get("exponent", "1")),
+                )
+                if request.post_only and maker_parameters.get("rebate_rate") is not None
+                else Decimal("0")
+            )
+        except FeeEstimateError as exc:
+            return PreparedPolymarketOrder("blocked", f"invalid_fee_schedule:{exc}", request, normalized_price, current_book, None, None, None)
         return PreparedPolymarketOrder(
             "ready",
             "validated",
@@ -316,8 +340,8 @@ class PolymarketVenueAdapter:
             normalized_price,
             current_book,
             make_fee_identity(fee_schedule),
-            notional * rate,
-            notional * rebate_rate,
+            estimated_fee,
+            estimated_rebate,
         )
 
     def place(

@@ -106,7 +106,8 @@ def parse_knmi_netcdf(
             source_kind="official_airport_station",
             source_note=(
                 "KNMI Schiphol station 240 10-minute AWS/synoptic file; "
-                "ta is the final 1-minute mean and tx is the 10-minute maximum; "
+                "ta is the preceding 10-minute average ambient temperature and "
+                "tx is the preceding 10-minute maximum ambient temperature; "
                 "research enrichment, not METAR or WU settlement truth"
             ),
             extra={

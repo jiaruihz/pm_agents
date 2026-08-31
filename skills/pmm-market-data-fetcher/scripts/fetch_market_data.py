@@ -214,7 +214,7 @@ def _fetch_market(client: httpx.Client, market_id: str) -> dict[str, Any]:
 
 def _make_output_path(slug: str) -> Path:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    out_dir = Path("local_market_collection")
+    out_dir = Path("runtime/pmm/market_snapshots")
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir / f"market_snapshot_{slug}_{ts}.json"
 

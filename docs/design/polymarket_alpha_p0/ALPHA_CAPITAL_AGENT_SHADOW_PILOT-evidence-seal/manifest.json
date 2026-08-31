@@ -1,0 +1,93 @@
+{
+  "schema": "alpha_capital_agent_shadow_pilot_seal_v1",
+  "pilot_date_bj": "2026-08-30",
+  "source_commit": "d695eb5dfe544563b55d966936eee46cb927bc2f",
+  "source_tree_dirty": true,
+  "authorization_id": "owner-user-aca-taste-20260829T171200Z",
+  "artifact_root": "/private/tmp/polymarket-alpha-pilot/aca-taste-20260830-0CeFjs",
+  "mode": "READ_ONLY_SHADOW",
+  "execution": "NO_ORDER",
+  "production_changes": 0,
+  "current_runtime_db_writes": 0,
+  "gamma": {
+    "events_per_tick": 5,
+    "nested_markets_per_tick": 24,
+    "t0_raw_sha256": "136238c1e9335a55eb78bc28427522ac93ab2c880a608f51d8d8b475fd1e15ad",
+    "t1_raw_sha256": "cf09ffa7e49901ee478cb7f4530f8680a57d37bd19cc70b56b3ca857ed643a74",
+    "confirmation_elapsed_seconds": 363.420863
+  },
+  "capture_bundle_freshness": {
+    "status": "PASS",
+    "max_cross_source_skew_seconds": 300,
+    "t0_observed_skew_seconds": 282.353704,
+    "t1_observed_skew_seconds": 261.370455
+  },
+  "screen": {
+    "active_open_input": 9,
+    "prebook_eligible": 6,
+    "selected_event_diverse": 5,
+    "newly_requalified_in_window": 0
+  },
+  "eligibility": {
+    "near_eligible_t0": 5,
+    "eligible_unresearched_t1": 5,
+    "admission_episodes": 5
+  },
+  "research": {
+    "markets": 5,
+    "sources": 24,
+    "price_blind": true,
+    "provider_note": "fresh isolated Codex subagents; not a Gate R GPT Pro import"
+  },
+  "opportunity_funnel": {
+    "central_edge_ge_3pp": 4,
+    "conservative_edge_ge_3pp": 0,
+    "capital_eligible": 0
+  },
+  "account": {
+    "completeness": "PUBLIC_ONLY",
+    "position_snapshots": 81,
+    "open_positive": 64,
+    "redeemable_positive": 17,
+    "initial_value": 2424.83,
+    "current_marked_value": 2331.08,
+    "public_trade_crosscheck_gate": "PASS",
+    "free_and_reserved_cash": "UNKNOWN",
+    "open_order_coverage": "MISSING"
+  },
+  "capital": {
+    "status": "DATA_BLOCKED",
+    "actions": 1,
+    "action_type": "DATA_BLOCKED",
+    "buy_cost": 0,
+    "buy_shares": 0,
+    "orders": 0
+  },
+  "replacement": {
+    "formal_ranking": "DATA_BLOCKED",
+    "batch_default_action": "KEEP_EXISTING",
+    "reason": "no conservative-edge candidate and incomplete private account/held-position execution facts"
+  },
+  "idempotency": {
+    "before_counts": [10, 10, 10, 5, 1],
+    "after_counts": [10, 10, 10, 5, 1],
+    "distinct_plan_ids": 1
+  },
+  "verification": {
+    "tests_passed": 761,
+    "review_findings": 1,
+    "review_findings_fixed": 1,
+    "blocking_findings_open": 0
+  },
+  "artifact_hashes": {
+    "authorization_json": "1fb068d3f068f921b15beb6e7724caef3545df2a40eb28dbf0b6ce3af8a547b2",
+    "screen_json": "e52399db196f86a15823974bb3eec8b7bcf0fd792b986f0b162907e56122300f",
+    "books_t0_json": "45ad19082950b92fa4ded334c4ed8d01cd5d64d720775b0f85202e7a431d83f1",
+    "books_t1_json": "bc1ea62b520f3a8ba99c06bff0e091a9f0421477f80fb16cd74e6ee6de64d866",
+    "alpha_catalog_db": "cd91e05f36789d8229c925e756b0e5d2fe88c68eeea8392c78dc8db80992aded",
+    "aca_db": "3065b15b892b77c6bdcc7664a2baf96070f4fe1926cf85ff07218171f7d7ef3f",
+    "account_ledger_db": "d203759bce4db73d73dd7c30f42cbcba6aea2ebb343dada63fe87dda43572ce3",
+    "pilot_result_json": "9e794a5d52091b08841dc5a4e9ba0819e2456725923d7889a3194c902c07432d",
+    "materializer_py": "f95d448a18936e8fe4b4fe1b19b4366b5522bfaacf2fd1e6108cce9c8de9e89f"
+  }
+}

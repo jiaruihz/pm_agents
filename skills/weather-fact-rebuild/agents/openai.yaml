@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather Fact Refresh"
   short_description: "同步或重建天气 canonical facts 并验证完整性"
-  default_prompt: "Use $weather-fact-rebuild to verify controller, storage, writer, and canonical DB identity, then run only the minimal registered refresh required."
+  default_prompt: "Use $weather-fact-rebuild to diagnose the requested window and canonical coverage first; run the smallest registered refresh only when this request authorizes sync/repair of a confirmed gap, and require explicit authorization for a full rebuild."

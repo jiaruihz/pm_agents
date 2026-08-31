@@ -1,4 +1,4 @@
 interface:
   display_name: "Polymarket Research Orchestrator"
   short_description: "完整审计 Polymarket market 或 event"
-  default_prompt: "Use $polymarket-research-orchestrator 对这个 Polymarket market 或 event 执行规则与市场情报研究。"
+  default_prompt: "Use $polymarket-research-orchestrator 完成规则与市场情报研究；一次性产物留在 runtime，改变长期 thesis 时创建 governed record 并回写现有知识入口。"

@@ -16,7 +16,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.strategies.pmm.config import PMMConfig
+from src.strategies.pmm.config import PMMConfig, validate_execution_mode
 from src.strategies.pmm.core.anchoring import anchor_quotes_to_book as _anchor_quotes_to_book
 from src.strategies.pmm.core.signals import (
     depth_near_mid as _depth_near_mid,
@@ -162,6 +162,7 @@ def _maker_only_price(
 
 async def tick_loop(config: PMMConfig) -> None:
     """执行 PMM 连续 tick 主循环。"""
+    execution_mode = validate_execution_mode(config.execution_mode)
     if not config.market.token_ids:
         _log_event(logging.ERROR, "config_missing_token_ids")
         return
@@ -206,7 +207,6 @@ async def tick_loop(config: PMMConfig) -> None:
         )
 
     async with ToolServiceClient(config.api_base_url, config.api_key) as client:
-        execution_mode = config.execution_mode.lower().strip()
         quote_runtime_meta = config.quote_runtime_meta()
         if quote_runtime_meta.get("multi_level_placeholder_active") and strategy.key != "multi_level_v1":
             _log_event(
@@ -224,7 +224,6 @@ async def tick_loop(config: PMMConfig) -> None:
         paper_broker: Optional[PaperBroker] = None
         execution_client: Any
         paper_bootstrap_actions: List[Dict[str, Any]] = []
-        use_raw_client_retry = False
         # 3) 执行层路由：
         # - live: 真实调用下单接口
         # - paper: 本地撮合模拟（仍使用真实盘口数据）
@@ -309,14 +308,6 @@ async def tick_loop(config: PMMConfig) -> None:
                 max_order_value=config.guard_max_order_value,
                 max_daily_loss=config.guard_max_daily_loss,
             )
-        else:
-            execution_client = client
-            use_raw_client_retry = True
-            _log_event(
-                logging.WARNING,
-                "unknown_execution_mode_fallback",
-                execution_mode=execution_mode,
-            )
         notifier = PMMTelegramNotifier(
             config=config,
             execution_mode=execution_mode,
@@ -388,9 +379,8 @@ async def tick_loop(config: PMMConfig) -> None:
             )
 
         async def _exec_call(method, *args, **kwargs):
-            # 统一执行入口：broker 路径直接 await；raw client 路径走 retry。
-            if use_raw_client_retry:
-                return await client.retry(method, *args, **kwargs)
+            # All execution flows go through a broker. Unsupported modes are
+            # rejected before any client or order path is initialized.
             return await method(*args, **kwargs)
 
         if ws_feed:

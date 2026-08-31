@@ -1,7 +1,7 @@
 # Weather Signal Candidates 底表设计
 
 Status: design-draft
-Updated: 2026-07-28 event-checkpoint grain correction; preserve content dates below
+Updated: 2026-08-30 unified replay-case projection; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
 
@@ -34,6 +34,15 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 > [WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
 > 这不是把所有轮询 snapshot 灌进 fact：只有 material information event
 > 触发 checkpoint，重复 poll 不产生新 candidate。
+
+> **2026-08-30 replay projection:** `fact_signal_candidates` 继续是唯一的机会事实表；不再维护一套
+> 独立、手工挑选的“错题真相”。`weather_replay_cases_v1` 把每个 candidate 投影成同一案例格式，
+> 包括正确、错误、未选、未成交、blocked 与 pending rows；
+> `weather_replay_mistakes_v1` 只是按明确错误轴筛选的派生视图。v2 row 按 event/checkpoint/
+> feature/model/book PIT 引用标记 `full_decision`、`model_only` 或 `blocked`；v1 row 保留为
+> `legacy_summary_only`，不伪造历史缺失引用。视图不 join `fact_trades`，因此 grain 仍严格是一行一个
+> `candidate_id`。这些状态表示引用完整度，不替代 replay 时的 artifact/hash 实查；尚未 materialize 成
+> candidate 的旧 raw 判断仍是显式 coverage gap。
 
 ---
 

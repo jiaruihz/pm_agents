@@ -185,6 +185,8 @@ async function waitForStableAssistantText(page, timeoutMs = 180000) {
 GITIGNORE = """node_modules/
 playwright-report/
 test-results/
+data/profile-chatgpt/
+data/records/
 """
 
 
@@ -219,4 +221,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

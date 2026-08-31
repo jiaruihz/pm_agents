@@ -15,7 +15,11 @@ from src.workflows.research.profile_audit_workflow import run_profile_audit_work
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Skill wrapper for Polymarket profile audit.")
     parser.add_argument("--target", required=True, help="@username, profile url, or wallet")
-    parser.add_argument("--fetch-all", action="store_true", help="paginate near-full history")
+    parser.add_argument(
+        "--fetch-all",
+        action="store_true",
+        help="paginate within public endpoint and current code limits",
+    )
     parser.add_argument("--focus", default="all", choices=["accuracy", "pnl", "drawdown", "suspiciousness", "all"])
     parser.add_argument("--report-style", default="brief", choices=["brief", "analyst", "risk"])
     parser.add_argument("--out-file", default="", help="summary json path")

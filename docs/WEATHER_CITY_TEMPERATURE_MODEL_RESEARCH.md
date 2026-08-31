@@ -126,6 +126,47 @@ stale只描述首轮运行时刻。机器身份见`amsterdam_knmi_market_offset_
 
 跨城共同结论：模型是否“预测天气不错”与是否“打败同刻 market”必须分开。
 
+### Amsterdam unified next-print pilot（2026-08-29）
+
+统一三层数据协议后，Amsterdam historical-final archive 为253,290个10-minute checkpoints/1,814日，
+全部缺原始first-seen；因此只用于weather-only development，不声称strict PIT。固定最后20个可用target dates
+（7/09–29）作historical outer时，M1强正则ordinal model相对最强B2 latest-fast baseline的date-equal
+RPS差为`-0.00128`，95% date-block CI `[-0.00174,-0.00084]`。但在既有Stage-3 captured-PIT
+的87 events/16日上结果反转：M1/B2 RPS=`.01815/.01012`，差`+.00803`，CI
+`[+.00405,+.01273]`，且logloss也明显更差。按预注册裁决为`FAIL`：artifact只保留为negative
+control，不启动新的forward epoch、不部署shadow、不复制到Helsinki。Amsterdam recorded-book同分母没有
+一条完整可执行entry，market-only ordinal prior也是0，因此economic replay为`INCONCLUSIVE/PnL NULL`，
+orders/fills/notional仍为0/0/0。另已显式记录Stage-1把official source写为KNMI 10m、而Stage-3/runtime
+reaction lineage使用下一EHAM routine METAR/WU print的provenance差异；跨城canonical promotion前必须收口，
+不能静默混用。审阅入口：`reviews/wcir_unified_data_amsterdam_pilot_v1/GPT_PRO_REVIEW_PACKET.md`。
+
+#### v1.1 feature parity、market archive 与 frozen score-only closure
+
+v1.1 保留 v1 immutable evidence，并把 fast source、prediction target、settlement source 拆为三个独立
+identity；`ta/tx/tn` 分别固定为 KNMI 10-minute average/max/min，其中 frozen input 的 `tn` 明确不可用。
+historical-final、captured-PIT、prospective shadow 现统一调用 `AmsterdamFeatureBuilderV2`。87 个 captured
+opportunities 中 75 个具备从 Amsterdam 当地日初到 cutoff 的连续 10-minute source path；5 个缺当地日初、
+7 个存在 20-minute gap，共 12 个以 `INCOMPLETE_CAPTURED_SOURCE_PATH` fail closed。v1 稀疏 opportunity
+groupby 影响 87/87 行：`path_volatility` 87、`recent_acceleration` 76、`recent_slope` 57、
+`reheat_strength` 85，其他逐特征计数见 parity audit。
+
+同分母 primary RPS 排名为 P0/P1 `M1 < M2 < B2`，corrected P2（75 rows/51 print groups/14 dates）
+为 `B2 .01038 < M2 .01099 < M1 .01183`。P2 target-date bootstrap 的 M1−B2 CI
+`[+.000003,+.003273]`、M2−B2 CI `[+.000017,+.001243]`，故冻结 B2 为 primary reference，M1/M2
+只作 challengers；但两组 official-print-group cluster CI 均跨 0，推断不具 cluster robustness。
+
+旧 42/42（现 living evidence 更新为 57/57）是 V9 selected final-temperature expression 分母，不是本轮
+87 个 next-print opportunities。v1 的 0/87 根因是只消费 Stage-2 deterministic WS rows，未接独立 REST
+full-ladder archive；逐行旧口径原因为 83 no archive、3 checkpoint missing、1 one-sided。接回 exact-identity
+Tier-B REST 后 1/5-share entry 均为 36，但 Tier-A 仍为 0；+30/+60/+120s markout 各仅 2 rows/1 date，
+Layer B 因而 `NOT_ESTIMABLE`，MR0/MR1 均未拟合、uplift 为 NULL。
+
+epoch `wcir_amsterdam_score_only_v2_c18fa016b0612195` 已初始化 0600、append-only 空 journal，三臂固定为
+`B2_REFERENCE / M1_CHALLENGER / M2_CHALLENGER`。没有注册 continuous owner，因此状态诚实保持
+`INITIALIZED_NOT_CONTINUOUSLY_SCHEDULED`；不生成 BUY/SELL/TradeIntent，orders/fills/notional 为 0/0/0。
+继续 Amsterdam prospective evidence，不复制到 Helsinki、不授权 live。完整证据位于
+`reviews/wcir_unified_data_amsterdam_pilot_v1_1/GPT_PRO_REVIEW_PACKET_AMSTERDAM_V1_1.md`。
+
 ### Seoul WCIR exact-NO 首版训练（2026-08-13）
 
 结论：现有 WCIR/Korea AMOS raw 已能训练 Seoul 独立 probability artifact，但首版训练门失败，
@@ -551,6 +592,27 @@ posterior uncertainty 下界扣除 ask/VWAP、官方 fee、spread/退出摩擦�
 - 缺盘口、不可执行和未结算数量。
 
 没有历史盘口时，这一层标 `not_available`，不能填 0，也不能用天气 accuracy 代替 ROI。
+
+### 5.5 Next-official-print 跨城迁移的实证边界（2026-08-29）
+
+Amsterdam rev2 的 shared full-path ordinal 方法迁移到 Helsinki 与 Tokyo 后，完整路径根因修复后的历史分母为
+Helsinki 59,868 rows、Tokyo 58,047 rows。Tokyo 的 expanding OOF、opportunity-matched 与最后20日 outer 上
+M1/M2 RPS 都优于城市原生 B2；Helsinki 在 all-checkpoint/outer 上两者更好，但 opportunity-matched 上只有 M2
+更好，M1 略差。真正 captured-PIT 分母上两城 challenger 也只是点估改善：Helsinki 45/67 rows、14 dates的
+B2/M1/M2 RPS=`.01183/.01091/.01107`，M1−B2 CI=`[-.00363,+.00108]`；Tokyo 37/43 rows、14 dates为
+`.00973/.00931/.00955`，M1−B2 CI=`[-.00127,+.00032]`。两城都保持 `INCONCLUSIVE_NO_PROMOTION`，继续
+zero-notional collection，不启动新的 frozen forward 或部署。
+
+该结果固化三条跨城默认经验：第一，fast source、official target、settlement truth、station 和 routine clock
+必须逐城冻结，FMI/EFHK 与 JMA/RJTT 不能继承 KNMI/EHAM 语义；第二，captured feature 必须从 decision 前已
+available 的完整城市 raw path 计算，不能从 opportunity rows 重算 slope/running max/pullback/reheat；第三，
+historical-final improvement 不能替代 captured-PIT promotion。下一官方 print 到 exact settlement token 的 action
+mapping 尚未注册时，book 只做 repricing diagnostic，不把 `p_new_running_max` 写成 token fair probability。本轮82个
+eligible event 均有 Tier A/B book evidence，但没有任何一行同时具备 archive-native event_id/market_id/condition_id/
+token_id/checkpoint 五字段；因此 historical executable replay 明确为不可估，不能把派生 event join 称为 full exact identity。
+1200秒合同修复最终恢复 Helsinki 13行、Tokyo 10行；本地05:50完整path起点合同使 Helsinki 22行、Tokyo 6行
+fail closed。完整路径修复影响 Helsinki 59,590/59,868、Tokyo 57,211/58,047 个历史 eligible rows，逐行差异已封存。
+完整逐行证据见 `reviews/wcir_next_official_print_helsinki_tokyo_rev1/`。
 
 ## 6. 知识库怎么维护
 

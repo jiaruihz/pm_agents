@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from scripts.analysis.tmin.evaluate_tmin_cross_prev_no_shadow_v1 import evaluate
 
@@ -42,6 +43,7 @@ def _quote(
                     "fresh_ask_size": size,
                     "fresh_best_bid": bid,
                     "fresh_bid_size": bid_size,
+                    "fresh_fetched_at_utc": ts,
                     "fresh_status": "ok",
                 }
             }
@@ -102,8 +104,145 @@ def test_evaluator_requires_closed_settlement_and_freezes_cap90(tmp_path: Path) 
     assert summary["frozen_policy"]["historical_replay"]["rows"] == 1
     assert summary["taker_repricing_exit"]["10m"]["all_entries"]["rows"] == 1
     assert summary["taker_repricing_exit"]["10m"]["all_entries"]["pnl_usd"] < 0
+    assert summary["evidence_funnel"]["candidate_raw_ask_matches_exact_quote"] == 3
     selected = frame[frame["frozen_policy_selected"]]
     assert selected["candidate_id"].tolist() == ["candidate-a"]
     open_row = frame[frame["candidate_id"].eq("candidate-c")].iloc[0]
     assert open_row["settlement_status"] == "open_event_not_settlement"
     assert open_row["settlement_no_label"] != open_row["settlement_no_label"]
+
+
+def test_evaluator_rejects_stale_underlying_entry_quote(tmp_path: Path) -> None:
+    candidates = tmp_path / "candidates.jsonl"
+    quotes = tmp_path / "quotes.jsonl"
+    gamma = tmp_path / "gamma"
+    gamma.mkdir()
+    row = _candidate(
+        suffix="stale",
+        date="2026-08-19",
+        ts="2026-08-19T14:46:10Z",
+        ask=0.53,
+    )
+    _write_jsonl(candidates, [row])
+    quote = _quote(
+        suffix="stale",
+        date="2026-08-19",
+        ts="2026-08-19T14:46:10Z",
+        ask=0.53,
+        size=9.41,
+    )
+    quote["quotes"]["t_minus_1"]["no"]["fresh_fetched_at_utc"] = (
+        "2026-08-19T11:00:11Z"
+    )
+    _write_jsonl(quotes, [quote])
+    day = pd.Timestamp("2026-08-19")
+    event_path = (
+        gamma
+        / f"lowest-temperature-in-seoul-on-{day.strftime('%B').lower()}-"
+        f"{day.day}-{day.year}.json"
+    )
+    event_path.write_text(
+        json.dumps(_event(condition="condition-stale", closed=True, no_wins=True)),
+        encoding="utf-8",
+    )
+
+    frame, summary = evaluate(
+        candidates_path=candidates,
+        quotes_path=quotes,
+        gamma_root=gamma,
+    )
+
+    assert frame.loc[0, "entry_quote_age_seconds"] > 300
+    assert not bool(frame.loc[0, "min_5_share_executable"])
+    assert summary["frozen_policy"]["historical_replay"]["rows"] == 0
+
+
+def test_evaluator_rejects_duplicate_exact_quote_key(tmp_path: Path) -> None:
+    candidates = tmp_path / "candidates.jsonl"
+    quotes = tmp_path / "quotes.jsonl"
+    gamma = tmp_path / "gamma"
+    gamma.mkdir()
+    row = _candidate(
+        suffix="duplicate",
+        date="2026-08-19",
+        ts="2026-08-18T16:00:00Z",
+        ask=0.60,
+    )
+    quote = _quote(
+        suffix="duplicate",
+        date="2026-08-19",
+        ts="2026-08-18T16:00:00Z",
+        ask=0.60,
+        size=10,
+    )
+    _write_jsonl(candidates, [row])
+    _write_jsonl(quotes, [quote, quote])
+
+    with pytest.raises(ValueError, match="duplicate exact quote key"):
+        evaluate(
+            candidates_path=candidates,
+            quotes_path=quotes,
+            gamma_root=gamma,
+        )
+
+
+def test_evaluator_qualifies_complete_first_entry_60m_repricing_forward(
+    tmp_path: Path,
+) -> None:
+    candidates = tmp_path / "candidates.jsonl"
+    quotes = tmp_path / "quotes.jsonl"
+    gamma = tmp_path / "gamma"
+    gamma.mkdir()
+    candidate_rows = []
+    quote_rows = []
+    for index, target_date in enumerate(
+        pd.date_range("2026-08-01", periods=10, tz="UTC")
+    ):
+        date = target_date.strftime("%Y-%m-%d")
+        entry = target_date - pd.Timedelta(hours=8)
+        entry_ts = entry.isoformat().replace("+00:00", "Z")
+        exit_ts = (entry + pd.Timedelta(minutes=60)).isoformat().replace(
+            "+00:00", "Z"
+        )
+        suffix = f"repricing-{index}"
+        candidate_rows.append(
+            _candidate(suffix=suffix, date=date, ts=entry_ts, ask=0.50)
+        )
+        quote_rows.extend(
+            [
+                _quote(
+                    suffix=suffix,
+                    date=date,
+                    ts=entry_ts,
+                    ask=0.50,
+                    size=10,
+                ),
+                _quote(
+                    suffix=suffix,
+                    date=date,
+                    ts=exit_ts,
+                    ask=0.50,
+                    size=10,
+                    bid=0.70,
+                    bid_size=10,
+                ),
+            ]
+        )
+    _write_jsonl(candidates, candidate_rows)
+    _write_jsonl(quotes, quote_rows)
+
+    _frame, summary = evaluate(
+        candidates_path=candidates,
+        quotes_path=quotes,
+        gamma_root=gamma,
+    )
+
+    challenger = summary["prospective_repricing_challenger"]
+    assert challenger["development_replay"]["rows"] == 10
+    assert challenger["development_replay"]["target_dates"] == 10
+    assert challenger["development_replay"]["roi"] > 0
+    assert challenger["freeze_qualification"]["eligible"] is True
+    assert challenger["status"] == (
+        "eligible_for_prospective_zero_notional_frozen_forward"
+    )
+    assert challenger["forward_funnel"]["status"] == "not_started"

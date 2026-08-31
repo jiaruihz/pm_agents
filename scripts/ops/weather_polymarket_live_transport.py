@@ -45,9 +45,13 @@ def _mapping(value: Any) -> dict[str, Any]:
         "asset_id",
         "asks",
         "bids",
+        "condition_id",
+        "conditionId",
         "hash",
         "last_trade_price",
         "market",
+        "market_id",
+        "marketId",
         "min_order_size",
         "neg_risk",
         "price",
@@ -152,7 +156,7 @@ class LivePolymarketTransport:
             "venue": "polymarket_clob",
             "protocol_version": "clob-v2",
             "client_version": self.client_version,
-            "collateral_asset": "USDC",
+            "collateral_asset": "pUSD",
             "supported_order_types": ("GTC", "GTD", "FAK", "FOK"),
             "post_only_order_types": ("GTC", "GTD"),
             "price_precision": 4,
@@ -165,32 +169,69 @@ class LivePolymarketTransport:
             },
             "gtd_security_threshold_sec": 60,
             "capabilities_fetched_at_utc": _utc_now(),
-            "fee_schedule_ref": "polymarket-token-fee-bps-v1",
+            "fee_schedule_ref": "polymarket-token-fee-v2",
         }
 
     def fetch_fee_schedule(self) -> Mapping[str, Any]:
         return {
             "venue": "polymarket_clob",
-            "fee_schedule_ref": "polymarket-token-fee-bps-v1",
+            "fee_schedule_ref": "polymarket-token-fee-v2",
             "fee_schedule_fetched_at_utc": _utc_now(),
-            "fee_formula_id": "polymarket_dynamic_token_fee_bps_v1",
-            "taker_fee_parameters": {"rate": "0"},
+            "fee_formula_id": "polymarket_v2_fee_forecast",
+            "taker_fee_parameters": {"rate": "0", "exponent": "1"},
             "maker_fee_parameters": {"rate": "0", "rebate_rate": "0"},
             "maker_rebate_program": None,
         }
 
+    @staticmethod
+    def _v2_fee_details(raw_info: Mapping[str, Any]) -> Mapping[str, Any] | None:
+        """Extract CLOB V2's compact ``fd={r,e,to}`` payload without guessing."""
+        for container in (raw_info, _mapping(raw_info.get("fees")), _mapping(raw_info.get("market"))):
+            details = _mapping(container.get("fd"))
+            if all(details.get(key) is not None for key in ("r", "e", "to")):
+                return details
+        return None
+
     def fetch_fee_schedule_for_token(self, token_id: str) -> Mapping[str, Any]:
-        fee_bps = int(self.client.get_fee_rate_bps(str(token_id)))
+        book = self._book(token_id)
+        condition_id = str(book.get("condition_id") or book.get("conditionId") or "").strip()
+        market_id = str(book.get("market") or book.get("market_id") or book.get("marketId") or "").strip()
+        lookup_id = condition_id or market_id
+        if not lookup_id:
+            raise RuntimeError("missing condition_id/market id required for V2 fee lookup")
+        raw_info = _mapping(self.client.get_clob_market_info(lookup_id))
+        details = self._v2_fee_details(raw_info)
+        if details is None:
+            raise RuntimeError("missing raw V2 fee details fd={r,e,to}; refusing fee estimate")
+        try:
+            raw_rate = Decimal(str(details["r"]))
+            exponent = Decimal(str(details["e"]))
+        except Exception as exc:
+            raise RuntimeError("invalid raw V2 fee details fd={r,e,to}") from exc
+        # CLOB V2 feeds ``fd.r`` directly into the SDK fee curve.  It is a
+        # decimal rate (for example Weather ``0.05``), not the legacy
+        # ``/fee-rate`` endpoint's basis-point value.
+        rate = raw_rate
+        secondary_fee_rate_bps: int | None = None
+        try:
+            secondary_fee_rate_bps = int(self.client.get_fee_rate_bps(str(token_id)))
+        except Exception:
+            pass
         return {
             **dict(self.fetch_fee_schedule()),
             "taker_fee_parameters": {
-                "rate": format(Decimal(fee_bps) / Decimal("10000"), "f"),
-                "fee_rate_bps": fee_bps,
+                "rate": format(rate, "f"),
+                "exponent": format(exponent, "f"),
+                "raw_fee_details": dict(details),
+                "condition_id": condition_id or None,
+                "market_id": market_id or None,
+                "fee_truth_source": "get_clob_market_info.fd",
+                "secondary_fee_rate_bps": secondary_fee_rate_bps,
             },
             "maker_fee_parameters": {
                 "rate": "0",
-                "rebate_rate": "0",
-                "fee_rate_bps": fee_bps,
+                "raw_fee_details": dict(details),
+                "fee_truth_source": "maker_zero_v2",
             },
         }
 

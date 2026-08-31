@@ -739,6 +739,19 @@ move a script only when it becomes the maintained entrypoint for a new result.
     scoring as shadow evidence, and do not convert any tested price or weather
     bucket into a new gate. Evidence:
     `docs/analysis/2026-08/2026-08-08-current-yes-core-carry-mid-floor-forward-v1.md`.
+16. `current_yes_core_carry_first_positive_ladder_dynamics_p1_v1`: fixed the
+    denominator at the authoritative 92-signal ledger through 2026-08-20 and
+    exactly matched all 92 triggers. Only 61 had a same-artifact, executable
+    earlier non-eligible checkpoint; the prior was 42.35--117.1 minutes old
+    (median 59.27m), so the resulting four strict quote-driven candidates are
+    coarse diagnostics, not causal pre-trigger tape evidence. REST full-ladder
+    deltas were primary-ready for 31 signals/12 dates; loss-minus-win delta
+    `q_up` was +0.0490 with target-date CI [-0.1726,+0.3332]. Historical WS
+    covered the current token at only 2 triggers and a complete YES ladder at
+    zero. The adverse-selection hypothesis therefore remains inconclusive;
+    do not add a confirm/hedge gate until P0 produces sub-minute forward tape.
+    Evidence:
+    `docs/analysis/2026-08/2026-08-22-core-carry-first-positive-ladder-dynamics-p1-v1.md`.
 
 ## Naming Rules
 

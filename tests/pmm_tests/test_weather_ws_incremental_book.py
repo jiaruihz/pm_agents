@@ -637,6 +637,72 @@ def test_public_materializer_replays_epoch_chain_deterministically() -> None:
     assert first.snapshots[-1].delta_chain_hash
 
 
+def test_public_materializer_accepts_explicit_reconnect_root_and_resets_state() -> None:
+    epochs = [
+        {
+            "subscription_epoch_id": "epoch-1",
+            "started_at_utc": "2026-08-09T10:00:00Z",
+            "reason": "connect",
+            "token_ids": ["no-token"],
+        },
+        {
+            "subscription_epoch_id": "epoch-2",
+            "previous_subscription_epoch_id": None,
+            "started_at_utc": "2026-08-09T10:01:00Z",
+            "reason": "reconnect",
+            "token_ids": ["no-token"],
+        },
+    ]
+    frames = [
+        _envelope(
+            "epoch-1",
+            {
+                "event_type": "book",
+                "asset_id": "no-token",
+                "bids": [{"price": "0.50", "size": "5"}],
+                "asks": [{"price": "0.55", "size": "5"}],
+            },
+            "2026-08-09T10:00:01Z",
+        ),
+        _envelope(
+            "epoch-2",
+            {
+                "event_type": "book",
+                "asset_id": "no-token",
+                "bids": [{"price": "0.60", "size": "5"}],
+                "asks": [{"price": "0.65", "size": "5"}],
+            },
+            "2026-08-09T10:01:01Z",
+        ),
+    ]
+
+    run = materialize_reconstructed_books(epochs, frames)
+
+    assert run.reconstruction_errors == 0
+    assert run.snapshots[-1].best_bid == pytest.approx(0.60)
+    assert run.snapshots[-1].delta_frame_count == 0
+
+
+def test_public_materializer_rejects_non_null_epoch_chain_gap() -> None:
+    epochs = [
+        {
+            "subscription_epoch_id": "epoch-1",
+            "started_at_utc": "2026-08-09T10:00:00Z",
+            "token_ids": ["no-token"],
+        },
+        {
+            "subscription_epoch_id": "epoch-2",
+            "previous_subscription_epoch_id": "unexpected-epoch",
+            "started_at_utc": "2026-08-09T10:01:00Z",
+            "reason": "selector_reconcile",
+            "token_ids": ["no-token"],
+        },
+    ]
+
+    with pytest.raises(BookReconstructionError, match="subscription epoch chain gap"):
+        materialize_reconstructed_books(epochs, [])
+
+
 def test_materializer_slice_starting_mid_socket_fails_closed_without_predecessor() -> None:
     epoch = {
         "subscription_epoch_id": "epoch-mid-socket",

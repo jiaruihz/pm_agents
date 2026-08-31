@@ -48,6 +48,7 @@ from src.weather_agent_harness.orchestration import (
     WorkOrder,
     WorkResult,
     build_run_receipt,
+    find_codex_session,
     price_usage,
     usage_from_codex_session,
 )
@@ -380,9 +381,33 @@ def record_dispatch(args: argparse.Namespace) -> int:
 
 def record_work_result(args: argparse.Namespace) -> int:
     result = WorkResult.model_validate_json(args.result_json.read_text(encoding="utf-8"))
-    if args.codex_session_jsonl:
+    store = OrchestrationStore(EvidenceStore(args.run_dir))
+    session_path = args.codex_session_jsonl
+    if session_path is None and result.execution_mode == "agent":
+        state = store.load()
+        agent_run = next(
+            (
+                item
+                for item in reversed(state.agent_runs)
+                if item.work_order_id == result.work_order_id
+                and item.attempt == result.attempt
+                and item.lease_id == result.lease_id
+            ),
+            None,
+        )
+        if agent_run and agent_run.thread_id:
+            try:
+                session_path = find_codex_session(
+                    agent_run.thread_id,
+                    started_at_utc=agent_run.started_at_utc,
+                )
+            except FileNotFoundError:
+                role = next(item for item in state.roles if item.name == agent_run.role)
+                if role.require_usage:
+                    raise
+    if session_path:
         usage, observed_model, duration_seconds, tool_calls = usage_from_codex_session(
-            args.codex_session_jsonl
+            session_path
         )
         result = result.model_copy(
             update={
@@ -392,7 +417,7 @@ def record_work_result(args: argparse.Namespace) -> int:
                 "tool_calls": tool_calls,
             }
         )
-    state, accepted = OrchestrationStore(EvidenceStore(args.run_dir)).record_result(result)
+    state, accepted = store.record_result(result)
     print(json.dumps({"accepted": accepted, "state": state.model_dump(mode="json")}, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if accepted else 2
 

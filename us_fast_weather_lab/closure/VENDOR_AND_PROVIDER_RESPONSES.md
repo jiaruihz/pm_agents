@@ -83,6 +83,53 @@ the collector process controlled by Codex and is not recorded here. A bounded
 commercial-only canary was prepared so the user can launch it from that same
 shell without duplicating the still-active WIS2/AWC r2 run.
 
+## METAR.ws Professional trial activation and measured capture — 2026-08-29/30
+
+At 2026-08-29 17:46:11 UTC METAR.ws confirmed that the Professional trial was
+granted and asked us to try the WebSocket. The provider said it would check in
+and disable access manually after a few days rather than enforce an exact
+72-hour expiry. This is valid zero-cost trial access, not authorization for a
+paid subscription, renewal, conversion, or charge. Gmail evidence:
+`gmail:1a04ea13f9bf4697`.
+
+The bounded two-hour paired capture then completed as
+`run_1788070660424322000_ae7045d3` with SQLite integrity `ok`, clean
+`duration_complete`, successful Professional WebSocket authentication, 2,059
+live METAR.ws frames, and 2,119/2,119 replay-stable observation versions. Every
+wall-clock sample remained outside the 20 ms contract, so its transport leads
+are exploratory and excluded from formal adoption ranking. The fixed market
+denominator produced no proven material fee-adjusted five-share uplift.
+
+A single non-overlapping 24-hour forward capture started at
+2026-08-30 09:21:01 UTC as `run_1788081661849919000_fa0d7312`, locked to
+commit `105f7388ec294c7dc2a42cce8d86f99c1b9cb19e` and config hash
+`6b86db4f0571d031ea5f7788e707bac9c0d3c4dacd273eea65b1b82a2e46ab4e`.
+It reuses the sole production public market-books WebSocket owner through the
+append-only stable demand relay. It is zero-notional and cannot create orders
+or fills. The clock is still invalid for formal seconds-level ranking, but raw
+receipts and same-host monotonic exploratory ordering remain admissible.
+
+A Gmail sweep through 2026-08-30 09:25 UTC found no newer substantive reply
+from WMSCR/Stewart Stepney, Synoptic, Novra, NOAA WIS2, FAA Non-Federal, or
+Unidata IDD beyond the entries already recorded above.
+
+### Persistence correction — 2026-08-30 09:33/09:34 UTC
+
+The first 24-hour launch was discovered to be owned by a transient exec
+session, the same persistence failure mode that orphaned the first public
+baseline. It was therefore cleanly signal-stopped before handoff, not allowed
+to fail silently later. That separate startup canary is
+`run_1788081661849919000_fa0d7312`: SQLite integrity `ok`, 872/872 stable
+replay identities, normal run-end evidence, and no overlap with its successor.
+It is excluded from the 24-hour denominator and will never be merged into r2.
+
+The only valid persistent 24-hour run is now
+`runtime/us_fast_weather_lab_metarws_24h_20260830_r2`,
+`run_1788082477666168000_cb1a311d`, started at 2026-08-30 09:34:37 UTC in
+the dedicated `us-fast-weather-lab` tmux server. Its collector and one local
+append-only demand relay are separate live windows. The production
+`weather_market_books` process remains the sole public market WebSocket owner.
+
 ## Synoptic Push — 2026-08-28 15:41 UTC
 
 The provider asked whether an account already exists and which email address

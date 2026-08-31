@@ -15,15 +15,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..contracts import (
     BookCaptureReceipt, BookCaptureStatus, CaptureScope, ClaimEvidence,
-    EstimateStage, EvidenceOrigin, EvidenceSupport, HashScope, MarketComparison,
+    EstimateStage, EvidenceOrigin, EvidenceSupport, HashScope, MarketComparisonV2,
     MarketComparisonStatus, MarketResearchPacket, ProbabilityEstimate,
     Replayability, ResearchResultEnvelope, SourceArtifact, SourceTier,
     content_sha256, stable_record_id,
 )
 from ..contracts.base import ensure_utc
+from ..books.executable_cost import EXECUTABLE_COST_VERSION, paired_buy_cost
 
 
-MARKET_COMPARISON_COMPILER_VERSION = "gate_r_wp5_v1"
+MARKET_COMPARISON_COMPILER_VERSION = "gate_r_wp5_v2"
 _ONE = Decimal("1")
 
 
@@ -52,7 +53,7 @@ class MarketComparisonPolicy(BaseModel):
 
 
 class MarketAssessment(NamedTuple):
-    comparison: MarketComparison
+    comparison: MarketComparisonV2
     result: ResearchResultEnvelope | None
 
 
@@ -87,7 +88,7 @@ def _comparison(
     *, packet: MarketResearchPacket, blind: ResearchResultEnvelope,
     receipt: BookCaptureReceipt, policy: MarketComparisonPolicy, as_of: datetime,
     run_id: str, created_at: datetime,
-) -> MarketComparison:
+) -> MarketComparisonV2:
     snapshot = packet.orderbook
     yes = _depth(snapshot, policy.policy_size, "yes_depth")
     no = _depth(snapshot, policy.policy_size, "no_depth")
@@ -123,10 +124,31 @@ def _comparison(
     )
     estimate = blind.probability_estimate
     cost_yes = cost_no = None
+    yes_fills = no_fills = ()
+    yes_taker_fee = no_taker_fee = None
     if ready:
         assert yes is not None and no is not None and yes.buy_vwap is not None and no.buy_vwap is not None
-        cost_yes = yes.buy_vwap * (_ONE + policy.fee_rate) + policy.slippage_buffer
-        cost_no = no.buy_vwap * (_ONE + policy.fee_rate) + policy.slippage_buffer
+        paired_cost = paired_buy_cost(
+            snapshot,
+            target_size=policy.policy_size,
+            fee_rate=policy.fee_rate,
+            slippage_buffer=policy.slippage_buffer,
+        )
+        if not paired_cost.fully_executable:
+            raise MarketComparisonError(
+                "target-depth metrics disagree with the sealed orderbook levels"
+            )
+        if paired_cost.yes.vwap != yes.buy_vwap or paired_cost.no.vwap != no.buy_vwap:
+            raise MarketComparisonError(
+                "target-depth VWAP does not match the sealed orderbook levels"
+            )
+        assert paired_cost.yes.effective_price is not None
+        assert paired_cost.no.effective_price is not None
+        cost_yes = paired_cost.yes.effective_price
+        cost_no = paired_cost.no.effective_price
+        yes_fills, no_fills = paired_cost.yes.fills, paired_cost.no.fills
+        yes_taker_fee = paired_cost.yes.taker_fee
+        no_taker_fee = paired_cost.no.taker_fee
         edges = (
             estimate.p_event_yes_low - cost_yes, estimate.p_event_yes_mid - cost_yes, estimate.p_event_yes_high - cost_yes,
             (_ONE - estimate.p_event_yes_high) - cost_no, (_ONE - estimate.p_event_yes_mid) - cost_no, (_ONE - estimate.p_event_yes_low) - cost_no,
@@ -147,7 +169,11 @@ def _comparison(
         book_capture_at_utc=snapshot.captured_at, comparison_as_of_utc=as_of,
         policy_size=policy.policy_size, yes_bid=yes_bid, yes_ask=yes_ask, no_bid=no_bid, no_ask=no_ask,
         yes_buy_vwap=None if yes is None else yes.buy_vwap, no_buy_vwap=None if no is None else no.buy_vwap,
+        yes_buy_fills=yes_fills, no_buy_fills=no_fills,
+        yes_taker_fee=yes_taker_fee, no_taker_fee=no_taker_fee,
+        yes_all_in_buy_price=cost_yes, no_all_in_buy_price=cost_no,
         fee_slippage_cost_policy_id=policy.policy_id, fee_slippage_cost_policy_version=policy.version,
+        fee_model_version=EXECUTABLE_COST_VERSION,
         fee_rate=policy.fee_rate, slippage_buffer=policy.slippage_buffer,
         yes_edge_low=edges[0], yes_edge_mid=edges[1], yes_edge_high=edges[2],
         no_edge_low=edges[3], no_edge_mid=edges[4], no_edge_high=edges[5], stale=stale,
@@ -156,7 +182,12 @@ def _comparison(
     )
     digest = content_sha256(payload)
     record_id = stable_record_id("market_comparison", payload)
-    return MarketComparison(record_id=record_id, comparison_id=record_id, comparison_sha256=digest, **payload)
+    return MarketComparisonV2(
+        record_id=record_id,
+        comparison_id=record_id,
+        comparison_sha256=digest,
+        **payload,
+    )
 
 
 class DeterministicMarketAssessmentCompiler:
@@ -179,7 +210,7 @@ class DeterministicMarketAssessmentCompiler:
         return MarketAssessment(comparison, self._result(packet=packet, blind=accepted_blind_result, comparison=comparison, run_id=run_id, created_at=created_at))
 
     @staticmethod
-    def _result(*, packet: MarketResearchPacket, blind: ResearchResultEnvelope, comparison: MarketComparison, run_id: str, created_at: datetime) -> ResearchResultEnvelope:
+    def _result(*, packet: MarketResearchPacket, blind: ResearchResultEnvelope, comparison: MarketComparisonV2, run_id: str, created_at: datetime) -> ResearchResultEnvelope:
         estimate = blind.probability_estimate
         estimate_id = stable_record_id("probability_estimate", "market_comparison", comparison.record_id, comparison.comparison_sha256, run_id)
         market_estimate = ProbabilityEstimate(

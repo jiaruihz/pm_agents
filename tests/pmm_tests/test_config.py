@@ -4,6 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 from src.strategies.pmm.config import PMMConfig, MarketConfig
+from src.strategies.pmm.engine.tick_engine import tick_loop
 
 
 class TestMarketConfig(unittest.TestCase):
@@ -27,7 +28,7 @@ class TestPMMConfig(unittest.TestCase):
         
         self.assertEqual(config.api_base_url, "http://localhost:8000")
         self.assertEqual(config.tick_interval_sec, 2.0)
-        self.assertEqual(config.execution_mode, "live")
+        self.assertEqual(config.execution_mode, "paper")
         self.assertEqual(config.strategy_key, "single_level_v1")
         self.assertEqual(config.base_spread, 0.04)
         self.assertEqual(config.max_position, 100.0)
@@ -76,6 +77,35 @@ class TestPMMConfig(unittest.TestCase):
         self.assertEqual(config.telegram_chat_id, 'chat-id')
         self.assertEqual(config.telegram_report_interval_sec, 900)
         self.assertTrue(config.live_maker_only)
+
+    @patch.dict(os.environ, {"PMM_EXECUTION_MODE": "live"})
+    def test_live_execution_requires_exact_explicit_environment_variable(self):
+        config = PMMConfig.from_env()
+
+        self.assertEqual(config.execution_mode, "live")
+
+    @patch.dict(
+        os.environ,
+        {"PMM_EXEC_MODE": "live"},
+        clear=True,
+    )
+    def test_legacy_misspelled_execution_variable_cannot_enable_live(self):
+        config = PMMConfig.from_env()
+
+        self.assertEqual(config.execution_mode, "paper")
+
+    @patch.dict(os.environ, {"PMM_EXECUTION_MODE": " LIVE "}, clear=True)
+    def test_execution_mode_rejects_non_exact_live_opt_in(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported PMM_EXECUTION_MODE"):
+            PMMConfig.from_env()
+
+    def test_tick_loop_rejects_unknown_mode_before_initializing_clients(self):
+        config = PMMConfig(execution_mode="typo")
+
+        with self.assertRaisesRegex(ValueError, "Unsupported PMM_EXECUTION_MODE"):
+            import asyncio
+
+            asyncio.run(tick_loop(config))
 
 
 if __name__ == '__main__':

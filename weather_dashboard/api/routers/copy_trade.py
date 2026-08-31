@@ -4,18 +4,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import requests
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
+
+from weather_dashboard.api.capital_efficiency import build_capital_efficiency_report
 
 
 router = APIRouter(prefix="/copy-trade", tags=["copy-trade"])
 
 RESEARCH_DB_PATH = os.environ.get("COPY_TRADE_RESEARCH_DB_PATH", "runtime/db/research.db")
 DATA_API_BASE = "https://data-api.polymarket.com"
+GAMMA_API_BASE = "https://gamma-api.polymarket.com"
+CLOB_API_BASE = "https://clob.polymarket.com"
+WALLET_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
 
 def _connect() -> sqlite3.Connection:
@@ -26,6 +34,10 @@ def _connect() -> sqlite3.Connection:
 
 def _json_loads(raw: Any, default: Any) -> Any:
     if raw is None:
+        return default
+    try:
+        return json.loads(raw)
+    except Exception:
         return default
 
 
@@ -74,10 +86,101 @@ def _compact_closed_position(row: dict[str, Any]) -> dict[str, Any]:
         "cur_price": row.get("curPrice") or row.get("cur_price"),
         "raw": row,
     }
+
+
+def _get_public_profile(wallet: str, timeout_sec: float = 10.0) -> dict[str, Any]:
     try:
-        return json.loads(raw)
+        resp = requests.get(
+            f"{GAMMA_API_BASE}/public-profile",
+            params={"address": wallet},
+            headers={"Accept": "application/json", "User-Agent": "pm-agent-capital-efficiency/1.0"},
+            timeout=timeout_sec,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
     except Exception:
-        return default
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _get_positions_strict(
+    wallet: str,
+    timeout_sec: float = 25.0,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    page_limit = 500
+    max_offset = 10_000
+    positions: list[dict[str, Any]] = []
+    pages_fetched = 0
+    truncated = False
+    for offset in range(0, max_offset + 1, page_limit):
+        try:
+            resp = requests.get(
+                f"{DATA_API_BASE}/positions",
+                params={
+                    "user": wallet,
+                    "sizeThreshold": 0,
+                    "limit": page_limit,
+                    "offset": offset,
+                    "sortBy": "CURRENT",
+                    "sortDirection": "DESC",
+                },
+                headers={"Accept": "application/json", "User-Agent": "pm-agent-capital-efficiency/1.0"},
+                timeout=timeout_sec,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Polymarket positions API unavailable: {exc}") from exc
+        if not isinstance(payload, list):
+            raise HTTPException(status_code=502, detail="Polymarket positions API returned an invalid payload")
+        page = [item for item in payload if isinstance(item, dict)]
+        positions.extend(page)
+        pages_fetched += 1
+        if len(payload) < page_limit:
+            break
+        if offset == max_offset:
+            truncated = True
+
+    return positions, {
+        "pages_fetched": pages_fetched,
+        "truncated": truncated,
+        "max_supported_positions": max_offset + page_limit,
+    }
+
+
+def _get_clob_books(
+    token_ids: list[str],
+    timeout_sec: float = 25.0,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    books: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for start in range(0, len(token_ids), 100):
+        batch = token_ids[start : start + 100]
+        try:
+            resp = requests.post(
+                f"{CLOB_API_BASE}/books",
+                json=[{"token_id": token_id} for token_id in batch],
+                headers={"Accept": "application/json", "User-Agent": "pm-agent-capital-efficiency/1.0"},
+                timeout=timeout_sec,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as exc:
+            errors.append(f"batch_{start // 100 + 1}:{type(exc).__name__}")
+            continue
+        if isinstance(payload, list):
+            books.extend(item for item in payload if isinstance(item, dict))
+        else:
+            errors.append(f"batch_{start // 100 + 1}:invalid_payload")
+    return books, errors
+
+
+def _positive_size(row: dict[str, Any]) -> bool:
+    try:
+        size = float(row.get("size") or 0)
+    except (TypeError, ValueError):
+        return False
+    return size > 0
 
 
 def _latest_reviews(conn: sqlite3.Connection, scan_mode: Optional[str] = None) -> list[dict[str, Any]]:
@@ -159,6 +262,59 @@ def _wallet_row(item: dict[str, Any]) -> dict[str, Any]:
         "scan_mode": metrics.get("scan_mode", ""),
         "topic_counts": metrics.get("topic_counts", {}),
     }
+
+
+@router.get("/capital-efficiency")
+def get_capital_efficiency(
+    wallet_address: str = Query(..., description="Polymarket profile/proxy wallet address"),
+    annual_hurdle_rate: float = Query(0.10, ge=0.0, le=10.0),
+    available_cash_usd: Optional[float] = Query(None, ge=0.0),
+    reserved_cash_usd: Optional[float] = Query(None, ge=0.0),
+):
+    wallet = wallet_address.strip().lower()
+    if not WALLET_RE.fullmatch(wallet):
+        raise HTTPException(status_code=422, detail="wallet_address must be a 0x-prefixed 40-hex address")
+
+    positions, positions_meta = _get_positions_strict(wallet)
+    token_ids = sorted(
+        {
+            str(row["asset"])
+            for row in positions
+            if row.get("asset") is not None
+            and not bool(row.get("redeemable"))
+            and _positive_size(row)
+        }
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        books_future = pool.submit(_get_clob_books, token_ids)
+        profile_future = pool.submit(_get_public_profile, wallet)
+        books, book_errors = books_future.result()
+        profile = profile_future.result()
+
+    report = build_capital_efficiency_report(
+        wallet_address=wallet,
+        positions=positions,
+        books=books,
+        observed_at=datetime.now(timezone.utc),
+        annual_hurdle_rate=annual_hurdle_rate,
+        available_cash_usd=available_cash_usd,
+        reserved_cash_usd=reserved_cash_usd,
+        profile=profile,
+    )
+    report["sources"] = {
+        "positions": f"{DATA_API_BASE}/positions",
+        "order_books": f"{CLOB_API_BASE}/books",
+        "profile": f"{GAMMA_API_BASE}/public-profile",
+        "books_requested": len(token_ids),
+        "books_received": len(books),
+        "book_fetch_errors": book_errors,
+        "position_pages_fetched": positions_meta["pages_fetched"],
+    }
+    report["data_quality"]["positions_truncated"] = positions_meta["truncated"]
+    report["data_quality"]["order_book_fetch_complete"] = (
+        not book_errors and len(books) == len(token_ids)
+    )
+    return report
 
 
 @router.get("/summary")

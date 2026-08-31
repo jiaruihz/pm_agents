@@ -271,3 +271,23 @@ Warsaw 案例中上一档(21°C)成交活跃(价格 0.08~0.18、单笔 5~100 股
 - 复制第四节代码块全部内容到 GPT Pro(或等价高级模型);建议开新对话避免上下文污染。
 - 拿回建议后先对照本文第二节"已证伪清单"过滤重复方向,再回到本仓库讨论落地(涉及 live 变更的走 `weather-strategy-deploy` 流程)。
 - 本文档是快照,后续新证据(止血 forward、divergence 影子、tape 采集)出来后以 registry 为准。
+
+## 六、2026-08-22 外部审阅 P0 落地状态
+
+状态：`deployed 2026-08-23 / collector healthy / awaiting first real forward demand`。部署不改变 Core probability、selector、entry sizing、maker policy 或 live 授权。
+
+- 首次正信号新增 append-only `decision_packets.jsonl`：稳定 packet identity，保存完整 trigger、last checkpoint/negative/informative quote-usable negative，以及 observation/book/forecast/snapshot 引用；缺字段显式 `unavailable`，写失败只告警、不改变下单选择。
+- strategy snapshot 的 forecast hash/archive/source/model/model-init、book snapshot 与 exchange/request/receive/parse/archive clocks 原样穿透 state decision、pre-live score 和 packet。当前 snapshot 没有 `forecast_first_seen_utc` 时不伪造，标为 `requires_forecast_archive_hash_join`。
+- 首次正信号新增公共 `polymarket_capture_demand_v1`：同 city/date 全部 YES outcome tokens，`P0`、WS、30 分钟、checkpoint `0/60/300/900/1800s`，单事件与共享 active budget 均为 24。复用唯一 `weather_market_books_ws` owner；full-ladder 作为 atomic group，预算不足时整组拒绝，不采任意前缀。既有 raw WS frame、subscription epoch、public `last_trade_price` tape、deterministic reconstructed book 与 REST/WS parity 继续作为数据真相。
+- 专项测试为 `93 passed, 1 deselected`；deselect 是 dirty critical source 必须 fail closed 的 clean-deployment 测试，未削弱。最新 `snapshot_20260822_1241.json` 只读→`/tmp` replay 得到 24 decisions，24/24 有 forecast hash/archive/book snapshot；梯度为 11 档（22 rows）或 17 档（2 rows），全部低于 24-token contract；24/24 first-seen 仍需 archive-hash join。
+- 2026-08-23 已按 git-first 合同部署并由 production controller 重启：Core=`24099162`，WS=`6d4676d0`；唯一 WS owner 使用 selector v7、Core shared-demand path 与 24-token atomic budget。启动回填 96 个历史 packet，因旧 score rows 缺 full-ladder tokens，96/96 写入显式 `capture_demand_full_ladder_tokens_missing` 告警而没有伪造 demand。新 snapshot 35/35 具备完整 ladder lineage（33×11档、2×17档）。
+- 12 分钟生产验收窗内没有新 Core first-positive，因此真实 Core `capture_demands.jsonl`/atomic subscription 样本仍为 0；这表示 forward evidence 尚未形成，不表示 collector 故障。同期 WS raw 增长 1 file / 957,947 bytes，selector/health 正常；Core live orders 与 execution journal 分别保持 393/1077，新增 entry/order/fill/lifecycle 均为 0。
+
+## 七、2026-08-22 P1 研究收口
+
+状态：`P1 complete / mechanism inconclusive / no-live-change`。详见
+[first-positive + ladder dynamics P1](2026-08-22-core-carry-first-positive-ladder-dynamics-p1-v1.md)。
+
+- 固定本文 92 行 signal ledger，92/92 精确回连 trigger；61 条有可评分 prior，但 prior 距 trigger 最短 42.35 分钟、中位 59.27 分钟。因此严格 `quote_driven` 只有 4 条且 0 loss 只能算粗诊断，不能推翻 Warsaw/Amsterdam 的链上逐笔证据，也不能完成触发前卖压的因果归因。
+- REST full ladder 双端 7 分钟 freshness 覆盖 31 条/12 target dates；loss−win `Δq_up=+0.0490`，target-date CI `[-0.1726,+0.3332]`。`q_up/q1/alpha1` 当前没有可用于 confirm/hedge 的稳定方向。
+- 历史 WS 在 trigger 时 current token 覆盖 2/92、完整 YES ladder 0/92；P0 collector 已于 2026-08-23 启用，但验收窗没有真实 Core forward demand，故 clean frozen-forward 仍未形成。下一研究动作是等待并冻结新的 target-date slice，积累 sub-minute pre-trigger current-token tape 与 post-trigger full-ladder tape，再做 P2 policy replay；不增加 gate、模型头或 live threshold。

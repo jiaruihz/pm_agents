@@ -1,4 +1,4 @@
 interface:
   display_name: "Polymarket Market Intel"
   short_description: "分析 Polymarket 评论、top holders 与关键钱包历史证据"
-  default_prompt: "Use $polymarket-market-intel 分析这个 Polymarket 市场的评论、top holders 和关键钱包历史。"
+  default_prompt: "Use $polymarket-market-intel 分析评论、top holders 和关键钱包公开历史；默认产物留在 runtime，改变长期 thesis 时再写 governed handoff。"

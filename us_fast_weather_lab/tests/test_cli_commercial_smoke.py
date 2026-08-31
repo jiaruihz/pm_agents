@@ -115,6 +115,21 @@ def test_global_cohort_expands_official_hf_but_not_uninvented_atis(tmp_path, mon
     assert "metar.atis.efhk" not in channels
 
 
+def test_explicit_polymarket_universe_subscribes_all_three_arms(tmp_path, monkeypatch):
+    monkeypatch.setenv("METAR_WS_API_KEY", "test-polymarket-secret")
+    monkeypatch.setattr(cli, "MetarWsCollector", _CommercialCollector)
+    monkeypatch.setattr(cli, "command_replay", lambda args: 0)
+    monkeypatch.setattr(cli, "generate_reports", lambda *args, **kwargs: {"counts": {}, "disposition": "BLOCKED"})
+    universe = "configs/weather/cross_no_v2_metar_polymarket_48h_v1.json"
+    assert cli.command_smoke(_commercial_args(tmp_path, "--station-universe-config", universe)) == 0
+    _, kwargs = _CommercialCollector.last_init
+    assert len(kwargs["stations"]) == 46
+    channels = set(kwargs["config"].channels)
+    assert len(channels) == 46 * 3
+    assert {"metar.obs.efhk", "metar.obs10.efhk", "metar.atis.efhk"}.issubset(channels)
+    assert {"metar.obs.zhhh", "metar.obs10.zhhh", "metar.atis.zhhh"}.issubset(channels)
+
+
 def test_commercial_start_failure_still_seals_run_without_secret(tmp_path, monkeypatch) -> None:
     secret = "test-start-secret-must-not-persist"
     monkeypatch.setenv("METAR_WS_API_KEY", secret)

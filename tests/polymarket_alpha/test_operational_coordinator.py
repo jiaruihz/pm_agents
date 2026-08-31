@@ -330,6 +330,10 @@ def test_full_fixture_path_stops_and_resumes_at_every_handoff(tmp_path: Path) ->
                 version="op-coordinator-v1",
                 watch_threshold=Decimal("0.05"),
                 simulate_threshold=Decimal("0.10"),
+                fee_slippage_cost_policy_id="op_fixture_fee_free",
+                fee_slippage_cost_policy_version="v1",
+                fee_rate=Decimal("0"),
+                slippage_buffer=Decimal("0"),
             ),
         ),
     )
@@ -535,6 +539,10 @@ def test_rule_binding_mismatch_blocks_the_market_resume(tmp_path: Path) -> None:
                 version="op-coordinator-v1",
                 watch_threshold=Decimal("0.05"),
                 simulate_threshold=Decimal("0.10"),
+                fee_slippage_cost_policy_id="op_fixture_fee_free",
+                fee_slippage_cost_policy_version="v1",
+                fee_rate=Decimal("0"),
+                slippage_buffer=Decimal("0"),
             ),
         ),
     )
@@ -623,6 +631,10 @@ def test_gate_b_block_branch_blocks_finalization_without_ledger(
                 version="op-coordinator-v1",
                 watch_threshold=Decimal("0.05"),
                 simulate_threshold=Decimal("0.10"),
+                fee_slippage_cost_policy_id="op_fixture_fee_free",
+                fee_slippage_cost_policy_version="v1",
+                fee_rate=Decimal("0"),
+                slippage_buffer=Decimal("0"),
             ),
         ),
     )
@@ -1043,6 +1055,10 @@ def test_cli_runs_the_full_offline_fixture_path(monkeypatch, tmp_path: Path) -> 
                         "version": "op-coordinator-v1",
                         "watch_threshold": "0.05",
                         "simulate_threshold": "0.10",
+                        "fee_slippage_cost_policy_id": "op_fixture_fee_free",
+                        "fee_slippage_cost_policy_version": "v1",
+                        "fee_rate": "0",
+                        "slippage_buffer": "0",
                     },
                 }
             )

@@ -1,6 +1,11 @@
 # PMM 路线图
 
-已实现和待实现的工程项清单。
+Status: `dormant-backlog / not-current-roadmap`
+
+这是 legacy PMM 的历史 backlog，不是当前项目待办，也不授权恢复 PMM live。
+当前 weather/MM 方向以
+[weather-first MM 评审包](../design/weather_market_making/WEATHER_FIRST_MM_GPT_PRO_REVIEW_PACKET_V1.md)
+和 [WEATHER_STRATEGY_REGISTRY.md](../WEATHER_STRATEGY_REGISTRY.md) 为准；下列未勾选项仅用于保留历史设计意图。
 
 ## Alpha / Edge Sources
 

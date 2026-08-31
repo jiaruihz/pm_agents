@@ -92,32 +92,75 @@ def repo_relative(path: Path) -> str | None:
         return None
 
 
+WEATHER_SKILL_ROUTES = (
+    "weather-strategy-research",
+    "weather-strategy-performance",
+    "weather-strategy-lineage",
+    "weather-strategy-exposure",
+    "weather-live-account-reconcile",
+    "weather-fact-rebuild",
+    "weather-strategy-deploy",
+    "weather-jrs-runtime-failover",
+)
+
+
+def entrypoint_semantic_errors(label: str, text: str) -> list[str]:
+    """Validate the compact root contract without pinning mutable internals/prose."""
+    errors: list[str] = []
+    required = (
+        "docs/WEATHER_DOCS_INDEX.md",
+        "weather_production_manifest.py --strict",
+        "production.yaml",
+        "/Volumes/jrs/pm_agents/runtime/weather.db",
+        "fact_signal_candidates",
+        "fact_trades",
+        "EventEnvelope",
+        "SignalCandidate",
+        "TradeIntent",
+        "living doc",
+        "artifact root",
+        *WEATHER_SKILL_ROUTES,
+    )
+    for marker in required:
+        if marker not in text:
+            errors.append(f"{label}: missing context contract {marker!r}")
+    if not re.search(
+        r"(?:当前|短期)生产(?:主机)?\s*(?:是|=|：|:)\s*Mac", text
+    ):
+        errors.append(f"{label}: missing Mac production boundary")
+    if "删除" not in text or not any(word in text for word in ("确认", "授权")):
+        errors.append(f"{label}: missing explicit deletion authorization boundary")
+    return errors
+
+
+def normalized_entrypoint_core(text: str) -> str:
+    """Normalize only adapter-specific names before AGENTS/CLAUDE parity checks."""
+    marker = re.search(r"^## 0\.", text, flags=re.MULTILINE)
+    if marker is None:
+        return ""
+    core = text[marker.start() :].replace("\r\n", "\n")
+    for reference in (
+        "docs/AGENT_CONTEXT_REFERENCE.md",
+        "docs/CLAUDE_CONTEXT_REFERENCE.md",
+    ):
+        core = core.replace(reference, "docs/ENTRYPOINT_CONTEXT_REFERENCE.md")
+    core = core.replace("AGENTS.md", "ENTRYPOINT.md")
+    core = core.replace("CLAUDE.md", "ENTRYPOINT.md")
+    return "\n".join(line.rstrip() for line in core.splitlines()).strip()
+
+
 def check_entrypoints(errors: list[str]) -> None:
     for path in ("AGENTS.md", "CLAUDE.md"):
         text = read(path)
-        if "docs/WEATHER_DOCS_INDEX.md" not in text:
-            fail(errors, f"{path}: missing docs index link")
-        if "weather-strategy-research" not in text:
-            fail(errors, f"{path}: missing research skill routing")
-        if "weather-jrs-runtime-failover" not in text:
-            fail(errors, f"{path}: missing JRS failover skill routing")
-        if not re.search(r"短期生产(?:主机)? = Mac", text):
-            fail(errors, f"{path}: missing Mac production boundary")
-        for required in (
-            "weather_dashboard_api",
-            "com.pm-agents.weather-api",
-            "canonical refresh 是唯一登记的 DB 刷新 one-shot",
-            "db_route.status=healthy",
-        ):
-            if required not in text:
-                fail(errors, f"{path}: missing controller contract {required!r}")
-        for term in ("EventEnvelope", "SignalCandidate", "TradeIntent"):
-            if term not in text:
-                fail(errors, f"{path}: missing WCIR lineage term {term}")
+        errors.extend(entrypoint_semantic_errors(path, text))
 
     agents = read("AGENTS.md")
     claude = read("CLAUDE.md")
-    if agents[agents.index("## 0.") :] != claude[claude.index("## 0.") :]:
+    agents_core = normalized_entrypoint_core(agents)
+    claude_core = normalized_entrypoint_core(claude)
+    if not agents_core or not claude_core:
+        fail(errors, "AGENTS.md and CLAUDE.md must contain a ## 0. core body")
+    elif agents_core != claude_core:
         fail(errors, "AGENTS.md and CLAUDE.md core bodies differ")
 
 
@@ -229,7 +272,7 @@ def check_operational_skill_contracts(errors: list[str]) -> None:
         if term not in lineage:
             fail(errors, f"weather-strategy-lineage: missing WCIR lineage term {term}")
 
-    for path in ("AGENTS.md", "CLAUDE.md", "docs/WEATHER_ANALYSIS_CONTRACT.md"):
+    for path in ("docs/WEATHER_ANALYSIS_CONTRACT.md",):
         if "denominator_scope" not in read(path):
             fail(errors, f"{path}: missing scoped-history denominator contract")
 
@@ -310,9 +353,6 @@ def check_research_knowledge_routing(errors: list[str]) -> None:
         for marker in markers:
             if marker not in text:
                 fail(errors, f"{path}: missing knowledge-routing marker {marker!r}")
-    for path in ("AGENTS.md", "CLAUDE.md"):
-        if "迁移机器产物不等于完成知识整理" not in read(path):
-            fail(errors, f"{path}: missing artifact-to-knowledge handoff")
 
 
 def check_dated_current_references(errors: list[str]) -> None:

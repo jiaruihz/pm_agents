@@ -53,19 +53,51 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return dict(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def config_hash(*, market_reaction_cohort_id: str = "us_temperature_markets_wide_v1") -> str:
+def config_hash(
+    *,
+    market_reaction_cohort_id: str = "us_temperature_markets_wide_v1",
+    station_universe_path: Path | None = None,
+) -> str:
     digest = hashlib.sha256()
     for path in CONFIG_PATHS:
         digest.update(path.name.encode("utf-8"))
         digest.update(path.read_bytes())
     digest.update(b"market_reaction_cohort_id=")
     digest.update(market_reaction_cohort_id.encode("utf-8"))
+    if station_universe_path is not None:
+        digest.update(b"station_universe_path=")
+        digest.update(station_universe_path.name.encode("utf-8"))
+        digest.update(station_universe_path.read_bytes())
     return digest.hexdigest()
 
 
 def airports() -> set[str]:
     config = load_yaml(CONFIG_PATHS[0])
     return {str(row["icao"]).upper() for row in config["primary_20"]}
+
+
+def station_universe(path: Path) -> set[str]:
+    """Load one frozen market-city station universe without inferring stations."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("schema_version") != "cross_no_v2_metar_universe_v1":
+        raise ValueError("station universe schema mismatch")
+    targets = raw.get("targets")
+    if not isinstance(targets, list) or not targets:
+        raise ValueError("station universe targets are required")
+    cities: set[str] = set()
+    stations: set[str] = set()
+    for target in targets:
+        if not isinstance(target, dict):
+            raise ValueError("station universe target must be a mapping")
+        city = str(target.get("city") or "").strip()
+        station = str(target.get("station") or "").strip().upper()
+        if not city or len(station) != 4 or not station.isalnum():
+            raise ValueError("station universe city/station is invalid")
+        if city in cities or station in stations:
+            raise ValueError("station universe city and station must be unique")
+        cities.add(city)
+        stations.add(station)
+    return stations
 
 
 def command_init(args: argparse.Namespace) -> int:
@@ -172,7 +204,13 @@ def command_smoke(args: argparse.Namespace) -> int:
     commercial_config = load_yaml(COMMERCIAL_CONFIG_PATH)
     market_cohort = load_named_market_reaction_cohort(args.market_reaction_cohort)
     acceptance = load_yaml(CONFIG_PATHS[1])
-    station_set = airports()
+    station_universe_path = (
+        Path(args.station_universe_config)
+        if getattr(args, "station_universe_config", None)
+        else None
+    )
+    explicit_station_set = station_universe(station_universe_path) if station_universe_path else None
+    station_set = explicit_station_set or airports()
     metar_ws_key: str | None = None
     synoptic_token: str | None = None
     if getattr(args, "enable_metar_ws", False):
@@ -214,7 +252,13 @@ def command_smoke(args: argparse.Namespace) -> int:
 
     try:
         store = EvidenceStore(runtime_root)
-        run_id = store.start_run(config_hash=config_hash(market_reaction_cohort_id=market_cohort.cohort_id), vantage_id=args.vantage_id)
+        run_id = store.start_run(
+            config_hash=config_hash(
+                market_reaction_cohort_id=market_cohort.cohort_id,
+                station_universe_path=station_universe_path,
+            ),
+            vantage_id=args.vantage_id,
+        )
         store.record_clock(probe_clock(max_offset))
 
         if enable_wis2:
@@ -264,7 +308,11 @@ def command_smoke(args: argparse.Namespace) -> int:
             metar_raw = commercial_config["metar_ws"]
             # Official/HF subscriptions use the versioned reaction cohort;
             # D-ATIS remains strictly the explicit commercial-stream list.
-            commercial_station_set = station_set | set(market_cohort.all_source_stations)
+            commercial_station_set = (
+                station_set
+                if explicit_station_set is not None
+                else station_set | set(market_cohort.all_source_stations)
+            )
             channels: list[str] = []
             if bool(metar_raw.get("subscribe_primary_official")):
                 channels.extend(
@@ -274,7 +322,12 @@ def command_smoke(args: argparse.Namespace) -> int:
                 channels.extend(
                     f"metar.obs10.{station.lower()}" for station in sorted(commercial_station_set)
                 )
-            channels.extend(f"metar.atis.{str(station).lower()}" for station in metar_raw["datis_stations"])
+            datis_stations = (
+                sorted(commercial_station_set)
+                if explicit_station_set is not None
+                else metar_raw["datis_stations"]
+            )
+            channels.extend(f"metar.atis.{str(station).lower()}" for station in datis_stations)
             commercial_collectors.append(
                 MetarWsCollector(
                     store,
@@ -457,6 +510,7 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--market-books-latest")
     smoke.add_argument("--market-capture-demands-jsonl")
     smoke.add_argument("--market-capture-resolution-jsonl")
+    smoke.add_argument("--station-universe-config")
     smoke.add_argument("--market-reaction-cohort", choices=("us_temperature_markets_wide_v1", "europe_asia_core_v1"), default="us_temperature_markets_wide_v1")
     smoke.set_defaults(func=command_smoke)
     return parser

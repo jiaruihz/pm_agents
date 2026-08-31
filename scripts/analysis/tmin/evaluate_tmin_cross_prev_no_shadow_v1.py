@@ -19,11 +19,17 @@ import numpy as np
 import pandas as pd
 
 
-SCHEMA_VERSION = "weather_tmin_cross_prev_no_performance_v1"
+SCHEMA_VERSION = "weather_tmin_cross_prev_no_performance_v2"
 FROZEN_POLICY_ID = "tmin_cross_prev_no_cap90_first_cityday_v1"
+REPRICING_CHALLENGER_POLICY_ID = "tmin_cross_prev_no_first_cityday_exit60m_v1"
 FEE_RATE = 0.05
 MIN_SHARES = 5.0
 MAX_NO_ASK = 0.90
+REPRICING_CHALLENGER_HORIZON_MINUTES = 60
+REPRICING_QUOTE_TOLERANCE_MINUTES = 12
+MAX_FRESH_QUOTE_AGE_SECONDS = 300.0
+REPRICING_DEVELOPMENT_END_TARGET_DATE = "2026-08-27"
+REPRICING_FORWARD_START_TARGET_DATE = "2026-08-28"
 BOOTSTRAP_DRAWS = 20_000
 BOOTSTRAP_SEED = 20260812
 
@@ -37,8 +43,15 @@ def _json_list(value: Any) -> list[Any]:
     return []
 
 
-def _snapshot_jsonl(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    size = path.stat().st_size
+def _snapshot_jsonl(
+    path: Path, *, snapshot_size_bytes: int | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    source_size = path.stat().st_size
+    size = (
+        source_size
+        if snapshot_size_bytes is None
+        else min(source_size, snapshot_size_bytes)
+    )
     with path.open("rb") as handle:
         payload = handle.read(size)
     complete_size = len(payload) if payload.endswith(b"\n") else payload.rfind(b"\n") + 1
@@ -46,11 +59,72 @@ def _snapshot_jsonl(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rows = [json.loads(line) for line in complete.decode("utf-8").splitlines() if line]
     return rows, {
         "path": str(path),
+        "source_size_at_read_bytes": source_size,
         "snapshot_size_bytes": size,
         "complete_size_bytes": complete_size,
         "complete_sha256": hashlib.sha256(complete).hexdigest(),
         "rows": len(rows),
     }
+
+
+def _require_candidate_schema(candidates: list[dict[str, Any]]) -> None:
+    if not candidates:
+        raise ValueError("candidate journal contains no complete rows")
+    required = {
+        "candidate_id",
+        "checkpoint_id",
+        "city",
+        "target_date",
+        "decision_ts_utc",
+        "condition_id",
+        "token_id",
+        "bracket",
+        "input_refs",
+    }
+    candidate_ids: set[str] = set()
+    for index, row in enumerate(candidates):
+        missing = sorted(required - set(row))
+        if missing:
+            raise ValueError(f"candidate row {index} missing required fields: {missing}")
+        references = row.get("input_refs")
+        if (
+            not isinstance(references, list)
+            or not references
+            or not isinstance(references[0], dict)
+            or not references[0].get("event_key")
+        ):
+            raise ValueError(f"candidate row {index} missing input_refs[0].event_key")
+        try:
+            pd.Timestamp(str(row["decision_ts_utc"]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"candidate row {index} has invalid decision_ts_utc"
+            ) from exc
+        candidate_id = str(row["candidate_id"])
+        if candidate_id in candidate_ids:
+            raise ValueError(f"duplicate candidate_id: {candidate_id}")
+        candidate_ids.add(candidate_id)
+
+
+def _exact_quote_map(
+    quotes: list[dict[str, Any]],
+    *,
+    needed: set[tuple[str, int]],
+    snapshot_name: str,
+) -> dict[tuple[str, int], dict[str, Any]]:
+    output: dict[tuple[str, int], dict[str, Any]] = {}
+    for index, quote in enumerate(quotes):
+        if not quote.get("ts_utc"):
+            continue
+        key = (str(quote.get("event_key") or ""), _ts_key(quote.get("ts_utc")))
+        if key not in needed:
+            continue
+        if key in output:
+            raise ValueError(
+                f"duplicate exact quote key in {snapshot_name}: {key} at row {index}"
+            )
+        output[key] = quote
+    return output
 
 
 def _event_path(root: Path, city: str, target_date: str) -> Path:
@@ -102,6 +176,8 @@ def _ts_key(value: Any) -> int:
 
 
 def _fee_per_share(price: float) -> float:
+    if not np.isfinite(price) or not 0.0 <= price <= 1.0:
+        raise ValueError(f"price must be finite and within [0, 1], got {price}")
     return FEE_RATE * price * (1.0 - price)
 
 
@@ -149,27 +225,19 @@ def _pnl_summary(frame: pd.DataFrame) -> dict[str, Any]:
     return base | _bootstrap_roi(frame)
 
 
-def evaluate(
-    *, candidates_path: Path, quotes_path: Path, gamma_root: Path
-) -> tuple[pd.DataFrame, dict[str, Any]]:
-    candidates, candidate_snapshot = _snapshot_jsonl(candidates_path)
-    quotes, quote_snapshot = _snapshot_jsonl(quotes_path)
-    needed = {
-        (str(row["input_refs"][0]["event_key"]), _ts_key(row["decision_ts_utc"]))
-        for row in candidates
-    }
-    quote_by_key: dict[tuple[str, int], dict[str, Any]] = {}
-    candidate_tokens = {
-        (str(row["input_refs"][0]["event_key"]), str(row["token_id"]))
-        for row in candidates
-    }
-    quote_tape: dict[tuple[str, str], list[dict[str, Any]]] = {
+def _build_quote_tape(
+    quotes: list[dict[str, Any]],
+    *,
+    candidate_tokens: set[tuple[str, str]],
+    snapshot_name: str,
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    tape: dict[tuple[str, str], list[dict[str, Any]]] = {
         key: [] for key in candidate_tokens
     }
-    for quote in quotes:
-        key = (str(quote.get("event_key") or ""), _ts_key(quote.get("ts_utc")))
-        if key in needed:
-            quote_by_key[key] = quote
+    seen: set[tuple[str, str, int]] = set()
+    for index, quote in enumerate(quotes):
+        if not quote.get("ts_utc"):
+            continue
         no_quote = (
             (((quote.get("quotes") or {}).get("t_minus_1") or {}).get("no") or {})
         )
@@ -177,20 +245,120 @@ def evaluate(
             str(quote.get("event_key") or ""),
             str(no_quote.get("token_id") or ""),
         )
-        if tape_key in quote_tape:
-            quote_tape[tape_key].append(
-                {
-                    "ts_utc": pd.Timestamp(str(quote.get("ts_utc"))),
-                    "best_bid": no_quote.get("fresh_best_bid"),
-                    "bid_size": no_quote.get("fresh_bid_size"),
-                }
+        if tape_key not in tape:
+            continue
+        timestamp = pd.Timestamp(str(quote.get("ts_utc")))
+        unique_key = (*tape_key, int(timestamp.value))
+        if unique_key in seen:
+            raise ValueError(
+                f"duplicate quote tape key in {snapshot_name}: {unique_key} at row {index}"
             )
+        seen.add(unique_key)
+        bid = no_quote.get("fresh_best_bid")
+        bid_size = no_quote.get("fresh_bid_size")
+        if bid is not None:
+            _fee_per_share(float(bid))
+        if bid_size is not None and (
+            not np.isfinite(float(bid_size)) or float(bid_size) < 0
+        ):
+            raise ValueError(f"invalid fresh_bid_size in {snapshot_name} row {index}")
+        fetched_at_raw = no_quote.get("fresh_fetched_at_utc")
+        tape[tape_key].append(
+            {
+                "ts_utc": timestamp,
+                "fresh_fetched_at_utc": (
+                    pd.Timestamp(str(fetched_at_raw)) if fetched_at_raw else None
+                ),
+                "fresh_status": no_quote.get("fresh_status"),
+                "best_bid": bid,
+                "bid_size": bid_size,
+            }
+        )
+    return tape
+
+
+def evaluate(
+    *,
+    candidates_path: Path,
+    quotes_path: Path,
+    gamma_root: Path,
+    development_candidates_snapshot_size_bytes: int | None = None,
+    development_quotes_snapshot_size_bytes: int | None = None,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    candidates, candidate_snapshot = _snapshot_jsonl(candidates_path)
+    quotes, quote_snapshot = _snapshot_jsonl(quotes_path)
+    _require_candidate_schema(candidates)
+    development_candidates, development_candidate_snapshot = _snapshot_jsonl(
+        candidates_path,
+        snapshot_size_bytes=development_candidates_snapshot_size_bytes,
+    )
+    development_quotes, development_quote_snapshot = _snapshot_jsonl(
+        quotes_path,
+        snapshot_size_bytes=development_quotes_snapshot_size_bytes,
+    )
+    _require_candidate_schema(development_candidates)
+    development_candidate_ids = {
+        str(row["candidate_id"])
+        for row in development_candidates
+        if str(row["target_date"]) <= REPRICING_DEVELOPMENT_END_TARGET_DATE
+    }
+    needed = {
+        (str(row["input_refs"][0]["event_key"]), _ts_key(row["decision_ts_utc"]))
+        for row in candidates
+        if str(row["candidate_id"]) not in development_candidate_ids
+    }
+    development_needed = {
+        (str(row["input_refs"][0]["event_key"]), _ts_key(row["decision_ts_utc"]))
+        for row in development_candidates
+        if str(row["candidate_id"]) in development_candidate_ids
+    }
+    quote_by_key = _exact_quote_map(
+        quotes,
+        needed=needed,
+        snapshot_name="full quote snapshot",
+    )
+    development_quote_by_key = _exact_quote_map(
+        development_quotes,
+        needed=development_needed,
+        snapshot_name="development quote snapshot",
+    )
+    candidate_tokens = {
+        (str(row["input_refs"][0]["event_key"]), str(row["token_id"]))
+        for row in candidates
+        if str(row["candidate_id"]) not in development_candidate_ids
+    }
+    development_candidate_tokens = {
+        (str(row["input_refs"][0]["event_key"]), str(row["token_id"]))
+        for row in development_candidates
+        if str(row["candidate_id"]) in development_candidate_ids
+    }
+    quote_tape = _build_quote_tape(
+        quotes,
+        candidate_tokens=candidate_tokens,
+        snapshot_name="full quote snapshot",
+    )
+    development_quote_tape = _build_quote_tape(
+        development_quotes,
+        candidate_tokens=development_candidate_tokens,
+        snapshot_name="development quote snapshot",
+    )
 
     rows: list[dict[str, Any]] = []
     gamma_paths: set[str] = set()
     for candidate in candidates:
         event_key = str(candidate["input_refs"][0]["event_key"])
-        quote = quote_by_key.get((event_key, _ts_key(candidate["decision_ts_utc"])), {})
+        is_frozen_development_candidate = (
+            str(candidate["candidate_id"]) in development_candidate_ids
+            and str(candidate["target_date"]) <= REPRICING_DEVELOPMENT_END_TARGET_DATE
+        )
+        exact_quotes = (
+            development_quote_by_key
+            if is_frozen_development_candidate
+            else quote_by_key
+        )
+        quote = exact_quotes.get(
+            (event_key, _ts_key(candidate["decision_ts_utc"])), {}
+        )
         no_quote = (
             (((quote.get("quotes") or {}).get("t_minus_1") or {}).get("no") or {})
         )
@@ -201,10 +369,47 @@ def evaluate(
             (((quote.get("quotes") or {}).get("source_plus_1") or {}).get("no") or {})
         )
         metadata = candidate.get("metadata") or {}
-        ask = metadata.get("raw_no_best_ask")
+        candidate_raw_ask = metadata.get("raw_no_best_ask")
+        candidate_raw_ask = (
+            float(candidate_raw_ask) if candidate_raw_ask is not None else None
+        )
+        ask = no_quote.get("fresh_best_ask")
         ask = float(ask) if ask is not None else None
+        if candidate_raw_ask is not None:
+            _fee_per_share(candidate_raw_ask)
+        if ask is not None:
+            _fee_per_share(ask)
         size = no_quote.get("fresh_ask_size")
         size = float(size) if size is not None else None
+        if size is not None and (not np.isfinite(size) or size < 0):
+            raise ValueError(
+                f"invalid fresh_ask_size for candidate {candidate['candidate_id']}"
+            )
+        quote_timestamp = (
+            pd.Timestamp(str(quote.get("ts_utc"))) if quote.get("ts_utc") else None
+        )
+        fresh_fetched_at_raw = no_quote.get("fresh_fetched_at_utc")
+        fresh_fetched_at = (
+            pd.Timestamp(str(fresh_fetched_at_raw)) if fresh_fetched_at_raw else None
+        )
+        fresh_age_seconds = (
+            float((quote_timestamp - fresh_fetched_at).total_seconds())
+            if quote_timestamp is not None and fresh_fetched_at is not None
+            else None
+        )
+        candidate_ask_matches_exact_quote = (
+            ask is not None
+            and candidate_raw_ask is not None
+            and abs(ask - candidate_raw_ask) <= 1e-12
+        )
+        token_matches = str(no_quote.get("token_id") or "") == str(
+            candidate.get("token_id") or ""
+        )
+        fresh_quote_valid = (
+            str(no_quote.get("fresh_status") or "") == "ok"
+            and fresh_age_seconds is not None
+            and 0.0 <= fresh_age_seconds <= MAX_FRESH_QUOTE_AGE_SECONDS
+        )
         label, settlement_status, gamma_path = _settlement_label(
             root=gamma_root,
             city=str(candidate["city"]),
@@ -228,10 +433,20 @@ def evaluate(
         if gamma_path:
             gamma_paths.add(gamma_path)
         fee = _fee_per_share(ask) if ask is not None else None
-        executable = ask is not None and size is not None and size >= MIN_SHARES
+        executable = (
+            bool(quote)
+            and ask is not None
+            and ask > 0.0
+            and size is not None
+            and size >= MIN_SHARES
+            and candidate_ask_matches_exact_quote
+            and token_matches
+            and fresh_quote_valid
+        )
         rows.append(
             {
                 "candidate_id": candidate["candidate_id"],
+                "frozen_development_candidate": is_frozen_development_candidate,
                 "checkpoint_id": candidate["checkpoint_id"],
                 "city": candidate["city"],
                 "target_date": candidate["target_date"],
@@ -242,8 +457,14 @@ def evaluate(
                 "bracket": candidate["bracket"],
                 "source": event_key.split("|")[2],
                 "cold_cross_margin_native": metadata.get("cold_cross_margin_native"),
+                "candidate_raw_no_best_ask": candidate_raw_ask,
                 "no_best_ask": ask,
                 "no_best_ask_size": size,
+                "entry_quote_fresh_status": no_quote.get("fresh_status"),
+                "entry_quote_fetched_at_utc": fresh_fetched_at_raw,
+                "entry_quote_age_seconds": fresh_age_seconds,
+                "candidate_ask_matches_exact_quote": candidate_ask_matches_exact_quote,
+                "candidate_token_matches_exact_quote": token_matches,
                 "current_yes_best_ask": current_yes_quote.get("fresh_best_ask"),
                 "current_yes_best_ask_size": current_yes_quote.get("fresh_ask_size"),
                 "current_yes_settlement_label": current_yes_label,
@@ -281,17 +502,40 @@ def evaluate(
     frame["frozen_policy_selected"] = frame["candidate_id"].isin(selected_ids)
 
     repricing = {}
+    repricing_exit_frames: dict[int, pd.DataFrame] = {}
+    strict_entry_signals = frame[frame["min_5_share_executable"]].sort_values(
+        ["decision_ts_utc", "candidate_id"]
+    )
+    first_entry_signals = strict_entry_signals.drop_duplicates(
+        ["city", "target_date"], keep="first"
+    )
+    frozen_development_entry_signals = strict_entry_signals[
+        strict_entry_signals["frozen_development_candidate"]
+    ].drop_duplicates(["city", "target_date"], keep="first")
     for horizon_minutes in (10, 30, 60, 120, 240):
         exit_rows = []
         bid_column = f"exit_{horizon_minutes}m_best_bid"
+        exit_ts_column = f"exit_{horizon_minutes}m_quote_ts_utc"
+        exit_age_column = f"exit_{horizon_minutes}m_quote_age_seconds"
         frame[bid_column] = np.nan
+        frame[exit_ts_column] = None
+        frame[exit_age_column] = np.nan
         for index, row in frame.iterrows():
             if not bool(row["min_5_share_executable"]):
                 continue
             start = row["decision_ts_utc"] + pd.Timedelta(minutes=horizon_minutes)
-            deadline = start + pd.Timedelta(minutes=12)
+            deadline = start + pd.Timedelta(
+                minutes=REPRICING_QUOTE_TOLERANCE_MINUTES
+            )
+            selected_tape = (
+                development_quote_tape
+                if bool(row["frozen_development_candidate"])
+                else quote_tape
+            )
             tape = sorted(
-                quote_tape.get((str(row["event_key"]), str(row["token_id"])), []),
+                selected_tape.get(
+                    (str(row["event_key"]), str(row["token_id"])), []
+                ),
                 key=lambda item: item["ts_utc"],
             )
             exit_quote = next(
@@ -299,6 +543,11 @@ def evaluate(
                     item
                     for item in tape
                     if start <= item["ts_utc"] <= deadline
+                    and item["fresh_fetched_at_utc"] is not None
+                    and item["fresh_status"] == "ok"
+                    and 0.0
+                    <= (item["ts_utc"] - item["fresh_fetched_at_utc"]).total_seconds()
+                    <= MAX_FRESH_QUOTE_AGE_SECONDS
                     and item["best_bid"] is not None
                     and item["bid_size"] is not None
                     and float(item["bid_size"]) >= MIN_SHARES
@@ -308,31 +557,55 @@ def evaluate(
             if exit_quote is None:
                 continue
             bid = float(exit_quote["best_bid"])
+            exit_age_seconds = float(
+                (
+                    exit_quote["ts_utc"] - exit_quote["fresh_fetched_at_utc"]
+                ).total_seconds()
+            )
             frame.at[index, bid_column] = bid
+            frame.at[index, exit_ts_column] = exit_quote["ts_utc"].isoformat()
+            frame.at[index, exit_age_column] = exit_age_seconds
             ask = float(row["no_best_ask"])
             cost = MIN_SHARES * (ask + _fee_per_share(ask))
             proceeds = MIN_SHARES * (bid - _fee_per_share(bid))
             exit_rows.append(
                 {
+                    "candidate_id": row["candidate_id"],
                     "city": row["city"],
                     "target_date": row["target_date"],
                     "decision_ts_utc": row["decision_ts_utc"],
+                    "entry_ask": ask,
+                    "entry_quote_age_seconds": row["entry_quote_age_seconds"],
+                    "exit_best_bid": bid,
+                    "exit_quote_ts_utc": exit_quote["ts_utc"],
+                    "exit_quote_age_seconds": exit_age_seconds,
                     "cost_usd": cost,
                     "pnl_usd": proceeds - cost,
                 }
             )
         exit_frame = pd.DataFrame(exit_rows)
+        repricing_exit_frames[horizon_minutes] = exit_frame
+        first_signal_ids = set(first_entry_signals["candidate_id"])
         first_city_day = (
-            exit_frame.sort_values("decision_ts_utc").drop_duplicates(
-                ["city", "target_date"], keep="first"
-            )
+            exit_frame[exit_frame["candidate_id"].isin(first_signal_ids)].copy()
             if not exit_frame.empty
             else exit_frame
         )
+        first_summary = _pnl_summary(first_city_day)
+        first_summary.update(
+            {
+                "signal_rows": int(len(first_entry_signals)),
+                "signals_with_fresh_exit_quote": int(len(first_city_day)),
+                "signals_missing_fresh_exit_quote": int(
+                    len(first_entry_signals) - len(first_city_day)
+                ),
+            }
+        )
         repricing[f"{horizon_minutes}m"] = {
-            "quote_tolerance_minutes": 12,
+            "quote_tolerance_minutes": REPRICING_QUOTE_TOLERANCE_MINUTES,
+            "max_underlying_quote_age_seconds": MAX_FRESH_QUOTE_AGE_SECONDS,
             "all_entries": _pnl_summary(exit_frame),
-            "first_entry_per_city_day": _pnl_summary(first_city_day),
+            "first_entry_per_city_day": first_summary,
         }
 
     basket_specs = {
@@ -385,6 +658,198 @@ def evaluate(
         sliced = eligible[eligible["no_best_ask"] <= cap]
         cap_grid.append({"max_no_ask": cap} | _trade_summary(sliced))
 
+    challenger_exit_frame = repricing_exit_frames[
+        REPRICING_CHALLENGER_HORIZON_MINUTES
+    ]
+    development_signals = frozen_development_entry_signals[
+        frozen_development_entry_signals["target_date"].astype(str).le(
+            REPRICING_DEVELOPMENT_END_TARGET_DATE
+        )
+    ].copy()
+    development_signal_ids = set(development_signals["candidate_id"])
+    development_exits = (
+        challenger_exit_frame[
+            challenger_exit_frame["candidate_id"].isin(development_signal_ids)
+        ].copy()
+        if not challenger_exit_frame.empty
+        else challenger_exit_frame
+    )
+    forward_signals = first_entry_signals[
+        first_entry_signals["target_date"].astype(str).ge(
+            REPRICING_FORWARD_START_TARGET_DATE
+        )
+    ].copy()
+    forward_signal_ids = set(forward_signals["candidate_id"])
+    forward_exits = (
+        challenger_exit_frame[
+            challenger_exit_frame["candidate_id"].isin(forward_signal_ids)
+        ].copy()
+        if not challenger_exit_frame.empty
+        else challenger_exit_frame
+    )
+    frame["repricing_challenger_development_selected"] = frame["candidate_id"].isin(
+        development_signal_ids
+    )
+    frame["repricing_challenger_forward_selected"] = frame["candidate_id"].isin(
+        forward_signal_ids
+    )
+    development_repricing = _pnl_summary(development_exits)
+    development_repricing.update(
+        {
+            "signal_rows": int(len(development_signals)),
+            "signals_with_fresh_exit_quote": int(len(development_exits)),
+            "signals_missing_fresh_exit_quote": int(
+                len(development_signals) - len(development_exits)
+            ),
+        }
+    )
+    development_horizon_summaries = {}
+    for horizon in (10, 30, 60, 120, 240):
+        horizon_frame = repricing_exit_frames[horizon]
+        horizon_development = (
+            horizon_frame[
+                horizon_frame["candidate_id"].isin(development_signal_ids)
+            ].copy()
+            if not horizon_frame.empty
+            else horizon_frame
+        )
+        horizon_summary = _pnl_summary(horizon_development)
+        horizon_summary.update(
+            {
+                "signal_rows": int(len(development_signals)),
+                "signals_with_fresh_exit_quote": int(len(horizon_development)),
+                "signals_missing_fresh_exit_quote": int(
+                    len(development_signals) - len(horizon_development)
+                ),
+            }
+        )
+        development_horizon_summaries[f"{horizon}m"] = horizon_summary
+    positive_ci_horizons = [
+        horizon
+        for horizon in (10, 30, 60, 120, 240)
+        if development_horizon_summaries[f"{horizon}m"]["ci_low"]
+        is not None
+        and development_horizon_summaries[f"{horizon}m"]["ci_low"] > 0
+    ]
+    qualifying_horizons = [
+        horizon
+        for horizon in positive_ci_horizons
+        if development_horizon_summaries[f"{horizon}m"][
+            "signals_missing_fresh_exit_quote"
+        ]
+        == 0
+    ]
+    earliest_positive_ci_horizon = min(qualifying_horizons) if qualifying_horizons else None
+    repricing_freeze_eligible = (
+        earliest_positive_ci_horizon == REPRICING_CHALLENGER_HORIZON_MINUTES
+        and development_repricing["target_dates"] >= 10
+        and development_repricing["ci_low"] is not None
+        and development_repricing["ci_low"] > 0
+        and len(development_exits) == len(development_signals)
+    )
+    repricing_challenger = {
+        "policy_id": REPRICING_CHALLENGER_POLICY_ID,
+        "status": (
+            "eligible_for_prospective_zero_notional_frozen_forward"
+            if repricing_freeze_eligible
+            else "development_gate_failed_do_not_freeze"
+        ),
+        "mechanism": (
+            "buy previous-warmer exact-bracket NO on the first strict source cross per "
+            "city and target_date, then taker-exit at the first fresh executable bid in "
+            "the fixed 60-to-72 minute observation window"
+        ),
+        "objective": "event-driven_60m_fee_adjusted_round_trip_not_settlement_hold",
+        "entry_policy": {
+            "dedupe": "first strict 5-share executable source cross per city and target_date",
+            "entry_clock": "exact-checkpoint direct fresh NO ask",
+            "min_top_ask_shares": MIN_SHARES,
+            "max_underlying_quote_age_seconds": MAX_FRESH_QUOTE_AGE_SECONDS,
+            "price_cap": None,
+        },
+        "exit_policy": {
+            "horizon_minutes": REPRICING_CHALLENGER_HORIZON_MINUTES,
+            "first_quote_window_minutes": [
+                REPRICING_CHALLENGER_HORIZON_MINUTES,
+                REPRICING_CHALLENGER_HORIZON_MINUTES
+                + REPRICING_QUOTE_TOLERANCE_MINUTES,
+            ],
+            "min_top_bid_shares": MIN_SHARES,
+            "max_underlying_quote_age_seconds": MAX_FRESH_QUOTE_AGE_SECONDS,
+            "fees": "official Weather taker fee applied at entry and exit",
+        },
+        "development_end_target_date": REPRICING_DEVELOPMENT_END_TARGET_DATE,
+        "forward_start_target_date": REPRICING_FORWARD_START_TARGET_DATE,
+        "development_replay": development_repricing,
+        "development_horizon_diagnostics": development_horizon_summaries,
+        "development_quote_lineage": {
+            "entry_quote_age_seconds_max": (
+                None
+                if development_signals.empty
+                else float(development_signals["entry_quote_age_seconds"].max())
+            ),
+            "exit_quote_age_seconds_max": (
+                None
+                if development_exits.empty
+                else float(development_exits["exit_quote_age_seconds"].max())
+            ),
+            "all_entry_candidate_asks_match_exact_quotes": bool(
+                development_signals["candidate_ask_matches_exact_quote"].all()
+            )
+            if not development_signals.empty
+            else False,
+            "all_entry_tokens_match_exact_quotes": bool(
+                development_signals["candidate_token_matches_exact_quote"].all()
+            )
+            if not development_signals.empty
+            else False,
+        },
+        "development_by_city": [
+            {"city": str(city), **_pnl_summary(group)}
+            for city, group in development_exits.groupby("city", sort=True)
+        ]
+        if not development_exits.empty
+        else [],
+        "multiple_testing": {
+            "horizons_examined_minutes": [10, 30, 60, 120, 240],
+            "cohort_forms_per_horizon": ["all_entries", "first_entry_per_city_day"],
+            "comparisons": 10,
+            "selection_rule": (
+                "earliest horizon whose development target-date bootstrap lower bound "
+                "is above zero and whose fixed signal denominator has complete fresh-exit "
+                "coverage; no multiplicity-adjusted significance claim"
+            ),
+            "positive_ci_horizons_before_coverage_gate_minutes": positive_ci_horizons,
+            "qualifying_horizons_minutes": qualifying_horizons,
+            "selected_horizon_minutes": REPRICING_CHALLENGER_HORIZON_MINUTES,
+        },
+        "freeze_qualification": {
+            "minimum_development_target_dates": 10,
+            "development_target_dates": int(development_repricing["target_dates"]),
+            "fee_adjusted_target_date_bootstrap_ci_low_above_zero": bool(
+                development_repricing["ci_low"] is not None
+                and development_repricing["ci_low"] > 0
+            ),
+            "complete_fresh_exit_coverage": bool(
+                len(development_exits) == len(development_signals)
+            ),
+            "eligible": repricing_freeze_eligible,
+            "note": (
+                "eligibility freezes a prospective zero-notional test; development data "
+                "were used to choose the expression and cannot validate it"
+            ),
+        },
+        "forward_funnel": {
+            "signal_rows": int(len(forward_signals)),
+            "signals_with_fresh_exit_quote": int(len(forward_exits)),
+            "target_dates": int(forward_signals["target_date"].nunique())
+            if not forward_signals.empty
+            else 0,
+            "performance": _pnl_summary(forward_exits),
+            "status": "running" if not forward_signals.empty else "not_started",
+        },
+    }
+
     gamma_manifest = []
     for raw_path in sorted(gamma_paths):
         path = Path(raw_path)
@@ -401,6 +866,8 @@ def evaluate(
         "observed_input_snapshots": {
             "candidates": candidate_snapshot,
             "quotes": quote_snapshot,
+            "development_candidates": development_candidate_snapshot,
+            "development_quotes": development_quote_snapshot,
             "gamma_closed_events": gamma_manifest,
         },
         "denominator_scope": {
@@ -417,6 +884,17 @@ def evaluate(
         "evidence_funnel": {
             "exact_quote_joined": int(frame["quote_match_status"].eq("matched").sum()),
             "raw_no_ask_available": int(frame["no_best_ask"].notna().sum()),
+            "candidate_raw_ask_matches_exact_quote": int(
+                frame["candidate_ask_matches_exact_quote"].sum()
+            ),
+            "entry_quote_status_ok_and_age_at_most_300s": int(
+                (
+                    frame["entry_quote_fresh_status"].eq("ok")
+                    & frame["entry_quote_age_seconds"].between(
+                        0.0, MAX_FRESH_QUOTE_AGE_SECONDS
+                    )
+                ).sum()
+            ),
             "top_ask_depth_at_least_5_shares": int(frame["min_5_share_executable"].sum()),
             "closed_binary_settlement": int(frame["settlement_no_label"].notna().sum()),
             "settled_and_5_share_executable": int(len(eligible)),
@@ -438,6 +916,7 @@ def evaluate(
             "rows": cap_grid,
         },
         "taker_repricing_exit": repricing,
+        "prospective_repricing_challenger": repricing_challenger,
         "basket_diagnostics": {
             "comparisons": 3,
             "multiple_testing_adjustment": "none; development diagnostic only",
@@ -449,10 +928,19 @@ def evaluate(
             "frozen_forward": "FAIL_not_started_for_this_policy",
             "direct_execution_evidence": "PARTIAL_direct_ask_and_top_depth_no_fills",
             "taker_repricing_10m": "FAIL_fee_adjusted_ci_below_zero",
+            "prospective_repricing_challenger_freeze": (
+                "PASS_ZERO_NOTIONAL_FREEZE_ONLY"
+                if repricing_freeze_eligible
+                else "FAIL_DEVELOPMENT_QUALIFICATION"
+            ),
+            "prospective_repricing_forward": (
+                "RUNNING" if not forward_signals.empty else "NOT_STARTED"
+            ),
         },
         "decision": (
-            "Freeze cap90/first-city-day as a zero-notional challenger; keep the full "
-            "candidate denominator and do not change live behavior."
+            "Keep cap90/settlement-hold as the incumbent; freeze the first-city-day 60m "
+            "round-trip expression as a separate prospective zero-notional challenger. "
+            "Do not change live behavior."
         ),
     }
     return frame, summary
@@ -463,12 +951,28 @@ def main() -> int:
     parser.add_argument("--candidates", type=Path, required=True)
     parser.add_argument("--quotes", type=Path, required=True)
     parser.add_argument("--gamma-root", type=Path, required=True)
+    parser.add_argument(
+        "--development-candidates-snapshot-size-bytes",
+        type=int,
+        help="Immutable candidate journal byte boundary used for challenger development.",
+    )
+    parser.add_argument(
+        "--development-quotes-snapshot-size-bytes",
+        type=int,
+        help="Immutable quote journal byte boundary used for challenger development.",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     frame, summary = evaluate(
         candidates_path=args.candidates,
         quotes_path=args.quotes,
         gamma_root=args.gamma_root,
+        development_candidates_snapshot_size_bytes=(
+            args.development_candidates_snapshot_size_bytes
+        ),
+        development_quotes_snapshot_size_bytes=(
+            args.development_quotes_snapshot_size_bytes
+        ),
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     frame.to_csv(args.output_dir / "candidate_evaluation.csv.gz", index=False, compression="gzip")

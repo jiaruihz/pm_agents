@@ -45,4 +45,8 @@ The script writes one JSON snapshot containing:
 
 If `out` is omitted, it writes into:
 
-- `local_market_collection/market_snapshot_<slug>_<timestamp>.json`
+- `runtime/pmm/market_snapshots/market_snapshot_<slug>_<timestamp>.json`
+
+This is a one-shot runtime artifact. If the result changes a durable strategy,
+rule, or account thesis, create a governed research record and update the
+existing family living document/index instead of promoting the snapshot itself.

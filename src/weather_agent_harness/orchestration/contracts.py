@@ -83,6 +83,23 @@ class RoleSpec(HarnessModel):
     require_usage: bool = True
     baseline_model: str = "gpt-5.6-sol"
 
+    @model_validator(mode="after")
+    def role_family_matches_requested_model(self) -> "RoleSpec":
+        """Fail closed when a conventionally named role targets another model family."""
+
+        expected_by_prefix = {
+            "luna_": "gpt-5.6-luna",
+            "terra_": "gpt-5.6-terra",
+            "sol_": "gpt-5.6-sol",
+        }
+        for prefix, expected in expected_by_prefix.items():
+            if self.name.startswith(prefix) and self.requested_model != expected:
+                raise ValueError(
+                    f"role {self.name} requires requested_model={expected}; "
+                    f"got {self.requested_model}"
+                )
+        return self
+
 
 class JsonAssertion(HarnessModel):
     path: str

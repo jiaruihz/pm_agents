@@ -92,9 +92,9 @@ tmux 中的系统 Python 漂移：
 先运行 controller/manifest 保存全局现场，不要直接手拼 tmux：
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict --json-out "$PRECHANGE_MANIFEST"
 .venv/bin/python scripts/ops/weather_production_ctl.py health
 .venv/bin/python scripts/ops/weather_production_ctl.py plan
-.venv/bin/python scripts/ops/weather_production_manifest.py --strict --json-out "$PRECHANGE_MANIFEST"
 ```
 
 加载共享 helper，并从 canonical tmux 权限上下文探测目标 JRS root：

@@ -2539,6 +2539,10 @@ class MarketComparison(CommonEnvelope):
 
     @model_validator(mode="after")
     def comparison_is_complete_and_content_derived(self) -> "MarketComparison":
+        # Subclasses own their complete semantic validator.  This preserves the
+        # released V1 payload byte-for-byte while allowing additive contracts.
+        if type(self) is not MarketComparison:
+            return self
         if self.comparison_id != self.record_id:
             raise ValueError("comparison_id must equal record_id")
         if not (self.blind_p_yes_low <= self.blind_p_yes_mid <= self.blind_p_yes_high):
@@ -2615,6 +2619,198 @@ class MarketComparison(CommonEnvelope):
         if self.reason_codes != tuple(sorted(expected_reasons)):
             raise ValueError("reason_codes must exactly match the derived comparison state")
         payload = self.model_dump(mode="python", exclude={"record_id", "comparison_id", "comparison_sha256"})
+        expected_hash = content_sha256(payload)
+        expected_id = stable_record_id("market_comparison", payload)
+        if self.comparison_sha256 != expected_hash or self.record_id != expected_id:
+            raise ValueError("MarketComparison id/hash must be recomputed from complete content")
+        return self
+
+
+class MarketComparisonV2(MarketComparison):
+    """Additive fill-level executable-cost contract.
+
+    V1 remains parseable as :class:`MarketComparison`.  New compilers emit this
+    contract so a comparison seals the exact theoretical fills and fee model
+    used to derive each all-in edge.
+    """
+
+    yes_buy_fills: tuple[BookLevel, ...] = ()
+    no_buy_fills: tuple[BookLevel, ...] = ()
+    yes_taker_fee: Decimal | None = Field(default=None, ge=0)
+    no_taker_fee: Decimal | None = Field(default=None, ge=0)
+    yes_all_in_buy_price: Decimal | None = Field(default=None, ge=0)
+    no_all_in_buy_price: Decimal | None = Field(default=None, ge=0)
+    fee_model_version: str
+
+    @field_validator("fee_model_version")
+    @classmethod
+    def fee_model_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("fee model version must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def comparison_v2_is_complete_and_content_derived(self) -> "MarketComparisonV2":
+        # Local import avoids a contracts -> books -> contracts import cycle.
+        from ..books.executable_cost import (
+            EXECUTABLE_COST_VERSION,
+            executable_sweep,
+        )
+
+        if self.comparison_id != self.record_id:
+            raise ValueError("comparison_id must equal record_id")
+        if self.fee_model_version != EXECUTABLE_COST_VERSION:
+            raise ValueError("unsupported executable fee model version")
+        if not (self.blind_p_yes_low <= self.blind_p_yes_mid <= self.blind_p_yes_high):
+            raise ValueError("Blind interval must be ordered")
+        if self.book_capture_at_utc > self.comparison_as_of_utc:
+            raise ValueError("comparison cannot precede book capture")
+        if self.blind_as_of_utc > self.comparison_as_of_utc:
+            raise ValueError("comparison cannot precede Blind as-of")
+
+        values = (
+            self.yes_bid,
+            self.yes_ask,
+            self.no_bid,
+            self.no_ask,
+            self.yes_buy_vwap,
+            self.no_buy_vwap,
+        )
+        edges = (
+            self.yes_edge_low,
+            self.yes_edge_mid,
+            self.yes_edge_high,
+            self.no_edge_low,
+            self.no_edge_mid,
+            self.no_edge_high,
+        )
+        costs = (
+            self.yes_taker_fee,
+            self.no_taker_fee,
+            self.yes_all_in_buy_price,
+            self.no_all_in_buy_price,
+        )
+        observed_one_sided = any(
+            value is None
+            for value in (self.yes_bid, self.yes_ask, self.no_bid, self.no_ask)
+        )
+        if self.one_sided != observed_one_sided:
+            raise ValueError("one_sided must be derived from paired top-of-book quotes")
+        observed_crossed = False
+        if not observed_one_sided:
+            assert self.yes_bid is not None and self.yes_ask is not None
+            assert self.no_bid is not None and self.no_ask is not None
+            observed_crossed = (
+                self.yes_bid >= self.yes_ask
+                or self.no_bid >= self.no_ask
+                or self.yes_bid + self.no_bid > Decimal("1")
+                or self.yes_ask + self.no_ask < Decimal("1")
+            )
+        if self.crossed_outcome != observed_crossed:
+            raise ValueError("crossed_outcome must be derived from paired quotes")
+
+        executable = not (
+            self.stale
+            or self.insufficient_depth
+            or self.one_sided
+            or self.crossed_outcome
+        )
+        if executable:
+            if (
+                any(value is None for value in values)
+                or any(value is None for value in edges)
+                or any(value is None for value in costs)
+                or not self.yes_buy_fills
+                or not self.no_buy_fills
+            ):
+                raise ValueError(
+                    "READY V2 comparison requires paired prices, fills, fees and edges"
+                )
+            assert self.yes_ask is not None and self.no_ask is not None
+            if (
+                self.yes_buy_fills[0].price != self.yes_ask
+                or self.no_buy_fills[0].price != self.no_ask
+            ):
+                raise ValueError("first executable fill must equal the sealed best ask")
+            yes_sweep = executable_sweep(
+                self.yes_buy_fills,
+                target_size=self.policy_size,
+                side="BUY",
+                fee_rate=self.fee_rate,
+                slippage_buffer=self.slippage_buffer,
+            )
+            no_sweep = executable_sweep(
+                self.no_buy_fills,
+                target_size=self.policy_size,
+                side="BUY",
+                fee_rate=self.fee_rate,
+                slippage_buffer=self.slippage_buffer,
+            )
+            if (
+                not yes_sweep.fully_executable
+                or not no_sweep.fully_executable
+                or yes_sweep.fills != self.yes_buy_fills
+                or no_sweep.fills != self.no_buy_fills
+            ):
+                raise ValueError("V2 fills must exactly execute the policy target size")
+            if (
+                yes_sweep.vwap != self.yes_buy_vwap
+                or no_sweep.vwap != self.no_buy_vwap
+                or yes_sweep.taker_fee != self.yes_taker_fee
+                or no_sweep.taker_fee != self.no_taker_fee
+                or yes_sweep.effective_price != self.yes_all_in_buy_price
+                or no_sweep.effective_price != self.no_all_in_buy_price
+            ):
+                raise ValueError("V2 executable costs must be recomputed from sealed fills")
+            assert self.yes_all_in_buy_price is not None
+            assert self.no_all_in_buy_price is not None
+            expected_edges = (
+                self.blind_p_yes_low - self.yes_all_in_buy_price,
+                self.blind_p_yes_mid - self.yes_all_in_buy_price,
+                self.blind_p_yes_high - self.yes_all_in_buy_price,
+                (Decimal("1") - self.blind_p_yes_high) - self.no_all_in_buy_price,
+                (Decimal("1") - self.blind_p_yes_mid) - self.no_all_in_buy_price,
+                (Decimal("1") - self.blind_p_yes_low) - self.no_all_in_buy_price,
+            )
+            if edges != expected_edges:
+                raise ValueError("edge intervals must be deterministically recomputed")
+            if self.status != MarketComparisonStatus.READY:
+                raise ValueError("executable comparison must be READY")
+        else:
+            expected_status = (
+                MarketComparisonStatus.BOOK_REFRESH_REQUIRED
+                if self.stale or self.one_sided or self.insufficient_depth
+                else MarketComparisonStatus.NON_ADVANCING
+            )
+            if self.status != expected_status:
+                raise ValueError("unusable comparison status must match refresh/block semantics")
+            if any(value is not None for value in edges):
+                raise ValueError("unusable comparison cannot fabricate edge intervals")
+            if self.yes_buy_fills or self.no_buy_fills or any(
+                value is not None for value in costs
+            ):
+                raise ValueError("unusable V2 comparison cannot carry executable costs")
+
+        expected_reasons: list[str] = []
+        if executable:
+            expected_reasons.append("EXECUTABLE_PAIRED_BOOK")
+        else:
+            if self.stale:
+                expected_reasons.append("BOOK_REFRESH_REQUIRED")
+            if self.insufficient_depth:
+                expected_reasons.append("INSUFFICIENT_POLICY_DEPTH")
+            if self.one_sided:
+                expected_reasons.append("ONE_SIDED_BOOK")
+            if self.crossed_outcome:
+                expected_reasons.append("CROSS_OUTCOME_INCONSISTENT")
+        if self.reason_codes != tuple(sorted(expected_reasons)):
+            raise ValueError("reason_codes must exactly match the derived comparison state")
+
+        payload = self.model_dump(
+            mode="python",
+            exclude={"record_id", "comparison_id", "comparison_sha256"},
+        )
         expected_hash = content_sha256(payload)
         expected_id = stable_record_id("market_comparison", payload)
         if self.comparison_sha256 != expected_hash or self.record_id != expected_id:

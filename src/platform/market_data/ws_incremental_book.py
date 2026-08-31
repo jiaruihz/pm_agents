@@ -929,13 +929,26 @@ def materialize_reconstructed_books(
     for epoch in epochs:
         epoch_id = str(epoch["subscription_epoch_id"])
         declared_previous = str(epoch.get("previous_subscription_epoch_id") or "") or None
-        if previous_epoch_id is not None and declared_previous != previous_epoch_id:
+        # A null predecessor is an explicit reconnect/root boundary.  State
+        # from the previous socket must not be carried across it, but the new
+        # epoch is still valid once it supplies fresh book baselines.  A
+        # non-null predecessor pointing anywhere except the immediately prior
+        # epoch remains a real chain gap and must fail closed.
+        if (
+            previous_epoch_id is not None
+            and declared_previous is not None
+            and declared_previous != previous_epoch_id
+        ):
             raise BookReconstructionError(
                 f"subscription epoch chain gap: epoch={epoch_id} "
                 f"declared_previous={declared_previous} expected={previous_epoch_id}"
             )
         carry_requested = str(epoch.get("reason") or "") == "selector_reconcile"
-        carry = carry_requested and previous_epoch_id is not None
+        carry = (
+            carry_requested
+            and previous_epoch_id is not None
+            and declared_previous == previous_epoch_id
+        )
         epoch_started = str(epoch.get("started_at_utc") or "")
         next_tokens = {str(value) for value in epoch.get("token_ids") or ()}
         if previous_epoch_id is not None:

@@ -226,7 +226,15 @@ def run_offline_fixture_pilot(repository: AlphaRepository) -> OfflinePilotResult
     ranked = build_ranked_ledger(candidate=rankable_candidate, contract=contract, gate_a=gate_a, gate_b=gate_b,
         blind_result=blind_import.result, blind_receipt=blind_import.receipt, market_packet=market_packet,
         market_result=market_import.result, market_receipt=market_import.receipt, book=normalized.snapshot,
-        config=RankConfig(version="p0-12-fixture", watch_threshold=Decimal("0.05"), simulate_threshold=Decimal("0.10")),
+        config=RankConfig(
+            version="p0-12-fixture",
+            watch_threshold=Decimal("0.05"),
+            simulate_threshold=Decimal("0.10"),
+            fee_slippage_cost_policy_id="p0_12_fixture_fee_free",
+            fee_slippage_cost_policy_version="v1",
+            fee_rate=Decimal("0"),
+            slippage_buffer=Decimal("0"),
+        ),
         as_of=PILOT_NOW + timedelta(minutes=12), run_id="p0-12-decision")
     if ranked.prediction.position_state.value != "SIMULATED":
         raise RuntimeError("offline fixture must end in a simulated prediction")

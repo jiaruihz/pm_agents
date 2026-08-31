@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather Strategy Research"
   short_description: "研究 PIT 天气机制、模型和市场 residual"
-  default_prompt: "Use $weather-strategy-research to design a PIT weather study on controller-verified canonical evidence without changing production behavior."
+  default_prompt: "Use $weather-strategy-research to design a bounded PIT study with evidence appropriate to its stage; verify controller/DB identity before canonical performance claims, and do not change production behavior."

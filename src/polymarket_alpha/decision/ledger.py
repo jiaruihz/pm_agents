@@ -19,6 +19,8 @@ from ..contracts import (
     CandidateState,
     DecisionDirection,
     EstimateStage,
+    MarketComparisonV2,
+    MarketComparisonStatus,
     MarketResearchPacket,
     OrderbookSnapshot,
     PacketStage,
@@ -37,11 +39,12 @@ from ..contracts import (
     stable_record_id,
 )
 from ..contracts.base import ensure_utc
+from ..books.executable_cost import EXECUTABLE_COST_VERSION, paired_buy_cost
 from ..rules.models import RuleGateDecision, RuleGateStage
 from ..storage import AlphaRepository
 
 
-RANKER_VERSION = "p0_09b_v1"
+RANKER_VERSION = "p0_09b_v2"
 _ONE = Decimal("1")
 _ZERO = Decimal("0")
 
@@ -66,6 +69,10 @@ class RankConfig(BaseModel):
     max_book_age_seconds: int = Field(default=300, gt=0)
     max_result_age_seconds: int = Field(default=86_400, gt=0)
     simulation_target_size: Decimal = Field(default=Decimal("10"), gt=0)
+    fee_slippage_cost_policy_id: str
+    fee_slippage_cost_policy_version: str
+    fee_rate: Decimal = Field(ge=0, le=1)
+    slippage_buffer: Decimal = Field(ge=0, le=1)
 
     @model_validator(mode="after")
     def weights_and_thresholds_are_complete(self) -> "RankConfig":
@@ -75,6 +82,8 @@ class RankConfig(BaseModel):
             raise ValueError("rank weights must sum exactly to 1")
         if self.watch_threshold > self.simulate_threshold:
             raise ValueError("watch threshold cannot exceed simulate threshold")
+        if not self.fee_slippage_cost_policy_id.strip() or not self.fee_slippage_cost_policy_version.strip():
+            raise ValueError("cost policy id/version must not be blank")
         return self
 
     @property
@@ -111,9 +120,12 @@ def _fresh(at: datetime, as_of: datetime, seconds: int, label: str) -> None:
         raise DecisionLedgerError(f"{label} is stale or lies after as_of")
 
 
-def _book_prices(book: OrderbookSnapshot, target_size: Decimal) -> tuple[Decimal, Decimal]:
+def _book_prices(
+    book: OrderbookSnapshot, *, config: RankConfig
+) -> tuple[Decimal, Decimal]:
     if book.stale or book.quality_flags:
         raise DecisionLedgerError("orderbook is stale or has quality flags")
+    target_size = config.simulation_target_size
     yes = tuple(item for item in book.yes_depth if item.target_size == target_size)
     no = tuple(item for item in book.no_depth if item.target_size == target_size)
     if len(yes) != 1 or len(no) != 1:
@@ -125,7 +137,94 @@ def _book_prices(book: OrderbookSnapshot, target_size: Decimal) -> tuple[Decimal
         or no[0].buy_vwap is None
     ):
         raise DecisionLedgerError("orderbook has insufficient target depth")
-    return yes[0].buy_vwap, no[0].buy_vwap
+    costs = paired_buy_cost(
+        book,
+        target_size=target_size,
+        fee_rate=config.fee_rate,
+        slippage_buffer=config.slippage_buffer,
+    )
+    if not costs.fully_executable:
+        raise DecisionLedgerError("orderbook has insufficient sealed fill-level depth")
+    if costs.yes.vwap != yes[0].buy_vwap or costs.no.vwap != no[0].buy_vwap:
+        raise DecisionLedgerError(
+            "orderbook target-depth VWAP disagrees with sealed levels"
+        )
+    assert costs.yes.effective_price is not None
+    assert costs.no.effective_price is not None
+    return costs.yes.effective_price, costs.no.effective_price
+
+
+def _bind_market_comparison(
+    *,
+    comparison: MarketComparisonV2 | None,
+    blind_result: ResearchResultEnvelope,
+    market_result: ResearchResultEnvelope,
+    contract: RuleContract,
+    book: OrderbookSnapshot,
+    config: RankConfig,
+) -> None:
+    comparison_id = market_result.extensions.get("market_comparison_id")
+    comparison_sha256 = market_result.extensions.get("market_comparison_sha256")
+    deterministic = market_result.extensions.get("probability_update") == "NONE"
+    if deterministic and comparison is None:
+        raise DecisionLedgerError(
+            "deterministic Market result requires its sealed MarketComparison"
+        )
+    if comparison is None:
+        if comparison_id is not None or comparison_sha256 is not None:
+            raise DecisionLedgerError("market comparison binding is incomplete")
+        return
+    if not isinstance(comparison, MarketComparisonV2):
+        raise DecisionLedgerError("fee-aware MarketComparisonV2 is required")
+    if comparison.status is not MarketComparisonStatus.READY:
+        raise DecisionLedgerError("market comparison is not executable")
+    if (comparison_id, comparison_sha256) != (
+        comparison.record_id,
+        comparison.comparison_sha256,
+    ):
+        raise DecisionLedgerError("market result comparison id/hash mismatch")
+    if (
+        comparison.accepted_blind_result_id != blind_result.result_id
+        or comparison.accepted_blind_result_sha256 != blind_result.canonical_sha256
+        or comparison.rule_contract_id != contract.record_id
+        or comparison.rule_contract_sha256 != contract.canonical_sha256
+        or comparison.rule_hash != contract.rule_hash
+        or comparison.orderbook_snapshot_id != book.record_id
+        or comparison.orderbook_snapshot_sha256 != book.canonical_sha256
+    ):
+        raise DecisionLedgerError("market comparison input lineage mismatch")
+    if (
+        comparison.policy_size != config.simulation_target_size
+        or comparison.fee_slippage_cost_policy_id
+        != config.fee_slippage_cost_policy_id
+        or comparison.fee_slippage_cost_policy_version
+        != config.fee_slippage_cost_policy_version
+        or comparison.fee_model_version != EXECUTABLE_COST_VERSION
+        or comparison.fee_rate != config.fee_rate
+        or comparison.slippage_buffer != config.slippage_buffer
+    ):
+        raise DecisionLedgerError("ranker and market comparison cost policies differ")
+    sealed_cost = paired_buy_cost(
+        book,
+        target_size=config.simulation_target_size,
+        fee_rate=config.fee_rate,
+        slippage_buffer=config.slippage_buffer,
+    )
+    if not sealed_cost.fully_executable:
+        raise DecisionLedgerError("sealed orderbook cannot execute comparison target")
+    if (
+        sealed_cost.yes.fills != comparison.yes_buy_fills
+        or sealed_cost.no.fills != comparison.no_buy_fills
+        or sealed_cost.yes.vwap != comparison.yes_buy_vwap
+        or sealed_cost.no.vwap != comparison.no_buy_vwap
+        or sealed_cost.yes.taker_fee != comparison.yes_taker_fee
+        or sealed_cost.no.taker_fee != comparison.no_taker_fee
+        or sealed_cost.yes.effective_price != comparison.yes_all_in_buy_price
+        or sealed_cost.no.effective_price != comparison.no_all_in_buy_price
+    ):
+        raise DecisionLedgerError(
+            "market comparison fills/costs do not match sealed orderbook"
+        )
 
 
 def _research_temporally_closed(
@@ -147,7 +246,8 @@ def _bind(
     gate_b: RuleGateDecision, blind_result: ResearchResultEnvelope,
     blind_receipt: ResearchImportReceipt, market_packet: MarketResearchPacket,
     market_result: ResearchResultEnvelope, market_receipt: ResearchImportReceipt,
-    book: OrderbookSnapshot, config: RankConfig, as_of: datetime,
+    book: OrderbookSnapshot, market_comparison: MarketComparisonV2 | None,
+    config: RankConfig, as_of: datetime,
 ) -> None:
     if candidate.state not in {CandidateState.RULE_B_PASSED, CandidateState.RULE_B_RISK}:
         raise DecisionLedgerError("candidate is not at a rankable Rule B state")
@@ -168,6 +268,14 @@ def _bind(
         item.canonical_sha256 for item in blind_result.evidence
     ):
         raise DecisionLedgerError("market packet Blind evidence binding mismatch")
+    _bind_market_comparison(
+        comparison=market_comparison,
+        blind_result=blind_result,
+        market_result=market_result,
+        contract=contract,
+        book=book,
+        config=config,
+    )
     if gate_a.stage != RuleGateStage.A or gate_a.decision != "PASS":
         raise DecisionLedgerError("Gate A must be PASS")
     if gate_b.stage != RuleGateStage.B or gate_b.decision not in {"PASS", "PASS_WITH_RULE_RISK"}:
@@ -236,6 +344,7 @@ def build_ranked_ledger(
     blind_receipt: ResearchImportReceipt, market_packet: MarketResearchPacket,
     market_result: ResearchResultEnvelope, market_receipt: ResearchImportReceipt,
     book: OrderbookSnapshot, config: RankConfig, as_of: datetime, run_id: str,
+    market_comparison: MarketComparisonV2 | None = None,
 ) -> RankOutcome:
     """Build deterministic, no-order decision facts from fully bound frozen inputs."""
     as_of = ensure_utc(as_of)
@@ -244,8 +353,14 @@ def build_ranked_ledger(
     _bind(candidate=candidate, contract=contract, gate_a=gate_a, gate_b=gate_b,
           blind_result=blind_result, blind_receipt=blind_receipt, market_packet=market_packet,
           market_result=market_result, market_receipt=market_receipt, book=book,
-          config=config, as_of=as_of)
-    yes_cost, no_cost = _book_prices(book, config.simulation_target_size)
+          market_comparison=market_comparison, config=config, as_of=as_of)
+    if market_comparison is None:
+        yes_cost, no_cost = _book_prices(book, config=config)
+    else:
+        assert market_comparison.yes_all_in_buy_price is not None
+        assert market_comparison.no_all_in_buy_price is not None
+        yes_cost = market_comparison.yes_all_in_buy_price
+        no_cost = market_comparison.no_all_in_buy_price
     estimate = market_result.probability_estimate
     yes_edge = estimate.p_event_yes_low - yes_cost
     no_edge = (_ONE - estimate.p_event_yes_high) - no_cost
@@ -283,14 +398,32 @@ def build_ranked_ledger(
         action = ReviewAction.WATCH
     input_ids = (candidate.record_id, contract.record_id, gate_a.record_id, gate_b.record_id,
                  blind_result.result_id, blind_receipt.record_id, book.record_id,
-                 market_packet.record_id, market_result.result_id, market_receipt.record_id)
+                 market_packet.record_id, market_result.result_id, market_receipt.record_id) + (
+                     () if market_comparison is None else (market_comparison.record_id,)
+                 )
     decision_id = stable_record_id("review_decision", candidate.candidate_id, contract.rule_hash,
                                    gate_b.record_id, market_result.result_id, book.record_id,
                                    config.config_sha256, as_of, run_id, action.value, direction.value)
     decision = ReviewDecision(
         record_id=decision_id, run_id=run_id, created_at=as_of, source="alpha_deterministic_ranker",
         source_version=f"{RANKER_VERSION}:{config.version}", provenance=(),
-        extensions={"rank_config_sha256": config.config_sha256, "score": score, "score_breakdown": breakdown},
+        extensions={
+            "rank_config_sha256": config.config_sha256,
+            "score": score,
+            "score_breakdown": breakdown,
+            "executable_cost": {
+                "fee_model_version": EXECUTABLE_COST_VERSION,
+                "policy_id": config.fee_slippage_cost_policy_id,
+                "policy_version": config.fee_slippage_cost_policy_version,
+                "fee_rate": config.fee_rate,
+                "slippage_buffer": config.slippage_buffer,
+                "yes_all_in_buy_price": yes_cost,
+                "no_all_in_buy_price": no_cost,
+                "market_comparison_id": None
+                if market_comparison is None
+                else market_comparison.record_id,
+            },
+        },
         market_id=candidate.market_id, rule_hash=contract.rule_hash,
         rule_gate_b=RuleGateB(gate_b.decision), action=action, direction=direction,
         conservative_probability=conservative_probability, net_edge=net_edge,

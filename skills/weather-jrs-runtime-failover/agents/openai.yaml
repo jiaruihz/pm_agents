@@ -1,4 +1,4 @@
 interface:
   display_name: "Weather JRS Runtime Failover"
   short_description: "诊断 JRS 权限故障并通过 controller 恢复"
-  default_prompt: "Use $weather-jrs-runtime-failover to preserve production state and recover JRS only through the registered production controller."
+  default_prompt: "Use $weather-jrs-runtime-failover to diagnose and preserve JRS production state; run failover or recovery through the registered controller only when this request authorizes it."
