@@ -1,7 +1,7 @@
 # Weather Intraday Decision Casebook
 
 Status: current-reference
-Updated: 2026-08-29 San Francisco near-Core maker no-fill case
+Updated: 2026-08-30 unified all-case replay catalog contract
 Scope: 实时天气判断、用户与 Codex 的结论更新、PIT 数据快照、订单/成交血缘
 
 ## 结论与动作
@@ -21,6 +21,29 @@ city-day，就不为了完成实验而交易。
 估计 P(final exact bracket | PIT weather/path/source state)，
 并检验相对同一时点 executable market probability 的 residual。
 ```
+
+## 全案例底表与错题视图
+
+从 2026-08-30 起，casebook 分成两层：
+
+1. canonical 全案例目录是 `weather_replay_cases_v1`，来源只有 `fact_signal_candidates`，一行一个
+   `candidate_id`。正确、错误、selected、未选、live fill、paper unfilled、blocked 和 pending 全部保留，
+   因而复盘不会只看输单或精选故事。
+2. “错题库”是 `weather_replay_mistakes_v1` 的派生视图。它按模型二分错误、selected outcome loss、
+   已实现亏损和 paper-unfilled winner 四个独立 flag 收录，不手工复制 row，也不另造 settlement/PnL。
+
+能用同一格式查询，不代表所有历史 row 都具备相同重放强度：完整 v2 event-checkpoint row 才可能是
+`full_decision`；缺 decision book 但 model lineage 完整的是 `model_only`；旧 v1 row 只能
+`legacy_summary_only`；late backfill、缺引用或 PIT 时钟穿越的 v2 row 明确为 `blocked`。这样旧错题仍进入
+目录，但不会伪装成可以从原始输入精确重算。
+
+`full_decision` 只表示 catalog 中的引用完整、一致且 PIT 时钟合法；视图本身不访问外部 artifact，执行重放前
+还必须验 raw/feature/model/book 引用与 hash。案例目录的覆盖也只到已 materialize 的 candidate：尚未 dual-write
+的旧 runner/raw 判断要列入 coverage gap，不能因为 view 查不到就当成“当时没有判断”。
+
+本文件下面的人工 golden cases、交互时间线和 current-YES 机制 library 继续保留，职责是解释“当时怎样更新
+判断”和提供语义 annotation。它们不再承担案例分母或错误真相；后续新案例应优先挂到稳定
+`candidate_id/replay_case_id`，没有对应 canonical candidate 时必须显式标为 narrative-only gap。
 
 ## 冻结证据
 

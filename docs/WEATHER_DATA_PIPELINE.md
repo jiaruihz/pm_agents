@@ -611,6 +611,14 @@ id directly.
 | `weather_execution_policy_compare.py` | compare execution policies (mid_price vs maker_queue) |
 | `weather_decision_journal.py` | record manual notes/observations |
 | `weather_source_backtest.py` / `weather_source_probe.py` | data-source experiments |
+| `backfill_weather_pm_history.py` | Gamma events → `cache/pm_history/*.json`（Tmax，默认）或 `--extreme min` → `cache/pm_history_lowest/*.json`（Tmin，bracket 内嵌 condition/market id）。Mac 直连 gamma DNS 污染，需 `--proxy http://127.0.0.1:7890`（或 `WEATHER_PREDICT_PROXY`） |
+| `ingest_weather_lowest_settlements.py` | `pm_history_lowest` → `settlement_outcomes`（source_system=`polymarket_api`、id 带 `|lowest` 后缀，与 Tmax 分命名空间）+ `settlements`；未 closed fail-closed 跳过 |
+
+> **settlement 刷新链 ownership 缺口（2026-08-17 发现）**：`pm_history` 缓存与
+> `pm_history_settlements` ingest 自 8/12 起停更——原 owner 是 N100 daily_pipeline，Mac 侧
+> 无 scheduler。8/12–8/17 已手动补全（Tmax 282 files/3102 outcome rows；Tmin 新链 24 files/241
+> rows）。长期方案应把 backfill+ingest 并入既有 canonical refresh one-shot（需审批），不另建
+> scheduler/owner。
 
 ### 5.3 Dashboard ingest (in `weather_dashboard/`)
 
@@ -618,7 +626,7 @@ id directly.
 |---|---|---|
 | `legacy_migration/research_csv.py` | `t24_paper_*.csv` | signals, plans, orders, fills, settlements (paper/explore state) |
 | `legacy_migration/live_cycle.py` | `live_cycle/*.json` + siblings | signals, plans, orders, fills (live state), strategy_config |
-| `ingest/pm_history_settlements.py` | `cache/pm_history/*.json` | `settlements` for condition_id trade joins; `settlement_outcomes` for city/date/bracket source-grain research; raw near-binary prices normalized to 1/0 |
+| `ingest/pm_history_settlements.py` | `cache/pm_history/*.json`（Tmax only） | `settlements` for condition_id trade joins; `settlement_outcomes` for city/date/bracket source-grain research; raw near-binary prices normalized to 1/0。Tmin 走 `scripts/ops/ingest_weather_lowest_settlements.py`（id 命名空间隔离，避免 Tmax/Tmin 同 city-date-bracket 撞 id/串 market 绑定） |
 | `ingest/clob_fill_sync.py` | Polymarket data-api or CLOB | fills (status='filled') for real on-chain matches |
 | `db/consolidate_configs.py` | strategy_config | config_aliases |
 | `metrics/save.py` | the canonical caliber above | per-run cached metrics on `runs.metrics` |

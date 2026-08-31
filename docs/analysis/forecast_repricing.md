@@ -1,5 +1,28 @@
 # Forecast Repricing
 
+## D-1 early repricing 启动审计（2026-08-29）
+
+已按 `slr07` 暴露的“D-1 revision 后数小时主动 SELL”机制启动现有 run-aware runner 的全分母
+coverage audit，而不是从钱包 selected fills 直接造 selector。审计扫描34城、target_date
+`2026-08-06..08-31`：911,176条forecast deliveries收敛为43,588个provider-run keys、38,976个
+run transitions，其中D-1为16,198、primary 18–24h为3,968；market侧有399,228个checkpoints，
+60m legacy markout可评分3,150行/23 dates。
+
+历史 formal forward 仍为**硬阻塞**：16,198个D-1 events全部是
+`legacy_provider_run_earliest_observed`，旧窗口的 `collector_response_complete`、executable、fills均为0；
+旧JSONL不能事后伪造时钟。legacy primary consensus的60m方向一致率为61.80%（89 events/20 dates，
+mean directional rung shift +2.074pp），只能说明机制值得采集，不能当alpha或A/B结果。
+
+collector blocker 已于2026-08-29 16:33 UTC解除：production
+`weather_forecast_run_capture_v1`从 `e943e956…d0d5f` 切到最小clock release
+`761a16d8…bd40`。首轮新增1,020 rows全部保存request-start/response-complete clocks，ordering
+violation=0，orders/fills delta=0/0。因为三个provider runs在部署前已经见过，这1,020行按append-only
+合同继续保留旧 `collector_exact`，没有伪造新的first-seen；第一条formal
+`collector_response_complete`将从下一个unseen provider run开始。随后累计至少30个clean settled
+target dates，再跑固定60m、同rows market baseline、direct ask→future bid且扣双边fee的A/B。
+当前不改shadow/live。完整readiness、影响半径与artifact见
+[D-1 early repricing readiness v1](2026-08/2026-08-29-d1-early-repricing-readiness-v1.md)。
+
 ## Real run-aware / first-touch repair（2026-08-12）
 
 旧 selector 已停止继续调参：其 forecast innovation 来自 legacy strategy snapshots，不是真实 provider-run

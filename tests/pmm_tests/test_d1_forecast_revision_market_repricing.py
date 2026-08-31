@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import csv
 
 from weather_model_evaluation import d1_revision_repricing as subject
 
@@ -406,3 +407,105 @@ def test_revision_execution_scores_independent_transition_with_real_quotes() -> 
     )
     assert abs(sigma_two["taker_pnl_per_share"] - expected) < 1e-12
     assert sigma_two["maker_fill_evidence"] == "blocked_no_own_order_queue_overlap"
+
+
+def _write_d1_panel_artifacts(tmp_path, events, checkpoints) -> None:
+    event_fields = sorted({key for row in events for key in row})
+    checkpoint_fields = sorted({key for row in checkpoints for key in row})
+    for name, fields, rows in (
+        ("revision_events.csv", event_fields, events),
+        ("market_checkpoints.csv", checkpoint_fields, checkpoints),
+    ):
+        with (tmp_path / name).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+
+
+def test_legacy_panel_scores_shared_transition_once_and_builds_yes_no(tmp_path) -> None:
+    manifest_pre = [
+        {
+            "condition_id": "c1", "label": "80", "yes_best_bid": 0.40,
+            "yes_best_ask": 0.42, "yes_best_bid_size": 7, "yes_best_ask_size": 8,
+        }
+    ]
+    manifest_post = [{**manifest_pre[0], "yes_best_bid": 0.45, "yes_best_ask": 0.47}]
+    manifest_exit = [{**manifest_pre[0], "yes_best_bid": 0.55, "yes_best_ask": 0.57}]
+    base_event = {
+        "event_class": "legacy_provider_run_earliest_observed",
+        "checkpoint_policy": "D-1_18_24", "markout_60m_status": "scoreable",
+        "city": "Tokyo", "target_date": "2026-08-12", "pre_book_snapshot_id": "pre",
+        "post_book_snapshot_id": "post", "markout_60m_snapshot_id": "exit",
+        "consensus_median_before_f": "79", "consensus_iqr_before_f": "1",
+        "event_available_at_utc": "2026-08-11T01:00:00Z", "event_local_hour": "10",
+    }
+    events = [
+        {**base_event, "consensus_median_after_f": "80", "consensus_iqr_after_f": "2", "consensus_median_revision_f": "1"},
+        {**base_event, "event_available_at_utc": "2026-08-11T01:03:00Z", "consensus_median_after_f": "81", "consensus_iqr_after_f": "3", "consensus_median_revision_f": "1"},
+    ]
+    checkpoints = [
+        {
+            "feature_book_snapshot_id": snapshot, "source_contract": "canonical_market_books_v1",
+            "event_time_pit_scorable": "true", "market_distribution_complete": "true",
+            "rung_manifest": repr(manifest),
+        }
+        for snapshot, manifest in (("pre", manifest_pre), ("post", manifest_post), ("exit", manifest_exit))
+    ]
+    _write_d1_panel_artifacts(tmp_path, events, checkpoints)
+
+    rows, summary = subject.build_legacy_development_executable_rung_panel(tmp_path)
+    assert len(rows) == 2
+    yes = next(row for row in rows if row["side"] == "YES")
+    no = next(row for row in rows if row["side"] == "NO")
+    assert yes["provider_event_count"] == 2
+    assert yes["rolling_consensus_net_revision_f"] == 2.0
+    assert yes["entry_price"] == 0.47
+    assert yes["exit_price"] == 0.55
+    assert no["entry_price"] == 0.55
+    assert abs(no["exit_price"] - 0.43) < 1e-12
+    expected_yes = 0.55 - 0.05 * 0.55 * 0.45 - 0.47 - 0.05 * 0.47 * 0.53
+    assert abs(yes["fee_only_pnl_per_share"] - expected_yes) < 1e-12
+    assert abs(yes["one_cent_per_side_stress_pnl_per_share"] - (expected_yes - 0.02)) < 1e-12
+    assert summary["signal_evidence_funnel"]["independent_transitions"] == 1
+
+
+def test_legacy_panel_reports_market_contract_and_ladder_blockers(tmp_path) -> None:
+    event = {
+        "event_class": "legacy_provider_run_earliest_observed", "checkpoint_policy": "D-1_18_24",
+        "markout_60m_status": "scoreable", "city": "Tokyo", "target_date": "2026-08-12",
+        "pre_book_snapshot_id": "pre", "post_book_snapshot_id": "post", "markout_60m_snapshot_id": "exit",
+        "consensus_median_before_f": "79", "consensus_median_after_f": "80",
+        "consensus_median_revision_f": "1", "event_available_at_utc": "2026-08-11T01:00:00Z",
+    }
+    valid = [{"condition_id": "c1", "label": "80", "yes_best_bid": 0.4, "yes_best_ask": 0.5, "yes_best_bid_size": 1, "yes_best_ask_size": 1}]
+    bad = [{**valid[0], "label": "81"}]
+    checkpoints = [
+        {"feature_book_snapshot_id": "pre", "source_contract": "canonical_market_books_v1", "event_time_pit_scorable": "true", "market_distribution_complete": "true", "rung_manifest": repr(valid)},
+        {"feature_book_snapshot_id": "post", "source_contract": "legacy_paper_snapshot", "event_time_pit_scorable": "true", "market_distribution_complete": "true", "rung_manifest": repr(valid)},
+        {"feature_book_snapshot_id": "exit", "source_contract": "canonical_market_books_v1", "event_time_pit_scorable": "true", "market_distribution_complete": "true", "rung_manifest": repr(bad)},
+    ]
+    _write_d1_panel_artifacts(tmp_path, [event], checkpoints)
+    rows, summary = subject.build_legacy_development_executable_rung_panel(tmp_path)
+    assert rows == []
+    assert summary["blocker_counts"] == {"noncanonical_market_checkpoint": 1}
+
+    checkpoints[1]["source_contract"] = "canonical_market_books_v1"
+    checkpoints[1]["event_time_pit_scorable"] = "false"
+    _write_d1_panel_artifacts(tmp_path, [event], checkpoints)
+    _, summary = subject.build_legacy_development_executable_rung_panel(tmp_path)
+    assert summary["blocker_counts"] == {"inexact_market_clock": 1}
+
+    checkpoints[1]["event_time_pit_scorable"] = "true"
+    _write_d1_panel_artifacts(tmp_path, [event], checkpoints)
+    _, summary = subject.build_legacy_development_executable_rung_panel(tmp_path)
+    assert summary["blocker_counts"] == {"misaligned_rung_manifest": 1}
+
+
+def test_default_forward_execution_does_not_admit_legacy_event() -> None:
+    legacy = {
+        "event_class": "legacy_provider_run_earliest_observed",
+        "checkpoint_policy": "D-1_18_24", "city": "Tokyo", "target_date": "2026-08-12",
+        "post_book_snapshot_id": "post", "markout_60m_status": "scoreable",
+        "markout_60m_snapshot_id": "exit",
+    }
+    assert subject.revision_execution_candidates([legacy], []) == []

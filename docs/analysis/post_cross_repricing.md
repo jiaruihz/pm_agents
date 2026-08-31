@@ -292,3 +292,38 @@ Durable output:
 - `scripts/analysis/market_structure_edge/research_source_event_expression_denominator_v3.py`
 - `docs/analysis/2026-07/2026-07-14-source-event-expression-denominator-v3.md`
 - `scripts/ops/backfill_weather_pm_history_from_snapshot_conditions.py`
+
+## 2026-08-28 Fixed +60 Minute Taker Exit Cross-Family Check
+
+The Tmin challenger is not a global 60-minute exit rule.  This check migrated
+its single preselected policy to Tmax without searching another horizon:
+entry at the executable ask, then sell the full original quantity at the first
+fresh executable bid in minutes +60 through +72.  Both legs pay the official
+Weather taker fee, freshness is capped at 300 seconds, and missing exits remain
+in the signal denominator.  The fast-source family used the first valid v2/v3
+previous-bracket NO entry per city-day at five shares; normal Core used its
+frozen current-YES selections at their original five- or ten-share quantity.
+This was a quote replay with zero actual orders or fills.
+
+| Tmax family | Signals / exits | Entry cash / gross two-leg quote notional | Fixed-exit result | Same-settled HOLD comparison |
+| --- | ---: | ---: | ---: | ---: |
+| Fast-source previous NO | 279 / 267 | $1,256.01 / $2,507.81 | -$2.99, -0.238% | fixed -$1.59 vs HOLD +$10.44; delta -$12.03 |
+| Normal Core current YES | 112 / 70 | $635.52 / $1,270.35 | +$0.08, +0.013% | fixed -$0.91 vs HOLD +$18.17; delta -$19.09 |
+
+The late secondary-history window started on 2026-08-13.  Fast-source returned
+-$3.55 / -0.923% (95% target-date CI [-3.61%, +1.46%]); normal Core returned
+-$7.85 / -1.962% (CI [-7.25%, +2.58%]).  Neither family had a positive lower
+confidence bound or beat HOLD.  Normal Core's early +$7.93 / +3.37% point
+estimate is not qualification evidence: only 27 of 68 signals had a complete
+exit, and HOLD made +$19.48 on those same rows.
+
+The mechanism sometimes rescues eventual losers, but a fixed clock cannot
+separate those positions from eventual winners experiencing a temporary
+drawdown.  Selling into the bid also adds spread and a second taker fee.  The
+cross-family significance, HOLD-baseline, coverage, and pristine-forward gates
+therefore fail.  Status is `inconclusive_do_not_promote`; retain the existing
+HOLD semantics and do not deploy a general fixed 60-minute exit.
+
+Durable artifact:
+
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/tmax_fixed_60m_taker_exit_v1/tmax_fixed60_20260828_v3/`

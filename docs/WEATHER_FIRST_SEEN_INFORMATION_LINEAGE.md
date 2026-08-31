@@ -1,7 +1,7 @@
 # Weather First-Seen Information Event Lineage
 
 Status: current-reference
-Updated: 2026-07-28 initial frozen design
+Updated: 2026-08-28 U.S. METAR transport benchmark smoke
 Source of truth: yes for first-seen event semantics and target data/signal lineage
 Implementation status: data/signal implementation complete and locally replayed; production forward start blocked by JRS write permission
 Used by: WEATHER_SYSTEM_CONTRACT.md; WEATHER_ARCHITECTURE_SPINE.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md
@@ -615,3 +615,49 @@ The data/signal implementation is complete only when:
 - a later observation would change the label but not the earlier feature row;
 - Atlanta 2026-07-17 terminal false cross remains a negative control for
   source-to-settlement basis.
+
+## 12. U.S. METAR transport benchmark integration (2026-08-28)
+
+The standalone `us_fast_weather_lab/` applies this document's immutable
+first-seen semantics before those events enter weather-state or strategy
+lineage. It records raw wire payload, wall and monotonic receipt clocks,
+semantic versions, correction/update families, first actionable decode and
+clock validity. It does not create candidates, intents, orders or fills.
+
+The consolidated bounded run lasted 303.8 seconds: AWC produced 144 API
+responses plus five full-cache responses, yielding 21 same-semantic API/cache
+pairs. All 21 are excluded from latency ranking because all five host clock
+probes were invalid. GDC
+discovered all four requested WIS2 brokers; Météo-France, CMA and INMET accepted
+the origin/cache subscriptions, while NOAA's advertised hostname presented a
+certificate for `wis2cacheqa.qa.globaldata.nws.noaa.gov`. TLS verification was
+not bypassed. No target WIS2 notification was observed in the five-minute
+window.
+
+Current disposition is `BLOCKED_BY_ACCESS_OR_INSUFFICIENT_EVIDENCE`. The
+transport lab must complete unchanged 24-hour and 72-hour two-vantage runs
+before any speed ranking. The Atlanta 2026-07-17 OMO terminal false remains the
+mandatory source-basis negative control even if a source later wins the
+transport race.
+
+Evidence: [2026-08-28 consolidated smoke](analysis/2026-08/2026-08-28-us-fast-weather-source-consolidated-smoke-v1.md)
+and `us_fast_weather_lab/reports/`.
+
+### 12.1 Full-closure expansion
+
+The closure pass corrected the stale NOAA endpoint by adding the current SCN
+broker/cache names and the dataset's direct node without erasing the GDC
+evidence. All current NOAA names passed TLS verification. A 125-second rerun
+connected 12/14 clients and accepted 11 subscriptions, but produced zero METAR
+notifications; the advertised `metar_features` collection returned 404 and the
+notification collection had zero rows for the advertised METAR metadata ID.
+This is upstream publication evidence, not permission to bypass TLS.
+
+The same closure pass built current FAA DCS phone evidence for all 20 airports,
+sent real RFIs/RFQs across WMSCR, Synoptic, METAR.ws and NOAAPort hardware, and
+kept FAA SAA, one-time trials, wallet/payment, telephony spend and external
+hosts in a manual queue. Direct-phone/OMO and METAR transports remain distinct
+measurement classes.
+
+Evidence: [2026-08-28 full-closure execution](analysis/2026-08/2026-08-28-us-airport-fast-source-full-closure-execution-v1.md)
+and `us_fast_weather_lab/closure/`.
