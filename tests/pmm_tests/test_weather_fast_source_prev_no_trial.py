@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import scripts.ops.weather_fast_source_prev_no_trial as runner
+import scripts.ops.weather_fast_source_stale_book_observer as stale_book
 
 from scripts.ops.weather_fast_source_prev_no_trial import (
     build_parser,
@@ -525,7 +526,7 @@ def test_marketable_gtc_accepts_exact_ten_share_immediate_match():
     assert calls[0]["size"] == 10.0
 
 
-def test_marketable_gtc_partial_or_unfilled_remainder_stays_bounded_by_signed_shares():
+def test_marketable_gtc_live_remainder_without_cancel_path_fails_closed():
     def place(_row):
         return {
             "order_id": "resting-taker-remainder",
@@ -551,10 +552,87 @@ def test_marketable_gtc_partial_or_unfilled_remainder_stays_bounded_by_signed_sh
         place=place,
     )
 
-    assert result["live_submit_status"] == "submitted"
+    assert result["live_submit_status"] == "submitted_residual_cancel_failed"
     assert result["exchange_order_status"] == "live"
     assert result["actual_fill_shares"] is None
     assert result["share_cap_check"]["effective_share_cap"] == 10.0
+    assert result["error"] == "marketable_gtc_live_remainder_missing_cancel_path"
+
+
+def test_marketable_gtc_cancels_live_remainder_and_records_partial_fill():
+    def place(_row):
+        return {
+            "order_id": "resting-taker-remainder",
+            "order_type": "GTC",
+            "order_mode": "marketable_gtc_buy_shares",
+            "post_only": False,
+            "place": {
+                "success": True,
+                "status": "live",
+                "orderID": "resting-taker-remainder",
+            },
+        }
+
+    result = submit_marketable_gtc(
+        {
+            "token_id": "token",
+            "limit_price": 0.82,
+            "size": 10.0,
+            "desired_shares": 10.0,
+            "max_shares_per_market": 15.0,
+        },
+        place=place,
+        cancel=lambda order_id: {
+            "cancel": {"canceled": [order_id]},
+            "order_after_cancel": {
+                "size": "10",
+                "size_matched": "3",
+                "price": "0.82",
+                "status": "CANCELED",
+            },
+        },
+    )
+
+    assert result["live_submit_status"] == "submitted"
+    assert result["exchange_order_status"] == "canceled"
+    assert result["immediate_cancel_confirmed"] is True
+    assert result["actual_fill_shares"] == 3.0
+    assert result["actual_fill_cost_usd"] == 2.46
+    assert result["error"] == ""
+
+
+def test_fresh_book_keeps_full_depth_beyond_summary_top_n(monkeypatch):
+    raw = {
+        "bids": [{"price": "0.40", "size": "1"}],
+        "asks": [
+            {"price": f"{0.50 + index / 100:.2f}", "size": "1"}
+            for index in range(5)
+        ],
+        "tick_size": "0.01",
+    }
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return raw
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def get(self, *_args, **_kwargs):
+            return Response()
+
+    monkeypatch.setattr(stale_book, "market_httpx_client", lambda *_args, **_kwargs: Client())
+    result = stale_book.fetch_fresh_book("token", top_n=2)
+
+    assert result["full_depth_valid"] is True
+    assert len(result["summary"]["asks"]) == 2
+    assert len(result["raw"]["asks"]) == 5
 
 
 def test_all_live_fast_source_city_policies_use_fifteen_share_split_cap():

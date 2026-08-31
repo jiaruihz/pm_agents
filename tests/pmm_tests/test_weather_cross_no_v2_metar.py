@@ -43,6 +43,84 @@ def read(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+def test_universe_loader_preserves_required_market_units(tmp_path: Path):
+    config = tmp_path / "universe.json"
+    config.write_text(
+        json.dumps(
+            {
+                "schema_version": "cross_no_v2_metar_universe_v1",
+                "targets": [
+                    {
+                        "city": "Miami",
+                        "station": "KMIA",
+                        "timezone": "America/New_York",
+                        "market_unit": "F",
+                        "live_eligible": True,
+                    },
+                    {
+                        "city": "London",
+                        "station": "EGLL",
+                        "timezone": "Europe/London",
+                        "market_unit": "C",
+                        "live_eligible": False,
+                    },
+                ],
+            }
+        )
+    )
+
+    allowlist, timezones, market_units, live_eligible = (
+        cross_no_v2.load_universe_config(config)
+    )
+
+    assert allowlist == {"Miami": "KMIA", "London": "EGLL"}
+    assert timezones["London"] == "Europe/London"
+    assert market_units == {"Miami": "F", "London": "C"}
+    assert live_eligible == frozenset({"Miami"})
+
+
+def test_native_integer_lattice_maps_us_celsius_without_decimal_gap(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    rows = [event("metar_ws_metar", "official1", 21.0), event("metar_ws_hfmetar", "hf2", 22.3)]
+    (source / "information_events.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+    books = tmp_path / "books.json"
+    books.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {**markets()["records"][0], "bracket": "70-71"},
+                    {**markets()["records"][1], "bracket": "72-73"},
+                ]
+            }
+        )
+    )
+
+    cross_no_v2.run_probe(
+        source_events_root=source,
+        market_books_latest=books,
+        output_dir=tmp_path / "out",
+        now=NOW,
+        official_fee_rate=0.05,
+        market_units={"Miami": "F"},
+    )
+
+    candidate = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert candidate["status"] == "candidate"
+    assert candidate["prior_official_running_max"] == 70
+    assert candidate["source_running_max"] == 72
+    assert candidate["market_unit"] == "F"
+
+
+def test_celsius_market_unit_is_not_silently_treated_as_fahrenheit(tmp_path: Path):
+    assert cross_no_v2._market_value(21.4, "C") == 21
+    assert cross_no_v2._market_value(21.4, "F") == 71
+    assert cross_no_v2._market_value(-1.5, "C") == -2
+    assert cross_no_v2._market_value(21.4, "") is None
+
+
 def test_shadow_cross_is_proxy_and_never_hard_settlement_invalidation(tmp_path: Path):
     result = run(tmp_path, [event("metar_ws_metar", "official1", 26.7), event("metar_ws_datis", "datis2", 27.8)])
     rows = read(tmp_path / "out/opportunities.jsonl")
@@ -275,6 +353,7 @@ def test_running_max_state_survives_poll_cycles(tmp_path: Path):
 
 def test_real_market_raw_asks_are_swept_across_levels():
     market = {
+        "full_depth_valid": True,
         "raw": {
             "asks": [
                 {"price": "0.70", "size": "2"},
@@ -287,6 +366,11 @@ def test_real_market_raw_asks_are_swept_across_levels():
     assert sweep["covered"] is True
     assert sweep["worst_ask"] == 0.71
     assert abs(sweep["vwap"] - 0.706) < 1e-12
+
+
+def test_raw_asks_without_explicit_depth_contract_are_not_promoted_to_full_depth():
+    market = {"raw": {"asks": [{"price": "0.70", "size": "10"}]}}
+    assert cross_no_v2._book_summary(market) == (0.70, 10.0, False)
 
 
 def test_submit_failure_reservation_prevents_retry(tmp_path: Path):
@@ -485,7 +569,35 @@ def test_lower_official_revision_cannot_reduce_running_max(tmp_path: Path):
     )
     candidate = read(out / "opportunities.jsonl")[-1]
     assert candidate["status"] == "candidate"
-    assert candidate["prior_official_running_max"] > 80.0
+    assert candidate["prior_official_running_max"] == 80
+
+
+def test_late_official_updates_state_but_cannot_trigger_decision(tmp_path: Path):
+    late_official = {
+        **event("metar_ws_metar", "official1", 26.7),
+        "source_event_ts_utc": "2026-08-31T08:00:00Z",
+    }
+    run(
+        tmp_path,
+        [late_official, event("metar_ws_hfmetar", "hf2", 27.8)],
+        max_observation_delay_sec=3600,
+    )
+    rows = read(tmp_path / "out/opportunities.jsonl")
+    assert "source_observation_delay_out_of_bounds" in rows[0]["blockers"]
+    assert rows[1]["status"] == "candidate"
+    assert rows[1]["prior_official_running_max"] == 80
+
+
+def test_source_stream_silence_is_visible_in_health(tmp_path: Path):
+    result = run(
+        tmp_path,
+        [],
+        source_stream_last_received_at_utc="2026-08-31T11:50:00Z",
+        max_stream_silence_sec=120,
+        monitor_source_stream=True,
+    )
+    assert result["status"] == "source_stream_stale"
+    assert result["source_stream_stale"] is True
 
 
 def test_direct_evidence_rejects_ended_collector_run(tmp_path: Path):

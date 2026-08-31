@@ -70,6 +70,8 @@ runner=(
   --pause-file "$PAUSE_FILE"
   --interval-sec "${WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC:-0.5}"
   --max-source-age-sec "${WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC:-30}"
+  --max-observation-delay-sec "${WEATHER_CROSS_NO_V2_METAR_MAX_OBSERVATION_DELAY_SEC:-3600}"
+  --max-stream-silence-sec "${WEATHER_CROSS_NO_V2_METAR_MAX_STREAM_SILENCE_SEC:-120}"
   --book-timeout-sec "${WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC:-5}"
   --stop-after-sec "$STOP_AFTER_SEC"
   --official-fee-rate 0.05

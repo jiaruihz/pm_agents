@@ -233,7 +233,7 @@ def _build_live_limit_place_fn(
         pass
     try:
         from py_clob_client_v2.client import ClobClient
-        from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderType
+        from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderPayload, OrderType
         from py_clob_client_v2.constants import POLYGON
         import py_clob_client_v2.http_helpers.helpers as clob_http_helpers
 
@@ -246,6 +246,7 @@ def _build_live_limit_place_fn(
         import py_clob_client.http_helpers.helpers as clob_http_helpers
 
         order_args_cls = OrderArgs
+        OrderPayload = None  # type: ignore[assignment]
         clob_v2 = False
 
     if proxy_url:
@@ -300,6 +301,42 @@ def _build_live_limit_place_fn(
             "signer": signer_addr,
             "clob_proxy_enabled": bool(proxy_url),
         }
+
+    def cancel(order_id: str) -> dict[str, Any]:
+        """Cancel a share-denominated GTC remainder with order-state evidence."""
+        result: dict[str, Any] = {}
+        try:
+            result["order_before_cancel"] = client.get_order(order_id)
+        except Exception as exc:  # noqa: BLE001
+            result["order_before_cancel_error"] = f"{type(exc).__name__}: {exc}"
+        before_state = _order_state(result.get("order_before_cancel"))
+        original = _state_float(before_state, "original_size", "originalSize", "size")
+        matched = _state_float(
+            before_state,
+            "size_matched",
+            "sizeMatched",
+            "matched_size",
+            "matchedSize",
+        )
+        if (
+            original is not None
+            and original > 0
+            and matched is not None
+            and matched >= original - SHARE_CAP_TOLERANCE
+        ):
+            result["terminal_before_cancel"] = "fully_matched"
+            return result
+        if clob_v2:
+            result["cancel"] = client.cancel_order(OrderPayload(orderID=order_id))
+        else:
+            result["cancel"] = client.cancel(order_id)
+        try:
+            result["order_after_cancel"] = client.get_order(order_id)
+        except Exception as exc:  # noqa: BLE001
+            result["order_after_cancel_error"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+    place.cancel = cancel  # type: ignore[attr-defined]
 
     return place
 
@@ -363,12 +400,71 @@ def response_is_accepted_taker(response: dict[str, Any]) -> bool:
     )
 
 
+def _order_state(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    nested = value.get("order")
+    return nested if isinstance(nested, dict) else value
+
+
+def _state_float(state: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = safe_float(state.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def canceled_remainder_fill_amounts(
+    cancel_response: dict[str, Any] | None,
+    *,
+    fallback_price: float,
+) -> tuple[float | None, float | None]:
+    """Read matched shares from authenticated state captured around cancel."""
+    if not isinstance(cancel_response, dict):
+        return None, None
+    for key in ("order_after_cancel", "order_before_cancel"):
+        state = _order_state(cancel_response.get(key))
+        matched = _state_float(
+            state,
+            "size_matched",
+            "sizeMatched",
+            "matched_size",
+            "matchedSize",
+        )
+        if matched is None:
+            continue
+        price = _state_float(state, "price") or float(fallback_price)
+        return matched, round(matched * price, 6)
+    return None, None
+
+
+def cancel_response_confirmed(
+    response: dict[str, Any] | None,
+    order_id: str,
+) -> bool:
+    if not isinstance(response, dict):
+        return False
+    if response.get("terminal_before_cancel") == "fully_matched":
+        return True
+    payload = response.get("cancel") if isinstance(response.get("cancel"), dict) else response
+    if not isinstance(payload, dict):
+        return False
+    canceled = payload.get("canceled")
+    if isinstance(canceled, list) and order_id in {str(value) for value in canceled}:
+        return True
+    return str(payload.get("cancelled") or payload.get("canceled") or "") == order_id or bool(
+        payload.get("cancelled") is True or payload.get("canceled") is True
+    )
+
+
 def submit_marketable_gtc(
     order_row: dict[str, Any],
     *,
     place: Callable[[dict[str, Any]], dict[str, Any]],
+    cancel: Callable[[str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Submit one exact-share marketable GTC child order."""
+    """Submit one exact-share marketable GTC and cancel any resting remainder."""
     working = dict(order_row)
     attempt = {
         "attempt": 1,
@@ -398,12 +494,59 @@ def submit_marketable_gtc(
         }
 
     actual_shares, actual_cost = matched_fill_amounts(response)
+    place_status = str((response.get("place") or {}).get("status") or "").lower()
+    immediate_cancel_response: dict[str, Any] | None = None
+    immediate_cancel_error = ""
+    immediate_cancel_confirmed = False
+    if place_status == "live":
+        cancel_fn = cancel or getattr(place, "cancel", None)
+        order_id = str(response.get("order_id") or "")
+        if cancel_fn is None or not order_id:
+            immediate_cancel_error = "marketable_gtc_live_remainder_missing_cancel_path"
+        else:
+            try:
+                immediate_cancel_response = cancel_fn(order_id)
+                immediate_cancel_confirmed = cancel_response_confirmed(
+                    immediate_cancel_response,
+                    order_id,
+                )
+                canceled_shares, canceled_cost = canceled_remainder_fill_amounts(
+                    immediate_cancel_response,
+                    fallback_price=float(working.get("limit_price") or 0.0),
+                )
+                if canceled_shares is not None:
+                    actual_shares, actual_cost = canceled_shares, canceled_cost
+                if not immediate_cancel_confirmed:
+                    immediate_cancel_error = (
+                        "marketable_gtc_live_remainder_cancel_not_confirmed"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                immediate_cancel_error = (
+                    "marketable_gtc_live_remainder_cancel_failed:"
+                    f"{type(exc).__name__}:{exc}"
+                )
     checked = {**working, "exchange_response": response, "actual_fill_shares": actual_shares}
     cap_check = share_cap_check(checked)
-    place_status = str((response.get("place") or {}).get("status") or "").lower()
+    fully_matched_after_live = bool(
+        place_status == "live"
+        and actual_shares is not None
+        and actual_shares
+        >= float(working.get("desired_shares") or working.get("size") or 0.0)
+        - SHARE_CAP_TOLERANCE
+    )
+    lifecycle_status = (
+        "matched"
+        if fully_matched_after_live
+        else ("canceled" if immediate_cancel_confirmed else place_status)
+    )
+    submit_status = (
+        "share_cap_violation" if cap_check["share_cap_violation"] else "submitted"
+    )
+    if immediate_cancel_error and submit_status == "submitted":
+        submit_status = "submitted_residual_cancel_failed"
     attempt.update(
         {
-            "status": "share_cap_violation" if cap_check["share_cap_violation"] else "submitted",
+            "status": submit_status,
             "order_id": response.get("order_id"),
             "actual_fill_shares": actual_shares,
             "actual_fill_cost_usd": actual_cost,
@@ -414,13 +557,19 @@ def submit_marketable_gtc(
         "order_row": working,
         "attempts": [attempt],
         "exchange_response": response,
-        "live_submit_status": "share_cap_violation" if cap_check["share_cap_violation"] else "submitted",
+        "live_submit_status": submit_status,
         "live_order_posted": True,
-        "exchange_order_status": place_status,
+        "exchange_order_status": lifecycle_status,
         "actual_fill_shares": actual_shares,
         "actual_fill_cost_usd": actual_cost,
         "share_cap_check": cap_check,
-        "error": "actual_fill_shares_exceeded_desired_or_market_cap" if cap_check["share_cap_violation"] else "",
+        "immediate_cancel_response": immediate_cancel_response,
+        "immediate_cancel_confirmed": immediate_cancel_confirmed,
+        "error": (
+            "actual_fill_shares_exceeded_desired_or_market_cap"
+            if cap_check["share_cap_violation"]
+            else immediate_cancel_error
+        ),
     }
 
 
