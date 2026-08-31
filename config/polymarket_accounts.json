@@ -1,0 +1,34 @@
+{
+  "schema_version": "polymarket_account_registry_v1",
+  "accounts": [
+    {
+      "account_id": "jiaruihz",
+      "account_label": "jiaruihz",
+      "account_kind": "personal",
+      "proxy_wallet": "0x83946fd2a83b4c0045a17a938ae0802dfaf58d66",
+      "relayer_api_key_address": "0x06D760A9e0D520d748537aA1f23cc7356c9DC656",
+      "keychain_account": "jiaruihz",
+      "relayer_api_key_service": "pm_agents.polymarket.relayer_api_key",
+      "sync_relayer": true,
+      "tags": [
+        "personal",
+        "capital_efficiency"
+      ]
+    },
+    {
+      "account_id": "weather_live",
+      "account_label": "weather_live",
+      "account_kind": "weather_bot",
+      "proxy_wallet": "0x76c7ad96e789e3995046af3bb13218f5f1a2860e",
+      "relayer_api_key_address": null,
+      "keychain_account": null,
+      "relayer_api_key_service": null,
+      "sync_relayer": false,
+      "tags": [
+        "weather",
+        "bot",
+        "production"
+      ]
+    }
+  ]
+}

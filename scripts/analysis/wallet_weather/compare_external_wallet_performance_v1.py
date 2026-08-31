@@ -15,6 +15,8 @@ from pathlib import Path
 import statistics
 from typing import Any
 
+from research_external_wallet_full_ladder_history_v1 import target_date_block_bootstrap
+
 
 def ratio(numerator: float, denominator: float) -> float | None:
     return numerator / denominator if denominator else None
@@ -98,6 +100,91 @@ def period_from_dates(rows: list[dict[str, Any]]) -> dict[str, float | int | Non
     }
 
 
+def positive_pnl_concentration(
+    rows: list[dict[str, Any]], count: int
+) -> float | None:
+    positive = sorted(
+        (float(row["pnl"]) for row in rows if float(row["pnl"]) > 0),
+        reverse=True,
+    )
+    total = sum(positive)
+    return ratio(sum(positive[:count]), total)
+
+
+def horizon_profile(offset_cost_share: dict[str, Any]) -> dict[str, Any]:
+    shares = {str(key): float(value or 0) for key, value in offset_cost_share.items()}
+    d0 = shares.get("0", 0.0)
+    d1 = shares.get("-1", 0.0)
+    d2_or_earlier = sum(
+        share
+        for offset, share in shares.items()
+        if offset.lstrip("-").isdigit() and int(offset) <= -2
+    )
+    later_or_unknown = max(0.0, 1.0 - d0 - d1 - d2_or_earlier)
+    buckets = {
+        "d2_or_earlier": d2_or_earlier,
+        "d1": d1,
+        "d0": d0,
+        "later_or_unknown": later_or_unknown,
+    }
+    dominant = max(buckets, key=buckets.get)
+    return {
+        "buy_cost_share": buckets,
+        "dominant_horizon": dominant,
+        "dominant_horizon_share": buckets[dominant],
+    }
+
+
+def event_horizon_bucket(row: dict[str, Any]) -> str:
+    raw = str(row.get("first_entry_day_offset") or "").strip()
+    try:
+        offset = int(float(raw))
+    except ValueError:
+        return "unknown"
+    if offset <= -2:
+        return "d2_or_earlier"
+    if offset == -1:
+        return "d1"
+    if offset == 0:
+        return "d0"
+    return "later"
+
+
+def event_slice_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    pnl = sum(float(row["public_cashflow"]) for row in rows)
+    cost = sum(float(row["buy_cost"]) for row in rows)
+    prepared = [
+        {
+            "cashflow_complete": True,
+            "target_date": str(row["target_date"]),
+            "public_cashflow": float(row["public_cashflow"]),
+            "buy_cost": float(row["buy_cost"]),
+        }
+        for row in rows
+    ]
+    bootstrap = target_date_block_bootstrap(prepared) if prepared else {"ci95": [None, None]}
+    return {
+        "events": len(rows),
+        "independent_target_dates": len({str(row["target_date"]) for row in rows}),
+        "buy_cost": cost,
+        "pnl": pnl,
+        "turnover_roi": ratio(pnl, cost),
+        "target_date_block_ci95": bootstrap["ci95"],
+    }
+
+
+def grouped_event_summaries(
+    rows: list[dict[str, Any]], key_fn: Any
+) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(str(key_fn(row)), []).append(row)
+    return {
+        key: event_slice_summary(group)
+        for key, group in sorted(grouped.items())
+    }
+
+
 def monthly_rows(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in events:
@@ -126,6 +213,10 @@ def classify_copyability(
     median_sessions: float | None,
     median_span_minutes: float | None,
     near_binary_buy_share: float | None,
+    sell_event_share: float | None,
+    median_first_buy_to_first_sell_hours: float | None,
+    sell_proceeds_share_ge_95c: float | None,
+    mean_events_per_target_date: float | None,
     dominant_expression_label: str,
     dominant_expression_share: float | None,
 ) -> dict[str, Any]:
@@ -138,8 +229,19 @@ def classify_copyability(
         blockers.append("long_active_execution_window")
     if (median_event_buy_cost or 0) > 300 or (p90_event_buy_cost or 0) > 1_000:
         blockers.append("large_event_capital_requirement")
-    if (near_binary_buy_share or 0) > 0.25:
+    if near_binary_buy_share is None:
+        blockers.append("near_binary_price_diagnostics_missing")
+    elif near_binary_buy_share > 0.25:
         blockers.append("near_binary_buy_dependence")
+    if (mean_events_per_target_date or 0) > 12:
+        blockers.append("high_daily_market_breadth")
+    if (
+        (sell_event_share or 0) >= 0.75
+        and median_first_buy_to_first_sell_hours is not None
+        and median_first_buy_to_first_sell_hours <= 1
+        and (sell_proceeds_share_ge_95c or 0) < 0.8
+    ):
+        blockers.append("subhour_repricing_timing_dependence")
 
     if (median_transactions or 0) <= 2 and (median_sessions or 0) <= 2:
         execution_style = "low_frequency"
@@ -161,6 +263,7 @@ def classify_copyability(
         "blockers": blockers,
         "execution_style": execution_style,
         "capital_style": capital_style,
+        "events_per_target_date": mean_events_per_target_date,
         "dominant_expression": dominant_expression_label,
         "dominant_expression_share": dominant_expression_share,
     }
@@ -200,6 +303,7 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
     target_day_share = (
         hour_timing["buy_cost_share_by_target_day_offset"].get("0") or 0.0
     )
+    horizons = horizon_profile(hour_timing["buy_cost_share_by_target_day_offset"])
     portfolio = summary["portfolio_summary"]
     event_buy_costs = [float(row["buy_cost"]) for row in events]
     expression_label, expression_share = dominant_expression(
@@ -210,7 +314,11 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
     median_transactions = portfolio["unique_buy_transactions"]["median"]
     median_sessions = portfolio["buy_sessions_gap_gt_5m"]["median"]
     median_span_minutes = portfolio["buy_span_minutes"]["median"]
-    near_binary_buy_share = portfolio["buy_cost_share_ge_95c"]
+    # Pre-2026-08 full-ladder summaries did not materialize these three price
+    # diagnostics.  Keep the historical wallet in the comparison with an
+    # explicit null instead of either failing the cohort or silently treating
+    # the missing share as zero.
+    near_binary_buy_share = portfolio.get("buy_cost_share_ge_95c")
     ranked_cities = sorted(
         (
             {
@@ -279,21 +387,34 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
             "late_half": period_from_dates(late),
             "latest_30_target_dates": period_from_dates(dates[-30:]),
             "without_top_five_pnl_dates": period_from_dates(without_top_five),
+            "top_one_positive_date_pnl_share": positive_pnl_concentration(dates, 1),
+            "top_five_positive_date_pnl_share": positive_pnl_concentration(dates, 5),
+            "positive_active_month_share": ratio(
+                sum(float(row["pnl"]) > 0 for row in months),
+                len(months),
+            ),
         },
         "replication_inputs": {
             "median_event_buy_cost": median_event_buy_cost,
             "p90_event_buy_cost": p90_event_buy_cost,
-            "buy_price_cost_weighted": portfolio["buy_price_cost_weighted"],
-            "buy_cost_share_ge_95c": portfolio["buy_cost_share_ge_95c"],
-            "buy_cost_share_ge_99c": portfolio["buy_cost_share_ge_99c"],
+            "buy_price_cost_weighted": portfolio.get("buy_price_cost_weighted"),
+            "buy_cost_share_ge_95c": portfolio.get("buy_cost_share_ge_95c"),
+            "buy_cost_share_ge_99c": portfolio.get("buy_cost_share_ge_99c"),
             "yes_buy_cost_share": portfolio["yes_buy_cost_share"],
             "buy_cost_share_by_target_day_offset": hour_timing[
                 "buy_cost_share_by_target_day_offset"
             ],
             "target_day_buy_cost_share": target_day_share,
+            "horizon_profile": horizons,
             "sell_event_share": portfolio["sell_event_share"],
             "settlement_without_sell_share": portfolio[
                 "settlement_without_sell_share"
+            ],
+            "sell_proceeds_over_buy_cost": sell_behavior[
+                "sell_proceeds_over_buy_cost"
+            ],
+            "sell_price_cost_weighted": sell_behavior[
+                "sell_price_cost_weighted"
             ],
             "median_buy_sessions_gap_gt_5m": portfolio[
                 "buy_sessions_gap_gt_5m"
@@ -314,6 +435,7 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
             "sell_proceeds_share_ge_99c": sell_behavior[
                 "sell_proceeds_share_ge_99c"
             ],
+            "exit_style_counts": summary["exit_style_counts"],
             "expression_counts": summary["expression_counts"],
             "dominant_expression": expression_label,
             "dominant_expression_share": expression_share,
@@ -334,9 +456,23 @@ def summarize(label: str, analysis_dir: Path) -> dict[str, Any]:
             median_sessions=median_sessions,
             median_span_minutes=median_span_minutes,
             near_binary_buy_share=near_binary_buy_share,
+            sell_event_share=portfolio["sell_event_share"],
+            median_first_buy_to_first_sell_hours=sell_behavior[
+                "first_buy_to_first_sell_hours"
+            ]["median"],
+            sell_proceeds_share_ge_95c=sell_behavior[
+                "sell_proceeds_share_ge_95c"
+            ],
+            mean_events_per_target_date=ratio(len(events), len(dates)),
             dominant_expression_label=expression_label,
             dominant_expression_share=expression_share,
         ),
+        "strategy_breakdowns": {
+            "by_expression": grouped_event_summaries(
+                events, lambda row: row.get("expression") or "unknown"
+            ),
+            "by_entry_horizon": grouped_event_summaries(events, event_horizon_bucket),
+        },
         "city_profile": {
             "top_city": ranked_cities[0]["city"] if ranked_cities else None,
             "top_city_buy_cost_share": city_shares[0] if city_shares else None,
@@ -538,7 +674,7 @@ def main() -> int:
     (output / "comparison.json").write_text(
         json.dumps(
             {
-                "schema_version": "external_wallet_performance_compare_v1",
+                "schema_version": "external_wallet_performance_compare_v2",
                 "grain": "cashflow_complete_city_x_target_date_ladder",
                 "fee_basis": (
                     "public activity usdcSize cashflow; actual fills include observed "
@@ -553,7 +689,6 @@ def main() -> int:
         + "\n",
         encoding="utf-8",
     )
-    write_csv(output / "comparison.csv", comparisons)
     print(
         json.dumps(
             {

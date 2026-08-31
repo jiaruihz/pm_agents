@@ -34,6 +34,7 @@ const WeatherStrategyInstancesPage = lazy(() => import("../pages/weather/Weather
 const WeatherStrategyInstanceDetailPage = lazy(() => import("../pages/weather/WeatherStrategyInstanceDetailPage").then((m) => ({ default: m.WeatherStrategyInstanceDetailPage })));
 const CopyTradeWalletsPage = lazy(() => import("../pages/weather/CopyTradeWalletsPage").then((m) => ({ default: m.CopyTradeWalletsPage })));
 const CopyTradeWalletDetailPage = lazy(() => import("../pages/weather/CopyTradeWalletDetailPage").then((m) => ({ default: m.CopyTradeWalletDetailPage })));
+const CapitalEfficiencyPage = lazy(() => import("../pages/weather/CapitalEfficiencyPage").then((m) => ({ default: m.CapitalEfficiencyPage })));
 
 export function App(): JSX.Element {
   return (
@@ -71,6 +72,7 @@ export function App(): JSX.Element {
       <Route path="/weather/runtime" element={<WeatherStrategyRuntimePage />} />
       <Route path="/copy-trade/wallets" element={<CopyTradeWalletsPage />} />
       <Route path="/copy-trade/wallets/:walletAddress" element={<CopyTradeWalletDetailPage />} />
+      <Route path="/copy-trade/capital-efficiency" element={<CapitalEfficiencyPage />} />
 
       {/* Legacy PMM/ARB pages, namespaced to avoid colliding with v2 /research etc. */}
       <Route path="/legacy/dashboard" element={<DashboardPage />} />

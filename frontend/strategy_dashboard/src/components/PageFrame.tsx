@@ -25,6 +25,7 @@ const WEATHER_NAV = [
 
 const COPY_TRADE_NAV = [
   { to: "/copy-trade/wallets", label: "🧭 Wallets", sub: "地址筛选" },
+  { to: "/copy-trade/capital-efficiency", label: "💧 Capital", sub: "资金效率" },
 ];
 
 // ---- Legacy (old strategy_runtime.db, deprecated) ----

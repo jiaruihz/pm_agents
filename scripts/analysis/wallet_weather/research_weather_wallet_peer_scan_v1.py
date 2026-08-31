@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
 import math
@@ -315,6 +316,7 @@ def main() -> int:
     )
     parser.add_argument("--discover-leaderboard-rows", type=int, default=0)
     parser.add_argument("--max-profile-wallets", type=int, default=100)
+    parser.add_argument("--profile-workers", type=int, default=1)
     parser.add_argument("--select-count", type=int, default=20)
     parser.add_argument("--max-lifetime-volume", type=float, default=2_000_000)
     parser.add_argument("--max-recent-trade-rows", type=int, default=4_000)
@@ -407,31 +409,17 @@ def main() -> int:
             ],
         }
 
-    for wallet in wallet_universe:
-        if wallet in completed_wallets:
-            continue
-        try:
-            weather_rows, raw_rows = recent_activity(session, wallet)
-            wallet_row = {
-                "wallet": wallet,
-                "leaderboard": {
-                    period.lower(): leaderboard_row(session, wallet, period)
-                    for period in ("ALL", "MONTH", "WEEK")
-                },
-                "recent_activity": activity_profile(weather_rows, raw_rows),
-            }
-        except requests.RequestException as exc:
-            blockers.append(
-                {
-                    "wallet": wallet,
-                    "code": "public_profile_fetch_failed_after_retries",
-                    "error_type": type(exc).__name__,
-                    "error": str(exc)[:1000],
-                }
-            )
-            atomic_write_json(args.output, payload("running_with_blockers"))
-            print(wallet, blockers[-1], flush=True)
-            continue
+    def fetch_profile(wallet: str) -> dict[str, Any]:
+        worker_session = build_session()
+        weather_rows, raw_rows = recent_activity(worker_session, wallet)
+        wallet_row = {
+            "wallet": wallet,
+            "leaderboard": {
+                period.lower(): leaderboard_row(worker_session, wallet, period)
+                for period in ("ALL", "MONTH", "WEEK")
+            },
+            "recent_activity": activity_profile(weather_rows, raw_rows),
+        }
         wallet_row["replication_screen"] = replication_screen(
             wallet_row,
             max_lifetime_volume=args.max_lifetime_volume,
@@ -440,10 +428,31 @@ def main() -> int:
             max_near_binary_share=args.max_near_binary_share,
             min_weather_events=args.min_weather_events,
         )
-        wallets.append(wallet_row)
-        completed_wallets.add(wallet)
-        atomic_write_json(args.output, payload("running"))
-        print(wallet, wallets[-1]["leaderboard"], flush=True)
+        return wallet_row
+
+    pending = [wallet for wallet in wallet_universe if wallet not in completed_wallets]
+    with ThreadPoolExecutor(max_workers=max(1, args.profile_workers)) as executor:
+        futures = {executor.submit(fetch_profile, wallet): wallet for wallet in pending}
+        for future in as_completed(futures):
+            wallet = futures[future]
+            try:
+                wallet_row = future.result()
+            except Exception as exc:  # preserve failures without losing completed profiles
+                blockers.append(
+                    {
+                        "wallet": wallet,
+                        "code": "public_profile_fetch_failed_after_retries",
+                        "error_type": type(exc).__name__,
+                        "error": str(exc)[:1000],
+                    }
+                )
+                atomic_write_json(args.output, payload("running_with_blockers"))
+                print(wallet, blockers[-1], flush=True)
+                continue
+            wallets.append(wallet_row)
+            completed_wallets.add(wallet)
+            atomic_write_json(args.output, payload("running"))
+            print(wallet, wallets[-1]["leaderboard"], flush=True)
     atomic_write_json(args.output, payload("complete" if not blockers else "complete_with_blockers"))
     return 0
 

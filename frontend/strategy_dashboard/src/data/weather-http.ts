@@ -1,6 +1,6 @@
 // HTTP client for the weather dashboard FastAPI backend
 import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail, StrategyDefinitionRow, StrategyDefinitionDetail, StrategyInstanceRow, StrategyInstanceDetail } from "./weather-types";
-import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
+import type { CapitalEfficiencyReport, CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse, OrderBlotterResponse, OrderBlotterDailySummaryResponse } from "./v2-types";
 
 const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
@@ -186,6 +186,15 @@ export const weatherApi = {
 
   getCopyTradeWallet(walletAddress: string): Promise<CopyTradeWalletDetail> {
     return get(`/copy-trade/wallets/${encodeURIComponent(walletAddress)}`);
+  },
+
+  getCapitalEfficiency(params: {
+    wallet_address: string;
+    annual_hurdle_rate?: number;
+    available_cash_usd?: number;
+    reserved_cash_usd?: number;
+  }): Promise<CapitalEfficiencyReport> {
+    return get("/copy-trade/capital-efficiency", params);
   },
 
   // ── v2 redesign endpoints ─────────────────────────────────────────────────

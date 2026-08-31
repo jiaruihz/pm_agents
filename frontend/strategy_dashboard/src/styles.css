@@ -85,6 +85,20 @@ a {
 
 .content {
   padding: 20px;
+  min-width: 0;
+}
+
+.grid,
+.grid > *,
+.card {
+  min-width: 0;
+}
+
+.capital-form-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 2fr) repeat(3, minmax(130px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
 }
 
 .page-head {
@@ -331,6 +345,14 @@ pre {
   .runtime-candidate-grid {
     grid-template-columns: 1fr !important;
   }
+
+  .capital-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .capital-form-wallet {
+    grid-column: auto;
+  }
 }
 
 .warn {
@@ -359,5 +381,15 @@ pre {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--stroke);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1400px) {
+  .capital-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .capital-form-wallet {
+    grid-column: 1 / -1;
   }
 }

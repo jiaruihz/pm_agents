@@ -88,9 +88,12 @@ export function CopyTradeWalletDetailPage(): JSX.Element {
                     {detail.wallet_address}
                   </div>
                 </div>
-                <span className="badge" style={{ color: verdictColor(latest.verdict), background: `${verdictColor(latest.verdict)}18`, borderColor: `${verdictColor(latest.verdict)}55` }}>
-                  {latest.verdict.replace("_", " ")}
-                </span>
+                <div className="row wrap">
+                  <Link to={`/copy-trade/capital-efficiency?wallet=${encodeURIComponent(detail.wallet_address)}`}><button>资金效率</button></Link>
+                  <span className="badge" style={{ color: verdictColor(latest.verdict), background: `${verdictColor(latest.verdict)}18`, borderColor: `${verdictColor(latest.verdict)}55` }}>
+                    {latest.verdict.replace("_", " ")}
+                  </span>
+                </div>
               </div>
 
               <div style={metricGridStyle}>
