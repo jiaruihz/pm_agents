@@ -1,5 +1,7 @@
 # 策略手册
 
+Status: `dormant-reference`（legacy PMM strategy family；不授权 live）
+
 做市策略的设计理念、参数逻辑和运行指南。
 
 ## 定位

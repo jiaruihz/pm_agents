@@ -2,7 +2,9 @@
 
 场景造数、策略回放、真实数据录制与结果分析的方法说明。
 
-> 文档分工：`docs/pmm/archive/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md` 负责阶段计划，本文件负责可执行细则，避免冗余维护。
+> **状态**：`dormant-reference`。本文只服务 legacy PMM 的离线回放，不是当前
+> weather 研究或生产入口。历史阶段计划见
+> [EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md](../archive/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md)。
 
 ## 文件结构
 

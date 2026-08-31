@@ -62,3 +62,6 @@ description: 审计一个 Polymarket 账户在公开端点可见窗口内的交�
 - 已平仓结果和未平仓浮盈亏必须分开写。
 - 回撤不是可选项，必须写。
 - 不能基于公开数据直接指控内幕交易。
+
+默认产物是一次性 `runtime/` 调查，不自动成为长期知识。如果结论改变账户 thesis、策略或规则库，必须创建
+`research_record.json`，并回写已有 family living doc/registry/index；不要只新增一份孤立报告。

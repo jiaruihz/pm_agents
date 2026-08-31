@@ -1,5 +1,7 @@
 # Backtest Analysis: Why Trades Are Zero (0 Fills)
 
+Status: `historical-snapshot`（特定 legacy PMM scenario/config mismatch）
+
 > **Issue**: Even in "fillable" scenarios like `b50_oscillating_fill`, the backtest reports 0 fills.
 
 ## Root Cause: Parameter Mismatch ("The Stubborn Market Maker")

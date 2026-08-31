@@ -1,5 +1,7 @@
 # 主链路流程
 
+Status: `dormant-reference`（legacy PMM flow；不属于 weather 生产血缘）
+
 主循环的时序图和关键路径。更详细的策略逻辑见 [STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)，代码走读见 [CODE_IMPLEMENTATION.md](CODE_IMPLEMENTATION.md)。
 
 ## Tick 生命周期

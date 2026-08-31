@@ -20,7 +20,7 @@ description: 追踪 weather 的 EventEnvelope→DecisionContext→ModelOutput→
 
 单笔或单日 raw lineage 不需要 sync/rebuild。只有 settlement/PnL 的 canonical 窗口确实缺失时才转 `weather-fact-rebuild`。
 
-需要 canonical 补证前先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB split/consumer route 为 critical，raw lineage 仍可继续，但必须停止 canonical settlement/fee/PnL 结论，不能任选 local/JRS DB 补齐。
+需要 canonical 补证前先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`，再运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health`。若 DB split/consumer route 为 critical，raw lineage 仍可继续，但必须停止 canonical settlement/fee/PnL 结论，不能任选 local/JRS DB 补齐。
 
 ## 查询前自检
 
@@ -54,8 +54,8 @@ EventEnvelope -> DecisionContext -> ModelOutput -> SignalCandidate
 - `feature_book_snapshot_id` 与 `execution_book_snapshot_id`；模型看到的书不是默认成交价。若来自
   selective WS，还要回溯 baseline raw ref、delta 区间/hash、selector/capture-policy version、
   subscription set 与 gap/reconnect 状态，不能把单条 frame 当完整盘口。
-- 当前 capture-only WS raw 若缺 historical subscription set、可验证 baseline 或 reconstructed snapshot，
-  直接标 lineage gap；不得从覆盖式 health 或事后 REST ladder 反推当时完整状态。
+- 即使共享 reconstructor 已存在，目标 WS 窗口若缺 epoch subscription manifest、可验证 baseline、gap/parity
+  状态或 reconstructed snapshot，仍直接标 lineage gap；不得从覆盖式 health 或事后 REST ladder 反推当时完整状态。
 - `TradeIntent` 的 token/side/shares/profile/cap/TTL/dedupe 与 blocker。
 - `record_only`/zero-notional 不得被解释为正 shares 或 venue call。
 

@@ -89,6 +89,9 @@ context_contract:
   # AGENTS/CLAUDE context-reduction change lands, then it should be lowered.
   target_entrypoint_lines: 120
   max_entrypoint_lines: 260
+  skill_target_lines: 180
+  skill_max_lines: 240
+  skill_default_prompt_max_chars: 280
   required_files:
     - AGENTS.md
     - docs/PROJECT_STRUCTURE.md

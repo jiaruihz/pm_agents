@@ -1,8 +1,11 @@
 # Weather Edge Engine — PR1 开发日志
 
+Status: `historical-development-log / not-current-state`
+Current authority: `../WEATHER_DOCS_INDEX.md` and `../WEATHER_STRATEGY_REGISTRY.md`
+
 > 关联设计：[WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](../WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md)
 > 范围：Step 1 / PR 1 — 本机纯函数骨架（blender + city_day_basket + tests）
-> 状态：进行中
+> 当时状态：进行中（仅表示 2026-06-05 的开发截面）
 
 ## 0. PR1 范围
 

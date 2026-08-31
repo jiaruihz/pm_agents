@@ -258,7 +258,9 @@ def _audit_context(repo_root: Path, config: dict[str, Any]) -> list[Finding]:
 
 
 def _audit_skills(
-    repo_root: Path, catalog_path: Path
+    repo_root: Path,
+    catalog_path: Path,
+    context_contract: Optional[dict[str, Any]] = None,
 ) -> tuple[list[Finding], dict[str, Any]]:
     findings: list[Finding] = []
     catalog = _load_yaml(catalog_path)
@@ -266,6 +268,14 @@ def _audit_skills(
     if not isinstance(entries, dict):
         raise ValueError(f"skill catalog must contain a skills mapping: {catalog_path}")
     skill_paths = sorted((repo_root / "skills").glob("*/SKILL.md"))
+    context_contract = context_contract or {}
+    target_lines = int(context_contract.get("skill_target_lines", 500))
+    max_lines = int(context_contract.get("skill_max_lines", 500))
+    max_prompt_chars = int(
+        context_contract.get("skill_default_prompt_max_chars", 500)
+    )
+    skill_line_counts: dict[str, int] = {}
+    prompt_lengths: dict[str, int] = {}
     actual = {path.parent.name for path in skill_paths}
     declared = set(entries)
     for name in sorted(actual - declared):
@@ -290,6 +300,26 @@ def _audit_skills(
     allowed_lifecycle = {"active", "dormant"}
     for path in skill_paths:
         name = path.parent.name
+        line_count = len(path.read_text(encoding="utf-8").splitlines())
+        skill_line_counts[name] = line_count
+        if line_count > max_lines:
+            findings.append(
+                Finding(
+                    "error",
+                    "skill_too_large",
+                    f"skill has {line_count} lines; maximum is {max_lines}",
+                    str(path.relative_to(repo_root)),
+                )
+            )
+        elif line_count > target_lines:
+            findings.append(
+                Finding(
+                    "warning",
+                    "skill_above_target",
+                    f"skill has {line_count} lines; target is {target_lines}",
+                    str(path.relative_to(repo_root)),
+                )
+            )
         try:
             frontmatter = _split_frontmatter(path)
         except ValueError as exc:
@@ -335,12 +365,31 @@ def _audit_skills(
             default_prompt = str(
                 (metadata.get("interface") or {}).get("default_prompt") or ""
             )
+            prompt_lengths[name] = len(default_prompt)
             if f"${name}" not in default_prompt:
                 findings.append(
                     Finding(
                         "error",
                         "skill_prompt_mismatch",
                         "default_prompt must invoke its own skill",
+                        str(agent.relative_to(repo_root)),
+                    )
+                )
+            if len(default_prompt) > max_prompt_chars:
+                findings.append(
+                    Finding(
+                        "error",
+                        "skill_prompt_too_large",
+                        f"default_prompt has {len(default_prompt)} chars; maximum is {max_prompt_chars}",
+                        str(agent.relative_to(repo_root)),
+                    )
+                )
+            if any(ord(char) < 32 for char in default_prompt):
+                findings.append(
+                    Finding(
+                        "error",
+                        "skill_prompt_not_single_line",
+                        "default_prompt must not contain control characters",
                         str(agent.relative_to(repo_root)),
                     )
                 )
@@ -395,6 +444,8 @@ def _audit_skills(
         "dormant_skills": sum(
             (entries.get(name) or {}).get("lifecycle") == "dormant" for name in declared
         ),
+        "max_skill_lines": max(skill_line_counts.values(), default=0),
+        "max_default_prompt_chars": max(prompt_lengths.values(), default=0),
     }
 
 
@@ -472,7 +523,9 @@ def audit_project(
     tracked = tracked_files(repo_root)
     root_findings, root_metrics = _audit_roots(repo_root, config, tracked)
     skill_findings, skill_metrics = _audit_skills(
-        repo_root, repo_root / config["skill_catalog"]
+        repo_root,
+        repo_root / config["skill_catalog"],
+        config.get("context_contract"),
     )
     review_findings, review_metrics = _audit_reviews(
         repo_root, config, tracked, deep=deep

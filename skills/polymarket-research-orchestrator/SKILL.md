@@ -54,3 +54,10 @@ event 默认输出到 `runtime/events/<slug>-<timestamp>/`：
 - 评论和钱包偏向只是证据层，不是唯一裁判。
 - 若规则高歧义，最终结论必须降级。
 - `profile_audit_mode=full` 仍只是在公开端点和当前代码上限内尽量分页；综合报告必须保留账户覆盖窗口和缺口。
+
+## 知识生命周期
+
+- 即时 market/event 尽调默认只保留在 `runtime/`，不为每次运行新建长期 Markdown。
+- 若结论改变策略、规则库或账户 thesis，必须补 `research_record.json`，并更新已有 family living
+  doc/registry/index，记录证据范围、denominator、当前动作和 runtime artifact pointer。
+- 同一主题复跑优先修订既有知识入口；方向暂停标 `dormant` 或 `superseded-for-now`，不擅自删除历史证据。

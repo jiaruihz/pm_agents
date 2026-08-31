@@ -65,6 +65,8 @@ node scripts/login.js
 
 The browser opens with a persistent profile under `data/profile-chatgpt/`.
 The user logs in manually once, then returns to the terminal and presses Enter.
+The scaffold ignores this profile and `data/records/`; never commit either login
+state or captured conversations.
 
 ### 4. Ask questions
 
@@ -83,6 +85,8 @@ Outputs are saved under `data/records/`.
 3. Do not rely on `networkidle` to decide that an answer is finished.
 4. Prefer message-text stabilization logic: poll the last assistant message until it stops changing.
 5. If ChatGPT UI selectors drift, use Playwright codegen to refresh them.
+6. Require an explicit target directory. Keep the persistent profile and generated
+   records untracked even when the scaffold lives inside another repository.
 
 ## Locator maintenance
 
@@ -118,4 +122,3 @@ That keeps browser fragility inside the local bot project and keeps Codex logic 
 1. This skill is for local, user-controlled browser automation.
 2. Do not turn it into high-frequency or large-scale scraping.
 3. Expect periodic selector maintenance because ChatGPT web UI changes over time.
-

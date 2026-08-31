@@ -1,8 +1,11 @@
 # Weather Edge Engine — PR2 开发日志
 
+Status: `historical-development-log / not-current-state`
+Current authority: `../WEATHER_DOCS_INDEX.md` and `../WEATHER_STRATEGY_REGISTRY.md`
+
 > 关联设计：[WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](../WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) §4 Step 2 / §6 PR 2
 > 范围：离线回放评估 + 周度 sklearn 重新校准脚本
-> 状态：进行中
+> 当时状态：进行中（仅表示 2026-06-05 的开发截面）
 
 ## 0. PR2 范围
 

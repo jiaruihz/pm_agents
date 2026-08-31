@@ -1,4 +1,4 @@
 interface:
   display_name: "PMM Market Data Fetcher"
   short_description: "Fetch one-shot event snapshots for dormant PMM tests"
-  default_prompt: "Use $pmm-market-data-fetcher to save a one-shot Polymarket event snapshot for a legacy PMM test."
+  default_prompt: "Use $pmm-market-data-fetcher to save a one-shot legacy PMM event snapshot under runtime; record a durable handoff only if it changes an existing research thesis."

@@ -1,5 +1,8 @@
 # Weather Edge Engine — PR2b 开发日志
 
+Status: `historical-development-log / not-current-state`
+Current authority: `../WEATHER_DOCS_INDEX.md` and `../WEATHER_STRATEGY_REGISTRY.md`
+
 > 关联设计：[WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](../WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) §4 Step 2  
 > 范围：basket 参数调优与离线 gate 复核  
 > 状态：完成；不改 N100、不改生产配置、不开 canary

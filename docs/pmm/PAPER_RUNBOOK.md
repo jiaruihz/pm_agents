@@ -1,11 +1,15 @@
 # PMM Paper 运维手册
 
-面向日常运行 `PMM_EXECUTION_MODE=paper` 的操作说明，覆盖启动、监控、日志、Telegram 汇报和可视化看板。
+> **状态**：`dormant-paper-only`。本文只用于 legacy PMM 本地 paper 演练，不是
+> weather 生产 runbook；不得把下文命令改成 `live` 后直接执行。当前生产操作见
+> [OPS_RUNBOOK.md](../OPS_RUNBOOK.md)。
+
+面向 `PMM_EXECUTION_MODE=paper` 的操作说明，覆盖启动、监控、日志、Telegram 汇报和可视化看板。
 
 ## 1. 启动前检查
 
 ```bash
-cd /home/rui/projects/pm_agent
+# 在 pm_agents 仓库根目录执行
 test -f .env || cp .env.example .env
 ```
 

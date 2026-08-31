@@ -40,3 +40,6 @@ description: 审计一个 Polymarket 市场的基础信息、规则、结算来�
 - 先给规则清晰度和争议风险，再给摘要。
 - 不能只依赖评论或钱包行为判断规则风险。
 - 如果规则文本不充分，必须在报告里明确写出局限性。
+
+默认产物是一次性 `runtime/` 调查，不自动成为长期知识。如果规则结论改变现有策略或规则库，必须创建
+`research_record.json`，并回写已有 family living doc/registry/index；不要只新增一份孤立报告。

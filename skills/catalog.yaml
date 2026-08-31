@@ -134,8 +134,14 @@ precedence:
     route: weather-strategy-deploy
   - condition: A weather storage failure involves JRS or TCC.
     route: weather-jrs-runtime-failover + weather-strategy-deploy
+  - condition: A weather request asks about wallet cash, transfers, fees, or reserved funds.
+    route: weather-live-account-reconcile
+  - condition: A weather request asks about positions, open orders, unsettled risk, or concentration.
+    route: weather-strategy-exposure
   - condition: A weather question asks why one decision or order happened.
     route: weather-strategy-lineage
+  - condition: A weather target window is missing stale derived facts, fills, fees, or settlements.
+    route: weather-fact-rebuild
   - condition: A weather question asks aggregate results for an existing strategy.
     route: weather-strategy-performance
   - condition: A weather question proposes a new mechanism or model.

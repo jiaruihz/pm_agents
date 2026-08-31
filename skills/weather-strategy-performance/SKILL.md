@@ -24,6 +24,7 @@ description: 评估 weather 策略、模型、shadow/live probe 的 fee-adjusted
 | 全机会 alpha / fill selection | opportunity | `fact_signal_candidates` |
 | 概率/分布质量 | 固定 PIT checkpoint/label | WCIR prediction table + canonical feature/model artifact + settlement source |
 | 当前 order/fill 状态 | raw event/order/fill | 当前 Mac strategy runtime |
+| 零 notional shadow 绩效 | shadow decision/candidate | instance `health_path` 同目录 journal（`shadow_decisions.jsonl`/`signal_candidates.jsonl`，路径见 `src/strategies/runtime/production.yaml`）；结算 join 用 condition_id/market_id 查 canonical `settlements`，禁止用 (city,date,bracket) 键（Tmax/Tmin 同档会串）、禁止用观测 lane 冒充结算 truth（反例见 `WEATHER_TMIN_DISTRIBUTION_EDGE_STRATEGY.md` 2026-08-17 节） |
 | 钱包现金流 | account | `weather-live-account-reconcile` |
 
 不得把 opportunity replay 称为 actual fills，也不得用 fill 样本替代全机会分母。
@@ -72,8 +73,8 @@ best-model 或 evidence-complete 子集只能称 slice。只有明确 universe�
 先确认 DB 目标窗口与 raw 覆盖；需要刷新时走 `weather-fact-rebuild`。普通历史查询不为形式重建。
 
 ```bash
-.venv/bin/python scripts/ops/weather_production_ctl.py health
 .venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_production_ctl.py health
 ```
 
 manifest 必须无 `critical`，且 `db_route.status=healthy`、`runtime/weather.db` 与 JRS physical canonical 是同一 device/inode；无关 warning 逐项记录但不自动阻断只读绩效。split 或存在非 canonical consumer 时停止绩效计算，不能挑行数较多的一份继续。
@@ -139,7 +140,9 @@ executable_cost = side ask + taker fee + declared friction
 - 报 fills/states、独立日期、active days、unsettled/coverage。
 - 本轮试验 K 个版本/切片，报告多重检验处理或明确未校正。
 - train 选模型/阈值；frozen holdout/forward 只复核。
-- 当前默认 live 动作门仍是 significance、same-denominator baseline、forward 三门全过。
+- live 动作门以 `docs/WEATHER_ANALYSIS_CONTRACT.md` 与 registry 中登记的版本化 gate 为准；每次评测记录
+  gate/version identity，再报告 significance、same-denominator baseline、forward 等已登记判据，不把 skill
+  中的当前措辞当永久配置。
 
 结论等级：
 

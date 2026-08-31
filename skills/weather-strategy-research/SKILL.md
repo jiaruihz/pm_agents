@@ -7,12 +7,15 @@ description: 设计和验证新的 weather 策略机制、物理特征、概率/
 
 研究目标是找到 fee-adjusted、PIT、可执行、能在 frozen forward 重复的 market residual。
 
-## 先定位血缘
+## 最小上下文与血缘
 
-读 `AGENTS.md`、`docs/RESEARCH_KNOWLEDGE_SYSTEM.md`、`docs/WEATHER_ANALYSIS_CONTRACT.md`、`docs/WEATHER_STRATEGY_QUANT_DESIGN.md`、`docs/WEATHER_STRATEGY_REGISTRY.md` 和目标 family living doc。
+先读 `AGENTS.md`、`docs/RESEARCH_KNOWLEDGE_SYSTEM.md` 的研究记录合同、registry 中目标 family 的当前行，
+以及目标 family living doc。然后按问题加载：分析口径读 `docs/WEATHER_ANALYSIS_CONTRACT.md` 的对应章节；
+概率/forward 设计读 `docs/WEATHER_STRATEGY_QUANT_DESIGN.md` 的对应章节；不要默认全文加载两份大合同。
 
-跨城市分钟/小时间隔温度模型还必须读 `docs/WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md` 与
-`docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md`，先声明目标、PIT 时钟、source/cadence、settlement lattice 和盘口在模型中的角色。
+只有跨城市分钟/小时间隔模型才读 `docs/WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md` 与
+`docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md` 的相关 contract/current-state 章节，并先声明目标、PIT 时钟、
+source/cadence、settlement lattice 和盘口在模型中的角色。
 
 新产物挂到：
 
@@ -43,10 +46,10 @@ source/raw -> EventEnvelope -> DecisionContext -> ModelOutput
 
 研究使用选择性 WebSocket 增量盘口时，先冻结 raw-to-book 合同，再构造特征：
 
-当前 `weather_data_feed_service.market_books_ws` 只落原始 WS frame 和可覆盖的 combined health；尚未提供
-canonical reconstructed-book materializer，也没有直接可消费的 `feature_book_snapshot_id`。因此现阶段可做
-transport/coverage 审计和离线重建实验；在确定性 materializer、append-only subscription/capture manifest 与
-REST/WS parity 测试落地前，readiness 必须标 `BLOCKED`，不得把 raw frame 直接接入模型或称为 model-ready。
+`weather_data_feed_service.market_books_ws` 负责 raw frame、subscription epoch 与 combined health；共享
+deterministic offline reconstruction、REST/WS parity 和 immutable role-specific snapshot-id 合同已存在。
+但 raw capture 不自动等于 model/execution evidence：目标窗口若缺 deployed producer identity、epoch manifest、
+gap/blocker 状态、parity、policy-valid coverage 或 checkpoint integration，readiness 仍标 `BLOCKED`。
 
 - raw `book` / `snapshot` 是状态基准，`price_change` 是 delta；必须按 token 和 event/receive clock
   从最近有效基准确定性重建，处理 reconnect 初始快照、重复、乱序和 gap。单条 JSONL/frame 不是完整盘口。
@@ -64,8 +67,8 @@ REST/WS parity 测试落地前，readiness 必须标 `BLOCKED`，不得把 raw f
 落盘量/日、保留期和停止条件。这是资源与运维边界，不是 alpha eligibility gate；实际部署另走
 `weather-strategy-deploy`。
 
-研究若读取 canonical facts/features，先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与
-`.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；
+研究若读取 canonical facts/features，先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`，
+再运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health`；
 DB split 或存在非 canonical consumer 时只允许继续 raw coverage/机制诊断，不得产出 canonical 同分母结论。
 开始读取时保存 build manifest；若 build 变化，重启该次查询或按 build 分层。
 
@@ -144,11 +147,10 @@ label 或 evidence availability 过滤后的结果称 `training/evaluation slice
 - forecast 用 issue/run/first-seen/hash/age lineage，不用粗 local-hour 标签冒充信息状态。
 - source event grain 默认 first-seen `(city, local_date, source, observation_ts, prior official state)`。
 - 快源温度不是 settlement truth；校准 source→official/settlement 的 basis、boundary、age、path state。
-- 机场快源必须运行已登记的 terminal-false negative-control suite，其中 Atlanta `2026-07-17`
-  作为必含 fixture：OMO/MADISHF `91.4F`、
-  direct MADIS `temperatureQCR=0`，但 routine METAR/WU final `89F`、旧 `88-89` bracket 未离开。
-  相关报告必须单列 terminal false、同 timestamp source→routine→WU basis，以及 correct/false 各自的
-  fresh executable/fill 分母；persistent 命中率或 QC pass 不能替代这三项。
+- 机场快源必须运行
+  `docs/WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md#11-required-regression-cases` 登记的 terminal-false
+  negative-control suite，并单列 terminal false、source→settlement basis，以及 correct/false 各自的 fresh
+  executable/fill 分母；不要在 skill 中复制会漂移的单例数值。
 - 后到的 METAR/WU 只能作 label，不能回填成事前特征。
 - 多源 fallback 必须显式；模型/source 缺失不得静默替换。
 

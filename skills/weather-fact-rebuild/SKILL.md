@@ -7,14 +7,15 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
 
 把“补当前 raw 数据”“刷新 canonical DB”“全量重建”分开。当前机器是 Mac；N100 在磁盘事故恢复完成前只提供历史/抢救数据，不是 present-state truth。
 
-## 先读
+## 最小上下文
 
-依次读：
+先读 `AGENTS.md` 和目标窗口对应的 `production.yaml`/manifest。然后只按缺口加载：
 
-1. `AGENTS.md`
-2. `docs/WEATHER_ANALYSIS_CONTRACT.md`
-3. `docs/WEATHER_DATA_PIPELINE.md`
-4. `docs/WEATHER_DATA_CANONICAL_SOURCES.md`
+- fact grain、fee、PnL 或分析口径：`docs/WEATHER_ANALYSIS_CONTRACT.md` 的相关章节。
+- sync/materializer/writer 链：`docs/WEATHER_DATA_PIPELINE.md` 的当前 canonical refresh 章节。
+- source、settlement 或 label 缺口：`docs/WEATHER_DATA_CANONICAL_SOURCES.md` 的对应 source 章节。
+
+不要为一次 bounded refresh 默认全文加载三份大文档。
 
 ## 数据层级
 
@@ -27,7 +28,7 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
 
 ## 决策顺序
 
-0. 先运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health`、`.venv/bin/python scripts/ops/weather_production_manifest.py --strict` 与 `.venv/bin/python scripts/ops/weather_storage_identity_audit.py`。若 DB route 为 split、存在非 canonical consumer、独立可写 `weather.db`、共享 live journal 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。无关 warning 逐项记录，但不冒充 DB identity 故障。
+0. 先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`、`.venv/bin/python scripts/ops/weather_production_ctl.py health` 与 `.venv/bin/python scripts/ops/weather_storage_identity_audit.py`。若 DB route 为 split、存在非 canonical consumer、独立可写 `weather.db`、共享 live journal 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。无关 warning 逐项记录，但不冒充 DB identity 故障。
 1. 单笔订单、当前 runner、某次触发：直接读精确 raw 文件，不 sync、不 rebuild。
 2. 历史分析且 DB 已覆盖目标窗：只读查询现有 DB。
 3. 问“最新/今天”且 Mac market mirror 落后：先增量同步当前 Mac market raw。

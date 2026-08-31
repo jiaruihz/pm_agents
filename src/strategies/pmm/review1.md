@@ -1,3 +1,14 @@
+# PMM 早期代码审阅快照
+
+Status: `historical-snapshot / not-current-advice`
+
+本文保留一次早期代码审阅的原始判断，其中的路径、收益类比和“下一步”均不能代表
+当前实现或 live 授权。当前 dormant PMM 入口见
+[PMM README](../../../docs/pmm/README.md)，当前 MM 研究见
+[weather-first MM review packet](../../../docs/design/weather_market_making/WEATHER_FIRST_MM_GPT_PRO_REVIEW_PACKET_V1.md)。
+
+## 原始审阅
+
  我们的做市算法的思路怎么样，作为散户可能在polymarket上赚钱吗？：一句话版
 
   每秒钟做一次循环：看行情 → 算出该挂什么价 → 跟上次不一样就改单 → 等下一秒。

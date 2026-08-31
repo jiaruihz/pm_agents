@@ -1,5 +1,7 @@
 # 代码实现说明
 
+Status: `dormant-reference`（legacy PMM code walk-through；不代表 weather 当前架构）
+
 各模块的代码走读，按数据流顺序。
 
 ## 模块依赖

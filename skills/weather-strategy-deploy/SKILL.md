@@ -43,16 +43,17 @@ expected raw output / stop-pause mechanism / rollback
   set、代理流量预算/日、落盘预算/日、保留期和 stop condition。
 - 后验分别验证 REST raw freshness、WS baseline/delta reconstruction、gap/reconnect、当前订阅集合、
   collector bytes/messages 与预算；无消息只可按 policy-valid window 判定，不能直接当作健康或无变化。
-- 当前 WS collector 是 capture-only：只落 raw frame 与 combined health。若本次没有同时交付并验证
-  deterministic reconstructed-book materializer、append-only subscription/capture manifest 和 parity test，
-  部署结论只能写“capture healthy”，不得写“feature/model-ready”；baseline/delta reconstruction 项明确记为未完成。
+- WS collector 本身只负责 raw frame、subscription epoch 与 combined health；仓库已有共享 deterministic
+  offline reconstructor/parity contract，但 collector 部署不会自动产出 model-ready evidence。只有 deployed
+  producer identity、epoch manifest、gap/blocker、REST/WS parity、role-specific snapshot ids、policy-valid coverage
+  与目标 checkpoint integration 都验证通过，才可写“feature/model-ready”；否则最多写“capture healthy”。
 
 ## 变更前动态盘点
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
 .venv/bin/python scripts/ops/weather_production_ctl.py health
 .venv/bin/python scripts/ops/weather_production_ctl.py plan
-.venv/bin/python scripts/ops/weather_production_manifest.py --strict
 .venv/bin/python scripts/ops/weather_storage_identity_audit.py
 git status --short
 git rev-parse HEAD
@@ -123,12 +124,11 @@ one-shot，并确认没有在跑的同名任务）。
 
 worktree 已脏时保留用户改动。若目标文件已有无关修改，先分离范围；不能把整棵脏树一并提交。
 
-部署或修复任务使用的临时 worktree 必须在交付时收口：已提交代码保留 branch/SHA，未提交代码先做
-content-addressed snapshot，ignored 研究产物通过 `weather_research_artifact_ctl.py archive --source-root ...`
-迁到 archive，然后移除非 `production.yaml` 登记的实体 worktree 并 prune 失效 metadata。不得长期在
-`/Users/deepsleep/projects` 顶层留下 `pm_agents_<task>`；manifest 出现
-`unregistered_persistent_worktrees` 时，先确认无进程/LaunchAgent/cwd 引用再清理。当前登记的生产 checkout
-只能在明确生产维护授权下变更或移除。
+部署或修复任务使用的临时 worktree 在交付时先做只读 inventory：列出 branch/SHA、dirty/untracked/ignored
+状态，以及 process/LaunchAgent/cwd/`production.yaml` 引用，并给出 archive/cleanup candidate。默认不移除
+worktree、不 prune metadata，也不把未提交内容自动迁走；只有用户明确授权 cleanup，且未提交内容已有可验证
+content-addressed snapshot、研究产物已归档、所有 runtime 引用均解除后，才执行精确 remove/prune。当前登记的
+生产 checkout 只能在明确生产维护授权下变更或移除。
 
 ## 本地验证
 
