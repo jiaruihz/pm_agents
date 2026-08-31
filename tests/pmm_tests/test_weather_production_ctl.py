@@ -145,20 +145,20 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert cross_no_v2.release_id == "cross_no_v2_metar"
     assert cross_no_v2.expected_health_contract() == {
         "strategy_instance": "cross_no_v2_metar_v1",
-        "code_identity": "b27800ccd3acfd1eb673c8ec8590cdb1b2a9a734",
+        "code_identity": "a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430",
         "execution_mode": "live_probe",
         "live_enabled": True,
         "shares_per_order": 5.0,
-        "max_orders_per_utc_day": 5,
-        "max_daily_principal_usd": 25.0,
-        "max_no_ask": 0.97,
+        "daily_order_cap_enabled": False,
+        "daily_principal_cap_enabled": False,
+        "max_no_ask": 0.99,
         "weather_taker_fee_rate": 0.05,
         "clock_invalid_same_boot_override_enabled": True,
         "settlement_hard_invalidation": False,
         "source_attribution_schema_version": "cross_no_v2_metar_source_attribution_runtime_v1",
     }
     assert spec.release("cross_no_v2_metar").expected_repo_sha == (
-        "b27800ccd3acfd1eb673c8ec8590cdb1b2a9a734"
+        "a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430"
     )
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"
