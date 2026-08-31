@@ -209,6 +209,8 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
     if row.get("_parse_error") or not is_current_or_future_order(row, today_utc=today_utc):
         return False
     status = str(row.get("status") or "").lower()
+    side_effect_state = str(row.get("execution_side_effect_state") or "").lower()
+    live_submit_status = str(row.get("live_submit_status") or "").lower()
     exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
     place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
     place_status = str(place.get("status") or "").lower()
@@ -216,7 +218,35 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
     cancel_status = str(cancel.get("status") or "").lower()
     quote_status = str(row.get("quote_status") or "").lower()
     exchange_order_status = str(row.get("exchange_order_status") or "").lower()
+    try:
+        actual_fill_shares = float(row.get("actual_fill_shares") or 0.0)
+    except (TypeError, ValueError):
+        actual_fill_shares = 0.0
+    has_order_side_effect_evidence = bool(
+        str(row.get("_effective_order_id") or effective_order_id(row)).strip()
+        or actual_fill_shares > 0
+        or row.get("live_order_posted") is True
+        or place.get("success") is True
+    )
     if status in {"failed", "error", "rejected", "cancelled", "canceled", "blocked"}:
+        return False
+    # A failed submission can still be emitted as a cross-candidate row and
+    # retried under the same execution key.  Keep those attempts in raw
+    # lineage, but do not treat an authoritative no-side-effect outcome as a
+    # live order (or as a duplicate live order).
+    if side_effect_state == "definitive_no_order" and not has_order_side_effect_evidence:
+        return False
+    if (
+        not has_order_side_effect_evidence
+        and row.get("live_order_posted") is False
+        and live_submit_status
+        in {
+            "blocked",
+            "failed",
+            "rejected",
+            "submit_failed",
+        }
+    ):
         return False
     if quote_status in {"cancelled", "canceled"} or cancel_status in {
         "cancelled",
@@ -225,10 +255,6 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
         return False
     if place_status in {"failed", "error", "rejected", "cancelled", "canceled"}:
         return False
-    try:
-        actual_fill_shares = float(row.get("actual_fill_shares") or 0.0)
-    except (TypeError, ValueError):
-        actual_fill_shares = 0.0
     if actual_fill_shares <= 0 and (
         exchange_order_status in {"cancelled", "canceled"}
         or row.get("immediate_cancel_confirmed") is True

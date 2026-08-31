@@ -1384,6 +1384,148 @@ def test_live_order_check_flags_repeated_execution_id(tmp_path):
     assert report["duplicate_current_execution_identity_count"] == 1
 
 
+def test_live_order_check_excludes_repeated_definitive_no_order_attempts(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    failed = {
+        "strategy_instance": "fast_source_prev_no_trial_v1",
+        "city": "Amsterdam",
+        "target_date": "2026-08-10",
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "execution_policy": "fast_source_visible_depth_hot_retry_v1",
+        "child_order_role": "taker",
+        "execution_key": "same-failed-attempt",
+        "status": "cross_candidate",
+        "execution_side_effect_state": "definitive_no_order",
+        "live_submit_status": "submit_failed",
+        "live_order_posted": False,
+    }
+    path.write_text(json.dumps(failed) + "\n" + json.dumps(failed) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 0
+    assert report["duplicate_current_execution_identity_count"] == 0
+
+
+def test_live_order_check_keeps_submitted_order_after_failed_attempt(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    base = {
+        "strategy_instance": "fast_source_prev_no_trial_v1",
+        "city": "Amsterdam",
+        "target_date": "2026-08-10",
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "execution_policy": "fast_source_visible_depth_hot_retry_v1",
+        "child_order_role": "taker",
+        "execution_key": "retry-then-submit",
+        "status": "cross_candidate",
+    }
+    failed = {
+        **base,
+        "execution_side_effect_state": "definitive_no_order",
+        "live_submit_status": "submit_failed",
+        "live_order_posted": False,
+    }
+    submitted = {
+        **base,
+        "live_submit_status": "submitted",
+        "live_order_posted": True,
+        "venue_order_id": "venue-order",
+    }
+    path.write_text(json.dumps(failed) + "\n" + json.dumps(submitted) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 1
+    assert report["duplicate_current_execution_identity_count"] == 0
+
+
+def test_live_order_check_keeps_contradictory_definitive_no_order_evidence(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    base = {
+        "strategy_instance": "fast_source_prev_no_trial_v1",
+        "city": "Amsterdam",
+        "target_date": "2026-08-10",
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "execution_policy": "fast_source_visible_depth_hot_retry_v1",
+        "child_order_role": "taker",
+        "execution_key": "contradictory-side-effect",
+        "status": "cross_candidate",
+        "execution_side_effect_state": "definitive_no_order",
+        "live_submit_status": "submit_failed",
+        "live_order_posted": False,
+    }
+    first = {**base, "venue_order_id": "venue-order-1"}
+    second = {**base, "venue_order_id": "venue-order-2", "actual_fill_shares": 1.0}
+    path.write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 2
+    assert report["duplicate_current_execution_identity_count"] == 1
+
+
+def test_live_order_check_keeps_unknown_side_effect_with_order_evidence(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "orders.jsonl"
+    row = {
+        "strategy_instance": "fast_source_prev_no_trial_v1",
+        "city": "Amsterdam",
+        "target_date": "2026-08-10",
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "execution_policy": "fast_source_visible_depth_hot_retry_v1",
+        "child_order_role": "taker",
+        "execution_key": "unknown-side-effect",
+        "status": "cross_candidate",
+        "execution_side_effect_state": "unknown",
+        "live_submit_status": "submit_failed",
+        "live_order_posted": False,
+        "exchange_response": {
+            "place": {"success": True, "status": "live", "orderID": "venue-order"}
+        },
+    }
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 1
+    assert report["duplicate_current_execution_identity_count"] == 0
+
+
 def test_live_order_check_flags_current_duplicate_and_yes_no_conflict(tmp_path):
     live_dir = tmp_path / "live"
     live_dir.mkdir()
