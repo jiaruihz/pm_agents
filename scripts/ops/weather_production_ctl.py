@@ -1598,12 +1598,14 @@ def _runtime_launch_env(
     confirm_live: bool,
 ) -> dict[str, str]:
     env = os.environ.copy()
-    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
-    production_config = str(
-        ROOT / "src/strategies/runtime/production.yaml"
-    )
-    env["WEATHER_PRODUCTION_CONFIG"] = production_config
     env.update(dict(runtime.launch_environment))
+    production_config = str(
+        spec.operational_repo_root / "src/strategies/runtime/production.yaml"
+    )
+    # These are controller-owned safety bindings.  A runtime-specific launch
+    # environment must never redirect desired state or mutation authority.
+    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
+    env["WEATHER_PRODUCTION_CONFIG"] = production_config
     update_environment = _tmux(
         spec,
         "show-options",

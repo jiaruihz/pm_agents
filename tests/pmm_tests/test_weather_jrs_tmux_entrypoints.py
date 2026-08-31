@@ -362,7 +362,9 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
         encoding="utf-8"
     )
     assert "weather_market_proxy_env.sh" in refresh
-    assert "load_production_spec().operational_repo_root" in refresh
+    assert 'BUNDLED_PRODUCTION_SPEC="$PROJECT_DIR/' in refresh
+    assert "load_production_spec(Path(sys.argv[1])).operational_repo_root" in refresh
+    assert 'PRODUCTION_SPEC_SOURCE="$OPERATIONAL_PROJECT_DIR/' in refresh
     assert 'source "$OPERATIONAL_PROJECT_DIR/.env"' in refresh
     assert 'source "$PROJECT_DIR/.env"' not in refresh
     assert 'PROXY_CONTROL_ROOT="$OPERATIONAL_PROJECT_DIR"' in refresh

@@ -1190,6 +1190,10 @@ def test_controller_injects_tmux_mutation_authority_for_start(monkeypatch, tmp_p
         checkout_root=tmp_path,
         start_script=Path("start.sh"),
         recovery_policy="safe",
+        launch_environment=(
+            ("WEATHER_JRS_TMUX_MUTATION_AUTHORITY", "runtime_override"),
+            ("WEATHER_PRODUCTION_CONFIG", "/tmp/runtime-override.yaml"),
+        ),
     )
     monkeypatch.setattr(
         ctl,
@@ -1204,7 +1208,7 @@ def test_controller_injects_tmux_mutation_authority_for_start(monkeypatch, tmp_p
     assert result["status"] == "started"
     assert marker.read_text(encoding="utf-8") == "controller"
     assert config_marker.read_text(encoding="utf-8") == str(
-        ROOT / "src/strategies/runtime/production.yaml"
+        tmp_path / "src/strategies/runtime/production.yaml"
     )
 
 
@@ -1253,7 +1257,7 @@ def test_controller_pins_proxy_environment_for_managed_runtime(monkeypatch, tmp_
         "set-environment",
         "-g",
         "WEATHER_PRODUCTION_CONFIG",
-        str(ROOT / "src/strategies/runtime/production.yaml"),
+        str(tmp_path / "src/strategies/runtime/production.yaml"),
     ) in calls
     assert any(
         call[:3] == ("set-option", "-g", "update-environment")
@@ -1346,7 +1350,7 @@ def test_controller_can_restart_safe_non_live_runtime_from_start_contract(
         "set-environment",
         "-g",
         "WEATHER_PRODUCTION_CONFIG",
-        str(ROOT / "src/strategies/runtime/production.yaml"),
+        str(tmp_path / "src/strategies/runtime/production.yaml"),
     ) in calls
     assert result["status"] == "restarted"
     assert result["restart_mode"] == "controller_stop_then_registered_start"
