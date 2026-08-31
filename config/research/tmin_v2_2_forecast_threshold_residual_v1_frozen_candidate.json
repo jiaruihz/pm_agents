@@ -1,0 +1,59 @@
+{
+  "schema_version": "tmin_v2_2_forecast_threshold_residual_frozen_candidate_config_v1",
+  "model_id": "TMIN_V2_2_FORECAST_THRESHOLD_RESIDUAL_V1",
+  "research_only": true,
+  "zero_notional": true,
+  "live_authorization": false,
+  "fit_authorization_policy": "AUDITED_MISMATCH_EXCLUSION",
+  "truth_training_policy": "exclude row-level-audited unresolved source mismatches from primary forecast-error history; retain all-source sensitivity",
+  "contract_amendment": "Evidence-quality gates may exclude affected training rows but may not silently turn all otherwise valid probability rows into market fallback. Promotion diagnostics are evaluated after fitting.",
+  "evidence_seal_timestamp_utc": "2026-08-29T18:03:16Z",
+  "confirmatory_forward_start_target_date": "2026-08-31",
+  "supported_cities": [
+    "Seoul",
+    "Tokyo"
+  ],
+  "checkpoint_hours_local": [
+    6,
+    9
+  ],
+  "active_windows": [
+    "morning_cooling",
+    "post_sunrise_provisional_low"
+  ],
+  "city_cdf_shrinkage_strength": 30.0,
+  "clock_shrinkage_strength": 20.0,
+  "probability_clip": [
+    0.01,
+    0.99
+  ],
+  "alpha_prior": {
+    "distribution": "HalfNormal",
+    "scale": 0.25,
+    "lower_bound": 0.0
+  },
+  "fit_gate": {
+    "forecast_covered_independent_city_days_min": 120,
+    "next_colder_event_city_days_min": 40,
+    "per_city_covered_city_days_min": 50,
+    "per_city_event_city_days_min": 15,
+    "checkpoint_06_09_usable_vintage_coverage_min": 0.9,
+    "native_available_at_coverage_required": 1.0,
+    "truth_exact_match_min": 0.99,
+    "prior_target_dates_min": 10,
+    "prior_independent_negative_city_date_episodes_min": 5,
+    "both_supported_cities_required": true
+  },
+  "bootstrap_draws": 20000,
+  "random_seed": 20260829,
+  "data_cutoff_target_date": "2026-08-27",
+  "selection_metric": "date_equal_delta_logloss_vs_raw_market",
+  "selection_uses_pnl": false,
+  "forward_readout_gate": {
+    "new_settled_target_dates_min": 30,
+    "p0_rows_min": 180,
+    "p1_rows_min": 80,
+    "negative_p1_independent_city_date_episodes_min": 15,
+    "per_supported_city_p1_rows_min": 20
+  }
+}
