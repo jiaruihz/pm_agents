@@ -84,6 +84,7 @@ def _load_events(
         allowlist=allowlist,
         city_timezones=timezones,
         initialize_at_current=False,
+        allow_ended_run_for_replay=True,
     )
     strategy._save_cursor(cursor_path, state)
     events, _state = strategy.direct_evidence_events(
@@ -92,6 +93,7 @@ def _load_events(
         allowlist=allowlist,
         city_timezones=timezones,
         initialize_at_current=False,
+        allow_ended_run_for_replay=True,
     )
     return events
 
@@ -217,7 +219,13 @@ def main() -> int:
                 code_identity="counterfactual_corrected_worktree",
             )
 
-    corrected = _jsonl(args.output_dir / "opportunities.jsonl")
+    corrected_raw = _jsonl(args.output_dir / "opportunities.jsonl")
+    corrected_by_event: dict[str, dict[str, Any]] = {}
+    for row in corrected_raw:
+        identity = strategy.source_event_identity(row)
+        if identity:
+            corrected_by_event.setdefault(identity, row)
+    corrected = list(corrected_by_event.values())
     simulated_orders = _jsonl(args.output_dir / "orders.jsonl")
     corrected_crosses = [
         row
@@ -317,6 +325,7 @@ def main() -> int:
         },
         "corrected_replay": {
             "denominator_rows": len(corrected),
+            "duplicate_replay_rows_discarded": len(corrected_raw) - len(corrected),
             "deterministic_unique_cross_signals": len(unique_crosses),
             "contract_qualified_asof_potential_orders": len(order_details),
             "snapshot_five_share_depth_observed_unverified_full_depth": len(

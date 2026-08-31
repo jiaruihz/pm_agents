@@ -368,7 +368,7 @@ def ensure_research_record(
             ],
             "forward_policy": "Freeze the three source arms, market-city universe and five-share sizing for 48 hours; do not tune from intraday anecdotes.",
             "acceptance_gates": [
-                "one day is probe evidence only and cannot confirm alpha",
+                "48 hours is probe evidence only and cannot confirm alpha",
                 "paid adoption still requires the existing 72h/7d, 500-pair, two-vantage and clock-valid gates",
                 "every real order must have a durable pre-submit reservation and fresh five-share depth",
             ],
@@ -463,6 +463,7 @@ def direct_evidence_events(
     evidence_db: Path, *, cursor_path: Path, allowlist: Mapping[str, str],
     city_timezones: Mapping[str, str] = CITY_TIMEZONES,
     collector_run_start_wall_ns: int | None = None, initialize_at_current: bool = True,
+    allow_ended_run_for_replay: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read only new METAR.ws arrivals after a durable SQLite rowid watermark.
 
@@ -492,7 +493,7 @@ def direct_evidence_events(
                 "SELECT COUNT(*) FROM collector_run_end WHERE run_id = ?", (run_id,)
             ).fetchone()[0]
         )
-        if ended:
+        if ended and not allow_ended_run_for_replay:
             raise ValueError("collector run has ended; rotate through a new explicit evidence DB")
         latest_clock = conn.execute(
             "SELECT uncertainty_ms FROM clock_health WHERE run_id = ? ORDER BY sampled_at_ns DESC LIMIT 1",

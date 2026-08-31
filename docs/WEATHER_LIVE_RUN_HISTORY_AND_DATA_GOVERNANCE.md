@@ -1807,7 +1807,53 @@ Fixes: isolate the forecast proxy route, propagate per-runtime launch environmen
 into canonical tmux sessions, and make data-feed semantic health depend on the
 forecast collector so the outage is no longer reported green.
 
-## 28. Immediate Follow-Up Work
+## 28. 2026-08-31 Cross NO V2 unit/lattice pollution window
+
+Cross NO V2 release `a96a1fe8a4d7b6cc28da7ff40015cb6b850ef430` ran from
+`2026-08-31T10:09:58.229460Z` through `2026-08-31T17:21:25.495140Z` with two
+decision-breaking contracts missing: the frozen universe's per-city `market_unit`
+was discarded, and Celsius evidence converted to Fahrenheit was not snapped to the
+integer settlement-native lattice. The runner therefore mapped every city as
+Fahrenheit and left U.S. values such as `69.8` between exact brackets. It also lacked
+an observation-delay gate, could skip official-running-max updates behind unrelated
+decision blockers, treated any asks list as full depth, and did not cancel a live GTC
+remainder.
+
+Observed old-runtime denominator: 4,004 append-only opportunities, 0 orders and 0
+fills; 1,412 rows carried `exact_condition_or_no_token_unverified`, and 1,910 carried
+`market_not_found`. Corrected event-order replay produces 54 unique deterministic
+cross signals. No missed executable order or fill can be confirmed because the old
+runner blocked before requesting its event-time fresh REST book. Seven first-cross
+rows had five-share depth visible in the latest retained pre-event snapshot
+(Helsinki 18→19, Amsterdam 19→20, Ankara 27→28 and 28→29, Paris 22→23, Miami
+86-87→90-91, Buenos Aires 18→19), but those historical rows did not explicitly assert
+`full_depth_valid=true`; classify them as suspected missed orders, not confirmed
+orders or fills.
+
+The clean boundary is `2026-08-31T17:21:32.217819Z`, release
+`1ac0edf698bd6e0dc57d66b3f862683064b63dfb`, output
+`cross_no_v2_metar_polymarket_48h_v2`. The corrected runtime requires universe units,
+round-half-up native lattice values, bounded observation delay, visible source-stream
+silence, explicit full-depth evidence, and immediate cancellation of a resting GTC
+remainder. The old window must not enter Cross NO V2 alpha, fill-rate, or execution
+quality denominators; retain it only as engineering failure evidence.
+
+Machine audit:
+`runtime/reviews/cross_no_v2_pollution_20260831_v2/impact_report.json`.
+
+```text
+run_family = cross_no_v2_metar_v1
+run_quality = polluted_unit_native_lattice_and_execution_contract
+exclusion_window = 2026-08-31T10:09:58.229460Z..2026-08-31T17:21:25.495140Z
+observed_orders = 0
+confirmed_missed_executable_orders = 0
+deterministic_unique_cross_signals = 54
+suspected_missed_orders_visible_5_share_depth_only = 7
+clean_boundary = 2026-08-31T17:21:32.217819Z
+fixed_release = 1ac0edf698bd6e0dc57d66b3f862683064b63dfb
+```
+
+## 29. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
