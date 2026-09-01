@@ -389,6 +389,10 @@ def test_live_exactly_five_shares_and_cross_source_race_dedupes(tmp_path: Path):
     orders = read(tmp_path / "out/orders.jsonl")
     assert result["orders"] == 1 and len(calls) == 1
     assert orders[0]["size"] == 5.0 and orders[0]["actual_fill_shares"] == 5.0
+    assert orders[0]["bracket"] == "80-81"
+    assert orders[0]["unit"] == "F"
+    assert orders[0]["market_id"] == "c80"
+    assert orders[0]["icao"] == "KMIA"
     assert orders[0]["public_trade_is_own_fill"] is False
     opportunities = read(tmp_path / "out/opportunities.jsonl")
     assert orders[0]["attribution_source_arm"] == "metar_ws_datis"
