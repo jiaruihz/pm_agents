@@ -145,3 +145,8 @@ Austin 1、SanFrancisco 1、Seattle 1、Amsterdam 2、Houston 1。最后一笔 H
 journal，造成 journal 已 append、refresh exit 0 且 coverage gate pass，但 adjustment row 未进入 DB。
 启动器现统一绑定这四类 operational journal；以后必须同时核验 DB adjustment row 和
 `fact_trades` effective value，不能只看 refresh/gate 总状态。
+
+目标 Helsinki adjustment 最终以 canonical class `exact` 物化，同时在 `evidence_json` 保留 raw
+class `exact_onchain`。原始 `fills.filled_at_utc` 保持 13:47:18.996284；派生
+`fact_trades.fill_ts_utc` 为 13:02:22，校正 2696.996 秒。受影响 grain 为 1 个 fill；shares
+9.72、price 0.77、fee 0、cost 7.4844 均未变化，未结算 PnL 仍为空，coverage gate pass。
