@@ -1853,7 +1853,40 @@ clean_boundary = 2026-08-31T17:21:32.217819Z
 fixed_release = 1ac0edf698bd6e0dc57d66b3f862683064b63dfb
 ```
 
-## 29. Immediate Follow-Up Work
+## 29. 2026-08-31..2026-09-01 Cross NO V2 delayed-source supersession window
+
+The clean unit/lattice release still allowed a non-official HF/DATIS observation to
+execute after the system had already received a strictly newer official METAR for
+the same city and target date. Event-order replay over
+`2026-08-31T17:21:57Z..2026-09-01T06:14:12Z` covers 7,428 opportunity rows and all
+11 observed orders. Two orders are affected: the New York order and the second
+Chicago order. The first Chicago order, Austin, San Francisco, Seattle, and
+official-source orders are not blocked by this rule.
+
+Release `004d456b2f822704b20e503517c25dde6fd06d9f` took over at
+`2026-09-01T13:57:46Z`. Live execution now requires a single causally-current
+observation more than `0.7` settlement-native units across the boundary; the old
+single-current `>0.5` rule remains shadow, and two consecutive current `>0.5`
+remains comparison-only. In addition, a strictly newer official METAR received by
+the system supersedes any later-arriving older HF/DATIS source event and forces
+execution authority, planned shares, and planned principal to zero. State schema
+v3 restores and persists the latest official clock from the append-only journal.
+
+Machine audit:
+`runtime/reviews/cross_no_v2_official_supersession_20260831_v3/impact_report.json`.
+
+```text
+run_family = cross_no_v2_metar_v1
+impact_window = 2026-08-31T17:21:57Z..2026-09-01T06:14:12Z
+opportunity_rows = 7428
+observed_orders = 11
+counterfactual_blocked_orders = 2
+affected_orders = New York; Chicago second order
+fixed_release = 004d456b2f822704b20e503517c25dde6fd06d9f
+clean_boundary = 2026-09-01T13:57:46Z
+```
+
+## 30. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
