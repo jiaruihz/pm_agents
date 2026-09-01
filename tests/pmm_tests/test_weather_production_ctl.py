@@ -145,7 +145,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert cross_no_v2.release_id == "cross_no_v2_metar"
     assert cross_no_v2.expected_health_contract() == {
         "strategy_instance": "cross_no_v2_metar_v1",
-        "code_identity": "004d456b2f822704b20e503517c25dde6fd06d9f",
+        "code_identity": "831d7c654d8af1b91ed6ee3ab66cfb4924150297",
         "execution_mode": "live_probe",
         "live_enabled": True,
         "shares_per_order": 5.0,
@@ -159,18 +159,18 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "source_stream_monitor_enabled": True,
         "market_unit_contract": "universe_config_required_v1",
         "native_lattice_contract": "round_half_up_integer_market_unit_v1",
-        "live_cross_policy": "single_current_gt_0p7_with_official_supersession_v2",
+        "live_cross_policy": "single_current_bracket_cross_datis_only_with_official_supersession_v3",
+        "live_source_arms": ["metar_ws_datis"],
         "shadow_cross_policy": "single_current_gt_0p5_v1",
         "comparison_cross_policy": "two_consecutive_current_gt_0p5_v1",
         "official_supersession_policy": "newer_official_observation_blocks_older_source_v1",
-        "strong_single_cross_margin": 0.7,
         "confirmed_cross_margin": 0.5,
         "confirmed_cross_observations": 2,
         "source_running_max_execution_authority": False,
         "confirmation_sequence_contract": "consecutive_eligible_causally_current_observations_same_source_baseline_v1",
     }
     assert spec.release("cross_no_v2_metar").expected_repo_sha == (
-        "004d456b2f822704b20e503517c25dde6fd06d9f"
+        "831d7c654d8af1b91ed6ee3ab66cfb4924150297"
     )
     dispute = by_id["polymarket_dispute_repricing_zero_notional_v1"]
     assert dispute.execution_mode == "zero_notional_shadow"

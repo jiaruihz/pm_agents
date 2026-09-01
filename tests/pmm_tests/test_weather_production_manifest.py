@@ -40,7 +40,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     assert spec.canonical_refresh_checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/"
-        "004d456b2f822704b20e503517c25dde6fd06d9f"
+        "831d7c654d8af1b91ed6ee3ab66cfb4924150297"
     )
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
