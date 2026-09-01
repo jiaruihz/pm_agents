@@ -68,12 +68,22 @@ ATTRIBUTION_REFRESH_SEC = 30.0
 DEFAULT_MAX_OBSERVATION_DELAY_SEC = 3600.0
 DEFAULT_MAX_STREAM_SILENCE_SEC = 120.0
 HEALTH_HISTORY_INTERVAL_SEC = 30.0
+LIVE_CROSS_POLICY = "single_current_gt_0p7_v1"
+SHADOW_CROSS_POLICY = "single_current_gt_0p5_v1"
+COMPARISON_CROSS_POLICY = "two_consecutive_current_gt_0p5_v1"
+STRONG_SINGLE_CROSS_MARGIN = 0.7
+CONFIRMED_CROSS_MARGIN = 0.5
+CONFIRMED_CROSS_OBSERVATIONS = 2
+MARGIN_EPSILON = 1e-9
 PRESTART_TRANSITION_HEALTH_FIELDS = frozenset(
     {
         "code_identity",
         "source_attribution_schema_version",
         "market_unit_contract",
         "native_lattice_contract",
+        "live_cross_policy",
+        "shadow_cross_policy",
+        "comparison_cross_policy",
     }
 )
 _BOOK_RECORD_CACHE: dict[str, tuple[int, int, list[dict[str, Any]]]] = {}
@@ -334,7 +344,7 @@ def ensure_research_record(
         "lifecycle_status": "running",
         "observed_at_utc": None,
         "question": {
-            "hypothesis": "The first eligible METAR.ws source cross can buy five shares of the prior official bracket NO before the public market fully reprices.",
+            "hypothesis": "A current METAR.ws source observation with native margin above 0.7 can buy five shares of the prior official bracket NO before the public market fully reprices; the original single-above-0.5 rule remains shadow-only and two consecutive above-0.5 observations remain a comparison label.",
             "decision_target": "Whether METAR.ws merits a longer paid executable-alpha study; 48 hours cannot establish durable alpha.",
             "scope": "One pre-registered 48-hour global station-aligned forward probe over the frozen universe; METAR.ws official, HF-METAR and D-ATIS arms remain separate.",
             "exclusions": [
@@ -345,7 +355,7 @@ def ensure_research_record(
             ],
         },
         "method": {
-            "grain": "first post-watermark source information event x city x target_date x prior official bracket",
+            "grain": "post-watermark source information event x city x target_date x prior official value/bracket, with distinct-observation confirmation state",
             "denominator_scope": "Every post-watermark event from the frozen configured station universe, including blocked, no-cross, no-book, no-fill and terminal-false rows.",
             "evidence_layers": [
                 "append-only METAR.ws transport/observation SQLite",
@@ -366,7 +376,7 @@ def ensure_research_record(
                 "AWC paired receipt",
                 "same-token decision-time executable market price",
             ],
-            "forward_policy": "Freeze the three source arms, market-city universe and five-share sizing for 48 hours; do not tune from intraday anecdotes.",
+            "forward_policy": "Freeze the three source arms, market-city universe, single-current-margin-above-0.7 live policy and five-share sizing for the remaining forward window; retain single-current-margin-above-0.5 and consecutive-above-0.5 labels as fixed shadow comparators.",
             "acceptance_gates": [
                 "48 hours is probe evidence only and cannot confirm alpha",
                 "paid adoption still requires the existing 72h/7d, 500-pair, two-vantage and clock-valid gates",
@@ -439,20 +449,21 @@ def record_research_code_identity_amendment(output_dir: Path, *, code_identity: 
         {
             "schema_version": "cross_no_v2_metar_research_record_amendment_v1",
             "amendment_id": hashlib.sha256(
-                f"{STRATEGY_ID}|{original}|{code_identity}|source_attribution_v1".encode("utf-8")
+                f"{STRATEGY_ID}|{original}|{code_identity}|signal_policy_confirmation_v1".encode("utf-8")
             ).hexdigest(),
             "record_id": record.get("record_id"),
             "amended_at_utc": iso(),
             "previous_code_identity": original,
             "new_code_identity": code_identity,
-            "change_class": "instrumentation_only_source_attribution_v1",
-            "signal_policy_changed": False,
+            "change_class": "signal_policy_confirmation_v1",
+            "signal_policy_changed": True,
             "sizing_or_execution_policy_changed": False,
             "denominator_changed": False,
             "changes": [
-                "observed METAR.ws topic and fixed source arm lineage",
-                "economic-cross winner versus later-source attribution",
-                "per-source capture demand and derived attribution reporting",
+                "live requires one causally current native observation with margin above 0.7",
+                "single current native margin above 0.5 is retained as zero-notional shadow evidence",
+                "two distinct consecutive current observations each above 0.5 are retained as a non-executing comparison label",
+                "running source maximum is descriptive only and cannot trigger an order",
             ],
         },
         durable=True,
@@ -632,6 +643,66 @@ def _market_value(temp_c: float, market_unit: str) -> int | None:
     return None
 
 
+def _native_value(temp_c: float, market_unit: str) -> float | None:
+    """Return the unrounded observation in the market's settlement unit."""
+    unit = str(market_unit or "").upper()
+    if unit == "C":
+        return float(temp_c)
+    if unit == "F":
+        return float(temp_c) * 9.0 / 5.0 + 32.0
+    return None
+
+
+def _strictly_above(value: float, threshold: float) -> bool:
+    return float(value) - float(threshold) > MARGIN_EPSILON
+
+
+def _advance_confirmation(
+    prior: Mapping[str, Any] | None,
+    *,
+    observation_ts: str,
+    baseline_value: float,
+    baseline_bracket: str,
+    qualifies: bool,
+) -> tuple[dict[str, Any], bool]:
+    """Advance a same-source streak using distinct, newer observations only."""
+    current = dict(prior or {})
+    prior_ts = str(current.get("last_observation_ts") or "")
+    if prior_ts and observation_ts < prior_ts:
+        return current, False
+    same_baseline = bool(
+        safe_float(current.get("baseline_value")) == float(baseline_value)
+        and str(current.get("baseline_bracket") or "") == baseline_bracket
+    )
+    if prior_ts == observation_ts:
+        streak = int(current.get("streak") or 0)
+        if not qualifies:
+            streak = 0
+        elif not same_baseline or not bool(current.get("last_qualifies")):
+            streak = 1
+        return {
+            "last_observation_ts": observation_ts,
+            "baseline_value": float(baseline_value),
+            "baseline_bracket": baseline_bracket,
+            "last_qualifies": bool(qualifies),
+            "streak": streak,
+        }, False
+    streak = (
+        int(current.get("streak") or 0) + 1
+        if qualifies and same_baseline and bool(current.get("last_qualifies"))
+        else 1
+        if qualifies
+        else 0
+    )
+    return {
+        "last_observation_ts": observation_ts,
+        "baseline_value": float(baseline_value),
+        "baseline_bracket": baseline_bracket,
+        "last_qualifies": bool(qualifies),
+        "streak": streak,
+    }, True
+
+
 def _no_market_for_value(records: Iterable[Mapping[str, Any]], value: float) -> dict[str, Any] | None:
     candidates: list[dict[str, Any]] = []
     for raw in records:
@@ -713,14 +784,20 @@ def _expected_weather_taker_fee(shares: float, price: float) -> float:
 
 
 def _capture_demand(
-    *, row: Mapping[str, Any], condition_id: str, token_id: str, now: datetime
+    *,
+    row: Mapping[str, Any],
+    condition_id: str,
+    token_id: str,
+    now: datetime,
+    reason: str = "cross_no_v2_metar_execution_markout",
+    capture_role: str = "execution_candidate",
 ) -> dict[str, Any]:
     return CaptureDemand.create(
         consumer_id="cross_no_v2_metar_v1",
         strategy_key="weather.cross_no_v2_metar_v1",
         condition_id=condition_id,
         token_id=token_id,
-        reason="cross_no_v2_metar_execution_markout",
+        reason=reason,
         priority="P0",
         requested_at_utc=iso(now),
         expires_at_utc=iso(now + timedelta(seconds=360)),
@@ -737,6 +814,8 @@ def _capture_demand(
             "attribution_role": row.get("attribution_role"),
             "economic_cross_id": row.get("economic_cross_id"),
             "execution_race_key": row.get("execution_race_key"),
+            "capture_role": capture_role,
+            "shadow_zero_notional": bool(row.get("shadow_zero_notional")),
             "event_family_id": row.get("event_family_id"),
             "semantic_version_id": row.get("semantic_version_id"),
             "raw_report_id": row.get("raw_report_id"),
@@ -1061,10 +1140,10 @@ def run_probe(
         for key, value in dict(strategy_state.get("source_max") or {}).items()
         if key.count("|") == 2 and safe_float(value) is not None
     }
-    source_crossed_brackets = {
-        tuple(str(value).split("|", 3))
-        for value in strategy_state.get("source_crossed_brackets") or []
-        if str(value).count("|") == 3
+    confirmation_state = {
+        tuple(key.split("|", 2)): dict(value)
+        for key, value in dict(strategy_state.get("confirmation_state") or {}).items()
+        if key.count("|") == 2 and isinstance(value, Mapping)
     }
     processed_keys = set(map(str, strategy_state.get("processed_event_keys") or []))
     legacy_processed_ids = (
@@ -1120,11 +1199,20 @@ def run_probe(
             if temp_c is not None and market_unit in {"C", "F"}
             else None
         )
+        current_native_value = (
+            _native_value(temp_c, market_unit)
+            if temp_c is not None and market_unit in {"C", "F"}
+            else None
+        )
         common.update(
             {
                 "market_unit": market_unit or None,
                 "settlement_native_value": market_value,
+                "source_current_native_value": current_native_value,
                 "native_lattice_contract": "round_half_up_integer_market_unit_v1",
+                "live_cross_policy": LIVE_CROSS_POLICY,
+                "shadow_cross_policy": SHADOW_CROSS_POLICY,
+                "comparison_cross_policy": COMPARISON_CROSS_POLICY,
             }
         )
         if not blockers and not markets:
@@ -1163,27 +1251,70 @@ def run_probe(
             emitted += 1; blocked += 1
             continue
         prior_market = _no_market_for_value(markets, prior_official)
-        source_bracket = _no_market_for_value(markets, source_max[source_key])
+        source_bracket = _no_market_for_value(markets, market_value)
         if prior_market is None or source_bracket is None:
             row = {**common, "status": "blocked", "prior_official_running_max": prior_official,
                    "source_running_max": source_max[source_key], "blockers": ["exact_condition_or_no_token_unverified"]}
             append_jsonl(output_dir / "opportunities.jsonl", row); emitted += 1; blocked += 1
             continue
         bracket = str(prior_market.get("bracket"))
-        cross_key = (source_key[0], source_key[1], source_key[2], bracket)
         candidate_blockers: list[str] = []
         if city_date[0] not in eligible_cities:
             candidate_blockers.append("city_not_live_eligible")
-        source_crossed = bool(
-            source_max[source_key] > prior_official
+        current_crossed_new_bracket = bool(
+            current_native_value is not None
+            and current_native_value > prior_official
             and str(source_bracket.get("bracket")) != bracket
         )
-        if not source_crossed:
-            candidate_blockers.append("source_running_max_did_not_cross_new_bracket")
-        if source_crossed and cross_key in source_crossed_brackets:
-            candidate_blockers.append("source_bracket_already_seen")
-        if source_crossed:
-            source_crossed_brackets.add(cross_key)
+        current_cross_margin = (
+            float(current_native_value) - float(prior_official)
+            if current_native_value is not None
+            else None
+        )
+        shadow_cross = bool(
+            current_crossed_new_bracket
+            and current_cross_margin is not None
+            and _strictly_above(current_cross_margin, CONFIRMED_CROSS_MARGIN)
+        )
+        observation_ts = str(event.get("source_event_ts_utc") or "")
+        prior_confirmation = confirmation_state.get(source_key)
+        prior_confirmation_ts = str(
+            (prior_confirmation or {}).get("last_observation_ts") or ""
+        )
+        observation_is_causally_current = bool(
+            observation_ts
+            and (
+                not prior_confirmation_ts
+                or observation_ts >= prior_confirmation_ts
+            )
+        )
+        next_confirmation, observation_advanced = _advance_confirmation(
+            prior_confirmation,
+            observation_ts=observation_ts,
+            baseline_value=prior_official,
+            baseline_bracket=bracket,
+            qualifies=shadow_cross,
+        )
+        confirmation_state[source_key] = next_confirmation
+        confirmation_count = int(next_confirmation.get("streak") or 0)
+        strong_single_cross = bool(
+            current_crossed_new_bracket
+            and current_cross_margin is not None
+            and observation_is_causally_current
+            and _strictly_above(current_cross_margin, STRONG_SINGLE_CROSS_MARGIN)
+        )
+        consecutive_cross = bool(
+            shadow_cross
+            and observation_advanced
+            and confirmation_count >= CONFIRMED_CROSS_OBSERVATIONS
+        )
+        live_cross_confirmed = strong_single_cross
+        if not current_crossed_new_bracket:
+            candidate_blockers.append("current_observation_did_not_cross_new_bracket")
+        elif not shadow_cross:
+            candidate_blockers.append("current_cross_margin_not_above_shadow_threshold")
+        elif not live_cross_confirmed:
+            candidate_blockers.append("live_cross_confirmation_not_met")
         condition_id, token_id = str(prior_market.get("condition_id") or ""), str(prior_market.get("token_id") or prior_market.get("no_token_id") or "")
         if not condition_id or not token_id:
             candidate_blockers.append("exact_condition_or_no_token_unverified")
@@ -1255,7 +1386,9 @@ def run_probe(
             "later_race_blocked"
             if race_already_executed
             else "no_cross"
-            if not source_crossed
+            if not shadow_cross
+            else "shadow_single_cross"
+            if not live_cross_confirmed
             else "cross_blocked"
             if candidate_blockers
             else "execution_candidate"
@@ -1264,6 +1397,20 @@ def run_probe(
         )
         row = {**common, "status": "candidate" if not candidate_blockers else "blocked", "blockers": candidate_blockers,
                "prior_official_running_max": prior_official, "source_running_max": source_max[source_key],
+               "source_running_max_descriptive_only": True,
+               "current_cross_margin_native": current_cross_margin,
+               "current_crossed_new_bracket": current_crossed_new_bracket,
+               "shadow_single_cross": shadow_cross,
+               "strong_single_cross": strong_single_cross,
+               "confirmation_observation_advanced": observation_advanced,
+               "confirmation_observation_causally_current": observation_is_causally_current,
+               "consecutive_cross_count": confirmation_count,
+               "consecutive_cross_confirmed": consecutive_cross,
+               "live_cross_confirmed": live_cross_confirmed,
+               "live_cross_policy": LIVE_CROSS_POLICY,
+               "shadow_cross_policy": SHADOW_CROSS_POLICY,
+               "comparison_cross_policy": COMPARISON_CROSS_POLICY,
+               "confirmation_sequence_contract": "consecutive_eligible_causally_current_observations_same_source_baseline_v1",
                "previous_official_bracket": bracket, "new_source_bracket": source_bracket.get("bracket"),
                "condition_id": condition_id, "token_id": token_id, "best_ask": best_ask, "ask_size": ask_size,
                "worst_ask_for_five_shares": worst_ask, "expected_five_share_vwap": expected_vwap,
@@ -1277,16 +1424,46 @@ def run_probe(
                    if expected_vwap is not None else None
                ),
                "execution_race_key": race_key, "economic_cross_id": economic_cross_id(race_key),
-               "attribution_role": attribution_role, "planned_shares": SHARES_PER_ORDER,
-               "max_shares_per_market": SHARES_PER_ORDER, "planned_principal_usd": principal,
+               "attribution_role": attribution_role,
+               "shadow_zero_notional": bool(shadow_cross and not live_cross_confirmed),
+               "execution_authority": live_cross_confirmed,
+               "planned_shares": SHARES_PER_ORDER if live_cross_confirmed else 0.0,
+               "hypothetical_shares": SHARES_PER_ORDER,
+               "max_shares_per_market": SHARES_PER_ORDER,
+               "planned_principal_usd": principal if live_cross_confirmed else 0.0,
+               "hypothetical_principal_usd": principal,
                "live_requested": bool(live), "live_enabled": live_enabled}
         append_jsonl(output_dir / "opportunities.jsonl", row); emitted += 1
+        shadow_capture_eligible = bool(
+            shadow_cross
+            and city_date[0] in eligible_cities
+            and condition_id
+            and token_id
+            and (
+                not expected_station
+                or expected_station
+                == str(event.get("station") or event.get("station_id") or "").upper()
+            )
+        )
         if candidate_blockers:
             blocked += 1
-        else:
+        if not candidate_blockers:
             append_jsonl(
                 capture_demands_jsonl or (output_dir / "capture_demands.jsonl"),
                 _capture_demand(row=row, condition_id=condition_id, token_id=token_id, now=now),
+                durable=True,
+            )
+        elif shadow_capture_eligible:
+            append_jsonl(
+                capture_demands_jsonl or (output_dir / "capture_demands.jsonl"),
+                _capture_demand(
+                    row=row,
+                    condition_id=condition_id,
+                    token_id=token_id,
+                    now=now,
+                    reason="cross_no_v2_metar_shadow_markout",
+                    capture_role="single_current_gt_0p5_zero_notional_shadow",
+                ),
                 durable=True,
             )
         if not candidate_blockers and live_enabled:
@@ -1352,12 +1529,18 @@ def run_probe(
     state_changed = _save_strategy_state_if_changed(
         strategy_state_path,
         {
-            "schema_version": "cross_no_v2_metar_state_v1",
+            "schema_version": "cross_no_v2_metar_state_v2",
             "strategy_id": STRATEGY_ID,
+            "live_cross_policy": LIVE_CROSS_POLICY,
+            "shadow_cross_policy": SHADOW_CROSS_POLICY,
+            "comparison_cross_policy": COMPARISON_CROSS_POLICY,
             "updated_at_utc": iso(),
             "official_max": {"|".join(key): value for key, value in sorted(official_max.items())},
             "source_max": {"|".join(key): value for key, value in sorted(source_max.items())},
-            "source_crossed_brackets": ["|".join(key) for key in sorted(source_crossed_brackets)],
+            "confirmation_state": {
+                "|".join(key): value
+                for key, value in sorted(confirmation_state.items())
+            },
             "processed_event_ids": sorted(
                 {
                     key.split("|", 1)[1]
@@ -1427,6 +1610,14 @@ def run_probe(
         "source_stream_monitor_enabled": monitor_source_stream,
         "market_unit_contract": "universe_config_required_v1",
         "native_lattice_contract": "round_half_up_integer_market_unit_v1",
+        "live_cross_policy": LIVE_CROSS_POLICY,
+        "shadow_cross_policy": SHADOW_CROSS_POLICY,
+        "comparison_cross_policy": COMPARISON_CROSS_POLICY,
+        "strong_single_cross_margin": STRONG_SINGLE_CROSS_MARGIN,
+        "confirmed_cross_margin": CONFIRMED_CROSS_MARGIN,
+        "confirmed_cross_observations": CONFIRMED_CROSS_OBSERVATIONS,
+        "source_running_max_execution_authority": False,
+        "confirmation_sequence_contract": "consecutive_eligible_causally_current_observations_same_source_baseline_v1",
         "strategy_state_changed_this_cycle": state_changed,
         "clock_invalid_same_boot_override_enabled": bool(allow_clock_invalid_same_boot_monotonic_probe),
         "settlement_hard_invalidation": False,

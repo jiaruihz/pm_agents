@@ -43,6 +43,25 @@ def read(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+def celsius_for_fahrenheit(value: float) -> float:
+    return (value - 32.0) * 5.0 / 9.0
+
+
+def filled_order(order_id: str = "o1") -> dict:
+    return {
+        "order_id": order_id,
+        "order_type": "GTC",
+        "post_only": False,
+        "place": {
+            "success": True,
+            "status": "matched",
+            "order_id": order_id,
+            "takingAmount": "5",
+            "makingAmount": "2.5",
+        },
+    }
+
+
 def test_universe_loader_preserves_required_market_units(tmp_path: Path):
     config = tmp_path / "universe.json"
     config.write_text(
@@ -130,6 +149,228 @@ def test_shadow_cross_is_proxy_and_never_hard_settlement_invalidation(tmp_path: 
     assert candidate["source_cross_is_proxy_only"] is True
     assert candidate["settlement_hard_invalidation"] is False
     assert candidate["planned_shares"] == 5.0
+
+
+def test_single_current_margin_above_point_five_is_shadow_only(tmp_path: Path):
+    calls = []
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    moderate = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.6))
+    result = run(
+        tmp_path,
+        [official, moderate],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["shadow_single_cross"] is True
+    assert row["strong_single_cross"] is False
+    assert row["consecutive_cross_count"] == 1
+    assert row["live_cross_confirmed"] is False
+    assert row["attribution_role"] == "shadow_single_cross"
+    assert row["shadow_zero_notional"] is True
+    assert row["execution_authority"] is False
+    assert row["planned_shares"] == 0.0
+    assert row["hypothetical_shares"] == 5.0
+    assert row["planned_principal_usd"] == 0.0
+    assert row["hypothetical_principal_usd"] > 0.0
+    assert "live_cross_confirmation_not_met" in row["blockers"]
+    demand = read(tmp_path / "out/capture_demands.jsonl")[-1]
+    assert demand["reason"] == "cross_no_v2_metar_shadow_markout"
+    assert demand["metadata"]["capture_role"] == (
+        "single_current_gt_0p5_zero_notional_shadow"
+    )
+    assert demand["metadata"]["shadow_zero_notional"] is True
+
+
+def test_single_current_margin_strictly_above_point_seven_executes(tmp_path: Path):
+    calls = []
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    strong = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.71))
+    result = run(
+        tmp_path,
+        [official, strong],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 1 and len(calls) == 1
+    assert row["strong_single_cross"] is True
+    assert row["live_cross_confirmed"] is True
+
+
+def test_single_current_margin_equal_to_point_seven_remains_shadow(tmp_path: Path):
+    calls = []
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    boundary = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.7))
+    result = run(
+        tmp_path,
+        [official, boundary],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["strong_single_cross"] is False
+    assert row["shadow_single_cross"] is True
+
+
+def test_two_distinct_consecutive_point_five_crosses_remain_comparison_only(tmp_path: Path):
+    calls = []
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    first = {
+        **event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.6)),
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+    }
+    second = {
+        **event("metar_ws_hfmetar", "hf3", celsius_for_fahrenheit(81.65)),
+        "source_event_ts_utc": "2026-08-31T11:59:00Z",
+    }
+    result = run(
+        tmp_path,
+        [official, first, second],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    rows = read(tmp_path / "out/opportunities.jsonl")
+    assert result["orders"] == 0 and calls == []
+    assert rows[-2]["consecutive_cross_count"] == 1
+    assert rows[-1]["consecutive_cross_count"] == 2
+    assert rows[-1]["consecutive_cross_confirmed"] is True
+    assert rows[-1]["strong_single_cross"] is False
+    assert rows[-1]["live_cross_confirmed"] is False
+    assert rows[-1]["shadow_zero_notional"] is True
+
+
+def test_same_observation_timestamp_cannot_supply_second_confirmation(tmp_path: Path):
+    calls = []
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    first = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.6))
+    revision = event(
+        "metar_ws_hfmetar",
+        "hf3",
+        celsius_for_fahrenheit(81.65),
+        role="revision",
+    )
+    result = run(
+        tmp_path,
+        [official, first, revision],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["confirmation_observation_advanced"] is False
+    assert row["consecutive_cross_count"] == 1
+
+
+def test_backfilled_older_observation_cannot_trigger_strong_single(tmp_path: Path):
+    calls = []
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    newer_moderate = {
+        **event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.6)),
+        "source_event_ts_utc": "2026-08-31T11:59:00Z",
+    }
+    older_strong = {
+        **event("metar_ws_hfmetar", "hf3", celsius_for_fahrenheit(81.8)),
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+    }
+    result = run(
+        tmp_path,
+        [official, newer_moderate, older_strong],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["confirmation_observation_causally_current"] is False
+    assert row["strong_single_cross"] is False
+    assert row["shadow_single_cross"] is True
+
+
+def test_comparison_confirmation_streak_survives_poll_cycle_restart(tmp_path: Path):
+    books = tmp_path / "books.json"
+    books.write_text(json.dumps(markets()))
+    out = tmp_path / "out"
+    official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
+    first = {
+        **event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.6)),
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+    }
+    cross_no_v2.run_probe(
+        source_events_root=tmp_path,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        events_override=[official, first],
+    )
+    calls = []
+    second = {
+        **event("metar_ws_hfmetar", "hf3", celsius_for_fahrenheit(81.65)),
+        "source_event_ts_utc": "2026-08-31T11:59:00Z",
+    }
+    result = cross_no_v2.run_probe(
+        source_events_root=tmp_path,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        events_override=[second],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(out / "opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["consecutive_cross_count"] == 2
+    assert row["consecutive_cross_confirmed"] is True
+    assert row["live_cross_confirmed"] is False
+    state = json.loads((out / "state.json").read_text())
+    assert state["schema_version"] == "cross_no_v2_metar_state_v2"
+
+
+def test_current_observation_not_running_max_controls_execution(tmp_path: Path):
+    books = tmp_path / "books.json"
+    books.write_text(json.dumps(markets()))
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "cross_no_v2_metar_state_v1",
+                "official_max": {"Miami|2026-08-31": 81},
+                "source_max": {"Miami|2026-08-31|metar_ws_hfmetar": 83},
+                "processed_event_key_migration_complete": True,
+                "processed_event_journal_recovery_complete": True,
+            }
+        )
+    )
+    current = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.0))
+    calls = []
+    result = cross_no_v2.run_probe(
+        source_events_root=tmp_path,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        events_override=[current],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+    row = read(out / "opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["source_running_max"] == 83
+    assert row["source_running_max_descriptive_only"] is True
+    assert row["source_current_native_value"] == 81
+    assert "current_observation_did_not_cross_new_bracket" in row["blockers"]
 
 
 def test_live_requires_double_flag_and_injected_place_fn(tmp_path: Path):
