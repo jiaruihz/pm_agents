@@ -333,7 +333,130 @@ def test_comparison_confirmation_streak_survives_poll_cycle_restart(tmp_path: Pa
     assert row["consecutive_cross_confirmed"] is True
     assert row["live_cross_confirmed"] is False
     state = json.loads((out / "state.json").read_text())
-    assert state["schema_version"] == "cross_no_v2_metar_state_v2"
+    assert state["schema_version"] == "cross_no_v2_metar_state_v3"
+
+
+def test_newer_official_observation_blocks_late_older_hf_cross(tmp_path: Path):
+    calls = []
+    baseline = {
+        **event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0)),
+        "source_event_ts_utc": "2026-08-31T11:50:00Z",
+        "transport_received_at_utc": "2026-08-31T11:51:00Z",
+    }
+    newer_official = {
+        **event("metar_ws_metar", "official2", celsius_for_fahrenheit(81.0)),
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+        "transport_received_at_utc": "2026-08-31T11:58:30Z",
+    }
+    late_hf = {
+        **event("metar_ws_hfmetar", "hf3", celsius_for_fahrenheit(83.0)),
+        "source_event_ts_utc": "2026-08-31T11:57:00Z",
+        "transport_received_at_utc": "2026-08-31T11:59:30Z",
+    }
+
+    result = run(
+        tmp_path,
+        [baseline, newer_official, late_hf],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["strong_single_cross"] is True
+    assert row["official_observation_supersedes_source_event"] is True
+    assert cross_no_v2.parse_utc(row["latest_official_observation_ts_utc"]) == (
+        cross_no_v2.parse_utc("2026-08-31T11:58:00Z")
+    )
+    assert row["latest_official_market_value"] == 81
+    assert "newer_official_observation_supersedes_source_event" in row["blockers"]
+    assert row["official_supersession_execution_authority"] is False
+    assert row["execution_authority"] is False
+    assert row["planned_shares"] == 0.0
+    assert row["planned_principal_usd"] == 0.0
+
+
+def test_same_time_official_does_not_block_hf_cross(tmp_path: Path):
+    calls = []
+    official = {
+        **event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0)),
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+        "transport_received_at_utc": "2026-08-31T11:58:30Z",
+    }
+    hf = {
+        **event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(83.0)),
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+        "transport_received_at_utc": "2026-08-31T11:59:30Z",
+    }
+
+    result = run(
+        tmp_path,
+        [official, hf],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 1 and len(calls) == 1
+    assert row["official_observation_supersedes_source_event"] is False
+    assert row["official_supersession_execution_authority"] is True
+
+
+def test_state_v2_restart_rebuilds_official_clock_before_late_hf(tmp_path: Path):
+    books = tmp_path / "books.json"
+    books.write_text(json.dumps(markets()))
+    out = tmp_path / "out"
+    out.mkdir()
+    prior_official = {
+        **event("metar_ws_metar", "official2", celsius_for_fahrenheit(81.0)),
+        "schema_version": "cross_no_v2_metar_opportunity_v1",
+        "event_role": None,
+        "source_event_ts_utc": "2026-08-31T11:58:00Z",
+        "transport_received_at_utc": "2026-08-31T11:58:30Z",
+    }
+    (out / "opportunities.jsonl").write_text(json.dumps(prior_official) + "\n")
+    (out / "state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "cross_no_v2_metar_state_v2",
+                "official_max": {"Miami|2026-08-31": 81},
+                "processed_event_keys": ["metar_ws_metar|official2"],
+                "processed_event_key_migration_complete": True,
+                "processed_event_journal_recovery_complete": True,
+            }
+        )
+    )
+    late_hf = {
+        **event("metar_ws_hfmetar", "hf3", celsius_for_fahrenheit(83.0)),
+        "source_event_ts_utc": "2026-08-31T11:57:00Z",
+        "transport_received_at_utc": "2026-08-31T11:59:30Z",
+    }
+    calls = []
+
+    result = cross_no_v2.run_probe(
+        source_events_root=tmp_path,
+        market_books_latest=books,
+        output_dir=out,
+        now=NOW,
+        official_fee_rate=0.05,
+        events_override=[late_hf],
+        live=True,
+        confirm_live=True,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+
+    row = read(out / "opportunities.jsonl")[-1]
+    state = json.loads((out / "state.json").read_text())
+    assert result["orders"] == 0 and calls == []
+    assert "newer_official_observation_supersedes_source_event" in row["blockers"]
+    assert state["schema_version"] == "cross_no_v2_metar_state_v3"
+    assert cross_no_v2.parse_utc(
+        state["official_latest"]["Miami|2026-08-31"]["observation_ts_utc"]
+    ) == cross_no_v2.parse_utc(
+        "2026-08-31T11:58:00Z"
+    )
 
 
 def test_current_observation_not_running_max_controls_execution(tmp_path: Path):
