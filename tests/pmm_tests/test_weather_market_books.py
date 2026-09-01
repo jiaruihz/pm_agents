@@ -221,6 +221,85 @@ def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
     assert "legacy_orderbook_path" not in result
 
 
+def test_market_books_keeps_hot_execution_health_when_only_cold_books_fail(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        market_books,
+        "discover_market_ladders",
+        lambda **_kwargs: (_events(), []),
+    )
+
+    def fake_fetch(_client, request_rows, token_ids, **_kwargs):
+        rows = {}
+        for token_id in token_ids:
+            book = _book(token_id)
+            if request_rows[token_id]["capture_priority"] == "cold":
+                book["status"] = "error"
+                book["error"] = "orderbook_unavailable"
+            rows[token_id] = (request_rows[token_id], book)
+        return rows
+
+    monkeypatch.setattr(market_books, "_fetch_priority_group", fake_fetch)
+    monkeypatch.setattr(
+        market_books.httpx,
+        "Client",
+        lambda **_kwargs: type("C", (), {"close": lambda self: None})(),
+    )
+
+    result = market_books.collect(
+        argparse.Namespace(
+            output_root=str(tmp_path / "market_books"),
+            market_ladder_root=str(tmp_path / "market_ladders"),
+            observation_cache="",
+            target_date=None,
+            now_utc="2026-08-07T12:00:00Z",
+            orderbook_top_n=20,
+            orderbook_budget_sec=240.0,
+        )
+    )
+
+    assert result["status"] == "ok_with_cold_book_failures"
+    assert result["hot_ok_books"] == result["hot_tokens"] == 1
+    assert result["hot_failed_books"] == 0
+    assert result["cold_failed_books"] == 1
+
+
+def test_market_books_degrades_when_no_hot_execution_tokens_exist(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        market_books,
+        "discover_market_ladders",
+        lambda **_kwargs: ([], []),
+    )
+    monkeypatch.setattr(
+        market_books,
+        "_fetch_priority_group",
+        lambda _client, _request_rows, _token_ids, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        market_books.httpx,
+        "Client",
+        lambda **_kwargs: type("C", (), {"close": lambda self: None})(),
+    )
+
+    result = market_books.collect(
+        argparse.Namespace(
+            output_root=str(tmp_path / "market_books"),
+            market_ladder_root=str(tmp_path / "market_ladders"),
+            observation_cache="",
+            target_date=None,
+            now_utc="2026-08-07T12:00:00Z",
+            orderbook_top_n=20,
+            orderbook_budget_sec=240.0,
+        )
+    )
+
+    assert result["status"] == "degraded"
+    assert result["hot_tokens"] == 0
+
+
 def test_market_books_degrades_when_discovery_has_operational_failure(
     monkeypatch, tmp_path
 ) -> None:

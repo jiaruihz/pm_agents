@@ -894,6 +894,7 @@ def _rest_health(path: Path, *, now_utc: datetime, max_age_sec: float) -> dict[s
     ok = payload.get("status") in {
         "ok",
         "ok_with_discovery_reuse",
+        "ok_with_cold_book_failures",
     } and age is not None and age <= max_age_sec
     return {
         "status": payload.get("status") or "missing",

@@ -106,7 +106,16 @@ try:
 except (OSError, ValueError):
     raise SystemExit(1)
 fresh = os.path.getmtime(path) >= started_epoch
-raise SystemExit(0 if fresh and payload.get("status") == "ok" else 1)
+raise SystemExit(
+    0
+    if fresh
+    and payload.get("status") in {
+        "ok",
+        "ok_with_discovery_reuse",
+        "ok_with_cold_book_failures",
+    }
+    else 1
+)
 PY
   then
     break
@@ -122,6 +131,10 @@ path, started_epoch = sys.argv[1], int(sys.argv[2])
 with open(path, encoding="utf-8") as handle:
     payload = json.load(handle)
 assert os.path.getmtime(path) >= started_epoch, "WebSocket health was not refreshed"
-assert payload.get("status") == "ok", payload
+assert payload.get("status") in {
+    "ok",
+    "ok_with_discovery_reuse",
+    "ok_with_cold_book_failures",
+}, payload
 PY
 echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE ws_health=$WS_HEALTH_PATH"
