@@ -378,6 +378,31 @@ def _event_slug(
     return f"{adjective}-temperature-in-{city_slug}-on-{parsed.strftime('%B-%-d-%Y').lower()}"
 
 
+def _capturable_markets(markets: Any) -> list[dict[str, Any]]:
+    """Keep only Gamma markets whose CLOB books can still accept orders.
+
+    Gamma can continue returning a weather event and its markets after the
+    venue has closed the order books.  Those token ids deterministically return
+    no CLOB book and must not be counted as collector failures or execution-hot
+    coverage.
+    """
+
+    result: list[dict[str, Any]] = []
+    for market in markets or ():
+        if not isinstance(market, dict):
+            continue
+        if market.get("active") is False:
+            continue
+        if market.get("closed") is True:
+            continue
+        if market.get("enableOrderBook") is False:
+            continue
+        if market.get("acceptingOrders") is False:
+            continue
+        result.append(market)
+    return result
+
+
 def discover_market_ladders(
     *,
     now_utc: datetime,
@@ -459,7 +484,8 @@ def discover_market_ladders(
                 "discovery_failure_class": failure_class,
                 "discovery_attempt_count": attempt_count,
             }
-        _, entries = legacy.gamma_market_ladder(raw.get("markets") or [])
+        capturable_markets = _capturable_markets(raw.get("markets") or [])
+        _, entries = legacy.gamma_market_ladder(capturable_markets)
         if not entries:
             return None, {
                 "extreme_kind": extreme_kind,
@@ -467,13 +493,17 @@ def discover_market_ladders(
                 "target_date": event_date,
                 "slug": slug,
                 "status_code": status_code,
-                "error": "empty_market_ladder",
+                "error": (
+                    "no_open_orderbook_markets"
+                    if raw.get("markets") and not capturable_markets
+                    else "empty_market_ladder"
+                ),
                 "discovery_failure_class": "expected_unavailable",
                 "discovery_attempt_count": attempt_count,
             }
         if extreme_kind == "max":
             strategy_targets = legacy.orderbook_targets_for_strategy_live(
-                raw.get("markets") or [],
+                capturable_markets,
                 cfg["unit"],
                 _strategy_state_from_observation(
                     observation_index.get((city, event_date))

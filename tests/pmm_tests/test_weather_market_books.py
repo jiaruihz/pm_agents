@@ -171,6 +171,121 @@ def test_market_discovery_adds_only_registered_minimum_city_ladders(monkeypatch)
     assert not any(slug.startswith("lowest-temperature-in-seoul-") for slug in seen_slugs)
 
 
+def test_market_discovery_excludes_closed_or_non_orderbook_markets(monkeypatch) -> None:
+    now = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "CITIES",
+        {"PanamaCity": {"slug": "panama-city", "unit": "C"}},
+    )
+    monkeypatch.setattr(
+        market_books,
+        "city_scan_dates",
+        lambda *_args, **_kwargs: ["2026-09-01"],
+    )
+    monkeypatch.setattr(market_books, "local_settle_utc", lambda *_args: now)
+    monkeypatch.setattr(market_books, "city_local_datetime", lambda *_args: now)
+    markets = [
+        {"id": "closed", "active": True, "closed": True, "acceptingOrders": False},
+        {"id": "disabled", "active": True, "closed": False, "enableOrderBook": False},
+        {"id": "open", "active": True, "closed": False, "enableOrderBook": True, "acceptingOrders": True},
+    ]
+    monkeypatch.setattr(
+        market_books.legacy,
+        "curl_json_get",
+        lambda *_args, **_kwargs: (200, {"id": "event", "markets": markets}, ""),
+    )
+    seen: list[str] = []
+
+    def fake_ladder(rows):
+        seen.extend(str(row["id"]) for row in rows)
+        return None, [
+            {
+                "label": "30",
+                "market_id": "open",
+                "condition_id": "condition-open",
+                "yes_token_id": "yes-open",
+                "no_token_id": "no-open",
+            }
+        ]
+
+    monkeypatch.setattr(market_books.legacy, "gamma_market_ladder", fake_ladder)
+    monkeypatch.setattr(
+        market_books.legacy, "orderbook_targets_for_strategy_live", lambda rows, *_args: {(rows[0]["id"], "yes")}
+    )
+
+    events, failures = market_books.discover_market_ladders(
+        now_utc=now,
+        observation_index={},
+    )
+
+    assert failures == []
+    assert seen == ["open"]
+    assert events[0]["condition_count"] == 1
+
+
+def test_capturable_markets_is_backward_compatible_and_fail_closed_on_explicit_flags() -> None:
+    missing_fields = {"id": "legacy-open"}
+    rows = market_books._capturable_markets(  # noqa: SLF001
+        [
+            missing_fields,
+            {"id": "inactive", "active": False},
+            {"id": "closed", "closed": True},
+            {"id": "disabled", "enableOrderBook": False},
+            {"id": "not-accepting", "acceptingOrders": False},
+        ]
+    )
+
+    assert rows == [missing_fields]
+
+
+def test_market_discovery_classifies_fully_closed_event_as_expected_unavailable(
+    monkeypatch,
+) -> None:
+    now = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "CITIES",
+        {"PanamaCity": {"slug": "panama-city", "unit": "C"}},
+    )
+    monkeypatch.setattr(
+        market_books,
+        "city_scan_dates",
+        lambda *_args, **_kwargs: ["2026-09-01"],
+    )
+    monkeypatch.setattr(market_books, "local_settle_utc", lambda *_args: now)
+    monkeypatch.setattr(market_books, "city_local_datetime", lambda *_args: now)
+    monkeypatch.setattr(
+        market_books.legacy,
+        "curl_json_get",
+        lambda *_args, **_kwargs: (
+            200,
+            {
+                "id": "event",
+                "markets": [
+                    {
+                        "id": "closed",
+                        "active": True,
+                        "closed": True,
+                        "enableOrderBook": True,
+                        "acceptingOrders": False,
+                    }
+                ],
+            },
+            "",
+        ),
+    )
+
+    events, failures = market_books.discover_market_ladders(
+        now_utc=now,
+        observation_index={},
+    )
+
+    assert events == []
+    assert failures[0]["error"] == "no_open_orderbook_markets"
+    assert failures[0]["discovery_failure_class"] == "expected_unavailable"
+
+
 def test_market_books_collects_raw_before_weather_views(monkeypatch, tmp_path):
     events = _events()
     unavailable = {
