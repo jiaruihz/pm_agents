@@ -13,8 +13,8 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/8e6c0e26c12a169df33d95b446a3179dea49a58f
-    expected_repo_sha: 8e6c0e26c12a169df33d95b446a3179dea49a58f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/3d486291fa0f9552e56b1acbb9f3e925fcb208e9
+    expected_repo_sha: 3d486291fa0f9552e56b1acbb9f3e925fcb208e9
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -550,7 +550,7 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_instance: cross_no_v2_metar_v1
-      code_identity: 8e6c0e26c12a169df33d95b446a3179dea49a58f
+      code_identity: 3d486291fa0f9552e56b1acbb9f3e925fcb208e9
       execution_mode: live_probe
       live_enabled: true
       shares_per_order: 5.0
