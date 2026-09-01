@@ -13,8 +13,8 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/e4f1a8d9410bb16ce6290daac475ec4f23e098f8
-    expected_repo_sha: e4f1a8d9410bb16ce6290daac475ec4f23e098f8
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/004d456b2f822704b20e503517c25dde6fd06d9f
+    expected_repo_sha: 004d456b2f822704b20e503517c25dde6fd06d9f
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -550,7 +550,7 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_instance: cross_no_v2_metar_v1
-      code_identity: e4f1a8d9410bb16ce6290daac475ec4f23e098f8
+      code_identity: 004d456b2f822704b20e503517c25dde6fd06d9f
       execution_mode: live_probe
       live_enabled: true
       shares_per_order: 5.0
@@ -578,7 +578,7 @@ managed_runtimes:
     dependencies: [weather_jrs_context_keeper, weather_market_books]
     recovery_policy: guarded_live
     launch_environment:
-      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v2/evidence.sqlite3
+      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v3/evidence.sqlite3
       WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST: /Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json
       WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2
       WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl
@@ -594,8 +594,8 @@ managed_runtimes:
       WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE: "1"
       WEATHER_CROSS_NO_V2_METAR_UNIVERSE_CONFIG: configs/weather/cross_no_v2_metar_polymarket_48h_v1.json
       WEATHER_CROSS_NO_V2_METAR_START_COLLECTOR: "1"
-      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v2
-      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG: /Volumes/jrs/weather_data_feed_service_runtime/loop/metarws_polymarket_48h_20260901_v2.log
+      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v3
+      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG: /Volumes/jrs/weather_data_feed_service_runtime/loop/metarws_polymarket_48h_20260901_v3.log
       WEATHER_CROSS_NO_V2_METAR_SOURCE_ENV_FILE: /Users/deepsleep/.config/pm_agents/metar_ws.env
 
   # The old multisource D1 shadow remains dormant research evidence. The
