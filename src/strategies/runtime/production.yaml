@@ -13,8 +13,8 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/1ac0edf698bd6e0dc57d66b3f862683064b63dfb
-    expected_repo_sha: 1ac0edf698bd6e0dc57d66b3f862683064b63dfb
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/7b1b03436071cd49a8f66392781971ea8a314fe7
+    expected_repo_sha: 7b1b03436071cd49a8f66392781971ea8a314fe7
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -549,7 +549,7 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_instance: cross_no_v2_metar_v1
-      code_identity: 1ac0edf698bd6e0dc57d66b3f862683064b63dfb
+      code_identity: 7b1b03436071cd49a8f66392781971ea8a314fe7
       execution_mode: live_probe
       live_enabled: true
       shares_per_order: 5.0
@@ -563,6 +563,14 @@ managed_runtimes:
       source_stream_monitor_enabled: true
       market_unit_contract: universe_config_required_v1
       native_lattice_contract: round_half_up_integer_market_unit_v1
+      live_cross_policy: single_current_gt_0p7_v1
+      shadow_cross_policy: single_current_gt_0p5_v1
+      comparison_cross_policy: two_consecutive_current_gt_0p5_v1
+      strong_single_cross_margin: 0.7
+      confirmed_cross_margin: 0.5
+      confirmed_cross_observations: 2
+      source_running_max_execution_authority: false
+      confirmation_sequence_contract: consecutive_eligible_causally_current_observations_same_source_baseline_v1
     expected_live: true
     live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/orders.jsonl
     dependencies: [weather_jrs_context_keeper, weather_market_books]
