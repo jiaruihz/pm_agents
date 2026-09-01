@@ -2423,7 +2423,10 @@ def near_core_entry_plans(
             reason = "existing_core_family_exposure"
         elif key in near_consumed:
             reason = "near_core_city_day_exposure_already_consumed"
-        elif used_city_days >= int(args.near_core_max_city_days_per_bj_day):
+        elif (
+            int(args.near_core_max_city_days_per_bj_day) > 0
+            and used_city_days >= int(args.near_core_max_city_days_per_bj_day)
+        ):
             reason = "near_core_daily_city_day_cap"
         plan = None if reason else build_near_core_entry_plan(
             row,
@@ -2654,6 +2657,9 @@ def write_near_core_runtime_artifacts(
         "client_order_prefix": near_core_maker_probe.CLIENT_ORDER_PREFIX,
         "risk_budget": {
             "max_city_days_per_bj_day": int(args.near_core_max_city_days_per_bj_day),
+            "city_day_count_cap_enabled": int(
+                args.near_core_max_city_days_per_bj_day
+            ) > 0,
             "max_daily_cost_usd": float(args.near_core_max_daily_cost_usd),
         },
         "policy_arm": "WS1_BASELINE_FIXED_REST",
@@ -3374,6 +3380,12 @@ def validate_runtime_arguments(args: argparse.Namespace) -> None:
         raise RuntimeError("--live requires --confirm-live")
     if float(args.near_core_book_max_age_sec) <= 0:
         raise RuntimeError("--near-core-book-max-age-sec must be positive")
+    if int(args.near_core_max_city_days_per_bj_day) < 0:
+        raise RuntimeError(
+            "--near-core-max-city-days-per-bj-day must be non-negative; 0 disables the count cap"
+        )
+    if float(args.near_core_max_daily_cost_usd) <= 0:
+        raise RuntimeError("--near-core-max-daily-cost-usd must be positive")
     if (
         args.live
         and args.near_core_maker_probe_enabled
@@ -3614,8 +3626,13 @@ def parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--near-core-order-ttl-min", type=float, default=15.0)
     ap.add_argument("--near-core-candidate-max-age-sec", type=float, default=90.0)
-    ap.add_argument("--near-core-max-city-days-per-bj-day", type=int, default=1)
-    ap.add_argument("--near-core-max-daily-cost-usd", type=float, default=5.0)
+    ap.add_argument(
+        "--near-core-max-city-days-per-bj-day",
+        type=int,
+        default=0,
+        help="maximum new near-Core city-days per Beijing day; 0 disables this count cap",
+    )
+    ap.add_argument("--near-core-max-daily-cost-usd", type=float, default=30.0)
     ap.add_argument("--near-core-ws-control-manifest", default="")
     return ap
 

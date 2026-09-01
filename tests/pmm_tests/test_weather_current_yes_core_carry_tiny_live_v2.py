@@ -147,6 +147,78 @@ def test_live_parser_defaults_match_frozen_ten_plus_shared_five_contract() -> No
     assert args.confirm_near_core_maker_probe_live is False
     assert args.near_core_maker_shares == 5
     assert args.near_core_book_max_age_sec == 90
+    assert args.near_core_max_city_days_per_bj_day == 0
+    assert args.near_core_max_daily_cost_usd == 30
+
+
+def test_near_core_zero_city_day_cap_is_unlimited_but_cost_cap_remains(
+    tmp_path,
+) -> None:
+    rows = []
+    for index, city in enumerate(("Busan", "Seoul")):
+        rows.append(
+            {
+                **score_row(),
+                "city": city,
+                "token_id": f"yes-token-{index}",
+                "checkpoint_key": f"{city}|2026-07-24|13",
+                "eligible": False,
+                "reasons": ["non_positive_taker_ev"],
+            }
+        )
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", rows)
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert len(plans) == 2
+    assert {row["city"] for row in plans} == {"Busan", "Seoul"}
+    assert all(row["reason"] != "near_core_daily_city_day_cap" for row in ledger)
+
+
+def test_near_core_positive_city_day_cap_still_blocks_second_city_day(
+    tmp_path,
+) -> None:
+    rows = []
+    for index, city in enumerate(("Busan", "Seoul")):
+        rows.append(
+            {
+                **score_row(),
+                "city": city,
+                "token_id": f"yes-token-{index}",
+                "checkpoint_key": f"{city}|2026-07-24|13",
+                "eligible": False,
+                "reasons": ["non_positive_taker_ev"],
+            }
+        )
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", rows)
+    args = runner.parser().parse_args(
+        [
+            "run",
+            "--output-dir",
+            str(tmp_path),
+            "--near-core-maker-probe-enabled",
+            "--near-core-max-city-days-per-bj-day",
+            "1",
+        ]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert len(plans) == 1
+    assert sum(row["reason"] == "near_core_daily_city_day_cap" for row in ledger) == 1
 
 
 def test_near_core_book_freshness_uses_direct_fetch_clock_for_legacy_rows() -> None:

@@ -15,6 +15,12 @@ SESSION="${CURRENT_YES_CORE_CARRY_TINY_LIVE_V2_TMUX_SESSION:-weather_current_yes
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$PM_RUNTIME_ROOT")"
 LOG_FILE="$OUTPUT_DIR/runner.log"
 MARKET_PROXY="$(weather_resolve_market_proxy "$ROOT")"
+NEAR_CORE_WS_CONTROL_MANIFEST="${CURRENT_YES_CORE_CARRY_NEAR_CORE_WS_CONTROL_MANIFEST:-$OUTPUT_DIR/near_core_ws_control_readiness.json}"
+
+if [[ ! -f "$NEAR_CORE_WS_CONTROL_MANIFEST" ]]; then
+  echo "near-Core live readiness manifest missing: $NEAR_CORE_WS_CONTROL_MANIFEST" >&2
+  exit 1
+fi
 
 weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 PREFLIGHT="$("$PY" -c \
@@ -33,6 +39,11 @@ session_cmd="cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u scripts/op
     --order-ttl-min 15 \
     --max-city-days-per-bj-day 10 \
     --max-daily-cost-usd 100 \
+    --near-core-maker-probe-enabled \
+    --confirm-near-core-maker-probe-live \
+    --near-core-max-city-days-per-bj-day 0 \
+    --near-core-max-daily-cost-usd 30 \
+    --near-core-ws-control-manifest '$NEAR_CORE_WS_CONTROL_MANIFEST' \
     --interval-seconds 15 \
     --book-proxy '$MARKET_PROXY' \
     --live --confirm-live >> '$LOG_FILE' 2>&1"
