@@ -36,6 +36,31 @@ PRAGMA table_info(fact_trades);
 不要照抄旧 schema。当前 canonical 里订单实例字段为 `orders.instance_id`；fee-adjusted fill 结果在 `fact_trades.fees_usd` / `pnl_usd_at_fill`。
 查询前保存 DB realpath、device/inode、canonical `build_id`/build time 与 `observed_at_utc`；同一次复盘不得混用不同 build。
 
+## Fill 时间不是单字段真相
+
+判断“何时成交”、GTD/expiry 是否失效或首笔 fill latency 时，禁止只读
+`fills.filled_at_utc`。该字段的历史行可能在 authenticated order 只返回
+`MATCHED`、却没有 trade timestamp 时退化成 canonical reconciliation 的发现/写入时间。
+
+每笔至少并列以下时钟，并注明证据来源：
+
+1. `orders.placed_at_utc` 与 exchange request/response 时间。
+2. GTD `expiration` epoch 转成的 UTC 时间。
+3. exact transaction hash 对应的 Polygon receipt/block timestamp（成交事件最高优先级）。
+4. 同一 tx、condition、asset、side、shares/price 对上的 public activity `timestamp`。
+5. authenticated trade `match_time`/`timestamp`；order `updatedAt` 只能作较弱证据。
+6. fill cache/DB 的 `created_at_utc` 与 canonical refresh 日志时间（只代表发现/物化）。
+
+若 `filled_at_utc == created_at_utc` 且精确到本地同步微秒、附近日志刚完成
+`GET /data/order`，先按“发现时间 fallback”调查；在取得 tx/block 或 exact activity 前，
+不得声称订单在 GTD 过期后成交。还要检查该窗口 canonical refresh 是否中断、release
+是否缺 `.venv`/runtime binding、订单何时首次进入 sync 分母。
+
+已确认的历史时间错误不得 UPDATE `fills`。写入 append-only
+`clob_fill_timestamp_adjustments.jsonl` / `fill_timestamp_adjustments`，保存 fill/order/execution/tx、
+原时间、修正时间、block number、timestamp source/evidence class 和核验时间；随后只跑登记的
+bounded canonical refresh，确认 `fact_trades` 使用 effective timestamp，并量化同窗口受影响行。
+
 ## WCIR 决策边界
 
 新 WCIR 实例按以下链路复盘；legacy 实例通过显式 adapter 投影，不伪造缺失层：

@@ -38,6 +38,7 @@ from weather_data_feed.market_brackets import parse_market_bracket
 
 STRATEGY_ID = "cross_no_v2_metar_v1"
 SOURCE_ARMS = frozenset({"metar_ws_datis", "metar_ws_hfmetar", "metar_ws_metar"})
+LIVE_SOURCE_ARMS = frozenset({"metar_ws_datis"})
 SHARES_PER_ORDER = 5.0
 MAX_ORDER_PRINCIPAL_USD = 5.0
 MAX_NO_ASK = 0.99
@@ -68,11 +69,10 @@ ATTRIBUTION_REFRESH_SEC = 30.0
 DEFAULT_MAX_OBSERVATION_DELAY_SEC = 3600.0
 DEFAULT_MAX_STREAM_SILENCE_SEC = 120.0
 HEALTH_HISTORY_INTERVAL_SEC = 30.0
-LIVE_CROSS_POLICY = "single_current_gt_0p7_with_official_supersession_v2"
+LIVE_CROSS_POLICY = "single_current_bracket_cross_datis_only_with_official_supersession_v3"
 SHADOW_CROSS_POLICY = "single_current_gt_0p5_v1"
 COMPARISON_CROSS_POLICY = "two_consecutive_current_gt_0p5_v1"
 OFFICIAL_SUPERSESSION_POLICY = "newer_official_observation_blocks_older_source_v1"
-STRONG_SINGLE_CROSS_MARGIN = 0.7
 CONFIRMED_CROSS_MARGIN = 0.5
 CONFIRMED_CROSS_OBSERVATIONS = 2
 MARGIN_EPSILON = 1e-9
@@ -86,7 +86,7 @@ PRESTART_TRANSITION_HEALTH_FIELDS = frozenset(
         "shadow_cross_policy",
         "comparison_cross_policy",
         "official_supersession_policy",
-        "strong_single_cross_margin",
+        "live_source_arms",
         "confirmed_cross_margin",
         "confirmed_cross_observations",
         "source_running_max_execution_authority",
@@ -1416,11 +1416,11 @@ def run_probe(
         )
         confirmation_state[source_key] = next_confirmation
         confirmation_count = int(next_confirmation.get("streak") or 0)
+        live_source_arm_enabled = str(event.get("source") or "") in LIVE_SOURCE_ARMS
         strong_single_cross = bool(
-            current_crossed_new_bracket
-            and current_cross_margin is not None
+            live_source_arm_enabled
+            and current_crossed_new_bracket
             and observation_is_causally_current
-            and _strictly_above(current_cross_margin, STRONG_SINGLE_CROSS_MARGIN)
         )
         consecutive_cross = bool(
             shadow_cross
@@ -1433,12 +1433,12 @@ def run_probe(
         )
         if official_observation_supersedes_source_event:
             candidate_blockers.append("newer_official_observation_supersedes_source_event")
+        if not live_source_arm_enabled:
+            candidate_blockers.append("source_arm_live_disabled")
         if not current_crossed_new_bracket:
             candidate_blockers.append("current_observation_did_not_cross_new_bracket")
-        elif not shadow_cross:
-            candidate_blockers.append("current_cross_margin_not_above_shadow_threshold")
-        elif not live_cross_confirmed:
-            candidate_blockers.append("live_cross_confirmation_not_met")
+        elif not observation_is_causally_current:
+            candidate_blockers.append("observation_not_causally_current")
         condition_id, token_id = str(prior_market.get("condition_id") or ""), str(prior_market.get("token_id") or prior_market.get("no_token_id") or "")
         if not condition_id or not token_id:
             candidate_blockers.append("exact_condition_or_no_token_unverified")
@@ -1509,10 +1509,10 @@ def run_probe(
         attribution_role = (
             "later_race_blocked"
             if race_already_executed
+            else "shadow_source_arm_disabled"
+            if not live_source_arm_enabled and current_crossed_new_bracket
             else "no_cross"
-            if not shadow_cross
-            else "shadow_single_cross"
-            if not live_cross_confirmed
+            if not current_crossed_new_bracket
             else "cross_blocked"
             if candidate_blockers
             else "execution_candidate"
@@ -1533,6 +1533,8 @@ def run_probe(
                "confirmation_observation_causally_current": observation_is_causally_current,
                "consecutive_cross_count": confirmation_count,
                "consecutive_cross_confirmed": consecutive_cross,
+               "live_source_arm_enabled": live_source_arm_enabled,
+               "live_source_arms": sorted(LIVE_SOURCE_ARMS),
                "live_cross_confirmed": live_cross_confirmed,
                "live_cross_policy": LIVE_CROSS_POLICY,
                "shadow_cross_policy": SHADOW_CROSS_POLICY,
@@ -1755,7 +1757,7 @@ def run_probe(
         "shadow_cross_policy": SHADOW_CROSS_POLICY,
         "comparison_cross_policy": COMPARISON_CROSS_POLICY,
         "official_supersession_policy": OFFICIAL_SUPERSESSION_POLICY,
-        "strong_single_cross_margin": STRONG_SINGLE_CROSS_MARGIN,
+        "live_source_arms": sorted(LIVE_SOURCE_ARMS),
         "confirmed_cross_margin": CONFIRMED_CROSS_MARGIN,
         "confirmed_cross_observations": CONFIRMED_CROSS_OBSERVATIONS,
         "source_running_max_execution_authority": False,

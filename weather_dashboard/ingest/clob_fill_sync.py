@@ -318,6 +318,13 @@ def _exact_activity_fee_for_fill(
     tx_hashes = sorted(
         {str(trade.get("transactionHash") or "").lower() for trade, _ in matched}
     )
+    activity_fill_times = sorted(
+        value
+        for value in (
+            _ts_to_iso(trade.get("timestamp")) for trade, _ in matched
+        )
+        if value is not None
+    )
     weighted_denom = sum(
         float(trade.get("size") or 0.0)
         * float(trade.get("price") or 0.0)
@@ -329,10 +336,13 @@ def _exact_activity_fee_for_fill(
         "fee_source": "public_activity_tx_exact",
         "fee_rate": fees_usd / weighted_denom if fees_usd > 0 and weighted_denom > 0 else 0.0,
         "transaction_hash": tx_hashes[0] if len(tx_hashes) == 1 else None,
+        "filled_at_utc": activity_fill_times[0] if activity_fill_times else None,
         "fee_metadata": {
             "transaction_hashes": tx_hashes,
             "activity_rows": len(matched),
             "activity_shares": activity_shares,
+            "activity_fill_times_utc": activity_fill_times,
+            "fill_timestamp_evidence_class": "public_activity_tx_exact",
             "evidence": [details["fee_metadata"] for _, details in matched],
         },
     }
@@ -350,6 +360,7 @@ def _fallback_fee_details(
             "fee_source": "maker_zero",
             "fee_rate": 0.0,
             "transaction_hash": None,
+            "filled_at_utc": None,
             "fee_metadata": {"maker_only": True},
         }
     return {
@@ -357,6 +368,7 @@ def _fallback_fee_details(
         "fee_source": "weather_fee_curve_estimate",
         "fee_rate": float(WEATHER_TAKER_FEE_RATE),
         "transaction_hash": None,
+        "filled_at_utc": None,
         "fee_metadata": {
             "fee_formula": "shares*fee_rate*price*(1-price)",
             "fee_rate": float(WEATHER_TAKER_FEE_RATE),
@@ -379,14 +391,6 @@ def _resolve_fee_details(
     price: float,
     maker_only: bool,
 ) -> dict[str, Any]:
-    if authenticated_fee_usd > 0:
-        return {
-            "fees_usd": authenticated_fee_usd,
-            "fee_source": "authenticated_taker_fee",
-            "fee_rate": authenticated_fee_rate,
-            "transaction_hash": None,
-            "fee_metadata": authenticated_metadata or {},
-        }
     exact = _exact_activity_fee_for_fill(
         transaction_hashes=transaction_hashes,
         activity_by_tx=activity_by_tx,
@@ -395,6 +399,27 @@ def _resolve_fee_details(
         order_side=order_side,
         expected_shares=shares,
     )
+    if authenticated_fee_usd > 0:
+        return {
+            "fees_usd": authenticated_fee_usd,
+            "fee_source": "authenticated_taker_fee",
+            "fee_rate": authenticated_fee_rate,
+            "transaction_hash": (exact or {}).get("transaction_hash"),
+            "filled_at_utc": (exact or {}).get("filled_at_utc"),
+            "fee_metadata": {
+                **(authenticated_metadata or {}),
+                **(
+                    {
+                        "activity_fill_times_utc": exact["fee_metadata"].get(
+                            "activity_fill_times_utc", []
+                        ),
+                        "fill_timestamp_evidence_class": "public_activity_tx_exact",
+                    }
+                    if exact is not None
+                    else {}
+                ),
+            },
+        }
     if exact is not None:
         return exact
     return _fallback_fee_details(shares=shares, price=price, maker_only=maker_only)
@@ -1498,41 +1523,31 @@ def sync_clob_fills(
         fill_id = _make_fill_id(execution_id, clob_order_id)
         immediate_fill = _extract_immediate_place_fill(row)
         if immediate_fill is not None:
-            fee_details: dict[str, Any] | None = None
+            authenticated_fee_usd = 0.0
+            authenticated_fee_rate: float | None = None
+            authenticated_fee_metadata: dict[str, Any] = {}
             if client is not None:
                 authenticated_order = _fetch_order_status_clob(client, clob_order_id)
                 if authenticated_order is not None:
                     authenticated = _parse_clob_order_response(
                         authenticated_order, expected_shares=row_shares
                     )
-                    if authenticated["fees_usd"] > 0:
-                        fee_details = {
-                            "fees_usd": authenticated["fees_usd"],
-                            "fee_source": "authenticated_taker_fee",
-                            "fee_rate": authenticated["fee_rate"],
-                            "transaction_hash": None,
-                            "fee_metadata": authenticated["fee_metadata"],
-                        }
-            if fee_details is None:
-                fee_details = _exact_activity_fee_for_fill(
-                    transaction_hashes=immediate_fill["transaction_hashes"],
-                    activity_by_tx=activity_by_tx,
-                    condition_id=str(row["condition_id"] or ""),
-                    token_id=str(row["token_id"] or ""),
-                    order_side=str(row["order_side"] or ""),
-                    expected_shares=immediate_fill["filled_shares"],
-                )
-            if fee_details is None:
-                fee_details = {
-                    key: immediate_fill[key]
-                    for key in (
-                        "fees_usd",
-                        "fee_source",
-                        "fee_rate",
-                        "transaction_hash",
-                        "fee_metadata",
-                    )
-                }
+                    authenticated_fee_usd = authenticated["fees_usd"]
+                    authenticated_fee_rate = authenticated["fee_rate"]
+                    authenticated_fee_metadata = authenticated["fee_metadata"]
+            fee_details = _resolve_fee_details(
+                authenticated_fee_usd=authenticated_fee_usd,
+                authenticated_fee_rate=authenticated_fee_rate,
+                authenticated_metadata=authenticated_fee_metadata,
+                transaction_hashes=immediate_fill["transaction_hashes"],
+                activity_by_tx=activity_by_tx,
+                condition_id=str(row["condition_id"] or ""),
+                token_id=str(row["token_id"] or ""),
+                order_side=str(row["order_side"] or ""),
+                shares=immediate_fill["filled_shares"],
+                price=immediate_fill["filled_price"],
+                maker_only=_maker_only(row),
+            )
             inserted = _insert_order_fill_top_up(
                 conn,
                 base_fill_id=fill_id,
@@ -1541,7 +1556,10 @@ def sync_clob_fills(
                 target_shares=immediate_fill["filled_shares"],
                 target_price=immediate_fill["filled_price"],
                 fees_usd=fee_details["fees_usd"],
-                filled_at_utc=immediate_fill["filled_at_utc"],
+                filled_at_utc=(
+                    fee_details.get("filled_at_utc")
+                    or immediate_fill["filled_at_utc"]
+                ),
                 dry_run=dry_run,
                 fee_source=fee_details["fee_source"],
                 fee_rate=fee_details["fee_rate"],
@@ -1623,6 +1641,7 @@ def sync_clob_fills(
                         price=filled_price,
                         maker_only=_maker_only(row),
                     )
+                    filled_at = filled_at or fee_details.get("filled_at_utc")
 
                     inserted = _insert_order_fill_top_up(
                         conn,
@@ -1684,6 +1703,10 @@ def sync_clob_fills(
                             price=filled_price,
                             maker_only=_maker_only(row),
                         )
+                        filled_at = (
+                            parsed["filled_at"]
+                            or fee_details.get("filled_at_utc")
+                        )
                         inserted = _insert_order_fill_top_up(
                             conn,
                             base_fill_id=fill_id,
@@ -1692,7 +1715,7 @@ def sync_clob_fills(
                             target_shares=filled_shares,
                             target_price=filled_price,
                             fees_usd=fee_details["fees_usd"],
-                            filled_at_utc=parsed["filled_at"],
+                            filled_at_utc=filled_at,
                             dry_run=dry_run,
                             fee_source=fee_details["fee_source"],
                             fee_rate=fee_details["fee_rate"],
@@ -1744,6 +1767,7 @@ def sync_clob_fills(
                     price=filled_price,
                     maker_only=_maker_only(row),
                 )
+                filled_at = agg["filled_at"] or fee_details.get("filled_at_utc")
                 inserted = _insert_order_fill_top_up(
                     conn,
                     base_fill_id=fill_id,
@@ -1752,7 +1776,7 @@ def sync_clob_fills(
                     target_shares=filled_shares,
                     target_price=filled_price,
                     fees_usd=fee_details["fees_usd"],
-                    filled_at_utc=agg["filled_at"],
+                    filled_at_utc=filled_at,
                     dry_run=dry_run,
                     fee_source=fee_details["fee_source"],
                     fee_rate=fee_details["fee_rate"],

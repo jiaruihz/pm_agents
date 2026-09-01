@@ -101,7 +101,7 @@ def test_universe_loader_preserves_required_market_units(tmp_path: Path):
 def test_native_integer_lattice_maps_us_celsius_without_decimal_gap(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    rows = [event("metar_ws_metar", "official1", 21.0), event("metar_ws_hfmetar", "hf2", 22.3)]
+    rows = [event("metar_ws_metar", "official1", 21.0), event("metar_ws_datis", "datis2", 22.3)]
     (source / "information_events.jsonl").write_text(
         "\n".join(json.dumps(row) for row in rows) + "\n"
     )
@@ -151,7 +151,7 @@ def test_shadow_cross_is_proxy_and_never_hard_settlement_invalidation(tmp_path: 
     assert candidate["planned_shares"] == 5.0
 
 
-def test_single_current_margin_above_point_five_is_shadow_only(tmp_path: Path):
+def test_hfmetar_cross_is_shadow_only_even_when_it_crosses(tmp_path: Path):
     calls = []
     official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
     moderate = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.6))
@@ -168,14 +168,16 @@ def test_single_current_margin_above_point_five_is_shadow_only(tmp_path: Path):
     assert row["strong_single_cross"] is False
     assert row["consecutive_cross_count"] == 1
     assert row["live_cross_confirmed"] is False
-    assert row["attribution_role"] == "shadow_single_cross"
+    assert row["attribution_role"] == "shadow_source_arm_disabled"
     assert row["shadow_zero_notional"] is True
     assert row["execution_authority"] is False
     assert row["planned_shares"] == 0.0
     assert row["hypothetical_shares"] == 5.0
     assert row["planned_principal_usd"] == 0.0
     assert row["hypothetical_principal_usd"] > 0.0
-    assert "live_cross_confirmation_not_met" in row["blockers"]
+    assert row["live_source_arm_enabled"] is False
+    assert row["live_source_arms"] == ["metar_ws_datis"]
+    assert "source_arm_live_disabled" in row["blockers"]
     demand = read(tmp_path / "out/capture_demands.jsonl")[-1]
     assert demand["reason"] == "cross_no_v2_metar_shadow_markout"
     assert demand["metadata"]["capture_role"] == (
@@ -184,10 +186,10 @@ def test_single_current_margin_above_point_five_is_shadow_only(tmp_path: Path):
     assert demand["metadata"]["shadow_zero_notional"] is True
 
 
-def test_single_current_margin_strictly_above_point_seven_executes(tmp_path: Path):
+def test_datis_new_bracket_executes_without_margin_gate(tmp_path: Path):
     calls = []
     official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
-    strong = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.71))
+    strong = event("metar_ws_datis", "datis2", celsius_for_fahrenheit(81.6))
     result = run(
         tmp_path,
         [official, strong],
@@ -199,12 +201,14 @@ def test_single_current_margin_strictly_above_point_seven_executes(tmp_path: Pat
     assert result["orders"] == 1 and len(calls) == 1
     assert row["strong_single_cross"] is True
     assert row["live_cross_confirmed"] is True
+    assert row["current_cross_margin_native"] < 0.7
+    assert row["live_source_arm_enabled"] is True
 
 
-def test_single_current_margin_equal_to_point_seven_remains_shadow(tmp_path: Path):
+def test_hfmetar_strong_cross_never_executes(tmp_path: Path):
     calls = []
     official = event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0))
-    boundary = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(81.7))
+    boundary = event("metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(83.0))
     result = run(
         tmp_path,
         [official, boundary],
@@ -216,6 +220,8 @@ def test_single_current_margin_equal_to_point_seven_remains_shadow(tmp_path: Pat
     assert result["orders"] == 0 and calls == []
     assert row["strong_single_cross"] is False
     assert row["shadow_single_cross"] is True
+    assert row["live_cross_confirmed"] is False
+    assert "source_arm_live_disabled" in row["blockers"]
 
 
 def test_two_distinct_consecutive_point_five_crosses_remain_comparison_only(tmp_path: Path):
@@ -364,7 +370,7 @@ def test_newer_official_observation_blocks_late_older_hf_cross(tmp_path: Path):
 
     row = read(tmp_path / "out/opportunities.jsonl")[-1]
     assert result["orders"] == 0 and calls == []
-    assert row["strong_single_cross"] is True
+    assert row["strong_single_cross"] is False
     assert row["official_observation_supersedes_source_event"] is True
     assert cross_no_v2.parse_utc(row["latest_official_observation_ts_utc"]) == (
         cross_no_v2.parse_utc("2026-08-31T11:58:00Z")
@@ -377,7 +383,7 @@ def test_newer_official_observation_blocks_late_older_hf_cross(tmp_path: Path):
     assert row["planned_principal_usd"] == 0.0
 
 
-def test_same_time_official_does_not_block_hf_cross(tmp_path: Path):
+def test_same_time_official_does_not_restore_hf_live_authority(tmp_path: Path):
     calls = []
     official = {
         **event("metar_ws_metar", "official1", celsius_for_fahrenheit(81.0)),
@@ -399,9 +405,10 @@ def test_same_time_official_does_not_block_hf_cross(tmp_path: Path):
     )
 
     row = read(tmp_path / "out/opportunities.jsonl")[-1]
-    assert result["orders"] == 1 and len(calls) == 1
+    assert result["orders"] == 0 and calls == []
     assert row["official_observation_supersedes_source_event"] is False
     assert row["official_supersession_execution_authority"] is True
+    assert "source_arm_live_disabled" in row["blockers"]
 
 
 def test_any_final_blocker_zeroes_execution_authority_and_planned_notional(
@@ -414,7 +421,7 @@ def test_any_final_blocker_zeroes_execution_authority_and_planned_notional(
         "metar_ws_metar", "official1", celsius_for_fahrenheit(81.0)
     )
     strong = event(
-        "metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(83.0)
+        "metar_ws_datis", "datis2", celsius_for_fahrenheit(83.0)
     )
 
     result = run(
@@ -681,7 +688,7 @@ def test_prestart_manifest_allows_only_narrow_self_health_schema_transition():
                     {"field": "code_identity"},
                     {"field": "source_attribution_schema_version"},
                     {"field": "official_supersession_policy"},
-                    {"field": "strong_single_cross_margin"},
+                    {"field": "live_source_arms"},
                     {"field": "confirmed_cross_margin"},
                     {"field": "confirmed_cross_observations"},
                     {"field": "source_running_max_execution_authority"},
@@ -782,7 +789,7 @@ def test_submit_failure_reservation_prevents_retry(tmp_path: Path):
     def fail(_order):
         raise RuntimeError("synthetic rejection")
 
-    rows = [event("metar_ws_metar", "official1", 26.7), event("metar_ws_hfmetar", "hf2", 27.8)]
+    rows = [event("metar_ws_metar", "official1", 26.7), event("metar_ws_datis", "datis2", 27.8)]
     first = run(tmp_path, rows, live=True, confirm_live=True, place_fn=fail)
     assert first["orders_attempted_this_cycle"] == 1
     assert (tmp_path / "out/execution_attempts.jsonl").exists()
@@ -802,7 +809,7 @@ def test_submit_failure_reservation_prevents_retry(tmp_path: Path):
 def test_prior_daily_reservations_do_not_cap_a_new_economic_cross(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    rows = [event("metar_ws_metar", "official1", 26.7), event("metar_ws_hfmetar", "hf2", 27.8)]
+    rows = [event("metar_ws_metar", "official1", 26.7), event("metar_ws_datis", "datis2", 27.8)]
     (source / "information_events.jsonl").write_text(
         "\n".join(json.dumps(row) for row in rows) + "\n"
     )
@@ -970,7 +977,7 @@ def test_lower_official_revision_cannot_reduce_running_max(tmp_path: Path):
         output_dir=out,
         now=NOW,
         official_fee_rate=0.05,
-        events_override=[event("metar_ws_hfmetar", "hf3", 27.8)],
+        events_override=[event("metar_ws_datis", "datis3", 27.8)],
     )
     candidate = read(out / "opportunities.jsonl")[-1]
     assert candidate["status"] == "candidate"
@@ -984,7 +991,7 @@ def test_late_official_updates_state_but_cannot_trigger_decision(tmp_path: Path)
     }
     run(
         tmp_path,
-        [late_official, event("metar_ws_hfmetar", "hf2", 27.8)],
+        [late_official, event("metar_ws_datis", "datis2", 27.8)],
         max_observation_delay_sec=3600,
     )
     rows = read(tmp_path / "out/opportunities.jsonl")

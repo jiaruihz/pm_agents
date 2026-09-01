@@ -265,7 +265,8 @@ assert payload.get("shares_per_order") == 5.0, payload
 assert payload.get("daily_order_cap_enabled") is False, payload
 assert payload.get("daily_principal_cap_enabled") is False, payload
 assert payload.get("max_no_ask") == 0.99, payload
-assert payload.get("live_cross_policy") == "single_current_gt_0p7_v1", payload
+assert payload.get("live_cross_policy") == "single_current_bracket_cross_datis_only_with_official_supersession_v3", payload
+assert payload.get("live_source_arms") == ["metar_ws_datis"], payload
 assert payload.get("shadow_cross_policy") == "single_current_gt_0p5_v1", payload
 assert payload.get("comparison_cross_policy") == "two_consecutive_current_gt_0p5_v1", payload
 assert payload.get("source_running_max_execution_authority") is False, payload
@@ -273,6 +274,6 @@ PY
 
 echo "started cross_no_v2_metar_v1 tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
 echo "execution=5_share_taker_only daily_order_cap=off daily_principal_cap=off max_no_ask=0.99"
-echo "cross_policy=single_current_gt_0p7_v1 shadow=single_current_gt_0p5_v1 comparison=two_consecutive_current_gt_0p5_v1"
+echo "cross_policy=single_current_bracket_cross_datis_only_with_official_supersession_v3 live_sources=metar_ws_datis shadow=single_current_gt_0p5_v1 comparison=two_consecutive_current_gt_0p5_v1"
 echo "live=$ENABLE_LIVE confirm_live=$CONFIRM_LIVE clock_override=$ALLOW_CLOCK_OVERRIDE"
 echo "evidence_db=$EVIDENCE_DB output_dir=$OUTPUT_DIR pause_file=$PAUSE_FILE"

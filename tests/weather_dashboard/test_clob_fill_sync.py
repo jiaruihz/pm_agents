@@ -405,6 +405,7 @@ def test_exact_transaction_activity_fee_beats_estimate():
         "size": 5,
         "price": 0.67,
         "usdcSize": 3.40527,
+        "timestamp": 1788267742,
     }
     exact = _exact_activity_fee_for_fill(
         transaction_hashes=["0xc055"],
@@ -418,6 +419,10 @@ def test_exact_transaction_activity_fee_beats_estimate():
     assert exact is not None
     assert exact["fees_usd"] == 0.05527
     assert exact["fee_source"] == "public_activity_tx_exact"
+    assert exact["filled_at_utc"] == "2026-09-01T13:02:22+00:00"
+    assert exact["fee_metadata"]["fill_timestamp_evidence_class"] == (
+        "public_activity_tx_exact"
+    )
 
 
 def test_public_partial_buy_derives_exact_cash_delta_fee():
@@ -448,6 +453,7 @@ def test_authenticated_nonzero_taker_fee_is_authoritative():
                 "transactionHash": "0xc055", "conditionId": "cond", "asset": "token",
                 "side": "BUY", "outcome": "No", "size": 5, "price": 0.67,
                 "usdcSize": 3.40527,
+                "timestamp": 1788267742,
             }]
         ),
         condition_id="cond",
@@ -460,3 +466,4 @@ def test_authenticated_nonzero_taker_fee_is_authoritative():
 
     assert details["fees_usd"] == 0.07
     assert details["fee_source"] == "authenticated_taker_fee"
+    assert details["filled_at_utc"] == "2026-09-01T13:02:22+00:00"
