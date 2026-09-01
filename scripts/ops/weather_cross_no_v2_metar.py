@@ -1519,6 +1519,9 @@ def run_probe(
             if live_enabled
             else "first_eligible_cross"
         )
+        final_execution_authority = bool(
+            live_cross_confirmed and not candidate_blockers
+        )
         row = {**common, "status": "candidate" if not candidate_blockers else "blocked", "blockers": candidate_blockers,
                "prior_official_running_max": prior_official, "source_running_max": source_max[source_key],
                "source_running_max_descriptive_only": True,
@@ -1560,11 +1563,11 @@ def run_probe(
                "attribution_role": attribution_role,
                "shadow_zero_notional": bool(shadow_cross and not live_cross_confirmed),
                "official_supersession_execution_authority": official_supersession_execution_authority,
-               "execution_authority": bool(live_cross_confirmed and official_supersession_execution_authority),
-               "planned_shares": SHARES_PER_ORDER if live_cross_confirmed and official_supersession_execution_authority else 0.0,
+               "execution_authority": final_execution_authority,
+               "planned_shares": SHARES_PER_ORDER if final_execution_authority else 0.0,
                "hypothetical_shares": SHARES_PER_ORDER,
                "max_shares_per_market": SHARES_PER_ORDER,
-               "planned_principal_usd": principal if live_cross_confirmed and official_supersession_execution_authority else 0.0,
+               "planned_principal_usd": principal if final_execution_authority else 0.0,
                "hypothetical_principal_usd": principal,
                "live_requested": bool(live), "live_enabled": live_enabled}
         append_jsonl(output_dir / "opportunities.jsonl", row); emitted += 1

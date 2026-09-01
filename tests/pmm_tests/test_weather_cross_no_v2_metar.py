@@ -404,6 +404,37 @@ def test_same_time_official_does_not_block_hf_cross(tmp_path: Path):
     assert row["official_supersession_execution_authority"] is True
 
 
+def test_any_final_blocker_zeroes_execution_authority_and_planned_notional(
+    tmp_path: Path,
+):
+    pause_file = tmp_path / "PAUSE"
+    pause_file.write_text("operator pause")
+    calls = []
+    official = event(
+        "metar_ws_metar", "official1", celsius_for_fahrenheit(81.0)
+    )
+    strong = event(
+        "metar_ws_hfmetar", "hf2", celsius_for_fahrenheit(83.0)
+    )
+
+    result = run(
+        tmp_path,
+        [official, strong],
+        live=True,
+        confirm_live=True,
+        pause_file=pause_file,
+        place_fn=lambda order: calls.append(order) or filled_order(),
+    )
+
+    row = read(tmp_path / "out/opportunities.jsonl")[-1]
+    assert result["orders"] == 0 and calls == []
+    assert row["strong_single_cross"] is True
+    assert "pause_file_present" in row["blockers"]
+    assert row["execution_authority"] is False
+    assert row["planned_shares"] == 0.0
+    assert row["planned_principal_usd"] == 0.0
+
+
 def test_state_v2_restart_rebuilds_official_clock_before_late_hf(tmp_path: Path):
     books = tmp_path / "books.json"
     books.write_text(json.dumps(markets()))
