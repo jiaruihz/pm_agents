@@ -13,8 +13,8 @@ production_releases:
     expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/72ae100620770811faa021454d1507b9c6f4309f
-    expected_repo_sha: 72ae100620770811faa021454d1507b9c6f4309f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/8e6c0e26c12a169df33d95b446a3179dea49a58f
+    expected_repo_sha: 8e6c0e26c12a169df33d95b446a3179dea49a58f
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: data_feed
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
@@ -550,7 +550,7 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_instance: cross_no_v2_metar_v1
-      code_identity: 72ae100620770811faa021454d1507b9c6f4309f
+      code_identity: 8e6c0e26c12a169df33d95b446a3179dea49a58f
       execution_mode: live_probe
       live_enabled: true
       shares_per_order: 5.0
@@ -564,9 +564,10 @@ managed_runtimes:
       source_stream_monitor_enabled: true
       market_unit_contract: universe_config_required_v1
       native_lattice_contract: round_half_up_integer_market_unit_v1
-      live_cross_policy: single_current_gt_0p7_v1
+      live_cross_policy: single_current_gt_0p7_with_official_supersession_v2
       shadow_cross_policy: single_current_gt_0p5_v1
       comparison_cross_policy: two_consecutive_current_gt_0p5_v1
+      official_supersession_policy: newer_official_observation_blocks_older_source_v1
       strong_single_cross_margin: 0.7
       confirmed_cross_margin: 0.5
       confirmed_cross_observations: 2
