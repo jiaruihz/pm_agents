@@ -649,6 +649,12 @@ def test_prestart_manifest_allows_only_narrow_self_health_schema_transition():
                 "mismatches": [
                     {"field": "code_identity"},
                     {"field": "source_attribution_schema_version"},
+                    {"field": "official_supersession_policy"},
+                    {"field": "strong_single_cross_margin"},
+                    {"field": "confirmed_cross_margin"},
+                    {"field": "confirmed_cross_observations"},
+                    {"field": "source_running_max_execution_authority"},
+                    {"field": "confirmation_sequence_contract"},
                 ],
             }]
         },

@@ -85,6 +85,12 @@ PRESTART_TRANSITION_HEALTH_FIELDS = frozenset(
         "live_cross_policy",
         "shadow_cross_policy",
         "comparison_cross_policy",
+        "official_supersession_policy",
+        "strong_single_cross_margin",
+        "confirmed_cross_margin",
+        "confirmed_cross_observations",
+        "source_running_max_execution_authority",
+        "confirmation_sequence_contract",
     }
 )
 _BOOK_RECORD_CACHE: dict[str, tuple[int, int, list[dict[str, Any]]]] = {}
