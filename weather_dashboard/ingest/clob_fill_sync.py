@@ -199,6 +199,22 @@ def _ts_to_iso(ts_raw: Any) -> str | None:
         return None
 
 
+def _select_authoritative_fill_time(
+    *,
+    exact_activity_at: str | None,
+    authenticated_trade_at: str | None = None,
+    order_updated_at: str | None = None,
+    local_fallback_at: str | None = None,
+) -> str | None:
+    """Choose fill time by evidence strength, never by discovery recency."""
+    return (
+        exact_activity_at
+        or authenticated_trade_at
+        or order_updated_at
+        or local_fallback_at
+    )
+
+
 def _as_decimal(value: Any) -> Decimal | None:
     try:
         return Decimal(str(value))
@@ -1556,9 +1572,9 @@ def sync_clob_fills(
                 target_shares=immediate_fill["filled_shares"],
                 target_price=immediate_fill["filled_price"],
                 fees_usd=fee_details["fees_usd"],
-                filled_at_utc=(
-                    fee_details.get("filled_at_utc")
-                    or immediate_fill["filled_at_utc"]
+                filled_at_utc=_select_authoritative_fill_time(
+                    exact_activity_at=fee_details.get("filled_at_utc"),
+                    local_fallback_at=immediate_fill["filled_at_utc"],
                 ),
                 dry_run=dry_run,
                 fee_source=fee_details["fee_source"],
@@ -1641,7 +1657,11 @@ def sync_clob_fills(
                         price=filled_price,
                         maker_only=_maker_only(row),
                     )
-                    filled_at = filled_at or fee_details.get("filled_at_utc")
+                    filled_at = _select_authoritative_fill_time(
+                        exact_activity_at=fee_details.get("filled_at_utc"),
+                        authenticated_trade_at=(trade_agg or {}).get("filled_at"),
+                        order_updated_at=parsed["filled_at"],
+                    )
 
                     inserted = _insert_order_fill_top_up(
                         conn,
@@ -1703,9 +1723,9 @@ def sync_clob_fills(
                             price=filled_price,
                             maker_only=_maker_only(row),
                         )
-                        filled_at = (
-                            parsed["filled_at"]
-                            or fee_details.get("filled_at_utc")
+                        filled_at = _select_authoritative_fill_time(
+                            exact_activity_at=fee_details.get("filled_at_utc"),
+                            order_updated_at=parsed["filled_at"],
                         )
                         inserted = _insert_order_fill_top_up(
                             conn,
@@ -1767,7 +1787,10 @@ def sync_clob_fills(
                     price=filled_price,
                     maker_only=_maker_only(row),
                 )
-                filled_at = agg["filled_at"] or fee_details.get("filled_at_utc")
+                filled_at = _select_authoritative_fill_time(
+                    exact_activity_at=fee_details.get("filled_at_utc"),
+                    authenticated_trade_at=agg["filled_at"],
+                )
                 inserted = _insert_order_fill_top_up(
                     conn,
                     base_fill_id=fill_id,

@@ -16,10 +16,20 @@ from weather_dashboard.ingest.clob_fill_sync import (
     _public_buy_fee_details,
     _public_trade_matches_order,
     _resolve_fee_details,
+    _select_authoritative_fill_time,
     _select_public_partial_fills,
     _submitted_order_price_cap,
     sync_clob_fills,
 )
+
+
+def test_exact_activity_fill_time_beats_trade_and_order_discovery_times():
+    assert _select_authoritative_fill_time(
+        exact_activity_at="2026-09-01T13:02:22+00:00",
+        authenticated_trade_at="2026-09-01T13:02:24+00:00",
+        order_updated_at="2026-09-01T13:47:18.996284+00:00",
+        local_fallback_at="2026-09-01T13:47:19+00:00",
+    ) == "2026-09-01T13:02:22+00:00"
 
 
 def test_v2_clob_http_client_uses_explicit_proxy_and_resilient_timeout(monkeypatch):
