@@ -115,8 +115,9 @@ def make_fixture_env(tmp_path: Path, *, viable: bool) -> dict[str, str]:
         "genuinely_stale": [{"name": "FixtureStale", "claiming_prs": [999],
                               "collision": "claimed"}],
         "redirects_confirmed_all_claimed": []}))
+    from datetime import datetime, timezone as _tz
     (state / "last_full_discovery.json").write_text(json.dumps({
-        "completed_at_utc": "2026-08-24T00:00:00Z",
+        "completed_at_utc": datetime.now(_tz.utc).isoformat().replace("+00:00", "Z"),
         "run_id": "fixture-seed", "mode": "shadow"}))
 
     policy = tmp_path / "policy.json"
