@@ -25,8 +25,9 @@ production_releases:
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/d9866cbd9ca185c4547fd93795027735649a3e7c
-    expected_repo_sha: d9866cbd9ca185c4547fd93795027735649a3e7c
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/3cc2155969482d72d97fc462e3f3f57e3f587d7e
+    expected_repo_sha: 3cc2155969482d72d97fc462e3f3f57e3f587d7e
+    runtime_bindings: [operational_venv]
   - release_id: amsterdam_wcir_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/4b0a7fdaf376fc94ca410de49b72d463b27107e4
     expected_repo_sha: 4b0a7fdaf376fc94ca410de49b72d463b27107e4

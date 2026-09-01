@@ -185,7 +185,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "d7dcdc53f6bb27fd9731485ef0f779442056629c"
     )
     assert spec.release("market_books").expected_repo_sha == (
-        "d9866cbd9ca185c4547fd93795027735649a3e7c"
+        "3cc2155969482d72d97fc462e3f3f57e3f587d7e"
     )
     selective_maker = by_id["weather_first_selective_maker_v2_1_shadow"]
     assert selective_maker.execution_mode == "zero_notional_shadow"
