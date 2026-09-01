@@ -339,8 +339,9 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "weather_jrs_tmux_run_oneshot" in starter
     assert "canonical_refresh_checkout_root" in starter
     assert "load_production_spec().operational_repo_root" in starter
-    assert 'CANONICAL_FILL_CACHE="$OPERATIONAL_PROJECT_DIR/runtime/weather_edge_v1/clob_fills.jsonl"' in starter
-    assert 'ln -sfn "$CANONICAL_FILL_CACHE" "$REFRESH_FILL_CACHE"' in starter
+    assert "weather_canonical_refresh_bindings.py" in starter
+    assert '--operational-project-dir "$OPERATIONAL_PROJECT_DIR"' in starter
+    assert '--refresh-project-dir "$REFRESH_PROJECT_DIR"' in starter
     assert 'export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q WEATHER_CANONICAL_REFRESH_RUNTIME_DIR=%q' in starter
     assert "WEATHER_CANONICAL_REFRESH_RUNTIME_DIR" in starter
     assert 'SESSION="weather_canonical_refresh"' in starter

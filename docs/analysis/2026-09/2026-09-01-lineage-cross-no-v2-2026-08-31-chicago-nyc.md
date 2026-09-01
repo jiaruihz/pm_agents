@@ -126,3 +126,22 @@ D-ATIS 并非全程没有盘口：82 rows 中有 60 rows 的一般 5-share book 
 治理口径：GTD 和 fill latency 必须按 `placed → expiry → tx/block → exact public activity
 → authenticated trade → reconciliation created_at` 的证据顺序复盘；历史修正只写
 append-only `fill_timestamp_adjustments`，禁止改写原始 `fills`。
+
+## 2026-09-01 Cross V2 live policy 切换与影响清单
+
+已加载 release `6561553bb9b2da7ee14ea4c8350b1b95b6328b4e`：HF-METAR 继续采集并保留
+shadow/lineage，但 `live_source_arms` 仅含 `metar_ws_datis`；D-ATIS 以当前报文本身跨入新
+bracket 为 live signal，不再要求 0.7 margin。官方 supersession、causal ordering、fresh 5-share
+book、price/cap/dedupe/pause 等执行 gate 保持不变。
+
+该 policy 若反事实应用于切换前 runtime，会阻断 9 笔 HF exchange orders：NYC 1、Chicago 2、
+Austin 1、SanFrancisco 1、Seattle 1、Amsterdam 2、Houston 1。最后一笔 Houston 在
+2026-09-01 14:48:17 UTC 提交，order
+`0x2fe652ea019a06e3b56991671de48bf127909c2b8dacc062c519fdcafcdcc7f8`；它发生在部署切换前，
+不是新 policy 下的订单。新 policy 不撤销历史 fill，只改变后续 execution authority。
+
+本次时间修正还发现 canonical refresh 的 release-boundary 缺口：旧启动器只把 operational
+`clob_fills.jsonl` 绑定进 immutable release，未绑定 fee/price/timestamp/validity 四类 adjustment
+journal，造成 journal 已 append、refresh exit 0 且 coverage gate pass，但 adjustment row 未进入 DB。
+启动器现统一绑定这四类 operational journal；以后必须同时核验 DB adjustment row 和
+`fact_trades` effective value，不能只看 refresh/gate 总状态。
