@@ -1790,6 +1790,7 @@ def main() -> int:
     source_input = parser.add_mutually_exclusive_group(required=True)
     source_input.add_argument("--source-events-root", type=Path)
     source_input.add_argument("--evidence-db", type=Path)
+    parser.add_argument("--evidence-cursor-path", type=Path)
     parser.add_argument("--market-books-latest", type=Path, required=True)
     parser.add_argument("--universe-config", type=Path)
     parser.add_argument("--capture-demands-jsonl", type=Path)
@@ -1852,6 +1853,11 @@ def main() -> int:
         code_identity=args.code_identity,
     )
     place_fn = build_live_taker_gtc_place_fn(args.market_proxy or os.environ.get("WEATHER_MARKET_PROXY_URL", "")) if args.live and args.confirm_live else None
+    evidence_cursor_path = (
+        args.evidence_cursor_path
+        if args.evidence_cursor_path is not None
+        else args.output_dir / "evidence_cursor.json"
+    )
     while True:
         cycle_started = time.monotonic()
         try:
@@ -1865,7 +1871,7 @@ def main() -> int:
             if args.evidence_db and not experiment_control["expired"]:
                 direct_events, cursor_state = direct_evidence_events(
                     args.evidence_db,
-                    cursor_path=args.output_dir / "evidence_cursor.json",
+                    cursor_path=evidence_cursor_path,
                     allowlist=allowlist,
                     city_timezones=city_timezones,
                     collector_run_start_wall_ns=args.collector_run_start_wall_ns,
@@ -1908,7 +1914,7 @@ def main() -> int:
                 code_identity=args.code_identity,
             )
             if cursor_state is not None:
-                _save_cursor(args.output_dir / "evidence_cursor.json", cursor_state)
+                _save_cursor(evidence_cursor_path, cursor_state)
                 result["direct_evidence_events"] = len(direct_events or [])
             print(json.dumps(result, sort_keys=True), flush=True)
         except Exception as exc:  # noqa: BLE001

@@ -63,6 +63,7 @@ runner=(
   "$PYTHON_BIN" "$PROJECT_DIR/scripts/ops/weather_cross_no_v2_metar.py"
   --loop
   --evidence-db "$EVIDENCE_DB"
+  --evidence-cursor-path "$COLLECTOR_RUNTIME_ROOT/evidence_cursor.json"
   --market-books-latest "$MARKET_BOOKS_LATEST"
   --universe-config "$UNIVERSE_CONFIG"
   --capture-demands-jsonl "$CAPTURE_DEMANDS_JSONL"
