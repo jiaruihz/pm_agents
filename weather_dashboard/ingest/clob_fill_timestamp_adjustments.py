@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TIMESTAMP_ADJUSTMENT_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "clob_fill_timestamp_adjustments.jsonl"
 )
+CANONICAL_EVIDENCE_CLASSES = {"exact", "estimate"}
+EVIDENCE_CLASS_ALIASES = {"exact_onchain": "exact"}
 
 
 def iter_timestamp_adjustments(
@@ -57,6 +59,18 @@ def import_timestamp_adjustments(
         return 0
     inserted = 0
     for row in iter_timestamp_adjustments(path):
+        journal_evidence_class = str(row["timestamp_evidence_class"])
+        canonical_evidence_class = EVIDENCE_CLASS_ALIASES.get(
+            journal_evidence_class, journal_evidence_class
+        )
+        if canonical_evidence_class not in CANONICAL_EVIDENCE_CLASSES:
+            raise ValueError(
+                "unsupported fill timestamp evidence class: "
+                f"{journal_evidence_class}"
+            )
+        evidence = dict(row.get("evidence") or {})
+        if journal_evidence_class != canonical_evidence_class:
+            evidence["journal_timestamp_evidence_class"] = journal_evidence_class
         before = conn.total_changes
         conn.execute(
             """
@@ -70,8 +84,8 @@ def import_timestamp_adjustments(
                 row["fill_id"],
                 row["corrected_filled_at_utc"],
                 row["timestamp_source"],
-                row["timestamp_evidence_class"],
-                json.dumps(row.get("evidence") or {}, sort_keys=True),
+                canonical_evidence_class,
+                json.dumps(evidence, sort_keys=True),
                 str(path),
                 row["created_at_utc"],
             ),
