@@ -127,6 +127,22 @@ def test_registered_historical_json_documents_preserve_record_index_and_quaranti
     assert output[0].classification == "legacy_summary_only"
 
 
+def test_registered_unknown_suffix_is_quarantined_not_silently_skipped(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".snapshot.json.partial"
+    path.write_text('{"decision_id":"unfinished"}', encoding="utf-8")
+    quarantine = tmp_path / "quarantine.jsonl"
+
+    rows, audit = _read_registered_input(path, quarantine_path=quarantine)
+
+    assert rows == []
+    assert audit.scanned == audit.quarantined == 1
+    record = json.loads(quarantine.read_text())
+    assert record["reason"] == "unsupported_historical_input_suffix:.partial"
+    assert record["physical_path"] == str(path)
+
+
 def test_registered_gzip_jsonl_is_streamed_and_quarantined(tmp_path: Path) -> None:
     path = tmp_path / "snapshot.jsonl.gz"
     with gzip.open(path, "wb") as handle:

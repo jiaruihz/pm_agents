@@ -215,7 +215,15 @@ def _read_registered_input(
             quarantined=quarantined,
         )
     if path.suffix != ".json":
-        raise ValueError(f"unsupported historical input suffix: {path}")
+        source_hash = _sha256(path)
+        _append_json_quarantine(
+            path,
+            quarantine_path=quarantine_path,
+            source_hash=source_hash,
+            reason=f"unsupported_historical_input_suffix:{path.suffix or '<none>'}",
+            record_index=None,
+        )
+        return [], InputCatalogAudit(scanned=1, valid=0, quarantined=1)
     source_hash = _sha256(path)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
