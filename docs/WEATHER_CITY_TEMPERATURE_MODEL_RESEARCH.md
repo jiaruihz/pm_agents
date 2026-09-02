@@ -167,6 +167,23 @@ epoch `wcir_amsterdam_score_only_v2_c18fa016b0612195` 已初始化 0600、append
 继续 Amsterdam prospective evidence，不复制到 Helsinki、不授权 live。完整证据位于
 `reviews/wcir_unified_data_amsterdam_pilot_v1_1/GPT_PRO_REVIEW_PACKET_AMSTERDAM_V1_1.md`。
 
+#### previous-running-max NO action shadow v1（2026-09-03）
+
+表达已接成严格的 zero-notional action shadow：当 frozen opportunity generator 判断下一次 EHAM
+routine print 可能抬高 running max 时，候选动作是买“当前 official running max exact bracket”的直接
+NO token。下一报文 break probability 不等于 Weather Underground 最终结算概率，因此 Layer B 不做
+`weather probability - market price`；固定目标是 direct NO 5-share 的
+`official+30s sell effective value - entry-after-p95-latency buy effective cost`，两端均含官方 fee。
+
+冻结前统一 ledger 有 1,617 predictions、238 条 entry/+30s 可比 direct-NO rows、5 个 target dates；其中
+真正命中 opportunity 的仅 10 rows/3 dates。固定前4日开发、最后 `2026-09-02` 审计：market-only MR0
+选择0笔；B2/M1/M2各选择同一笔，均亏 `$0.3233`，成本 `$4.9049`，ROI `-6.59%`、0胜1负。
+所以当前判断是 `action expression connected / early evidence negative-inconclusive`，不是已验证盈利策略。
+新 epoch 从 `2026-09-03T04:00:00Z` 起只收 prospective candidates，四臂为 MR0/B2/M1/M2；每个
+target_date×bracket×arm 只记首个正预测 markout，append-only 记录 candidate、shadow decision、+30s
+result 与 final-settlement sensitivity。它不创建 TradeIntent、plan、order 或 fill，orders/fills/notional
+固定为0；是否可盈利只由新 forward 的 signal count、win rate、fee-adjusted PnL/ROI 决定。
+
 ### Seoul WCIR exact-NO 首版训练（2026-08-13）
 
 结论：现有 WCIR/Korea AMOS raw 已能训练 Seoul 独立 probability artifact，但首版训练门失败，

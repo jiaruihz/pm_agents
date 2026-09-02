@@ -14,6 +14,7 @@ from scripts.analysis.forecast_quality.wcir_amsterdam_pilot_v1_1 import (
     score_shadow_once,
 )
 from weather_city_runtime.amsterdam_frozen_shadow_v2 import AmsterdamFrozenShadowRuntime, read_jsonl
+from weather_city_runtime.amsterdam_action_shadow_v1 import file_sha256, validate_policy_artifact
 
 DEFAULT_REVIEW = ROOT / "reviews/wcir_unified_data_amsterdam_pilot_v1_1"
 DEFAULT_ROOT = Path("/Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2")
@@ -22,6 +23,8 @@ DEFAULT_SOURCE_EVENTS = Path("/Volumes/jrs/weather_data_feed_service_runtime/out
 DEFAULT_SETTLEMENT_DB = Path("/Volumes/jrs/pm_agents/runtime/weather.db")
 DEFAULT_MARKET_LATEST = Path("/Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json")
 DEFAULT_WS_RUNTIME = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+DEFAULT_ACTION_POLICY = ROOT / "configs/weather/amsterdam_wcir_prevmax_no_action_shadow_v1.json"
+DEFAULT_REACTION_ARTIFACT = ROOT / "configs/weather/amsterdam_wcir_prevmax_no_reaction_ridge_v1.json"
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -38,6 +41,8 @@ def main() -> int:
     parser.add_argument("--ws-runtime-root", type=Path, default=DEFAULT_WS_RUNTIME)
     parser.add_argument("--bootstrap-predictions", type=Path, default=DEFAULT_BOOTSTRAP)
     parser.add_argument("--max-events", type=int, default=256)
+    parser.add_argument("--action-policy", type=Path, default=DEFAULT_ACTION_POLICY)
+    parser.add_argument("--reaction-artifact", type=Path, default=DEFAULT_REACTION_ARTIFACT)
     args = parser.parse_args()
     if not args.once and args.loop_seconds <= 0:
         parser.error("supply --once or a positive --loop-seconds")
@@ -46,6 +51,14 @@ def main() -> int:
     epoch = str(config["forward_epoch_id"])
     if epoch != str(epoch_manifest.get("forward_epoch_id") or ""):
         raise RuntimeError("frozen config/epoch mismatch")
+    action_policy = json.loads(args.action_policy.read_text(encoding="utf-8"))
+    reaction_artifact = json.loads(args.reaction_artifact.read_text(encoding="utf-8"))
+    validate_policy_artifact(action_policy, reaction_artifact)
+    artifact_sha = file_sha256(args.reaction_artifact)
+    if artifact_sha != str(action_policy.get("reaction_artifact_sha256") or ""):
+        raise RuntimeError("Amsterdam reaction artifact file hash drift")
+    if str(action_policy.get("source_model_epoch_id") or "") != epoch:
+        raise RuntimeError("Amsterdam action policy/source epoch mismatch")
     root = args.shadow_root / f"epoch={epoch}"
     runtime = AmsterdamFrozenShadowRuntime(
         root,
@@ -53,6 +66,8 @@ def main() -> int:
         settlement_db=args.settlement_db,
         market_latest_path=args.market_latest,
         ws_runtime_root=args.ws_runtime_root,
+        action_policy=action_policy,
+        reaction_artifact=reaction_artifact,
     )
     if args.bootstrap_predictions.is_file():
         runtime.ingest_predictions(read_jsonl(args.bootstrap_predictions))
@@ -73,6 +88,8 @@ def main() -> int:
             "opportunity_generator_hash": epoch_manifest.get("opportunity_generator_hash"),
             "market_identity_resolver_hash": epoch_manifest.get("market_identity_resolver_hash"),
             "prediction_journal_sha256": score.get("prediction_journal_sha256"),
+            "action_policy_sha256": file_sha256(args.action_policy),
+            "reaction_artifact_sha256": artifact_sha,
         })
         print(json.dumps({"score": score, "materialized": result, "health": health}, ensure_ascii=False, sort_keys=True))
         if args.once:

@@ -1,0 +1,246 @@
+{
+  "artifact_id": "c167e5038cb1cac9e660c3c2667411a1965bff4eb3e885a286cc945d75b14bbb",
+  "development_audit": {
+    "B2": {
+      "date_equal_mae_per_share": 0.019851246687473005,
+      "date_equal_rmse_per_share": 0.030540302688692858,
+      "policy": {
+        "counterfactual_cost_usd": 4.9049000000000005,
+        "fee_adjusted_markout_pnl_usd": -0.3232999999999997,
+        "fee_adjusted_markout_roi": -0.06591367815857604,
+        "raw_positive_candidates": 1,
+        "rows": [
+          {
+            "expected_markout_per_share": 0.012039623896710108,
+            "native_bracket": "20",
+            "prediction_row_id": "d658160f0b228ac5028b7d10f5fd44ee7118a678215ff55ba46e99e228ecef4d",
+            "realized_markout_per_share": -0.06465999999999994,
+            "target_date": "2026-09-02"
+          }
+        ],
+        "selected_signals": 1,
+        "selected_target_dates": 1,
+        "wins": 0
+      },
+      "rows": 7,
+      "target_dates": 1
+    },
+    "M1": {
+      "date_equal_mae_per_share": 0.015401438160404858,
+      "date_equal_rmse_per_share": 0.02784579346306389,
+      "policy": {
+        "counterfactual_cost_usd": 4.9049000000000005,
+        "fee_adjusted_markout_pnl_usd": -0.3232999999999997,
+        "fee_adjusted_markout_roi": -0.06591367815857604,
+        "raw_positive_candidates": 1,
+        "rows": [
+          {
+            "expected_markout_per_share": 0.005781054312461634,
+            "native_bracket": "20",
+            "prediction_row_id": "d658160f0b228ac5028b7d10f5fd44ee7118a678215ff55ba46e99e228ecef4d",
+            "realized_markout_per_share": -0.06465999999999994,
+            "target_date": "2026-09-02"
+          }
+        ],
+        "selected_signals": 1,
+        "selected_target_dates": 1,
+        "wins": 0
+      },
+      "rows": 7,
+      "target_dates": 1
+    },
+    "M2": {
+      "date_equal_mae_per_share": 0.016096019471233524,
+      "date_equal_rmse_per_share": 0.030883853225811768,
+      "policy": {
+        "counterfactual_cost_usd": 4.9049000000000005,
+        "fee_adjusted_markout_pnl_usd": -0.3232999999999997,
+        "fee_adjusted_markout_roi": -0.06591367815857604,
+        "raw_positive_candidates": 1,
+        "rows": [
+          {
+            "expected_markout_per_share": 0.015407948087662,
+            "native_bracket": "20",
+            "prediction_row_id": "d658160f0b228ac5028b7d10f5fd44ee7118a678215ff55ba46e99e228ecef4d",
+            "realized_markout_per_share": -0.06465999999999994,
+            "target_date": "2026-09-02"
+          }
+        ],
+        "selected_signals": 1,
+        "selected_target_dates": 1,
+        "wins": 0
+      },
+      "rows": 7,
+      "target_dates": 1
+    },
+    "MR0": {
+      "date_equal_mae_per_share": 0.013663966845507346,
+      "date_equal_rmse_per_share": 0.01864545835983552,
+      "policy": {
+        "counterfactual_cost_usd": 0,
+        "fee_adjusted_markout_pnl_usd": 0,
+        "fee_adjusted_markout_roi": null,
+        "raw_positive_candidates": 0,
+        "rows": [],
+        "selected_signals": 0,
+        "selected_target_dates": 0,
+        "wins": 0
+      },
+      "rows": 7,
+      "target_dates": 1
+    }
+  },
+  "development_eval_target_dates": [
+    "2026-09-02"
+  ],
+  "development_train_target_dates": [
+    "2026-08-29",
+    "2026-08-30",
+    "2026-08-31",
+    "2026-09-01"
+  ],
+  "extraction_failure_reasons": {
+    "ENTRY_AFTER_P95_LATENCY_NOT_MATERIALIZED": 1,
+    "ENTRY_BOOK_INVALID": 566,
+    "ENTRY_VALID_BUT_INSUFFICIENT_DEPTH": 12,
+    "ENTRY_VALID_BUT_ONE_SIDED": 381,
+    "EXACT_PREVIOUS_MAX_NO_IDENTITY_MISSING": 183,
+    "EXIT_BOOK_INVALID": 131,
+    "EXIT_VALID_BUT_INSUFFICIENT_DEPTH": 6,
+    "EXIT_VALID_BUT_ONE_SIDED": 58,
+    "OFFICIAL_PLUS_30S_NOT_MATERIALIZED": 7,
+    "PREVIOUS_MAX_IDENTITY_BRACKET_MISMATCH": 34
+  },
+  "fills": 0,
+  "fit_protocol": "target_date_equal_weighted_ridge_alpha_1_last_date_development_audit_final_refit_all_pre_freeze_dates",
+  "generated_at_utc": "2026-09-03T04:00:00Z",
+  "input_snapshot_sha256": "bfd5fa948715e61080cca8cd725cb57ba6985911f87052084dae34772431528c",
+  "live_eligible": false,
+  "models": {
+    "B2": {
+      "alpha": 1.0,
+      "coefficients": [
+        -0.0009278256962882638,
+        -0.06396438071072,
+        -0.00013668268873375859,
+        -0.002196826869788626
+      ],
+      "feature_means": [
+        0.47491383334201703,
+        0.04026050420168068,
+        13.245332377240901,
+        0.09001228245151174
+      ],
+      "feature_names": [
+        "entry_effective_cost_per_share",
+        "entry_spread",
+        "minutes_to_expected_routine",
+        "b2_p_next_break"
+      ],
+      "feature_scales": [
+        0.4383521483652835,
+        0.061109897173198494,
+        9.897917378083497,
+        0.17782116329094538
+      ],
+      "intercept": -0.04931925170051726
+    },
+    "M1": {
+      "alpha": 1.0,
+      "coefficients": [
+        -0.0018592971970967122,
+        -0.06403495490950299,
+        -0.00011805426633866855,
+        0.00030806772424821633
+      ],
+      "feature_means": [
+        0.47491383334201703,
+        0.04026050420168068,
+        13.245332377240901,
+        0.052946095662567166
+      ],
+      "feature_names": [
+        "entry_effective_cost_per_share",
+        "entry_spread",
+        "minutes_to_expected_routine",
+        "m1_p_next_break"
+      ],
+      "feature_scales": [
+        0.4383521483652835,
+        0.061109897173198494,
+        9.897917378083497,
+        0.12706465206948908
+      ],
+      "intercept": -0.04941573704243414
+    },
+    "M2": {
+      "alpha": 1.0,
+      "coefficients": [
+        -0.001050199097299586,
+        -0.06399853475161878,
+        -0.00013211589582291162,
+        -0.0013591815788732138
+      ],
+      "feature_means": [
+        0.47491383334201703,
+        0.04026050420168068,
+        13.245332377240901,
+        0.07050548017816148
+      ],
+      "feature_names": [
+        "entry_effective_cost_per_share",
+        "entry_spread",
+        "minutes_to_expected_routine",
+        "m2_p_next_break"
+      ],
+      "feature_scales": [
+        0.4383521483652835,
+        0.061109897173198494,
+        9.897917378083497,
+        0.15503647344943872
+      ],
+      "intercept": -0.04918544683093237
+    },
+    "MR0": {
+      "alpha": 1.0,
+      "coefficients": [
+        -0.001662407841235782,
+        -0.06403493522656345,
+        -0.0001238201989173437
+      ],
+      "feature_means": [
+        0.47491383334201703,
+        0.04026050420168068,
+        13.245332377240901
+      ],
+      "feature_names": [
+        "entry_effective_cost_per_share",
+        "entry_spread",
+        "minutes_to_expected_routine"
+      ],
+      "feature_scales": [
+        0.4383521483652835,
+        0.061109897173198494,
+        9.897917378083497
+      ],
+      "intercept": -0.04932997582286173
+    }
+  },
+  "notional": 0,
+  "opportunity_training_rows": 10,
+  "orders": 0,
+  "schema_version": "wcir_amsterdam_prevmax_no_reaction_ridge_v1",
+  "selection_rule": "opportunity_matched AND expected_after_fee_markout_per_share > 0; first per target_date/native_bracket/arm",
+  "source_model_epoch_id": "wcir_amsterdam_score_only_v2_bb04a8acbeafd66b",
+  "target": "official_plus_30s_direct_no_sell_5_effective_per_share_minus_entry_direct_no_buy_5_effective_per_share",
+  "training_first_entry_at_utc": "2026-08-29T13:54:30.017024+00:00",
+  "training_last_entry_at_utc": "2026-09-02T09:14:32.291970+00:00",
+  "training_rows": 238,
+  "training_target_dates": [
+    "2026-08-29",
+    "2026-08-30",
+    "2026-08-31",
+    "2026-09-01",
+    "2026-09-02"
+  ]
+}

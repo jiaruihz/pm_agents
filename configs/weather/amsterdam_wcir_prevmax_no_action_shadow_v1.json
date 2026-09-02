@@ -1,0 +1,29 @@
+{
+  "action": "BUY_NO_PREVIOUS_OFFICIAL_RUNNING_MAX",
+  "arms": [
+    "MR0",
+    "B2",
+    "M1",
+    "M2"
+  ],
+  "entry_checkpoint": "entry_after_p95_latency",
+  "execution_mode": "zero_notional_action_shadow",
+  "fills": 0,
+  "forward_start_utc": "2026-09-03T04:00:00Z",
+  "live_authority": false,
+  "min_expected_markout_per_share": 0.0,
+  "notional": 0,
+  "opportunity_trigger": "frozen_wcir_amsterdam_opportunity_generator_v2",
+  "orders": 0,
+  "policy_epoch_id": "wcir_amsterdam_prevmax_no_action_shadow_v1_ccecfdc550d92068",
+  "primary_exit_checkpoint": "official_plus_30s",
+  "reaction_artifact_id": "c167e5038cb1cac9e660c3c2667411a1965bff4eb3e885a286cc945d75b14bbb",
+  "reaction_artifact_path": "configs/weather/amsterdam_wcir_prevmax_no_reaction_ridge_v1.json",
+  "reaction_artifact_sha256": "a9cca0e54b6ecbc29da78061bd7e281bf9239a423bd8b936a04c924df4b37f24",
+  "schema_version": "wcir_amsterdam_prevmax_no_action_shadow_v1",
+  "selection_rule": "opportunity_matched AND expected_after_fee_markout_per_share > 0; first per target_date/native_bracket/arm",
+  "selection_shares": 5,
+  "source_model_epoch_id": "wcir_amsterdam_score_only_v2_bb04a8acbeafd66b",
+  "target": "official_plus_30s_after_fee_direct_no_markout"
+}
+
