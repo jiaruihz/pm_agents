@@ -97,9 +97,13 @@ def export_projection(
         "labels.measurement_namespace = ?",
         "labels.label_availability_status = 'known'",
         "labels.label_available_at_utc IS NOT NULL",
+        "julianday(labels.label_available_at_utc) IS NOT NULL",
+        "julianday(labels.label_available_at_utc) <= julianday(?)",
+        "julianday(replay.decision_ts_utc) IS NOT NULL",
+        "julianday(replay.decision_ts_utc) <= julianday(?)",
         "replay.candidate_grain_version = 'v2_event_checkpoint'",
     ]
-    params: list[Any] = [measurement_namespace]
+    params: list[Any] = [measurement_namespace, cutoff_utc, cutoff_utc]
     if start_date:
         clauses.append("replay.event_date >= ?")
         params.append(start_date)

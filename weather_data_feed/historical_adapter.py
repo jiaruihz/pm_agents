@@ -182,7 +182,6 @@ class HistoricalAdapter:
         """Classify a stream while retaining only compact evidence when requested."""
 
         seen_hashes: dict[str, str] = {}
-        available_identities: set[str] = set()
         parents: list[str | None] = []
         output: list[HistoricalAdaptation] = []
         canonical = duplicate = blocked = 0
@@ -192,8 +191,6 @@ class HistoricalAdapter:
                 blocked += 1
             else:
                 identity = self._identity(row)
-                if identity is not None:
-                    available_identities.add(identity)
                 classification, blocker = self._classification(row)
                 row_hash = hashlib.sha256(
                     json.dumps(
@@ -234,7 +231,7 @@ class HistoricalAdapter:
             if (
                 parent
                 and item.classification != BLOCKED
-                and parent not in available_identities
+                and parent not in seen_hashes
             ):
                 output[index] = HistoricalAdaptation(
                     BLOCKED,

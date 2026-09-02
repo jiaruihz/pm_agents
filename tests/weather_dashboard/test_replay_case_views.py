@@ -403,6 +403,11 @@ def test_candidate_projection_is_sealed_and_has_four_chronological_blocks(
     ]
     for index, candidate_id in enumerate(candidate_ids):
         target_date = f"2026-08-{25 + min(index, 3):02d}"
+        label_available_at_utc = (
+            "2026-09-02T00:00:00Z"
+            if index == len(candidate_ids) - 1
+            else "2026-08-30T00:00:00Z"
+        )
         conn.execute(
             "UPDATE fact_signal_candidates SET event_date=? WHERE candidate_id=?",
             (target_date, candidate_id),
@@ -416,8 +421,8 @@ def test_candidate_projection_is_sealed_and_has_four_chronological_blocks(
               source_available_at_utc, label_available_at_utc,
               label_availability_status, created_at_utc
             ) VALUES (?, ?, ?, 'Manila', ?, 'tmax', 'explicit_question', 1.0,
-                      'settlement_outcome', ?, ?, '2026-08-30T00:00:00Z',
-                      '2026-08-30T00:00:00Z', 'known', '2026-08-30T00:00:01Z')
+                      'settlement_outcome', ?, ?, ?, ?, 'known',
+                      '2026-08-30T00:00:01Z')
             """,
             (
                 f"label:{candidate_id}",
@@ -426,6 +431,8 @@ def test_candidate_projection_is_sealed_and_has_four_chronological_blocks(
                 target_date,
                 f"settlement:{candidate_id}",
                 candidate_id.ljust(64, "0")[:64],
+                label_available_at_utc,
+                label_available_at_utc,
             ),
         )
     conn.commit()
@@ -441,7 +448,7 @@ def test_candidate_projection_is_sealed_and_has_four_chronological_blocks(
         code_sha="a" * 40,
     )
 
-    assert receipt["row_count"] == len(candidate_ids)
+    assert receipt["row_count"] == len(candidate_ids) - 1
     assert receipt["split_boundaries"]["train_end"] < receipt["split_boundaries"][
         "validation_end"
     ]

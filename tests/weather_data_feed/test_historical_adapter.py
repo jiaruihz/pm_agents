@@ -139,3 +139,29 @@ def test_stream_adapter_can_drop_large_rows_and_resolve_forward_parent(
     assert [item.classification for item in output] == ["model_only", "model_only"]
     assert [item.row for item in output] == [{}, {}]
     assert audit.canonical == 2 and audit.blocked == 0
+
+
+def test_stream_adapter_rejects_child_of_blocked_parent(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.jsonl"
+    path.write_text('{"source": "sealed"}\n', encoding="utf-8")
+    child = {
+        **_base(path, "child"),
+        "revision": 1,
+        "revision_parent_id": "blocked-parent",
+        "model_output": {},
+    }
+    blocked_parent = {
+        **_base(path, "blocked-parent"),
+        "model_output": {},
+        "ws_gap": True,
+    }
+
+    output, audit = HistoricalAdapter(allowed_roots=(tmp_path,)).adapt_stream(
+        iter((child, blocked_parent)), retain_rows=False
+    )
+
+    assert [item.blocker for item in output] == [
+        "unknown_revision_parent",
+        "websocket_gap",
+    ]
+    assert audit.canonical == 0 and audit.blocked == 2

@@ -180,6 +180,16 @@ def _jsonl_bytes(rows: Iterable[dict[str, Any]]) -> bytes:
     )
 
 
+def _line_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    count = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            count += chunk.count(b"\n")
+    return count
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--product-id", required=True)
@@ -215,24 +225,23 @@ def main(argv: list[str] | None = None) -> int:
             for path in paths:
                 source_stat = path.stat()
                 source_hash = _sha256(path)
-                catalog_rows, source_audit = _read_registered_input(
-                    path,
-                    quarantine_path=quarantine_tmp,
-                )
-                source_stat_after = path.stat()
+                if path.suffix == ".jsonl":
+                    quarantine_before = _line_count(quarantine_tmp)
+                    catalog_rows: Iterable[CatalogRow] = JsonlInputCatalog._iter_path(
+                        path, quarantine_path=quarantine_tmp
+                    )
+                    source_audit = None
+                else:
+                    catalog_rows, source_audit = _read_registered_input(
+                        path,
+                        quarantine_path=quarantine_tmp,
+                    )
                 identity = (
                     source_stat.st_dev,
                     source_stat.st_ino,
                     source_stat.st_size,
                     source_stat.st_mtime_ns,
                 )
-                if identity != (
-                    source_stat_after.st_dev,
-                    source_stat_after.st_ino,
-                    source_stat_after.st_size,
-                    source_stat_after.st_mtime_ns,
-                ):
-                    raise RuntimeError(f"historical input changed during audit: {path}")
                 adapter.register_verified_source(
                     path,
                     source_hash,
@@ -241,21 +250,9 @@ def main(argv: list[str] | None = None) -> int:
                     size_bytes=source_stat.st_size,
                     mtime_ns=source_stat.st_mtime_ns,
                 )
-                counters["quarantined"] += source_audit.quarantined
-                sources.append(
-                    {
-                        "path": str(path),
-                        "sha256": source_hash,
-                        "device": source_stat.st_dev,
-                        "inode": source_stat.st_ino,
-                        "size_bytes": source_stat.st_size,
-                        "mtime_ns": source_stat.st_mtime_ns,
-                        "scanned": source_audit.scanned,
-                        "valid": source_audit.valid,
-                        "quarantined": source_audit.quarantined,
-                    }
-                )
+                valid_rows = 0
                 for catalog_row in catalog_rows:
+                    valid_rows += 1
                     enriched = dict(catalog_row.row)
                     if "source_snapshot_hash" in enriched:
                         enriched["legacy_declared_source_snapshot_hash"] = enriched[
@@ -280,6 +277,35 @@ def main(argv: list[str] | None = None) -> int:
                         physical_ref["line"] = catalog_row.physical_line
                     enriched["physical_ref"] = physical_ref
                     yield enriched
+                source_stat_after = path.stat()
+                if identity != (
+                    source_stat_after.st_dev,
+                    source_stat_after.st_ino,
+                    source_stat_after.st_size,
+                    source_stat_after.st_mtime_ns,
+                ):
+                    raise RuntimeError(f"historical input changed during audit: {path}")
+                if source_audit is None:
+                    quarantined_rows = _line_count(quarantine_tmp) - quarantine_before
+                    source_audit = InputCatalogAudit(
+                        scanned=valid_rows + quarantined_rows,
+                        valid=valid_rows,
+                        quarantined=quarantined_rows,
+                    )
+                counters["quarantined"] += source_audit.quarantined
+                sources.append(
+                    {
+                        "path": str(path),
+                        "sha256": source_hash,
+                        "device": source_stat.st_dev,
+                        "inode": source_stat.st_ino,
+                        "size_bytes": source_stat.st_size,
+                        "mtime_ns": source_stat.st_mtime_ns,
+                        "scanned": source_audit.scanned,
+                        "valid": source_audit.valid,
+                        "quarantined": source_audit.quarantined,
+                    }
+                )
 
         adapted, audit = adapter.adapt_stream(
             iter_enriched_rows(), retain_rows=False
