@@ -46,6 +46,24 @@ def test_adapter_preserves_evidence_and_never_upgrades_gaps_or_missing_identity(
     assert audit.scanned == audit.canonical + audit.duplicate + audit.blocked == 5
 
 
+def test_archive_adapter_keeps_valid_raw_rows_as_source_only(tmp_path: Path) -> None:
+    path = tmp_path / "book.jsonl"
+    path.write_text('{"city":"Manila","raw":{"bids":[]}}\n', encoding="utf-8")
+    raw = _base(path)
+    raw.pop("decision_id")
+    raw["physical_ref"]["row_sha256"] = "a" * 64
+
+    output, audit = HistoricalAdapter(
+        allowed_roots=(tmp_path,), allow_source_only=True
+    ).adapt_stream([raw], retain_rows=False)
+
+    assert output[0].classification == "source_only"
+    assert output[0].identity == (
+        f"source:{raw['source_snapshot_hash']}:{'a' * 64}"
+    )
+    assert audit.canonical == 1 and audit.blocked == 0
+
+
 def test_duplicate_conflict_and_unparented_revision_are_not_canonical(
     tmp_path: Path,
 ) -> None:

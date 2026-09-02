@@ -733,7 +733,7 @@ schema initializer 绕过 migration gate。
 以下命令只生成 research evidence 或 GO/NO_GO，不会切 writer、重启 runner 或删除旧数据：
 
 ```bash
-# archive row -> full_decision/model_only/legacy_summary_only/blocked
+# archive row -> full_decision/model_only/legacy_summary_only/source_only/blocked
 .venv/bin/python scripts/ops/materialize_weather_historical_replay_manifest.py \
   --product-id historical_full_ladder_snapshots \
   --output-dir "$REGISTERED_RESEARCH_ARTIFACT_DIR"
@@ -757,6 +757,8 @@ line/record index，不复制几十 GB 的原始 row payload；原始 archive �
 增量运行 `materialize_weather_replay_artifact_verifications.py`。只有 absolute managed path 与真实 file
 SHA-256 同时存在才是 `ready`；历史摘要是 `legacy_summary_only`，仅有 row hash、symbolic model id 或
 无 file digest 的 physical path 必须显式记为 `blocked_unverifiable_artifact`，不能用“文件还在”冒充完整重放。
+原始 weather/CLOB row 没有 decision_id 时标成 `source_only`：它能作为 PIT replay input，但不能单独冒充
+`model_only` 或 `full_decision` case。
 
 候选级模型评估可先生成 sealed projection，再交给统一 split builder：
 

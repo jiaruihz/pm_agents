@@ -12,6 +12,7 @@ from typing import Any, Iterable
 FULL_DECISION = "full_decision"
 MODEL_ONLY = "model_only"
 LEGACY_SUMMARY_ONLY = "legacy_summary_only"
+SOURCE_ONLY = "source_only"
 BLOCKED = "blocked"
 
 
@@ -36,13 +37,19 @@ class HistoricalAdapterAudit:
 class HistoricalAdapter:
     """Classify legacy records without inventing missing decision lineage."""
 
-    def __init__(self, *, allowed_roots: Iterable[Path] = ()) -> None:
+    def __init__(
+        self,
+        *,
+        allowed_roots: Iterable[Path] = (),
+        allow_source_only: bool = False,
+    ) -> None:
         self.allowed_roots = tuple(
             root.resolve(strict=True) for root in allowed_roots
         )
         self._source_evidence_cache: dict[
             tuple[str, str, int, int, int, int], str | None
         ] = {}
+        self.allow_source_only = allow_source_only
 
     def register_verified_source(
         self,
@@ -160,6 +167,8 @@ class HistoricalAdapter:
             return BLOCKED, "websocket_gap"
         identity = HistoricalAdapter._identity(row)
         if identity is None:
+            if self.allow_source_only:
+                return SOURCE_ONLY, None
             return BLOCKED, "missing_identity"
         parent = row.get("revision_parent_id")
         revision = row.get("revision")
@@ -192,14 +201,26 @@ class HistoricalAdapter:
             else:
                 identity = self._identity(row)
                 classification, blocker = self._classification(row)
-                row_hash = hashlib.sha256(
-                    json.dumps(
-                        row,
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                ).hexdigest()
+                if classification == SOURCE_ONLY and identity is None:
+                    physical_ref = row.get("physical_ref") or {}
+                    row_hash = str(physical_ref.get("row_sha256") or "")
+                    source_hash = str(row.get("source_snapshot_hash") or "")
+                    if not row_hash or not source_hash:
+                        classification, blocker = BLOCKED, "missing_source_row_identity"
+                    else:
+                        identity = f"source:{source_hash}:{row_hash}"
+                comparison_hash = (
+                    str((row.get("physical_ref") or {}).get("row_sha256"))
+                    if classification == SOURCE_ONLY
+                    else hashlib.sha256(
+                        json.dumps(
+                            row,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ).encode("utf-8")
+                    ).hexdigest()
+                )
                 item = HistoricalAdaptation(
                     classification,
                     row.get("source_snapshot_hash"),
@@ -209,7 +230,7 @@ class HistoricalAdapter:
                     dict(row) if retain_rows else {},
                 )
                 if classification != BLOCKED and identity in seen_hashes:
-                    if seen_hashes[identity] == row_hash:
+                    if seen_hashes[identity] == comparison_hash:
                         item = HistoricalAdaptation(BLOCKED, item.source_snapshot_hash, item.physical_ref, "duplicate_identity", identity, item.row)
                         duplicate += 1
                     else:
@@ -218,7 +239,7 @@ class HistoricalAdapter:
                 elif classification == BLOCKED:
                     blocked += 1
                 else:
-                    seen_hashes[str(identity)] = row_hash
+                    seen_hashes[str(identity)] = comparison_hash
                     canonical += 1
             output.append(item)
             parents.append(

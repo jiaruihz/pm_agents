@@ -30,7 +30,7 @@ from weather_data_feed.input_catalog import (  # noqa: E402
 )
 
 
-MANIFEST_SCHEMA_VERSION = "weather_historical_replay_manifest_v1"
+MANIFEST_SCHEMA_VERSION = "weather_historical_replay_manifest_v2"
 
 
 def _sha256(path: Path) -> str:
@@ -279,7 +279,8 @@ def main(argv: list[str] | None = None) -> int:
     sources: list[dict[str, Any]] = []
     counters = {"quarantined": 0}
     adapter = HistoricalAdapter(
-        allowed_roots=(registry.physical_path(args.product_id),)
+        allowed_roots=(registry.physical_path(args.product_id),),
+        allow_source_only=True,
     )
     try:
         def iter_enriched_rows() -> Iterable[dict[str, Any]]:
