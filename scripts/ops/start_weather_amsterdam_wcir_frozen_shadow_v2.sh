@@ -17,6 +17,8 @@ DECISIONS="${WEATHER_AMSTERDAM_WCIR_DECISIONS:-$DATA_FEED_RUNTIME_ROOT/output/ci
 MARKET_LATEST="${WEATHER_AMSTERDAM_WCIR_MARKET_LATEST:-$DATA_FEED_RUNTIME_ROOT/market_books/latest.json}"
 SETTLEMENT_DB="${WEATHER_AMSTERDAM_WCIR_SETTLEMENT_DB:-$PM_RUNTIME_ROOT/weather.db}"
 INTERVAL_SECONDS="${WEATHER_AMSTERDAM_WCIR_INTERVAL_SECONDS:-60}"
+ACTION_POLICY="${WEATHER_AMSTERDAM_WCIR_ACTION_POLICY:-$PROJECT_DIR/configs/weather/amsterdam_wcir_prevmax_no_action_shadow_v1.json}"
+REACTION_ARTIFACT="${WEATHER_AMSTERDAM_WCIR_REACTION_ARTIFACT:-$PROJECT_DIR/configs/weather/amsterdam_wcir_prevmax_no_reaction_ridge_v1.json}"
 SESSION="${WEATHER_AMSTERDAM_WCIR_SESSION:-weather_amsterdam_wcir_frozen_shadow_v2}"
 PY="${PYTHON_BIN:-$PROJECT_DIR/.venv/bin/python}"
 LOG_FILE="$OUTPUT_ROOT/runtime.log"
@@ -42,6 +44,8 @@ runner=(
   --ws-runtime-root "$DATA_FEED_RUNTIME_ROOT"
   --settlement-db "$SETTLEMENT_DB"
   --max-events 256
+  --action-policy "$ACTION_POLICY"
+  --reaction-artifact "$REACTION_ARTIFACT"
 )
 runner_q=""
 for part in "${runner[@]}"; do
@@ -52,4 +56,4 @@ log_q="$(printf '%q' "$LOG_FILE")"
 bootstrap="cd $project_q && exec $runner_q >> $log_q 2>&1"
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
 
-echo "started session=$SESSION socket=$TMUX_SOCKET mode=zero_notional_shadow live_authority=false orders=0 fills=0 notional=0"
+echo "started session=$SESSION socket=$TMUX_SOCKET mode=zero_notional_action_shadow live_authority=false orders=0 fills=0 notional=0"

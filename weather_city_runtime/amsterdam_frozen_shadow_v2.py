@@ -20,6 +20,13 @@ from typing import Any, Iterable
 from src.platform.market_data.capture_demand import CaptureDemand
 from weather_city_runtime.jsonl_lock import exclusive_jsonl_lock
 from weather_city_runtime.next_print_contracts import CITY_CONTRACTS
+from weather_city_runtime.amsterdam_action_shadow_v1 import (
+    action_candidates,
+    action_health,
+    select_shadow_decisions,
+    shadow_results,
+    validate_policy_artifact,
+)
 from weather_clock_contract import parse_utc
 
 UTC = timezone.utc
@@ -752,18 +759,46 @@ class AmsterdamFrozenShadowRuntime:
         settlement_db: Path | None = None,
         market_latest_path: Path | None = None,
         ws_runtime_root: Path | None = None,
+        action_policy: Mapping[str, Any] | None = None,
+        reaction_artifact: Mapping[str, Any] | None = None,
     ) -> None:
         self.root = root
         self.source_events_path = source_events_path
         self.settlement_db = settlement_db
         self.market_latest_path = market_latest_path
         self.ws_runtime_root = ws_runtime_root
+        if (action_policy is None) != (reaction_artifact is None):
+            raise ValueError("Amsterdam action policy and reaction artifact must be loaded together")
+        if action_policy is not None and reaction_artifact is not None:
+            validate_policy_artifact(action_policy, reaction_artifact)
+        self.action_policy = dict(action_policy) if action_policy is not None else None
+        self.reaction_artifact = dict(reaction_artifact) if reaction_artifact is not None else None
         self.predictions = ImmutableJsonl(root / "predictions.jsonl", "prediction_row_id")
         self.market_identities = ImmutableJsonl(root / "market_identities.jsonl", "market_identity_row_id")
         self.demands = ImmutableJsonl(root / "capture_demands.jsonl", "demand_id")
         self.labels = ImmutableJsonl(root / "labels.jsonl", "label_row_id")
         self.settlements = ImmutableJsonl(root / "settlements.jsonl", "settlement_row_id")
         self.markouts = ImmutableJsonl(root / "markouts.jsonl", "markout_row_id")
+        self.policy_candidates = ImmutableJsonl(root / "policy_candidates.jsonl", "policy_candidate_id")
+        self.shadow_decisions = ImmutableJsonl(root / "shadow_decisions.jsonl", "shadow_decision_id")
+        self.shadow_results = ImmutableJsonl(root / "shadow_results.jsonl", "shadow_result_id")
+
+    @staticmethod
+    def _put_many(store: ImmutableJsonl, rows: Iterable[Mapping[str, Any]]) -> int:
+        with exclusive_jsonl_lock(store.path):
+            store._refresh_unlocked()
+            return sum(int(store.put(row)) for row in rows)
+
+    def _select_put_decisions(self, candidates: Sequence[Mapping[str, Any]]) -> int:
+        assert self.action_policy is not None
+        with exclusive_jsonl_lock(self.shadow_decisions.path):
+            self.shadow_decisions._refresh_unlocked()
+            selected = select_shadow_decisions(
+                candidates,
+                list(self.shadow_decisions.rows.values()),
+                self.action_policy,
+            )
+            return sum(int(self.shadow_decisions.put(row)) for row in selected)
 
     def ingest_predictions(self, rows: Iterable[Mapping[str, Any]]) -> int:
         # The frozen scorer writes this same journal before the materializer
@@ -803,7 +838,8 @@ class AmsterdamFrozenShadowRuntime:
             loaded = json.loads(self.market_latest_path.read_text(encoding="utf-8"))
             if isinstance(loaded, Mapping):
                 market_payload = loaded
-        result = {"market_identities": 0, "demands": 0, "labels": 0, "settlements": 0, "markouts": 0, "ledger": 0}
+        result = {"market_identities": 0, "demands": 0, "labels": 0, "settlements": 0, "markouts": 0,
+                  "policy_candidates": 0, "shadow_decisions": 0, "shadow_results": 0, "ledger": 0}
         identity_by_prediction: dict[str, list[dict[str, Any]]] = {}
         linked_label_by_prediction: dict[str, dict[str, Any]] = {}
         for prediction in self.predictions.rows.values():
@@ -870,6 +906,38 @@ class AmsterdamFrozenShadowRuntime:
             for key, value in self.predictions.rows.items()
         ]
         _write_json_atomic(snapshot, joined, pretty=False)
+        if self.action_policy is not None and self.reaction_artifact is not None:
+            prospective_candidates = [
+                candidate
+                for item in joined
+                for candidate in action_candidates(item, self.action_policy, self.reaction_artifact)
+            ]
+            result["policy_candidates"] = self._put_many(self.policy_candidates, prospective_candidates)
+            all_candidates = [
+                row for row in self.policy_candidates.rows.values()
+                if row.get("policy_epoch_id") == self.action_policy["policy_epoch_id"]
+            ]
+            result["shadow_decisions"] = self._select_put_decisions(all_candidates)
+            joined_by_prediction = {str(item["prediction_row_id"]): item for item in joined}
+            candidates_by_id = {str(item["policy_candidate_id"]): item for item in all_candidates}
+            results = shadow_results(
+                [row for row in self.shadow_decisions.rows.values() if row.get("policy_epoch_id") == self.action_policy["policy_epoch_id"]],
+                candidates_by_id,
+                joined_by_prediction,
+                self.action_policy,
+            )
+            result["shadow_results"] = self._put_many(self.shadow_results, results)
+            policy_ledger = {
+                "policy_epoch_id": self.action_policy["policy_epoch_id"],
+                "candidates": all_candidates,
+                "decisions": [row for row in self.shadow_decisions.rows.values() if row.get("policy_epoch_id") == self.action_policy["policy_epoch_id"]],
+                "results": [row for row in self.shadow_results.rows.values() if row.get("policy_epoch_id") == self.action_policy["policy_epoch_id"]],
+                "orders": 0,
+                "fills": 0,
+                "notional": 0,
+                "actual_notional": 0.0,
+            }
+            _write_json_atomic(self.root / "policy_ledger_snapshot.json", policy_ledger, pretty=False)
         result["ledger"] = len(joined)
         return result
 
@@ -879,6 +947,8 @@ class AmsterdamFrozenShadowRuntime:
         labels = list(self.labels.rows.values())
         settlements = list(self.settlements.rows.values())
         markouts = list(self.markouts.rows.values())
+        for store in (self.policy_candidates, self.shadow_decisions, self.shadow_results):
+            store.refresh()
         linked_label_rows = {
             str(row["prediction_row_id"]): row
             for row in labels if row.get("status") == "linked"
@@ -941,8 +1011,25 @@ class AmsterdamFrozenShadowRuntime:
         else:
             layer_b_status = "READY_FOR_FROZEN_NONOVERLAPPING_FIT"
             layer_b_reason = None
-        return {"status": "ok", "execution_mode": "zero_notional_shadow", "live_authority": False,
+        action_enabled = self.action_policy is not None
+        policy_epoch = self.action_policy.get("policy_epoch_id") if self.action_policy else None
+        policy_candidates = [row for row in self.policy_candidates.rows.values() if row.get("policy_epoch_id") == policy_epoch]
+        policy_decisions = [row for row in self.shadow_decisions.rows.values() if row.get("policy_epoch_id") == policy_epoch]
+        policy_results = [row for row in self.shadow_results.rows.values() if row.get("policy_epoch_id") == policy_epoch]
+        action_metrics = action_health(
+            policy_candidates,
+            policy_decisions,
+            policy_results,
+        ) if action_enabled else {}
+        return {"status": "ok", "execution_mode": ("zero_notional_action_shadow" if action_enabled else "zero_notional_shadow"), "live_authority": False,
                 "strategy_key": STRATEGY_KEY, "generated_at_utc": _now(), "forward_epoch_id": epoch,
+                "action_shadow_enabled": action_enabled,
+                "policy_epoch_id": policy_epoch,
+                "action": (self.action_policy.get("action") if self.action_policy else None),
+                "action_model_metrics": action_metrics,
+                "policy_candidate_count": len(policy_candidates),
+                "shadow_decision_count": len(policy_decisions),
+                "shadow_result_count": len(policy_results),
                 "frozen_hashes": dict(frozen_hashes or {}), "prediction_count": total,
                 "prediction_physical_row_count": self.predictions.physical_row_count,
                 "prediction_duplicate_identity_count": self.predictions.duplicate_identity_count,
