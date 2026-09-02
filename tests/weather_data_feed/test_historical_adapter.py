@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -83,6 +84,23 @@ def test_registered_historical_json_documents_preserve_record_index_and_quaranti
     enriched["summary"] = "legacy"
     output, _ = HistoricalAdapter(allowed_roots=(tmp_path,)).adapt([enriched])
     assert output[0].classification == "legacy_summary_only"
+
+
+def test_registered_gzip_jsonl_is_streamed_and_quarantined(tmp_path: Path) -> None:
+    path = tmp_path / "snapshot.jsonl.gz"
+    with gzip.open(path, "wb") as handle:
+        handle.write(b'{"decision_id":"d1","summary":"legacy"}\n')
+        handle.write(b'not-json\n')
+    quarantine = tmp_path / "quarantine.jsonl"
+
+    rows, audit = _read_registered_input(path, quarantine_path=quarantine)
+
+    assert [row.row["decision_id"] for row in rows] == ["d1"]
+    assert audit.scanned == audit.valid + audit.quarantined == 2
+    record = json.loads(quarantine.read_text())
+    assert record["compression"] == "gzip"
+    assert record["physical_line"] == 2
+    assert record["physical_byte_offset"] is None
 
 
 def test_adapter_blocks_unverified_or_mismatched_physical_lineage(

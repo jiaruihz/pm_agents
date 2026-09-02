@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+import gzip
 import hashlib
 import json
 import os
@@ -116,11 +117,71 @@ def _append_json_quarantine(
         handle.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+def _iter_gzip_jsonl(
+    path: Path, *, source_hash: str, quarantine_path: Path
+) -> Iterable[CatalogRow]:
+    """Strictly scan a compressed JSONL archive without decompressing it to disk."""
+
+    snapshot_size = path.stat().st_size
+    with gzip.open(path, "rb") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            reason: str | None = None
+            try:
+                value = json.loads(raw_line.decode("utf-8"))
+            except UnicodeDecodeError as exc:
+                value = None
+                reason = f"invalid_utf8:{exc.start}"
+            except json.JSONDecodeError as exc:
+                value = None
+                reason = f"invalid_json:{exc.msg}"
+            if isinstance(value, dict):
+                yield CatalogRow(
+                    row=value,
+                    physical_path=str(path),
+                    physical_line=line_number,
+                )
+                continue
+            if reason is None:
+                reason = "json_value_is_not_object"
+            line_payload = raw_line.rstrip(b"\r\n")
+            record = {
+                "schema_version": "weather_jsonl_quarantine_v1",
+                "reason": reason,
+                "physical_path": str(path),
+                "physical_line": line_number,
+                "physical_byte_offset": None,
+                "source_snapshot_size_bytes": snapshot_size,
+                "source_snapshot_sha256": source_hash,
+                "file_sha256": source_hash,
+                "line_sha256": hashlib.sha256(line_payload).hexdigest(),
+                "file_line_sha256": hashlib.sha256(
+                    f"{source_hash}:{line_number}:".encode() + line_payload
+                ).hexdigest(),
+                "compression": "gzip",
+            }
+            with quarantine_path.open("a", encoding="utf-8") as quarantined:
+                quarantined.write(json.dumps(record, sort_keys=True) + "\n")
+
+
 def _read_registered_input(
     path: Path, *, quarantine_path: Path
 ) -> tuple[list[CatalogRow], InputCatalogAudit]:
     if path.suffix == ".jsonl":
         return JsonlInputCatalog.audit_path(path, quarantine_path=quarantine_path)
+    if path.name.endswith(".jsonl.gz"):
+        before = _line_count(quarantine_path)
+        source_hash = _sha256(path)
+        rows = list(
+            _iter_gzip_jsonl(
+                path, source_hash=source_hash, quarantine_path=quarantine_path
+            )
+        )
+        quarantined = _line_count(quarantine_path) - before
+        return rows, InputCatalogAudit(
+            scanned=len(rows) + quarantined,
+            valid=len(rows),
+            quarantined=quarantined,
+        )
     if path.suffix != ".json":
         raise ValueError(f"unsupported historical input suffix: {path}")
     source_hash = _sha256(path)
@@ -229,6 +290,14 @@ def main(argv: list[str] | None = None) -> int:
                     quarantine_before = _line_count(quarantine_tmp)
                     catalog_rows: Iterable[CatalogRow] = JsonlInputCatalog._iter_path(
                         path, quarantine_path=quarantine_tmp
+                    )
+                    source_audit = None
+                elif path.name.endswith(".jsonl.gz"):
+                    quarantine_before = _line_count(quarantine_tmp)
+                    catalog_rows = _iter_gzip_jsonl(
+                        path,
+                        source_hash=source_hash,
+                        quarantine_path=quarantine_tmp,
                     )
                     source_audit = None
                 else:
