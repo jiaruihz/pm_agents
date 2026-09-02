@@ -496,7 +496,8 @@ def capture_snapshot(repo: str, *, cache_dir: Path | None = None) -> dict[str, A
 def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3,
                      cache_dir: Path | None = None, head_shas: dict[int, str] | None = None,
                      target_paths: set[str] | None = None,
-                     changed_file_counts: dict[int, int] | None = None) -> dict[int, str]:
+                     changed_file_counts: dict[int, int] | None = None,
+                     repo_path: Path | None = None) -> dict[int, str]:
     diffs: dict[int, str] = {}
     cache_dir = cache_dir or (Path("/tmp") / "chainlove-diff-cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -549,8 +550,41 @@ def capture_pr_diffs(repo: str, numbers: list[int], *, max_retries: int = 3,
                     f"+++ b/{filename}\n{patch}\n"
                 )
             if missing:
+                # Last resort: fetch the pull ref locally and diff the target
+                # paths ourselves (GitHub omits patches for huge single files).
+                try:
+                    if repo_path is None:
+                        raise RuntimeError("local fallback requires repo_path")
+                    proc = subprocess.run(["true"], check=False)  # placeholder no-op
+                    for attempt in range(3):
+                        proc = subprocess.run(
+                            ["git", "-C", str(repo_path), "-c", "http.version=HTTP/1.1",
+                             "fetch", "-q", "origin", f"pull/{number}/head"],
+                            text=True, capture_output=True, timeout=300, check=False)
+                        if proc.returncode == 0:
+                            break
+                        time.sleep(5 * (attempt + 1))
+                    if proc.returncode == 0:
+                        head = subprocess.run(
+                            ["git", "-C", str(repo_path), "rev-parse", "FETCH_HEAD"],
+                            text=True, capture_output=True, check=False).stdout.strip()
+                        base_merge = subprocess.run(
+                            ["git", "-C", str(repo_path), "merge-base", head,
+                             "refs/remotes/origin/main"],
+                            text=True, capture_output=True, check=False).stdout.strip()
+                        local = subprocess.run(
+                            ["git", "-C", str(repo_path), "diff", base_merge, head, "--",
+                             *missing],
+                            text=True, capture_output=True, check=False).stdout
+                        if local.strip():
+                            fragments.append(local)
+                            missing = []
+                except subprocess.TimeoutExpired:
+                    pass
+            if missing:
                 raise RuntimeError(
-                    f"PR {number} files fallback missing target patches: {missing[:5]}"
+                    f"PR {number} diff unobtainable (300-file cap + null patches + "
+                    f"local fetch failed); missing targets: {missing[:5]}"
                 )
             reconstructed = "".join(fragments)
             diffs[number] = reconstructed
@@ -649,7 +683,7 @@ def main(argv: list[str] | None = None) -> int:
                  for pr in snapshot.get("pull_requests", [])}
     changed_file_counts = {pr["number"]: len(pr.get("files", []))
                            for pr in snapshot.get("pull_requests", [])}
-    diffs = capture_pr_diffs(args.repo, touching,
+    diffs = capture_pr_diffs(args.repo, touching, repo_path=args.repo_path,
                              cache_dir=args.run_dir / ".diff_cache", head_shas=head_shas,
                              target_paths=paths, changed_file_counts=changed_file_counts)
     claimed_paths, err = extract_claimed_slugs(diffs, paths)

@@ -16,10 +16,20 @@ from weather_dashboard.ingest.clob_fill_sync import (
     _public_buy_fee_details,
     _public_trade_matches_order,
     _resolve_fee_details,
+    _select_authoritative_fill_time,
     _select_public_partial_fills,
     _submitted_order_price_cap,
     sync_clob_fills,
 )
+
+
+def test_exact_activity_fill_time_beats_trade_and_order_discovery_times():
+    assert _select_authoritative_fill_time(
+        exact_activity_at="2026-09-01T13:02:22+00:00",
+        authenticated_trade_at="2026-09-01T13:02:24+00:00",
+        order_updated_at="2026-09-01T13:47:18.996284+00:00",
+        local_fallback_at="2026-09-01T13:47:19+00:00",
+    ) == "2026-09-01T13:02:22+00:00"
 
 
 def test_v2_clob_http_client_uses_explicit_proxy_and_resilient_timeout(monkeypatch):
@@ -405,6 +415,7 @@ def test_exact_transaction_activity_fee_beats_estimate():
         "size": 5,
         "price": 0.67,
         "usdcSize": 3.40527,
+        "timestamp": 1788267742,
     }
     exact = _exact_activity_fee_for_fill(
         transaction_hashes=["0xc055"],
@@ -418,6 +429,10 @@ def test_exact_transaction_activity_fee_beats_estimate():
     assert exact is not None
     assert exact["fees_usd"] == 0.05527
     assert exact["fee_source"] == "public_activity_tx_exact"
+    assert exact["filled_at_utc"] == "2026-09-01T13:02:22+00:00"
+    assert exact["fee_metadata"]["fill_timestamp_evidence_class"] == (
+        "public_activity_tx_exact"
+    )
 
 
 def test_public_partial_buy_derives_exact_cash_delta_fee():
@@ -448,6 +463,7 @@ def test_authenticated_nonzero_taker_fee_is_authoritative():
                 "transactionHash": "0xc055", "conditionId": "cond", "asset": "token",
                 "side": "BUY", "outcome": "No", "size": 5, "price": 0.67,
                 "usdcSize": 3.40527,
+                "timestamp": 1788267742,
             }]
         ),
         condition_id="cond",
@@ -460,3 +476,4 @@ def test_authenticated_nonzero_taker_fee_is_authoritative():
 
     assert details["fees_usd"] == 0.07
     assert details["fee_source"] == "authenticated_taker_fee"
+    assert details["filled_at_utc"] == "2026-09-01T13:02:22+00:00"

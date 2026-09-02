@@ -219,7 +219,14 @@ def _needs_snapshot_lookup(row: dict[str, Any]) -> bool:
     )
     has_condition = bool(str(row.get("condition_id") or "").strip())
     has_question = bool(str(row.get("question") or "").strip())
-    has_bracket = bool(str(row.get("bracket") or row.get("t_minus_1_no_bracket_c") or "").strip())
+    has_bracket = bool(
+        str(
+            row.get("bracket")
+            or row.get("t_minus_1_no_bracket_c")
+            or row.get("previous_official_bracket")
+            or ""
+        ).strip()
+    )
     has_static_lineage = has_condition and has_question and has_bracket
     return not has_explicit_clock or not has_static_lineage
 
@@ -582,10 +589,14 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
     ) = _resolve_signal_snapshot_clock(row, snap)
     row["venue"] = row.get("venue") or "polymarket_clob"
     row["status"] = _runtime_order_status(row)
-    row["bracket"] = row.get("bracket") or row.get("t_minus_1_no_bracket_c")
+    row["bracket"] = (
+        row.get("bracket")
+        or row.get("t_minus_1_no_bracket_c")
+        or row.get("previous_official_bracket")
+    )
     row["city_pool"] = snap.get("city_pool") if snap.get("city_pool") in {"t1_trading", "t2_research"} else "t1_trading"
     row["icao"] = row.get("icao") or snap.get("icao") or CITY_ICAO.get(str(row.get("city") or ""), "")
-    row["unit"] = row.get("unit") or snap.get("unit") or "C"
+    row["unit"] = row.get("unit") or row.get("market_unit") or snap.get("unit") or "C"
     row["signal_side"] = _side_from_runtime(row)
     row["order_side"] = _order_side_from_runtime(row)
     row["model_p_yes"] = (
@@ -620,6 +631,10 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
         row["condition_id"] = row["market_id"]
     if not row.get("condition_id"):
         row["condition_id"] = snap.get("condition_id") or ""
+    # Some runtime journals (including the first Cross NO V2 release) only
+    # persisted Polymarket's condition id. Canonical signals still require a
+    # stable market id; use the same condition-id fallback as other live jobs.
+    row["market_id"] = row.get("market_id") or row.get("condition_id") or ""
     _enrich_from_gamma_market(row)
     return row
 

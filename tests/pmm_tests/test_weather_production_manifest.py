@@ -39,7 +39,11 @@ def test_committed_production_spec_owns_jrs_canonical_db():
         "/Users/deepsleep/.local/share/pm_agents/releases"
     )
     control_plane_release = spec.release("control_plane")
-    assert spec.canonical_refresh_checkout_root == control_plane_release.checkout_root
+    canonical_refresh_release = spec.release(spec.canonical_refresh_release_id)
+    assert (
+        spec.canonical_refresh_checkout_root
+        == canonical_refresh_release.checkout_root
+    )
     assert spec.compatibility_db_paths == (Path("runtime/weather.db"),)
     assert spec.research_artifact_root == Path(
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"

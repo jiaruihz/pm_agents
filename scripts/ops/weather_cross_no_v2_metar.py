@@ -16,6 +16,7 @@ import sqlite3
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Callable, Collection, Iterable, Mapping
 from zoneinfo import ZoneInfo
@@ -37,6 +38,7 @@ from weather_data_feed.market_brackets import parse_market_bracket
 
 STRATEGY_ID = "cross_no_v2_metar_v1"
 SOURCE_ARMS = frozenset({"metar_ws_datis", "metar_ws_hfmetar", "metar_ws_metar"})
+LIVE_SOURCE_ARMS = frozenset({"metar_ws_datis"})
 SHARES_PER_ORDER = 5.0
 MAX_ORDER_PRINCIPAL_USD = 5.0
 MAX_NO_ASK = 0.99
@@ -54,6 +56,7 @@ CITY_TIMEZONES = {
     "Miami": "America/New_York", "NYC": "America/New_York", "SanFrancisco": "America/Los_Angeles",
     "Seattle": "America/Los_Angeles",
 }
+DEFAULT_CITY_MARKET_UNITS = {city: "F" for city in DEFAULT_CITY_STATIONS}
 SQLITE_SOURCE_MAP = {
     "METAR_WS_METAR": "metar_ws_metar", "METAR_WS_HFMETAR": "metar_ws_hfmetar", "METAR_WS_DATIS": "metar_ws_datis",
 }
@@ -63,12 +66,40 @@ SOURCE_TOPIC_TEMPLATES = {
     "metar_ws_datis": "metar.atis.<icao>",
 }
 ATTRIBUTION_REFRESH_SEC = 30.0
+DEFAULT_MAX_OBSERVATION_DELAY_SEC = 3600.0
+DEFAULT_MAX_STREAM_SILENCE_SEC = 120.0
+HEALTH_HISTORY_INTERVAL_SEC = 30.0
+LIVE_CROSS_POLICY = "single_current_bracket_cross_datis_only_with_official_supersession_v3"
+SHADOW_CROSS_POLICY = "single_current_gt_0p5_v1"
+COMPARISON_CROSS_POLICY = "two_consecutive_current_gt_0p5_v1"
+OFFICIAL_SUPERSESSION_POLICY = "newer_official_observation_blocks_older_source_v1"
+CONFIRMED_CROSS_MARGIN = 0.5
+CONFIRMED_CROSS_OBSERVATIONS = 2
+MARGIN_EPSILON = 1e-9
 PRESTART_TRANSITION_HEALTH_FIELDS = frozenset(
-    {"code_identity", "source_attribution_schema_version"}
+    {
+        "code_identity",
+        "source_attribution_schema_version",
+        "market_unit_contract",
+        "native_lattice_contract",
+        "live_cross_policy",
+        "shadow_cross_policy",
+        "comparison_cross_policy",
+        "official_supersession_policy",
+        "live_source_arms",
+        "confirmed_cross_margin",
+        "confirmed_cross_observations",
+        "source_running_max_execution_authority",
+        "confirmation_sequence_contract",
+    }
 )
+_BOOK_RECORD_CACHE: dict[str, tuple[int, int, list[dict[str, Any]]]] = {}
+_LAST_HEALTH_HISTORY_AT: dict[str, datetime] = {}
 
 
-def load_universe_config(path: Path) -> tuple[dict[str, str], dict[str, str], frozenset[str]]:
+def load_universe_config(
+    path: Path,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], frozenset[str]]:
     """Load the frozen collection universe and its independent live eligibility."""
     raw = json.loads(path.read_text(encoding="utf-8"))
     if raw.get("schema_version") != "cross_no_v2_metar_universe_v1":
@@ -78,6 +109,7 @@ def load_universe_config(path: Path) -> tuple[dict[str, str], dict[str, str], fr
         raise ValueError("cross NO V2 universe targets are required")
     allowlist: dict[str, str] = {}
     timezones: dict[str, str] = {}
+    market_units: dict[str, str] = {}
     live_eligible: set[str] = set()
     seen_stations: set[str] = set()
     for target in targets:
@@ -86,17 +118,27 @@ def load_universe_config(path: Path) -> tuple[dict[str, str], dict[str, str], fr
         city = str(target.get("city") or "").strip()
         station = str(target.get("station") or "").strip().upper()
         timezone_name = str(target.get("timezone") or "").strip()
-        if not city or len(station) != 4 or not station.isalnum() or not timezone_name:
-            raise ValueError("cross NO V2 universe city/station/timezone is invalid")
+        market_unit = str(target.get("market_unit") or "").strip().upper()
+        if (
+            not city
+            or len(station) != 4
+            or not station.isalnum()
+            or not timezone_name
+            or market_unit not in {"C", "F"}
+        ):
+            raise ValueError(
+                "cross NO V2 universe city/station/timezone/market_unit is invalid"
+            )
         if city in allowlist or station in seen_stations:
             raise ValueError("cross NO V2 universe city and station must be unique")
         ZoneInfo(timezone_name)
         allowlist[city] = station
         timezones[city] = timezone_name
+        market_units[city] = market_unit
         seen_stations.add(station)
         if target.get("live_eligible") is True:
             live_eligible.add(city)
-    return allowlist, timezones, frozenset(live_eligible)
+    return allowlist, timezones, market_units, frozenset(live_eligible)
 
 
 def utc_now() -> datetime:
@@ -147,6 +189,59 @@ def source_event_identity(row: Mapping[str, Any]) -> str:
     source = str(row.get("source") or "")
     event_id = str(row.get("information_event_id") or "")
     return f"{source}|{event_id}" if source and event_id else ""
+
+
+def _official_state_from_event(
+    row: Mapping[str, Any],
+    *,
+    allowlist: Mapping[str, str],
+    market_units: Mapping[str, str],
+) -> tuple[tuple[str, str], dict[str, Any]] | None:
+    """Return a causally comparable official observation state row."""
+    if str(row.get("source") or "") != "metar_ws_metar":
+        return None
+    event_role = str(row.get("event_role") or "")
+    legacy_opportunity_row = bool(
+        not event_role
+        and row.get("schema_version") == "cross_no_v2_metar_opportunity_v1"
+    )
+    if event_role not in {"new_content", "revision"} and not legacy_opportunity_row:
+        return None
+    city = str(row.get("city") or "")
+    target_date = str(row.get("target_date") or "")
+    station = str(row.get("station") or row.get("station_id") or "").upper()
+    source = str(row.get("source") or "")
+    topic = (
+        str(row.get("source_topic") or "").strip() or None
+        if "source_topic" in row
+        else source_topic(source, station)
+    )
+    observed_at = parse_utc(row.get("source_event_ts_utc"))
+    temp_c = safe_float(row.get("temp_c"))
+    market_unit = str(market_units.get(city) or "").upper()
+    market_value = (
+        _market_value(temp_c, market_unit)
+        if temp_c is not None and market_unit in {"C", "F"}
+        else None
+    )
+    if (
+        not city
+        or not target_date
+        or allowlist.get(city) != station
+        or not source_topic_valid(source, station, topic)
+        or observed_at is None
+        or market_value is None
+    ):
+        return None
+    return (
+        (city, target_date),
+        {
+            "observation_ts_utc": iso(observed_at),
+            "transport_received_at_utc": row.get("transport_received_at_utc"),
+            "market_value": market_value,
+            "information_event_id": row.get("information_event_id"),
+        },
+    )
 
 
 def economic_cross_id(race_key: str) -> str:
@@ -246,6 +341,16 @@ def _save_strategy_state(path: Path, value: Mapping[str, Any]) -> None:
     _save_cursor(path, value)
 
 
+def _save_strategy_state_if_changed(path: Path, value: Mapping[str, Any]) -> bool:
+    prior = _load_strategy_state(path)
+    semantic_prior = {key: item for key, item in prior.items() if key != "updated_at_utc"}
+    semantic_next = {key: item for key, item in value.items() if key != "updated_at_utc"}
+    if semantic_prior == semantic_next:
+        return False
+    _save_strategy_state(path, value)
+    return True
+
+
 def enforce_experiment_deadline(
     output_dir: Path, *, pause_file: Path, stop_after_sec: float
 ) -> dict[str, Any]:
@@ -291,28 +396,27 @@ def ensure_research_record(
         return path
     payload = {
         "schema_version": "pm_agents_research_record_v1",
-        "record_id": "research:weather:cross_no_v2_metar:cross_no_v2_metar_one_day_live_probe_v1",
-        "run_id": "cross_no_v2_metar_one_day_live_probe_v1",
+        "record_id": "research:weather:cross_no_v2_metar:cross_no_v2_metar_global_48h_live_probe_v2",
+        "run_id": "cross_no_v2_metar_global_48h_live_probe_v2",
         "domain": "weather",
         "family": "cross_no_v2_metar",
         "skill": "weather-strategy-research",
         "lifecycle_status": "running",
         "observed_at_utc": None,
         "question": {
-            "hypothesis": "The first eligible METAR.ws source cross can buy five shares of the prior official bracket NO before the public market fully reprices.",
-            "decision_target": "Whether METAR.ws merits a longer paid executable-alpha study; one day cannot establish durable alpha.",
-            "scope": "One pre-registered 24-hour U.S. station-aligned forward probe; METAR.ws official, HF-METAR and D-ATIS arms remain separate.",
+            "hypothesis": "A current METAR.ws source observation with native margin above 0.7 can buy five shares of the prior official bracket NO before the public market fully reprices; the original single-above-0.5 rule remains shadow-only and two consecutive above-0.5 observations remain a comparison label.",
+            "decision_target": "Whether METAR.ws merits a longer paid executable-alpha study; 48 hours cannot establish durable alpha.",
+            "scope": "One pre-registered 48-hour global station-aligned forward probe over the frozen universe; METAR.ws official, HF-METAR and D-ATIS arms remain separate.",
             "exclusions": [
                 "orders above five shares",
-                "more than one order per city-target-date",
-                "more than five orders or 25 USD reserved principal per UTC day",
+                "more than one order per exact condition token or economic cross",
                 "treating a source cross as settlement truth",
                 "formal cross-source latency ranking while the wall clock contract is invalid",
             ],
         },
         "method": {
-            "grain": "first post-watermark source information event x city x target_date x prior official bracket",
-            "denominator_scope": "Every post-watermark event from the fixed ten-city station allowlist, including blocked, no-cross, no-book, no-fill and terminal-false rows.",
+            "grain": "post-watermark source information event x city x target_date x prior official value/bracket, with distinct-observation confirmation state",
+            "denominator_scope": "Every post-watermark event from the frozen configured station universe, including blocked, no-cross, no-book, no-fill and terminal-false rows.",
             "evidence_layers": [
                 "append-only METAR.ws transport/observation SQLite",
                 "decision-time fresh CLOB REST full-depth sweep",
@@ -332,9 +436,9 @@ def ensure_research_record(
                 "AWC paired receipt",
                 "same-token decision-time executable market price",
             ],
-            "forward_policy": "Freeze the three source arms, market-city universe and five-share sizing for 48 hours; do not tune from intraday anecdotes.",
+            "forward_policy": "Freeze the three source arms, market-city universe, single-current-margin-above-0.7 live policy, newer-official-observation supersession blocker and five-share sizing for the remaining forward window; retain single-current-margin-above-0.5 and consecutive-above-0.5 labels as fixed shadow comparators.",
             "acceptance_gates": [
-                "one day is probe evidence only and cannot confirm alpha",
+                "48 hours is probe evidence only and cannot confirm alpha",
                 "paid adoption still requires the existing 72h/7d, 500-pair, two-vantage and clock-valid gates",
                 "every real order must have a durable pre-submit reservation and fresh five-share depth",
             ],
@@ -345,7 +449,7 @@ def ensure_research_record(
                 "input_id": "metar_ws_append_only_evidence",
                 "kind": "sqlite_append_only_transport_evidence",
                 "locator": (
-                    "runtime://us_fast_weather_lab_metarws_24h_20260830_r2/evidence.sqlite3"
+                    f"runtime://{evidence_db.parent.name}/evidence.sqlite3"
                     if evidence_db else "runtime://cross_no_v2_metar/source_events_replay"
                 ),
                 "identity": "explicit single collector run fenced by run_id/start and rowid watermark",
@@ -365,7 +469,7 @@ def ensure_research_record(
             "producer": "scripts/ops/weather_cross_no_v2_metar.py",
             "code_identity": code_identity,
             "config_locator": "src/strategies/runtime/production.yaml",
-            "config_identity": "cross_no_v2_metar_polymarket_48h_uncapped_daily_v1",
+            "config_identity": "cross_no_v2_metar_polymarket_48h_native_lattice_v2",
             "reproduce_command": "scripts/ops/start_weather_cross_no_v2_metar.sh (controller-managed registered release only)",
         },
         "outputs": {
@@ -388,7 +492,7 @@ def ensure_research_record(
 
 
 def record_research_code_identity_amendment(output_dir: Path, *, code_identity: str) -> None:
-    """Append an instrumentation-only release transition without rewriting the record."""
+    """Append a release transition without rewriting the research record."""
     record = _load_cursor(output_dir / "research_record.json")
     original = str((record.get("execution") or {}).get("code_identity") or "")
     if not original or original == code_identity:
@@ -405,20 +509,22 @@ def record_research_code_identity_amendment(output_dir: Path, *, code_identity: 
         {
             "schema_version": "cross_no_v2_metar_research_record_amendment_v1",
             "amendment_id": hashlib.sha256(
-                f"{STRATEGY_ID}|{original}|{code_identity}|source_attribution_v1".encode("utf-8")
+                f"{STRATEGY_ID}|{original}|{code_identity}|official_supersession_v2".encode("utf-8")
             ).hexdigest(),
             "record_id": record.get("record_id"),
             "amended_at_utc": iso(),
             "previous_code_identity": original,
             "new_code_identity": code_identity,
-            "change_class": "instrumentation_only_source_attribution_v1",
-            "signal_policy_changed": False,
+            "change_class": "official_supersession_v2",
+            "signal_policy_changed": True,
             "sizing_or_execution_policy_changed": False,
             "denominator_changed": False,
             "changes": [
-                "observed METAR.ws topic and fixed source arm lineage",
-                "economic-cross winner versus later-source attribution",
-                "per-source capture demand and derived attribution reporting",
+                "live requires one causally current native observation with margin above 0.7",
+                "single current native margin above 0.5 is retained as zero-notional shadow evidence",
+                "two distinct consecutive current observations each above 0.5 are retained as a non-executing comparison label",
+                "running source maximum is descriptive only and cannot trigger an order",
+                "a non-official source observation is zero-authority when a newer official observation was already received",
             ],
         },
         durable=True,
@@ -429,6 +535,7 @@ def direct_evidence_events(
     evidence_db: Path, *, cursor_path: Path, allowlist: Mapping[str, str],
     city_timezones: Mapping[str, str] = CITY_TIMEZONES,
     collector_run_start_wall_ns: int | None = None, initialize_at_current: bool = True,
+    allow_ended_run_for_replay: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read only new METAR.ws arrivals after a durable SQLite rowid watermark.
 
@@ -458,7 +565,7 @@ def direct_evidence_events(
                 "SELECT COUNT(*) FROM collector_run_end WHERE run_id = ?", (run_id,)
             ).fetchone()[0]
         )
-        if ended:
+        if ended and not allow_ended_run_for_replay:
             raise ValueError("collector run has ended; rotate through a new explicit evidence DB")
         latest_clock = conn.execute(
             "SELECT uncertainty_ms FROM clock_health WHERE run_id = ? ORDER BY sampled_at_ns DESC LIMIT 1",
@@ -466,11 +573,26 @@ def direct_evidence_events(
         ).fetchone()
         clock_uncertainty_ms = safe_float(latest_clock[0]) if latest_clock else None
         maximum = int(conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM source_observation_seen").fetchone()[0])
+        latest_transport_wall_ns = conn.execute(
+            "SELECT MAX(received_wall_ns) FROM transport_message WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()[0]
+        latest_transport_at_utc = (
+            iso(
+                datetime.fromtimestamp(
+                    int(latest_transport_wall_ns) / 1_000_000_000,
+                    tz=timezone.utc,
+                )
+            )
+            if latest_transport_wall_ns is not None
+            else None
+        )
         if "source_seen_rowid" not in state:
             watermark = maximum if initialize_at_current else 0
             return [], {"source_seen_rowid": watermark, "collector_run_start_wall_ns": collector_run_start_wall_ns,
                         "collector_run_id": run_id, "initialized_at_utc": iso(),
-                        "initialization": "current_max_rowid" if initialize_at_current else "from_start"}
+                        "initialization": "current_max_rowid" if initialize_at_current else "from_start",
+                        "latest_transport_received_at_utc": latest_transport_at_utc}
         if int(state.get("collector_run_start_wall_ns") or 0) != int(collector_run_start_wall_ns):
             raise ValueError("direct evidence cursor belongs to a different collector run")
         if str(state.get("collector_run_id") or "") != run_id:
@@ -536,16 +658,28 @@ def direct_evidence_events(
     next_state = {"source_seen_rowid": max([int(row["source_seen_rowid"]) for row in rows], default=cursor),
                   "collector_run_start_wall_ns": collector_run_start_wall_ns,
                   "collector_run_id": run_id, "updated_at_utc": iso(), "initialization": "incremental"}
+    next_state["latest_transport_received_at_utc"] = latest_transport_at_utc
     return events, next_state
 
 
 def _book_records(path: Path) -> list[dict[str, Any]]:
     try:
+        stat = path.stat()
+        cache_key = str(path.resolve())
+        cached = _BOOK_RECORD_CACHE.get(cache_key)
+        if cached is not None and cached[:2] == (stat.st_mtime_ns, stat.st_size):
+            return cached[2]
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
     rows = value.get("records", value) if isinstance(value, Mapping) else value
-    return [dict(row) for row in rows if isinstance(row, Mapping)] if isinstance(rows, list) else []
+    records = (
+        [dict(row) for row in rows if isinstance(row, Mapping)]
+        if isinstance(rows, list)
+        else []
+    )
+    _BOOK_RECORD_CACHE[cache_key] = (stat.st_mtime_ns, stat.st_size, records)
+    return records
 
 
 def _event_sort_key(row: Mapping[str, Any]) -> tuple[int, str]:
@@ -556,13 +690,78 @@ def _event_sort_key(row: Mapping[str, Any]) -> tuple[int, str]:
         return (2**63 - 1, str(row.get("information_event_id") or ""))
 
 
-def _market_value(temp_c: float, market: Mapping[str, Any]) -> float | None:
-    unit = str(market.get("market_unit") or market.get("unit") or "F").upper()
+def _round_half_up(value: float) -> int:
+    return int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _market_value(temp_c: float, market_unit: str) -> int | None:
+    """Map raw Celsius evidence onto the integer settlement-native lattice."""
+    unit = str(market_unit or "").upper()
     if unit == "C":
-        return temp_c
+        return _round_half_up(temp_c)
     if unit == "F":
-        return temp_c * 9.0 / 5.0 + 32.0
+        return _round_half_up(temp_c * 9.0 / 5.0 + 32.0)
     return None
+
+
+def _native_value(temp_c: float, market_unit: str) -> float | None:
+    """Return the unrounded observation in the market's settlement unit."""
+    unit = str(market_unit or "").upper()
+    if unit == "C":
+        return float(temp_c)
+    if unit == "F":
+        return float(temp_c) * 9.0 / 5.0 + 32.0
+    return None
+
+
+def _strictly_above(value: float, threshold: float) -> bool:
+    return float(value) - float(threshold) > MARGIN_EPSILON
+
+
+def _advance_confirmation(
+    prior: Mapping[str, Any] | None,
+    *,
+    observation_ts: str,
+    baseline_value: float,
+    baseline_bracket: str,
+    qualifies: bool,
+) -> tuple[dict[str, Any], bool]:
+    """Advance a same-source streak using distinct, newer observations only."""
+    current = dict(prior or {})
+    prior_ts = str(current.get("last_observation_ts") or "")
+    if prior_ts and observation_ts < prior_ts:
+        return current, False
+    same_baseline = bool(
+        safe_float(current.get("baseline_value")) == float(baseline_value)
+        and str(current.get("baseline_bracket") or "") == baseline_bracket
+    )
+    if prior_ts == observation_ts:
+        streak = int(current.get("streak") or 0)
+        if not qualifies:
+            streak = 0
+        elif not same_baseline or not bool(current.get("last_qualifies")):
+            streak = 1
+        return {
+            "last_observation_ts": observation_ts,
+            "baseline_value": float(baseline_value),
+            "baseline_bracket": baseline_bracket,
+            "last_qualifies": bool(qualifies),
+            "streak": streak,
+        }, False
+    streak = (
+        int(current.get("streak") or 0) + 1
+        if qualifies and same_baseline and bool(current.get("last_qualifies"))
+        else 1
+        if qualifies
+        else 0
+    )
+    return {
+        "last_observation_ts": observation_ts,
+        "baseline_value": float(baseline_value),
+        "baseline_bracket": baseline_bracket,
+        "last_qualifies": bool(qualifies),
+        "streak": streak,
+    }, True
 
 
 def _no_market_for_value(records: Iterable[Mapping[str, Any]], value: float) -> dict[str, Any] | None:
@@ -595,8 +794,8 @@ def _book_summary(market: Mapping[str, Any]) -> tuple[float | None, float | None
     if parsed_asks:
         best_ask, ask_size = parsed_asks[0]
     full_depth = bool(
-        book.get("full_depth_valid", summary.get("full_depth_valid", False))
-        or isinstance(asks, list)
+        book.get("full_depth_valid") is True
+        or summary.get("full_depth_valid") is True
     )
     return best_ask, ask_size, full_depth
 
@@ -646,14 +845,20 @@ def _expected_weather_taker_fee(shares: float, price: float) -> float:
 
 
 def _capture_demand(
-    *, row: Mapping[str, Any], condition_id: str, token_id: str, now: datetime
+    *,
+    row: Mapping[str, Any],
+    condition_id: str,
+    token_id: str,
+    now: datetime,
+    reason: str = "cross_no_v2_metar_execution_markout",
+    capture_role: str = "execution_candidate",
 ) -> dict[str, Any]:
     return CaptureDemand.create(
         consumer_id="cross_no_v2_metar_v1",
         strategy_key="weather.cross_no_v2_metar_v1",
         condition_id=condition_id,
         token_id=token_id,
-        reason="cross_no_v2_metar_execution_markout",
+        reason=reason,
         priority="P0",
         requested_at_utc=iso(now),
         expires_at_utc=iso(now + timedelta(seconds=360)),
@@ -670,6 +875,8 @@ def _capture_demand(
             "attribution_role": row.get("attribution_role"),
             "economic_cross_id": row.get("economic_cross_id"),
             "execution_race_key": row.get("execution_race_key"),
+            "capture_role": capture_role,
+            "shadow_zero_notional": bool(row.get("shadow_zero_notional")),
             "event_family_id": row.get("event_family_id"),
             "semantic_version_id": row.get("semantic_version_id"),
             "raw_report_id": row.get("raw_report_id"),
@@ -690,6 +897,14 @@ def _source_age_seconds(row: Mapping[str, Any], now: datetime) -> float | None:
     return None if received is None else (now - received).total_seconds()
 
 
+def _observation_delay_seconds(row: Mapping[str, Any]) -> float | None:
+    received = parse_utc(row.get("transport_received_at_utc"))
+    observed = parse_utc(row.get("source_event_ts_utc"))
+    if received is None or observed is None:
+        return None
+    return (received - observed).total_seconds()
+
+
 def _base_row(row: Mapping[str, Any], *, now: datetime, execution_clock_mode: str = "formal_clock_valid_v1") -> dict[str, Any]:
     source = str(row.get("source") or "")
     station = row.get("station") or row.get("station_id")
@@ -705,6 +920,7 @@ def _base_row(row: Mapping[str, Any], *, now: datetime, execution_clock_mode: st
         "created_at_monotonic_ns": time.monotonic_ns(),
         "city": row.get("city"), "target_date": row.get("target_date"),
         "station": station, "source": source,
+        "event_role": row.get("event_role"),
         "temp_c": row.get("temp_c"),
         "source_topic": topic,
         "source_topic_valid": source_topic_valid(source, station, topic),
@@ -718,6 +934,7 @@ def _base_row(row: Mapping[str, Any], *, now: datetime, execution_clock_mode: st
         "transport_received_at_utc": row.get("transport_received_at_utc"),
         "transport_received_monotonic_ns": row.get("transport_received_monotonic_ns"),
         "source_event_ts_utc": row.get("source_event_ts_utc"),
+        "observation_delay_seconds": _observation_delay_seconds(row),
         "source_cross_is_proxy_only": True,
         "settlement_hard_invalidation": False,
         "economic_cross_id": None,
@@ -730,6 +947,7 @@ def _base_row(row: Mapping[str, Any], *, now: datetime, execution_clock_mode: st
 
 def _eligible_event(
     row: Mapping[str, Any], *, allowlist: Mapping[str, str], now: datetime, max_source_age_sec: float,
+    max_observation_delay_sec: float,
     allow_clock_invalid_same_boot_monotonic_probe: bool, live: bool, confirm_live: bool,
     clock_uncertainty_ms: float | None, boot_monotonic_start_ns: int | None, monotonic_now_ns: int,
 ) -> tuple[list[str], str]:
@@ -774,6 +992,13 @@ def _eligible_event(
     age = _source_age_seconds(row, now)
     if age is None or age < -1.0 or age > max_source_age_sec:
         blockers.append("source_age_out_of_bounds")
+    observation_delay = _observation_delay_seconds(row)
+    if (
+        observation_delay is None
+        or observation_delay < -300.0
+        or observation_delay > max_observation_delay_sec
+    ):
+        blockers.append("source_observation_delay_out_of_bounds")
     if row.get("transport_received_monotonic_ns") is None:
         blockers.append("transport_monotonic_missing")
     return blockers, clock_mode
@@ -927,11 +1152,16 @@ def run_probe(
     official_fee_rate: float | None = WEATHER_TAKER_FEE_RATE,
     official_fee_bps: float | None = None,
     allowlist: Mapping[str, str] = DEFAULT_CITY_STATIONS, pause_file: Path | None = None,
+    market_units: Mapping[str, str] = DEFAULT_CITY_MARKET_UNITS,
     live_eligible_cities: Collection[str] | None = None,
     capture_demands_jsonl: Path | None = None,
     events_override: Iterable[Mapping[str, Any]] | None = None,
     allow_clock_invalid_same_boot_monotonic_probe: bool = False, clock_uncertainty_ms: float | None = None,
     boot_monotonic_start_ns: int | None = None, monotonic_now_ns: int | None = None,
+    max_observation_delay_sec: float = DEFAULT_MAX_OBSERVATION_DELAY_SEC,
+    source_stream_last_received_at_utc: str | None = None,
+    max_stream_silence_sec: float = DEFAULT_MAX_STREAM_SILENCE_SEC,
+    monitor_source_stream: bool = False,
     fetch_book_fn: Callable[..., dict[str, Any]] | None = None,
     market_proxy: str = "", book_timeout_sec: float = 5.0,
     code_identity: str = "unversioned_test",
@@ -948,6 +1178,8 @@ def run_probe(
         official_fee_rate = float(official_fee_bps) / 10_000.0
     if official_fee_rate is None or abs(float(official_fee_rate) - WEATHER_TAKER_FEE_RATE) > 1e-12:
         raise ValueError(f"official weather taker fee rate must equal {WEATHER_TAKER_FEE_RATE}")
+    if max_observation_delay_sec <= 0 or max_stream_silence_sec <= 0:
+        raise ValueError("observation delay and stream silence limits must be positive")
     books = _book_records(market_books_latest)
     by_city_date: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for market in books:
@@ -965,15 +1197,20 @@ def run_probe(
         for key, value in dict(strategy_state.get("official_max") or {}).items()
         if "|" in key and safe_float(value) is not None
     }
+    official_latest = {
+        tuple(key.split("|", 1)): dict(value)
+        for key, value in dict(strategy_state.get("official_latest") or {}).items()
+        if "|" in key and isinstance(value, Mapping)
+    }
     source_max = {
         tuple(key.split("|", 2)): float(value)
         for key, value in dict(strategy_state.get("source_max") or {}).items()
         if key.count("|") == 2 and safe_float(value) is not None
     }
-    source_crossed_brackets = {
-        tuple(str(value).split("|", 3))
-        for value in strategy_state.get("source_crossed_brackets") or []
-        if str(value).count("|") == 3
+    confirmation_state = {
+        tuple(key.split("|", 2)): dict(value)
+        for key, value in dict(strategy_state.get("confirmation_state") or {}).items()
+        if key.count("|") == 2 and isinstance(value, Mapping)
     }
     processed_keys = set(map(str, strategy_state.get("processed_event_keys") or []))
     legacy_processed_ids = (
@@ -995,6 +1232,34 @@ def run_probe(
                 or str(row.get("information_event_id") or "") in legacy_processed_ids
             )
         )
+    # State v2 did not persist the latest official observation clock. Rebuild
+    # it only from events already processed before this cycle, never from
+    # unprocessed rows later in the same batch, so restart migration remains
+    # point-in-time causal. The append-only opportunity journal keeps this
+    # migration available even when the evidence reader no longer returns an
+    # older processed event.
+    if strategy_state.get("schema_version") != "cross_no_v2_metar_state_v3":
+        prior_processed_events = [
+            *jsonl_rows((output_dir / "opportunities.jsonl",)),
+            *events,
+        ]
+        for prior_event in prior_processed_events:
+            if source_event_identity(prior_event) not in processed_keys:
+                continue
+            official_state = _official_state_from_event(
+                prior_event, allowlist=allowlist, market_units=market_units
+            )
+            if official_state is None:
+                continue
+            key, candidate = official_state
+            candidate_ts = parse_utc(candidate.get("observation_ts_utc"))
+            prior_ts = parse_utc(
+                (official_latest.get(key) or {}).get("observation_ts_utc")
+            )
+            if candidate_ts is not None and (
+                prior_ts is None or candidate_ts >= prior_ts
+            ):
+                official_latest[key] = candidate
     emitted = orders = fills = blocked = 0
 
     for event in events:
@@ -1005,6 +1270,7 @@ def run_probe(
         processed_keys.add(event_key)
         blockers, clock_mode = _eligible_event(
             event, allowlist=allowlist, now=now, max_source_age_sec=max_source_age_sec,
+            max_observation_delay_sec=max_observation_delay_sec,
             allow_clock_invalid_same_boot_monotonic_probe=allow_clock_invalid_same_boot_monotonic_probe,
             live=live, confirm_live=confirm_live,
             clock_uncertainty_ms=(
@@ -1020,15 +1286,67 @@ def run_probe(
         city_date = (str(event.get("city") or ""), str(event.get("target_date") or ""))
         markets = by_city_date.get(city_date, [])
         temp_c = safe_float(event.get("temp_c"))
+        market_unit = str(market_units.get(city_date[0]) or "").upper()
+        if market_unit not in {"C", "F"}:
+            blockers.append("market_unit_missing_or_invalid")
+        market_value = (
+            _market_value(temp_c, market_unit)
+            if temp_c is not None and market_unit in {"C", "F"}
+            else None
+        )
+        current_native_value = (
+            _native_value(temp_c, market_unit)
+            if temp_c is not None and market_unit in {"C", "F"}
+            else None
+        )
+        common.update(
+            {
+                "market_unit": market_unit or None,
+                "settlement_native_value": market_value,
+                "source_current_native_value": current_native_value,
+                "native_lattice_contract": "round_half_up_integer_market_unit_v1",
+                "live_cross_policy": LIVE_CROSS_POLICY,
+                "shadow_cross_policy": SHADOW_CROSS_POLICY,
+                "comparison_cross_policy": COMPARISON_CROSS_POLICY,
+            }
+        )
         if not blockers and not markets:
             blockers.append("market_not_found")
-        market_value = _market_value(temp_c, markets[0]) if temp_c is not None and markets else None
         if not blockers and market_value is None:
             blockers.append("market_unit_unsupported")
 
-        # METAR arm defines the official running-max basis after any candidate
-        # is evaluated, preserving the previous official value for the cross.
+        # Preserve the previous official value for this event's cross decision,
+        # but update the official accumulator independently of market/book and
+        # decision freshness blockers. A valid late official observation still
+        # belongs in the running-max state; it must not itself become a trade.
         prior_official = official_max.get(city_date)
+        prior_official_latest = official_latest.get(city_date)
+        official_state_eligible = bool(
+            str(event.get("source")) == "metar_ws_metar"
+            and str(event.get("event_role")) in {"new_content", "revision"}
+            and allowlist.get(city_date[0])
+            == str(event.get("station") or event.get("station_id") or "").upper()
+            and common.get("source_topic_valid") is True
+            and market_value is not None
+            and city_date[1]
+        )
+        if official_state_eligible:
+            official_max[city_date] = max(
+                official_max.get(city_date, -math.inf), market_value
+            )
+            official_state = _official_state_from_event(
+                event, allowlist=allowlist, market_units=market_units
+            )
+            if official_state is not None:
+                _, candidate = official_state
+                candidate_ts = parse_utc(candidate.get("observation_ts_utc"))
+                prior_ts = parse_utc(
+                    (official_latest.get(city_date) or {}).get("observation_ts_utc")
+                )
+                if candidate_ts is not None and (
+                    prior_ts is None or candidate_ts >= prior_ts
+                ):
+                    official_latest[city_date] = candidate
         if blockers:
             append_jsonl(output_dir / "opportunities.jsonl", {**common, "status": "blocked", "blockers": blockers})
             emitted += 1; blocked += 1
@@ -1038,33 +1356,89 @@ def run_probe(
         prior_source = source_max.get(source_key, -math.inf)
         source_max[source_key] = max(prior_source, market_value)
         if prior_official is None:
-            if str(event["source"]) == "metar_ws_metar":
-                official_max[city_date] = max(official_max.get(city_date, -math.inf), market_value)
             append_jsonl(output_dir / "opportunities.jsonl", {**common, "status": "blocked", "blockers": ["prior_official_running_max_missing"]})
             emitted += 1; blocked += 1
             continue
         prior_market = _no_market_for_value(markets, prior_official)
-        source_bracket = _no_market_for_value(markets, source_max[source_key])
+        source_bracket = _no_market_for_value(markets, market_value)
         if prior_market is None or source_bracket is None:
             row = {**common, "status": "blocked", "prior_official_running_max": prior_official,
                    "source_running_max": source_max[source_key], "blockers": ["exact_condition_or_no_token_unverified"]}
             append_jsonl(output_dir / "opportunities.jsonl", row); emitted += 1; blocked += 1
             continue
         bracket = str(prior_market.get("bracket"))
-        cross_key = (source_key[0], source_key[1], source_key[2], bracket)
         candidate_blockers: list[str] = []
         if city_date[0] not in eligible_cities:
             candidate_blockers.append("city_not_live_eligible")
-        source_crossed = bool(
-            source_max[source_key] > prior_official
+        current_crossed_new_bracket = bool(
+            current_native_value is not None
+            and current_native_value > prior_official
             and str(source_bracket.get("bracket")) != bracket
         )
-        if not source_crossed:
-            candidate_blockers.append("source_running_max_did_not_cross_new_bracket")
-        if source_crossed and cross_key in source_crossed_brackets:
-            candidate_blockers.append("source_bracket_already_seen")
-        if source_crossed:
-            source_crossed_brackets.add(cross_key)
+        current_cross_margin = (
+            float(current_native_value) - float(prior_official)
+            if current_native_value is not None
+            else None
+        )
+        shadow_cross = bool(
+            current_crossed_new_bracket
+            and current_cross_margin is not None
+            and _strictly_above(current_cross_margin, CONFIRMED_CROSS_MARGIN)
+        )
+        observation_ts = str(event.get("source_event_ts_utc") or "")
+        observation_clock = parse_utc(observation_ts)
+        latest_official_clock = parse_utc(
+            (prior_official_latest or {}).get("observation_ts_utc")
+        )
+        official_observation_supersedes_source_event = bool(
+            str(event.get("source") or "") != "metar_ws_metar"
+            and observation_clock is not None
+            and latest_official_clock is not None
+            and latest_official_clock > observation_clock
+        )
+        prior_confirmation = confirmation_state.get(source_key)
+        prior_confirmation_ts = str(
+            (prior_confirmation or {}).get("last_observation_ts") or ""
+        )
+        observation_is_causally_current = bool(
+            observation_ts
+            and (
+                not prior_confirmation_ts
+                or observation_ts >= prior_confirmation_ts
+            )
+        )
+        next_confirmation, observation_advanced = _advance_confirmation(
+            prior_confirmation,
+            observation_ts=observation_ts,
+            baseline_value=prior_official,
+            baseline_bracket=bracket,
+            qualifies=shadow_cross,
+        )
+        confirmation_state[source_key] = next_confirmation
+        confirmation_count = int(next_confirmation.get("streak") or 0)
+        live_source_arm_enabled = str(event.get("source") or "") in LIVE_SOURCE_ARMS
+        strong_single_cross = bool(
+            live_source_arm_enabled
+            and current_crossed_new_bracket
+            and observation_is_causally_current
+        )
+        consecutive_cross = bool(
+            shadow_cross
+            and observation_advanced
+            and confirmation_count >= CONFIRMED_CROSS_OBSERVATIONS
+        )
+        live_cross_confirmed = strong_single_cross
+        official_supersession_execution_authority = not (
+            official_observation_supersedes_source_event
+        )
+        if official_observation_supersedes_source_event:
+            candidate_blockers.append("newer_official_observation_supersedes_source_event")
+        if not live_source_arm_enabled:
+            candidate_blockers.append("source_arm_live_disabled")
+        if not current_crossed_new_bracket:
+            candidate_blockers.append("current_observation_did_not_cross_new_bracket")
+        elif not observation_is_causally_current:
+            candidate_blockers.append("observation_not_causally_current")
         condition_id, token_id = str(prior_market.get("condition_id") or ""), str(prior_market.get("token_id") or prior_market.get("no_token_id") or "")
         if not condition_id or not token_id:
             candidate_blockers.append("exact_condition_or_no_token_unverified")
@@ -1080,8 +1454,10 @@ def run_probe(
             if book_status != "ok":
                 candidate_blockers.append("fresh_execution_book_not_ok")
             sweep = _five_share_sweep(execution_book)
-            full_depth = book_status == "ok" and isinstance(
-                (execution_book.get("raw") or {}).get("asks"), list
+            full_depth = (
+                book_status == "ok"
+                and execution_book.get("full_depth_valid") is True
+                and isinstance((execution_book.get("raw") or {}).get("asks"), list)
             )
             book_started_at = execution_book.get("request_started_at_utc")
             book_fetched_at = execution_book.get("fetched_at_utc")
@@ -1133,18 +1509,48 @@ def run_probe(
         attribution_role = (
             "later_race_blocked"
             if race_already_executed
+            else "shadow_source_arm_disabled"
+            if not live_source_arm_enabled and current_crossed_new_bracket
             else "no_cross"
-            if not source_crossed
+            if not current_crossed_new_bracket
             else "cross_blocked"
             if candidate_blockers
             else "execution_candidate"
             if live_enabled
             else "first_eligible_cross"
         )
+        final_execution_authority = bool(
+            live_cross_confirmed and not candidate_blockers
+        )
         row = {**common, "status": "candidate" if not candidate_blockers else "blocked", "blockers": candidate_blockers,
                "prior_official_running_max": prior_official, "source_running_max": source_max[source_key],
+               "source_running_max_descriptive_only": True,
+               "current_cross_margin_native": current_cross_margin,
+               "current_crossed_new_bracket": current_crossed_new_bracket,
+               "shadow_single_cross": shadow_cross,
+               "strong_single_cross": strong_single_cross,
+               "confirmation_observation_advanced": observation_advanced,
+               "confirmation_observation_causally_current": observation_is_causally_current,
+               "consecutive_cross_count": confirmation_count,
+               "consecutive_cross_confirmed": consecutive_cross,
+               "live_source_arm_enabled": live_source_arm_enabled,
+               "live_source_arms": sorted(LIVE_SOURCE_ARMS),
+               "live_cross_confirmed": live_cross_confirmed,
+               "live_cross_policy": LIVE_CROSS_POLICY,
+               "shadow_cross_policy": SHADOW_CROSS_POLICY,
+               "comparison_cross_policy": COMPARISON_CROSS_POLICY,
+               "official_supersession_policy": OFFICIAL_SUPERSESSION_POLICY,
+               "official_observation_supersedes_source_event": official_observation_supersedes_source_event,
+               "latest_official_observation_ts_utc": (prior_official_latest or {}).get("observation_ts_utc"),
+               "latest_official_transport_received_at_utc": (prior_official_latest or {}).get("transport_received_at_utc"),
+               "latest_official_market_value": (prior_official_latest or {}).get("market_value"),
+               "confirmation_sequence_contract": "consecutive_eligible_causally_current_observations_same_source_baseline_v1",
+               "bracket": bracket, "unit": market_unit,
                "previous_official_bracket": bracket, "new_source_bracket": source_bracket.get("bracket"),
-               "condition_id": condition_id, "token_id": token_id, "best_ask": best_ask, "ask_size": ask_size,
+               "condition_id": condition_id, "market_id": condition_id,
+               "question": prior_market.get("question"),
+               "icao": str(event.get("station") or event.get("station_id") or "").upper(),
+               "token_id": token_id, "best_ask": best_ask, "ask_size": ask_size,
                "worst_ask_for_five_shares": worst_ask, "expected_five_share_vwap": expected_vwap,
                "book_full_depth_valid": full_depth, "execution_book_status": book_status,
                "execution_book_request_started_at_utc": book_started_at,
@@ -1156,16 +1562,47 @@ def run_probe(
                    if expected_vwap is not None else None
                ),
                "execution_race_key": race_key, "economic_cross_id": economic_cross_id(race_key),
-               "attribution_role": attribution_role, "planned_shares": SHARES_PER_ORDER,
-               "max_shares_per_market": SHARES_PER_ORDER, "planned_principal_usd": principal,
+               "attribution_role": attribution_role,
+               "shadow_zero_notional": bool(shadow_cross and not live_cross_confirmed),
+               "official_supersession_execution_authority": official_supersession_execution_authority,
+               "execution_authority": final_execution_authority,
+               "planned_shares": SHARES_PER_ORDER if final_execution_authority else 0.0,
+               "hypothetical_shares": SHARES_PER_ORDER,
+               "max_shares_per_market": SHARES_PER_ORDER,
+               "planned_principal_usd": principal if final_execution_authority else 0.0,
+               "hypothetical_principal_usd": principal,
                "live_requested": bool(live), "live_enabled": live_enabled}
         append_jsonl(output_dir / "opportunities.jsonl", row); emitted += 1
+        shadow_capture_eligible = bool(
+            shadow_cross
+            and city_date[0] in eligible_cities
+            and condition_id
+            and token_id
+            and (
+                not expected_station
+                or expected_station
+                == str(event.get("station") or event.get("station_id") or "").upper()
+            )
+        )
         if candidate_blockers:
             blocked += 1
-        else:
+        if not candidate_blockers:
             append_jsonl(
                 capture_demands_jsonl or (output_dir / "capture_demands.jsonl"),
                 _capture_demand(row=row, condition_id=condition_id, token_id=token_id, now=now),
+                durable=True,
+            )
+        elif shadow_capture_eligible:
+            append_jsonl(
+                capture_demands_jsonl or (output_dir / "capture_demands.jsonl"),
+                _capture_demand(
+                    row=row,
+                    condition_id=condition_id,
+                    token_id=token_id,
+                    now=now,
+                    reason="cross_no_v2_metar_shadow_markout",
+                    capture_role="single_current_gt_0p5_zero_notional_shadow",
+                ),
                 durable=True,
             )
         if not candidate_blockers and live_enabled:
@@ -1195,24 +1632,58 @@ def run_probe(
                      "live_attempted_monotonic_ns": time.monotonic_ns(), "exchange_response": result.get("exchange_response"),
                      "order_id": extract_order_id(result.get("exchange_response") or {}),
                      "execution_attempt_id": execution_attempt_id,
-                     "live_submit_status": result.get("live_submit_status"), "actual_fill_shares": result.get("actual_fill_shares"),
+                     "live_submit_status": result.get("live_submit_status"),
+                     "exchange_order_status": result.get("exchange_order_status"),
+                     "immediate_cancel_response": result.get("immediate_cancel_response"),
+                     "immediate_cancel_confirmed": result.get("immediate_cancel_confirmed"),
+                     "actual_fill_shares": result.get("actual_fill_shares"),
                      "actual_fill_cost_usd": result.get("actual_fill_cost_usd"), "public_trade_is_own_fill": False}
             append_jsonl(output_dir / "orders.jsonl", order, durable=True); orders += 1
             if order.get("actual_fill_shares") is not None:
                 append_jsonl(output_dir / "fills.jsonl", {**order, "status": "fill", "fill_source": "exchange_response_not_public_trade"}, durable=True); fills += 1
             if result.get("error"):
-                append_jsonl(output_dir / "errors.jsonl", {**common, "error_type": "order_submit_failed"}, durable=True)
-        if str(event.get("source")) == "metar_ws_metar":
-            official_max[city_date] = max(official_max.get(city_date, -math.inf), market_value)
-    _save_strategy_state(
+                append_jsonl(
+                    output_dir / "errors.jsonl",
+                    {
+                        **common,
+                        "error_type": "order_lifecycle_failed",
+                        "error": result.get("error"),
+                        "execution_attempt_id": execution_attempt_id,
+                        "order_id": order.get("order_id"),
+                    },
+                    durable=True,
+                )
+                if pause_file is not None and result.get("live_order_posted"):
+                    _save_cursor(
+                        pause_file,
+                        {
+                            "reason": "live_order_lifecycle_uncertain",
+                            "paused_at_utc": iso(),
+                            "execution_attempt_id": execution_attempt_id,
+                            "order_id": order.get("order_id"),
+                            "error": result.get("error"),
+                        },
+                    )
+                    paused = True
+    state_changed = _save_strategy_state_if_changed(
         strategy_state_path,
         {
-            "schema_version": "cross_no_v2_metar_state_v1",
+            "schema_version": "cross_no_v2_metar_state_v3",
             "strategy_id": STRATEGY_ID,
+            "live_cross_policy": LIVE_CROSS_POLICY,
+            "shadow_cross_policy": SHADOW_CROSS_POLICY,
+            "comparison_cross_policy": COMPARISON_CROSS_POLICY,
             "updated_at_utc": iso(),
             "official_max": {"|".join(key): value for key, value in sorted(official_max.items())},
+            "official_latest": {
+                "|".join(key): value
+                for key, value in sorted(official_latest.items())
+            },
             "source_max": {"|".join(key): value for key, value in sorted(source_max.items())},
-            "source_crossed_brackets": ["|".join(key) for key in sorted(source_crossed_brackets)],
+            "confirmation_state": {
+                "|".join(key): value
+                for key, value in sorted(confirmation_state.items())
+            },
             "processed_event_ids": sorted(
                 {
                     key.split("|", 1)[1]
@@ -1237,12 +1708,23 @@ def run_probe(
         source_attribution = write_runtime_source_attribution(output_dir, now=now)
     else:
         source_attribution = prior_attribution
+    stream_received = parse_utc(source_stream_last_received_at_utc)
+    source_stream_age_sec = (
+        (now - stream_received).total_seconds() if stream_received is not None else None
+    )
+    source_stream_stale = bool(
+        monitor_source_stream
+        and (
+            source_stream_age_sec is None
+            or source_stream_age_sec > max_stream_silence_sec
+        )
+    )
     health = {
         "schema_version": "cross_no_v2_metar_health_v1",
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_ID,
         "code_identity": code_identity,
-        "status": "ok",
+        "status": "source_stream_stale" if source_stream_stale else "ok",
         "generated_at_utc": iso(now),
         "generated_at_monotonic_ns": time.monotonic_ns(),
         "events_seen_total": len(processed_keys),
@@ -1263,6 +1745,24 @@ def run_probe(
         "daily_principal_cap_enabled": False,
         "max_no_ask": MAX_NO_ASK,
         "weather_taker_fee_rate": WEATHER_TAKER_FEE_RATE,
+        "max_observation_delay_sec": max_observation_delay_sec,
+        "source_stream_last_received_at_utc": source_stream_last_received_at_utc,
+        "source_stream_age_sec": source_stream_age_sec,
+        "max_stream_silence_sec": max_stream_silence_sec,
+        "source_stream_stale": source_stream_stale,
+        "source_stream_monitor_enabled": monitor_source_stream,
+        "market_unit_contract": "universe_config_required_v1",
+        "native_lattice_contract": "round_half_up_integer_market_unit_v1",
+        "live_cross_policy": LIVE_CROSS_POLICY,
+        "shadow_cross_policy": SHADOW_CROSS_POLICY,
+        "comparison_cross_policy": COMPARISON_CROSS_POLICY,
+        "official_supersession_policy": OFFICIAL_SUPERSESSION_POLICY,
+        "live_source_arms": sorted(LIVE_SOURCE_ARMS),
+        "confirmed_cross_margin": CONFIRMED_CROSS_MARGIN,
+        "confirmed_cross_observations": CONFIRMED_CROSS_OBSERVATIONS,
+        "source_running_max_execution_authority": False,
+        "confirmation_sequence_contract": "consecutive_eligible_causally_current_observations_same_source_baseline_v1",
+        "strategy_state_changed_this_cycle": state_changed,
         "clock_invalid_same_boot_override_enabled": bool(allow_clock_invalid_same_boot_monotonic_probe),
         "settlement_hard_invalidation": False,
         "source_attribution_schema_version": source_attribution.get("schema_version"),
@@ -1270,7 +1770,19 @@ def run_probe(
         "pause_file": str(pause_file) if pause_file else "",
         "paused": paused,
     }
-    append_jsonl(output_dir / "health.jsonl", health, durable=True)
+    health_history_key = str((output_dir / "health.jsonl").resolve())
+    last_health_history_at = _LAST_HEALTH_HISTORY_AT.get(health_history_key)
+    if (
+        last_health_history_at is None
+        or (now - last_health_history_at).total_seconds()
+        >= HEALTH_HISTORY_INTERVAL_SEC
+        or emitted
+        or orders
+        or fills
+        or source_stream_stale
+    ):
+        append_jsonl(output_dir / "health.jsonl", health, durable=True)
+        _LAST_HEALTH_HISTORY_AT[health_history_key] = now
     _save_strategy_state(output_dir / "latest.json", health)
     return health
 
@@ -1280,11 +1792,22 @@ def main() -> int:
     source_input = parser.add_mutually_exclusive_group(required=True)
     source_input.add_argument("--source-events-root", type=Path)
     source_input.add_argument("--evidence-db", type=Path)
+    parser.add_argument("--evidence-cursor-path", type=Path)
     parser.add_argument("--market-books-latest", type=Path, required=True)
     parser.add_argument("--universe-config", type=Path)
     parser.add_argument("--capture-demands-jsonl", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-source-age-sec", type=float, default=30.0)
+    parser.add_argument(
+        "--max-observation-delay-sec",
+        type=float,
+        default=DEFAULT_MAX_OBSERVATION_DELAY_SEC,
+    )
+    parser.add_argument(
+        "--max-stream-silence-sec",
+        type=float,
+        default=DEFAULT_MAX_STREAM_SILENCE_SEC,
+    )
     parser.add_argument("--official-fee-rate", type=float, default=WEATHER_TAKER_FEE_RATE)
     parser.add_argument("--pause-file", type=Path)
     parser.add_argument("--collector-run-start-wall-ns", type=int)
@@ -1312,11 +1835,15 @@ def main() -> int:
     args.pause_file = args.pause_file or (args.output_dir / "PAUSE")
     allowlist = DEFAULT_CITY_STATIONS
     city_timezones = CITY_TIMEZONES
+    market_units = DEFAULT_CITY_MARKET_UNITS
     live_eligible_cities: Collection[str] = frozenset(DEFAULT_CITY_STATIONS)
     if args.universe_config:
-        allowlist, city_timezones, live_eligible_cities = load_universe_config(
-            args.universe_config
-        )
+        (
+            allowlist,
+            city_timezones,
+            market_units,
+            live_eligible_cities,
+        ) = load_universe_config(args.universe_config)
     ensure_research_record(
         args.output_dir,
         code_identity=args.code_identity,
@@ -1328,6 +1855,11 @@ def main() -> int:
         code_identity=args.code_identity,
     )
     place_fn = build_live_taker_gtc_place_fn(args.market_proxy or os.environ.get("WEATHER_MARKET_PROXY_URL", "")) if args.live and args.confirm_live else None
+    evidence_cursor_path = (
+        args.evidence_cursor_path
+        if args.evidence_cursor_path is not None
+        else args.output_dir / "evidence_cursor.json"
+    )
     while True:
         cycle_started = time.monotonic()
         try:
@@ -1341,7 +1873,7 @@ def main() -> int:
             if args.evidence_db and not experiment_control["expired"]:
                 direct_events, cursor_state = direct_evidence_events(
                     args.evidence_db,
-                    cursor_path=args.output_dir / "evidence_cursor.json",
+                    cursor_path=evidence_cursor_path,
                     allowlist=allowlist,
                     city_timezones=city_timezones,
                     collector_run_start_wall_ns=args.collector_run_start_wall_ns,
@@ -1357,8 +1889,10 @@ def main() -> int:
                 confirm_live=args.confirm_live,
                 place_fn=place_fn,
                 max_source_age_sec=args.max_source_age_sec,
+                max_observation_delay_sec=args.max_observation_delay_sec,
                 official_fee_rate=args.official_fee_rate,
                 allowlist=allowlist,
+                market_units=market_units,
                 live_eligible_cities=live_eligible_cities,
                 capture_demands_jsonl=args.capture_demands_jsonl,
                 pause_file=args.pause_file,
@@ -1369,13 +1903,20 @@ def main() -> int:
                     args.boot_monotonic_start_ns
                     if args.boot_monotonic_start_ns is not None else 0
                 ),
+                source_stream_last_received_at_utc=(
+                    cursor_state.get("latest_transport_received_at_utc")
+                    if cursor_state is not None
+                    else None
+                ),
+                max_stream_silence_sec=args.max_stream_silence_sec,
+                monitor_source_stream=bool(args.evidence_db),
                 fetch_book_fn=fetch_fresh_book,
                 market_proxy=args.market_proxy or os.environ.get("WEATHER_MARKET_PROXY_URL", ""),
                 book_timeout_sec=args.book_timeout_sec,
                 code_identity=args.code_identity,
             )
             if cursor_state is not None:
-                _save_cursor(args.output_dir / "evidence_cursor.json", cursor_state)
+                _save_cursor(evidence_cursor_path, cursor_state)
                 result["direct_evidence_events"] = len(direct_events or [])
             print(json.dumps(result, sort_keys=True), flush=True)
         except Exception as exc:  # noqa: BLE001

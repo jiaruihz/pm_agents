@@ -95,6 +95,12 @@ pause/stop/restart 必须走 controller 并执行 pre/post manifest 对比。`sa
 controller 使用精确 session identity 做 stop-then-registered-start；live/guarded 实例仍必须有独立、可审计的
 pause/cancel/restart 合同，缺失时阻断，不允许 AI 手拼 kill/tmux 命令填空。
 
+带内置 append-only collector 的 live runtime 每次新 collector process 都必须轮转到新的空
+`COLLECTOR_RUNTIME_ROOT/evidence.sqlite3`；不得把新 run 追加到旧 evidence DB。旧 root 原样保留，
+将新 root 写入 production contract 后再由 controller restart。遇到
+`refusing to append a fresh live collector run to existing evidence DB` 应按这个合同轮转，不能靠
+创建 PAUSE、删除旧 DB 或绕过 wrapper 启动。
+
 任何可能重启、重建或迁移 canonical JRS tmux server/session 的改动，必须保存 observed pre-state，并在改动后做同集合比较：
 
 ```bash

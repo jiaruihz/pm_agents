@@ -112,8 +112,11 @@ SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;
 - fill 数量优先 matched response / authenticated order-trade；public activity 只能作受 cap 约束的 fallback。
 - fee 证据链与 fill 数量证据链分开；即时 matched 不能把 fee 默认为 0。
 - `fills` append-only。历史 fee 修正写 `clob_fill_fee_adjustments.jsonl` 并物化到 `fill_fee_adjustments`，不 UPDATE/DELETE 原 fill。
+- 历史成交时间修正同样 append-only：先用 exact tx 的 Polygon block timestamp 或同 tx/condition/asset/size 的 public activity timestamp 证明真实成交时钟，再写 `clob_fill_timestamp_adjustments.jsonl` 并物化到 `fill_timestamp_adjustments`。canonical sync 的 `created_at_utc`/fallback `filled_at_utc` 只能表示发现时间，不能单独证明 GTD 后成交。
+- journal 可保存更细的 raw class（例如 `exact_onchain`），但 canonical `timestamp_evidence_class` 必须归一为 schema 枚举 `exact|estimate`，并把 raw class 留在 `evidence_json`；不得通过改写已 append 的 journal 行修枚举不兼容。
 - fee 修复先在 canonical JRS 上运行 `scripts/ops/reconcile_clob_fill_fees.py` dry-run，核对 alias/excluded fill 已从分母剔除；再按证据写 append-only journal。优先 tx-exact，其次 maker-zero，无法取得精确证据时才单列 estimate，不能把 estimate 说成实际 fee。
 - journal 写入后必须重新 import/materialize facts，并核对 journal 行数、DB adjustment 行数、effective fee delta 和受影响 settled PnL delta；只生成 journal 不算完成重放。
+- canonical refresh 从 immutable release 运行时，还必须确认 release 的 `clob_fills.jsonl` 及 fee/price/timestamp/validity adjustment journal 都指向 operational runtime 正本；refresh exit 0 或 coverage gate 通过不能替代目标 adjustment row 已进入 DB、`fact_trades` 已使用 effective value 的逐行验证。
 - 重建后检查 `fact_trades.base_fees_usd`、`fee_adjustment_usd`、`fees_usd`、`fee_source`、`fee_evidence_class`。
 - maker zero、tx-exact public activity、Weather fee curve estimate 分层报告。
 

@@ -760,15 +760,25 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         for row in records:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
-    books_complete = (
-        bool(records)
-        and len(records) == len(request_rows)
-        and all(row.get("status") == "ok" for row in records)
+    hot_books_complete = (
+        bool(hot_tokens)
+        and len(hot_records) == len(hot_tokens)
+        and all(row.get("status") == "ok" for row in hot_records)
     )
-    if books_complete and not unrecovered_operational_discovery_failures:
-        batch_status = (
-            "ok_with_discovery_reuse" if recovered_discovery_count else "ok"
-        )
+    cold_book_failures = (
+        len(cold_records) != len(cold_tokens)
+        or any(row.get("status") != "ok" for row in cold_records)
+    )
+    if hot_books_complete and not unrecovered_operational_discovery_failures:
+        if cold_book_failures:
+            # Cold books are background coverage outside the current execution
+            # window. Preserve their failures in the append-only batch and
+            # summary, but do not make complete hot execution books unavailable.
+            batch_status = "ok_with_cold_book_failures"
+        else:
+            batch_status = (
+                "ok_with_discovery_reuse" if recovered_discovery_count else "ok"
+            )
     else:
         batch_status = "degraded"
     latest_payload = {

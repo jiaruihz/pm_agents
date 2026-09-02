@@ -63,6 +63,7 @@ runner=(
   "$PYTHON_BIN" "$PROJECT_DIR/scripts/ops/weather_cross_no_v2_metar.py"
   --loop
   --evidence-db "$EVIDENCE_DB"
+  --evidence-cursor-path "$COLLECTOR_RUNTIME_ROOT/evidence_cursor.json"
   --market-books-latest "$MARKET_BOOKS_LATEST"
   --universe-config "$UNIVERSE_CONFIG"
   --capture-demands-jsonl "$CAPTURE_DEMANDS_JSONL"
@@ -70,6 +71,8 @@ runner=(
   --pause-file "$PAUSE_FILE"
   --interval-sec "${WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC:-0.5}"
   --max-source-age-sec "${WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC:-30}"
+  --max-observation-delay-sec "${WEATHER_CROSS_NO_V2_METAR_MAX_OBSERVATION_DELAY_SEC:-3600}"
+  --max-stream-silence-sec "${WEATHER_CROSS_NO_V2_METAR_MAX_STREAM_SILENCE_SEC:-120}"
   --book-timeout-sec "${WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC:-5}"
   --stop-after-sec "$STOP_AFTER_SEC"
   --official-fee-rate 0.05

@@ -300,11 +300,21 @@ def test_capture_pr_diffs_fails_closed_when_target_patch_is_missing(
         lambda _repo, _path: [{"filename": "references/offers/security.csv"}],
     )
 
-    with pytest.raises(RuntimeError, match="missing target patches"):
+    # with repo_path=None the local-git fallback is unavailable -> still fails closed
+    with pytest.raises(RuntimeError, match="local fallback requires repo_path|missing target"):
         freeze_mod.capture_pr_diffs(
             "Chain-Love/chain-love", [99], max_retries=1,
             cache_dir=tmp_path, head_shas={99: "c" * 40},
             target_paths={"references/offers/security.csv"},
+        )
+    # with a repo_path whose git fetch also fails (flaky net simulated), the
+    # final verdict stays fail-closed on the missing targets
+    with pytest.raises(RuntimeError, match="diff unobtainable"):
+        freeze_mod.capture_pr_diffs(
+            "Chain-Love/chain-love", [99], max_retries=1,
+            cache_dir=tmp_path, head_shas={99: "c" * 40},
+            target_paths={"references/offers/security.csv"},
+            repo_path=tmp_path,
         )
 
 

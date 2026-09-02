@@ -7,6 +7,7 @@ from src.strategies.runtime.sync import sync_instance_specs
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.connection import apply_pragmas
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
+    _enrich_runtime_order,
     migrate_strategy_runtime_orders,
 )
 
@@ -115,6 +116,24 @@ def _public_book(root, observed_at):
             }
         ],
     )
+
+
+def test_cross_no_v2_legacy_order_maps_previous_bracket_and_market_unit():
+    row = _enrich_runtime_order(
+        {
+            "strategy_id": "cross_no_v2_metar_v1",
+            "created_at_utc": "2026-08-31T17:58:39Z",
+            "source_event_ts_utc": "2026-08-31T17:45:00Z",
+            "previous_official_bracket": "76-77",
+            "market_unit": "F",
+            "condition_id": "0xcondition",
+            "question": "Will NYC reach 76-77F?",
+        },
+        None,
+    )
+    assert row["bracket"] == "76-77"
+    assert row["unit"] == "F"
+    assert row["market_id"] == "0xcondition"
 
 
 def test_materializer_combines_causal_public_book_with_private_fill(tmp_path):

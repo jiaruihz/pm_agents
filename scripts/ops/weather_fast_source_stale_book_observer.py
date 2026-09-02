@@ -429,7 +429,11 @@ def relative_market_token(
     return None
 
 
-def normalize_levels(entries: Any, side: str, top_n: int = 20) -> list[dict[str, float]]:
+def normalize_levels(
+    entries: Any,
+    side: str,
+    top_n: int | None = 20,
+) -> list[dict[str, float]]:
     rows = []
     for entry in entries or []:
         if isinstance(entry, dict):
@@ -444,7 +448,7 @@ def normalize_levels(entries: Any, side: str, top_n: int = 20) -> list[dict[str,
         if price_f is not None and size_f is not None and price_f > 0 and size_f > 0:
             rows.append({"price": price_f, "size": size_f})
     rows.sort(key=lambda x: x["price"], reverse=(side == "bid"))
-    return rows[:top_n]
+    return rows if top_n is None else rows[:top_n]
 
 
 def summarize_book(raw: dict[str, Any], top_n: int = 20) -> dict[str, Any]:
@@ -496,6 +500,8 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
             }
         raw = response.json()
         summary = summarize_book(raw, top_n=top_n)
+        full_bids = normalize_levels(raw.get("bids"), "bid", top_n=None)
+        full_asks = normalize_levels(raw.get("asks"), "ask", top_n=None)
         return {
             "status": "ok",
             "request_started_at_utc": request_started_at,
@@ -503,7 +509,12 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
             "http_status": response.status_code,
             "proxy_used": proxy_url,
             "summary": summary,
-            "raw": {"bids": summary["bids"], "asks": summary["asks"], "tick_size": summary["tick_size"]},
+            "full_depth_valid": True,
+            "raw": {
+                "bids": full_bids,
+                "asks": full_asks,
+                "tick_size": summary["tick_size"],
+            },
         }
     except Exception as exc:  # noqa: BLE001
         return {
