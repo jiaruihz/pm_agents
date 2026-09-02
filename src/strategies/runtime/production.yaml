@@ -29,8 +29,9 @@ production_releases:
     expected_repo_sha: 3cc2155969482d72d97fc462e3f3f57e3f587d7e
     runtime_bindings: [operational_venv]
   - release_id: amsterdam_wcir_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/4b0a7fdaf376fc94ca410de49b72d463b27107e4
-    expected_repo_sha: 4b0a7fdaf376fc94ca410de49b72d463b27107e4
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/97a95fdc8baa5ed8a5ae89a5686adbbbde35d9e8
+    expected_repo_sha: 97a95fdc8baa5ed8a5ae89a5686adbbbde35d9e8
+    runtime_bindings: [operational_venv]
   - release_id: wcir_next_print_frozen
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/d4ecfffec7ff6558a6c21191eeee61d3eafcd300
     expected_repo_sha: d4ecfffec7ff6558a6c21191eeee61d3eafcd300
@@ -288,7 +289,7 @@ managed_runtimes:
   - instance_id: weather_amsterdam_wcir_frozen_shadow_v2
     tmux_session: weather_amsterdam_wcir_frozen_shadow_v2
     role: shadow
-    execution_mode: zero_notional_shadow
+    execution_mode: zero_notional_action_shadow
     release_id: amsterdam_wcir_shadow
     start_script: scripts/ops/start_weather_amsterdam_wcir_frozen_shadow_v2.sh
     health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/latest.json
@@ -297,7 +298,9 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_key: weather_amsterdam_wcir_frozen_v2
-      execution_mode: zero_notional_shadow
+      execution_mode: zero_notional_action_shadow
+      action_shadow_enabled: true
+      policy_epoch_id: wcir_amsterdam_prevmax_no_action_shadow_v1_ccecfdc550d92068
       live_authority: false
       actual_notional: 0.0
       orders: 0
