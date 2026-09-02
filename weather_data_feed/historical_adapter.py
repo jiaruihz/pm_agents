@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
-from typing import Any, Iterable
+import sqlite3
+import tempfile
+from typing import Any, Callable, Iterable
 
 
 FULL_DECISION = "full_decision"
@@ -167,6 +170,12 @@ class HistoricalAdapter:
             return BLOCKED, "websocket_gap"
         identity = HistoricalAdapter._identity(row)
         if identity is None:
+            if row.get("revision_parent_id") or row.get("revision") not in (
+                None,
+                0,
+                "0",
+            ):
+                return BLOCKED, "source_only_has_revision_lineage"
             if self.allow_source_only:
                 return SOURCE_ONLY, None
             return BLOCKED, "missing_identity"
@@ -187,84 +196,198 @@ class HistoricalAdapter:
         rows: Iterable[dict[str, Any]],
         *,
         retain_rows: bool = True,
+        sink: Callable[[HistoricalAdaptation], None] | None = None,
+        spool_dir: Path | None = None,
     ) -> tuple[list[HistoricalAdaptation], HistoricalAdapterAudit]:
-        """Classify a stream while retaining only compact evidence when requested."""
+        """Classify rows, optionally streaming compact results through ``sink``.
+
+        The non-retaining path spools compact classifications to disk so a
+        forward revision parent can be checked after the complete identity set
+        is known.  Raw source payloads and the final adapted JSONL are never
+        accumulated in memory.
+        """
 
         seen_hashes: dict[str, str] = {}
-        parents: list[str | None] = []
-        output: list[HistoricalAdaptation] = []
-        canonical = duplicate = blocked = 0
-        for row in rows:
-            if not isinstance(row, dict):
-                item = HistoricalAdaptation(BLOCKED, None, None, "row_is_not_object", None, {})
-                blocked += 1
+        seen_db: sqlite3.Connection | None = None
+        seen_db_path: Path | None = None
+        if sink is not None:
+            descriptor, raw_path = tempfile.mkstemp(
+                prefix=".weather-historical-seen-", dir=spool_dir
+            )
+            os.close(descriptor)
+            seen_db_path = Path(raw_path)
+            seen_db = sqlite3.connect(seen_db_path)
+            seen_db.execute("PRAGMA journal_mode=OFF")
+            seen_db.execute("PRAGMA synchronous=OFF")
+            seen_db.execute(
+                "CREATE TABLE seen (identity TEXT PRIMARY KEY, comparison_hash TEXT NOT NULL)"
+            )
+
+        def seen_hash(identity: str | None) -> str | None:
+            if identity is None:
+                return None
+            if seen_db is None:
+                return seen_hashes.get(identity)
+            found = seen_db.execute(
+                "SELECT comparison_hash FROM seen WHERE identity=?", (identity,)
+            ).fetchone()
+            return str(found[0]) if found else None
+
+        def remember(identity: str, comparison_hash: str) -> None:
+            if seen_db is None:
+                seen_hashes[identity] = comparison_hash
             else:
-                identity = self._identity(row)
-                classification, blocker = self._classification(row)
-                if classification == SOURCE_ONLY and identity is None:
-                    physical_ref = row.get("physical_ref") or {}
-                    row_hash = str(physical_ref.get("row_sha256") or "")
-                    source_hash = str(row.get("source_snapshot_hash") or "")
-                    if not row_hash or not source_hash:
-                        classification, blocker = BLOCKED, "missing_source_row_identity"
+                seen_db.execute(
+                    "INSERT INTO seen (identity, comparison_hash) VALUES (?, ?)",
+                    (identity, comparison_hash),
+                )
+        output: list[HistoricalAdaptation] = []
+        parents: list[str | None] = []
+        scanned = canonical = duplicate = blocked = 0
+        spool = (
+            tempfile.TemporaryFile(
+                mode="w+t", encoding="utf-8", dir=spool_dir
+            )
+            if sink
+            else None
+        )
+        try:
+            for row in rows:
+                scanned += 1
+                if not isinstance(row, dict):
+                    item = HistoricalAdaptation(
+                        BLOCKED, None, None, "row_is_not_object", None, {}
+                    )
+                    parent = None
+                    blocked += 1
+                else:
+                    identity = self._identity(row)
+                    classification, blocker = self._classification(row)
+                    if classification == SOURCE_ONLY and identity is None:
+                        physical_ref = row.get("physical_ref") or {}
+                        row_hash = str(physical_ref.get("row_sha256") or "")
+                        source_hash = str(row.get("source_snapshot_hash") or "")
+                        if not row_hash or not source_hash:
+                            classification, blocker = (
+                                BLOCKED,
+                                "missing_source_row_identity",
+                            )
+                        else:
+                            identity = f"source:{source_hash}:{row_hash}"
+                    comparison_hash = (
+                        str((row.get("physical_ref") or {}).get("row_sha256"))
+                        if classification == SOURCE_ONLY
+                        else hashlib.sha256(
+                            json.dumps(
+                                row,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            ).encode("utf-8")
+                        ).hexdigest()
+                    )
+                    item = HistoricalAdaptation(
+                        classification,
+                        row.get("source_snapshot_hash"),
+                        row.get("physical_ref"),
+                        blocker,
+                        identity,
+                        dict(row) if retain_rows else {},
+                    )
+                    previous_hash = seen_hash(identity)
+                    if classification != BLOCKED and previous_hash is not None:
+                        if previous_hash == comparison_hash:
+                            item = HistoricalAdaptation(
+                                BLOCKED,
+                                item.source_snapshot_hash,
+                                item.physical_ref,
+                                "duplicate_identity",
+                                identity,
+                                item.row,
+                            )
+                            duplicate += 1
+                        else:
+                            item = HistoricalAdaptation(
+                                BLOCKED,
+                                item.source_snapshot_hash,
+                                item.physical_ref,
+                                "conflicting_identity",
+                                identity,
+                                item.row,
+                            )
+                            blocked += 1
+                    elif classification == BLOCKED:
+                        blocked += 1
                     else:
-                        identity = f"source:{source_hash}:{row_hash}"
-                comparison_hash = (
-                    str((row.get("physical_ref") or {}).get("row_sha256"))
-                    if classification == SOURCE_ONLY
-                    else hashlib.sha256(
+                        remember(str(identity), comparison_hash)
+                        canonical += 1
+                    parent = (
+                        str(row.get("revision_parent_id"))
+                        if row.get("revision_parent_id")
+                        else None
+                    )
+                if spool is not None:
+                    spool.write(
                         json.dumps(
-                            row,
+                            {"item": asdict(item), "parent": parent},
                             ensure_ascii=False,
                             sort_keys=True,
                             separators=(",", ":"),
-                        ).encode("utf-8")
-                    ).hexdigest()
-                )
-                item = HistoricalAdaptation(
-                    classification,
-                    row.get("source_snapshot_hash"),
-                    row.get("physical_ref"),
-                    blocker,
-                    identity,
-                    dict(row) if retain_rows else {},
-                )
-                if classification != BLOCKED and identity in seen_hashes:
-                    if seen_hashes[identity] == comparison_hash:
-                        item = HistoricalAdaptation(BLOCKED, item.source_snapshot_hash, item.physical_ref, "duplicate_identity", identity, item.row)
-                        duplicate += 1
-                    else:
-                        item = HistoricalAdaptation(BLOCKED, item.source_snapshot_hash, item.physical_ref, "conflicting_identity", identity, item.row)
-                        blocked += 1
-                elif classification == BLOCKED:
-                    blocked += 1
+                        )
+                        + "\n"
+                    )
                 else:
-                    seen_hashes[str(identity)] = comparison_hash
-                    canonical += 1
-            output.append(item)
-            parents.append(
-                str(row.get("revision_parent_id"))
-                if isinstance(row, dict) and row.get("revision_parent_id")
-                else None
-            )
-        for index, parent in enumerate(parents):
-            item = output[index]
-            if (
-                parent
-                and item.classification != BLOCKED
-                and parent not in seen_hashes
-            ):
-                output[index] = HistoricalAdaptation(
-                    BLOCKED,
-                    item.source_snapshot_hash,
-                    item.physical_ref,
-                    "unknown_revision_parent",
-                    item.identity,
-                    item.row,
-                )
-                canonical -= 1
-                blocked += 1
-        return output, HistoricalAdapterAudit(len(output), canonical, duplicate, blocked)
+                    output.append(item)
+                    parents.append(parent)
+
+            if spool is not None:
+                spool.seek(0)
+                for line in spool:
+                    record = json.loads(line)
+                    item = HistoricalAdaptation(**record["item"])
+                    parent = record["parent"]
+                    if (
+                        parent
+                        and item.classification != BLOCKED
+                        and seen_hash(parent) is None
+                    ):
+                        item = HistoricalAdaptation(
+                            BLOCKED,
+                            item.source_snapshot_hash,
+                            item.physical_ref,
+                            "unknown_revision_parent",
+                            item.identity,
+                            item.row,
+                        )
+                        canonical -= 1
+                        blocked += 1
+                    sink(item)
+            else:
+                for index, item in enumerate(output):
+                    parent = parents[index]
+                    if (
+                        parent
+                        and item.classification != BLOCKED
+                        and seen_hash(parent) is None
+                    ):
+                        output[index] = HistoricalAdaptation(
+                            BLOCKED,
+                            item.source_snapshot_hash,
+                            item.physical_ref,
+                            "unknown_revision_parent",
+                            item.identity,
+                            item.row,
+                        )
+                        canonical -= 1
+                        blocked += 1
+        finally:
+            if spool is not None:
+                spool.close()
+            if seen_db is not None:
+                seen_db.close()
+            if seen_db_path is not None:
+                seen_db_path.unlink(missing_ok=True)
+        return output, HistoricalAdapterAudit(scanned, canonical, duplicate, blocked)
 
     def adapt(self, rows: Iterable[dict[str, Any]]) -> tuple[list[HistoricalAdaptation], HistoricalAdapterAudit]:
         return self.adapt_stream(rows, retain_rows=True)

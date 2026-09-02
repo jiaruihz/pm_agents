@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 import tempfile
 from typing import Any, Iterable
+import zlib
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,6 +73,28 @@ def _write_create_only(path: Path, payload: bytes) -> Path:
             temporary.unlink(missing_ok=True)
 
 
+def _seal_create_only(
+    source: Path, destination: Path, *, expected_sha256: str
+) -> Path:
+    """Hard-link a completed temp file into its immutable content-addressed name."""
+
+    if _sha256(source) != expected_sha256:
+        raise ValueError("temporary artifact hash changed before sealing")
+    if destination.exists():
+        if _sha256(destination) != expected_sha256:
+            raise FileExistsError(
+                f"conflicting sealed artifact already exists: {destination}"
+            )
+        return destination
+    try:
+        os.link(source, destination)
+    except FileExistsError:
+        if _sha256(destination) != expected_sha256:
+            raise
+    destination.chmod(0o444)
+    return destination
+
+
 def _discover(root: Path, pattern: str) -> list[Path]:
     resolved_root = root.resolve(strict=True)
     paths = [resolved_root] if resolved_root.is_file() else sorted(resolved_root.glob(pattern))
@@ -123,44 +146,53 @@ def _iter_gzip_jsonl(
     """Strictly scan a compressed JSONL archive without decompressing it to disk."""
 
     snapshot_size = path.stat().st_size
-    with gzip.open(path, "rb") as handle:
-        for line_number, raw_line in enumerate(handle, start=1):
-            reason: str | None = None
-            try:
-                value = json.loads(raw_line.decode("utf-8"))
-            except UnicodeDecodeError as exc:
-                value = None
-                reason = f"invalid_utf8:{exc.start}"
-            except json.JSONDecodeError as exc:
-                value = None
-                reason = f"invalid_json:{exc.msg}"
-            if isinstance(value, dict):
-                yield CatalogRow(
-                    row=value,
-                    physical_path=str(path),
-                    physical_line=line_number,
-                )
-                continue
-            if reason is None:
-                reason = "json_value_is_not_object"
-            line_payload = raw_line.rstrip(b"\r\n")
-            record = {
-                "schema_version": "weather_jsonl_quarantine_v1",
-                "reason": reason,
-                "physical_path": str(path),
-                "physical_line": line_number,
-                "physical_byte_offset": None,
-                "source_snapshot_size_bytes": snapshot_size,
-                "source_snapshot_sha256": source_hash,
-                "file_sha256": source_hash,
-                "line_sha256": hashlib.sha256(line_payload).hexdigest(),
-                "file_line_sha256": hashlib.sha256(
-                    f"{source_hash}:{line_number}:".encode() + line_payload
-                ).hexdigest(),
-                "compression": "gzip",
-            }
-            with quarantine_path.open("a", encoding="utf-8") as quarantined:
-                quarantined.write(json.dumps(record, sort_keys=True) + "\n")
+    try:
+        with gzip.open(path, "rb") as handle:
+            for line_number, raw_line in enumerate(handle, start=1):
+                reason: str | None = None
+                try:
+                    value = json.loads(raw_line.decode("utf-8"))
+                except UnicodeDecodeError as exc:
+                    value = None
+                    reason = f"invalid_utf8:{exc.start}"
+                except json.JSONDecodeError as exc:
+                    value = None
+                    reason = f"invalid_json:{exc.msg}"
+                if isinstance(value, dict):
+                    yield CatalogRow(
+                        row=value,
+                        physical_path=str(path),
+                        physical_line=line_number,
+                    )
+                    continue
+                if reason is None:
+                    reason = "json_value_is_not_object"
+                line_payload = raw_line.rstrip(b"\r\n")
+                record = {
+                    "schema_version": "weather_jsonl_quarantine_v1",
+                    "reason": reason,
+                    "physical_path": str(path),
+                    "physical_line": line_number,
+                    "physical_byte_offset": None,
+                    "source_snapshot_size_bytes": snapshot_size,
+                    "source_snapshot_sha256": source_hash,
+                    "file_sha256": source_hash,
+                    "line_sha256": hashlib.sha256(line_payload).hexdigest(),
+                    "file_line_sha256": hashlib.sha256(
+                        f"{source_hash}:{line_number}:".encode() + line_payload
+                    ).hexdigest(),
+                    "compression": "gzip",
+                }
+                with quarantine_path.open("a", encoding="utf-8") as quarantined:
+                    quarantined.write(json.dumps(record, sort_keys=True) + "\n")
+    except (gzip.BadGzipFile, EOFError, zlib.error) as exc:
+        _append_json_quarantine(
+            path,
+            quarantine_path=quarantine_path,
+            source_hash=source_hash,
+            reason=f"gzip_container_error:{type(exc).__name__}",
+            record_index=None,
+        )
 
 
 def _read_registered_input(
@@ -228,16 +260,6 @@ def _read_registered_input(
         )
     return rows, InputCatalogAudit(
         scanned=len(values), valid=len(rows), quarantined=quarantined
-    )
-
-
-def _jsonl_bytes(rows: Iterable[dict[str, Any]]) -> bytes:
-    return b"".join(
-        (
-            json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            + "\n"
-        ).encode("utf-8")
-        for row in rows
     )
 
 
@@ -377,32 +399,71 @@ def main(argv: list[str] | None = None) -> int:
                     }
                 )
 
-        adapted, audit = adapter.adapt_stream(
-            iter_enriched_rows(), retain_rows=False
-        )
+        adapted_tmp: Path | None = None
+        adapted_digest = hashlib.sha256()
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=output_dir,
+            prefix=".adapted_rows.",
+            suffix=".tmp",
+            delete=False,
+        ) as adapted_handle:
+            adapted_tmp = Path(adapted_handle.name)
+
+            def write_adapted(item: Any) -> None:
+                payload = (
+                    json.dumps(
+                        {
+                            **{
+                                key: value
+                                for key, value in asdict(item).items()
+                                if key != "row"
+                            },
+                            "raw_row_hash": (item.physical_ref or {}).get(
+                                "row_sha256"
+                            ),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    + "\n"
+                ).encode("utf-8")
+                adapted_handle.write(payload)
+                adapted_digest.update(payload)
+
+            adapted, audit = adapter.adapt_stream(
+                iter_enriched_rows(),
+                retain_rows=False,
+                sink=write_adapted,
+                spool_dir=output_dir,
+            )
+            if adapted:
+                raise AssertionError("non-retaining adapter unexpectedly returned rows")
+            adapted_handle.flush()
+            os.fsync(adapted_handle.fileno())
         quarantined = counters["quarantined"]
         if quarantined and not args.allow_quarantine:
             raise ValueError(
                 f"historical input contains {quarantined} quarantined physical rows"
             )
-        adapted_rows = [
-            {
-                **{key: value for key, value in asdict(item).items() if key != "row"},
-                "raw_row_hash": (item.physical_ref or {}).get("row_sha256"),
-            }
-            for item in adapted
-        ]
-        adapted_payload = _jsonl_bytes(adapted_rows)
-        adapted_hash = hashlib.sha256(adapted_payload).hexdigest()
+        adapted_hash = adapted_digest.hexdigest()
         adapted_path = output_dir / f"adapted_rows.{adapted_hash}.jsonl"
-        _write_create_only(adapted_path, adapted_payload)
+        _seal_create_only(
+            adapted_tmp, adapted_path, expected_sha256=adapted_hash
+        )
+        adapted_tmp.unlink(missing_ok=True)
 
         quarantine_path = None
         quarantine_hash = None
         if quarantine_tmp.exists() and quarantine_tmp.stat().st_size:
             quarantine_hash = _sha256(quarantine_tmp)
             quarantine_path = output_dir / f"quarantine.{quarantine_hash}.jsonl"
-            _write_create_only(quarantine_path, quarantine_tmp.read_bytes())
+            _seal_create_only(
+                quarantine_tmp,
+                quarantine_path,
+                expected_sha256=quarantine_hash,
+            )
         manifest_body = {
             "schema_version": MANIFEST_SCHEMA_VERSION,
             "product_id": args.product_id,
@@ -452,6 +513,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     finally:
         quarantine_tmp.unlink(missing_ok=True)
+        if "adapted_tmp" in locals() and adapted_tmp is not None:
+            adapted_tmp.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

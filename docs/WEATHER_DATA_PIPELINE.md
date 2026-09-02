@@ -758,7 +758,10 @@ line/record index，不复制几十 GB 的原始 row payload；原始 archive �
 SHA-256 同时存在才是 `ready`；历史摘要是 `legacy_summary_only`，仅有 row hash、symbolic model id 或
 无 file digest 的 physical path 必须显式记为 `blocked_unverifiable_artifact`，不能用“文件还在”冒充完整重放。
 原始 weather/CLOB row 没有 decision_id 时标成 `source_only`：它能作为 PIT replay input，但不能单独冒充
-`model_only` 或 `full_decision` case。
+`model_only` 或 `full_decision` case；带 revision/parent 的匿名 row 会 fail closed，不能降格逃到 `source_only`。
+迁移器使用磁盘 spool 和磁盘 identity index，最终 JSONL 直接流式 seal，不在内存同时保留百万行对象与
+完整输出 bytes。坏 JSON/UTF-8 行以及损坏/截断的 gzip container 都生成 quarantine evidence；只有显式
+`--allow-quarantine` 才允许其余有效行完成 manifest，且 quarantine 仍计入守恒。
 
 候选级模型评估可先生成 sealed projection，再交给统一 split builder：
 
