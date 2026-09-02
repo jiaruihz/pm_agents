@@ -5,6 +5,10 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # Immutable release identities. Runtime entries reference these IDs instead of
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
+  - release_id: canonical_refresh
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/canonical_refresh/e456bad4785f7f87d95af16b567a433a6bd8982f
+    expected_repo_sha: e456bad4785f7f87d95af16b567a433a6bd8982f
+    runtime_bindings: [operational_venv, canonical_db]
   - release_id: control_plane
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/4bf96f58dd167c0ccbbfe217d669dc9593b007f4
     expected_repo_sha: 4bf96f58dd167c0ccbbfe217d669dc9593b007f4
@@ -121,7 +125,7 @@ production_releases:
     expected_repo_sha: a977ad07dc348a7b45b86f1c0050b8afcede1db5
     runtime_bindings: [operational_venv, canonical_db]
 
-canonical_refresh_release_id: cross_no_v2_metar
+canonical_refresh_release_id: canonical_refresh
 # The mount name is a compatibility contract; UUID is the physical identity.
 # A same-named replacement disk must fail closed instead of becoming production.
 production_storage_root: /Volumes/jrs

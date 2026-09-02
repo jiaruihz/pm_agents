@@ -205,78 +205,94 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = _discover(registry.physical_path(args.product_id), args.pattern)
     quarantine_tmp = output_dir / f".quarantine.{os.getpid()}.jsonl"
-    rows: list[dict[str, Any]] = []
     sources: list[dict[str, Any]] = []
-    quarantined = 0
+    counters = {"quarantined": 0}
+    adapter = HistoricalAdapter(
+        allowed_roots=(registry.physical_path(args.product_id),)
+    )
     try:
-        for path in paths:
-            source_stat = path.stat()
-            source_hash = _sha256(path)
-            catalog_rows, audit = _read_registered_input(
-                path,
-                quarantine_path=quarantine_tmp,
-            )
-            source_stat_after = path.stat()
-            if (
-                source_stat.st_dev,
-                source_stat.st_ino,
-                source_stat.st_size,
-                source_stat.st_mtime_ns,
-            ) != (
-                source_stat_after.st_dev,
-                source_stat_after.st_ino,
-                source_stat_after.st_size,
-                source_stat_after.st_mtime_ns,
-            ):
-                raise RuntimeError(f"historical input changed during audit: {path}")
-            quarantined += audit.quarantined
-            sources.append(
-                {
-                    "path": str(path),
-                    "sha256": source_hash,
-                    "device": source_stat.st_dev,
-                    "inode": source_stat.st_ino,
-                    "size_bytes": source_stat.st_size,
-                    "mtime_ns": source_stat.st_mtime_ns,
-                    "scanned": audit.scanned,
-                    "valid": audit.valid,
-                    "quarantined": audit.quarantined,
-                }
-            )
-            for catalog_row in catalog_rows:
-                enriched = dict(catalog_row.row)
-                if "source_snapshot_hash" in enriched:
-                    enriched["legacy_declared_source_snapshot_hash"] = enriched[
-                        "source_snapshot_hash"
-                    ]
-                if "physical_ref" in enriched:
-                    enriched["legacy_declared_physical_ref"] = enriched["physical_ref"]
-                enriched["source_snapshot_hash"] = source_hash
-                physical_ref = {
-                    "path": catalog_row.physical_path,
-                    "device": source_stat.st_dev,
-                    "inode": source_stat.st_ino,
-                    "size_bytes": source_stat.st_size,
-                    "mtime_ns": source_stat.st_mtime_ns,
-                }
-                if catalog_row.physical_record_index is not None:
-                    physical_ref["record_index"] = catalog_row.physical_record_index
-                else:
-                    physical_ref["line"] = catalog_row.physical_line
-                enriched["physical_ref"] = physical_ref
-                rows.append(enriched)
+        def iter_enriched_rows() -> Iterable[dict[str, Any]]:
+            for path in paths:
+                source_stat = path.stat()
+                source_hash = _sha256(path)
+                catalog_rows, source_audit = _read_registered_input(
+                    path,
+                    quarantine_path=quarantine_tmp,
+                )
+                source_stat_after = path.stat()
+                identity = (
+                    source_stat.st_dev,
+                    source_stat.st_ino,
+                    source_stat.st_size,
+                    source_stat.st_mtime_ns,
+                )
+                if identity != (
+                    source_stat_after.st_dev,
+                    source_stat_after.st_ino,
+                    source_stat_after.st_size,
+                    source_stat_after.st_mtime_ns,
+                ):
+                    raise RuntimeError(f"historical input changed during audit: {path}")
+                adapter.register_verified_source(
+                    path,
+                    source_hash,
+                    device=source_stat.st_dev,
+                    inode=source_stat.st_ino,
+                    size_bytes=source_stat.st_size,
+                    mtime_ns=source_stat.st_mtime_ns,
+                )
+                counters["quarantined"] += source_audit.quarantined
+                sources.append(
+                    {
+                        "path": str(path),
+                        "sha256": source_hash,
+                        "device": source_stat.st_dev,
+                        "inode": source_stat.st_ino,
+                        "size_bytes": source_stat.st_size,
+                        "mtime_ns": source_stat.st_mtime_ns,
+                        "scanned": source_audit.scanned,
+                        "valid": source_audit.valid,
+                        "quarantined": source_audit.quarantined,
+                    }
+                )
+                for catalog_row in catalog_rows:
+                    enriched = dict(catalog_row.row)
+                    if "source_snapshot_hash" in enriched:
+                        enriched["legacy_declared_source_snapshot_hash"] = enriched[
+                            "source_snapshot_hash"
+                        ]
+                    if "physical_ref" in enriched:
+                        enriched["legacy_declared_physical_ref"] = enriched[
+                            "physical_ref"
+                        ]
+                    enriched["source_snapshot_hash"] = source_hash
+                    physical_ref = {
+                        "path": catalog_row.physical_path,
+                        "device": source_stat.st_dev,
+                        "inode": source_stat.st_ino,
+                        "size_bytes": source_stat.st_size,
+                        "mtime_ns": source_stat.st_mtime_ns,
+                        "row_sha256": canonical_json_hash(catalog_row.row),
+                    }
+                    if catalog_row.physical_record_index is not None:
+                        physical_ref["record_index"] = catalog_row.physical_record_index
+                    else:
+                        physical_ref["line"] = catalog_row.physical_line
+                    enriched["physical_ref"] = physical_ref
+                    yield enriched
+
+        adapted, audit = adapter.adapt_stream(
+            iter_enriched_rows(), retain_rows=False
+        )
+        quarantined = counters["quarantined"]
         if quarantined and not args.allow_quarantine:
             raise ValueError(
                 f"historical input contains {quarantined} quarantined physical rows"
             )
-        adapted, audit = HistoricalAdapter(
-            allowed_roots=(registry.physical_path(args.product_id),)
-        ).adapt(rows)
         adapted_rows = [
             {
                 **{key: value for key, value in asdict(item).items() if key != "row"},
-                "raw_row_hash": canonical_json_hash(item.row),
-                "row": item.row,
+                "raw_row_hash": (item.physical_ref or {}).get("row_sha256"),
             }
             for item in adapted
         ]
@@ -312,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "adapted_rows_path": str(adapted_path),
             "adapted_rows_sha256": adapted_hash,
+            "adapted_rows_mode": "reference_only_physical_row",
             "quarantine_path": str(quarantine_path) if quarantine_path else None,
             "quarantine_sha256": quarantine_hash,
             "old_source_retention": "read_only_never_delete",

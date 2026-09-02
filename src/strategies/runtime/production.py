@@ -108,6 +108,7 @@ class WeatherProductionSpec:
     historical_full_ladder_data_root: Path | None = None
     historical_targeted_data_root: Path | None = None
     historical_paper_snapshot_root: Path | None = None
+    canonical_refresh_release_id: str | None = None
     canonical_refresh_checkout_root: Path | None = None
     research_artifact_root: Path = Path(
         "/Volumes/jrs-archive/pm_agents/research/artifact_store"
@@ -542,6 +543,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             if raw.get("historical_paper_snapshot_root")
             else None
         ),
+        canonical_refresh_release_id=canonical_refresh_release_id,
         canonical_refresh_checkout_root=(
             release_by_id[canonical_refresh_release_id].checkout_root
             if canonical_refresh_release_id
@@ -659,6 +661,18 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             "research_artifact_root must live under the archive research root"
         )
     managed_ids = {item.instance_id for item in spec.managed_runtimes}
+    if spec.canonical_refresh_release_id is not None:
+        shared_refresh_owners = sorted(
+            item.instance_id
+            for item in spec.managed_runtimes
+            if item.release_id == spec.canonical_refresh_release_id
+        )
+        if shared_refresh_owners:
+            raise ValueError(
+                "canonical_refresh_release_id must be a dedicated release not "
+                "shared with managed runtimes: "
+                f"{shared_refresh_owners}"
+            )
     if spec.releases:
         missing_release_ids = [
             item.instance_id

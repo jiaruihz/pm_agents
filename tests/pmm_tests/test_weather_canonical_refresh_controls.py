@@ -30,6 +30,7 @@ def _preflight(tmp_path: Path, **overrides):
         "jrs_probe": {"status": "healthy"},
         "feed_health": {"status": "ok"},
         "registry_audit": {"ok": True, "registry_build_id": "registry"},
+        "refresh_release_identity": {"status": "healthy"},
     }
     values.update(overrides)
     return evaluate_preflight(**values)
@@ -64,6 +65,14 @@ def test_preflight_blocks_every_write_on_db_identity_or_jrs_failure(
 
     jrs = _preflight(tmp_path, jrs_probe={"status": "critical"})
     assert jrs["status"] == "all_writes_blocked"
+
+    wrong_release = _preflight(
+        tmp_path, refresh_release_identity={"status": "critical"}
+    )
+    assert wrong_release["status"] == "all_writes_blocked"
+    assert wrong_release["failures"][-1]["kind"] == (
+        "canonical_refresh_release_identity_mismatch"
+    )
 
 
 def test_preflight_allows_only_explicitly_safe_manifest_warnings(

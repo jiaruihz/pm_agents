@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -42,6 +43,27 @@ class HistoricalAdapter:
         self._source_evidence_cache: dict[
             tuple[str, str, int, int, int, int], str | None
         ] = {}
+
+    def register_verified_source(
+        self,
+        path: Path,
+        source_hash: str,
+        *,
+        device: int,
+        inode: int,
+        size_bytes: int,
+        mtime_ns: int,
+    ) -> None:
+        """Reuse a stable file hash already computed by the migration scanner."""
+
+        resolved = path.resolve(strict=True)
+        if not any(resolved.is_relative_to(root) for root in self.allowed_roots):
+            raise ValueError("verified historical source is outside registered roots")
+        identity = (device, inode, size_bytes, mtime_ns)
+        stat = resolved.stat()
+        if (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns) != identity:
+            raise ValueError("verified historical source identity changed")
+        self._source_evidence_cache[(str(resolved), source_hash, *identity)] = None
 
     @staticmethod
     def _identity(row: dict[str, Any]) -> str | None:
@@ -151,32 +173,46 @@ class HistoricalAdapter:
             return LEGACY_SUMMARY_ONLY, None
         return BLOCKED, "no_supported_legacy_payload"
 
-    def adapt(self, rows: Iterable[dict[str, Any]]) -> tuple[list[HistoricalAdaptation], HistoricalAdapterAudit]:
-        materialized = list(rows)
-        available_identities = {
-            identity
-            for row in materialized
-            if isinstance(row, dict)
-            for identity in [self._identity(row)]
-            if identity is not None
-        }
-        seen: dict[str, HistoricalAdaptation] = {}
+    def adapt_stream(
+        self,
+        rows: Iterable[dict[str, Any]],
+        *,
+        retain_rows: bool = True,
+    ) -> tuple[list[HistoricalAdaptation], HistoricalAdapterAudit]:
+        """Classify a stream while retaining only compact evidence when requested."""
+
+        seen_hashes: dict[str, str] = {}
+        available_identities: set[str] = set()
+        parents: list[str | None] = []
         output: list[HistoricalAdaptation] = []
         canonical = duplicate = blocked = 0
-        for row in materialized:
+        for row in rows:
             if not isinstance(row, dict):
                 item = HistoricalAdaptation(BLOCKED, None, None, "row_is_not_object", None, {})
                 blocked += 1
             else:
                 identity = self._identity(row)
+                if identity is not None:
+                    available_identities.add(identity)
                 classification, blocker = self._classification(row)
-                parent = row.get("revision_parent_id")
-                if classification != BLOCKED and parent and parent not in available_identities:
-                    classification, blocker = BLOCKED, "unknown_revision_parent"
-                item = HistoricalAdaptation(classification, row.get("source_snapshot_hash"), row.get("physical_ref"), blocker, identity, dict(row))
-                if classification != BLOCKED and identity in seen:
-                    original = seen[identity]
-                    if original.row == item.row:
+                row_hash = hashlib.sha256(
+                    json.dumps(
+                        row,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest()
+                item = HistoricalAdaptation(
+                    classification,
+                    row.get("source_snapshot_hash"),
+                    row.get("physical_ref"),
+                    blocker,
+                    identity,
+                    dict(row) if retain_rows else {},
+                )
+                if classification != BLOCKED and identity in seen_hashes:
+                    if seen_hashes[identity] == row_hash:
                         item = HistoricalAdaptation(BLOCKED, item.source_snapshot_hash, item.physical_ref, "duplicate_identity", identity, item.row)
                         duplicate += 1
                     else:
@@ -185,7 +221,32 @@ class HistoricalAdapter:
                 elif classification == BLOCKED:
                     blocked += 1
                 else:
-                    seen[identity] = item
+                    seen_hashes[str(identity)] = row_hash
                     canonical += 1
             output.append(item)
+            parents.append(
+                str(row.get("revision_parent_id"))
+                if isinstance(row, dict) and row.get("revision_parent_id")
+                else None
+            )
+        for index, parent in enumerate(parents):
+            item = output[index]
+            if (
+                parent
+                and item.classification != BLOCKED
+                and parent not in available_identities
+            ):
+                output[index] = HistoricalAdaptation(
+                    BLOCKED,
+                    item.source_snapshot_hash,
+                    item.physical_ref,
+                    "unknown_revision_parent",
+                    item.identity,
+                    item.row,
+                )
+                canonical -= 1
+                blocked += 1
         return output, HistoricalAdapterAudit(len(output), canonical, duplicate, blocked)
+
+    def adapt(self, rows: Iterable[dict[str, Any]]) -> tuple[list[HistoricalAdaptation], HistoricalAdapterAudit]:
+        return self.adapt_stream(rows, retain_rows=True)

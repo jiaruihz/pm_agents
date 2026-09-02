@@ -1,7 +1,7 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-08-30 shared clock + execution-evidence + replayable migration v1
+Updated: 2026-09-03 replay artifact verification + sealed candidate projection
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -751,6 +751,23 @@ schema initializer 绕过 migration gate。
 历史 adapter 会给每个 physical row 绑定 file SHA/path/line，坏 JSON/UTF-8 必须进入显式 quarantine；
 `scanned = canonical + duplicate + blocked + quarantined` 必须守恒。新 cursor epoch 需要新 inode、state
 path、receipt path、hash-identical overlap 和 offset 0；不得把旧 state 的 offset 直接清零。
+
+历史 manifest 是流式、reference-only 索引：保存 immutable source file identity、row hash 和 physical
+line/record index，不复制几十 GB 的原始 row payload；原始 archive 保持 read-only。canonical refresh 还会
+增量运行 `materialize_weather_replay_artifact_verifications.py`。只有 absolute managed path 与真实 file
+SHA-256 同时存在才是 `ready`；历史摘要是 `legacy_summary_only`，仅有 row hash、symbolic model id 或
+无 file digest 的 physical path 必须显式记为 `blocked_unverifiable_artifact`，不能用“文件还在”冒充完整重放。
+
+候选级模型评估可先生成 sealed projection，再交给统一 split builder：
+
+```bash
+.venv/bin/python scripts/analysis/export_weather_replay_dataset_inputs_v1.py --help
+.venv/bin/python scripts/analysis/build_weather_replay_dataset_v1.py --help
+```
+
+projection 明确标为 `canonical_candidate_projection`，含 authoritative settlement-label availability、
+source rows、compact SQLite snapshot 和建议的 chronological boundaries；它支持固定分母的模型/策略
+回测与 train/validation/test/frozen-forward，但不把缺少物理 file digest 的 case 升级为 raw full replay。
 
 ### 8.3 Just check status
 

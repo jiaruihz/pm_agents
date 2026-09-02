@@ -107,3 +107,35 @@ def test_adapter_blocks_unverified_or_mismatched_physical_lineage(
         "source_snapshot_hash_mismatch",
     ]
     assert audit.blocked == 2 and audit.canonical == 0
+
+
+def test_stream_adapter_can_drop_large_rows_and_resolve_forward_parent(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy.jsonl"
+    path.write_text('{"source": "sealed"}\n', encoding="utf-8")
+    adapter = HistoricalAdapter(allowed_roots=(tmp_path,))
+    stat = path.stat()
+    source_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    adapter.register_verified_source(
+        path,
+        source_hash,
+        device=stat.st_dev,
+        inode=stat.st_ino,
+        size_bytes=stat.st_size,
+        mtime_ns=stat.st_mtime_ns,
+    )
+    child = {
+        **_base(path, "child"),
+        "revision": 1,
+        "revision_parent_id": "parent",
+        "model_output": {},
+        "large": "x" * 1000,
+    }
+    parent = {**_base(path, "parent"), "model_output": {}}
+
+    output, audit = adapter.adapt_stream(iter((child, parent)), retain_rows=False)
+
+    assert [item.classification for item in output] == ["model_only", "model_only"]
+    assert [item.row for item in output] == [{}, {}]
+    assert audit.canonical == 2 and audit.blocked == 0

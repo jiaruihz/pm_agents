@@ -40,6 +40,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     control_plane_release = spec.release("control_plane")
     canonical_refresh_release = spec.release(spec.canonical_refresh_release_id)
+    assert spec.canonical_refresh_release_id == "canonical_refresh"
     assert (
         spec.canonical_refresh_checkout_root
         == canonical_refresh_release.checkout_root
@@ -108,6 +109,25 @@ def test_production_spec_rejects_release_binding_without_operational_venv(tmp_pa
     candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
 
     with pytest.raises(ValueError, match="must include operational_venv"):
+        load_production_spec(candidate)
+
+
+def test_production_spec_rejects_refresh_release_shared_with_managed_runtime(
+    tmp_path,
+):
+    raw = yaml.safe_load(
+        (ROOT / "src/strategies/runtime/production.yaml").read_text(encoding="utf-8")
+    )
+    shared = next(
+        runtime
+        for runtime in raw["managed_runtimes"]
+        if runtime.get("release_id")
+    )
+    raw["canonical_refresh_release_id"] = shared["release_id"]
+    candidate = tmp_path / "production.yaml"
+    candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a dedicated release"):
         load_production_spec(candidate)
 
 

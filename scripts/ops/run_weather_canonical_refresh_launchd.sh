@@ -244,5 +244,13 @@ if [[ "$migration_allowed" == "1" ]]; then
     --max-settlement-updates 5000 \
     --apply \
     --report "$RUNTIME_DIR/wcir_candidate_materialization.json"
+  run_refresh_stage replay_artifact_verification 300 \
+    "$PYTHON_BIN" scripts/ops/materialize_weather_replay_artifact_verifications.py \
+    --db "$DB_PATH" \
+    --expected-db "$CANONICAL_DB_PATH" \
+    --max-cases 5000 \
+    --commit-every 500 \
+    --apply \
+    --report "$RUNTIME_DIR/replay_artifact_verification.json"
 fi
 assert_production_spec_unchanged

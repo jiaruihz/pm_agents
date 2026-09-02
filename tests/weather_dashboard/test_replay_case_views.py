@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import sqlite3
 
 import pytest
@@ -12,6 +14,13 @@ from weather_dashboard.db.replay_case_schema import (
     REPLAY_MISTAKE_VIEW,
     apply_replay_case_schema,
     record_replay_artifact_verification,
+)
+from scripts.ops.materialize_weather_replay_artifact_verifications import (
+    artifacts_for_case,
+    materialize as materialize_artifact_verifications,
+)
+from scripts.analysis.export_weather_replay_dataset_inputs_v1 import (
+    export_projection,
 )
 from weather_model_evaluation import REPLAY_ARTIFACT_VERIFIER_BUILD_ID
 
@@ -342,6 +351,102 @@ def test_replay_artifact_verification_is_append_only_and_latest_is_visible() -> 
             verification=verification,
             verified_at_utc="2026-08-30T00:04:00Z",
         )
+    conn.close()
+
+
+def test_replay_artifact_materializer_fails_closed_without_file_digest(
+    tmp_path,
+) -> None:
+    source = tmp_path / "source.jsonl"
+    source.write_text('{"row": 1}\n', encoding="utf-8")
+    artifacts = artifacts_for_case(
+        {
+            "replay_capability": "model_only",
+            "input_refs_json": json.dumps(
+                [{"physical_path": str(source), "physical_line": 1}]
+            ),
+            "trigger_event_raw_source_path": str(source),
+            "trigger_event_raw_row_hash": "row-hash-is-not-a-file-hash",
+            "model_artifact_id": "model",
+        }
+    )
+    assert artifacts == [
+        {"path": str(source), "sha256": None, "physical_line": 1}
+    ]
+
+    conn = _populated_db()
+    report = materialize_artifact_verifications(
+        conn,
+        managed_roots=(tmp_path,),
+        max_cases=100,
+        apply=True,
+    )
+    assert report["remaining"] == 0
+    assert report["inserted"] == 7
+    assert report["status_counts"] == {
+        "blocked_unverifiable_artifact": 6,
+        "legacy_summary_only": 1,
+    }
+    conn.close()
+
+
+def test_candidate_projection_is_sealed_and_has_four_chronological_blocks(
+    tmp_path,
+) -> None:
+    conn = _populated_db()
+    candidate_ids = [
+        row[0]
+        for row in conn.execute(
+            "SELECT candidate_id FROM fact_signal_candidates "
+            "WHERE candidate_grain_version='v2_event_checkpoint' ORDER BY candidate_id"
+        )
+    ]
+    for index, candidate_id in enumerate(candidate_ids):
+        target_date = f"2026-08-{25 + min(index, 3):02d}"
+        conn.execute(
+            "UPDATE fact_signal_candidates SET event_date=? WHERE candidate_id=?",
+            (target_date, candidate_id),
+        )
+        conn.execute(
+            """
+            INSERT INTO weather_candidate_settlement_labels (
+              label_fact_id, candidate_id, condition_id, city, target_date,
+              measurement_namespace, namespace_status, settlement_yes,
+              settlement_source_kind, settlement_source_id, source_payload_hash,
+              source_available_at_utc, label_available_at_utc,
+              label_availability_status, created_at_utc
+            ) VALUES (?, ?, ?, 'Manila', ?, 'tmax', 'explicit_question', 1.0,
+                      'settlement_outcome', ?, ?, '2026-08-30T00:00:00Z',
+                      '2026-08-30T00:00:00Z', 'known', '2026-08-30T00:00:01Z')
+            """,
+            (
+                f"label:{candidate_id}",
+                candidate_id,
+                f"condition:{candidate_id}",
+                target_date,
+                f"settlement:{candidate_id}",
+                candidate_id.ljust(64, "0")[:64],
+            ),
+        )
+    conn.commit()
+
+    receipt = export_projection(
+        conn,
+        output_dir=tmp_path,
+        measurement_namespace="tmax",
+        start_date=None,
+        end_date=None,
+        max_rows=None,
+        cutoff_utc="2026-09-01T00:00:00Z",
+        code_sha="a" * 40,
+    )
+
+    assert receipt["row_count"] == len(candidate_ids)
+    assert receipt["split_boundaries"]["train_end"] < receipt["split_boundaries"][
+        "validation_end"
+    ]
+    assert Path(receipt["rows_path"]).stat().st_mode & 0o222 == 0
+    assert not Path(receipt["db_snapshot_path"] + "-wal").exists()
     conn.close()
 
 

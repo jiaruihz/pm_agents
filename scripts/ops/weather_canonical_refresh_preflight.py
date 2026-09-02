@@ -120,6 +120,7 @@ def evaluate_preflight(
     jrs_probe: Mapping[str, Any],
     feed_health: Mapping[str, Any],
     registry_audit: Mapping[str, Any],
+    refresh_release_identity: Mapping[str, Any],
 ) -> dict[str, Any]:
     failures: list[dict[str, str]] = []
     migration_blockers: list[dict[str, str]] = []
@@ -139,6 +140,10 @@ def evaluate_preflight(
         failures.append({"kind": "manifest_db_route_unhealthy", "scope": "all_writes"})
     if jrs_probe.get("status") != "healthy":
         failures.append({"kind": "canonical_jrs_write_probe_failed", "scope": "all_writes"})
+    if refresh_release_identity.get("status") != "healthy":
+        failures.append(
+            {"kind": "canonical_refresh_release_identity_mismatch", "scope": "all_writes"}
+        )
     manifest_allows_migration, allowed_manifest_warnings = (
         _manifest_allows_migration(manifest)
     )
@@ -178,6 +183,7 @@ def evaluate_preflight(
         "allowed_manifest_warnings": allowed_manifest_warnings,
         "db_route_status": (manifest.get("db_route") or {}).get("status"),
         "jrs_probe": dict(jrs_probe),
+        "refresh_release_identity": dict(refresh_release_identity),
         "data_feed_status": feed_health.get("status"),
         "registry_build_id": registry_audit.get("registry_build_id"),
     }
@@ -218,6 +224,46 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     spec = load_production_spec(args.production_spec)
     registry = production_data_product_registry(spec)
+    release_identity: dict[str, Any]
+    if spec.canonical_refresh_release_id is None:
+        release_identity = {
+            "status": "critical",
+            "error": "canonical_refresh_release_id_missing",
+        }
+    else:
+        release = spec.release(spec.canonical_refresh_release_id)
+        try:
+            actual_root = ROOT.resolve(strict=True)
+            declared_root = release.checkout_root.resolve(strict=True)
+            git_result = subprocess.run(
+                ["git", "-C", str(actual_root), "rev-parse", "HEAD"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            actual_sha = git_result.stdout.strip().lower()
+            healthy = (
+                git_result.returncode == 0
+                and actual_root == declared_root
+                and actual_sha == release.expected_repo_sha
+            )
+            release_identity = {
+                "status": "healthy" if healthy else "critical",
+                "release_id": release.release_id,
+                "declared_checkout_root": str(declared_root),
+                "actual_checkout_root": str(actual_root),
+                "expected_repo_sha": release.expected_repo_sha,
+                "actual_repo_sha": actual_sha or None,
+                "git_error": git_result.stderr[-1000:].strip() or None,
+            }
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            release_identity = {
+                "status": "critical",
+                "release_id": release.release_id,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
     manifest_command = [
         sys.executable,
         str(ROOT / "scripts/ops/weather_production_manifest.py"),
@@ -252,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         jrs_probe=jrs_probe,
         feed_health=feed_health,
         registry_audit=registry.audit(),
+        refresh_release_identity=release_identity,
     )
     report.update(
         {
