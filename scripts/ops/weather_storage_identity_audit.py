@@ -311,9 +311,14 @@ def configured_artifacts(spec: WeatherProductionSpec) -> list[dict[str, Any]]:
                 continue
             if not path.is_absolute():
                 path = (runtime.checkout_root or spec.operational_repo_root) / path
-            artifacts.append(
-                {"instance_id": runtime.instance_id, "role": role, **file_identity(path)}
-            )
+            artifact = {
+                "instance_id": runtime.instance_id,
+                "role": role,
+                **file_identity(path),
+            }
+            if role == "live_orders":
+                artifact["access"] = runtime.live_order_access
+            artifacts.append(artifact)
     return artifacts
 
 
@@ -411,19 +416,36 @@ def build_report(spec: WeatherProductionSpec) -> dict[str, Any]:
     artifacts = configured_artifacts(spec)
     declared_paths: dict[str, list[dict[str, str]]] = defaultdict(list)
     for item in artifacts:
-        declared_paths[item["resolved_path"]].append(
-            {"instance_id": item["instance_id"], "role": item["role"]}
-        )
+        declaration = {
+            "instance_id": item["instance_id"],
+            "role": item["role"],
+        }
+        if item.get("access"):
+            declaration["access"] = item["access"]
+        declared_paths[item["resolved_path"]].append(declaration)
     for path, owners in declared_paths.items():
-        roles = {owner["role"] for owner in owners}
-        if len(owners) > 1 and "live_orders" in roles:
+        live_order_declarations = [
+            owner for owner in owners if owner["role"] == "live_orders"
+        ]
+        live_order_owners = [
+            owner
+            for owner in live_order_declarations
+            if owner.get("access", "owner") == "owner"
+        ]
+        has_non_order_declaration = len(owners) != len(live_order_declarations)
+        if live_order_declarations and (
+            len(live_order_owners) != 1 or has_non_order_declaration
+        ):
             findings.append(
                 {
                     "severity": "critical",
                     "kind": "shared_live_order_target",
                     "path": path,
                     "owners": owners,
-                    "message": "multiple production declarations share a live order journal",
+                    "message": (
+                        "live order journal must have exactly one owner and cannot "
+                        "share storage with non-order artifacts"
+                    ),
                 }
             )
 

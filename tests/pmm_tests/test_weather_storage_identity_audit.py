@@ -123,6 +123,167 @@ def test_production_spec_is_single_authority_for_live_journals(tmp_path: Path) -
     assert report["active_live_order_journals"][0]["schema_versions"] == {"orders_v1": 1}
 
 
+def test_storage_audit_allows_one_owner_and_one_reader_for_live_journal(
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    journal = tmp_path / "feed/output/live/orders.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"schema_version":"orders_v1","order_id":"1"}\n', encoding="utf-8"
+    )
+    base = _spec(tmp_path, canonical, compatibility)
+    owner = base.managed_runtimes[0]
+    reader = WeatherManagedRuntimeSpec(
+        instance_id="cancel-controller",
+        tmux_session="cancel-controller",
+        role="execution_control",
+        execution_mode="live",
+        expected_live=True,
+        live_order_path=journal,
+        live_order_access="reader",
+        recovery_policy="guarded_live",
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "managed_runtimes": (owner, reader),
+        }
+    )
+
+    report = build_report(spec)
+
+    assert spec.active_live_order_paths() == (journal,)
+    assert not any(
+        item["kind"] == "shared_live_order_target" for item in report["findings"]
+    )
+
+
+def test_storage_audit_rejects_multiple_live_journal_owners(tmp_path: Path) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    journal = tmp_path / "feed/output/live/orders.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"schema_version":"orders_v1","order_id":"1"}\n', encoding="utf-8"
+    )
+    base = _spec(tmp_path, canonical, compatibility)
+    first = base.managed_runtimes[0]
+    second = WeatherManagedRuntimeSpec(
+        instance_id="second-writer",
+        tmux_session="second-writer",
+        role="strategy",
+        execution_mode="live",
+        expected_live=True,
+        live_order_path=journal,
+        recovery_policy="guarded_live",
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "managed_runtimes": (first, second),
+        }
+    )
+
+    report = build_report(spec)
+
+    finding = next(
+        item
+        for item in report["findings"]
+        if item["kind"] == "shared_live_order_target"
+    )
+    assert [owner["access"] for owner in finding["owners"]] == ["owner", "owner"]
+
+
+def test_storage_audit_rejects_reader_without_declared_owner(tmp_path: Path) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    journal = tmp_path / "feed/output/live/orders.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"schema_version":"orders_v1","order_id":"1"}\n', encoding="utf-8"
+    )
+    base = _spec(tmp_path, canonical, compatibility)
+    reader = WeatherManagedRuntimeSpec(
+        instance_id="reader",
+        tmux_session="reader",
+        role="execution_control",
+        execution_mode="live",
+        expected_live=True,
+        live_order_path=journal,
+        live_order_access="reader",
+        recovery_policy="guarded_live",
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "managed_runtimes": (reader,),
+        }
+    )
+
+    report = build_report(spec)
+
+    assert any(
+        item["kind"] == "shared_live_order_target" for item in report["findings"]
+    )
+
+
+def test_storage_audit_rejects_health_file_sharing_live_journal(
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path / "runtime/physical.db"
+    canonical.parent.mkdir()
+    with sqlite3.connect(canonical) as conn:
+        conn.execute("CREATE TABLE facts(id INTEGER PRIMARY KEY)")
+    compatibility = tmp_path / "runtime/weather-link.db"
+    compatibility.symlink_to(canonical)
+    journal = tmp_path / "feed/output/live/orders.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"schema_version":"orders_v1","order_id":"1"}\n', encoding="utf-8"
+    )
+    base = _spec(tmp_path, canonical, compatibility)
+    owner = base.managed_runtimes[0]
+    health_reader = WeatherManagedRuntimeSpec(
+        instance_id="health-reader",
+        tmux_session="health-reader",
+        role="shadow",
+        execution_mode="shadow",
+        health_path=journal,
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **base.__dict__,
+            "managed_runtimes": (owner, health_reader),
+        }
+    )
+
+    report = build_report(spec)
+
+    finding = next(
+        item
+        for item in report["findings"]
+        if item["kind"] == "shared_live_order_target"
+    )
+    assert {owner["role"] for owner in finding["owners"]} == {
+        "health",
+        "live_orders",
+    }
+
+
 def test_storage_audit_preserves_legacy_unversioned_prefix_without_warning(
     tmp_path: Path,
 ) -> None:

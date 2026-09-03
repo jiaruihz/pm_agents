@@ -481,6 +481,7 @@ managed_runtimes:
     accepted_health_statuses: [ready]
     expected_live: true
     live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
+    live_order_access: reader
     dependencies: [weather_market_books, weather_jrs_context_keeper]
     recovery_policy: guarded_live
 

@@ -42,6 +42,7 @@ class WeatherManagedRuntimeSpec:
     accepted_health_statuses: tuple[str, ...] = ()
     expected_live: bool = False
     live_order_path: Path | None = None
+    live_order_access: str = "owner"
     dependencies: tuple[str, ...] = ()
     recovery_policy: str = "manual"
     uses_market_proxy: bool = False
@@ -420,6 +421,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     if item.get("live_order_path")
                     else None
                 ),
+                live_order_access=str(item.get("live_order_access") or "owner"),
                 dependencies=tuple(
                     str(value) for value in (item.get("dependencies") or [])
                 ),
@@ -751,6 +753,15 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     "live_order_path must live under pm_runtime_root or "
                     f"data_feed_runtime_root: {item.instance_id}"
                 )
+        if item.live_order_access not in {"owner", "reader"}:
+            raise ValueError(
+                "live_order_access must be owner or reader: "
+                f"{item.instance_id}"
+            )
+        if item.live_order_access == "reader" and item.live_order_path is None:
+            raise ValueError(
+                f"live order reader must declare live_order_path: {item.instance_id}"
+            )
         if item.expected_live and item.live_order_path is None:
             raise ValueError(
                 f"live runtime must declare live_order_path: {item.instance_id}"
