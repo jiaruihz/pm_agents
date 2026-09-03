@@ -37,8 +37,8 @@ production_releases:
     expected_repo_sha: 97a95fdc8baa5ed8a5ae89a5686adbbbde35d9e8
     runtime_bindings: [operational_venv]
   - release_id: wcir_next_print_frozen
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/f96e32d190c7c9e30f4b76cd4c9446f10a0cec8e
-    expected_repo_sha: f96e32d190c7c9e30f4b76cd4c9446f10a0cec8e
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/5bab0e5d13a42d8f4a7da792171876f5dad2d1bf
+    expected_repo_sha: 5bab0e5d13a42d8f4a7da792171876f5dad2d1bf
     runtime_bindings: [operational_venv]
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
