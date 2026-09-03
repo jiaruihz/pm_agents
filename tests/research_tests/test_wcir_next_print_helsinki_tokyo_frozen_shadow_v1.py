@@ -300,6 +300,7 @@ def test_runtime_is_idempotent_and_stays_zero_notional(tmp_path: Path) -> None:
     second = runtime.run_once(now_utc=datetime(2026, 9, 1, tzinfo=timezone.utc))
     assert first["health"]["raw_opportunity_events"] == 1
     assert first["health"]["feature_eligible_events"] == 1
+    assert len(first["health"]["frozen_hashes"]["action_shadow_overlay_sha256"]) == 64
     assert first["health"]["cities"]["Helsinki"]["label_linked_events"] == 1
     assert first["health"]["exact_identity_action_count"] == 3
     identity = next(iter(runtime.market_identities.rows.values()))

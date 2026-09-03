@@ -47,6 +47,7 @@ UTC = timezone.utc
 STRATEGY_KEY = "weather_helsinki_tokyo_wcir_next_print_frozen_v1"
 MODEL_ARTIFACT_EXECUTION_MODE = "zero_notional_probability_only"
 EXECUTION_MODE = "zero_notional_action_shadow"
+ACTION_SHADOW_OVERLAY_FILENAME = "ACTION_SHADOW_OVERLAY_V2.json"
 ACTION_SHADOW_EPOCH = "wcir_ht_next_print_action_shadow_v2_20260904a"
 ACTION_SHADOW_START_UTC = "2026-09-03T16:45:00Z"
 MODEL_IDS = {
@@ -347,8 +348,12 @@ class FrozenModels:
         self.review_root = review_root
         self.config_path = review_root / "FROZEN_DEPLOYMENT_CONFIG.json"
         self.action_path = review_root / "FROZEN_ACTION_CONTRACT.json"
+        self.action_shadow_overlay_path = review_root / ACTION_SHADOW_OVERLAY_FILENAME
         self.config = json.loads(self.config_path.read_text(encoding="utf-8"))
         self.action = json.loads(self.action_path.read_text(encoding="utf-8"))
+        self.action_shadow_overlay = json.loads(
+            self.action_shadow_overlay_path.read_text(encoding="utf-8")
+        )
         if self.config.get("strategy_key") != STRATEGY_KEY:
             raise RuntimeError("frozen strategy key mismatch")
         if self.config.get("execution_mode") != MODEL_ARTIFACT_EXECUTION_MODE:
@@ -357,6 +362,32 @@ class FrozenModels:
             raise RuntimeError("frozen config unexpectedly grants live authority")
         if self.config.get("action_contract_sha256") != _sha256(self.action_path):
             raise RuntimeError("frozen action contract hash mismatch")
+        overlay = self.action_shadow_overlay
+        if overlay.get("schema_version") != "wcir_ht_action_shadow_overlay_v2":
+            raise RuntimeError("action-shadow overlay schema mismatch")
+        if overlay.get("strategy_key") != STRATEGY_KEY:
+            raise RuntimeError("action-shadow overlay strategy key mismatch")
+        if overlay.get("execution_mode") != EXECUTION_MODE:
+            raise RuntimeError("action-shadow overlay execution mode mismatch")
+        if overlay.get("live_authority") is not False:
+            raise RuntimeError("action-shadow overlay unexpectedly grants live authority")
+        if overlay.get("base_action_contract_sha256") != self.config.get(
+            "action_contract_sha256"
+        ):
+            raise RuntimeError("action-shadow overlay/base contract mismatch")
+        zero_notional = overlay.get("zero_notional", {})
+        if any(
+            zero_notional.get(field) != 0
+            for field in (
+                "actual_notional_usd",
+                "exchange_calls",
+                "fills",
+                "orders",
+                "plans",
+                "requested_size",
+            )
+        ):
+            raise RuntimeError("action-shadow overlay is not zero-notional")
         self.epoch = str(self.config["forward_epoch_id"])
         self.forward_start = _parse(self.config["forward_start_utc"], field="forward_start_utc")
         self.artifacts: dict[str, dict[str, Any]] = {}
@@ -378,6 +409,9 @@ class FrozenModels:
     def hashes(self) -> dict[str, Any]:
         return {
             "action_contract_sha256": self.config["action_contract_sha256"],
+            "action_shadow_overlay_sha256": _sha256(
+                self.action_shadow_overlay_path
+            ),
             "artifact_sha256": dict(self.config["artifact_sha256"]),
             "feature_builder": NextPrintFeatureBuilderV1.version,
         }
