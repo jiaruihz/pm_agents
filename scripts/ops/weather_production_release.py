@@ -2,8 +2,9 @@
 """Safely create and pin an immutable weather production release.
 
 This command deliberately owns only the small, auditable release transition:
-an exact detached worktree plus the matching two fields in ``production.yaml``.
-It never restarts a runtime and defaults to a no-write dry run.
+an exact detached worktree, its declared runtime bindings, plus the matching two
+fields in ``production.yaml``.  It never restarts a runtime and defaults to a
+no-write dry run.
 """
 
 from __future__ import annotations
@@ -73,6 +74,111 @@ def _release_block(spec: dict[str, Any], release_id: str) -> dict[str, Any]:
     if not isinstance(item.get("checkout_root"), str) or not isinstance(item.get("expected_repo_sha"), str):
         raise ReleaseError(f"release {release_id} lacks checkout_root or expected_repo_sha")
     return item
+
+
+def _runtime_binding_paths(
+    *,
+    spec: dict[str, Any],
+    release: dict[str, Any],
+    checkout: Path,
+    operational_repo: Path,
+) -> tuple[tuple[str, Path, Path], ...]:
+    bindings_raw = release.get("runtime_bindings", ["operational_venv"])
+    if not isinstance(bindings_raw, list) or not bindings_raw:
+        raise ReleaseError("release runtime_bindings must be a non-empty list")
+    bindings = tuple(str(binding) for binding in bindings_raw)
+    allowed = {"operational_venv", "operational_env", "canonical_db"}
+    unknown = sorted(set(bindings) - allowed)
+    if unknown:
+        raise ReleaseError("unknown release runtime bindings: " + ", ".join(unknown))
+    if len(bindings) != len(set(bindings)):
+        raise ReleaseError("duplicate release runtime bindings")
+    if "operational_venv" not in bindings:
+        raise ReleaseError("release runtime_bindings must include operational_venv")
+
+    overrides_raw = release.get("runtime_binding_sources") or {}
+    if not isinstance(overrides_raw, dict):
+        raise ReleaseError("release runtime_binding_sources must be a mapping")
+    undeclared_overrides = sorted(set(map(str, overrides_raw)) - set(bindings))
+    if undeclared_overrides:
+        raise ReleaseError(
+            "release runtime_binding_sources reference undeclared bindings: "
+            + ", ".join(undeclared_overrides)
+        )
+
+    canonical_db_raw = spec.get("canonical_db_path")
+    defaults = {
+        "operational_venv": (checkout / ".venv", operational_repo / ".venv"),
+        "operational_env": (checkout / ".env", operational_repo / ".env"),
+        "canonical_db": (
+            checkout / "runtime/weather.db",
+            Path(str(canonical_db_raw or "")),
+        ),
+    }
+    rows: list[tuple[str, Path, Path]] = []
+    for binding in bindings:
+        target, default_source = defaults[binding]
+        source = Path(str(overrides_raw.get(binding, default_source)))
+        if not source.is_absolute():
+            raise ReleaseError(f"runtime binding source must be absolute: {binding}: {source}")
+        if not (source.exists() or source.is_symlink()):
+            raise ReleaseError(f"runtime binding source is missing: {binding}: {source}")
+        if binding == "operational_venv" and not source.is_dir():
+            raise ReleaseError(f"runtime binding source must be a directory: {binding}: {source}")
+        if binding in {"operational_env", "canonical_db"} and not source.is_file():
+            raise ReleaseError(f"runtime binding source must be a file: {binding}: {source}")
+        rows.append((binding, target, source))
+    return tuple(rows)
+
+
+def _validate_runtime_binding_target(*, checkout: Path, target: Path) -> None:
+    try:
+        relative = target.relative_to(checkout)
+    except ValueError as exc:
+        raise ReleaseError(f"runtime binding target escapes release checkout: {target}") from exc
+    parent = checkout
+    for part in relative.parts[:-1]:
+        parent /= part
+        if parent.is_symlink():
+            raise ReleaseError(f"runtime binding parent must not be a symlink: {parent}")
+        if parent.exists() and not parent.is_dir():
+            raise ReleaseError(f"runtime binding parent must be a directory: {parent}")
+
+
+def _inspect_runtime_bindings(
+    *,
+    checkout: Path,
+    bindings: tuple[tuple[str, Path, Path], ...],
+) -> dict[str, str]:
+    checks: dict[str, str] = {}
+    for binding, target, source in bindings:
+        _validate_runtime_binding_target(checkout=checkout, target=target)
+        if target.exists() or target.is_symlink():
+            if not target.is_symlink() or target.resolve() != source.resolve():
+                raise ReleaseError(
+                    f"release runtime binding conflicts with required symlink: "
+                    f"{binding}: {target}"
+                )
+            checks[binding] = "existing_valid_symlink"
+        else:
+            checks[binding] = "will_create_symlink"
+    return checks
+
+
+def _create_runtime_bindings(
+    *,
+    checkout: Path,
+    bindings: tuple[tuple[str, Path, Path], ...],
+) -> list[str]:
+    created: list[str] = []
+    for binding, target, source in bindings:
+        _validate_runtime_binding_target(checkout=checkout, target=target)
+        if target.exists() or target.is_symlink():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(source, target)
+        created.append(binding)
+    return created
 
 
 def _git_common_dir(repo: Path) -> Path:
@@ -334,16 +440,16 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
     else:
         checks["existing_checkout"] = "will_create"
 
-    venv_target = operational_repo / ".venv"
-    venv_link = physical_target / ".venv"
-    if venv_link.exists() or venv_link.is_symlink():
-        if not venv_link.is_symlink() or venv_link.resolve() != venv_target.resolve():
-            raise ReleaseError(f"release .venv conflicts with required operational symlink: {venv_link}")
-        checks["venv"] = "existing_valid_symlink"
-    elif not venv_target.is_dir():
-        raise ReleaseError(f"operational .venv is missing: {venv_target}")
-    else:
-        checks["venv"] = "will_create_symlink"
+    runtime_bindings = _runtime_binding_paths(
+        spec=spec,
+        release=release,
+        checkout=physical_target,
+        operational_repo=operational_repo,
+    )
+    checks["runtime_bindings"] = _inspect_runtime_bindings(
+        checkout=physical_target,
+        bindings=runtime_bindings,
+    )
 
     replacement = _replace_release_pin(text["raw_text"], release_id, old_root, old_sha, target, source_sha)
     relative_spec = production_spec.relative_to(operational_repo)
@@ -400,9 +506,12 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
         )
         report["worktree_created"] = True
     _verify_checkout(physical_target, source_sha, operational_common_git_dir)
-    if not (venv_link.exists() or venv_link.is_symlink()):
-        os.symlink(venv_target, venv_link)
-        report["venv_symlink_created"] = True
+    created_bindings = _create_runtime_bindings(
+        checkout=physical_target,
+        bindings=runtime_bindings,
+    )
+    report["runtime_bindings_created"] = created_bindings
+    report["venv_symlink_created"] = "operational_venv" in created_bindings
     if _git(operational_repo, "rev-parse", "HEAD").lower() != operational_head:
         raise ReleaseError(
             "operational HEAD changed while creating release; pin remains unchanged"

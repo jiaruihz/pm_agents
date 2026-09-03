@@ -25,7 +25,9 @@ def _commit(repo: Path, text: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path, str, str]:
+def _fixture(
+    tmp_path: Path, *, runtime_bindings: str | None = None
+) -> tuple[Path, Path, str, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init")
@@ -38,13 +40,18 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, str, str]:
     old_checkout.parent.mkdir(parents=True)
     spec = repo / "src/strategies/runtime/production.yaml"
     spec.parent.mkdir(parents=True)
+    release_bindings = (
+        f"    runtime_bindings: {runtime_bindings}\n" if runtime_bindings else ""
+    )
     spec.write_text(
         "operational_repo_root: " + str(repo) + "\n"
         "production_release_root: " + str(releases) + "\n"
+        "canonical_db_path: " + str(tmp_path / "weather.db") + "\n"
         "production_releases:\n"
         "  - release_id: control_plane\n"
         "    checkout_root: " + str(old_checkout) + "\n"
         "    expected_repo_sha: " + old + "\n"
+        + release_bindings
     )
     _git(repo, "add", str(spec.relative_to(repo)))
     _git(repo, "commit", "-m", "production config")
@@ -83,6 +90,131 @@ def test_apply_is_idempotent_and_preserves_symlink_and_text(tmp_path: Path) -> N
     again = run_release(release_id="control_plane", source_sha=new, expected_old_sha=new, production_spec=spec, apply=True, confirm_production=True, reason="idempotent test")
     assert again["worktree_created"] is False
     assert again["pin_updated"] is True
+
+
+def test_apply_materializes_all_declared_runtime_bindings(tmp_path: Path) -> None:
+    repo, spec, old, new = _fixture(
+        tmp_path,
+        runtime_bindings="[operational_venv, canonical_db, operational_env]",
+    )
+    canonical_db = tmp_path / "weather.db"
+    canonical_db.write_text("db")
+    operational_env = repo / ".env"
+    operational_env.write_text("TOKEN=test\n")
+
+    result = run_release(
+        release_id="control_plane",
+        source_sha=new,
+        expected_old_sha=old,
+        production_spec=spec,
+        apply=True,
+        confirm_production=True,
+        reason="test runtime bindings",
+    )
+
+    target = Path(result["new"]["checkout_root"])
+    assert result["runtime_bindings_created"] == [
+        "operational_venv",
+        "canonical_db",
+        "operational_env",
+    ]
+    assert (target / ".venv").resolve() == (repo / ".venv").resolve()
+    assert (target / ".env").resolve() == operational_env.resolve()
+    assert (target / "runtime/weather.db").resolve() == canonical_db.resolve()
+
+
+def test_dry_run_rejects_missing_declared_runtime_binding_source(
+    tmp_path: Path,
+) -> None:
+    _, spec, old, new = _fixture(
+        tmp_path,
+        runtime_bindings="[operational_venv, canonical_db]",
+    )
+
+    with pytest.raises(ReleaseError, match="runtime binding source is missing: canonical_db"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=spec,
+            apply=False,
+            confirm_production=False,
+            reason="",
+        )
+
+
+def test_dry_run_rejects_conflicting_declared_runtime_binding(
+    tmp_path: Path,
+) -> None:
+    repo, spec, old, new = _fixture(
+        tmp_path,
+        runtime_bindings="[operational_venv, canonical_db]",
+    )
+    (tmp_path / "weather.db").write_text("db")
+    checkout = tmp_path / "releases/control_plane" / new
+    _git(repo, "worktree", "add", "--detach", str(checkout), new)
+    target = checkout / "runtime/weather.db"
+    target.parent.mkdir()
+    target.write_text("not a symlink")
+
+    with pytest.raises(ReleaseError, match="runtime binding conflicts"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=spec,
+            apply=False,
+            confirm_production=False,
+            reason="",
+        )
+
+
+def test_dry_run_rejects_runtime_binding_parent_symlink_escape(
+    tmp_path: Path,
+) -> None:
+    repo, spec, old, _ = _fixture(
+        tmp_path,
+        runtime_bindings="[operational_venv, canonical_db]",
+    )
+    (tmp_path / "weather.db").write_text("db")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repo / "runtime").symlink_to(outside, target_is_directory=True)
+    _git(repo, "add", "runtime")
+    _git(repo, "commit", "-m", "tracked runtime symlink")
+    new = _git(repo, "rev-parse", "HEAD")
+
+    with pytest.raises(ReleaseError, match="binding parent must not be a symlink"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=spec,
+            apply=True,
+            confirm_production=True,
+            reason="test parent escape",
+        )
+    assert not (outside / "weather.db").exists()
+    assert old in spec.read_text()
+
+
+def test_dry_run_rejects_wrong_runtime_binding_source_type(tmp_path: Path) -> None:
+    _, spec, old, new = _fixture(
+        tmp_path,
+        runtime_bindings="[operational_venv, canonical_db]",
+    )
+    (tmp_path / "weather.db").mkdir()
+
+    with pytest.raises(ReleaseError, match="source must be a file: canonical_db"):
+        run_release(
+            release_id="control_plane",
+            source_sha=new,
+            expected_old_sha=old,
+            production_spec=spec,
+            apply=False,
+            confirm_production=False,
+            reason="",
+        )
 
 
 def test_non_descendant_source_is_rejected(tmp_path: Path) -> None:
