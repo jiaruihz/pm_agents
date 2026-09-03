@@ -84,8 +84,8 @@ production_releases:
     expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/fce19185eb10389bb35784d043633b77ac708e4b
-    expected_repo_sha: fce19185eb10389bb35784d043633b77ac708e4b
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/e4b68402c3246b95cdf701065a77e29184f276e0
+    expected_repo_sha: e4b68402c3246b95cdf701065a77e29184f276e0
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
