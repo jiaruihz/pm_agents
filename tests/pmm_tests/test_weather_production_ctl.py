@@ -259,7 +259,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     }
     wcir_ht_release = spec.release("wcir_next_print_frozen")
     assert wcir_ht_release.expected_repo_sha == (
-        "f96e32d190c7c9e30f4b76cd4c9446f10a0cec8e"
+        "5bab0e5d13a42d8f4a7da792171876f5dad2d1bf"
     )
     assert wcir_ht_release.runtime_bindings == ("operational_venv",)
     court = by_id["polymarket_dispute_clarification_court_v1"]
