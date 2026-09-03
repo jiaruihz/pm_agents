@@ -639,6 +639,24 @@ Seoul、Tokyo：356 journal rows / 352 unique candidates、1,270 checkpoint bloc
 
 完成证据：仓库和 production manifest 的 active-path 扫描均无未登记旁路；五城 migration report、schema、contract tests、rolling-baseline impact report 已同步完成。这里的 `implemented` 只表示 runtime/authority 迁移完成，不表示模型 alpha 已确认，也不替代当前 controller health。
 
+### 2026-09-04 Helsinki/Tokyo B2/M1/M2 action-shadow 接回
+
+Helsinki/Tokyo 的 frozen next-print runtime 已从仅记录概率的
+`zero_notional_probability_only` 升为独立冻结的 `zero_notional_action_shadow` overlay；模型 artifact、特征 builder
+与 B2/M1/M2 selector 不重训，复用已有的 canonical market identity、capture demand、strict WS 5-share ask replay、
+settlement 和标准 `SignalCandidate → TradeIntent` 血缘。`p_new_running_max` 只决定是否表达
+previous-running-max exact NO，不冒充 token fair probability，因此 candidate 的 `p_model` 保持 NULL；intent 的
+`requested_size=0`，且 runtime 没有 broker/credential/plan/order/fill authority。
+
+旧 epoch 共17个 source-cross event（Helsinki 10、Tokyo 7）：Helsinki 9个通过特征门，Tokyo 因 05:50 local
+落在前一 UTC physical shard、旧 reader 只猜 `target_date` shard 而错误得到0个。修复后固定影响回放为
+Helsinki 9、Tokyo 7，共16个 feature-eligible prediction；历史 closed market 不用当前 `latest.json` 伪造 identity，
+故不能据此补造历史交易。新 forward epoch 为 `wcir_ht_next_print_action_shadow_v2_20260904a`，起点
+`2026-09-03T16:45:00Z`；identity 优先对 canonical `market_books/latest.json` 做 exact
+market/condition/token/side/bracket 匹配，Gamma `/markets/{id}` 只作 fallback。达到 strict WS entry 条件后，
+三个 model arm 分别追加 candidate 和零尺寸 intent；安全合同固定 plans/orders/fills/exchange calls/notional 全为0。
+这次部署只建立可结算的 forward 分母，不代表盈利或 live 晋级。
+
 ## 9. 全框架验收标准
 
 - 至少三类城市插件通过：纯天气或 weather-first、market-aware、source-cross/one-sided。
