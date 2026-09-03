@@ -1,0 +1,32 @@
+{
+  "action_contract_sha256": "4b1e3c2c0fa49779a776647caf92fcc4d52350d300f2f8d48465625b41be2669",
+  "actual_notional": 0.0,
+  "artifact_sha256": {
+    "Helsinki": "9d85bb82a292ce406af7672f0a9a9d58640e0c914fab6357edba32a77e92588a",
+    "Tokyo": "eb2ca393b2e1cb08504594610f2b50a4c438e3bddc05e5e51fbdf302929bb84f"
+  },
+  "execution_mode": "zero_notional_probability_only",
+  "fills": 0,
+  "forward_epoch_id": "wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06",
+  "forward_start_utc": "2026-08-31T00:00:00Z",
+  "generated_at_utc": "2026-08-30T11:24:21.246035Z",
+  "live_authority": false,
+  "model_artifacts": {
+    "Helsinki": {
+      "path": "artifacts/helsinki_b2_m1_m2_frozen_v1.joblib",
+      "sealed_relative_path": "artifacts/helsinki_b2_m1_m2_frozen_v1.joblib",
+      "sha256": "9d85bb82a292ce406af7672f0a9a9d58640e0c914fab6357edba32a77e92588a",
+      "size_bytes": 8740
+    },
+    "Tokyo": {
+      "path": "artifacts/tokyo_b2_m1_m2_frozen_v1.joblib",
+      "sealed_relative_path": "artifacts/tokyo_b2_m1_m2_frozen_v1.joblib",
+      "sha256": "eb2ca393b2e1cb08504594610f2b50a4c438e3bddc05e5e51fbdf302929bb84f",
+      "size_bytes": 8209
+    }
+  },
+  "notional": 0,
+  "orders": 0,
+  "schema_version": "wcir_next_print_helsinki_tokyo_frozen_v1",
+  "strategy_key": "weather_helsinki_tokyo_wcir_next_print_frozen_v1"
+}

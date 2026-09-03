@@ -507,6 +507,9 @@ def replay_markout_rows(
     ws_runtime_root: Path | None,
     now_utc: datetime | None = None,
     existing_rows: Iterable[Mapping[str, Any]] = (),
+    entry_latency_seconds: float = ENTRY_LATENCY_SECONDS,
+    materializer_version: str = "amsterdam_frozen_ws_checkpoint_v1",
+    entry_ready_by_prediction: Mapping[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Materialize exact-token checkpoints with the accepted Stage-2 replay.
 
@@ -556,7 +559,42 @@ def replay_markout_rows(
         })
     if not events:
         return [], {"status": "NO_MATURE_EVENTS", "event_count": 0, "query_count": 0}
-    queries = build_checkpoint_queries(events, universes, ENTRY_LATENCY_SECONDS)
+    if not math.isfinite(entry_latency_seconds) or entry_latency_seconds < 0:
+        raise ValueError("entry_latency_seconds must be finite and non-negative")
+    if not materializer_version:
+        raise ValueError("materializer_version is required")
+    queries = build_checkpoint_queries(events, universes, entry_latency_seconds)
+    entry_ready = dict(entry_ready_by_prediction or {})
+    if entry_ready:
+        adjusted: list[CheckpointQuery] = []
+        for query in queries:
+            ready_at = entry_ready.get(query.event_id)
+            if query.checkpoint != "entry_after_p95_latency" or ready_at is None:
+                adjusted.append(query)
+                continue
+            ready_ns = ts_ns(ready_at)
+            if ready_ns is None:
+                raise ValueError(
+                    f"invalid entry readiness timestamp for {query.event_id}: {ready_at}"
+                )
+            if ready_ns < query.at_ns:
+                raise ValueError(
+                    f"entry readiness precedes frozen latency for {query.event_id}"
+                )
+            adjusted.append(
+                CheckpointQuery(
+                    at_ns=ready_ns,
+                    event_id=query.event_id,
+                    checkpoint=query.checkpoint,
+                    checkpoint_at_utc=str(ready_at),
+                    token_id=query.token_id,
+                    condition_id=query.condition_id,
+                    outcome=query.outcome,
+                    bracket=query.bracket,
+                    roles=query.roles,
+                )
+            )
+        queries = adjusted
     allowed = {
         "source_t0",
         "entry_after_p95_latency",
@@ -591,7 +629,7 @@ def replay_markout_rows(
             str(row.get("checkpoint_at_utc") or ""),
         )
         for row in existing_rows
-        if row.get("materializer_version") == "amsterdam_frozen_ws_checkpoint_v1"
+        if row.get("materializer_version") == materializer_version
     }
     queries = sorted(
         (
@@ -631,7 +669,7 @@ def replay_markout_rows(
         body = {
             **item,
             "prediction_row_id": str(item["event_id"]),
-            "materializer_version": "amsterdam_frozen_ws_checkpoint_v1",
+            "materializer_version": materializer_version,
             "evidence_tier": (
                 "TIER_A_WS_DETERMINISTIC"
                 if bool(item.get("book_valid"))

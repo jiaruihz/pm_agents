@@ -1,0 +1,84 @@
+{
+  "action_grain": "first selected decision per exact condition_id and model arm",
+  "classification": {
+    "DATA_FAIL_CLOSED": "required PIT path, identity, book, or settlement evidence is missing or conflicting",
+    "POLICY_ABSTAIN": "complete evidence but frozen selector or duplicate-expression policy chooses no action",
+    "RESEARCH_INELIGIBLE": "row exists but violates the preregistered matching/evidence contract"
+  },
+  "decision_denominator": "every unique fast_source_prev_no_trial_v2 event_key for Helsinki=fmi or Tokyo=jma_amedas after forward_start_utc; complete 05:50-local 10m path required",
+  "exact_token_expression": {
+    "action": "DIAGNOSTIC_BUY_NO_PREVIOUS_OFFICIAL_RUNNING_MAX",
+    "cross_rule": "event.source_round_c > event.metar_running_max_round_c and event.source_cross_confirmed is true",
+    "identity_resolution": "trigger_event_id is the local source-event identity; polymarket_event_id must be resolved and cross-checked with a captured Gamma /markets/{id} payload against market_id, condition_id and token_id",
+    "is_exact_token_fair_probability": false,
+    "mapping_caveat": "routine EFHK/RJTT next print and WU settlement are separately observed; terminal token PnL is scored only from exact settlement_outcomes",
+    "native_bracket_rule": "event.t_minus_1_no_bracket_c == event.metar_running_max_round_c",
+    "probability_use": "selector only; never token fair value",
+    "required_identity": [
+      "trigger_event_id",
+      "polymarket_event_id",
+      "market_id",
+      "condition_id",
+      "token_id",
+      "checkpoint_timestamp"
+    ],
+    "side": "NO"
+  },
+  "execution_diagnostic": {
+    "book_rule": "first exact-token strict WS/full-ladder book at or after max(decision+5s, model_score_ready_at, identity_available_at, capture_subscription_ready_at); sweep asks for 5 shares; no mid/selected-row substitution",
+    "fee_rule": "src.platform.market_data.executable_book_truth.weather_taker_fee",
+    "frozen_signal_to_entry_latency_seconds": 5.0,
+    "latency_origin": "rounded historical H/T order-attempt p95=4.9180048s",
+    "max_taker_vwap": 0.92,
+    "missing_book": "DATA_FAIL_CLOSED",
+    "shares": 5.0
+  },
+  "feature_retry_contract": {
+    "raw_event_journal": "append-only before input cursor advance",
+    "retry_timeout_seconds": 300,
+    "retryable_failure": "incomplete captured city source path only",
+    "terminal_states": [
+      "ELIGIBLE",
+      "RESEARCH_INELIGIBLE",
+      "NONRETRYABLE_DATA_FAIL_CLOSED",
+      "FEATURE_RETRY_TIMEOUT_300S"
+    ]
+  },
+  "prediction_arms": {
+    "B2": "B2_latest_fast_rounded",
+    "M1": "ams_next_print_m1_ordinal_logit",
+    "M2": "ams_next_print_m2_monotonic_additive"
+  },
+  "promotion_gate": {
+    "automatic_promotion": false,
+    "challenger_comparison_cohorts": [
+      "all_feature_eligible",
+      "challenger_selected_opportunity_matched"
+    ],
+    "challenger_rps_delta_target_date_bootstrap_ci95_upper_lt": 0.0,
+    "economic_roi_target_date_bootstrap_ci95_lower_gt": 0.0,
+    "exact_identity_coverage_min": 0.95,
+    "execution_book_coverage_min": 0.8,
+    "minimum_executable_expressions_per_city": 50,
+    "minimum_new_settled_target_dates_per_city": 30,
+    "owner_decision_required": true,
+    "proper_score_weighting": "target_date equal, then official_print_group equal, then row equal"
+  },
+  "schema_version": "wcir_next_print_exact_token_action_v2",
+  "selector": {
+    "metric": "p_new_running_max",
+    "operator": ">=",
+    "threshold": 0.5,
+    "threshold_origin": "fixed semantic majority threshold; not tuned on captured outcomes"
+  },
+  "zero_notional": {
+    "actual_notional_usd": 0.0,
+    "execution_mode": "zero_notional_probability_only",
+    "fills": 0,
+    "live_authority": false,
+    "orders": 0,
+    "plans": 0,
+    "signals": 0,
+    "trade_intents": 0
+  }
+}
