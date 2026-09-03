@@ -857,6 +857,7 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
     recovery_policy: safe
   - instance_id: weather_tmin_no_further_cooling_tiny_live_v1
+    desired_state: paused
     uses_market_proxy: true
     tmux_session: weather_tmin_no_further_cooling_tiny_live_v1
     role: strategy
