@@ -84,8 +84,8 @@ production_releases:
     expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/fce19185eb10389bb35784d043633b77ac708e4b
-    expected_repo_sha: fce19185eb10389bb35784d043633b77ac708e4b
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/5ba155d68f0a2e54284c73626730adc4389105c2
+    expected_repo_sha: 5ba155d68f0a2e54284c73626730adc4389105c2
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
@@ -461,25 +461,7 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     expected_live: true
     live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
-    dependencies: [weather_data_feed_jrs, current_yes_core_carry_near_core_ws_controller]
-    recovery_policy: guarded_live
-
-  - instance_id: current_yes_core_carry_near_core_ws_controller
-    uses_market_proxy: true
-    tmux_session: weather_core_carry_near_core_ws_controller
-    role: execution_control
-    execution_mode: live
-    release_id: core_carry_runtime
-    start_script: scripts/ops/start_weather_core_carry_near_core_ws_controller.sh
-    restart_script: scripts/ops/start_weather_core_carry_near_core_ws_controller.sh
-    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_ws_control_readiness.json
-    health_format: json
-    max_health_age_sec: 3
-    startup_grace_sec: 30
-    accepted_health_statuses: [ready]
-    expected_live: true
-    live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
-    dependencies: [weather_market_books, weather_jrs_context_keeper]
+    dependencies: [weather_data_feed_jrs]
     recovery_policy: guarded_live
 
   - instance_id: current_yes_core_carry_event_rescore_shadow_v1
