@@ -547,6 +547,7 @@ managed_runtimes:
     tmux_session: weather_cross_no_v2_metar_v1
     role: strategy
     execution_mode: live
+    desired_state: paused
     release_id: cross_no_v2_metar
     start_script: scripts/ops/start_weather_cross_no_v2_metar.sh
     restart_script: scripts/ops/start_weather_cross_no_v2_metar.sh
