@@ -774,6 +774,38 @@ projection 明确标为 `canonical_candidate_projection`，含 authoritative set
 source rows、compact SQLite snapshot 和建议的 chronological boundaries；它支持固定分母的模型/策略
 回测与 train/validation/test/frozen-forward，但不把缺少物理 file digest 的 case 升级为 raw full replay。
 
+#### 2026-09-04 migration verification seal
+
+2026-09-04 00:42 CST 对完整迁移链做了只读复验。历史 archive 层与 sealed evaluation 层为
+**healthy**；scheduled canonical derivation 为 **degraded / fail-closed**，不能写成全绿：
+
+| product | sources | scanned | canonical | duplicate | quarantine | blocked |
+|---|---:|---:|---:|---:|---:|---:|
+| `historical_full_ladder_snapshots` | 2,843 | 2,512,860 | 2,512,860 | 0 | 0 | 0 |
+| `historical_targeted_snapshots` | 8,404 | 3,151,971 | 3,151,970 | 0 | 1 | 0 |
+| `historical_strategy_snapshots` | 6,576 | 4,800,522 | 4,800,479 | 41 | 2 | 0 |
+
+三组 manifest identity、17,823 个 source 的 device/inode/size/mtime、守恒式、quarantine SHA 和约
+7.3 GB adapted output SHA-256 全部复验通过，source stat mismatch 为 0。旧文件没有删除或覆盖。
+
+Tmax sealed projection 含 6,713 rows；`train=5,016`、`validation=1,012`、`test=216`、
+`frozen_forward=469`。四组 row identity 互斥且穷尽，PIT clock/cutoff、rows/manifest/DB snapshot SHA
+和 seal identity 全部通过；dataset hash 为
+`dbd6d05bfd45c5e429b7052057a1752031da2da24fff806a9d749e2aca820320`。
+
+同一观察点 canonical physical DB 与仓库 alias 为 samefile，`fact_signal_candidates=175,555`
+（`event_date` 到 2026-09-03），`fact_trades=5,190`；replay catalog `not_checked=0`。
+其中 128,068 个 case 是 `blocked_unverifiable_artifact`，47,487 个是 `legacy_summary_only`：这是对缺失
+历史 file digest 的 fail-closed 能力标注，不是将它们伪装成 raw full replay；candidate-level sealed replay
+仍按上面的固定数据集合同可用。
+
+持续增量目前未达 healthy：production manifest 为 warning，storage audit 还发现 core-carry live 与
+near-core controller 共用 mutable `live_orders.jsonl`；controller health 同时报告 core-carry loaded SHA /
+checkout 与 near-core live flags 漂移。canonical refresh 的 accounting stages 与 fill coverage gate 通过且
+最终 exit 0，但 preflight 正确返回 `migration_blocked`，因此该轮没有推进 WCIR candidate/replay verifier。
+恢复条件是先由独立 live 维护变更收口上述 release、依赖和 journal ownership，再观察下一轮 preflight
+`status=ready`、WCIR/replay report 时间推进且 `remaining=0`；不得为了让 migration 变绿而绕过 gate。
+
 ### 8.3 Just check status
 
 ```bash
