@@ -2101,6 +2101,7 @@ class HelsinkiTokyoNextPrintFrozenRuntime:
             "strategy_key": STRATEGY_KEY,
             "execution_mode": EXECUTION_MODE,
             "policy_status": "zero_notional_action_shadow",
+            "action_shadow_enabled": True,
             "live_authority": False,
             "forward_epoch_id": self.forward_epoch,
             "forward_start_utc": self._utc_text(self.forward_start),
