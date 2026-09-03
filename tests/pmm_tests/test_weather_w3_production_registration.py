@@ -3,7 +3,7 @@ from pathlib import Path
 from src.strategies.runtime.production import load_production_spec
 
 
-W3_SHA = "4a82f27705abd26e6d3e276217875b6bc2414044"
+W3_SHA = "18d55894137d08d9ac17355a4c9027bbbe6517ac"
 
 
 def test_w3_zero_notional_runtime_is_registered_without_live_authority():
