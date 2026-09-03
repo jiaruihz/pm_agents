@@ -71,6 +71,10 @@ production_releases:
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
     expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: tmin_no_further_cooling_tiny_live
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling_tiny_live/fac16d706c6da66055cac9be0d3f56f82ed4f518
+    expected_repo_sha: fac16d706c6da66055cac9be0d3f56f82ed4f518
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: tmin_v2_2_probability_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/b7397b1cc41b3424939727b433f5853c12303f42
@@ -857,7 +861,7 @@ managed_runtimes:
     tmux_session: weather_tmin_no_further_cooling_tiny_live_v1
     role: strategy
     execution_mode: live
-    release_id: tmin_no_further_cooling
+    release_id: tmin_no_further_cooling_tiny_live
     start_script: scripts/ops/start_weather_tmin_no_further_cooling_tiny_live_v1.sh
     restart_script: scripts/ops/start_weather_tmin_no_further_cooling_tiny_live_v1.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmin_no_further_cooling_tiny_live_v1/latest_summary.json
