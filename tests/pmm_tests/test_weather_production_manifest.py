@@ -60,7 +60,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     assert control_plane_release.runtime_bindings == ("operational_venv",)
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "5ba155d68f0a2e54284c73626730adc4389105c2"
+        "fce19185eb10389bb35784d043633b77ac708e4b"
     )
     assert spec.release("core_carry_runtime").runtime_bindings == (
         "operational_venv",
