@@ -15,6 +15,7 @@ from scripts.ops.weather_order_executor import (
 )
 from src.strategies.runtime.sync import sync_instance_specs
 from src.strategies.weather_edge_v1.tools.execution_pipeline import build_live_order_record
+from src.strategies.weather_edge_v1.execution import near_core_maker_probe
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 
 
@@ -31,6 +32,8 @@ def score_row() -> dict:
         "model_probability_hold": 0.91,
         "checkpoint_key": "Busan|2026-07-24|13",
         "decision_snapshot_ts_utc": "2026-07-24T04:30:00Z",
+        "current_yes_book_fetched_at_utc": "2026-07-24T04:30:01Z",
+        "current_yes_book_status": "ok",
         "source_report_ts_utc": "2026-07-24T04:20:00Z",
         "observation_cadence_min": 30.0,
         "artifact_hash": "hash",
@@ -128,7 +131,424 @@ def test_live_parser_defaults_match_frozen_ten_plus_five_contract() -> None:
     assert args.maker_shares == runner.FROZEN_MAKER_SHARES == 5
     assert args.summary_filename == "signal_latest_summary.json"
     assert args.summary_history_filename == "signal_summary_history.jsonl"
-    assert runner.CONFIG_ID.endswith("split_10_taker_5_maker_edge_cap_v3")
+    assert runner.CONFIG_ID.endswith("10_taker_5_shared_maker_v7")
+    assert args.near_core_maker_probe_enabled is False
+    assert args.confirm_near_core_maker_probe_live is False
+    assert args.near_core_maker_shares == 5
+    assert args.near_core_book_max_age_sec == 90
+    assert args.near_core_max_city_days_per_bj_day == 0
+    assert args.near_core_max_daily_cost_usd == 30
+
+
+def test_near_core_zero_city_day_cap_is_unlimited_but_cost_cap_remains(
+    tmp_path,
+) -> None:
+    rows = []
+    for index, city in enumerate(("Busan", "Seoul")):
+        rows.append(
+            {
+                **score_row(),
+                "city": city,
+                "token_id": f"yes-token-{index}",
+                "checkpoint_key": f"{city}|2026-07-24|13",
+                "eligible": False,
+                "reasons": ["non_positive_taker_ev"],
+            }
+        )
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", rows)
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert len(plans) == 2
+    assert {row["city"] for row in plans} == {"Busan", "Seoul"}
+    assert all(row["reason"] != "near_core_daily_city_day_cap" for row in ledger)
+
+
+def test_near_core_positive_city_day_cap_still_blocks_second_city_day(
+    tmp_path,
+) -> None:
+    rows = []
+    for index, city in enumerate(("Busan", "Seoul")):
+        rows.append(
+            {
+                **score_row(),
+                "city": city,
+                "token_id": f"yes-token-{index}",
+                "checkpoint_key": f"{city}|2026-07-24|13",
+                "eligible": False,
+                "reasons": ["non_positive_taker_ev"],
+            }
+        )
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", rows)
+    args = runner.parser().parse_args(
+        [
+            "run",
+            "--output-dir",
+            str(tmp_path),
+            "--near-core-maker-probe-enabled",
+            "--near-core-max-city-days-per-bj-day",
+            "1",
+        ]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert len(plans) == 1
+    assert sum(row["reason"] == "near_core_daily_city_day_cap" for row in ledger) == 1
+
+
+def test_near_core_book_freshness_uses_direct_fetch_clock_for_legacy_rows() -> None:
+    now = datetime(2026, 8, 28, 23, 32, 39, tzinfo=timezone.utc)
+    result = runner.near_core_book_freshness(
+        {
+            "current_yes_book_status": "ok",
+            "current_yes_book_clock_lineage_status": "collector_exact_response_clock",
+            "current_yes_book_response_received_at_utc": "2026-08-28T23:29:07.744Z",
+            "current_yes_book_fetched_at_utc": "2026-08-28T23:32:38Z",
+        },
+        now=now,
+        max_age_sec=90,
+    )
+
+    assert result["near_core_book_fresh"] is True
+    assert result["near_core_book_clock_source"] == "legacy_direct_fetch_clock_utc"
+    assert result["near_core_book_age_sec"] == pytest.approx(1.0)
+
+
+def test_near_core_book_freshness_rejects_stale_direct_response_clock() -> None:
+    result = runner.near_core_book_freshness(
+        {
+            "current_yes_book_status": "ok",
+            "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+            "current_yes_book_response_received_at_utc": "2026-08-28T23:29:00Z",
+            "current_yes_book_fetched_at_utc": "2026-08-28T23:32:38Z",
+        },
+        now=datetime(2026, 8, 28, 23, 32, 39, tzinfo=timezone.utc),
+        max_age_sec=90,
+    )
+
+    assert result["near_core_book_fresh"] is False
+    assert result["near_core_book_freshness_status"] == "stale_direct_book_quote"
+    assert result["near_core_book_clock_source"] == "direct_response_received_at_utc"
+
+
+def test_near_core_book_freshness_rejects_non_ok_status_and_future_clock() -> None:
+    now = datetime(2026, 8, 28, 23, 32, 39, tzinfo=timezone.utc)
+    failed = runner.near_core_book_freshness(
+        {
+            "current_yes_book_status": "fetch_error:TimeoutException",
+            "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+            "current_yes_book_response_received_at_utc": "2026-08-28T23:32:38Z",
+        },
+        now=now,
+        max_age_sec=90,
+    )
+    future = runner.near_core_book_freshness(
+        {
+            "current_yes_book_status": "ok",
+            "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+            "current_yes_book_response_received_at_utc": "2026-08-28T23:32:39.001Z",
+        },
+        now=now,
+        max_age_sec=90,
+    )
+
+    assert failed["near_core_book_fresh"] is False
+    assert failed["near_core_book_freshness_status"] == "direct_book_status_not_ok"
+    assert future["near_core_book_fresh"] is False
+    assert future["near_core_book_freshness_status"] == "direct_book_clock_in_future"
+
+
+def test_near_core_live_requires_separate_confirmation_and_ws_control_seal(
+    tmp_path,
+) -> None:
+    args = runner.parser().parse_args(
+        ["run", "--live", "--confirm-live", "--near-core-maker-probe-enabled"]
+    )
+
+    with pytest.raises(RuntimeError, match="confirm-near-core-maker-probe-live"):
+        runner.validate_runtime_arguments(args)
+
+    readiness = tmp_path / "near_core_ws_control_readiness.json"
+    runner.write_json(
+        readiness,
+        {
+            "schema_version": near_core_maker_probe.WS_CONTROL_READINESS_SCHEMA_VERSION,
+            "status": "ready",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "raw_ingestion": "continuous_event_driven",
+            "policy_heartbeat_ms": 500,
+            "feature_snapshot_max_interval_ms": 1000,
+            "private_order_updates": True,
+            "private_channel_connected": True,
+            "authenticated_rest_probe": True,
+            "private_ws_auth_assured": True,
+            "market_ws_connected": True,
+            "staleness_action": "safety_cancel",
+            "window_pre_sec": 60,
+            "window_post_sec": 900,
+        },
+    )
+    confirmed = runner.parser().parse_args(
+        [
+            "run",
+            "--live",
+            "--confirm-live",
+            "--near-core-maker-probe-enabled",
+            "--confirm-near-core-maker-probe-live",
+            "--near-core-ws-control-manifest",
+            str(readiness),
+        ]
+    )
+    runner.validate_runtime_arguments(confirmed)
+    assert runner.near_core_control_failures(
+        confirmed, now=datetime.now(timezone.utc)
+    ) == []
+
+    runner.write_json(readiness, {"schema_version": "wrong", "status": "ready"})
+    runner.validate_runtime_arguments(confirmed)
+    assert "ws_control_schema_mismatch" in runner.near_core_control_failures(
+        confirmed, now=datetime.now(timezone.utc)
+    )
+
+
+def test_near_core_plan_is_separate_fixed_rest_sleeve(tmp_path) -> None:
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "model_edge_after_fee_and_depth": -0.001,
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert len(plans) == 1
+    plan = plans[0]
+    assert plan["size"] == 5
+    assert plan["strategy_instance"] == near_core_maker_probe.STRATEGY_INSTANCE
+    assert plan["source_sleeve"] == near_core_maker_probe.SOURCE_SLEEVE
+    assert plan["client_order_prefix"] == "pmc_ccnc_"
+    assert plan["near_core_policy_arm"] == "WS1_BASELINE_FIXED_REST"
+    assert plan["economic_ws_cancel_enabled"] is False
+    assert plan["order_lifecycle_policy"] == "near_core_fixed_rest_safety_cancel_only_v1"
+    assert ledger[0]["eligible_checkpoint"] is True
+    assert ledger[0]["status"] == "planned"
+
+
+def test_near_core_stale_direct_book_is_recorded_and_blocked(tmp_path) -> None:
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "model_edge_after_fee_and_depth": -0.001,
+        "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+        "current_yes_book_response_received_at_utc": "2026-07-24T04:29:00Z",
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert plans == []
+    assert ledger[0]["status"] == "blocked"
+    assert ledger[0]["reason"] == "stale_direct_book_quote"
+    assert ledger[0]["near_core_book_age_sec"] == pytest.approx(120.0)
+
+    assert runner.append_near_core_ledger(tmp_path, ledger) == 1
+    assert runner.append_near_core_ledger(tmp_path, ledger) == 0
+    assert len(list(runner.iter_jsonl(tmp_path / "near_core_maker_ledger.jsonl"))) == 1
+
+
+def test_near_core_selector_rejects_multiple_blockers(tmp_path) -> None:
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev", "outside_carry_market_mid_domain"],
+        "model_edge_after_fee_and_depth": -0.001,
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert plans == []
+    assert ledger == []
+
+
+def test_core_supersession_cancels_near_core_before_core_submit(tmp_path) -> None:
+    now = datetime(2026, 7, 24, 4, 32, tzinfo=timezone.utc)
+    candidate = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "model_edge_after_fee_and_depth": -0.001,
+    }
+    plan = runner.build_near_core_entry_plan(
+        candidate,
+        live_enabled=True,
+        now=now - timedelta(minutes=1),
+        order_ttl_min=15,
+    )
+    assert plan is not None
+    order = build_live_order_record(
+        plan,
+        {
+            "posted_price": plan["limit_price"],
+            "maker_only": True,
+            "place": {"orderID": "near-core-order-1", "status": "live"},
+        },
+        status="submitted",
+    )
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
+    args = runner.parser().parse_args(
+        [
+            "run",
+            "--output-dir",
+            str(tmp_path),
+            "--live",
+            "--confirm-live",
+            "--near-core-maker-probe-enabled",
+            "--confirm-near-core-maker-probe-live",
+        ]
+    )
+
+    plans, decisions, superseded = runner.near_core_lifecycle_plans(
+        args,
+        tmp_path,
+        now=now,
+        core_actionable_city_days={("Busan", "2026-07-24")},
+    )
+
+    assert superseded == {("Busan", "2026-07-24")}
+    assert decisions[0]["action"] == "near_core_maker_cancel_core_supersession"
+    assert plans[0]["cancel_only"] is True
+    assert plans[0]["cancel_before_order_id"] == "near-core-order-1"
+
+
+def test_near_core_fill_reduces_existing_core_shared_maker_budget(tmp_path) -> None:
+    row = score_row()
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "would_orders.jsonl",
+        [{"checkpoint_key": row["checkpoint_key"], "family_city_day_conflict": False}],
+    )
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [
+            {
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "city": "Busan",
+                "target_date": "2026-07-24",
+                "status": "cancelled",
+                "authoritative_matched_shares": 3,
+            }
+        ],
+    )
+    args = runner.parser().parse_args(["run", "--output-dir", str(tmp_path)])
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+    )
+
+    assert [(plan["child_order_role"], plan["size"]) for plan in plans] == [
+        ("taker", 10.0),
+        ("maker_staged", 2.0),
+    ]
+    assert attempts[0]["near_core_filled_shares_counted_as_existing_exposure"] == 3
+    assert attempts[0]["remaining_core_maker_shares"] == 2
+
+
+def test_terminal_near_core_fill_consumes_city_day_without_submitted_row(
+    tmp_path,
+) -> None:
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "model_edge_after_fee_and_depth": -0.001,
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [row])
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [
+            {
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "city": "Busan",
+                "target_date": "2026-07-24",
+                "status": "filled",
+                "authoritative_matched_shares": 5,
+            }
+        ],
+    )
+    args = runner.parser().parse_args(
+        ["run", "--output-dir", str(tmp_path), "--near-core-maker-probe-enabled"]
+    )
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        core_actionable_city_days=set(),
+    )
+
+    assert plans == []
+    assert ledger[0]["reason"] == "near_core_city_day_exposure_already_consumed"
+
+
+def test_near_core_authoritative_fill_precedes_conflicting_legacy_fields() -> None:
+    assert near_core_maker_probe.matched_shares(
+        {
+            "authoritative_matched_shares": 0,
+            "source_filled_shares": 5,
+            "matched_shares": 4,
+        }
+    ) == 0
+    assert near_core_maker_probe.matched_shares(
+        {
+            "source_filled_shares": 5,
+            "exchange_response": {
+                "authoritative_order_state": {"size_matched": 2}
+            },
+        }
+    ) == 2
 
 
 def test_market_above_frozen_training_support_is_not_eligible() -> None:

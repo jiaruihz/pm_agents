@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from src.strategies.weather_edge_v1.execution.contracts import (
     EXECUTION_SCHEMA_VERSION,
     ChildOrderPlan,
@@ -12,6 +14,7 @@ from src.strategies.weather_edge_v1.execution.contracts import (
     make_plan_dedupe_key,
 )
 from src.strategies.weather_edge_v1.execution.venue.polymarket import (
+    make_client_order_id,
     PolymarketOrderRequest,
     PolymarketVenueAdapter,
 )
@@ -116,6 +119,53 @@ def _request(*, order_type="GTC", post_only=False, price="0.901", shares="5", ep
         now_utc=NOW,
         expiration_utc=expiration_utc,
     )
+
+
+def test_client_order_prefix_is_explicit_and_defaults_are_unchanged():
+    default = make_client_order_id(
+        plan_dedupe_key="plan-1",
+        child_role="maker_staged",
+        request=_request(epoch="book-1", post_only=True),
+        fee_identity="fee-1",
+        normalized_price=Decimal("0.901"),
+    )
+    near_core_request = PolymarketOrderRequest(
+        token_id="token-1",
+        venue_side="BUY",
+        price="0.901",
+        shares="5",
+        order_type="GTC",
+        post_only=True,
+        book_epoch_ref="book-1",
+        now_utc=NOW,
+        client_order_prefix="pmc_ccnc_",
+    )
+    near_core = make_client_order_id(
+        plan_dedupe_key="plan-1",
+        child_role="maker_staged",
+        request=near_core_request,
+        fee_identity="fee-1",
+        normalized_price=Decimal("0.901"),
+    )
+
+    assert default.startswith("pmc_")
+    assert near_core.startswith("pmc_ccnc_")
+    assert default.removeprefix("pmc_") == near_core.removeprefix("pmc_ccnc_")
+
+
+def test_client_order_prefix_rejects_unbounded_or_foreign_namespaces():
+    with pytest.raises(ValueError, match="client_order_prefix"):
+        PolymarketOrderRequest(
+            token_id="token-1",
+            venue_side="BUY",
+            price="0.901",
+            shares="5",
+            order_type="GTC",
+            post_only=True,
+            book_epoch_ref="book-1",
+            now_utc=NOW,
+            client_order_prefix="near-core-",
+        )
 
 
 def _intent():
