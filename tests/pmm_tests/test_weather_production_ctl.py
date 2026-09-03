@@ -128,7 +128,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
             "epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/"
             "capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/"
             "wcir_next_print_helsinki_tokyo_frozen_v1/"
-            "epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/"
+            "epoch=wcir_ht_next_print_action_shadow_v2_20260904a/"
             "capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/"
             "us_fast_weather_lab_metarws_pro_market_20260830/"
             "market_capture_demands.jsonl /Volumes/jrs/"
@@ -231,7 +231,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "4b0a7fdaf376fc94ca410de49b72d463b27107e4"
     )
     wcir_ht = by_id["weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1"]
-    assert wcir_ht.execution_mode == "zero_notional_probability_only"
+    assert wcir_ht.execution_mode == "zero_notional_action_shadow"
     assert wcir_ht.expected_live is False
     assert wcir_ht.release_id == "wcir_next_print_frozen"
     assert wcir_ht.dependencies == (
@@ -243,12 +243,10 @@ def test_committed_production_spec_declares_current_live_control_plane():
     )
     assert wcir_ht.expected_health_contract() == {
         "strategy_key": "weather_helsinki_tokyo_wcir_next_print_frozen_v1",
-        "execution_mode": "zero_notional_probability_only",
-        "policy_status": "diagnostic_only",
+        "execution_mode": "zero_notional_action_shadow",
+        "policy_status": "zero_notional_action_shadow",
         "live_authority": False,
-        "forward_epoch_id": "wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06",
-        "safety.signal_candidates": 0,
-        "safety.trade_intents": 0,
+        "forward_epoch_id": "wcir_ht_next_print_action_shadow_v2_20260904a",
         "safety.plans": 0,
         "safety.orders": 0,
         "safety.fills": 0,
@@ -261,7 +259,7 @@ def test_committed_production_spec_declares_current_live_control_plane():
     }
     wcir_ht_release = spec.release("wcir_next_print_frozen")
     assert wcir_ht_release.expected_repo_sha == (
-        "d4ecfffec7ff6558a6c21191eeee61d3eafcd300"
+        "f96e32d190c7c9e30f4b76cd4c9446f10a0cec8e"
     )
     assert wcir_ht_release.runtime_bindings == ("operational_venv",)
     court = by_id["polymarket_dispute_clarification_court_v1"]

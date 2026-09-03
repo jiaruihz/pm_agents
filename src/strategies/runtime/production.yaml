@@ -37,8 +37,8 @@ production_releases:
     expected_repo_sha: 97a95fdc8baa5ed8a5ae89a5686adbbbde35d9e8
     runtime_bindings: [operational_venv]
   - release_id: wcir_next_print_frozen
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/d4ecfffec7ff6558a6c21191eeee61d3eafcd300
-    expected_repo_sha: d4ecfffec7ff6558a6c21191eeee61d3eafcd300
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/f96e32d190c7c9e30f4b76cd4c9446f10a0cec8e
+    expected_repo_sha: f96e32d190c7c9e30f4b76cd4c9446f10a0cec8e
     runtime_bindings: [operational_venv]
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
@@ -102,6 +102,10 @@ production_releases:
   - release_id: weather_first_selective_maker_v2_1
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/6690b445e0737da6220c1c665cc8d1f9b40b59e0
     expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
+    runtime_bindings: [operational_venv]
+  - release_id: weather_mm_w3_event_fenced_paired_bid
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/4a82f27705abd26e6d3e276217875b6bc2414044
+    expected_repo_sha: 4a82f27705abd26e6d3e276217875b6bc2414044
     runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
@@ -286,7 +290,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
       WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
-      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_action_shadow_v2_20260904a/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
@@ -318,22 +322,20 @@ managed_runtimes:
     uses_market_proxy: true
     tmux_session: weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1
     role: shadow
-    execution_mode: zero_notional_probability_only
+    execution_mode: zero_notional_action_shadow
     release_id: wcir_next_print_frozen
     start_script: scripts/ops/start_weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1.sh
-    health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06/latest.json
+    health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_action_shadow_v2_20260904a/latest.json
     health_format: json
     max_health_age_sec: 180
     startup_grace_sec: 180
     accepted_health_statuses: [ok]
     expected_health_fields:
       strategy_key: weather_helsinki_tokyo_wcir_next_print_frozen_v1
-      execution_mode: zero_notional_probability_only
-      policy_status: diagnostic_only
+      execution_mode: zero_notional_action_shadow
+      policy_status: zero_notional_action_shadow
       live_authority: false
-      forward_epoch_id: wcir_ht_next_print_frozen_v1_603a0d1ddce3ee06
-      safety.signal_candidates: 0
-      safety.trade_intents: 0
+      forward_epoch_id: wcir_ht_next_print_action_shadow_v2_20260904a
       safety.plans: 0
       safety.orders: 0
       safety.fills: 0
@@ -542,6 +544,33 @@ managed_runtimes:
       venue_call_allowed: false
       formal_forward_start_utc: "2026-08-31T00:00:00Z"
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, current_yes_core_carry_market_state_shadow_v2, weather_market_books]
+    recovery_policy: safe
+
+  - instance_id: weather_mm_w3_event_fenced_paired_bid_shadow_v1
+    tmux_session: weather_mm_w3_event_fenced_paired_bid_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: weather_mm_w3_event_fenced_paired_bid
+    start_script: scripts/ops/start_weather_mm_w3_event_fenced_paired_bid_shadow.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_mm_w3_event_fenced_paired_bid_v1/latest.json
+    health_format: json
+    max_health_age_sec: 120
+    startup_grace_sec: 180
+    accepted_health_statuses: [warming, ok]
+    expected_health_fields:
+      strategy_key: weather_mm_w3_event_fenced_paired_bid_v1
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      venue_call_allowed: false
+      actual_notional: 0
+      trade_intents: 0
+      plans: 0
+      orders: 0
+      fills: 0
+      exchange_calls: 0
+      formal_forward_start_utc: "2026-09-04T00:00:00Z"
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
     recovery_policy: safe
 
   - instance_id: fast_source_prev_no_trial_v1
