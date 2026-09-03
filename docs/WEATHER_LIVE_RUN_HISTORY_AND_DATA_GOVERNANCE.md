@@ -5,7 +5,7 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
 
-Last updated: 2026-08-13
+Last updated: 2026-09-04
 
 This document records the early weather live-trading rollout history, known mistakes, and data-model rules needed to keep future analysis reproducible. Read it with:
 
@@ -1886,7 +1886,51 @@ fixed_release = 004d456b2f822704b20e503517c25dde6fd06d9f
 clean_boundary = 2026-09-01T13:57:46Z
 ```
 
-## 30. Immediate Follow-Up Work
+## 30. 2026-09-04 Core Carry near-maker tiny-live deployment boundary
+
+Mac production completed the Core Carry near-maker WS-1 baseline deployment at
+`2026-09-03T17:42:28Z` (`2026-09-04 01:42:28` Beijing). The immutable strategy
+release is `09086260d2e61d70b02b257040deb58bce4956b1`; the production runtime-contract
+fix is `8a87ad94ffb331c6dd632b6f6116689a7b6737f6`, and the canonical-refresh binding
+fix is `8aeb104880cd8ce34c73d0c9a61331216117b647`.
+
+The ordered restart replaced the near controller PID `60852 -> 53730`, verified
+`ready`, authenticated private WS, market WS, and `live_enabled=true`, then replaced
+the Core runner PID `71903 -> 90734`. Core reported `status=ok`,
+`live_enabled=true`, and loaded SHA `09086260...`. The final strict pre/post manifest
+had zero critical findings; its only warning was unrelated unregistered worktrees.
+`cross_no_v2_metar_v1` remained paused and absent throughout.
+
+This timestamp is the forward-comparison boundary for the new sleeve. Its frozen
+identity and safety envelope are:
+
+```text
+strategy_instance = current_yes_core_carry_near_core_maker_probe_5s_v1
+experiment_id = core_carry_near_core_maker_ws1_v1
+policy_arm = WS1_BASELINE_FIXED_REST
+client_order_prefix = pmc_ccnc_
+fixed_shares = 5
+max_city_days_per_bj_day = 1
+max_daily_cost_usd = 5
+economic_ws_cancel_or_reprice_enabled = false
+```
+
+At the boundary, `eligible_checkpoints=0`, near-maker ledger rows=`0`, near-maker
+orders/fills=`0/0`, and the shared historical Core `live_orders.jsonl` remained at
+533 rows before and after restart. An authenticated CLOB read showed 23 account-wide
+open orders and zero orders attributable to prefix `pmc_ccnc_`. Future comparisons
+must use all eligible near-Core checkpoints, including unfilled zero-PnL checkpoints;
+do not pool this sleeve's PnL with the existing Core taker/shared-maker sleeve.
+
+Primary raw evidence:
+
+- `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_ws_control_readiness.json`
+- `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_maker_manifest.json`
+- `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_maker_latest_report.json`
+- `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_maker_ledger.jsonl`
+- `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl`
+
+## 31. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
