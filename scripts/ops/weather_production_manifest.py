@@ -507,7 +507,7 @@ def inspect_runtime_health_contracts(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for runtime in spec.managed_runtimes:
-        if not runtime.expected_health_fields:
+        if runtime.desired_state != "running" or not runtime.expected_health_fields:
             continue
         try:
             if runtime.health_url:

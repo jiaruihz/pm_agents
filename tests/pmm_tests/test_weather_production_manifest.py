@@ -266,6 +266,25 @@ def test_manifest_reports_runtime_health_contract_mismatch(tmp_path, monkeypatch
     assert mismatch["observed"] == 2000000000
 
 
+def test_paused_runtime_does_not_require_active_health_artifact(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="paused_live_probe",
+        tmux_session="paused_live_probe",
+        role="strategy",
+        execution_mode="live",
+        desired_state="paused",
+        health_path=tmp_path / "missing_health.json",
+        expected_health_fields=(("live_enabled", True),),
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+    spec = WeatherProductionSpec(
+        **{**production_spec(tmp_path).__dict__, "managed_runtimes": (runtime,)}
+    )
+
+    assert manifest.inspect_runtime_health_contracts(spec) == []
+
+
 def test_db_route_detects_distinct_local_and_jrs_files(tmp_path):
     spec = production_spec(tmp_path)
     spec.canonical_db_path.parent.mkdir(parents=True)
