@@ -1,0 +1,29 @@
+{
+  "base_action_contract_sha256": "4b1e3c2c0fa49779a776647caf92fcc4d52350d300f2f8d48465625b41be2669",
+  "execution_mode": "zero_notional_action_shadow",
+  "forward_epoch_id": "wcir_ht_next_print_action_shadow_v2_20260904a",
+  "forward_start_utc": "2026-09-03T16:45:00Z",
+  "live_authority": false,
+  "market_identity": {
+    "fallback": "Gamma /markets/{market_id}",
+    "primary": "canonical market_books/latest.json exact market_id+condition_id+token_id+side+bracket match"
+  },
+  "model_probability_semantics": {
+    "p_model": null,
+    "reason": "p_new_running_max selects whether to express the exact NO token but is not the token's fair probability"
+  },
+  "schema_version": "wcir_ht_action_shadow_overlay_v2",
+  "standard_lineage": {
+    "signal_candidates": "append-only after exact-token strict WS entry book is executable",
+    "trade_intents": "append-only zero-size intent paired one-to-one with each selected candidate"
+  },
+  "strategy_key": "weather_helsinki_tokyo_wcir_next_print_frozen_v1",
+  "zero_notional": {
+    "actual_notional_usd": 0.0,
+    "exchange_calls": 0,
+    "fills": 0,
+    "orders": 0,
+    "plans": 0,
+    "requested_size": 0.0
+  }
+}
