@@ -2486,14 +2486,6 @@ def validate_runtime_arguments(args: argparse.Namespace) -> None:
             ) from exc
         if not isinstance(readiness, Mapping):
             raise RuntimeError("near-Core WS control-readiness manifest must be an object")
-        readiness_failures = near_core_maker_probe.ws_control_readiness_failures(
-            readiness
-        )
-        if readiness_failures:
-            raise RuntimeError(
-                "near-Core WS control-readiness failed: "
-                + ",".join(readiness_failures)
-            )
     if (
         float(args.taker_shares) != FROZEN_TAKER_SHARES
         or float(args.maker_shares) != FROZEN_MAKER_SHARES
@@ -2505,6 +2497,21 @@ def validate_runtime_arguments(args: argparse.Namespace) -> None:
         raise RuntimeError("near-Core maker probe requires exactly 5 shares")
 
 
+def near_core_control_failures(
+    args: argparse.Namespace, *, now: datetime
+) -> list[str]:
+    if not bool(args.live and args.near_core_maker_probe_enabled):
+        return []
+    path = Path(str(args.near_core_ws_control_manifest or ""))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ["ws_control_manifest_unreadable"]
+    if not isinstance(payload, Mapping):
+        return ["ws_control_manifest_not_object"]
+    return near_core_maker_probe.ws_control_readiness_failures(payload, now=now)
+
+
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
     assert_runtime_contract()
     validate_runtime_arguments(args)
@@ -2513,6 +2520,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     configure_signal_runner(output_dir)
     signal_summary = signal_runner.run_once(args)
     now = datetime.now(timezone.utc)
+    control_failures = near_core_control_failures(args, now=now)
+    runtime_args = argparse.Namespace(**vars(args))
+    if control_failures:
+        runtime_args.near_core_maker_probe_enabled = False
     decision_packets = write_new_decision_packets(output_dir)
     capture_demands = write_capture_demands(
         output_dir,
@@ -2528,7 +2539,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     }
     near_lifecycle_plans, near_lifecycle_decisions, superseded_city_days = (
         near_core_lifecycle_plans(
-            args,
+            runtime_args,
             output_dir,
             now=now,
             core_actionable_city_days=core_actionable_city_days,
@@ -2557,7 +2568,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         near_core_maker_probe.city_day(plan) for plan in entry_plans
     }
     near_entry_plans, near_entry_decisions = near_core_entry_plans(
-        args,
+        runtime_args,
         output_dir,
         now=now,
         core_actionable_city_days=remaining_core_city_days,
@@ -2574,9 +2585,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         *entry_plans,
         *near_entry_plans,
     ]
-    execution = execute_plans(args, plans, output_dir)
+    execution = execute_plans(runtime_args, plans, output_dir)
     near_core_order_ledger_rows = sync_near_core_order_ledger(output_dir)
-    near_core_artifacts = write_near_core_runtime_artifacts(args, output_dir)
+    near_core_artifacts = write_near_core_runtime_artifacts(runtime_args, output_dir)
     for attempt in attempts:
         append_jsonl(output_dir / "entry_attempts.jsonl", attempt)
     summary = {
@@ -2606,7 +2617,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             [list(key) for key in superseded_city_days]
         ),
         "near_core_order_ledger_rows_written": near_core_order_ledger_rows,
-        "near_core_feature_enabled": bool(args.near_core_maker_probe_enabled),
+        "near_core_feature_configured": bool(args.near_core_maker_probe_enabled),
+        "near_core_feature_enabled": bool(runtime_args.near_core_maker_probe_enabled),
+        "near_core_control_failures": control_failures,
         "near_core_live_authorized": bool(
             args.live
             and args.confirm_live

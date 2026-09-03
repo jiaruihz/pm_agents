@@ -40,8 +40,8 @@ session_cmd="cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u scripts/op
     --max-daily-cost-usd 100 \
     --near-core-maker-probe-enabled \
     --confirm-near-core-maker-probe-live \
-    --near-core-max-city-days-per-bj-day 0 \
-    --near-core-max-daily-cost-usd 30 \
+    --near-core-max-city-days-per-bj-day 1 \
+    --near-core-max-daily-cost-usd 5 \
     --near-core-ws-control-manifest '$NEAR_CORE_WS_CONTROL_MANIFEST' \
     --interval-seconds 15 \
     --book-proxy '$MARKET_PROXY' \

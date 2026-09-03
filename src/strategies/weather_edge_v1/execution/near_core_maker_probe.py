@@ -87,7 +87,12 @@ def consumed_city_days(
     return consumed
 
 
-def ws_control_readiness_failures(payload: Mapping[str, Any]) -> list[str]:
+def ws_control_readiness_failures(
+    payload: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+    max_manifest_age_sec: float = 2.0,
+) -> list[str]:
     """Validate the E1 smoke seal required before any WS-1 live order."""
 
     failures: list[str] = []
@@ -95,6 +100,15 @@ def ws_control_readiness_failures(payload: Mapping[str, Any]) -> list[str]:
         failures.append("ws_control_schema_mismatch")
     if str(payload.get("status") or "") != "ready":
         failures.append("ws_control_not_ready")
+    generated_at = str(payload.get("generated_at_utc") or "")
+    try:
+        generated_clock = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        age_sec = (current - generated_clock.astimezone(timezone.utc)).total_seconds()
+        if age_sec < 0 or age_sec > max_manifest_age_sec:
+            failures.append("ws_control_manifest_stale")
+    except (TypeError, ValueError):
+        failures.append("ws_control_manifest_clock_invalid")
     if str(payload.get("raw_ingestion") or "") != "continuous_event_driven":
         failures.append("raw_ingestion_not_continuous_event_driven")
     try:
@@ -111,6 +125,14 @@ def ws_control_readiness_failures(payload: Mapping[str, Any]) -> list[str]:
         failures.append("feature_snapshot_slower_than_1s")
     if not bool(payload.get("private_order_updates")):
         failures.append("private_order_updates_unavailable")
+    if not bool(payload.get("private_channel_connected")):
+        failures.append("private_channel_disconnected")
+    if not bool(payload.get("authenticated_rest_probe")):
+        failures.append("authenticated_rest_probe_failed")
+    if not bool(payload.get("private_ws_auth_assured")):
+        failures.append("private_ws_auth_not_assured")
+    if not bool(payload.get("market_ws_connected")):
+        failures.append("market_ws_disconnected")
     if str(payload.get("staleness_action") or "") != "safety_cancel":
         failures.append("staleness_action_not_safety_cancel")
     try:

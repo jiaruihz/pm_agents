@@ -288,10 +288,15 @@ def test_near_core_live_requires_separate_confirmation_and_ws_control_seal(
         {
             "schema_version": near_core_maker_probe.WS_CONTROL_READINESS_SCHEMA_VERSION,
             "status": "ready",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
             "raw_ingestion": "continuous_event_driven",
             "policy_heartbeat_ms": 500,
             "feature_snapshot_max_interval_ms": 1000,
             "private_order_updates": True,
+            "private_channel_connected": True,
+            "authenticated_rest_probe": True,
+            "private_ws_auth_assured": True,
+            "market_ws_connected": True,
             "staleness_action": "safety_cancel",
             "window_pre_sec": 60,
             "window_post_sec": 900,
@@ -309,10 +314,15 @@ def test_near_core_live_requires_separate_confirmation_and_ws_control_seal(
         ]
     )
     runner.validate_runtime_arguments(confirmed)
+    assert runner.near_core_control_failures(
+        confirmed, now=datetime.now(timezone.utc)
+    ) == []
 
     runner.write_json(readiness, {"schema_version": "wrong", "status": "ready"})
-    with pytest.raises(RuntimeError, match="WS control-readiness failed"):
-        runner.validate_runtime_arguments(confirmed)
+    runner.validate_runtime_arguments(confirmed)
+    assert "ws_control_schema_mismatch" in runner.near_core_control_failures(
+        confirmed, now=datetime.now(timezone.utc)
+    )
 
 
 def test_near_core_plan_is_separate_fixed_rest_sleeve(tmp_path) -> None:
