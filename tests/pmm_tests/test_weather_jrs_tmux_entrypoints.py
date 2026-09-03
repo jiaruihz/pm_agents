@@ -342,6 +342,8 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "weather_canonical_refresh_bindings.py" in starter
     assert '--operational-project-dir "$OPERATIONAL_PROJECT_DIR"' in starter
     assert '--refresh-project-dir "$REFRESH_PROJECT_DIR"' in starter
+    assert "load_production_spec().canonical_db_path" in starter
+    assert '--canonical-db "$CANONICAL_DB"' in starter
     assert 'export PROJECT_DIR=%q WEATHER_DATA_FEED_RUNTIME_ROOT=%q WEATHER_CANONICAL_REFRESH_RUNTIME_DIR=%q' in starter
     assert "WEATHER_CANONICAL_REFRESH_RUNTIME_DIR" in starter
     assert 'SESSION="weather_canonical_refresh"' in starter

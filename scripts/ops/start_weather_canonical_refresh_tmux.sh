@@ -14,6 +14,11 @@ OPERATIONAL_PROJECT_DIR="$(
   PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
     'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().operational_repo_root)'
 )"
+CANONICAL_DB="$(
+  cd "$PROJECT_DIR"
+  PYTHONPATH="$PROJECT_DIR" "$PROJECT_DIR/.venv/bin/python" -c \
+    'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().canonical_db_path)'
+)"
 
 # The release checkout is immutable code, not a second data root.  Provision
 # the operational fill cache and every append-only adjustment journal as
@@ -22,6 +27,7 @@ OPERATIONAL_PROJECT_DIR="$(
   "$PROJECT_DIR/scripts/ops/weather_canonical_refresh_bindings.py" \
   --operational-project-dir "$OPERATIONAL_PROJECT_DIR" \
   --refresh-project-dir "$REFRESH_PROJECT_DIR" \
+  --canonical-db "$CANONICAL_DB" \
   >/dev/null
 SESSION="weather_canonical_refresh"
 JOB_DIR="$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh"
