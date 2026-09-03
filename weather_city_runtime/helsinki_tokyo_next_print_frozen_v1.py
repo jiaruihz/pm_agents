@@ -369,6 +369,10 @@ class FrozenModels:
             raise RuntimeError("action-shadow overlay strategy key mismatch")
         if overlay.get("execution_mode") != EXECUTION_MODE:
             raise RuntimeError("action-shadow overlay execution mode mismatch")
+        if overlay.get("forward_epoch_id") != ACTION_SHADOW_EPOCH:
+            raise RuntimeError("action-shadow overlay epoch mismatch")
+        if overlay.get("forward_start_utc") != ACTION_SHADOW_START_UTC:
+            raise RuntimeError("action-shadow overlay start mismatch")
         if overlay.get("live_authority") is not False:
             raise RuntimeError("action-shadow overlay unexpectedly grants live authority")
         if overlay.get("base_action_contract_sha256") != self.config.get(

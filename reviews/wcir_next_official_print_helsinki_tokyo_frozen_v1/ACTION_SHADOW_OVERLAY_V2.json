@@ -1,6 +1,8 @@
 {
   "base_action_contract_sha256": "4b1e3c2c0fa49779a776647caf92fcc4d52350d300f2f8d48465625b41be2669",
   "execution_mode": "zero_notional_action_shadow",
+  "forward_epoch_id": "wcir_ht_next_print_action_shadow_v2_20260904a",
+  "forward_start_utc": "2026-09-03T16:45:00Z",
   "live_authority": false,
   "market_identity": {
     "fallback": "Gamma /markets/{market_id}",
