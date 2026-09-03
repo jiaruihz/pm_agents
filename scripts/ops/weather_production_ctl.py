@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -103,6 +105,32 @@ def _pane_text(row: Mapping[str, Any] | None) -> str:
     )
 
 
+def _command_arg_value(command: str, argument: str) -> str | None:
+    """Read an exact long-form CLI argument from an observed pane command."""
+
+    direct = re.search(
+        rf"(?<!\S){re.escape(argument)}(?:=|\s+)([^\s'\"\\]+)", command
+    )
+    if direct:
+        return direct.group(1)
+    tokens: list[str] = []
+    for _ in range(3):
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return None
+        if len(tokens) != 1 or tokens[0] == command:
+            break
+        command = tokens[0]
+    for index, token in enumerate(tokens):
+        if token == argument:
+            return tokens[index + 1] if index + 1 < len(tokens) else None
+        prefix = argument + "="
+        if token.startswith(prefix):
+            return token[len(prefix) :]
+    return None
+
+
 def without_allowed_unmanaged_sessions(
     spec: WeatherProductionSpec, observed: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -153,6 +181,7 @@ def evaluate_production_health(
                 "health_path": str(runtime.health_path) if runtime.health_path else None,
                 "health_url": runtime.health_url,
                 "health_format": runtime.health_format,
+                "health_publish_interval_sec": runtime.health_publish_interval_sec,
                 "health_age_sec": None,
                 "health_generated_at_utc": None,
                 "health_contract_mismatches": [],
@@ -186,6 +215,29 @@ def evaluate_production_health(
         if runtime.expected_live and session_row is not None:
             if "--live" not in pane_text or "--confirm-live" not in pane_text:
                 issues.append("live_flags_missing")
+        if runtime.freshness_contracts and session_row is not None:
+            for contract in runtime.freshness_contracts:
+                value = _command_arg_value(
+                    pane_text, contract.consumer_max_age_arg
+                )
+                if value is None:
+                    issues.append(
+                        f"freshness_arg_missing:{contract.name}"
+                    )
+                    continue
+                try:
+                    observed_max_age = float(value)
+                except ValueError:
+                    observed_max_age = math.nan
+                if not math.isfinite(observed_max_age) or not math.isclose(
+                    observed_max_age,
+                    contract.consumer_max_age_sec,
+                    rel_tol=0.0,
+                    abs_tol=1e-9,
+                ):
+                    issues.append(
+                        f"freshness_arg_mismatch:{contract.name}"
+                    )
         if runtime.health_format == "http_json":
             health_payload, health_error = _read_http_json(str(runtime.health_url))
             if health_error:
@@ -240,6 +292,7 @@ def evaluate_production_health(
             "health_path": str(runtime.health_path) if runtime.health_path else None,
             "health_url": runtime.health_url,
             "health_format": runtime.health_format,
+            "health_publish_interval_sec": runtime.health_publish_interval_sec,
             "health_age_sec": (
                 round(health_age_sec, 3) if health_age_sec is not None else None
             ),
@@ -1913,6 +1966,8 @@ def _run_restart(
             "status": "error",
             "reason": str(exc),
         }
+    before_pid = _primary_pane_pid(spec, runtime.tmux_session)
+    started_at_epoch = time.time()
     result = subprocess.run(
         [str(script)],
         cwd=str(runtime.checkout_root or ROOT),
@@ -1923,11 +1978,30 @@ def _run_restart(
         timeout=120,
         check=False,
     )
+    status = "restarted" if result.returncode == 0 else "error"
+    reason = None
+    if result.returncode != 0:
+        session_present = (
+            _tmux(spec, "has-session", "-t", f"={runtime.tmux_session}").returncode
+            == 0
+        )
+        after_pid = _primary_pane_pid(spec, runtime.tmux_session)
+        if (
+            session_present
+            and before_pid is not None
+            and after_pid is not None
+            and before_pid != after_pid
+        ):
+            status = "warming"
+            reason = "restart_wrapper_nonzero_target_replaced"
     return {
         "instance_id": runtime.instance_id,
-        "status": "restarted" if result.returncode == 0 else "error",
+        "status": status,
         "returncode": result.returncode,
         "output": result.stdout[-2000:].strip(),
+        "started_at_epoch": started_at_epoch,
+        "startup_grace_sec": runtime.startup_grace_sec,
+        **({"reason": reason} if reason else {}),
     }
 
 
@@ -1988,6 +2062,30 @@ def _pid_is_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _primary_pane_pid(
+    spec: WeatherProductionSpec, session: str
+) -> int | None:
+    """Return pane 0 PID, the managed runtime's target process identity."""
+
+    panes = _tmux(
+        spec,
+        "list-panes",
+        "-t",
+        f"={session}",
+        "-F",
+        "#{pane_index}\t#{pane_pid}",
+    )
+    if panes.returncode != 0:
+        return None
+    for line in panes.stdout.splitlines():
+        parts = line.strip().split("\t")
+        if len(parts) == 2 and parts[0] == "0" and parts[1].isdigit():
+            return int(parts[1])
+        if len(parts) == 1 and parts[0].isdigit():
+            return int(parts[0])
+    return None
 
 
 def _stop_registered_session(
@@ -2234,6 +2332,8 @@ def main() -> int:
             action = _run_restart(
                 spec, runtime, confirm_live=bool(args.confirm_live)
             )
+            if action.get("status") == "warming":
+                wait_for_startup_convergence(spec, [action])
             time.sleep(2)
             after = manifest_tool.collect_manifest(spec)
             after = manifest_tool.compare_prechange_manifest(after, before)

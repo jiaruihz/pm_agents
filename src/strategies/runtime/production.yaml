@@ -263,6 +263,7 @@ managed_runtimes:
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
     health_format: json
     max_health_age_sec: 420
+    health_publish_interval_sec: 10
     startup_grace_sec: 180
     accepted_health_statuses: [ok, ok_with_discovery_reuse, ok_with_cold_book_failures]
     expected_health_fields:
@@ -483,6 +484,12 @@ managed_runtimes:
     live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
     live_order_access: reader
     dependencies: [weather_market_books, weather_jrs_context_keeper]
+    freshness_contracts:
+      - name: market_books_health
+        producer_instance_id: weather_market_books
+        consumer_max_age_sec: 30
+        min_missed_heartbeats: 3
+        consumer_max_age_arg: --market-health-max-age-sec
     recovery_policy: guarded_live
 
   - instance_id: current_yes_core_carry_event_rescore_shadow_v1

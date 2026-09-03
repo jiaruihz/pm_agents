@@ -132,6 +132,24 @@ canonical refresh 是唯一允许的 unmanaged bounded one-shot，但只能 atta
 server。生产操作不得直接用 `tmux kill-server`、`tmux kill-session`、底层 start/stop
 脚本或手拼 live 命令绕过 controller。
 
+所有 heartbeat 驱动的 freshness gate 必须在 `production.yaml` 的 consumer runtime 下声明
+`freshness_contracts`；producer 自己用 `health_publish_interval_sec` 单点声明并由部署验收测量实际
+publish cadence，consumer 只引用 producer instance，同时冻结允许漏掉的 heartbeat 数、max-age
+及其 CLI 参数。允许漏掉的 heartbeat 不得少于 3 个，且
+`consumer_max_age_sec >= producer_interval_sec * min_missed_heartbeats`；controller 会同时校验
+静态关系和运行中 pane 的真实参数。数据年龄超过这个合同仍应 fail closed，但不得用比 producer
+正常发布周期更短的阈值制造永久 stale。
+
+所有 `expected_live: true` runtime 必须统一满足：`execution_mode: live`、JSON health、明确的
+accepted status、显式 restart contract、运行命令同时含 `--live --confirm-live`，health artifact
+明确报告 `live_enabled: true`。缺任一项都属于部署合同失败，不得用“业务 ready”覆盖。
+
+restart wrapper 的退出码不是唯一成功依据。wrapper 非零但目标 session 的 pane 0 已换成新 PID 时，controller
+必须继续等待 post-start health artifact 刷新并通过完整 health contract；只有 PID 未替换、目标退出或
+grace 超时才判 restart 失败；不得用整个多-pane session 的 PID 集合代替目标 pane identity。bounded
+health/probe tmux session 自然退出不得计为 persistent session
+丢失；persistent session 真丢失仍必须 fail closed。
+
 controller 启动 release checkout 时通过 `WEATHER_PRODUCTION_CONFIG` 指向控制仓库的
 `production.yaml`。已有 tmux server 不会继承 client 的环境，因此 shared helper 会在每个
 `new-session/new-window` 上显式注入该变量；controller 缺失该变量时 fail closed。

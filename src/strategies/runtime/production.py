@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 from dataclasses import dataclass, field, replace
@@ -26,6 +27,17 @@ class WeatherProductionReleaseSpec:
 
 
 @dataclass(frozen=True)
+class WeatherFreshnessContractSpec:
+    """Declared producer cadence and consumer staleness budget."""
+
+    name: str
+    producer_instance_id: str
+    consumer_max_age_sec: float
+    min_missed_heartbeats: int
+    consumer_max_age_arg: str
+
+
+@dataclass(frozen=True)
 class WeatherManagedRuntimeSpec:
     instance_id: str
     tmux_session: str
@@ -39,6 +51,7 @@ class WeatherManagedRuntimeSpec:
     health_url: str | None = None
     health_format: str = "json"
     max_health_age_sec: float | None = None
+    health_publish_interval_sec: float | None = None
     accepted_health_statuses: tuple[str, ...] = ()
     expected_live: bool = False
     live_order_path: Path | None = None
@@ -49,6 +62,7 @@ class WeatherManagedRuntimeSpec:
     release_id: str | None = None
     launch_environment: tuple[tuple[str, str], ...] = ()
     expected_health_fields: tuple[tuple[str, Any], ...] = ()
+    freshness_contracts: tuple[WeatherFreshnessContractSpec, ...] = ()
     startup_grace_sec: float = 180.0
 
     def expected_health_contract(self) -> dict[str, Any]:
@@ -375,6 +389,26 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"managed runtime expected_health_fields must be a mapping: {instance_id}"
             )
+        freshness_raw = item.get("freshness_contracts") or []
+        if not isinstance(freshness_raw, list):
+            raise ValueError(
+                f"managed runtime freshness_contracts must be a list: {instance_id}"
+            )
+        freshness_contracts: list[WeatherFreshnessContractSpec] = []
+        for contract_raw in freshness_raw:
+            if not isinstance(contract_raw, dict):
+                raise ValueError(
+                    f"freshness contract must be a mapping: {instance_id}"
+                )
+            freshness_contracts.append(
+                WeatherFreshnessContractSpec(
+                    name=str(contract_raw["name"]),
+                    producer_instance_id=str(contract_raw["producer_instance_id"]),
+                    consumer_max_age_sec=float(contract_raw["consumer_max_age_sec"]),
+                    min_missed_heartbeats=int(contract_raw["min_missed_heartbeats"]),
+                    consumer_max_age_arg=str(contract_raw["consumer_max_age_arg"]),
+                )
+            )
         checkout_root = (
             release_by_id[release_id].checkout_root
             if release_id
@@ -412,6 +446,11 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     if item.get("max_health_age_sec") is not None
                     else None
                 ),
+                health_publish_interval_sec=(
+                    float(item["health_publish_interval_sec"])
+                    if item.get("health_publish_interval_sec") is not None
+                    else None
+                ),
                 accepted_health_statuses=tuple(
                     str(value) for value in (item.get("accepted_health_statuses") or [])
                 ),
@@ -438,6 +477,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     (str(key), value)
                     for key, value in expected_health_raw.items()
                 ),
+                freshness_contracts=tuple(freshness_contracts),
                 startup_grace_sec=float(item.get("startup_grace_sec", 180.0)),
             )
         )
@@ -663,6 +703,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             "research_artifact_root must live under the archive research root"
         )
     managed_ids = {item.instance_id for item in spec.managed_runtimes}
+    managed_by_id = {item.instance_id: item for item in spec.managed_runtimes}
     if spec.canonical_refresh_release_id is not None:
         shared_refresh_owners = sorted(
             item.instance_id
@@ -706,6 +747,14 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"unsupported health_format for {item.instance_id}: "
                 f"{item.health_format}"
+            )
+        if item.health_publish_interval_sec is not None and (
+            not math.isfinite(item.health_publish_interval_sec)
+            or item.health_publish_interval_sec <= 0
+        ):
+            raise ValueError(
+                f"health_publish_interval_sec must be finite and positive for "
+                f"{item.instance_id}: {item.health_publish_interval_sec}"
             )
         if item.health_format == "mtime" and (
             item.accepted_health_statuses
@@ -766,6 +815,18 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"live runtime must declare live_order_path: {item.instance_id}"
             )
+        if item.expected_live and (
+            item.execution_mode != "live"
+            or item.health_format != "json"
+            or item.health_path is None
+            or not item.accepted_health_statuses
+            or item.resolved_restart_script() is None
+        ):
+            raise ValueError(
+                "live runtime must declare execution_mode=live, JSON health, "
+                "accepted status, and explicit restart contract: "
+                f"{item.instance_id}"
+            )
         if item.recovery_policy != "manual" and item.resolved_start_script() is None:
             raise ValueError(
                 f"automatic recovery requires checkout_root and start_script: "
@@ -785,6 +846,52 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"unknown dependencies for {item.instance_id}: "
                 f"{sorted(missing_dependencies)}"
             )
+        freshness_names: set[str] = set()
+        for contract in item.freshness_contracts:
+            if contract.name in freshness_names:
+                raise ValueError(
+                    f"duplicate freshness contract for {item.instance_id}: "
+                    f"{contract.name}"
+                )
+            freshness_names.add(contract.name)
+            if contract.producer_instance_id not in item.dependencies:
+                raise ValueError(
+                    f"freshness producer must be a dependency for {item.instance_id}: "
+                    f"{contract.producer_instance_id}"
+                )
+            producer = managed_by_id[contract.producer_instance_id]
+            if producer.health_publish_interval_sec is None:
+                raise ValueError(
+                    f"freshness producer must declare health_publish_interval_sec "
+                    f"for {item.instance_id}:{contract.name}: "
+                    f"{contract.producer_instance_id}"
+                )
+            if (
+                not math.isfinite(contract.consumer_max_age_sec)
+                or contract.consumer_max_age_sec <= 0
+                or contract.min_missed_heartbeats < 3
+            ):
+                raise ValueError(
+                    f"invalid freshness timing contract for {item.instance_id}: "
+                    f"{contract.name}"
+                )
+            minimum_age = (
+                producer.health_publish_interval_sec
+                * contract.min_missed_heartbeats
+            )
+            if contract.consumer_max_age_sec < minimum_age:
+                raise ValueError(
+                    f"freshness max age is shorter than the heartbeat budget for "
+                    f"{item.instance_id}:{contract.name}: "
+                    f"{contract.consumer_max_age_sec} < {minimum_age}"
+                )
+            if not re.fullmatch(
+                r"--[a-z0-9][a-z0-9-]*", contract.consumer_max_age_arg
+            ):
+                raise ValueError(
+                    f"invalid freshness consumer CLI argument for {item.instance_id}: "
+                    f"{contract.consumer_max_age_arg}"
+                )
     # Import late to avoid a module cycle: the registry validates itself
     # against this fully parsed production topology.
     from src.strategies.runtime.data_products import load_data_product_registry

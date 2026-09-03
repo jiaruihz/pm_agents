@@ -1,10 +1,12 @@
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
 from scripts.ops import weather_production_ctl as ctl
 from src.strategies.runtime.production import (
+    WeatherFreshnessContractSpec,
     WeatherManagedRuntimeSpec,
     WeatherProductionReleaseSpec,
     WeatherProductionSpec,
@@ -70,12 +72,25 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["current_yes_core_carry_tiny_live_v2"].release_id == "core_carry_runtime"
     assert by_id["current_yes_core_carry_tiny_live_v2"].resolved_restart_script() == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
-        "fce19185eb10389bb35784d043633b77ac708e4b/scripts/ops/"
+        "09086260d2e61d70b02b257040deb58bce4956b1/scripts/ops/"
         "start_weather_current_yes_core_carry_tiny_live_v2.sh"
     )
     assert by_id["current_yes_core_carry_tiny_live_v2"].live_order_path == Path(
         "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/"
         "current_yes_core_carry_tiny_live_v2/live_orders.jsonl"
+    )
+    near = by_id["current_yes_core_carry_near_core_ws_controller"]
+    assert near.expected_live is True
+    assert near.execution_mode == "live"
+    assert near.resolved_restart_script() is not None
+    assert near.freshness_contracts == (
+        WeatherFreshnessContractSpec(
+            name="market_books_health",
+            producer_instance_id="weather_market_books",
+            consumer_max_age_sec=30.0,
+            min_missed_heartbeats=3,
+            consumer_max_age_arg="--market-health-max-age-sec",
+        ),
     )
     assert by_id["weather_dashboard_api"].health_format == "http_json"
     assert by_id["weather_dashboard_api"].health_url == "http://127.0.0.1:8000/health"
@@ -468,6 +483,55 @@ def test_health_checks_session_freshness_status_and_live_flags(tmp_path):
     assert report["status"] == "healthy"
     assert report["runtimes"][0]["health_age_sec"] == 30.0
     assert report["runtimes"][0]["issues"] == []
+
+
+def test_health_locks_observed_consumer_freshness_argument(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="consumer",
+        tmux_session="consumer",
+        role="execution_control",
+        execution_mode="shadow",
+        dependencies=("producer",),
+        freshness_contracts=(
+            WeatherFreshnessContractSpec(
+                name="market_health",
+                producer_instance_id="producer",
+                consumer_max_age_sec=30,
+                min_missed_heartbeats=3,
+                consumer_max_age_arg="--market-health-max-age-sec",
+            ),
+        ),
+        recovery_policy="safe",
+    )
+    producer = WeatherManagedRuntimeSpec(
+        instance_id="producer",
+        tmux_session="producer",
+        role="collector",
+        execution_mode="collector",
+        health_publish_interval_sec=10,
+        recovery_policy="safe",
+    )
+    snapshot = observed("producer", "consumer")
+    snapshot["tmux_sessions"][1]["panes"][0]["pane_start_command"] = (
+        "python consumer.py --market-health-max-age-sec 3"
+    )
+
+    report = ctl.evaluate_production_health(
+        production_spec(tmp_path, (producer, runtime)), snapshot, now_epoch=1030.0
+    )
+
+    consumer = next(
+        row for row in report["runtimes"] if row["instance_id"] == "consumer"
+    )
+    assert consumer["status"] == "critical"
+    assert consumer["issues"] == ["freshness_arg_mismatch:market_health"]
+
+
+def test_command_arg_value_unwraps_tmux_shell_quoting():
+    inner = "python consumer.py --market-health-max-age-sec 30"
+    wrapped = "/release/root " + shlex.quote(inner)
+
+    assert ctl._command_arg_value(wrapped, "--market-health-max-age-sec") == "30"
 
 
 def test_health_rejects_runtime_contract_drift(tmp_path):
@@ -1326,6 +1390,81 @@ def test_restart_runs_registered_contract(monkeypatch, tmp_path):
     assert result["status"] == "restarted"
     assert result["returncode"] == 0
     assert marker.read_text(encoding="utf-8") == "controller"
+
+
+def test_restart_nonzero_wrapper_converges_only_after_target_pid_replaced(
+    monkeypatch, tmp_path
+):
+    script = tmp_path / "restart.sh"
+    script.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live",
+        role="strategy",
+        execution_mode="live",
+        checkout_root=tmp_path,
+        restart_script=Path("restart.sh"),
+        expected_live=True,
+        health_path=tmp_path / "health.json",
+        accepted_health_statuses=("ok",),
+        live_order_path=tmp_path / "orders.jsonl",
+        recovery_policy="guarded_live",
+    )
+    pane_calls = iter(("0\t111\n1\t333\n", "0\t222\n1\t333\n"))
+
+    def fake_tmux(_spec, *args):
+        if args[0] == "list-panes":
+            return subprocess.CompletedProcess(args, 0, next(pane_calls), "")
+        if args[0] == "has-session":
+            return subprocess.CompletedProcess(args, 0, "", "")
+        if args[0] in {"show-options", "set-environment", "set-option"}:
+            return subprocess.CompletedProcess(args, 0, "", "")
+        raise AssertionError(args)
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
+
+    result = ctl._run_restart(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=True
+    )
+
+    assert result["status"] == "warming"
+    assert result["reason"] == "restart_wrapper_nonzero_target_replaced"
+    assert result["returncode"] == 1
+
+
+def test_restart_nonzero_wrapper_does_not_mask_unchanged_target_pid(
+    monkeypatch, tmp_path
+):
+    script = tmp_path / "restart.sh"
+    script.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live",
+        role="strategy",
+        execution_mode="live",
+        checkout_root=tmp_path,
+        restart_script=Path("restart.sh"),
+        expected_live=True,
+        health_path=tmp_path / "health.json",
+        accepted_health_statuses=("ok",),
+        live_order_path=tmp_path / "orders.jsonl",
+        recovery_policy="guarded_live",
+    )
+
+    def fake_tmux(_spec, *args):
+        output = "0\t111\n" if args[0] == "list-panes" else ""
+        return subprocess.CompletedProcess(args, 0, output, "")
+
+    monkeypatch.setattr(ctl, "_tmux", fake_tmux)
+
+    result = ctl._run_restart(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=True
+    )
+
+    assert result["status"] == "error"
+    assert "reason" not in result
 
 
 def test_controller_can_restart_safe_non_live_runtime_from_start_contract(

@@ -26,6 +26,12 @@ N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent das
 消费这些文件，**不应** 静默地把字段改名再存 DB（会造成双方字段漂移）。
 如果 DB 字段名与 CSV/JSONL 不同，必须在本文档里显式标注「别名」和迁移时间。
 
+生产 runtime 的 control-plane 合同统一由 `production.yaml` 声明。heartbeat producer 与
+consumer freshness threshold 不得各自写死而不建立关系：producer 单点声明并实测 publish cadence，
+consumer 引用 producer，并声明至少 3 个 missed-heartbeat budget、max-age 和真实 CLI 参数。live runtime 必须同时以命令行
+`--live --confirm-live` 与 JSON health `live_enabled: true` 证明 live 状态；任一侧缺失都 fail closed。
+restart 的完成态以目标 PID 已替换且 post-start health 收敛为准，wrapper 返回码只是一项证据。
+
 ### 0.1 WCIR 决策契约覆盖层
 
 本文后续 `Signal` 字段仍是 legacy/canonical compatibility contract，不是新城市 runtime 的完整内部边界。

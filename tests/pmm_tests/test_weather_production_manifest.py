@@ -131,6 +131,60 @@ def test_production_spec_rejects_refresh_release_shared_with_managed_runtime(
         load_production_spec(candidate)
 
 
+def test_production_spec_rejects_freshness_budget_shorter_than_three_heartbeats(
+    tmp_path,
+):
+    raw = yaml.safe_load(
+        (ROOT / "src/strategies/runtime/production.yaml").read_text(encoding="utf-8")
+    )
+    near = next(
+        runtime
+        for runtime in raw["managed_runtimes"]
+        if runtime["instance_id"]
+        == "current_yes_core_carry_near_core_ws_controller"
+    )
+    near["freshness_contracts"][0]["consumer_max_age_sec"] = 3
+    candidate = tmp_path / "production.yaml"
+    candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="shorter than the heartbeat budget"):
+        load_production_spec(candidate)
+
+
+def test_production_spec_requires_cadence_on_freshness_producer(tmp_path):
+    raw = yaml.safe_load(
+        (ROOT / "src/strategies/runtime/production.yaml").read_text(encoding="utf-8")
+    )
+    producer = next(
+        runtime
+        for runtime in raw["managed_runtimes"]
+        if runtime["instance_id"] == "weather_market_books"
+    )
+    producer.pop("health_publish_interval_sec")
+    candidate = tmp_path / "production.yaml"
+    candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must declare health_publish_interval_sec"):
+        load_production_spec(candidate)
+
+
+def test_production_spec_rejects_incomplete_live_runtime_contract(tmp_path):
+    raw = yaml.safe_load(
+        (ROOT / "src/strategies/runtime/production.yaml").read_text(encoding="utf-8")
+    )
+    core = next(
+        runtime
+        for runtime in raw["managed_runtimes"]
+        if runtime["instance_id"] == "current_yes_core_carry_tiny_live_v2"
+    )
+    core.pop("restart_script")
+    candidate = tmp_path / "production.yaml"
+    candidate.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="live runtime must declare execution_mode=live"):
+        load_production_spec(candidate)
+
+
 def test_nested_project_worktree_is_included_in_lifecycle_audit(tmp_path, monkeypatch):
     spec = production_spec(tmp_path)
     nested = spec.operational_repo_root / ".worktrees/research"
