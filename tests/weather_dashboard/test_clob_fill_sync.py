@@ -77,6 +77,45 @@ def test_v2_clob_http_client_rejects_nonpositive_timeout(monkeypatch):
         raise AssertionError("nonpositive timeout must fail explicitly")
 
 
+def test_bulk_trade_enrichment_failure_is_supplemental(monkeypatch):
+    class FailingClient:
+        def get_trades(self, *, params):
+            raise RuntimeError("temporary upstream 503")
+
+    clob_fill_sync.EXTERNAL_FETCH_ERRORS.clear()
+    clob_fill_sync.SUPPLEMENTAL_FETCH_WARNINGS.clear()
+
+    rows = clob_fill_sync._fetch_trades_clob(
+        FailingClient(),
+        "0x0000000000000000000000000000000000000000",
+        record_as_required_error=False,
+    )
+
+    assert rows == []
+    assert clob_fill_sync.EXTERNAL_FETCH_ERRORS == []
+    assert clob_fill_sync.SUPPLEMENTAL_FETCH_WARNINGS == [
+        "clob_trades:temporary upstream 503"
+    ]
+
+
+def test_bulk_trade_failure_can_remain_required(monkeypatch):
+    class FailingClient:
+        def get_trades(self, *, params):
+            raise RuntimeError("hard failure")
+
+    clob_fill_sync.EXTERNAL_FETCH_ERRORS.clear()
+    clob_fill_sync.SUPPLEMENTAL_FETCH_WARNINGS.clear()
+
+    rows = clob_fill_sync._fetch_trades_clob(
+        FailingClient(),
+        "0x0000000000000000000000000000000000000000",
+    )
+
+    assert rows == []
+    assert clob_fill_sync.EXTERNAL_FETCH_ERRORS == ["clob_trades:hard failure"]
+    assert clob_fill_sync.SUPPLEMENTAL_FETCH_WARNINGS == []
+
+
 def test_insert_fill_dedupes_same_physical_fill_with_different_id(monkeypatch):
     monkeypatch.setattr(clob_fill_sync, "append_cached_fill", lambda row: None)
     conn = sqlite3.connect(":memory:")

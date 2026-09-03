@@ -23,7 +23,11 @@ def test_default_authenticated_trade_lookup_uses_funder(monkeypatch: pytest.Monk
 
     seen: list[str] = []
 
-    def capture_address(_client: object, address: str) -> list[dict[str, object]]:
+    def capture_address(
+        _client: object,
+        address: str,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
         seen.append(address)
         raise _CapturedAddress
 

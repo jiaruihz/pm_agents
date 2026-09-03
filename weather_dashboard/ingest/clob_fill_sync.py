@@ -90,6 +90,7 @@ from weather_clock_contract import parse_utc_or_none, utc_text
 
 log = logging.getLogger(__name__)
 EXTERNAL_FETCH_ERRORS: list[str] = []
+SUPPLEMENTAL_FETCH_WARNINGS: list[str] = []
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -930,7 +931,12 @@ def _fetch_order_status_clob(client: Any, order_id: str) -> dict[str, Any] | Non
         return None
 
 
-def _fetch_trades_clob(client: Any, maker_address: str) -> list[dict[str, Any]]:
+def _fetch_trades_clob(
+    client: Any,
+    maker_address: str,
+    *,
+    record_as_required_error: bool = True,
+) -> list[dict[str, Any]]:
     """Call GET /data/trades?maker_address=... with pagination. Returns flat list."""
     try:
         from py_clob_client_v2.clob_types import TradeParams  # type: ignore[import]
@@ -948,7 +954,11 @@ def _fetch_trades_clob(client: Any, maker_address: str) -> list[dict[str, Any]]:
             return result.get("data", [])
         return []
     except Exception as exc:
-        EXTERNAL_FETCH_ERRORS.append(f"clob_trades:{exc}")
+        detail = f"clob_trades:{exc}"
+        if record_as_required_error:
+            EXTERNAL_FETCH_ERRORS.append(detail)
+        else:
+            SUPPLEMENTAL_FETCH_WARNINGS.append(detail)
         log.warning("CLOB get_trades failed: %s", exc)
         return []
 
@@ -1383,6 +1393,7 @@ def sync_clob_fills(
         "still_open": 0,
         "errors": 0,
         "external_fetch_errors": 0,
+        "supplemental_fetch_warnings": 0,
         "data_incomplete": False,
         "cached_imported": 0,
         "fee_adjustments_imported": 0,
@@ -1395,6 +1406,7 @@ def sync_clob_fills(
         "lookback_hours": lookback_hours,
     }
     EXTERNAL_FETCH_ERRORS.clear()
+    SUPPLEMENTAL_FETCH_WARNINGS.clear()
 
     if not dry_run:
         summary["cached_imported"] = import_cached_fills(conn, DEFAULT_CACHE_PATH)
@@ -1473,7 +1485,18 @@ def sync_clob_fills(
         log.info(
             "Fetching all CLOB trades for maker_address=%s...", maker_address
         )
-        all_clob_trades = _fetch_trades_clob(client, maker_address)
+        # The per-order authenticated endpoint below is authoritative for
+        # MATCHED/LIVE/CANCELLED status and matched size.  The account-level
+        # trades page only enriches timestamps, transaction hashes and fees.
+        # A transient failure of that supplemental page must not block the
+        # entire canonical refresh when every required per-order lookup still
+        # succeeds; any failed per-order lookup remains fail-closed via
+        # EXTERNAL_FETCH_ERRORS.
+        all_clob_trades = _fetch_trades_clob(
+            client,
+            maker_address,
+            record_as_required_error=False,
+        )
         log.info("CLOB returned %d trade records.", len(all_clob_trades))
         if not all_clob_trades:
             log.info(
@@ -1510,6 +1533,13 @@ def sync_clob_fills(
         log.error(
             "External CLOB fill source failed %d time(s); DB live fill status is incomplete.",
             len(EXTERNAL_FETCH_ERRORS),
+        )
+    if SUPPLEMENTAL_FETCH_WARNINGS:
+        summary["supplemental_fetch_warnings"] = len(SUPPLEMENTAL_FETCH_WARNINGS)
+        log.warning(
+            "Supplemental authenticated trade enrichment failed %d time(s); "
+            "continuing with authoritative per-order status.",
+            len(SUPPLEMENTAL_FETCH_WARNINGS),
         )
     used_public_trade_keys: set[str] = set()
 
@@ -1948,6 +1978,7 @@ def sync_clob_fills(
     if EXTERNAL_FETCH_ERRORS:
         summary["external_fetch_errors"] = len(EXTERNAL_FETCH_ERRORS)
         summary["data_incomplete"] = True
+    summary["supplemental_fetch_warnings"] = len(SUPPLEMENTAL_FETCH_WARNINGS)
 
     log.info("Sync complete: %s", summary)
     return summary
