@@ -817,6 +817,8 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
     base = {
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
+        "source_candidate_id": safe_str(plan.get("source_candidate_id")),
+        "source_policy_id": safe_str(plan.get("source_policy_id")),
         "opportunity_id": safe_str(plan.get("opportunity_id")),
         "strategy": "weather_edge_v1",
         "strategy_instance": safe_str(plan.get("strategy_instance")),
@@ -950,6 +952,8 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
     base = {
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
+        "source_candidate_id": safe_str(plan.get("source_candidate_id")),
+        "source_policy_id": safe_str(plan.get("source_policy_id")),
         "opportunity_id": safe_str(plan.get("opportunity_id")),
         "strategy": "weather_edge_v1",
         "strategy_instance": safe_str(plan.get("strategy_instance")),
@@ -964,6 +968,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "entry_profile": safe_str(plan.get("entry_profile")),
         "probability_source": safe_str(plan.get("probability_source")),
         "model_version": safe_str(plan.get("model_version")),
+        "model_artifact_id": safe_str(plan.get("model_artifact_id")),
         "probability_branch": safe_str(plan.get("probability_branch")),
         "decision_mode": safe_str(plan.get("decision_mode")),
         "execution_mode": safe_str(plan.get("execution_mode")),

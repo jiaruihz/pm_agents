@@ -71,7 +71,7 @@ production_releases:
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
     expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
-    runtime_bindings: [operational_venv, canonical_db]
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: tmin_v2_2_probability_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/b7397b1cc41b3424939727b433f5853c12303f42
     expected_repo_sha: b7397b1cc41b3424939727b433f5853c12303f42
@@ -852,6 +852,31 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
     recovery_policy: safe
+  - instance_id: weather_tmin_no_further_cooling_tiny_live_v1
+    uses_market_proxy: true
+    tmux_session: weather_tmin_no_further_cooling_tiny_live_v1
+    role: strategy
+    execution_mode: live
+    release_id: tmin_no_further_cooling
+    start_script: scripts/ops/start_weather_tmin_no_further_cooling_tiny_live_v1.sh
+    restart_script: scripts/ops/start_weather_tmin_no_further_cooling_tiny_live_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmin_no_further_cooling_tiny_live_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 60
+    startup_grace_sec: 120
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: weather_tmin_no_further_cooling_tiny_live_v1
+      execution_mode: live
+      live_enabled: true
+      shares_per_order: 5.0
+      safety.historical_backfill: false
+      safety.fresh_ladder_revalidation: true
+      safety.first_positive_once_per_city_date: true
+    expected_live: true
+    live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmin_no_further_cooling_tiny_live_v1/live_orders.jsonl
+    dependencies: [weather_tmin_no_further_cooling_shadow_v1, weather_market_books, weather_jrs_context_keeper]
+    recovery_policy: guarded_live
   - instance_id: weather_tmin_v2_2_probability_shadow_v1
     uses_market_proxy: true
     tmux_session: weather_tmin_v2_2_probability_shadow_v1
