@@ -724,8 +724,8 @@ def maintain(
             accepted = (
                 not switch_error
                 and observed_node == attempted
-                and candidate_probe.get("failure_count") == 0
                 and not candidate_probe.get("degraded")
+                and int(candidate_probe.get("ok_count") or 0) >= 2
                 and candidate_geoblock.get("trading_allowed") is True
                 and candidate_final_geoblock.get("trading_allowed") is True
             )

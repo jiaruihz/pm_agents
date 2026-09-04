@@ -246,6 +246,54 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "latest.json").read_text())["failure_streak"] == 0
 
 
+def test_maintain_accepts_two_of_three_fast_probes_with_double_geoblock(
+    tmp_path, monkeypatch
+):
+    selected = {"node": "🇭🇰 香港 01丨1x HK"}
+
+    class Controller:
+        def proxies(self):
+            return {
+                ctl.DEFAULT_GROUP: {
+                    "type": "Selector",
+                    "now": selected["node"],
+                    "all": ["🇭🇰 香港 01丨1x HK", "🇲🇾 马来西亚 01丨1x MY"],
+                }
+            }
+
+        def delay(self, node):
+            return 700 if "HK" in node else 300
+
+        def switch(self, group, node):
+            selected["node"] = node
+
+    probes = iter(
+        [
+            [{"ok": False, "total_sec": 5.0}] * 3,
+            [
+                {"ok": True, "total_sec": 0.7},
+                {"ok": True, "total_sec": 0.8},
+                {"ok": False, "total_sec": 5.0},
+            ],
+        ]
+    )
+    monkeypatch.setattr(ctl, "probe_openai", lambda *_a, **_k: next(probes))
+    monkeypatch.setattr(ctl.time, "sleep", lambda _: None)
+
+    result = ctl.maintain(
+        Controller(),
+        state_root=tmp_path,
+        apply=True,
+        force_evaluate=True,
+        reason="test transient probe tolerance",
+    )
+
+    assert result["status"] == "switched"
+    assert result["selected_node"] == "🇲🇾 马来西亚 01丨1x MY"
+    assert result["switch_attempts"][0]["probe"]["ok_count"] == 2
+    assert result["live_entry_allowed"] is True
+
+
 def test_maintain_rolls_back_failed_post_switch_probe(tmp_path, monkeypatch):
     selected = {"node": "🇭🇰 香港 01丨1x HK"}
 
