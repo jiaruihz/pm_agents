@@ -112,6 +112,49 @@ class InputNotReady(RuntimeError):
         self.details = details or {}
 
 
+def _evaluation_id(profile: dict[str, Any], score: CityScore) -> tuple[str, str]:
+    """Return a stable evaluation identity and its explicit contract version.
+
+    The original identity remains the default so existing profiles do not
+    replay their current checkpoint after a release.  Profiles that need a
+    clean append-only epoch must opt into ``v2_profile_epoch``; this keeps the
+    old row immutable while allowing the same source event to be evaluated
+    under a corrected profile/clock contract.  Status is part of v2 so a
+    temporary not-ready blocker cannot suppress a later causal score.
+    """
+
+    version = str(profile.get("evaluation_identity_version") or "v1")
+    parts = [
+        score.city,
+        score.target_date,
+        score.source_obs_ts_utc,
+        str(score.current_bracket),
+        score.market_side,
+        score.model_id,
+    ]
+    if version == "v1":
+        pass
+    elif version == "v2_profile_epoch":
+        profile_id = str(profile.get("profile_id") or "").strip()
+        forward_epoch_id = str(profile.get("forward_epoch_id") or "").strip()
+        if not profile_id or not forward_epoch_id:
+            raise ValueError(
+                "v2_profile_epoch evaluation identity requires profile_id "
+                "and forward_epoch_id"
+            )
+        parts = [
+            version,
+            profile_id,
+            forward_epoch_id,
+            *parts,
+            score.evaluation_status,
+            str(score.not_scorable_reason or ""),
+        ]
+    else:
+        raise ValueError(f"unsupported evaluation_identity_version: {version}")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest(), version
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -561,9 +604,9 @@ class ShadowRuntime:
                     not_scorable += 1
                 else:
                     raise ValueError(f"unsupported evaluation_status: {score.evaluation_status}")
-                key = "|".join((score.city, score.target_date, score.source_obs_ts_utc,
-                                str(score.current_bracket), score.market_side, score.model_id))
-                evaluation_id = hashlib.sha256(key.encode()).hexdigest()
+                evaluation_id, evaluation_identity_version = _evaluation_id(
+                    profile, score
+                )
                 if evaluation_id in seen:
                     continue
                 selection_shares = profile.get("selection_shares")
@@ -636,6 +679,8 @@ class ShadowRuntime:
                     "execution_mode": "zero_notional_shadow",
                     "orders_submitted": 0,
                     "evaluation_id": evaluation_id,
+                    "evaluation_identity_version": evaluation_identity_version,
+                    "forward_epoch_id": profile.get("forward_epoch_id"),
                     **asdict(score),
                     "fee_per_share": fee,
                     "selection_shares": selection_shares,

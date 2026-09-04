@@ -14,6 +14,8 @@ from weather_dashboard.db.apply_schema_canonical import (
     init_db_canonical,
 )
 from weather_dashboard.db.connection import apply_pragmas, get_conn
+from weather_dashboard.db.first_seen_schema import DDL as FIRST_SEEN_DDL
+from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 from weather_dashboard.ingest.information_events import ingest_information_events
 from weather_data_feed.information_events import build_information_event
 
@@ -129,6 +131,59 @@ def test_information_event_ingest_is_append_only_for_duplicate_delivery(tmp_db_c
     stored = tmp_db_canonical.execute("SELECT * FROM weather_information_events").fetchone()
     assert stored["first_seen_at_utc"] == "2026-07-28T12:00:03Z"
     assert stored["available_at_utc"] == "2026-07-28T12:00:04Z"
+
+
+def test_first_seen_schema_migrates_market_book_event_kind_without_losing_rows():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    apply_pragmas(conn)
+    old_ddl = FIRST_SEEN_DDL.replace(",'market_book_snapshot'", "")
+    conn.executescript(old_ddl)
+    conn.execute(
+        """
+        INSERT INTO weather_information_events (
+          information_event_id, event_kind, event_role, source, city,
+          content_key, payload_hash, ingested_at_utc, pit_lineage_class,
+          original_first_seen_unknown
+        ) VALUES ('old-event', 'observation', 'new_content', 'metar', 'Paris',
+                  'old', 'old-payload', '2026-09-01T00:00:00Z',
+                  'collector_exact', 0)
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO weather_state_checkpoints (
+          state_checkpoint_id, city, target_date, trigger_event_id, as_of_ts_utc,
+          input_event_set_hash, feature_schema_version, feature_version_manifest,
+          pit_provenance, checkpoint_status, created_at_utc
+        ) VALUES ('old-checkpoint', 'Paris', '2026-09-01', 'old-event',
+                  '2026-09-01T00:00:00Z', 'input', 'v1', '{}',
+                  'live_capture', 'built', '2026-09-01T00:00:00Z')
+        """
+    )
+    conn.commit()
+
+    apply_first_seen_schema(conn)
+    conn.execute(
+        """
+        INSERT INTO weather_information_events (
+          information_event_id, event_kind, event_role, source, city,
+          content_key, payload_hash, ingested_at_utc, pit_lineage_class,
+          original_first_seen_unknown
+        ) VALUES ('book-event', 'market_book_snapshot', 'new_content',
+                  'polymarket_clob', 'Paris', 'book', 'book-payload',
+                  '2026-09-01T00:00:01Z', 'collector_exact', 0)
+        """
+    )
+
+    assert conn.execute(
+        "SELECT COUNT(*) FROM weather_information_events"
+    ).fetchone()[0] == 2
+    assert conn.execute(
+        "SELECT trigger_event_id FROM weather_state_checkpoints"
+    ).fetchone()[0] == "old-event"
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    conn.close()
 
 
 def test_fill_fee_lineage_is_v15_compatible(tmp_db_canonical):

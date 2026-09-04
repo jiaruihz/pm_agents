@@ -101,7 +101,11 @@ SOURCE_CLOCK_ORDER = (
 DECISION_CLOCK_ORDER = (
     ("event_available_at_utc", "decision_ts_utc"),
     ("available_at_utc", "decision_ts_utc"),
+    ("forecast_available_at_utc", "decision_ts_utc"),
     ("feature_book_available_at_utc", "decision_ts_utc"),
+    ("feature_frame_available_at_utc", "decision_ts_utc"),
+    ("collector_emitted_at_utc", "decision_ts_utc"),
+    ("runtime_scored_at_utc", "decision_ts_utc"),
     ("selection_quote_available_at_utc", "decision_ts_utc"),
     ("decision_ts_utc", "order_submitted_at_utc"),
     ("order_submitted_at_utc", "order_acknowledged_at_utc"),

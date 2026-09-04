@@ -55,6 +55,97 @@ def test_zero_notional_runtime_is_deduplicated(tmp_path):
     assert intent["record_kind"] == "paper_intent"
 
 
+def test_profile_epoch_identity_does_not_rewrite_or_suppress_legacy_row(tmp_path):
+    legacy = _config(tmp_path, [{"adapter": "fixture", "city": "Test"}])
+    first = ShadowRuntime(legacy, {"fixture": Adapter()}).run_once(
+        datetime(2026, 7, 31, 10, tzinfo=timezone.utc)
+    )
+    epoch_profile = {
+        "adapter": "fixture",
+        "city": "Test",
+        "profile_id": "test_clock_v2",
+        "evaluation_identity_version": "v2_profile_epoch",
+        "forward_epoch_id": "test_clock_v2_20260731",
+    }
+    epoch = _config(tmp_path, [epoch_profile])
+    second_runtime = ShadowRuntime(epoch, {"fixture": Adapter()})
+    second = second_runtime.run_once(
+        datetime(2026, 7, 31, 10, 1, tzinfo=timezone.utc)
+    )
+    third = second_runtime.run_once(
+        datetime(2026, 7, 31, 10, 2, tzinfo=timezone.utc)
+    )
+
+    assert first["new_evaluations"] == 1
+    assert second["new_evaluations"] == 1
+    assert third["new_evaluations"] == 0
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "evaluations.jsonl").read_text().splitlines()
+    ]
+    assert len(rows) == 2
+    assert rows[0]["evaluation_identity_version"] == "v1"
+    assert rows[1]["evaluation_identity_version"] == "v2_profile_epoch"
+    assert rows[1]["forward_epoch_id"] == "test_clock_v2_20260731"
+    assert rows[0]["evaluation_id"] != rows[1]["evaluation_id"]
+
+
+def test_profile_epoch_allows_not_ready_row_to_become_scored(tmp_path):
+    class RecoveringAdapter:
+        def score(self, profile, now):
+            ready = now.minute > 0
+            return [CityScore(
+                city="Test", target_date="2026-07-31",
+                decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-07-31T10:00:00+00:00",
+                current_bracket=20, market_side="NO",
+                market_probability=.5 if ready else None,
+                market_entry_price=.5 if ready else None,
+                model_probability=.6 if ready else None,
+                model_id="m1", feature_coverage=1.0 if ready else 0.0,
+                missing_features=[] if ready else ["book"], features={},
+                market={}, lineage={"source": "fixture"},
+                evaluation_status="scored" if ready else "not_scorable",
+                not_scorable_reason=(
+                    None if ready else "checkpoint_evidence_not_yet_available"
+                ),
+            )]
+
+    profile = {
+        "adapter": "recovering",
+        "city": "Test",
+        "profile_id": "test_clock_v2",
+        "evaluation_identity_version": "v2_profile_epoch",
+        "forward_epoch_id": "test_clock_v2_20260731",
+    }
+    runtime = ShadowRuntime(
+        _config(tmp_path, [profile]), {"recovering": RecoveringAdapter()}
+    )
+
+    blocked = runtime.run_once(
+        datetime(2026, 7, 31, 10, 0, tzinfo=timezone.utc)
+    )
+    scored = runtime.run_once(
+        datetime(2026, 7, 31, 10, 1, tzinfo=timezone.utc)
+    )
+    duplicate = runtime.run_once(
+        datetime(2026, 7, 31, 10, 2, tzinfo=timezone.utc)
+    )
+
+    assert blocked["new_evaluations"] == 1
+    assert scored["new_evaluations"] == 1
+    assert duplicate["new_evaluations"] == 0
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "evaluations.jsonl").read_text().splitlines()
+    ]
+    assert [row["evaluation_status"] for row in rows] == [
+        "not_scorable",
+        "scored",
+    ]
+    assert rows[0]["evaluation_id"] != rows[1]["evaluation_id"]
+
+
 def test_nonzero_execution_configuration_is_rejected(tmp_path):
     with pytest.raises(ValueError):
         ShadowRuntime({

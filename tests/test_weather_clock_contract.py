@@ -85,6 +85,28 @@ def test_feature_and_post_decision_books_have_distinct_clock_roles() -> None:
         )
 
 
+def test_consumed_forecast_frame_and_collector_must_precede_decision() -> None:
+    clocks = {
+        "forecast_available_at_utc": "2026-08-30T00:00:00Z",
+        "feature_book_available_at_utc": "2026-08-30T00:00:01Z",
+        "feature_frame_available_at_utc": "2026-08-30T00:00:02Z",
+        "collector_emitted_at_utc": "2026-08-30T00:00:02Z",
+        "runtime_scored_at_utc": "2026-08-30T00:00:03Z",
+        "decision_ts_utc": "2026-08-30T00:00:03Z",
+    }
+    validate_clock_order(clocks, DECISION_CLOCK_ORDER)
+
+    for field in (
+        "forecast_available_at_utc",
+        "feature_frame_available_at_utc",
+        "collector_emitted_at_utc",
+        "runtime_scored_at_utc",
+    ):
+        invalid = {**clocks, field: "2026-08-30T00:00:04Z"}
+        with pytest.raises(ValueError, match=field):
+            validate_clock_order(invalid, DECISION_CLOCK_ORDER)
+
+
 def test_local_wall_clock_uses_iana_dst_and_fails_on_ambiguous_time() -> None:
     summer = local_wall_time_to_utc(
         "2026-06-16T13:00", timezone_name="Europe/Helsinki"

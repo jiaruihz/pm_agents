@@ -67,12 +67,40 @@ def _input_refs(lineage: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     return tuple(refs)
 
 
+def _decision_clock_metadata(lineage: Mapping[str, Any]) -> dict[str, Any]:
+    """Expose consumed evidence clocks to the shared decision validator.
+
+    Legacy city adapters historically carried these clocks only as opaque
+    lineage.  Promoting the known fields into ModelOutput/SignalCandidate
+    metadata makes a back-dated decision fail at the write boundary instead of
+    being discovered later by a research join.
+    """
+
+    values = {
+        "event_available_at_utc": (
+            lineage.get("source_available_at_utc")
+            or lineage.get("source_first_seen_at_utc")
+        ),
+        "forecast_available_at_utc": lineage.get("forecast_available_at_utc"),
+        "feature_book_available_at_utc": lineage.get(
+            "feature_book_available_at_utc"
+        ),
+        "feature_frame_available_at_utc": lineage.get(
+            "feature_frame_available_at_utc"
+        ),
+        "collector_emitted_at_utc": lineage.get("collector_emitted_at_utc"),
+        "runtime_scored_at_utc": lineage.get("runtime_scored_at_utc"),
+    }
+    return {key: value for key, value in values.items() if value not in (None, "")}
+
+
 def _legacy_event_and_checkpoint(
     score: CityScore,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     lineage = score.lineage or {}
     source = str(lineage.get("source") or "legacy_city_probability_shadow")
     first_seen = lineage.get("source_first_seen_at_utc")
+    source_available = lineage.get("source_available_at_utc") or first_seen
     pit_class = "collector_exact" if first_seen else "archive_known_available"
     normalized_payload = {
         "source_obs_ts_utc": score.source_obs_ts_utc,
@@ -99,7 +127,7 @@ def _legacy_event_and_checkpoint(
         source_event_ts_utc=score.source_obs_ts_utc,
         detected_at_utc=first_seen,
         first_seen_at_utc=first_seen,
-        available_at_utc=str(first_seen or score.decision_ts_utc),
+        available_at_utc=str(source_available or score.decision_ts_utc),
         pit_lineage_class=pit_class,
         raw_source_path=(
             str(_input_refs(lineage)[0].get("physical_path"))
@@ -190,6 +218,7 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
         )
         or None,
         metadata={
+            **_decision_clock_metadata(lineage),
             "legacy_schema_version": migrated.get("source_schema_version")
             or migrated.get("schema_version"),
             "legacy_evaluation_id": migrated.get("evaluation_id"),
@@ -282,6 +311,7 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
         ),
         input_refs=model_output.input_refs,
         metadata={
+            **_decision_clock_metadata(lineage),
             "legacy_evaluation_id": migrated.get("evaluation_id"),
             "edge_after_fee": migrated.get("edge_after_fee"),
             "edge_threshold": migrated.get("edge_threshold"),

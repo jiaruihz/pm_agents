@@ -263,13 +263,22 @@ def effective_exact_quote(
 
 
 def load_settlement_winners(
-    db_path: Path, *, city: str, start_date: str, end_date: str
+    db_path: Path,
+    *,
+    city: str,
+    start_date: str,
+    end_date: str,
+    connection: sqlite3.Connection | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     realpath = db_path.resolve()
     stat = realpath.stat()
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
-    conn.execute("PRAGMA query_only=ON")
-    conn.execute("PRAGMA busy_timeout=2000")
+    owns_connection = connection is None
+    conn = connection or sqlite3.connect(
+        f"file:{db_path}?mode=ro", uri=True, timeout=2.0
+    )
+    if owns_connection:
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("PRAGMA busy_timeout=2000")
     rows = conn.execute(
         """
         SELECT target_date, bracket, source_system, source_payload_hash,
@@ -277,14 +286,26 @@ def load_settlement_winners(
         FROM settlement_outcomes
         WHERE city=? AND target_date BETWEEN ? AND ?
           AND settlement_status='settled' AND final_price>=0.999
+          AND lower(COALESCE(question, '')) LIKE '%highest temperature%'
         ORDER BY target_date, bracket
         """,
         (city, start_date, end_date),
     ).fetchall()
+    excluded_non_tmax_winners = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM settlement_outcomes
+        WHERE city=? AND target_date BETWEEN ? AND ?
+          AND settlement_status='settled' AND final_price>=0.999
+          AND lower(COALESCE(question, '')) NOT LIKE '%highest temperature%'
+        """,
+        (city, start_date, end_date),
+    ).fetchone()[0]
     fact_build = conn.execute(
         "SELECT MAX(fact_built_at_utc) FROM fact_signal_candidates"
     ).fetchone()[0]
-    conn.close()
+    if owns_connection:
+        conn.close()
     grouped: dict[str, list[str]] = {}
     for target_date, bracket, *_rest in rows:
         grouped.setdefault(str(target_date), []).append(str(bracket))
@@ -301,6 +322,9 @@ def load_settlement_winners(
         "size_bytes": int(stat.st_size),
         "mtime_utc": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
         "fact_build_at_utc": fact_build,
+        "market_extreme_kind": "daily_max",
+        "semantic_filter": "question contains highest temperature",
+        "excluded_non_tmax_winners": int(excluded_non_tmax_winners),
         "settlement_rows": len(rows),
         "settlement_evidence_sha256": evidence_hash,
     }
@@ -320,9 +344,20 @@ def _base_checkpoint_row(
     rung_int = int(rung)
     quote = effective_exact_quote((row.get("market_capture") or {}).get("books") or [], rung_int)
     book_at = parse_utc(quote.get("book_fetched_at_utc"))
-    decision = max(value for value in (source_available, book_at) if value is not None)
-    local = decision.astimezone(SEOUL_ZONE)
+    collector_emitted_at = parse_utc(row.get("collector_emitted_at_utc"))
     forecast = row.get("forecast_context") or {}
+    forecast_available_at = parse_utc(forecast.get("forecast_available_at_utc"))
+    decision = max(
+        value
+        for value in (
+            source_available,
+            book_at,
+            forecast_available_at,
+            collector_emitted_at,
+        )
+        if value is not None
+    )
+    local = decision.astimezone(SEOUL_ZONE)
     forecast_max_f = finite(forecast.get("forecast_max_f"))
     forecast_max_c = None if forecast_max_f is None else (forecast_max_f - 32.0) * 5.0 / 9.0
     forecast_peak_hour = finite(forecast.get("forecast_peak_hour_local"))
@@ -347,10 +382,17 @@ def _base_checkpoint_row(
     return {
         "checkpoint_id": checkpoint_id,
         "city": str(row.get("city") or ""),
+        "station_id": str(row.get("station") or ""),
+        "source": str(row.get("source") or ""),
+        "source_feature_grain": str(row.get("feature_grain") or ""),
         "target_date": str(row.get("target_date") or ""),
         "source_event_key": event_key,
         "source_observation_ts_utc": observed,
+        "source_first_seen_ts_utc": parse_utc(row.get("source_first_seen_ts_utc")),
         "source_available_at_utc": source_available,
+        "feature_book_available_at_utc": book_at,
+        "forecast_available_at_utc": forecast_available_at,
+        "collector_emitted_at_utc": collector_emitted_at,
         "decision_ts_utc": decision,
         "raw_ref": f"{path}#{line_number}",
         "routine_rung": rung_int,

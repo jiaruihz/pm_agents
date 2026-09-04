@@ -112,7 +112,13 @@ def _checkpoint(*, book_ts: str = "2026-08-11T02:16:15+00:00") -> dict:
     }
 
 
-def _score(tmp_path, monkeypatch, row):
+def _score(
+    tmp_path,
+    monkeypatch,
+    row,
+    *,
+    now: datetime = datetime(2026, 8, 11, 2, 16, 20, tzinfo=UTC),
+):
     source = tmp_path / "checkpoint.jsonl"
     source.write_text(json.dumps(row) + "\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -127,7 +133,7 @@ def _score(tmp_path, monkeypatch, row):
             "max_feature_book_response_seconds": 10,
             "max_execution_book_age_seconds": 90,
         },
-        datetime(2026, 8, 11, 2, 16, 16, tzinfo=UTC),
+        now,
     )[0]
 
 
@@ -149,6 +155,16 @@ def test_busan_adapter_scores_pending_state_without_settlement_label(
     assert score.lineage["label_fields_consumed"] == []
     assert score.market["feature_book_snapshot_id"]
     assert score.market["execution_book_snapshot_id"]
+    assert score.decision_ts_utc == "2026-08-11T02:16:20+00:00"
+    assert score.features["source_to_book_response_seconds"] == 3.0
+    assert score.features["feature_ready_to_decision_seconds"] == 2.0
+    assert score.lineage["feature_book_available_at_utc"] == (
+        "2026-08-11T02:16:15+00:00"
+    )
+    assert score.lineage["feature_frame_available_at_utc"] == (
+        "2026-08-11T02:16:18+00:00"
+    )
+    assert score.lineage["runtime_scored_at_utc"] == score.decision_ts_utc
     evaluation = {
         **asdict(score),
         "schema_version": "weather_city_probability_runtime_v3",
@@ -163,6 +179,19 @@ def test_busan_adapter_scores_pending_state_without_settlement_label(
     bundle = legacy_bundle_from_evaluation(evaluation)
     assert bundle.signal_candidate.candidate_status == "scored"
     assert bundle.signal_candidate.token_id == "no-token-29"
+    assert bundle.information_event["available_at_utc"] == (
+        "2026-08-11T02:16:12+00:00"
+    )
+    assert bundle.state_checkpoint["as_of_ts_utc"] == score.decision_ts_utc
+    assert bundle.model_output.metadata["feature_book_available_at_utc"] == (
+        "2026-08-11T02:16:15+00:00"
+    )
+    assert bundle.model_output.metadata["collector_emitted_at_utc"] == (
+        "2026-08-11T02:16:18+00:00"
+    )
+    assert bundle.signal_candidate.metadata["runtime_scored_at_utc"] == (
+        score.decision_ts_utc
+    )
     intent = legacy_trade_intent_from_paper_intent(evaluation)
     assert intent.mode == "zero_notional"
     assert intent.requested_size == 0.0
@@ -178,7 +207,13 @@ def test_busan_adapter_is_label_independent_and_blocks_stale_feature_book(
     assert labeled_score.model_probability == baseline_score.model_probability
 
     stale = _checkpoint(book_ts="2026-08-11T02:17:00+00:00")
-    stale_score = _score(tmp_path, monkeypatch, stale)
+    stale["collector_emitted_at_utc"] = "2026-08-11T02:17:02+00:00"
+    stale_score = _score(
+        tmp_path,
+        monkeypatch,
+        stale,
+        now=datetime(2026, 8, 11, 2, 17, 5, tzinfo=UTC),
+    )
     assert stale_score.evaluation_status == "not_scorable"
     assert stale_score.not_scorable_reason == "feature_book_response_stale"
     assert stale_score.model_probability is None
@@ -196,6 +231,131 @@ def test_busan_adapter_is_label_independent_and_blocks_stale_feature_book(
     )
 
 
+def test_busan_adapter_fails_closed_until_all_evidence_exists(
+    tmp_path, monkeypatch
+) -> None:
+    score = _score(
+        tmp_path,
+        monkeypatch,
+        _checkpoint(),
+        now=datetime(2026, 8, 11, 2, 16, 16, tzinfo=UTC),
+    )
+
+    assert score.evaluation_status == "not_scorable"
+    assert (
+        score.not_scorable_reason
+        == "busan_checkpoint_evidence_not_yet_available"
+    )
+    assert score.model_probability is None
+    assert "feature_book_available_at_utc" not in score.lineage
+    assert score.lineage["unavailable_evidence_clocks"][
+        "collector_emitted_at_utc"
+    ] == "2026-08-11T02:16:18+00:00"
+
+
+def test_busan_adapter_preserves_future_evidence_in_mixed_batch(
+    tmp_path, monkeypatch
+) -> None:
+    ready = _checkpoint()
+    future = _checkpoint(book_ts="2026-08-11T02:16:21+00:00")
+    future.update(
+        {
+            "source_event_key": "busan-event-future",
+            "source_observation_ts_utc": "2026-08-11T02:15:30+00:00",
+            "source_available_at_utc": "2026-08-11T02:16:13+00:00",
+            "collector_emitted_at_utc": "2026-08-11T02:16:22+00:00",
+        }
+    )
+    source = tmp_path / "checkpoint.jsonl"
+    source.write_text(
+        "\n".join(json.dumps(row) for row in (ready, future)) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "src.strategies.weather_city_probability_shadow.busan.joblib.load",
+        lambda path: _artifact(),
+    )
+
+    scores = BusanOnlineMarketPriorAdapter().score(
+        {
+            "source_journal": str(source),
+            "artifacts": {"runtime": {"path": str(tmp_path / "model.joblib")}},
+            "max_source_age_seconds": 180,
+            "max_feature_book_response_seconds": 10,
+            "max_execution_book_age_seconds": 90,
+        },
+        datetime(2026, 8, 11, 2, 16, 20, tzinfo=UTC),
+    )
+
+    assert [score.evaluation_status for score in scores] == [
+        "scored",
+        "not_scorable",
+    ]
+    assert scores[1].not_scorable_reason == (
+        "busan_checkpoint_evidence_not_yet_available"
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "reason"),
+    [
+        (
+            lambda row: row.pop("collector_emitted_at_utc"),
+            "decision_clock_lineage_incomplete",
+        ),
+        (
+            lambda row: row["forecast_context"].pop(
+                "forecast_available_at_utc"
+            ),
+            "decision_clock_lineage_incomplete",
+        ),
+        (
+            lambda row: row.update(
+                {"collector_emitted_at_utc": "2026-08-11T02:16:14+00:00"}
+            ),
+            "decision_clock_order_invalid",
+        ),
+        (
+            lambda row: row["forecast_context"].update(
+                {"forecast_available_at_utc": "2026-08-11T02:16:19+00:00"}
+            ),
+            "forecast_clock_after_collector",
+        ),
+    ],
+)
+def test_busan_adapter_blocks_incomplete_or_reversed_evidence_clocks(
+    tmp_path, monkeypatch, mutate, reason
+) -> None:
+    row = _checkpoint()
+    mutate(row)
+
+    score = _score(tmp_path, monkeypatch, row)
+
+    assert score.evaluation_status == "not_scorable"
+    assert score.not_scorable_reason == reason
+    assert score.model_probability is None
+
+
+def test_legacy_bundle_rejects_feature_book_after_decision(
+    tmp_path, monkeypatch
+) -> None:
+    score = _score(tmp_path, monkeypatch, _checkpoint())
+    evaluation = {
+        **asdict(score),
+        "schema_version": "weather_city_probability_runtime_v3",
+        "record_kind": "evaluation",
+        "evaluation_id": "backdated-busan-evaluation",
+        "would_enter": False,
+    }
+    evaluation["lineage"] = {
+        **evaluation["lineage"],
+        "feature_book_available_at_utc": "2026-08-11T02:16:21+00:00",
+    }
+
+    with pytest.raises(ValueError, match="feature_book_available_at_utc"):
+        legacy_bundle_from_evaluation(evaluation)
+
+
 def test_busan_production_profile_is_zero_notional_clean_forward() -> None:
     config = json.loads(
         (ROOT / "configs/weather/city_probability_runtime_v3.json").read_text()
@@ -205,7 +365,15 @@ def test_busan_production_profile_is_zero_notional_clean_forward() -> None:
     assert config["execution_mode"] == "zero_notional_shadow"
     assert config["orders_submitted"] == 0
     assert profile["adapter"] == "busan_online_market_prior_v1"
-    assert profile["forward_start_utc"] == "2026-08-12T02:00:00Z"
+    assert profile["profile_id"] == (
+        "busan_crossno_probability_clock_v2_clean_forward"
+    )
+    assert profile["evaluation_identity_version"] == "v2_profile_epoch"
+    assert profile["forward_epoch_id"] == "busan_clock_v2_20260906"
+    assert profile["forward_start_utc"] == "2026-09-05T15:00:00Z"
+    assert profile["decision_clock_policy"] == (
+        "runtime_score_after_source_book_forecast_and_collector_v2"
+    )
     assert profile["max_feature_book_response_seconds"] == 10
     assert profile["max_execution_book_age_seconds"] == 90
     assert profile["edge_threshold"] == 0.0

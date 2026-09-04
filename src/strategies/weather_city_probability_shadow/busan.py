@@ -217,17 +217,21 @@ class BusanOnlineMarketPriorAdapter:
         for row in rows:
             if row.get("city") != "Busan" or row.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
                 continue
-            decision = _parse_utc(
+            source_available = _parse_utc(
                 row.get("source_available_at_utc")
                 or row.get("source_first_seen_ts_utc")
             )
-            if decision is None or decision > now:
+            if source_available is None or source_available > now:
                 continue
-            if forward_start is not None and decision < forward_start:
+            # The clean-forward boundary applies to the source event as well as
+            # to the later runtime decision.  Otherwise a pre-boundary event
+            # could be admitted after a restart merely because it was scored
+            # later.
+            if forward_start is not None and source_available < forward_start:
                 continue
-            if (now - decision).total_seconds() > max_source_age:
+            if (now - source_available).total_seconds() > max_source_age:
                 continue
-            eligible.append((decision, row))
+            eligible.append((source_available, row))
         if not eligible:
             raise InputNotReady(
                 "busan_checkpoint_not_available",
@@ -243,24 +247,140 @@ class BusanOnlineMarketPriorAdapter:
 
         output: list[CityScore] = []
         seen_events: set[str] = set()
-        for decision, row in sorted(eligible, key=lambda item: item[0]):
+        for source_available, row in sorted(eligible, key=lambda item: item[0]):
             event_key = str(row.get("source_event_key") or row.get("source_first_seen_ts_utc"))
             if event_key in seen_events:
                 continue
             seen_events.add(event_key)
             target_date = str(row.get("target_date") or "unknown")
-            source_obs = str(row.get("source_observation_ts_utc") or decision.isoformat())
+            source_observation = _parse_utc(row.get("source_observation_ts_utc"))
+            source_first_seen = _parse_utc(row.get("source_first_seen_ts_utc"))
+            source_obs = (source_observation or source_available).isoformat()
             rung_value = row.get("routine_running_max_market_value")
             if rung_value is None:
                 continue
             rung = int(rung_value)
-            local = decision.astimezone(SEOUL_TZ)
+            book = _exact_no_book(row, rung)
+            bid = _summary_float(book, "best_bid")
+            ask = _summary_float(book, "best_ask")
+            book_ts = _parse_utc((book or {}).get("fetched_at_utc"))
+            collector_emitted = _parse_utc(row.get("collector_emitted_at_utc"))
+            forecast_context = row.get("forecast_context") or {}
+            forecast_available = _parse_utc(
+                forecast_context.get("forecast_available_at_utc")
+            )
+            forecast_clock_required = bool(
+                forecast_context.get("status") == "ok"
+                or any(
+                    forecast_context.get(name) is not None
+                    for name in (
+                        "forecast_max_f",
+                        "forecast_peak_hour_local",
+                        "forecast_cloud_cover_remaining_3h_mean_pct",
+                        "forecast_precip_probability_remaining_3h_max_pct",
+                        "forecast_wind_speed_remaining_3h_max_kt",
+                    )
+                )
+            )
+            evidence_clocks = [
+                value
+                for value in (
+                    source_available,
+                    book_ts,
+                    collector_emitted,
+                    forecast_available,
+                )
+                if value is not None
+            ]
+            feature_ready_at = max(evidence_clocks)
+            # `now` is the actual model-computation clock supplied by the
+            # runtime.  It must remain distinct from the earlier immutable
+            # feature checkpoint clock.
+            decision = now
+            if feature_ready_at > decision:
+                # Preserve the denominator as an explicit blocker without
+                # promoting unavailable clocks into decision metadata.  The
+                # nested evidence is diagnostic only; a later causal score has
+                # a distinct v2 evaluation identity.
+                output.append(
+                    CityScore(
+                        city="Busan",
+                        target_date=target_date,
+                        decision_ts_utc=decision.isoformat(),
+                        source_obs_ts_utc=source_obs,
+                        current_bracket=rung,
+                        market_side="NO",
+                        market_probability=None,
+                        market_entry_price=None,
+                        model_probability=None,
+                        model_id=str(artifact["model_id"]),
+                        feature_coverage=0.0,
+                        missing_features=list(artifact["confirmation_features"]),
+                        features={},
+                        market={},
+                        lineage={
+                            "source": "amos_runway",
+                            "profile_id": profile.get("profile_id"),
+                            "forward_epoch_id": profile.get("forward_epoch_id"),
+                            "source_event_key": event_key,
+                            "source_first_seen_at_utc": (
+                                source_first_seen.isoformat()
+                                if source_first_seen is not None
+                                else None
+                            ),
+                            "source_available_at_utc": source_available.isoformat(),
+                            "runtime_scored_at_utc": decision.isoformat(),
+                            "decision_clock_policy": (
+                                "runtime_score_after_source_book_forecast_and_collector_v2"
+                            ),
+                            "unavailable_evidence_clocks": {
+                                "feature_book_available_at_utc": (
+                                    book_ts.isoformat() if book_ts is not None else None
+                                ),
+                                "collector_emitted_at_utc": (
+                                    collector_emitted.isoformat()
+                                    if collector_emitted is not None
+                                    else None
+                                ),
+                                "forecast_available_at_utc": (
+                                    forecast_available.isoformat()
+                                    if forecast_available is not None
+                                    else None
+                                ),
+                                "feature_ready_at_utc": feature_ready_at.isoformat(),
+                            },
+                            "candidate_grain_version": artifact[
+                                "candidate_grain_version"
+                            ],
+                            "probability_target": f"busan_exact_bracket_{rung}",
+                            "probability_policy": "market_prior_residual_v1",
+                            "model_artifact_sha256": (
+                                ((profile.get("artifacts") or {}).get("runtime") or {}).get(
+                                    "sha256"
+                                )
+                            ),
+                            "checkpoint_input_ref": {
+                                "physical_path": str(root),
+                                "record_identity": event_key,
+                                "schema_version": CHECKPOINT_SCHEMA_VERSION,
+                            },
+                            "label_fields_consumed": [],
+                        },
+                        evaluation_status="not_scorable",
+                        not_scorable_reason=(
+                            "busan_checkpoint_evidence_not_yet_available"
+                        ),
+                    )
+                )
+                continue
+            local = feature_ready_at.astimezone(SEOUL_TZ)
             source_running = row.get("source_running_max_c")
             minutes_since_peak = row.get("minutes_since_source_running_max")
             peak_ts = (
                 None
-                if minutes_since_peak is None
-                else decision - timedelta(minutes=float(minutes_since_peak))
+                if minutes_since_peak is None or source_observation is None
+                else source_observation
+                - timedelta(minutes=float(minutes_since_peak))
             )
             routine_ts = _routine_report_ts(row.get("raw_metar"), target_date)
             pending = bool(
@@ -270,16 +390,17 @@ class BusanOnlineMarketPriorAdapter:
                 and peak_ts is not None
                 and (routine_ts is None or routine_ts < peak_ts)
             )
-            book = _exact_no_book(row, rung)
-            bid = _summary_float(book, "best_bid")
-            ask = _summary_float(book, "best_ask")
-            book_ts = _parse_utc((book or {}).get("fetched_at_utc"))
             response_seconds = (
-                None if book_ts is None else (book_ts - decision).total_seconds()
+                None
+                if book_ts is None
+                else (book_ts - source_available).total_seconds()
             )
             runtime_book_age_seconds = (
                 None if book_ts is None else (now - book_ts).total_seconds()
             )
+            feature_ready_to_decision_seconds = (
+                decision - feature_ready_at
+            ).total_seconds()
             max_response = float(
                 profile.get("max_feature_book_response_seconds", 10.0)
             )
@@ -291,6 +412,30 @@ class BusanOnlineMarketPriorAdapter:
                 reason = "outside_pending_confirmation_state"
             elif book is None or bid is None or ask is None:
                 reason = "exact_no_book_not_two_sided"
+            elif any(
+                value is None
+                for value in (
+                    source_observation,
+                    source_first_seen,
+                    book_ts,
+                    collector_emitted,
+                )
+            ) or (forecast_clock_required and forecast_available is None):
+                reason = "decision_clock_lineage_incomplete"
+            elif not (
+                source_observation
+                <= source_first_seen
+                <= source_available
+                <= book_ts
+                <= collector_emitted
+                <= decision
+            ):
+                reason = "decision_clock_order_invalid"
+            elif (
+                forecast_available is not None
+                and forecast_available > collector_emitted
+            ):
+                reason = "forecast_clock_after_collector"
             elif response_seconds is None or not 0.0 <= response_seconds <= max_response:
                 reason = "feature_book_response_stale"
             elif runtime_book_age_seconds is None or not 0.0 <= runtime_book_age_seconds <= max_runtime_age:
@@ -302,7 +447,7 @@ class BusanOnlineMarketPriorAdapter:
             posterior_probability = None
             if pending:
                 features, physical_probability, weather_probability = _feature_values(
-                    row, artifact, decision, rung
+                    row, artifact, feature_ready_at, rung
                 )
                 if reason is None:
                     market_probability = (float(bid) + float(ask)) / 2.0
@@ -355,7 +500,11 @@ class BusanOnlineMarketPriorAdapter:
                         "weather_no_probability": weather_probability,
                         "expression_weight": float(artifact["expression_weight"]),
                         "book_response_seconds": response_seconds,
+                        "source_to_book_response_seconds": response_seconds,
                         "runtime_book_age_seconds": runtime_book_age_seconds,
+                        "feature_ready_to_decision_seconds": (
+                            feature_ready_to_decision_seconds
+                        ),
                     },
                     market={
                         "token_id": (book or {}).get("token_id"),
@@ -373,12 +522,38 @@ class BusanOnlineMarketPriorAdapter:
                         "source": "amos_runway",
                         "profile_id": profile.get("profile_id"),
                         "source_event_key": event_key,
-                        "source_first_seen_at_utc": row.get("source_first_seen_ts_utc"),
-                        "source_first_seen_ts_utc": row.get("source_first_seen_ts_utc"),
-                        "source_available_at_utc": row.get("source_available_at_utc"),
-                        "collector_emitted_at_utc": row.get("collector_emitted_at_utc"),
+                        "source_first_seen_at_utc": (
+                            source_first_seen.isoformat()
+                            if source_first_seen is not None
+                            else None
+                        ),
+                        "source_first_seen_ts_utc": (
+                            source_first_seen.isoformat()
+                            if source_first_seen is not None
+                            else None
+                        ),
+                        "source_available_at_utc": source_available.isoformat(),
+                        "feature_book_available_at_utc": (
+                            book_ts.isoformat() if book_ts is not None else None
+                        ),
+                        "collector_emitted_at_utc": (
+                            collector_emitted.isoformat()
+                            if collector_emitted is not None
+                            else None
+                        ),
+                        "feature_frame_available_at_utc": (
+                            feature_ready_at.isoformat()
+                        ),
+                        "runtime_scored_at_utc": decision.isoformat(),
+                        "decision_clock_policy": (
+                            "runtime_score_after_source_book_forecast_and_collector_v2"
+                        ),
                         "forecast_first_seen_utc": (row.get("forecast_context") or {}).get("forecast_first_seen_utc"),
-                        "forecast_available_at_utc": (row.get("forecast_context") or {}).get("forecast_available_at_utc"),
+                        "forecast_available_at_utc": (
+                            forecast_available.isoformat()
+                            if forecast_available is not None
+                            else None
+                        ),
                         "candidate_grain_version": artifact["candidate_grain_version"],
                         "probability_target": f"busan_exact_bracket_{rung}",
                         "probability_policy": "market_prior_residual_v1",
