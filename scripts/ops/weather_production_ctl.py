@@ -1067,6 +1067,7 @@ def migrate_production_storage(
             spec.production_storage_root
         )
         target_db_tmp = target_db.with_name(target_db.name + ".migration.tmp")
+        target_db_tmp_sql = str(target_db_tmp).replace("'", "''")
         source_output = spec.data_feed_runtime_root / "output"
         target_output = staging_root / source_output.relative_to(
             spec.production_storage_root
@@ -1117,7 +1118,7 @@ def migrate_production_storage(
                 f"/usr/bin/rsync -aE {shlex.quote(str(source_current_yes) + '/')} {shlex.quote(str(target_current_yes) + '/')}",
                 f"/usr/bin/rsync -aE --exclude='*/' --exclude='weather.db' --exclude='weather.db-wal' --exclude='weather.db-shm' {source_runtime} {target_runtime}",
                 f"rm -f {shlex.quote(str(target_db_tmp))}",
-                f"/usr/bin/sqlite3 {source_db} \".timeout 30000\" \".backup '{str(target_db_tmp).replace("'", "''")}'\"",
+                f"/usr/bin/sqlite3 {source_db} \".timeout 30000\" \".backup '{target_db_tmp_sql}'\"",
                 f"test \"$(/usr/bin/sqlite3 {shlex.quote(str(target_db_tmp))} 'PRAGMA quick_check;')\" = ok",
                 f"mv -f {shlex.quote(str(target_db_tmp))} {shlex.quote(str(target_db))}",
                 "/bin/sync",
