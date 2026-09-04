@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from weather_city_runtime import (  # noqa: E402
     CanonicalCandidateBridge,
     DecisionBundle,
+    TradeIntent,
     TemporaryCanonicalBridge,
 )
 from weather_data_feed.information_events import canonical_json_hash  # noqa: E402
@@ -66,6 +67,16 @@ def _bundle_from_line(line: str, *, path: Path, row_number: int) -> DecisionBund
     if not isinstance(row, dict):
         raise ValueError(f"JSONL row must be an object at {path}:{row_number}")
     return DecisionBundle.from_dict(row)
+
+
+def _intent_from_line(line: str, *, path: Path, row_number: int) -> TradeIntent:
+    try:
+        row = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid TradeIntent JSONL at {path}:{row_number}") from exc
+    if not isinstance(row, dict):
+        raise ValueError(f"TradeIntent JSONL row must be an object at {path}:{row_number}")
+    return TradeIntent.from_dict(row)
 
 
 def load_bundles(paths: Iterable[Path]) -> list[DecisionBundle]:
@@ -176,7 +187,8 @@ def _load_cursor_batch(
     *,
     max_rows: int,
     max_bytes: int,
-) -> tuple[list[DecisionBundle], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    parse_line: Callable[..., Any] = _bundle_from_line,
+) -> tuple[list[Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     if max_rows <= 0 or max_bytes <= 0:
         raise ValueError("cursor batch limits must be positive")
     resolved = path.resolve()
@@ -228,9 +240,9 @@ def _load_cursor_batch(
                 raise ValueError("WCIR journal prefix changed behind the canonical cursor")
 
         handle.seek(offset_before)
-        bundles: list[DecisionBundle] = []
+        records: list[Any] = []
         batch_bytes = 0
-        while len(bundles) < max_rows and handle.tell() < source_stat.st_size:
+        while len(records) < max_rows and handle.tell() < source_stat.st_size:
             line_start = handle.tell()
             raw_line = handle.readline()
             line_end = handle.tell()
@@ -238,7 +250,7 @@ def _load_cursor_batch(
                 handle.seek(line_start)
                 break
             if batch_bytes + len(raw_line) > max_bytes:
-                if not bundles:
+                if not records:
                     raise ValueError(
                         "next complete WCIR JSONL row exceeds --max-new-bytes"
                     )
@@ -253,11 +265,11 @@ def _load_cursor_batch(
                 raise ValueError(
                     f"invalid UTF-8 JSONL at {resolved} byte {line_start}"
                 ) from exc
-            bundles.append(
-                _bundle_from_line(
+            records.append(
+                parse_line(
                     line,
                     path=resolved,
-                    row_number=processed_rows_before + len(bundles) + 1,
+                    row_number=processed_rows_before + len(records) + 1,
                 )
             )
         offset_after = handle.tell()
@@ -269,13 +281,13 @@ def _load_cursor_batch(
     }
     cursor_after = {
         "offset_bytes": offset_after,
-        "processed_rows": processed_rows_before + len(bundles),
-        "batch_rows": len(bundles),
+        "processed_rows": processed_rows_before + len(records),
+        "batch_rows": len(records),
         "batch_bytes": offset_after - offset_before,
         "remaining_bytes_at_snapshot": source_stat.st_size - offset_after,
         **epoch,
     }
-    return bundles, snapshot, cursor_before, cursor_after
+    return records, snapshot, cursor_before, cursor_after
 
 
 def _cursor_state_payload(
@@ -366,14 +378,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--state", type=Path)
     parser.add_argument("--max-new-rows", type=int, default=5000)
     parser.add_argument("--max-new-bytes", type=int, default=64 * 1024 * 1024)
+    parser.add_argument("--trade-intents", type=Path)
+    parser.add_argument("--trade-intent-state", type=Path)
+    parser.add_argument("--max-new-intents", type=int, default=5000)
+    parser.add_argument(
+        "--max-new-intent-bytes", type=int, default=64 * 1024 * 1024
+    )
     parser.add_argument("--max-settlement-updates", type=int, default=5000)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if bool(args.trade_intents) != bool(args.trade_intent_state):
+        raise ValueError(
+            "--trade-intents and --trade-intent-state must be provided together"
+        )
     cursor_before = None
     cursor_after = None
+    intent_cursor_before = None
+    intent_cursor_after = None
+    intent_input_snapshot: list[dict[str, Any]] = []
+    intents: list[TradeIntent] = []
     if args.state:
         if len(args.bundles) != 1:
             raise ValueError("cursor mode requires exactly one --bundles path")
@@ -393,6 +419,17 @@ def main(argv: list[str] | None = None) -> int:
             )
     if not bundles and not args.state:
         raise ValueError("no decision bundles found")
+    if args.trade_intents:
+        intents, intent_snapshot, intent_cursor_before, intent_cursor_after = (
+            _load_cursor_batch(
+                args.trade_intents,
+                args.trade_intent_state,
+                max_rows=args.max_new_intents,
+                max_bytes=args.max_new_intent_bytes,
+                parse_line=_intent_from_line,
+            )
+        )
+        intent_input_snapshot = [intent_snapshot]
     if args.apply:
         bridge = CanonicalCandidateBridge(
             args.db, expected_db_path=args.expected_db
@@ -403,6 +440,7 @@ def main(argv: list[str] | None = None) -> int:
             attach_candidate_settlements=True,
             max_candidate_settlement_updates=args.max_settlement_updates,
         )
+        intent_result = bridge.append_trade_intents(intents) if args.trade_intents else None
         db_path = bridge.db_path
         settlements_attached = result["settlements_attached"]
         if bundles:
@@ -431,6 +469,9 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory(prefix="wcir-canonical-dry-run-") as tmp:
             bridge = TemporaryCanonicalBridge(Path(tmp) / "weather.db")
             result = bridge.append(bundles)
+            intent_result = (
+                bridge.append_trade_intents(intents) if args.trade_intents else None
+            )
             funnels = bridge.candidate_funnels(
                 bundle.signal_candidate.candidate_id for bundle in bundles
             )
@@ -464,6 +505,12 @@ def main(argv: list[str] | None = None) -> int:
             bundle.signal_candidate.city for bundle in bundles
         ).items())),
         "canonical_reconciliation": result,
+        "trade_intent_reconciliation": intent_result,
+        "input_trade_intent_rows": len(intents),
+        "input_trade_intent_paths": (
+            [str(args.trade_intents.resolve())] if args.trade_intents else []
+        ),
+        "input_trade_intent_snapshot": intent_input_snapshot,
         "settlements_attached": settlements_attached,
         "settlement_update_limit": result["settlement_update_limit"],
         "settlement_update_limit_reached": result[
@@ -493,6 +540,13 @@ def main(argv: list[str] | None = None) -> int:
             "after": cursor_after,
             "delivery_semantics": "at_least_once_idempotent",
         }
+    if args.trade_intents:
+        summary["trade_intent_cursor"] = {
+            "state_path": str(args.trade_intent_state.resolve()),
+            "before": intent_cursor_before,
+            "after": intent_cursor_after,
+            "delivery_semantics": "at_least_once_idempotent",
+        }
     summary["summary_hash"] = canonical_json_hash(summary)
     summary["generated_at_utc"] = _utc_now()
     payload = json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
@@ -501,6 +555,15 @@ def main(argv: list[str] | None = None) -> int:
             args.state,
             _cursor_state_payload(
                 args.bundles[0], cursor_after or {}, input_snapshot[0]
+            ),
+        )
+    if args.apply and args.trade_intents:
+        _write_cursor_state(
+            args.trade_intent_state,
+            _cursor_state_payload(
+                args.trade_intents,
+                intent_cursor_after or {},
+                intent_input_snapshot[0],
             ),
         )
     if args.report:

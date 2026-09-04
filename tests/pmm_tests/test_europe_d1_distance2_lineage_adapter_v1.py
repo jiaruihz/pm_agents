@@ -5,8 +5,12 @@ import gzip
 import importlib.util
 import json
 from pathlib import Path
+import sqlite3
 
-from weather_city_runtime import DecisionBundle, TradeIntent
+from scripts.ops.materialize_weather_city_runtime_canonical_v1 import (
+    main as canonical_materialize_main,
+)
+from weather_city_runtime import DecisionBundle, TemporaryCanonicalBridge, TradeIntent
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -173,6 +177,47 @@ def test_adapter_emits_exact_contracts_and_is_idempotent(tmp_path: Path) -> None
     assert {bundle.signal_candidate.side for bundle in parsed} == {"NO"}
     assert all(intent.requested_size == 0 for intent in parsed_intents)
     assert all(intent.mode == "zero_notional" for intent in parsed_intents)
+
+
+def test_adapter_journals_materialize_candidates_and_intents_without_execution(
+    tmp_path: Path,
+) -> None:
+    source, config, sha = _inputs(tmp_path)
+    args = _args(tmp_path, source, config, sha)
+    subject.run_once(args)
+    db = tmp_path / "canonical.db"
+    TemporaryCanonicalBridge(db).append([])
+    report = tmp_path / "materialization.json"
+    materialize_args = [
+        "--bundles", str(args.output_dir / "decision_bundles.jsonl"),
+        "--state", str(tmp_path / "candidate-state.json"),
+        "--trade-intents", str(args.output_dir / "trade_intents.jsonl"),
+        "--trade-intent-state", str(tmp_path / "intent-state.json"),
+        "--db", str(db),
+        "--expected-db", str(db),
+        "--apply",
+        "--report", str(report),
+    ]
+
+    assert canonical_materialize_main(materialize_args) == 0
+    first = json.loads(report.read_text())
+    assert first["canonical_reconciliation"]["inserted_candidates"] == 2
+    assert first["trade_intent_reconciliation"]["inserted_trade_intents"] == 2
+    assert first["input_trade_intent_rows"] == 2
+    assert canonical_materialize_main(materialize_args) == 0
+    second = json.loads(report.read_text())
+    assert second["input_bundle_rows"] == 0
+    assert second["input_trade_intent_rows"] == 0
+
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM weather_trade_intents").fetchone()[0] == 2
+        assert {
+            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        } == {"plans": 0, "orders": 0, "fills": 0}
+    finally:
+        conn.close()
 
 
 def test_adapter_preserves_mixed_clock_pair_as_blocked_lineage(tmp_path: Path) -> None:

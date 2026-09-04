@@ -110,6 +110,14 @@ D1_DISTANCE2_CURSOR_STATE_PATH="$(
   PYTHONPATH="$PROJECT_DIR" "$PYTHON_BIN" -c \
     'from src.strategies.runtime.data_products import production_data_product_registry; from src.strategies.runtime.production import load_production_spec; spec = load_production_spec(); print(production_data_product_registry(spec).cursor_state_path("europe_d1_distance2_decision_bundles"))'
 )"
+D1_DISTANCE2_INTENTS_PATH="$(
+  PYTHONPATH="$PROJECT_DIR" "$PYTHON_BIN" -c \
+    'from src.strategies.runtime.data_products import production_data_product_registry; from src.strategies.runtime.production import load_production_spec; spec = load_production_spec(); print(production_data_product_registry(spec).physical_path("europe_d1_distance2_trade_intents"))'
+)"
+D1_DISTANCE2_INTENT_CURSOR_STATE_PATH="$(
+  PYTHONPATH="$PROJECT_DIR" "$PYTHON_BIN" -c \
+    'from src.strategies.runtime.data_products import production_data_product_registry; from src.strategies.runtime.production import load_production_spec; spec = load_production_spec(); print(production_data_product_registry(spec).cursor_state_path("europe_d1_distance2_trade_intents"))'
+)"
 DATA_FEED_RUNTIME_ROOT="$(
   PYTHONPATH="$PROJECT_DIR" "$PYTHON_BIN" -c \
     'from src.strategies.runtime.production import load_production_spec; print(load_production_spec().data_feed_runtime_root)'
@@ -272,6 +280,10 @@ if [[ "$migration_allowed" == "1" ]]; then
     echo "Europe D-1 distance-2 decision bundle journal missing or empty: $D1_DISTANCE2_BUNDLES_PATH" >&2
     exit 1
   fi
+  if [[ ! -s "$D1_DISTANCE2_INTENTS_PATH" ]]; then
+    echo "Europe D-1 distance-2 TradeIntent journal missing or empty: $D1_DISTANCE2_INTENTS_PATH" >&2
+    exit 1
+  fi
   run_refresh_stage europe_d1_distance2_candidate_materialization 300 \
     "$PYTHON_BIN" scripts/ops/materialize_weather_city_runtime_canonical_v1.py \
     --bundles "$D1_DISTANCE2_BUNDLES_PATH" \
@@ -280,6 +292,10 @@ if [[ "$migration_allowed" == "1" ]]; then
     --state "$D1_DISTANCE2_CURSOR_STATE_PATH" \
     --max-new-rows 5000 \
     --max-new-bytes 67108864 \
+    --trade-intents "$D1_DISTANCE2_INTENTS_PATH" \
+    --trade-intent-state "$D1_DISTANCE2_INTENT_CURSOR_STATE_PATH" \
+    --max-new-intents 5000 \
+    --max-new-intent-bytes 67108864 \
     --max-settlement-updates 5000 \
     --apply \
     --report "$RUNTIME_DIR/europe_d1_distance2_candidate_materialization.json"
