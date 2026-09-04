@@ -428,3 +428,41 @@ paused.  Recovery-controller hardening is commit `91186547`; the terminal-safe
 Core release pin is commit `f3d22a4d`.  Classification remains
 `recovery_improved`: this closes the recovery/config and repeated-cancel defects
 but does not eliminate macOS TCC as an architectural dependency.
+
+### Canonical refresh and cancel-tombstone follow-up
+
+The same recovery window exposed a canonical order-state defect rather than a
+new exchange action.  Order
+`0x5282ad67f0feadf749b8eff56e24146adf04ad407376837007f2f6011eac3197`
+was exchange-cancelled at `2026-09-03T21:48:09Z`; the strict append-only cancel
+lifecycle was materialized at `2026-09-04T02:04:06Z`, but authenticated CLOB
+lookup returns a tombstone after terminal deletion.  The generic fill sync
+treated that tombstone as still open instead of joining the confirmed cancel
+lifecycle.  Release `0af06655d6da0f3a005366e618d9afdd856efa9b` corrected the
+join, distinguished lookup errors from successful tombstones, and made
+`filled/cancelled/still_open` mutually exclusive.  The target has `0` fills,
+`0` fact-trade rows, `$0` actual cost and `$0` PnL; the defect changed canonical
+state classification only, not exchange exposure.
+
+Two independent control-plane blockers were then removed.  Commit `d8d9f255`
+bounded canonical tmux probe timeouts so the reliability supervisor no longer
+crashes on `TimeoutExpired`.  Commit `58c38fbd` keeps the host/Codex TAG route
+maintainer visible as a warning while preventing its unrelated non-zero exit
+from freezing the weather `7896 / PM-STABLE` canonical pipeline; weather
+LaunchAgent failures remain critical.  Canonical-refresh release
+`58c38fbd2ae4a4569ef4128248dbbb6e0ef84ef6` completed at
+`2026-09-04T12:58:54Z` with exit `0`.  Its authenticated fill sync classified
+`24` filled, `2` cancelled and `1` still-open order across `27` checked orders,
+with `0` errors and `data_incomplete=false`.  Fill coverage reconciled
+`1,645/1,645` distinct fill ids and `$6,180.716074/$6,180.716074` DB versus
+`live_real` cost with zero id or cost delta.  The catch-up added one Busan
+shadow candidate and no fill or fact-trade delta.
+
+One attempted refresh observed a failed JRS write probe and exited without
+writing.  The immediately repeated canonical-context probe succeeded, so the
+permission host was not recreated and no runtime tree was migrated.  A missing
+safe KNMI collector was restored through the registered controller contract;
+post-change health returned to warning-only and the saved pre/post manifest
+comparison found no lost canonical session.  This follow-up is classified
+`contained / recovery_improved`; it is not evidence that the recurrent macOS
+TCC/JRS permission-host dependency has been eliminated.
