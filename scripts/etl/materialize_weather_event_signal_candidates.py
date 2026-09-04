@@ -173,7 +173,8 @@ def attach_settlements(
                   ELSE NULL
                 END
                 FROM settlements AS settlement
-                WHERE settlement.condition_id = candidate.condition_id
+                WHERE settlement.target_date = candidate.event_date
+                  AND settlement.condition_id = candidate.condition_id
                   AND settlement.settlement_status = 'settled'
                   AND (
                     settlement.final_price >= 0.99
@@ -192,7 +193,8 @@ def attach_settlements(
                   AND EXISTS (
                     SELECT 1
                     FROM settlements AS pending_settlement
-                    WHERE pending_settlement.condition_id = pending.condition_id
+                    WHERE pending_settlement.target_date = pending.event_date
+                      AND pending_settlement.condition_id = pending.condition_id
                       AND pending_settlement.settlement_status = 'settled'
                       AND (
                         pending_settlement.final_price >= 0.99
@@ -203,8 +205,10 @@ def attach_settlements(
                     SELECT 1
                     FROM settlements AS zero_settlement
                     JOIN settlements AS one_settlement
-                      ON one_settlement.condition_id = zero_settlement.condition_id
-                    WHERE zero_settlement.condition_id = pending.condition_id
+                      ON one_settlement.target_date = zero_settlement.target_date
+                     AND one_settlement.condition_id = zero_settlement.condition_id
+                    WHERE zero_settlement.target_date = pending.event_date
+                      AND zero_settlement.condition_id = pending.condition_id
                       AND zero_settlement.settlement_status = 'settled'
                       AND one_settlement.settlement_status = 'settled'
                       AND zero_settlement.final_price <= 0.01
