@@ -481,9 +481,23 @@ def maintain(
                 break
         accepted = bool(selected)
         rolled_back = False
+        rollback_verified = False
+        rollback_node = ""
+        rollback_probe: dict[str, Any] = {}
+        rollback_geoblock: dict[str, Any] = {}
         if not accepted:
             controller.switch(group_name, current)
             rolled_back = True
+            time.sleep(0.5)
+            try:
+                _, rollback_node = group_snapshot(controller, group_name)
+            except RuntimeError:
+                rollback_node = ""
+            rollback_probe = probe_summary(
+                probe_openai(), slow_seconds=slow_seconds
+            )
+            rollback_geoblock = probe_polymarket_geoblock()
+            rollback_verified = rollback_node == current
         event = {
             "schema_version": SCHEMA_VERSION,
             "ts_utc": utc_now(),
@@ -493,6 +507,10 @@ def maintain(
             "selected_node": selected,
             "attempted_nodes": [row["node"] for row in switch_attempts],
             "rolled_back": rolled_back,
+            "rollback_verified": rollback_verified,
+            "rollback_node": rollback_node,
+            "rollback_probe": rollback_probe,
+            "rollback_polymarket_geoblock": rollback_geoblock,
             "pre_probe": probe,
             "pre_polymarket_geoblock": geoblock,
             "post_probe": post_probe,
@@ -503,33 +521,70 @@ def maintain(
         latest.update(
             {
                 "generated_at_utc": utc_now(),
-                "current_node": selected if accepted else current,
+                "current_node": selected if accepted else rollback_node,
                 "failure_streak": 0 if accepted else streak,
                 "last_switch_epoch": now_epoch if accepted else int(state.get("last_switch_epoch") or 0),
                 "last_switch": event,
                 "polymarket_geoblock": (
                     switch_attempts[-1]["polymarket_geoblock"]
                     if accepted
-                    else geoblock
+                    else rollback_geoblock
                 ),
             }
         )
         atomic_write_json(state_path, latest)
         return {
             **decision,
-            "status": "switched" if accepted else "rolled_back",
+            "status": (
+                "switched"
+                if accepted
+                else "rolled_back" if rollback_verified else "rollback_failed"
+            ),
             "switched": accepted,
             "selected_node": selected,
             "attempted_nodes": [row["node"] for row in switch_attempts],
-            "post_probe": post_probe,
+            "rollback_verified": rollback_verified,
+            "rollback_node": rollback_node,
+            "post_probe": post_probe if accepted else rollback_probe,
             "post_polymarket_geoblock": (
                 switch_attempts[-1]["polymarket_geoblock"]
                 if accepted
-                else geoblock
+                else rollback_geoblock
             ),
             "switch_attempts": switch_attempts,
             "audit_path": str(audit_path),
         }
+
+
+def maintenance_exit_code(result: dict[str, Any]) -> int:
+    """Keep launchd healthy after a safe rollback to a tradeable route.
+
+    A failed candidate search is still recorded as ``rolled_back`` or
+    ``no_healthy_candidate`` in the append-only controller state.  It is not a
+    process failure when the restored/current route remains explicitly
+    tradeable; returning 1 in that case makes the production manifest report a
+    false critical.  Unknown or blocked venue reachability remains fail-closed.
+    """
+    status = result.get("status")
+    if status == "rollback_failed":
+        return 1
+    if status not in {"rolled_back", "no_healthy_candidate"}:
+        return 0
+    if status == "rolled_back" and result.get("rollback_verified") is not True:
+        return 1
+    geoblock = result.get("post_polymarket_geoblock")
+    if not isinstance(geoblock, dict):
+        geoblock = result.get("polymarket_geoblock")
+    probe = result.get("post_probe")
+    if not isinstance(probe, dict):
+        probe = result.get("probe")
+    route_usable = (
+        isinstance(geoblock, dict)
+        and geoblock.get("trading_allowed") is True
+        and isinstance(probe, dict)
+        and int(probe.get("ok_count") or 0) >= 2
+    )
+    return 0 if route_usable else 1
 
 
 def main() -> int:
@@ -580,14 +635,11 @@ def main() -> int:
             reason=str(args.reason),
         )
         if args.quiet:
-            return 0 if result.get("status") not in {
-                "rolled_back",
-                "no_healthy_candidate",
-            } else 1
+            return maintenance_exit_code(result)
     else:  # pragma: no cover
         raise AssertionError(args.command)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("status") not in {"rolled_back", "no_healthy_candidate"} else 1
+    return maintenance_exit_code(result)
 
 
 if __name__ == "__main__":

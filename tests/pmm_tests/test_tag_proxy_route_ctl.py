@@ -199,6 +199,8 @@ def test_maintain_rolls_back_failed_post_switch_probe(tmp_path, monkeypatch):
     )
     assert result["status"] == "rolled_back"
     assert selected["node"] == "🇭🇰 香港 01丨1x HK"
+    assert result["rollback_verified"] is True
+    assert result["rollback_node"] == "🇭🇰 香港 01丨1x HK"
     assert result["attempted_nodes"] == ["🇯🇵 日本 01丨1x JP"]
 
 
@@ -333,3 +335,63 @@ def test_quiet_maintenance_suppresses_failure_payload(monkeypatch, capsys):
 
     assert ctl.main() == 1
     assert capsys.readouterr().out == ""
+
+
+def test_quiet_maintenance_accepts_safe_rollback_to_tradeable_route(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(sys, "argv", [
+        "tag_proxy_route_ctl.py",
+        "maintain",
+        "--apply",
+        "--reason",
+        "test",
+        "--quiet",
+    ])
+    monkeypatch.setattr(ctl, "TagController", lambda **_: object())
+    monkeypatch.setattr(
+        ctl,
+        "maintain",
+        lambda *_args, **_kwargs: {
+            "status": "rolled_back",
+            "rollback_verified": True,
+            "post_probe": {"ok_count": 3},
+            "post_polymarket_geoblock": {"trading_allowed": True},
+        },
+    )
+
+    assert ctl.main() == 0
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("trading_allowed", [False, None])
+def test_maintenance_exit_code_fails_closed_when_restored_route_is_not_assured(
+    trading_allowed
+):
+    assert ctl.maintenance_exit_code(
+        {
+            "status": "rolled_back",
+            "rollback_verified": True,
+            "post_probe": {"ok_count": 3},
+            "post_polymarket_geoblock": {"trading_allowed": trading_allowed},
+        }
+    ) == 1
+
+
+def test_maintenance_exit_code_rejects_unverified_or_unusable_rollback():
+    assert ctl.maintenance_exit_code(
+        {
+            "status": "rolled_back",
+            "rollback_verified": False,
+            "post_probe": {"ok_count": 3},
+            "post_polymarket_geoblock": {"trading_allowed": True},
+        }
+    ) == 1
+    assert ctl.maintenance_exit_code(
+        {
+            "status": "rolled_back",
+            "rollback_verified": True,
+            "post_probe": {"ok_count": 1},
+            "post_polymarket_geoblock": {"trading_allowed": True},
+        }
+    ) == 1
