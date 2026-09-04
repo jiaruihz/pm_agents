@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from scripts.ops import production_reliability_supervisor as supervisor
 
@@ -37,6 +38,34 @@ def test_incident_debounce_and_resolution_preserve_impact_window() -> None:
     assert transitions3[0]["impact_ended_utc"] == supervisor.iso_utc(
         start + timedelta(minutes=2)
     )
+
+
+def test_incident_resolution_preserves_open_time_runtime_context() -> None:
+    start = datetime(2026, 9, 3, 17, 32, tzinfo=timezone.utc)
+    finding = supervisor.issue(
+        "weather.runtime.live",
+        "critical",
+        "tmux_session_missing",
+        component="weather-runtime",
+    )
+    finding["runtime_context"] = {
+        "instance_id": "live",
+        "role": "strategy",
+        "execution_mode": "live",
+        "expected_live": True,
+        "desired_state": "running",
+    }
+    state1, _ = supervisor.update_incident_state({}, [finding], start)
+    state2, opened = supervisor.update_incident_state(
+        state1, [finding], start + timedelta(minutes=1)
+    )
+    _, resolved = supervisor.update_incident_state(
+        state2, [], start + timedelta(minutes=2)
+    )
+
+    assert opened[0]["runtime_context"]["desired_state"] == "running"
+    assert resolved[0]["runtime_context"]["expected_live"] is True
+    assert "可能造成漏单或执行中断" in supervisor.render_notification(resolved)
 
 
 def test_weather_health_classifies_live_and_safe_shadow() -> None:
@@ -410,6 +439,117 @@ def test_standalone_manifest_warning_is_translated() -> None:
     assert "问题：生产拓扑清单出现警告" in message
     assert "生产拓扑清单处于警告状态" in message
     assert "manifest_status=" not in message
+
+
+def test_resolved_paused_live_notification_does_not_claim_runtime_recovery(
+    monkeypatch,
+) -> None:
+    runtime = SimpleNamespace(
+        instance_id="paused_live",
+        role="strategy",
+        execution_mode="live",
+        expected_live=True,
+        desired_state="paused",
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "load_production_spec",
+        lambda: SimpleNamespace(managed_runtimes=(runtime,)),
+    )
+
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "resolved",
+                "severity": "critical",
+                "key": "weather.runtime.paused_live",
+                "detail": "tmux_session_missing,health_artifact_missing",
+                "impact_started_utc": "2026-09-03T17:32:12Z",
+                "impact_ended_utc": "2026-09-03T17:41:31Z",
+            }
+        ]
+    )
+
+    assert message.startswith("【生产状态通知｜告警已关闭】")
+    assert "告警关闭：paused_live（策略执行）异常" in message
+    assert "已暂停的实盘能力实例；当前不会真实下单" in message
+    assert "不单独证明进程重启、订单提交、成交或资金损失" in message
+    assert "恢复：" not in message
+
+
+def test_running_live_notification_distinguishes_possible_from_actual_impact(
+    monkeypatch,
+) -> None:
+    runtime = SimpleNamespace(
+        instance_id="running_live",
+        role="strategy",
+        execution_mode="live",
+        expected_live=True,
+        desired_state="running",
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "load_production_spec",
+        lambda: SimpleNamespace(managed_runtimes=(runtime,)),
+    )
+
+    _friendly, scope = supervisor._runtime_display("running_live")
+
+    assert "可能造成漏单或执行中断" in scope
+    assert "不证明已下单、成交或资金损失" in scope
+
+
+def test_paused_non_live_and_unknown_runtime_fallbacks(monkeypatch) -> None:
+    paused_shadow = SimpleNamespace(
+        instance_id="paused_shadow",
+        role="shadow",
+        execution_mode="zero_notional_shadow",
+        expected_live=False,
+        desired_state="paused",
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "load_production_spec",
+        lambda: SimpleNamespace(managed_runtimes=(paused_shadow,)),
+    )
+    _friendly, scope = supervisor._runtime_display("paused_shadow")
+    assert "已暂停的非实盘实例" in scope
+    assert supervisor._runtime_display("unknown") == (
+        "运行实例 unknown",
+        "影响范围未知，请按实例标识排查",
+    )
+    monkeypatch.setattr(
+        supervisor, "load_production_spec", lambda: (_ for _ in ()).throw(ValueError("bad spec"))
+    )
+    assert supervisor._runtime_display("unknown")[1] == "影响范围未知，请按实例标识排查"
+
+
+def test_repair_only_notification_does_not_claim_incident_closed() -> None:
+    success = supervisor.render_notification(
+        [
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.shadow",
+                "returncode": 0,
+                "target_status": "healthy",
+                "target_issues": [],
+            }
+        ]
+    )
+    failed = supervisor.render_notification(
+        [
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.shadow",
+                "returncode": 2,
+                "target_status": "critical",
+                "target_issues": ["health_artifact_stale"],
+            }
+        ]
+    )
+    assert success.startswith("【生产处理通知｜自动处理结果】")
+    assert failed.startswith("【生产处理通知｜自动处理失败】")
+    assert "告警已关闭" not in success + failed
 
 
 def test_safe_repair_never_adds_live_confirmation(tmp_path: Path) -> None:

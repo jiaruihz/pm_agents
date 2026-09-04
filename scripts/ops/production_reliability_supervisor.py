@@ -293,15 +293,21 @@ def collect_weather(runner: Runner = run_command) -> dict[str, Any]:
             and not row.get("expected_live")
         ):
             repair = {"kind": "weather_restart", "target": instance_id}
-        findings.append(
-            issue(
-                f"weather.runtime.{instance_id}",
-                severity,
-                ",".join(map(str, row.get("issues") or ["unhealthy"])),
-                component="weather-runtime",
-                repair=repair,
-            )
+        finding = issue(
+            f"weather.runtime.{instance_id}",
+            severity,
+            ",".join(map(str, row.get("issues") or ["unhealthy"])),
+            component="weather-runtime",
+            repair=repair,
         )
+        finding["runtime_context"] = {
+            "instance_id": instance_id,
+            "role": str(row.get("role") or "unknown"),
+            "execution_mode": str(row.get("execution_mode") or "unknown"),
+            "expected_live": bool(row.get("expected_live")),
+            "desired_state": str(row.get("desired_state") or "running"),
+        }
+        findings.append(finding)
 
     status = "critical" if any(row["severity"] == "critical" for row in findings) else (
         "warning" if findings else "healthy"
@@ -777,6 +783,7 @@ def update_incident_state(
                     "at_utc": now_text,
                     "impact_started_utc": row["first_seen_utc"],
                     "detail": finding.get("detail"),
+                    "runtime_context": finding.get("runtime_context"),
                 }
             )
 
@@ -792,6 +799,7 @@ def update_incident_state(
                 "impact_started_utc": old.get("first_seen_utc"),
                 "impact_ended_utc": now_text,
                 "detail": old.get("detail"),
+                "runtime_context": old.get("runtime_context"),
             }
         )
 
@@ -910,18 +918,32 @@ def _human_detail(detail: Any) -> str:
     return "；".join(parts) or "未提供具体原因"
 
 
-def _runtime_display(instance_id: str) -> tuple[str, str]:
+def _runtime_display(
+    instance_id: str, runtime_context: Mapping[str, Any] | None = None
+) -> tuple[str, str]:
     known_name = {
         "polymarket_weather_proposal_reward_shadow_v1": "天气 proposal reward 影子策略",
     }.get(instance_id)
-    try:
-        runtime = next(
-            item
-            for item in load_production_spec().managed_runtimes
-            if item.instance_id == instance_id
-        )
-    except (StopIteration, OSError, ValueError):
-        return known_name or f"运行实例 {instance_id}", "影响范围未知，请按实例标识排查"
+    if runtime_context:
+        runtime = runtime_context
+    else:
+        try:
+            runtime = next(
+                item
+                for item in load_production_spec().managed_runtimes
+                if item.instance_id == instance_id
+            )
+        except (StopIteration, OSError, ValueError):
+            return known_name or f"运行实例 {instance_id}", "影响范围未知，请按实例标识排查"
+    value = (
+        (lambda key, default=None: runtime.get(key, default))
+        if isinstance(runtime, Mapping)
+        else (lambda key, default=None: getattr(runtime, key, default))
+    )
+    role = str(value("role", "unknown"))
+    execution_mode = str(value("execution_mode", "unknown"))
+    expected_live = bool(value("expected_live", False))
+    desired_state = str(value("desired_state", "running"))
     role_labels = {
         "shadow": "影子策略",
         "strategy": "策略执行",
@@ -931,15 +953,22 @@ def _runtime_display(instance_id: str) -> tuple[str, str]:
         "dashboard_api": "看板 API",
         "infrastructure": "基础设施",
     }
-    friendly = known_name or f"{instance_id}（{role_labels.get(runtime.role, runtime.role)}）"
-    if runtime.expected_live:
-        scope = "实盘实例，可能影响真实下单"
-    elif runtime.execution_mode in {"shadow", "zero_notional_shadow"}:
+    friendly = known_name or f"{instance_id}（{role_labels.get(role, role)}）"
+    if desired_state == "paused" and expected_live:
+        scope = "已暂停的实盘能力实例；当前不会真实下单"
+    elif desired_state == "paused":
+        scope = f"已暂停的非实盘实例（{execution_mode}）；当前不会自行真实下单"
+    elif expected_live:
+        scope = (
+            "具备实盘下单能力；异常可能造成漏单或执行中断，"
+            "但告警本身不证明已下单、成交或资金损失"
+        )
+    elif execution_mode in {"shadow", "zero_notional_shadow"}:
         scope = "仅 shadow 研究实例，不会真实下单"
-    elif runtime.role in {"collector", "source_collector", "market_collector", "data_feed"}:
+    elif role in {"collector", "source_collector", "market_collector", "data_feed"}:
         scope = "数据采集实例，可能影响下游信号，但不会自行下单"
     else:
-        scope = f"非实盘实例（{runtime.execution_mode}），不会自行真实下单"
+        scope = f"非实盘实例（{execution_mode}），不会自行真实下单"
     return friendly, scope
 
 
@@ -947,7 +976,10 @@ def _problem_summary(row: Mapping[str, Any]) -> tuple[str, str, str]:
     key = str(row.get("key") or "unknown")
     if key.startswith("weather.runtime."):
         instance_id = key.removeprefix("weather.runtime.")
-        friendly, scope = _runtime_display(instance_id)
+        context = row.get("runtime_context")
+        friendly, scope = _runtime_display(
+            instance_id, context if isinstance(context, Mapping) else None
+        )
         return f"{friendly}异常", scope, instance_id
     if key == "weather.data_feed.semantic_critical":
         return "天气数据语义检查失败", "可能影响依赖该数据的信号；不等于进程或盘口链路全部停止", key
@@ -995,14 +1027,20 @@ def render_notification(transitions: Sequence[Mapping[str, Any]]) -> str:
     failed_repairs = [row for row in repairs if not _repair_succeeded(row)]
     successful_repairs = [row for row in repairs if _repair_succeeded(row)]
     severity = "CRITICAL" if any(row.get("severity") == "critical" for row in opened) else "WARNING"
-    if failed_repairs:
+    if repairs and not opened and not resolved:
+        title = (
+            "【生产处理通知｜自动处理失败】"
+            if failed_repairs
+            else "【生产处理通知｜自动处理结果】"
+        )
+    elif failed_repairs:
         title = f"【生产告警｜{severity}｜自动恢复失败】"
     elif opened and successful_repairs:
         title = f"【生产告警｜{severity}｜已执行自动恢复】"
     elif opened:
         title = f"【生产告警｜{severity}】"
     else:
-        title = "【生产恢复通知｜已恢复】"
+        title = "【生产状态通知｜告警已关闭】"
     lines = [title]
 
     for row in opened:
@@ -1022,13 +1060,14 @@ def render_notification(transitions: Sequence[Mapping[str, Any]]) -> str:
         lines.extend(
             [
                 "",
-                f"恢复：{summary}",
+                f"告警关闭：{summary}",
                 (
                     "影响窗口："
                     f"{_local_time(row.get('impact_started_utc'))} → "
                     f"{_local_time(row.get('impact_ended_utc'))}（北京时间）"
                 ),
                 f"影响：{scope}",
+                "说明：告警条件已消失；不单独证明进程重启、订单提交、成交或资金损失",
                 f"实例：{identifier}",
             ]
         )
