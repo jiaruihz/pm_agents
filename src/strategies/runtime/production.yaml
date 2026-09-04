@@ -108,8 +108,8 @@ production_releases:
     expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
     runtime_bindings: [operational_venv]
   - release_id: weather_mm_w3_event_fenced_paired_bid
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/18d55894137d08d9ac17355a4c9027bbbe6517ac
-    expected_repo_sha: 18d55894137d08d9ac17355a4c9027bbbe6517ac
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/849b15c99dd47adeca3ea5e0ff3772245fbbf9a5
+    expected_repo_sha: 849b15c99dd47adeca3ea5e0ff3772245fbbf9a5
     runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
@@ -562,20 +562,20 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, current_yes_core_carry_market_state_shadow_v2, weather_market_books]
     recovery_policy: safe
 
-  - instance_id: weather_mm_w3_event_fenced_paired_bid_shadow_v1
-    tmux_session: weather_mm_w3_event_fenced_paired_bid_shadow_v1
+  - instance_id: weather_mm_w3_risk_limited_paired_probe_shadow_v2
+    tmux_session: weather_mm_w3_risk_limited_paired_probe_shadow_v2
     role: shadow
     execution_mode: zero_notional_shadow
     desired_state: running
     release_id: weather_mm_w3_event_fenced_paired_bid
     start_script: scripts/ops/start_weather_mm_w3_event_fenced_paired_bid_shadow.sh
-    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_mm_w3_event_fenced_paired_bid_v1/latest.json
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_mm_w3_risk_limited_paired_probe_v2/latest.json
     health_format: json
     max_health_age_sec: 120
     startup_grace_sec: 180
     accepted_health_statuses: [warming, ok]
     expected_health_fields:
-      strategy_key: weather_mm_w3_event_fenced_paired_bid_v1
+      strategy_key: weather_mm_w3_risk_limited_paired_probe_v2
       execution_mode: zero_notional_shadow
       live_authority: false
       venue_call_allowed: false
@@ -585,7 +585,7 @@ managed_runtimes:
       orders: 0
       fills: 0
       exchange_calls: 0
-      formal_forward_start_utc: "2026-09-04T00:00:00Z"
+      formal_forward_start_utc: "2026-09-06T00:00:00Z"
     dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
     recovery_policy: safe
 

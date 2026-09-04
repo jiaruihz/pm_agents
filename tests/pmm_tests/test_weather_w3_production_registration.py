@@ -3,7 +3,7 @@ from pathlib import Path
 from src.strategies.runtime.production import load_production_spec
 
 
-W3_SHA = "18d55894137d08d9ac17355a4c9027bbbe6517ac"
+W3_SHA = "849b15c99dd47adeca3ea5e0ff3772245fbbf9a5"
 
 
 def test_w3_zero_notional_runtime_is_registered_without_live_authority():
@@ -11,7 +11,7 @@ def test_w3_zero_notional_runtime_is_registered_without_live_authority():
     runtime = next(
         row
         for row in spec.managed_runtimes
-        if row.instance_id == "weather_mm_w3_event_fenced_paired_bid_shadow_v1"
+        if row.instance_id == "weather_mm_w3_risk_limited_paired_probe_shadow_v2"
     )
     release = spec.release("weather_mm_w3_event_fenced_paired_bid")
 
@@ -25,7 +25,7 @@ def test_w3_zero_notional_runtime_is_registered_without_live_authority():
         "weather_market_books",
     )
     assert runtime.expected_health_contract() == {
-        "strategy_key": "weather_mm_w3_event_fenced_paired_bid_v1",
+        "strategy_key": "weather_mm_w3_risk_limited_paired_probe_v2",
         "execution_mode": "zero_notional_shadow",
         "live_authority": False,
         "venue_call_allowed": False,
@@ -35,7 +35,7 @@ def test_w3_zero_notional_runtime_is_registered_without_live_authority():
         "orders": 0,
         "fills": 0,
         "exchange_calls": 0,
-        "formal_forward_start_utc": "2026-09-04T00:00:00Z",
+        "formal_forward_start_utc": "2026-09-06T00:00:00Z",
     }
     assert release.expected_repo_sha == W3_SHA
     assert release.checkout_root == Path(
