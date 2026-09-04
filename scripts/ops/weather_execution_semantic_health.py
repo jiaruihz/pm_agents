@@ -32,6 +32,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.runtime.production import load_production_spec  # noqa: E402
+from scripts.ops.weather_live_entry_region_gate import (  # noqa: E402
+    DEFAULT_STATE_ROOT as DEFAULT_TAG_ROUTE_STATE_ROOT,
+    GATE_SCHEMA_VERSION as LIVE_ENTRY_GATE_SCHEMA_VERSION,
+)
 
 
 _PRODUCTION_SPEC = load_production_spec()
@@ -721,6 +725,70 @@ def evaluate_market_proxy_health(path: Path, now: datetime) -> dict[str, Any]:
     }
 
 
+def evaluate_live_entry_gate_health(path: Path, now: datetime) -> dict[str, Any]:
+    payload = read_json(path)
+    alerts: list[dict[str, Any]] = []
+    generated = parse_dt(payload.get("updated_at_utc")) if payload else None
+    age_min = (now - generated).total_seconds() / 60 if generated else None
+    if not payload or payload.get("_parse_error"):
+        kind = "live_entry_gate_parse_error" if payload else "live_entry_gate_missing"
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_live_entry_region_gate",
+            kind=kind,
+            message="Weather live entry region gate is unavailable",
+            detail={"path": str(path), "error": payload.get("_parse_error") if payload else None},
+        )
+    elif payload.get("schema_version") != LIVE_ENTRY_GATE_SCHEMA_VERSION:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_live_entry_region_gate",
+            kind="live_entry_gate_schema_mismatch",
+            message="Weather live entry region gate schema mismatch",
+            detail={"path": str(path), "schema_version": payload.get("schema_version")},
+        )
+    elif age_min is None or age_min > 5:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_live_entry_region_gate",
+            kind="live_entry_gate_stale",
+            message="Weather live entry region gate is stale",
+            detail={"path": str(path), "age_min": age_min},
+        )
+    elif payload.get("entry_allowed") is not True:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance="weather_live_entry_region_gate",
+            kind="live_entry_gate_closed",
+            message="Weather live entry region gate is closed",
+            detail={
+                "reason": payload.get("reason"),
+                "verified_node": payload.get("verified_node"),
+                "polymarket_geoblock": payload.get("polymarket_geoblock"),
+            },
+        )
+    return {
+        "strategy_instance": "weather_live_entry_region_gate",
+        "display_name": "Weather live entry region gate",
+        "mode": "infrastructure",
+        "expected_live": True,
+        "status": "critical" if alerts else "healthy",
+        "summary_path": str(path),
+        "generated_at_utc": payload.get("updated_at_utc") if payload else None,
+        "heartbeat_age_min": age_min,
+        "latest_summary_excerpt": {
+            "entry_allowed": payload.get("entry_allowed") if payload else None,
+            "verified_node": payload.get("verified_node") if payload else None,
+            "reason": payload.get("reason") if payload else None,
+        },
+        "alerts": alerts,
+    }
+
+
 def default_specs(root: Path) -> list[WatchSpec]:
     specs = [
         WatchSpec(
@@ -824,6 +892,12 @@ def collect_probes(
         evaluate_market_proxy_health(
             _PRODUCTION_SPEC.data_feed_runtime_root
             / "output/market_proxy_control/latest.json",
+            now,
+        )
+    )
+    probes.append(
+        evaluate_live_entry_gate_health(
+            DEFAULT_TAG_ROUTE_STATE_ROOT / "live_entry_gate.json",
             now,
         )
     )

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from contextlib import contextmanager
 
 from scripts.ops import weather_polymarket_live_transport as live_transport
 from scripts.ops.weather_polymarket_live_transport import LivePolymarketTransport
@@ -74,11 +75,17 @@ class Types:
 
 
 def _transport():
+    @contextmanager
+    def allow_entry(_proxy):
+        yield {"allowed": True}
+
     return LivePolymarketTransport(
         client=FakeClient(),
         order_args_cls=Args,
         order_payload_cls=Payload,
         order_type_cls=Types,
+        execution_proxy="http://127.0.0.1:7896",
+        entry_guard=allow_entry,
     )
 
 
@@ -148,6 +155,37 @@ def test_cancel_normalizes_confirmed_order_id():
     result = transport.cancel_order("venue-1")
 
     assert result["status"] == "cancelled"
+
+
+def test_submit_holds_region_guard_but_cancel_does_not_use_it():
+    events = []
+
+    @contextmanager
+    def guard(proxy):
+        events.append(("enter", proxy))
+        yield {}
+        events.append(("exit", proxy))
+
+    transport = _transport()
+    transport.entry_guard = guard
+    signed = transport.create_order(
+        {
+            "client_order_id": "guarded-client",
+            "identity_key": "guarded-identity",
+            "token_id": "token-1",
+            "price": "0.81",
+            "shares": "5",
+            "side": "BUY",
+        }
+    )
+
+    transport.post_order(signed, order_type="GTC", post_only=True)
+    transport.cancel_order("venue-1")
+
+    assert events == [
+        ("enter", "http://127.0.0.1:7896"),
+        ("exit", "http://127.0.0.1:7896"),
+    ]
 
 
 def test_live_transport_defaults_to_named_stable_route(monkeypatch):

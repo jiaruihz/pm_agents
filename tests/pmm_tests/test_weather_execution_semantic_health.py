@@ -296,3 +296,49 @@ def test_market_proxy_unblocked_route_is_healthy(tmp_path: Path) -> None:
 
     assert result["status"] == "healthy"
     assert result["alerts"] == []
+
+
+def test_live_entry_gate_closed_or_stale_is_critical(tmp_path: Path) -> None:
+    now = datetime(2026, 9, 5, 2, 30, tzinfo=timezone.utc)
+    path = tmp_path / "live_entry_gate.json"
+    write_json(
+        path,
+        {
+            "schema_version": monitor.LIVE_ENTRY_GATE_SCHEMA_VERSION,
+            "updated_at_utc": (now - timedelta(seconds=30)).isoformat(),
+            "entry_allowed": False,
+            "verified_node": "my-node",
+            "reason": "no_verified_tradeable_route",
+            "polymarket_geoblock": {"trading_allowed": False},
+        },
+    )
+
+    closed = monitor.evaluate_live_entry_gate_health(path, now)
+    assert closed["status"] == "critical"
+    assert closed["alerts"][0]["kind"] == "live_entry_gate_closed"
+
+    payload = json.loads(path.read_text())
+    payload["entry_allowed"] = True
+    payload["updated_at_utc"] = (now - timedelta(minutes=6)).isoformat()
+    write_json(path, payload)
+    stale = monitor.evaluate_live_entry_gate_health(path, now)
+    assert stale["alerts"][0]["kind"] == "live_entry_gate_stale"
+
+
+def test_live_entry_gate_fresh_open_is_healthy(tmp_path: Path) -> None:
+    now = datetime(2026, 9, 5, 2, 30, tzinfo=timezone.utc)
+    path = tmp_path / "live_entry_gate.json"
+    write_json(
+        path,
+        {
+            "schema_version": monitor.LIVE_ENTRY_GATE_SCHEMA_VERSION,
+            "updated_at_utc": (now - timedelta(seconds=30)).isoformat(),
+            "entry_allowed": True,
+            "verified_node": "hk-node",
+            "reason": "verified_tradeable_route",
+        },
+    )
+
+    result = monitor.evaluate_live_entry_gate_health(path, now)
+    assert result["status"] == "healthy"
+    assert result["alerts"] == []

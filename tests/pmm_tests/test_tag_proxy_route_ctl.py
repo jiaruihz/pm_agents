@@ -12,7 +12,7 @@ def _default_unblocked_polymarket_probe(monkeypatch):
     monkeypatch.setattr(
         ctl,
         "probe_polymarket_geoblock",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "ok": True,
             "blocked": False,
             "trading_allowed": True,
@@ -25,6 +25,64 @@ def _default_unblocked_polymarket_probe(monkeypatch):
 
 def test_host_tag_controller_owns_tag_canonical_ingress():
     assert ctl.DEFAULT_PROXY_URL == "http://127.0.0.1:7890"
+    assert ctl.DEFAULT_EXECUTION_PROXY_URL == "http://127.0.0.1:7896"
+
+
+def test_maintenance_probes_actual_execution_route(tmp_path, monkeypatch):
+    seen = []
+
+    class Controller:
+        def proxies(self):
+            return {
+                ctl.DEFAULT_GROUP: {
+                    "type": "Selector",
+                    "now": "hk丨1x HK",
+                    "all": ["hk丨1x HK", "my丨1x MY"],
+                }
+            }
+
+    monkeypatch.setattr(
+        ctl,
+        "probe_openai",
+        lambda proxy: seen.append(("openai", proxy))
+        or [{"ok": True, "total_sec": 0.2}] * 3,
+    )
+    monkeypatch.setattr(
+        ctl,
+        "probe_polymarket_geoblock",
+        lambda proxy: seen.append(("geoblock", proxy))
+        or {"ok": True, "blocked": False, "trading_allowed": True},
+    )
+
+    result = ctl.maintain(
+        Controller(), state_root=tmp_path, apply=True, reason="test"
+    )
+
+    assert result["status"] == "healthy"
+    assert seen == [
+        ("openai", "http://127.0.0.1:7896"),
+        ("geoblock", "http://127.0.0.1:7896"),
+    ]
+
+
+def test_controller_preflight_failure_closes_existing_gate(tmp_path):
+    (tmp_path / "live_entry_gate.json").write_text(
+        json.dumps({"entry_allowed": True}), encoding="utf-8"
+    )
+
+    class Controller:
+        def proxies(self):
+            raise RuntimeError("controller down")
+
+    result = ctl.maintain(
+        Controller(), state_root=tmp_path, apply=True, reason="test"
+    )
+
+    assert result["status"] == "controller_preflight_failed"
+    assert ctl.maintenance_exit_code(result) == 1
+    gate = json.loads((tmp_path / "live_entry_gate.json").read_text())
+    assert gate["entry_allowed"] is False
+    assert gate["reason"] == "route_controller_preflight_failed"
 
 
 def test_eligible_nodes_only_keep_preferred_1x_regions():
@@ -33,13 +91,36 @@ def test_eligible_nodes_only_keep_preferred_1x_regions():
             "🇯🇵 日本 01丨1x JP",
             "🇩🇪 德国丨1x DE",
             "🇺🇸 美国丨5x US",
-            "🇫🇷 法国丨1x FR",
+            "🇸🇬 新加坡丨1x SG",
+            "🇲🇾 马来西亚家宽 01丨1x MY",
+            "🇭🇰 香港 01丨1x HK",
         ]
     }
     assert ctl.eligible_nodes(group) == [
-        "🇯🇵 日本 01丨1x JP",
-        "🇩🇪 德国丨1x DE",
+        "🇭🇰 香港 01丨1x HK",
+        "🇲🇾 马来西亚家宽 01丨1x MY",
     ]
+
+
+def test_maintenance_pool_keeps_hk_my_and_diverse_fallbacks():
+    nodes = [
+        *(f"hk-{index}丨1x HK" for index in range(7)),
+        *(f"my-{index}丨1x MY" for index in range(3)),
+        "id丨1x ID",
+        "tw丨1x TW",
+        "fr丨1x FR",
+        "gb丨1x GB",
+    ]
+
+    selected = ctl.maintenance_candidate_pool(
+        nodes, current_node="hk-0丨1x HK", limit=10
+    )
+
+    assert sum(node.endswith("HK") for node in selected) == 4
+    assert sum(node.endswith("MY") for node in selected) == 2
+    assert {ctl.node_region(node) for node in selected} >= {
+        "HK", "MY", "ID", "TW", "FR", "GB"
+    }
 
 
 def test_probe_summary_tolerates_one_intermittent_failure():
@@ -87,7 +168,7 @@ def test_maintain_requires_two_degraded_cycles_before_switch(tmp_path, monkeypat
                 ctl.DEFAULT_GROUP: {
                     "type": "Selector",
                     "now": "🇭🇰 香港 01丨1x HK",
-                    "all": ["🇭🇰 香港 01丨1x HK", "🇯🇵 日本 01丨1x JP"],
+                    "all": ["🇭🇰 香港 01丨1x HK", "🇲🇾 马来西亚 01丨1x MY"],
                 }
             }
 
@@ -100,7 +181,7 @@ def test_maintain_requires_two_degraded_cycles_before_switch(tmp_path, monkeypat
     monkeypatch.setattr(
         ctl,
         "probe_openai",
-        lambda: [
+        lambda *_args, **_kwargs: [
             {"ok": False, "total_sec": 5.0},
             {"ok": False, "total_sec": 5.0},
             {"ok": True, "total_sec": 0.6},
@@ -123,7 +204,7 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
                 ctl.DEFAULT_GROUP: {
                     "type": "Selector",
                     "now": selected["node"],
-                    "all": ["🇭🇰 香港 01丨1x HK", "🇯🇵 日本 01丨1x JP"],
+                    "all": ["🇭🇰 香港 01丨1x HK", "🇲🇾 马来西亚 01丨1x MY"],
                 }
             }
 
@@ -139,7 +220,7 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
     )
     calls = {"count": 0}
 
-    def probes():
+    def probes(*_args, **_kwargs):
         calls["count"] += 1
         if calls["count"] == 1:
             return [
@@ -159,8 +240,8 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
         Controller(), state_root=tmp_path, apply=True, reason="test"
     )
     assert result["status"] == "switched"
-    assert result["selected_node"] == "🇯🇵 日本 01丨1x JP"
-    assert result["attempted_nodes"] == ["🇯🇵 日本 01丨1x JP"]
+    assert result["selected_node"] == "🇲🇾 马来西亚 01丨1x MY"
+    assert result["attempted_nodes"] == ["🇲🇾 马来西亚 01丨1x MY"]
     assert len(list(tmp_path.glob("switches-*.jsonl"))) == 1
     assert json.loads((tmp_path / "latest.json").read_text())["failure_streak"] == 0
 
@@ -174,7 +255,7 @@ def test_maintain_rolls_back_failed_post_switch_probe(tmp_path, monkeypatch):
                 ctl.DEFAULT_GROUP: {
                     "type": "Selector",
                     "now": selected["node"],
-                    "all": ["🇭🇰 香港 01丨1x HK", "🇯🇵 日本 01丨1x JP"],
+                    "all": ["🇭🇰 香港 01丨1x HK", "🇲🇾 马来西亚 01丨1x MY"],
                 }
             }
 
@@ -187,7 +268,7 @@ def test_maintain_rolls_back_failed_post_switch_probe(tmp_path, monkeypatch):
     monkeypatch.setattr(
         ctl,
         "probe_openai",
-        lambda: [{"ok": False, "total_sec": 5.0}] * 3,
+        lambda *_args, **_kwargs: [{"ok": False, "total_sec": 5.0}] * 3,
     )
     monkeypatch.setattr(ctl.time, "sleep", lambda _: None)
     result = ctl.maintain(
@@ -197,11 +278,14 @@ def test_maintain_rolls_back_failed_post_switch_probe(tmp_path, monkeypatch):
         force_evaluate=True,
         reason="test",
     )
-    assert result["status"] == "rolled_back"
+    assert result["status"] == "unsafe_route_unrecovered"
     assert selected["node"] == "🇭🇰 香港 01丨1x HK"
     assert result["rollback_verified"] is True
     assert result["rollback_node"] == "🇭🇰 香港 01丨1x HK"
-    assert result["attempted_nodes"] == ["🇯🇵 日本 01丨1x JP"]
+    assert result["attempted_nodes"] == ["🇲🇾 马来西亚 01丨1x MY"]
+    gate = json.loads((tmp_path / "live_entry_gate.json").read_text())
+    assert gate["entry_allowed"] is False
+    assert gate["reason"] == "no_verified_tradeable_route"
 
 
 def test_maintain_tries_next_candidate_after_failed_post_switch_probe(
@@ -217,8 +301,8 @@ def test_maintain_tries_next_candidate_after_failed_post_switch_probe(
                     "now": selected["node"],
                     "all": [
                         "🇭🇰 香港 01丨1x HK",
-                        "🇯🇵 日本 01丨1x JP",
-                        "🇸🇬 新加坡 01丨1x SG",
+                        "🇲🇾 马来西亚 01丨1x MY",
+                        "🇮🇩 印度尼西亚 01丨1x ID",
                     ],
                 }
             }
@@ -226,8 +310,8 @@ def test_maintain_tries_next_candidate_after_failed_post_switch_probe(
         def delay(self, node):
             return {
                 "🇭🇰 香港 01丨1x HK": 900,
-                "🇯🇵 日本 01丨1x JP": 200,
-                "🇸🇬 新加坡 01丨1x SG": 300,
+                "🇲🇾 马来西亚 01丨1x MY": 200,
+                "🇮🇩 印度尼西亚 01丨1x ID": 300,
             }[node]
 
         def switch(self, group, node):
@@ -240,7 +324,7 @@ def test_maintain_tries_next_candidate_after_failed_post_switch_probe(
             [{"ok": True, "total_sec": 0.4}] * 3,
         ]
     )
-    monkeypatch.setattr(ctl, "probe_openai", lambda: next(probes))
+    monkeypatch.setattr(ctl, "probe_openai", lambda *_args, **_kwargs: next(probes))
     monkeypatch.setattr(ctl.time, "sleep", lambda _: None)
 
     result = ctl.maintain(
@@ -252,10 +336,10 @@ def test_maintain_tries_next_candidate_after_failed_post_switch_probe(
     )
 
     assert result["status"] == "switched"
-    assert selected["node"] == "🇸🇬 新加坡 01丨1x SG"
+    assert selected["node"] == "🇮🇩 印度尼西亚 01丨1x ID"
     assert result["attempted_nodes"] == [
-        "🇯🇵 日本 01丨1x JP",
-        "🇸🇬 新加坡 01丨1x SG",
+        "🇲🇾 马来西亚 01丨1x MY",
+        "🇮🇩 印度尼西亚 01丨1x ID",
     ]
 
 
@@ -272,8 +356,8 @@ def test_maintain_immediately_leaves_blocked_region_and_rejects_blocked_candidat
                     "now": selected["node"],
                     "all": [
                         "🇸🇬 新加坡 01丨1x SG",
-                        "🇯🇵 日本 01丨1x JP",
                         "🇭🇰 香港 01丨1x HK",
+                        "🇲🇾 马来西亚 01丨1x MY",
                     ],
                 }
             }
@@ -281,8 +365,8 @@ def test_maintain_immediately_leaves_blocked_region_and_rejects_blocked_candidat
         def delay(self, node):
             return {
                 "🇸🇬 新加坡 01丨1x SG": 100,
-                "🇯🇵 日本 01丨1x JP": 200,
                 "🇭🇰 香港 01丨1x HK": 300,
+                "🇲🇾 马来西亚 01丨1x MY": 200,
             }[node]
 
         def switch(self, group, node):
@@ -291,16 +375,22 @@ def test_maintain_immediately_leaves_blocked_region_and_rejects_blocked_candidat
     monkeypatch.setattr(
         ctl,
         "probe_openai",
-        lambda: [{"ok": True, "total_sec": 0.4}] * 3,
+        lambda *_args, **_kwargs: [{"ok": True, "total_sec": 0.4}] * 3,
     )
     geoblocks = iter(
         [
             {"ok": True, "blocked": True, "trading_allowed": False, "country": "SG"},
-            {"ok": True, "blocked": True, "trading_allowed": False, "country": "JP"},
-            {"ok": True, "blocked": False, "trading_allowed": True, "country": "HK"},
+            {"ok": True, "blocked": True, "trading_allowed": False, "country": "HK"},
+            {"ok": True, "blocked": True, "trading_allowed": False, "country": "HK"},
+            {"ok": True, "blocked": False, "trading_allowed": True, "country": "MY"},
+            {"ok": True, "blocked": False, "trading_allowed": True, "country": "MY"},
         ]
     )
-    monkeypatch.setattr(ctl, "probe_polymarket_geoblock", lambda: next(geoblocks))
+    monkeypatch.setattr(
+        ctl,
+        "probe_polymarket_geoblock",
+        lambda *_args, **_kwargs: next(geoblocks),
+    )
     monkeypatch.setattr(ctl.time, "sleep", lambda _: None)
 
     result = ctl.maintain(
@@ -308,10 +398,10 @@ def test_maintain_immediately_leaves_blocked_region_and_rejects_blocked_candidat
     )
 
     assert result["status"] == "switched"
-    assert selected["node"] == "🇭🇰 香港 01丨1x HK"
+    assert selected["node"] == "🇲🇾 马来西亚 01丨1x MY"
     assert result["attempted_nodes"] == [
-        "🇯🇵 日本 01丨1x JP",
         "🇭🇰 香港 01丨1x HK",
+        "🇲🇾 马来西亚 01丨1x MY",
     ]
     assert result["switch_attempts"][0]["polymarket_geoblock"]["blocked"] is True
     assert result["post_polymarket_geoblock"]["trading_allowed"] is True

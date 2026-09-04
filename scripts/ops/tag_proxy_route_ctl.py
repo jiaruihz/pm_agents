@@ -29,8 +29,10 @@ import yaml
 
 
 SCHEMA_VERSION = "tag_proxy_route_control_v1"
+LIVE_ENTRY_GATE_SCHEMA_VERSION = "weather_live_entry_region_gate_v1"
 DEFAULT_GROUP = "🙂 TAGSS"
 DEFAULT_PROXY_URL = "http://127.0.0.1:7890"
+DEFAULT_EXECUTION_PROXY_URL = "http://127.0.0.1:7896"
 DEFAULT_CONTROLLER_URL = "http://127.0.0.1:9090"
 DEFAULT_TEST_URL = "https://api.openai.com/v1/models"
 DEFAULT_POLYMARKET_GEOBLOCK_URL = "https://polymarket.com/api/geoblock"
@@ -43,6 +45,60 @@ DEFAULT_STATE_ROOT = (
     / "Library/Application Support/pm_agents/tag_proxy_route_control"
 )
 ACCEPTED_OPENAI_STATUSES = {200, 401}
+MAX_MAINTENANCE_CANDIDATES = 12
+MAX_SWITCH_EVALUATION_SEC = 90.0
+# Candidate discovery is intentionally broader than one country but excludes
+# exits known to be unsuitable for this account.  The list is only an ordering
+# and bounding policy: Polymarket's live geoblock response is the final verdict
+# for every candidate.  Hong Kong is primary and Malaysia is first fallback.
+FALLBACK_REGION_PRIORITY = (
+    "HK",
+    "MY",
+    "ID",
+    "DK",
+    "NO",
+    "SE",
+    "FI",
+    "CH",
+    "CZ",
+    "GR",
+    "NL",
+    "HU",
+    "LT",
+    "ES",
+    "PT",
+    "BG",
+    "CY",
+    "LV",
+    "SK",
+    "EE",
+    "RO",
+    "AL",
+    "CA",
+    "BR",
+    "CR",
+    "GT",
+    "SV",
+    "ZA",
+    "KE",
+    "IN",
+    "TR",
+    "NP",
+    "GE",
+    "KG",
+    "UZ",
+)
+# Official API-restricted country codes plus JP, whose current provider exits
+# returned blocked=true in production despite being documented as frontend-only.
+# Province-level Canadian restrictions remain delegated to the live endpoint.
+EXCLUDED_FALLBACK_REGIONS = frozenset(
+    {
+        "AU", "BY", "BE", "BI", "BR", "CF", "CD", "CU", "ET", "FR",
+        "DE", "GB", "IR", "IQ", "IT", "JP", "KP", "LB", "LY", "MM",
+        "NI", "NZ", "PL", "RU", "SD", "SG", "SK", "SO", "SS", "SY",
+        "TH", "TW", "UM", "US", "VE", "YE", "ZW",
+    }
+)
 
 
 def utc_now() -> str:
@@ -293,14 +349,121 @@ def probe_summary(rows: list[dict[str, Any]], *, slow_seconds: float) -> dict[st
 def eligible_nodes(
     group: dict[str, Any],
     *,
-    regions: tuple[str, ...] = ("JP", "HK", "SG", "DE"),
+    regions: tuple[str, ...] | None = None,
 ) -> list[str]:
-    suffix = re.compile(r"\b(" + "|".join(re.escape(row) for row in regions) + r")\b")
-    return [
-        str(name)
-        for name in (group.get("all") or [])
-        if "1x" in str(name) and suffix.search(str(name))
-    ]
+    ordered_regions = regions or FALLBACK_REGION_PRIORITY
+    priorities = {region: index for index, region in enumerate(ordered_regions)}
+    rows = []
+    for position, name in enumerate(group.get("all") or []):
+        node = str(name)
+        region = node_region(node)
+        allowed = (
+            region in priorities
+            if regions is not None
+            else bool(region) and region not in EXCLUDED_FALLBACK_REGIONS
+        )
+        if "1x" in node and allowed:
+            rows.append((priorities.get(region, len(priorities)), position, node))
+    return [node for _priority, _position, node in sorted(rows)]
+
+
+def maintenance_candidate_pool(
+    nodes: list[str],
+    *,
+    current_node: str,
+    limit: int = MAX_MAINTENANCE_CANDIDATES,
+) -> list[str]:
+    """Keep primary depth while giving diverse fallback regions a bounded turn."""
+
+    remaining = [node for node in nodes if node != current_node]
+    selected: list[str] = []
+    for region, cap in (("HK", 4), ("MY", 2)):
+        region_nodes = [node for node in remaining if node_region(node) == region]
+        selected.extend(region_nodes[:cap])
+        remaining = [node for node in remaining if node not in set(region_nodes[:cap])]
+    seen_regions: set[str] = set()
+    for node in remaining:
+        region = node_region(node)
+        if region in {"HK", "MY"}:
+            continue
+        if region in seen_regions:
+            continue
+        selected.append(node)
+        seen_regions.add(region)
+        if len(selected) >= limit:
+            return selected[:limit]
+    selected.extend(node for node in remaining if node not in selected)
+    return selected[:limit]
+
+
+def node_region(node: str) -> str:
+    match = re.search(r"\b([A-Z]{2})\s*$", str(node))
+    return match.group(1) if match else ""
+
+
+def prioritize_benchmark(
+    rows: list[dict[str, Any]],
+    *,
+    last_known_good_node: str = "",
+) -> list[dict[str, Any]]:
+    priorities = {
+        region: index for index, region in enumerate(FALLBACK_REGION_PRIORITY)
+    }
+    return sorted(
+        rows,
+        key=lambda row: (
+            priorities.get(node_region(str(row.get("node") or "")), 10**6),
+            str(row.get("node") or "") != str(last_known_good_node or ""),
+            not bool(row.get("eligible")),
+            int(row.get("failure_count") or 0),
+            row.get("avg_delay_ms")
+            if row.get("avg_delay_ms") is not None
+            else 10**9,
+            str(row.get("node") or ""),
+        ),
+    )
+
+
+def route_usable(probe: dict[str, Any], geoblock: dict[str, Any]) -> bool:
+    return (
+        not bool(probe.get("degraded"))
+        and int(probe.get("ok_count") or 0) >= 2
+        and geoblock.get("trading_allowed") is True
+    )
+
+
+def write_live_entry_gate(
+    state_root: Path,
+    *,
+    entry_allowed: bool,
+    node: str,
+    reason: str,
+    probe: dict[str, Any],
+    geoblock: dict[str, Any],
+    now_epoch: int | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "schema_version": LIVE_ENTRY_GATE_SCHEMA_VERSION,
+        "updated_at_utc": utc_now(),
+        "updated_at_epoch": int(time.time()) if now_epoch is None else int(now_epoch),
+        "entry_allowed": bool(entry_allowed),
+        "verified_node": str(node or ""),
+        "reason": str(reason),
+        "probe": {
+            "ok_count": int(probe.get("ok_count") or 0),
+            "failure_count": int(probe.get("failure_count") or 0),
+            "degraded": bool(probe.get("degraded")),
+        },
+        "polymarket_geoblock": {
+            "ok": geoblock.get("ok"),
+            "blocked": geoblock.get("blocked"),
+            "trading_allowed": geoblock.get("trading_allowed"),
+            "country": geoblock.get("country"),
+            "region": geoblock.get("region"),
+        },
+    }
+    atomic_write_json(state_root / "live_entry_gate.json", payload)
+    return payload
 
 
 def benchmark_nodes(
@@ -375,10 +538,46 @@ def maintain(
         if not acquired:
             return {"status": "already_running", "switched": False}
 
-        group, current = group_snapshot(controller, group_name)
-        probe = probe_summary(probe_openai(), slow_seconds=slow_seconds)
-        geoblock = probe_polymarket_geoblock()
-        blocked_region = geoblock.get("blocked") is True
+        try:
+            group, current = group_snapshot(controller, group_name)
+            probe = probe_summary(
+                probe_openai(DEFAULT_EXECUTION_PROXY_URL), slow_seconds=slow_seconds
+            )
+            geoblock = probe_polymarket_geoblock(DEFAULT_EXECUTION_PROXY_URL)
+        except Exception as exc:  # noqa: BLE001 - publish a fail-closed lease
+            error = f"{type(exc).__name__}:{exc}"[:240]
+            state = read_state(state_path)
+            failed_probe = {
+                "ok_count": 0,
+                "failure_count": 3,
+                "degraded": True,
+            }
+            failed_geoblock = {
+                "ok": False,
+                "blocked": None,
+                "trading_allowed": False,
+                "country": None,
+                "region": None,
+            }
+            if apply:
+                write_live_entry_gate(
+                    state_root,
+                    entry_allowed=False,
+                    node=str(state.get("current_node") or ""),
+                    reason="route_controller_preflight_failed",
+                    probe=failed_probe,
+                    geoblock=failed_geoblock,
+                )
+            return {
+                "status": "controller_preflight_failed",
+                "switched": False,
+                "apply": apply,
+                "group": group_name,
+                "error": error,
+                "probe": failed_probe,
+                "polymarket_geoblock": failed_geoblock,
+            }
+        route_unverified = geoblock.get("trading_allowed") is not True
         state = read_state(state_path)
         previous_node = str(state.get("current_node") or "")
         streak = int(state.get("failure_streak") or 0)
@@ -396,6 +595,7 @@ def maintain(
             "last_switch_epoch": int(state.get("last_switch_epoch") or 0),
             "probe": probe,
             "polymarket_geoblock": geoblock,
+            "last_known_good_node": str(state.get("last_known_good_node") or ""),
         }
         if apply:
             atomic_write_json(state_path, latest)
@@ -417,6 +617,25 @@ def maintain(
                 },
             )
 
+            current_usable = route_usable(probe, geoblock)
+            gate_reason = "verified_tradeable_route" if current_usable else (
+                "polymarket_region_unverified"
+                if route_unverified
+                else "route_connectivity_degraded"
+            )
+            write_live_entry_gate(
+                state_root,
+                entry_allowed=current_usable,
+                node=current,
+                reason=gate_reason,
+                probe=probe,
+                geoblock=geoblock,
+                now_epoch=now_epoch,
+            )
+            if current_usable:
+                latest["last_known_good_node"] = current
+                atomic_write_json(state_path, latest)
+
         preview = {
             "status": "healthy" if not probe["degraded"] else "degraded",
             "switched": False,
@@ -427,21 +646,27 @@ def maintain(
             "probe": probe,
             "polymarket_geoblock": geoblock,
         }
-        if not force_evaluate and not probe["degraded"] and not blocked_region:
+        if not force_evaluate and not probe["degraded"] and not route_unverified:
             return preview
-        if not force_evaluate and not blocked_region and streak < required_degraded_cycles:
+        if not force_evaluate and not route_unverified and streak < required_degraded_cycles:
             return {**preview, "status": "awaiting_confirmation_cycle"}
         elapsed = now_epoch - int(state.get("last_switch_epoch") or 0)
         if (
             not force_evaluate
-            and not blocked_region
+            and not route_unverified
             and elapsed < cooldown_seconds
             and probe["ok_count"] > 0
         ):
             return {**preview, "status": "cooldown", "cooldown_remaining_sec": cooldown_seconds - elapsed}
 
-        candidates = eligible_nodes(group)
-        benchmark = benchmark_nodes(controller, candidates)
+        evaluation_deadline = time.monotonic() + MAX_SWITCH_EVALUATION_SEC
+        candidates = maintenance_candidate_pool(
+            eligible_nodes(group), current_node=current
+        )
+        benchmark = prioritize_benchmark(
+            benchmark_nodes(controller, candidates),
+            last_known_good_node=str(state.get("last_known_good_node") or ""),
+        )
         selected_rows = [
             row
             for row in benchmark
@@ -453,31 +678,73 @@ def maintain(
         if not apply:
             return {**decision, "selected_node": selected_rows[0]["node"]}
 
+        # Close the shared entry gate before the first selector mutation.  Live
+        # transports hold a shared lock through their exact-route geoblock
+        # probe and CLOB handoff, so this exclusive lock also removes the race
+        # between a verified preflight and a route switch.
+        write_live_entry_gate(
+            state_root,
+            entry_allowed=False,
+            node=current,
+            reason="route_switch_in_progress",
+            probe=probe,
+            geoblock=geoblock,
+            now_epoch=now_epoch,
+        )
+
         selected = ""
         post_probe: dict[str, Any] = {}
+        final_geoblock: dict[str, Any] = {}
         switch_attempts = []
         for selected_row in selected_rows:
+            if time.monotonic() >= evaluation_deadline:
+                break
             attempted = str(selected_row["node"])
-            controller.switch(group_name, attempted)
-            time.sleep(0.5)
-            candidate_probe = probe_summary(probe_openai(), slow_seconds=slow_seconds)
-            candidate_geoblock = probe_polymarket_geoblock()
+            switch_error = ""
+            observed_node = ""
+            candidate_probe: dict[str, Any] = {}
+            candidate_geoblock: dict[str, Any] = {}
+            candidate_final_geoblock: dict[str, Any] = {}
+            try:
+                controller.switch(group_name, attempted)
+                time.sleep(0.5)
+                candidate_probe = probe_summary(
+                    probe_openai(DEFAULT_EXECUTION_PROXY_URL),
+                    slow_seconds=slow_seconds,
+                )
+                candidate_geoblock = probe_polymarket_geoblock(
+                    DEFAULT_EXECUTION_PROXY_URL
+                )
+                _, observed_node = group_snapshot(controller, group_name)
+                candidate_final_geoblock = probe_polymarket_geoblock(
+                    DEFAULT_EXECUTION_PROXY_URL
+                )
+            except Exception as exc:  # noqa: BLE001 - preserve bounded failover
+                switch_error = f"{type(exc).__name__}:{exc}"[:240]
             accepted = (
-                candidate_probe["failure_count"] == 0
-                and not candidate_probe["degraded"]
-                and candidate_geoblock["trading_allowed"]
+                not switch_error
+                and observed_node == attempted
+                and candidate_probe.get("failure_count") == 0
+                and not candidate_probe.get("degraded")
+                and candidate_geoblock.get("trading_allowed") is True
+                and candidate_final_geoblock.get("trading_allowed") is True
             )
             switch_attempts.append(
                 {
                     "node": attempted,
+                    "region": node_region(attempted),
                     "accepted": accepted,
+                    "observed_node": observed_node,
+                    "error": switch_error,
                     "probe": candidate_probe,
                     "polymarket_geoblock": candidate_geoblock,
+                    "final_polymarket_geoblock": candidate_final_geoblock,
                 }
             )
             post_probe = candidate_probe
             if accepted:
                 selected = attempted
+                final_geoblock = candidate_final_geoblock
                 break
         accepted = bool(selected)
         rolled_back = False
@@ -486,18 +753,29 @@ def maintain(
         rollback_probe: dict[str, Any] = {}
         rollback_geoblock: dict[str, Any] = {}
         if not accepted:
-            controller.switch(group_name, current)
-            rolled_back = True
-            time.sleep(0.5)
             try:
+                controller.switch(group_name, current)
+                rolled_back = True
+                time.sleep(0.5)
                 _, rollback_node = group_snapshot(controller, group_name)
-            except RuntimeError:
+            except Exception:  # noqa: BLE001 - evidence below remains fail-closed
                 rollback_node = ""
             rollback_probe = probe_summary(
-                probe_openai(), slow_seconds=slow_seconds
+                probe_openai(DEFAULT_EXECUTION_PROXY_URL),
+                slow_seconds=slow_seconds,
             )
-            rollback_geoblock = probe_polymarket_geoblock()
+            rollback_geoblock = probe_polymarket_geoblock(
+                DEFAULT_EXECUTION_PROXY_URL
+            )
             rollback_verified = rollback_node == current
+        final_probe = post_probe if accepted else rollback_probe
+        final_geoblock = final_geoblock if accepted else rollback_geoblock
+        final_node = selected if accepted else rollback_node
+        final_usable = (
+            bool(final_node)
+            and (accepted or rollback_verified)
+            and route_usable(final_probe, final_geoblock)
+        )
         event = {
             "schema_version": SCHEMA_VERSION,
             "ts_utc": utc_now(),
@@ -521,36 +799,48 @@ def maintain(
         latest.update(
             {
                 "generated_at_utc": utc_now(),
-                "current_node": selected if accepted else rollback_node,
+                "current_node": final_node,
                 "failure_streak": 0 if accepted else streak,
                 "last_switch_epoch": now_epoch if accepted else int(state.get("last_switch_epoch") or 0),
                 "last_switch": event,
-                "polymarket_geoblock": (
-                    switch_attempts[-1]["polymarket_geoblock"]
-                    if accepted
-                    else rollback_geoblock
+                "polymarket_geoblock": final_geoblock,
+                "last_known_good_node": (
+                    final_node
+                    if final_usable
+                    else str(state.get("last_known_good_node") or "")
                 ),
             }
         )
         atomic_write_json(state_path, latest)
+        write_live_entry_gate(
+            state_root,
+            entry_allowed=final_usable,
+            node=final_node,
+            reason=(
+                "verified_tradeable_route"
+                if final_usable
+                else "no_verified_tradeable_route"
+            ),
+            probe=final_probe,
+            geoblock=final_geoblock,
+        )
         return {
             **decision,
             "status": (
                 "switched"
                 if accepted
-                else "rolled_back" if rollback_verified else "rollback_failed"
+                else "rolled_back"
+                if rollback_verified and final_usable
+                else "unsafe_route_unrecovered"
             ),
             "switched": accepted,
             "selected_node": selected,
             "attempted_nodes": [row["node"] for row in switch_attempts],
             "rollback_verified": rollback_verified,
             "rollback_node": rollback_node,
-            "post_probe": post_probe if accepted else rollback_probe,
-            "post_polymarket_geoblock": (
-                switch_attempts[-1]["polymarket_geoblock"]
-                if accepted
-                else rollback_geoblock
-            ),
+            "post_probe": final_probe,
+            "post_polymarket_geoblock": final_geoblock,
+            "live_entry_allowed": final_usable,
             "switch_attempts": switch_attempts,
             "audit_path": str(audit_path),
         }
@@ -566,7 +856,11 @@ def maintenance_exit_code(result: dict[str, Any]) -> int:
     false critical.  Unknown or blocked venue reachability remains fail-closed.
     """
     status = result.get("status")
-    if status == "rollback_failed":
+    if status in {
+        "controller_preflight_failed",
+        "rollback_failed",
+        "unsafe_route_unrecovered",
+    }:
         return 1
     if status not in {"rolled_back", "no_healthy_candidate"}:
         return 0
@@ -610,19 +904,29 @@ def main() -> int:
             "group": args.group,
             "current_node": current,
             "eligible_1x_nodes": eligible_nodes(group),
-            "probe": probe_summary(probe_openai(), slow_seconds=1.5),
-            "polymarket_geoblock": probe_polymarket_geoblock(),
+            "probe": probe_summary(
+                probe_openai(DEFAULT_EXECUTION_PROXY_URL), slow_seconds=1.5
+            ),
+            "polymarket_geoblock": probe_polymarket_geoblock(
+                DEFAULT_EXECUTION_PROXY_URL
+            ),
+            "execution_proxy_url": DEFAULT_EXECUTION_PROXY_URL,
             "state": read_state(args.state_root / "latest.json"),
+            "live_entry_gate": read_state(
+                args.state_root / "live_entry_gate.json"
+            ),
         }
     elif args.command == "benchmark":
         group, current = group_snapshot(controller, args.group)
         result = {
             "group": args.group,
             "current_node": current,
-            "benchmark": benchmark_nodes(
-                controller,
-                eligible_nodes(group),
-                rounds=max(2, args.rounds),
+            "benchmark": prioritize_benchmark(
+                benchmark_nodes(
+                    controller,
+                    eligible_nodes(group),
+                    rounds=max(2, args.rounds),
+                )
             ),
         }
     elif args.command == "maintain":

@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<!-- Template marker only. Install with install_tag_proxy_route_launchagent.py,
+     which resolves these arguments from the pinned control_plane release. -->
 <dict>
   <key>Label</key>
   <string>com.pm-agents.tag-proxy-route-maintain</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/deepsleep/projects/pm_agents/.venv/bin/python</string>
-    <string>/Users/deepsleep/projects/pm_agents/scripts/ops/tag_proxy_route_ctl.py</string>
+    <string>__PINNED_CONTROL_PLANE_PYTHON__</string>
+    <string>__PINNED_CONTROL_PLANE_TAG_CONTROLLER__</string>
     <string>maintain</string>
     <string>--apply</string>
     <string>--reason</string>

@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Any, Mapping
 
 from scripts.ops.weather_market_proxy import production_market_proxy_url
+from scripts.ops.weather_live_entry_region_gate import live_entry_region_guard
 
 
 PROXY_ENV_KEYS = (
@@ -136,14 +137,18 @@ class LivePolymarketTransport:
         order_args_cls: Any,
         order_payload_cls: Any,
         order_type_cls: Any,
+        execution_proxy: str,
         metadata_by_order_id: Mapping[str, Mapping[str, Any]] | None = None,
         client_version: str = "py_clob_client_v2",
+        entry_guard: Any = live_entry_region_guard,
     ) -> None:
         self.client = client
         self.order_args_cls = order_args_cls
         self.order_payload_cls = order_payload_cls
         self.order_type_cls = order_type_cls
         self.client_version = client_version
+        self.execution_proxy = str(execution_proxy or "")
+        self.entry_guard = entry_guard
         self.metadata_by_order_id = {
             str(key): dict(value) for key, value in dict(metadata_by_order_id or {}).items()
         }
@@ -301,24 +306,25 @@ class LivePolymarketTransport:
     ) -> Mapping[str, Any]:
         client_order_id = str(signed_order.get("client_order_id") or "")
         metadata = dict(self.metadata_by_client_id.get(client_order_id, {}))
-        try:
-            raw = self.client.post_order(
-                signed_order["signed_order"],
-                order_type=getattr(
-                    self.order_type_cls,
-                    str(order_type),
-                    str(order_type),
-                ),
-                post_only=bool(post_only),
-            )
-        except Exception:
-            identity_key = str(metadata.get("identity_key") or "")
-            if identity_key:
-                self.unknown_submit_by_identity[identity_key] = {
-                    "client_order_id": client_order_id,
-                    "order_id": signed_order.get("expected_venue_order_id"),
-                }
-            raise
+        with self.entry_guard(self.execution_proxy):
+            try:
+                raw = self.client.post_order(
+                    signed_order["signed_order"],
+                    order_type=getattr(
+                        self.order_type_cls,
+                        str(order_type),
+                        str(order_type),
+                    ),
+                    post_only=bool(post_only),
+                )
+            except Exception:
+                identity_key = str(metadata.get("identity_key") or "")
+                if identity_key:
+                    self.unknown_submit_by_identity[identity_key] = {
+                        "client_order_id": client_order_id,
+                        "order_id": signed_order.get("expected_venue_order_id"),
+                    }
+                raise
         response = _mapping(raw)
         venue_order_id = _order_id(response)
         if venue_order_id:
@@ -472,6 +478,7 @@ def build_live_transport(
             order_args_cls=OrderArgsV2,
             order_payload_cls=OrderPayload,
             order_type_cls=OrderType,
+            execution_proxy=str(proxy.get("proxy") or ""),
             metadata_by_order_id=metadata_by_order_id,
         ),
         proxy,

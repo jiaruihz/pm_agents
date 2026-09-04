@@ -10,6 +10,7 @@ from typing import Any, Callable
 import httpx
 
 from scripts.ops.weather_market_proxy import production_market_proxy_url
+from scripts.ops.weather_live_entry_region_gate import live_entry_region_guard
 
 PM_CLOB_URL = "https://clob.polymarket.com"
 SHARE_CAP_TOLERANCE = 1e-5
@@ -284,11 +285,12 @@ def _build_live_limit_place_fn(
                 expiration=int(row.get("expiration") or 0),
             )
         )
-        response = (
-            client.post_order(signed_order, order_type=order_type, post_only=post_only)
-            if clob_v2
-            else client.post_order(signed_order, orderType=order_type, post_only=post_only)
-        )
+        with live_entry_region_guard(proxy_url):
+            response = (
+                client.post_order(signed_order, order_type=order_type, post_only=post_only)
+                if clob_v2
+                else client.post_order(signed_order, orderType=order_type, post_only=post_only)
+            )
         return {
             "place": response,
             "order_id": extract_order_id(response),

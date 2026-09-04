@@ -1958,7 +1958,30 @@ therefore no historical PnL or executed-position decision changed. The post-repl
 fill coverage gate passed with zero unresolved aliases and zero DB/cache/fact cost
 delta.
 
-## 31. Immediate Follow-Up Work
+## 31. 2026-08-12..2026-09-04 TAG regional execution failure window
+
+Two bounded live-entry incidents share one root cause: TAG route monitoring could
+detect a Polymarket-restricted exit, but the execution transports did not consume a
+pre-submit region gate. On `2026-08-12..14`, old Cross NO made 8 rejected attempts
+covering 3 city-days (`95.13` planned shares, `$83.2054` planned notional). On
+`2026-09-04`, Core Carry produced its valid 10-share taker plus 5-share maker plan,
+but both submissions were rejected with venue HTTP 403 after TAG rollback left a JP
+exit active (`15` planned shares, `$14.55` planned notional). Across the complete
+window: 10 rejected attempts, `110.13` planned shares, `$97.7554` planned notional,
+0 accepted venue orders, 0 fills, and `$0` realized-PnL impact. These are execution
+failures, not strategy no-signal observations; exclude them from fill-rate denominators
+unless explicitly measuring infrastructure availability.
+
+The permanent contract is HK-primary, MY-first-fallback, then other bounded candidate
+regions, with the live Polymarket geoblock endpoint as final authority. Selector
+mutation closes a shared entry gate and holds an exclusive lock; Core Carry and old
+Cross NO hold the corresponding shared lock from exact execution-route verification
+through order post. An unsuccessful search may restore the original selector for
+connectivity, but cannot reopen new entries unless that restored route is independently
+proved tradeable. Cancellation and reconciliation remain available while entry is
+closed.
+
+## 32. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history

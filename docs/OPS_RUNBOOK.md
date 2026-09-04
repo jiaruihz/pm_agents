@@ -96,12 +96,21 @@ Gamma+CLOB 与 Polymarket geoblock 实测；全部失败则恢复原节点，切
 
 系统/Codex 的 TAG 节点维护与上述 weather route 分开：`tag_proxy_route_ctl.py` 只切 TAG 已有
 `🙂 TAGSS` selector 内的 `1x` 节点，不改 macOS 代理端口、`7896 / PM-STABLE`、`7897` 或任何 consumer。
-它用 OpenAI 实际端点而不是只用 `generate_204` 验收，连续两个 degraded cycle 后才在 JP/HK/SG/DE 的
-`1x` 候选中有界测速；Polymarket `blocked=true` 则不等待第二个 cycle、不受冷却限制。每个候选切后必须同时通过
-OpenAI 与 `trading_allowed=true`，受限地区会继续尝试下一个候选，全部失败恢复原节点，成功后冷却 15 分钟。
+它用 OpenAI 实际端点而不是只用 `generate_204` 验收，连续两个 degraded cycle 后才对有界的
+`1x` 候选测速；候选固定按 **HK → MY → 其他候选地区** 分层，层内再按健康度和延迟排序。
+Polymarket `trading_allowed!=true` 则不等待第二个 cycle、不受冷却限制。地区表只负责候选排序，
+每个节点切后都要连续两次通过 Polymarket geoblock，并同时通过 OpenAI 探测才可接受；因此地区政策变化时
+以实时 venue verdict 为准。受限地区会继续尝试下一个候选，全部失败时即使 selector 回到原节点，
+只要原节点没有重新证明可交易，live entry gate 仍保持关闭。
 每次 bounded probe 追加到主机状态目录的月度 `probes-YYYY-MM.jsonl`，切换另写月度
 `switches-YYYY-MM.jsonl`；单次三探测允许一次偶发超时，只有多数失败或整体持续变慢才累计 degraded cycle，
 后续机场评测以这份长期可用率/尾延迟证据为准，不用单次测速图代替稳定性。
+
+Core Carry 与旧 Cross NO 的所有新单提交都必须在共享 `maintain.lock` 上持有 shared lock，读取 5 分钟内的
+`live_entry_gate.json`，并在**实际 execution proxy (`stable`)** 上即时调用 Polymarket geoblock；三项任一失败都在
+CLOB handoff 前以 `live_entry_region_blocked:*` 拒绝。TAG controller 切节点时持有 exclusive lock 且先关 gate，
+所以不能出现“探测时是香港、post 时已切到受限节点”的竞态。撤单、查单和 reconciliation 不经过 entry gate，
+线路异常时仍可降风险。
 
 ```bash
 # 当前节点与 OpenAI 端到端状态
@@ -113,6 +122,12 @@ OpenAI 与 `trading_allowed=true`，受限地区会继续尝试下一个候选�
 # bounded one-shot；常驻调度只允许 com.pm-agents.tag-proxy-route-maintain
 .venv/bin/python scripts/ops/tag_proxy_route_ctl.py maintain --apply \
   --reason "host TAG route maintenance"
+
+# 推进 control_plane release pin 后，从该 immutable checkout 原子重装 LaunchAgent；
+# 不得把 ProgramArguments 指回 mutable operational repo。
+.venv/bin/python scripts/ops/install_tag_proxy_route_launchagent.py \
+  --production-spec src/strategies/runtime/production.yaml \
+  --apply --confirm-production --reason "pin TAG route controller release"
 ```
 
 机器可读矩阵写到 production contract 解析出的
