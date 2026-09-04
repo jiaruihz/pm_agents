@@ -158,9 +158,73 @@ def attach_settlements(
         return 0
     updated = 0
     if conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settlement_outcomes'"
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settlements'"
     ).fetchone() is not None:
         settled_limit = -1 if max_updates is None else max_updates
+        cursor = conn.execute(
+            """
+            UPDATE fact_signal_candidates AS candidate
+            SET
+              settlement_status = 'settled',
+              final_yes = (
+                SELECT CASE
+                  WHEN settlement.final_price >= 0.99 THEN 1.0
+                  WHEN settlement.final_price <= 0.01 THEN 0.0
+                  ELSE NULL
+                END
+                FROM settlements AS settlement
+                WHERE settlement.condition_id = candidate.condition_id
+                  AND settlement.settlement_status = 'settled'
+                  AND (
+                    settlement.final_price >= 0.99
+                    OR settlement.final_price <= 0.01
+                  )
+                ORDER BY settlement.created_at_utc DESC, settlement.settlement_id DESC
+                LIMIT 1
+              )
+            WHERE candidate.candidate_grain_version = 'v2_event_checkpoint'
+              AND candidate.final_yes IS NULL
+              AND candidate.candidate_id IN (
+                SELECT pending.candidate_id
+                FROM fact_signal_candidates AS pending
+                WHERE pending.candidate_grain_version = 'v2_event_checkpoint'
+                  AND pending.final_yes IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM settlements AS pending_settlement
+                    WHERE pending_settlement.condition_id = pending.condition_id
+                      AND pending_settlement.settlement_status = 'settled'
+                      AND (
+                        pending_settlement.final_price >= 0.99
+                        OR pending_settlement.final_price <= 0.01
+                      )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM settlements AS zero_settlement
+                    JOIN settlements AS one_settlement
+                      ON one_settlement.condition_id = zero_settlement.condition_id
+                    WHERE zero_settlement.condition_id = pending.condition_id
+                      AND zero_settlement.settlement_status = 'settled'
+                      AND one_settlement.settlement_status = 'settled'
+                      AND zero_settlement.final_price <= 0.01
+                      AND one_settlement.final_price >= 0.99
+                  )
+                ORDER BY pending.event_date, pending.candidate_id
+                LIMIT ?
+              )
+            """,
+            (settled_limit,),
+        )
+        updated += int(cursor.rowcount or 0)
+    remaining_limit = -1 if max_updates is None else max_updates - updated
+    if remaining_limit == 0:
+        if commit:
+            conn.commit()
+        return updated
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settlement_outcomes'"
+    ).fetchone() is not None:
         cursor = conn.execute(
             """
             UPDATE fact_signal_candidates AS candidate
@@ -208,7 +272,7 @@ def attach_settlements(
                   AND outcome.settlement_status = 'settled'
               )
             """,
-            (settled_limit,),
+            (remaining_limit,),
         )
         updated += int(cursor.rowcount or 0)
     remaining_limit = -1 if max_updates is None else max_updates - updated

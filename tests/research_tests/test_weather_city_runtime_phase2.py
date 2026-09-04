@@ -540,6 +540,44 @@ def test_canonical_bridge_bounds_and_drains_settlement_label_backlog(
         conn.close()
 
 
+def test_canonical_bridge_attaches_exact_condition_settlement_without_outcome(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "exact-condition-settlement.db"
+    bridge = TemporaryCanonicalBridge(physical)
+    bridge.append([])
+    conn = sqlite3.connect(physical)
+    conn.execute(
+        """
+        INSERT INTO settlements (
+          settlement_id, target_date, condition_id, market_id, bracket,
+          token_id, final_price, settlement_status
+        ) VALUES (
+          'exact-settlement-18', '2026-08-01', 'condition-18', 'market-18',
+          '18', 'token-no-18', 0.0, 'settled'
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    result = bridge.append(
+        [bundle],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+
+    assert result["settlements_attached"] == 1
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute(
+            "SELECT settlement_status, final_yes FROM fact_signal_candidates"
+        ).fetchone() == ("settled", 0.0)
+    finally:
+        conn.close()
+
+
 def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     tmp_path: Path,
 ) -> None:
