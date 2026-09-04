@@ -481,7 +481,12 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
                 "label": "com.pm-agents.weather-canonical-refresh",
                 "pid": None,
                 "last_exit_status": 1,
-            }
+            },
+            {
+                "label": "com.pm-agents.tag-proxy-route-maintain",
+                "pid": None,
+                "last_exit_status": 1,
+            },
         ],
         db_route=db_route,
         db_consumers={},
@@ -496,6 +501,26 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
         "sessions"
     ] == ["weather_unregistered"]
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
+    assert findings["launch_agent_last_exit_nonzero"]["detail"]["jobs"] == [
+        {
+            "label": "com.pm-agents.weather-canonical-refresh",
+            "pid": None,
+            "last_exit_status": 1,
+        }
+    ]
+    assert (
+        findings["host_auxiliary_launch_agent_last_exit_nonzero"]["severity"]
+        == "warning"
+    )
+    assert findings["host_auxiliary_launch_agent_last_exit_nonzero"]["detail"][
+        "jobs"
+    ] == [
+        {
+            "label": "com.pm-agents.tag-proxy-route-maintain",
+            "pid": None,
+            "last_exit_status": 1,
+        }
+    ]
     assert findings["unregistered_persistent_worktrees"]["severity"] == "warning"
 
 

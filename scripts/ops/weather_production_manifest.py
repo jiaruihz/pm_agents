@@ -55,6 +55,12 @@ BOUNDED_TMUX_HELPER_PATTERNS = (
     re.compile(r"weather_storage_migration_(?:probe|cutover)_[0-9]+_[0-9]+"),
     re.compile(r"weather_jrs_(?:write_probe|mkdir|status_bridge)_[0-9]+_[0-9]+"),
 )
+NON_BLOCKING_HOST_LAUNCH_AGENTS = {
+    # Host/Codex route maintenance is separate from the weather 7896
+    # PM-STABLE route. Its state remains visible, but it must not freeze the
+    # weather canonical pipeline when a safe route cannot be found.
+    "com.pm-agents.tag-proxy-route-maintain",
+}
 
 
 def bounded_tmux_helper_session(name: str) -> bool:
@@ -1132,6 +1138,7 @@ def build_manifest(
         for row in launchctl_rows
         if row.get("pid") is None
         and row.get("last_exit_status") not in (None, 0)
+        and row.get("label") not in NON_BLOCKING_HOST_LAUNCH_AGENTS
     ]
     if failed_launch_agents:
         findings.append(
@@ -1140,6 +1147,22 @@ def build_manifest(
                 "launch_agent_last_exit_nonzero",
                 "pm-agents LaunchAgent jobs have a non-zero last exit status",
                 {"jobs": failed_launch_agents},
+            )
+        )
+    failed_host_auxiliary_agents = [
+        row
+        for row in launchctl_rows
+        if row.get("pid") is None
+        and row.get("last_exit_status") not in (None, 0)
+        and row.get("label") in NON_BLOCKING_HOST_LAUNCH_AGENTS
+    ]
+    if failed_host_auxiliary_agents:
+        findings.append(
+            finding(
+                "warning",
+                "host_auxiliary_launch_agent_last_exit_nonzero",
+                "non-weather host auxiliary LaunchAgent jobs have a non-zero last exit status",
+                {"jobs": failed_host_auxiliary_agents},
             )
         )
 
