@@ -69,7 +69,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     assert spec.release("fast_source_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/"
-        "fa62d16f3628ee4490c1ec24835fa641bda2e83e"
+        "f048dc31114ddab12d052c4061e1d0d909640d89"
     )
     assert spec.release("fast_source_runtime").runtime_bindings == (
         "operational_venv",
