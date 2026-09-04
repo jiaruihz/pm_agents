@@ -574,7 +574,7 @@ def _canonical_order(raw: dict[str, Any], *, run_id: str, plan_id: str) -> dict[
         place = exchange_response.get("place")
         if isinstance(place, dict):
             order_id = str(place.get("orderID") or "").strip()
-    clob_status = None
+    clob_status = raw.get("clob_status")
     quote_status = raw.get("quote_status")
     quote_mode = raw.get("quote_mode")
     quote_reason = raw.get("quote_reason")

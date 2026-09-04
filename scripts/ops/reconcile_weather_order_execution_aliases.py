@@ -22,6 +22,7 @@ def _rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                 o.execution_id,
                 o.order_id AS physical_order_id,
                 o.order_side,
+                o.execution_action,
                 sig.condition_id,
                 sig.token_id,
                 o.created_at_utc,
@@ -108,9 +109,15 @@ def reconcile(conn: sqlite3.Connection, *, apply: bool, source_path: str) -> dic
                 "canonical_created_at_utc": row["canonical_created_at_utc"],
                 "alias_created_at_utc": row["created_at_utc"],
                 "order_side": row["order_side"],
+                "execution_action": row["execution_action"],
                 "condition_id": row["condition_id"],
                 "token_id": row["token_id"],
             }
+            reason = (
+                "physical_order_lifecycle_event"
+                if str(row.get("execution_action") or "").strip()
+                else "legacy_plan_dependent_execution_id"
+            )
             before = conn.total_changes
             conn.execute(
                 """
@@ -123,7 +130,7 @@ def reconcile(conn: sqlite3.Connection, *, apply: bool, source_path: str) -> dic
                     row["execution_id"],
                     row["canonical_execution_id"],
                     row["physical_order_id"],
-                    "legacy_plan_dependent_execution_id",
+                    reason,
                     json.dumps(evidence, sort_keys=True),
                     source_path,
                 ),

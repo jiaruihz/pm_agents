@@ -435,6 +435,8 @@ def _stable_attempt_key(raw: dict[str, Any]) -> str:
 
 
 def _runtime_order_status(raw: dict[str, Any]) -> str:
+    if _confirmed_cancel_order_id(raw):
+        return "cancelled"
     submit_status = str(raw.get("live_submit_status") or "").strip()
     if submit_status == "submit_failed":
         return "failed"
@@ -468,6 +470,82 @@ def _runtime_plan_config_id(raw: dict[str, Any], fallback: str) -> str:
     return fallback
 
 
+def _confirmed_cancel_order_id(raw: dict[str, Any]) -> str:
+    """Return the physical order id only for an exchange-confirmed cancel.
+
+    Runtime cancellation rows intentionally have their own execution id and no
+    new venue order id.  The durable exchange response links them back to the
+    original physical order.  Keep uncertain or explicitly rejected cancels
+    out of canonical orders instead of turning an attempted cancel into fact.
+    """
+
+    response = raw.get("exchange_response")
+    if not isinstance(response, dict):
+        return ""
+    cancel = response.get("cancel")
+    if not isinstance(cancel, dict):
+        return ""
+    raw_response = cancel.get("raw_response")
+    if not isinstance(raw_response, dict):
+        return ""
+
+    candidates = [
+        str(raw.get(key) or "").strip()
+        for key in (
+            "source_order_id",
+            "cancel_before_order_id",
+            "replacement_of_order_id",
+            "root_order_id",
+        )
+    ]
+    candidates = [value for value in candidates if value]
+
+    cancelled_values = raw_response.get("canceled")
+    if cancelled_values is None:
+        cancelled_values = raw_response.get("cancelled")
+    if isinstance(cancelled_values, str):
+        cancelled_ids = {cancelled_values.strip()} if cancelled_values.strip() else set()
+    elif isinstance(cancelled_values, list):
+        cancelled_ids = {
+            str(value).strip() for value in cancelled_values if str(value).strip()
+        }
+    else:
+        cancelled_ids = set()
+
+    not_cancelled_values = raw_response.get("not_canceled")
+    if not_cancelled_values is None:
+        not_cancelled_values = raw_response.get("not_cancelled")
+    if isinstance(not_cancelled_values, dict):
+        not_cancelled_ids = {str(value).strip() for value in not_cancelled_values}
+    elif isinstance(not_cancelled_values, list):
+        not_cancelled_ids = {
+            str(value).strip() for value in not_cancelled_values if str(value).strip()
+        }
+    elif isinstance(not_cancelled_values, str) and not_cancelled_values.strip():
+        not_cancelled_ids = {not_cancelled_values.strip()}
+    else:
+        not_cancelled_ids = set()
+
+    for candidate in candidates:
+        if candidate in cancelled_ids and candidate not in not_cancelled_ids:
+            return candidate
+    if cancelled_ids:
+        # A single-order cancel response is authoritative even when an older
+        # journal omitted source_order_id.
+        remaining = cancelled_ids - not_cancelled_ids
+        if len(remaining) == 1:
+            return next(iter(remaining))
+        return ""
+
+    status = str(cancel.get("status") or raw_response.get("status") or "").lower()
+    if status not in {"cancelled", "canceled"}:
+        return ""
+    for candidate in candidates:
+        if candidate not in not_cancelled_ids:
+            return candidate
+    return ""
+
+
 def physical_exchange_order_id(raw: dict[str, Any]) -> str:
     for payload in (
         raw,
@@ -483,7 +561,7 @@ def physical_exchange_order_id(raw: dict[str, Any]) -> str:
         value = str(place.get(key) or "").strip()
         if value:
             return value
-    return ""
+    return _confirmed_cancel_order_id(raw)
 
 
 def _resolve_signal_snapshot_clock(
@@ -552,6 +630,13 @@ def _resolve_signal_snapshot_clock(
 def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) -> dict[str, Any]:
     row = dict(raw)
     snap = snapshot or {}
+    confirmed_cancel_order_id = _confirmed_cancel_order_id(row)
+    if confirmed_cancel_order_id:
+        row["order_id"] = confirmed_cancel_order_id
+        row["clob_status"] = "cancelled"
+        row["cost_usd"] = 0.0
+        if row.get("source_posted_price") not in (None, ""):
+            row["posted_price"] = row["source_posted_price"]
 
     for key in (
         "condition_id",
@@ -668,7 +753,8 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
         if order_kind == "live" and not physical_order_id:
             report.skip("non_exchange_order_lifecycle_attempt")
             continue
-        if physical_order_id and (
+        confirmed_cancel = bool(_confirmed_cancel_order_id(raw))
+        if physical_order_id and not confirmed_cancel and (
             physical_order_id in existing_physical_order_ids
             or physical_order_id in seen_physical_order_ids
         ):

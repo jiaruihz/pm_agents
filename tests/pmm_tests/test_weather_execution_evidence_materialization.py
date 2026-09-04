@@ -3,12 +3,14 @@ import sqlite3
 
 from scripts.etl.build_weather_fact_trades import build as build_fact_trades
 from scripts.ops.materialize_weather_execution_evidence import materialize
+from scripts.ops.reconcile_weather_order_execution_aliases import reconcile
 from src.strategies.runtime.sync import sync_instance_specs
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.connection import apply_pragmas
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
     _enrich_runtime_order,
     migrate_strategy_runtime_orders,
+    physical_exchange_order_id,
 )
 
 
@@ -134,6 +136,183 @@ def test_cross_no_v2_legacy_order_maps_previous_bracket_and_market_unit():
     assert row["bracket"] == "76-77"
     assert row["unit"] == "F"
     assert row["market_id"] == "0xcondition"
+
+
+def test_confirmed_cancel_is_appended_as_canonical_order_lifecycle(tmp_path):
+    order_id = "0x" + "5" * 64
+    order_path = tmp_path / "runtime/weather_edge_v1/cancel_probe/live_orders.jsonl"
+    submitted = {
+        "record_type": "weather_edge_live_order",
+        "strategy_id": "cancel_probe",
+        "strategy_instance": "cancel_probe",
+        "execution_id": "a" * 64,
+        "order_id": order_id,
+        "venue": "polymarket_clob",
+        "status": "submitted",
+        "created_at_utc": "2026-09-03T21:33:44Z",
+        "decision_snapshot_ts_utc": "2026-09-03T21:33:25Z",
+        "target_date": "2026-09-03",
+        "city": "LA",
+        "city_pool": "t1_trading",
+        "icao": "KLAX",
+        "bracket": "76-77",
+        "unit": "F",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "model_version": "cancel-probe-v1",
+        "model_p_yes": 0.9657,
+        "forecast_source": "open_meteo_live_gfs",
+        "condition_id": "0xcondition",
+        "market_id": "4058776",
+        "token_id": "yes-token",
+        "question": "Will LA reach 76-77F?",
+        "market_price": 0.97,
+        "limit_price": 0.95,
+        "posted_price": 0.94,
+        "size": 5.0,
+        "posted_notional": 4.7,
+        "execution_policy": "core_carry_near_core_fixed_rest_maker_v1",
+        "execution_profile": "near_core_fixed_rest_maker_ws1_v1",
+        "order_lifecycle_policy": "near_core_fixed_rest_safety_cancel_only_v1",
+        "child_order_role": "maker_staged",
+        "maker_only": True,
+        "exchange_response": {
+            "place": {"orderID": order_id, "status": "live", "success": True},
+            "quote_status": "accepted",
+        },
+    }
+    cancelled = {
+        **submitted,
+        "execution_id": "b" * 64,
+        "created_at_utc": "2026-09-03T21:48:09Z",
+        "order_id": "",
+        "status": "submitted",
+        "source_order_id": order_id,
+        "cancel_before_order_id": order_id,
+        "source_execution_id": submitted["execution_id"],
+        "source_posted_price": 0.94,
+        "posted_price": 0.0,
+        "posted_notional": 0.0,
+        "notional": 0.0,
+        "limit_price": 0.0,
+        "execution_action": "near_core_maker_cancel_stale_market_state",
+        "child_order_role": "near_core_maker_cancel_stale_market_state",
+        "quote_status": "cancelled",
+        "exchange_response": {
+            "cancel": {
+                "status": "cancelled",
+                "raw_response": {
+                    "status": "cancelled",
+                    "canceled": [order_id],
+                    "not_canceled": {},
+                },
+            },
+            "quote_status": "cancelled",
+        },
+    }
+    _write_jsonl(order_path, [submitted, cancelled])
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    apply_pragmas(conn)
+    apply_schema_canonical(conn)
+    try:
+        report = migrate_strategy_runtime_orders(conn, order_path=order_path)
+        assert report.orders == 2
+        rows = conn.execute(
+            "SELECT execution_id, order_id, status, clob_status, quote_status, "
+            "execution_action, source_order_id, entry_price, cost_usd "
+            "FROM orders ORDER BY placed_at_utc, execution_id"
+        ).fetchall()
+        assert tuple(rows[0]) == (
+            submitted["execution_id"], order_id, "submitted", "live", "accepted",
+            None, None, 0.94, 4.7,
+        )
+        assert tuple(rows[1]) == (
+            cancelled["execution_id"], order_id, "cancelled", "cancelled", "cancelled",
+            "near_core_maker_cancel_stale_market_state", order_id, 0.94, 0.0,
+        )
+        assert physical_exchange_order_id(cancelled) == order_id
+
+        aliases = reconcile(conn, apply=True, source_path="test")
+        assert aliases["resolved_aliases"] == 1
+        alias = conn.execute(
+            "SELECT alias_execution_id, canonical_execution_id, reason "
+            "FROM order_execution_aliases"
+        ).fetchone()
+        assert tuple(alias) == (
+            cancelled["execution_id"],
+            submitted["execution_id"],
+            "physical_order_lifecycle_event",
+        )
+
+        repeated = migrate_strategy_runtime_orders(conn, order_path=order_path)
+        assert repeated.orders == 0
+        assert conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
+def test_unconfirmed_cancel_attempt_remains_out_of_canonical_orders(tmp_path):
+    order_id = "0x" + "6" * 64
+    order_path = tmp_path / "runtime/weather_edge_v1/cancel_probe/live_orders.jsonl"
+    attempted = {
+        "record_type": "weather_edge_live_order",
+        "strategy_instance": "cancel_probe",
+        "execution_id": "c" * 64,
+        "venue": "polymarket_clob",
+        "status": "submitted",
+        "created_at_utc": "2026-09-03T21:48:09Z",
+        "decision_snapshot_ts_utc": "2026-09-03T21:33:25Z",
+        "target_date": "2026-09-03",
+        "city": "LA",
+        "bracket": "76-77",
+        "unit": "F",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "model_version": "cancel-probe-v1",
+        "model_p_yes": 0.9657,
+        "forecast_source": "open_meteo_live_gfs",
+        "condition_id": "0xcondition",
+        "market_id": "4058776",
+        "token_id": "yes-token",
+        "market_price": 0.97,
+        "size": 5.0,
+        "source_order_id": order_id,
+        "execution_action": "near_core_maker_cancel_stale_market_state",
+        "exchange_response": {
+            "cancel": {
+                "status": "cancelled",
+                "raw_response": {
+                    "status": "cancelled",
+                    "not_canceled": {order_id: "not found"},
+                },
+            }
+        },
+    }
+    _write_jsonl(order_path, [attempted])
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    apply_pragmas(conn)
+    apply_schema_canonical(conn)
+    try:
+        report = migrate_strategy_runtime_orders(conn, order_path=order_path)
+        assert report.orders == 0
+        assert report.skipped_reasons == {"non_exchange_order_lifecycle_attempt": 1}
+        assert physical_exchange_order_id(attempted) == ""
+    finally:
+        conn.close()
+
+
+def test_cancel_status_without_raw_exchange_response_is_not_canonical_fact():
+    order_id = "0x" + "7" * 64
+    row = {
+        "source_order_id": order_id,
+        "execution_action": "near_core_maker_cancel_stale_market_state",
+        "exchange_response": {"cancel": {"status": "cancelled"}},
+    }
+    assert physical_exchange_order_id(row) == ""
 
 
 def test_materializer_combines_causal_public_book_with_private_fill(tmp_path):
