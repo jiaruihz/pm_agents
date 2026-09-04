@@ -1168,6 +1168,56 @@ def test_restore_rows_decode_tmux_quoted_start_command():
     )
 
 
+def test_recovery_injects_production_config_into_every_restored_pane(
+    monkeypatch, tmp_path
+):
+    spec = production_spec(tmp_path, ())
+    snapshot = observed("one")
+    snapshot["tmux_sessions"][0]["panes"].append(
+        {"pane_current_path": "/prod2", "pane_start_command": "python b.py"}
+    )
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+
+    monkeypatch.setattr(
+        ctl,
+        "collect_prospective_jrs_context_health",
+        lambda _spec: {"status": "healthy", "returncode": 0},
+    )
+    monkeypatch.setattr(
+        ctl,
+        "collect_jrs_context_health",
+        lambda _spec: {"status": "healthy", "returncode": 0},
+    )
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: calls.append(args) or Result(),
+    )
+
+    ctl.recover_jrs_context(spec, snapshot, confirm_live=True)
+
+    expected = (
+        "-e",
+        f"WEATHER_PRODUCTION_CONFIG={tmp_path / 'src/strategies/runtime/production.yaml'}",
+    )
+    restored = [
+        call
+        for call in calls
+        if call[0] in {"new-session", "new-window"}
+        and ("-s" in call or "-t" in call)
+        and "one" in call
+    ]
+    assert len(restored) == 2
+    assert all(
+        any(call[index : index + 2] == expected for index in range(len(call) - 1))
+        for call in restored
+    )
+
+
 def test_recovery_does_not_replay_allowed_unmanaged_oneshot(monkeypatch, tmp_path):
     spec = WeatherProductionSpec(
         **{
