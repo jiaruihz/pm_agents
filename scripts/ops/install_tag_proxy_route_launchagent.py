@@ -8,11 +8,16 @@ import json
 import os
 import plistlib
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from src.strategies.runtime.production import load_production_spec
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.runtime.production import load_production_spec  # noqa: E402
 
 
 LABEL = "com.pm-agents.tag-proxy-route-maintain"
@@ -119,4 +124,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
