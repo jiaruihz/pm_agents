@@ -76,6 +76,8 @@ def test_pm_history_ingest_writes_city_bracket_outcomes(canonical_conn, tmp_path
     assert stats["brackets_seen"] == 2
     assert stats["settlement_outcomes_inserted"] == 2
     assert stats["settlements_inserted"] == 2
+    assert stats["signal_identity_fallback"] == 1
+    assert stats["no_identity_match"] == 1
     rows = canonical_conn.execute(
         """
         SELECT city, target_date, bracket, condition_id, raw_final_price,
@@ -110,6 +112,88 @@ def test_pm_history_ingest_writes_city_bracket_outcomes(canonical_conn, tmp_path
     stats_second = ingest(canonical_conn, str(pmh_dir))
     assert stats_second["settlement_outcomes_inserted"] == 0
     assert canonical_conn.execute("SELECT COUNT(*) FROM settlement_outcomes").fetchone()[0] == 2
+
+
+def test_pm_history_ingest_prefers_embedded_market_identity_without_signal(
+    canonical_conn, tmp_path
+):
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    (pmh_dir / "Amsterdam_2026-09-01.json").write_text(
+        json.dumps(
+            {
+                "unit": "C",
+                "brackets": [
+                    {
+                        "label": "17",
+                        "final_price": 0.0005,
+                        "token_id": "token-17",
+                        "condition_id": "condition-17",
+                        "market_id": "market-17",
+                        "closed": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    stats = ingest(canonical_conn, str(pmh_dir))
+
+    assert stats["embedded_identity"] == 1
+    assert stats["signal_identity_fallback"] == 0
+    assert stats["no_identity_match"] == 0
+    row = canonical_conn.execute(
+        "SELECT condition_id, market_id, final_price, settlement_status FROM settlements"
+    ).fetchone()
+    assert dict(row) == {
+        "condition_id": "condition-17",
+        "market_id": "market-17",
+        "final_price": 0.0,
+        "settlement_status": "settled",
+    }
+
+
+def test_pm_history_ingest_rejects_embedded_signal_identity_mismatch(
+    canonical_conn, tmp_path
+):
+    canonical_conn.execute(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "b" * 64, "pm_agent_local", "snapshot", "2026-09-01T12:00:00Z",
+            "snapshot.json", "2026-09-01", "Amsterdam", "t1_trading", "EHAM",
+            "17", "C", "YES", "gfs", 0.8, "source", 0.55, 0.25, 0.25,
+            "signal-condition", "signal-market", "token", 18.0,
+        ),
+    )
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    (pmh_dir / "Amsterdam_2026-09-01.json").write_text(
+        json.dumps(
+            {
+                "unit": "C",
+                "brackets": [
+                    {
+                        "label": "17",
+                        "final_price": 0.0,
+                        "condition_id": "payload-condition",
+                        "market_id": "payload-market",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="condition_id mismatch"):
+        ingest(canonical_conn, str(pmh_dir))
 
 
 def test_pm_history_ingest_filters_target_date(canonical_conn, tmp_path):

@@ -31,11 +31,14 @@ Settlement outcome rows (source-grain schema):
     token_id, raw_final_price, final_price, settlement_status, source_path
 
 Files with `null` content or empty `brackets` are skipped (genuine upstream
-gaps). For each bracket, condition_id and market_id are looked up from the
-`signals` table by (city, target_date, bracket) -- the same market the
-strategy was trading. Settlements with no signal row get `condition_id=NULL`
-and won't join in trade queries. `settlement_outcomes` still preserves the
-city/date/bracket truth for basket research and later condition-id enrichment.
+gaps). For each bracket, condition_id and market_id are taken from the
+authoritative Gamma-backed pm_history payload when present. Legacy payloads
+without those fields fall back to the `signals` table by (city, target_date,
+bracket). A payload/signal condition identity disagreement fails closed instead
+of silently binding the settlement to a different market. Settlements with
+neither identity get `condition_id=NULL` and won't join in trade queries.
+`settlement_outcomes` still preserves the city/date/bracket truth for basket
+research and later condition-id enrichment.
 
 Idempotent: re-running is safe.
 
@@ -186,7 +189,8 @@ def ingest(
         "files_seen": 0, "files_skipped_null": 0,
         "brackets_seen": 0, "settlements_inserted": 0,
         "settlement_outcomes_inserted": 0,
-        "no_signal_match": 0, "dry_run": dry_run,
+        "embedded_identity": 0, "signal_identity_fallback": 0,
+        "no_identity_match": 0, "no_signal_match": 0, "dry_run": dry_run,
         "start_date": start_date, "end_date": end_date,
     }
     build_id, _ = producer_build_id()
@@ -219,9 +223,29 @@ def ingest(
             if final_price is None:
                 continue
             stats["brackets_seen"] += 1
-            condition_id, market_id = sig_lookup.get((city, date, label), (None, None))
-            if condition_id is None:
-                stats["no_signal_match"] += 1
+            embedded_condition_id = str(b.get("condition_id") or "") or None
+            embedded_market_id = str(b.get("market_id") or "") or None
+            signal_condition_id, signal_market_id = sig_lookup.get(
+                (city, date, label), (None, None)
+            )
+            if embedded_condition_id:
+                if signal_condition_id and signal_condition_id != embedded_condition_id:
+                    raise ValueError(
+                        "pm_history/signal condition_id mismatch: "
+                        f"{city} {date} {label} "
+                        f"payload={embedded_condition_id} signal={signal_condition_id}"
+                    )
+                condition_id = embedded_condition_id
+                market_id = embedded_market_id or signal_market_id
+                stats["embedded_identity"] += 1
+            else:
+                condition_id, market_id = signal_condition_id, signal_market_id
+                if condition_id:
+                    stats["signal_identity_fallback"] += 1
+                else:
+                    stats["no_identity_match"] += 1
+                    # Preserve this legacy counter for downstream reports.
+                    stats["no_signal_match"] += 1
             sid = _settlement_id(date, condition_id, market_id, label)
             status = _settlement_status(final_price)
 

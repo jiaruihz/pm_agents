@@ -240,6 +240,11 @@ def test_launchd_refresh_uses_registry_preflight_and_stage_wrapper() -> None:
     assert 'physical_path("europe_d1_distance2_decision_bundles")' in script
     assert 'cursor_state_path("europe_d1_distance2_decision_bundles")' in script
     assert "europe_d1_distance2_candidate_materialization.json" in script
+    assert "europe_d1_distance2_settlement_ingest" in script
+    assert "weather_dashboard.ingest.pm_history_settlements" in script
+    assert 'D1_SETTLEMENT_START_DATE="$(date -u -v-14d +%F)"' in script
+    assert 'D1_SETTLEMENT_END_DATE="$(date -u -v-1d +%F)"' in script
+    assert "--city Amsterdam --city Ankara" in script
     assert "weather_canonical_refresh_preflight.py" in script
     assert "weather_canonical_refresh_stage.py" in script
     assert "migration_allowed" in script

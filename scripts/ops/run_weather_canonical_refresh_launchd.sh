@@ -120,6 +120,9 @@ PM_RUNTIME_ROOT="$(
 )"
 SIGNAL_CLOCK_ADJUSTMENT_JOURNAL="$PM_RUNTIME_ROOT/weather_edge_v1/signal_clock_adjustments.jsonl"
 EXECUTION_PUBLIC_BOOKS_ROOT="$DATA_FEED_RUNTIME_ROOT/market_books/ws_incremental/execution_evidence_v1/public_books"
+D1_PMH_DIR="$OPERATIONAL_PROJECT_DIR/runtime/weather_edge_v1/market_data/cache/pm_history"
+D1_SETTLEMENT_START_DATE="$(date -u -v-14d +%F)"
+D1_SETTLEMENT_END_DATE="$(date -u -v-1d +%F)"
 
 run_refresh_stage() {
   local stage="$1"
@@ -237,6 +240,19 @@ run_refresh_stage fill_coverage_gate 180 \
 # fill/fact/gate chain so a concurrently appended shadow journal can fail and
 # retry without delaying post-trade accounting.
 if [[ "$migration_allowed" == "1" ]]; then
+  # Keep the D-1 settlement join bounded and identity-exact. Current Gamma
+  # cache rows carry condition_id/market_id; legacy rows may still use the
+  # signal fallback inside the ingester. Missing files remain an explicit
+  # evidence gap and never trigger a city/date inferred label.
+  run_refresh_stage europe_d1_distance2_settlement_ingest 180 \
+    "$PYTHON_BIN" -m weather_dashboard.ingest.pm_history_settlements \
+    --db-path "$DB_PATH" \
+    --pmh-dir "$D1_PMH_DIR" \
+    --start-date "$D1_SETTLEMENT_START_DATE" \
+    --end-date "$D1_SETTLEMENT_END_DATE" \
+    --city Amsterdam --city Ankara --city Helsinki --city Istanbul \
+    --city London --city Madrid --city Milan --city Munich --city Paris \
+    --city Warsaw
   if [[ ! -s "$WCIR_BUNDLES_PATH" ]]; then
     echo "WCIR decision bundle journal missing or empty: $WCIR_BUNDLES_PATH" >&2
     exit 1
