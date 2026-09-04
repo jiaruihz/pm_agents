@@ -380,3 +380,51 @@ replacement now excludes only the explicitly classified controller,
 reliability and canonical-refresh bounded sessions from peer-loss comparison;
 persistent registered sessions remain fail-closed.  The explicit live
 confirmation and prospective-host JRS probe are unchanged.
+
+## 2026-09-04 Recurrent JRS EPERM and Core Carry Recovery
+
+The canonical tmux permission host again lost external-volume access without a
+host reboot.  Core Carry last completed a healthy cycle at
+`2026-09-04T02:37:08Z`; its next readiness read and error publication failed
+with `PermissionError: [Errno 1] Operation not permitted`.  The near-Core
+controller independently failed its atomic readiness write.  This is another
+recurrence of the macOS TCC/JRS permission-host incident, not a Core signal or
+sizing change.
+
+The user authorized full live restoration.  Two bounded
+`recover-jrs-context --apply --confirm-live` transactions passed the
+prospective and recreated-host JRS probes, restored the declared topology, and
+kept `cross_no_v2_metar_v1` paused.  The second transaction exercised the
+controller fix that injects the operational `WEATHER_PRODUCTION_CONFIG` into
+every restored session and window.  Post-change strict manifest found zero
+managed sessions without the binding; controller and data-feed semantic health
+were healthy.  The remaining manifest warning is the pre-existing inventory of
+unregistered release worktrees and is not a runtime failure.
+
+Core Carry's first recovered full cycle completed at
+`2026-09-04T11:11:56Z`, so the decision-evidence interruption was `8h34m48s`.
+Twenty-four durable PIT snapshots inside that interval were replayed with the
+deployed model: `0` ten-share taker would-orders and `0` near-Core five-share
+maker candidates.  Missing snapshot intervals between the surrounding durable
+artifacts were `02:34:05Z..05:29:01Z`, `09:23:33Z..10:15:01Z`, and
+`10:15:01Z..11:11:39Z`; these remain coverage gaps and must not be relabelled as
+zero signals.  Confirmed missed orders on replayable evidence: `0`; behavior in
+the missing PIT intervals is unknown.
+
+Recovery also exposed a restart-only execution hygiene defect.  While the
+near-Core user channel was becoming ready, the old controller sent 73 repeated
+cancel requests for the same LA order already exchange-cancelled at
+`2026-09-03T21:48:09Z`; every response said the order was already cancelled or
+matched.  There were no new Core order-journal rows, no new fill, and the
+authenticated open-order set remained 23 orders with its newest order created
+at `2026-09-03T09:39:14Z`.  Release
+`501d299e6e4b2db489e394f1449d2cfaa2474a02` now persists explicit exchange
+terminal evidence across controller restarts.  After deployment the historical
+terminal order was loaded and the cancel journal did not grow.
+
+Final live contract: Core Carry remains `10` taker shares plus the additive
+near-Core `5` maker shares, both live and fresh; Cross NO remains explicitly
+paused.  Recovery-controller hardening is commit `91186547`; the terminal-safe
+Core release pin is commit `f3d22a4d`.  Classification remains
+`recovery_improved`: this closes the recovery/config and repeated-cancel defects
+but does not eliminate macOS TCC as an architectural dependency.
