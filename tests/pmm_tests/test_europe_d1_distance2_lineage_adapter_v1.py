@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import sqlite3
 
+import pytest
+
 from scripts.ops.materialize_weather_city_runtime_canonical_v1 import (
     main as canonical_materialize_main,
 )
@@ -268,3 +270,15 @@ def test_adapter_excludes_non_frozen_repo_without_mutating_source(tmp_path: Path
     assert result["excluded_non_frozen_repo_rows"] == 1
     assert result["decision_bundles"] == 0
     assert source.read_bytes() == before
+
+
+def test_adapter_rejects_leg_fetched_clock_that_differs_from_archived_book(
+    tmp_path: Path,
+) -> None:
+    source, config, sha = _inputs(tmp_path)
+    basket = json.loads(source.read_text(encoding="utf-8"))
+    basket["legs"][0]["book_fetched_at_utc"] = "2026-09-01T10:00:02.000Z"
+    source.write_text(json.dumps(basket) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="archived orderbook evidence differs"):
+        subject.run_once(_args(tmp_path, source, config, sha))
