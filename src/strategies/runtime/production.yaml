@@ -13,8 +13,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/4bf96f58dd167c0ccbbfe217d669dc9593b007f4
     expected_repo_sha: 4bf96f58dd167c0ccbbfe217d669dc9593b007f4
   - release_id: fast_source_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
-    expected_repo_sha: 3ce5193287bf19b8a6bf237ce6ac9c3cb8f561d2
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/1bd4aee3c30011b049fc24d14dc2a4bf9fd19ac7
+    expected_repo_sha: 1bd4aee3c30011b049fc24d14dc2a4bf9fd19ac7
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
