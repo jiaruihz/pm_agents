@@ -16,7 +16,7 @@ Strategy
       precise status (``MATCHED``, ``CANCELLED``, ``LIVE``, ...).
 4. If a fill is found: insert a row into ``fills`` with ``status='filled'``.
 5. Count cancelled / still-open / errors.
-6. Return summary dict ``{checked, filled, cancelled, still_open, errors}``.
+6. Return mutually exclusive order outcomes plus ``fills_inserted`` for writes.
 
 Important schema notes
 ----------------------
@@ -85,6 +85,9 @@ from weather_dashboard.ingest.clob_fill_timestamp_adjustments import (
 from weather_dashboard.ingest.clob_fill_validity_adjustments import (
     DEFAULT_VALIDITY_ADJUSTMENT_PATH,
     import_validity_adjustments,
+)
+from weather_dashboard.legacy_migration.strategy_runtime_orders import (
+    _confirmed_cancel_order_id,
 )
 from weather_clock_contract import parse_utc_or_none, utc_text
 
@@ -483,6 +486,47 @@ def _get_submitted_orders(
         """,
         (placed_after_utc,) if placed_after_utc else (),
     ).fetchall()
+
+
+def _confirmed_cancelled_order_ids(conn: sqlite3.Connection) -> set[str]:
+    """Return physical order ids with an exchange-confirmed lifecycle cancel.
+
+    Polymarket may return ``null`` from ``GET /data/order/{id}`` after a
+    cancellation. The append-only lifecycle row remains the durable evidence,
+    but only aliases materialized from the strict cancel-response parser count.
+    """
+    rows = conn.execute(
+        """
+        SELECT
+          alias.physical_order_id,
+          lifecycle.source_order_id,
+          lifecycle.cancel_before_order_id,
+          lifecycle.exchange_response
+        FROM order_execution_aliases alias
+        JOIN orders lifecycle
+          ON lifecycle.execution_id = alias.alias_execution_id
+        WHERE alias.reason = 'physical_order_lifecycle_event'
+          AND lifecycle.venue = 'polymarket_clob'
+          AND lifecycle.status IN ('cancelled', 'canceled', 'expired')
+        """
+    ).fetchall()
+    confirmed: set[str] = set()
+    for row in rows:
+        physical_order_id = str(row["physical_order_id"] or "").strip()
+        if not physical_order_id:
+            continue
+        try:
+            response = json.loads(row["exchange_response"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        raw = {
+            "source_order_id": row["source_order_id"] or physical_order_id,
+            "cancel_before_order_id": row["cancel_before_order_id"],
+            "exchange_response": response,
+        }
+        if _confirmed_cancel_order_id(raw) == physical_order_id:
+            confirmed.add(physical_order_id)
+    return confirmed
 
 
 def _insert_fill(
@@ -924,7 +968,12 @@ def _fetch_order_status_clob(client: Any, order_id: str) -> dict[str, Any] | Non
     """Call GET /data/order/{order_id}. Returns dict or None on error."""
     try:
         result = client.get_order(order_id)
-        return result if isinstance(result, dict) else None
+        if result is None or isinstance(result, dict):
+            return result
+        EXTERNAL_FETCH_ERRORS.append(
+            f"clob_order_status:unexpected_response_type:{type(result).__name__}"
+        )
+        return None
     except Exception as exc:
         EXTERNAL_FETCH_ERRORS.append(f"clob_order_status:{exc}")
         log.debug("get_order(%s...): %s", order_id[:12], exc)
@@ -1384,11 +1433,13 @@ def sync_clob_fills(
 
     Returns
     -------
-    dict with keys: checked, filled, cancelled, still_open, errors, dry_run
+    ``filled``, ``cancelled`` and ``still_open`` are mutually exclusive order
+    counts. ``fills_inserted`` is the number of append-only fill rows written.
     """
     summary: dict[str, Any] = {
         "checked": 0,
         "filled": 0,
+        "fills_inserted": 0,
         "cancelled": 0,
         "still_open": 0,
         "errors": 0,
@@ -1541,7 +1592,11 @@ def sync_clob_fills(
             "continuing with authoritative per-order status.",
             len(SUPPLEMENTAL_FETCH_WARNINGS),
         )
+    confirmed_cancelled_order_ids = _confirmed_cancelled_order_ids(conn)
     used_public_trade_keys: set[str] = set()
+    filled_execution_ids: set[str] = set()
+    cancelled_execution_ids: set[str] = set()
+    open_execution_ids: set[str] = set()
 
     # --- Process each submitted order ---
     for row in submitted:
@@ -1622,18 +1677,18 @@ def sync_clob_fills(
                     fee_details["fees_usd"],
                     fee_details["fee_source"],
                 )
-                summary["filled"] += 1
-            else:
-                summary["still_open"] += 1
+                summary["fills_inserted"] += 1
 
         # ------------------------------------------------------------------
         # Authenticated path: per-order status + bulk trades
         # ------------------------------------------------------------------
         if client is not None:
+            fetch_errors_before = len(EXTERNAL_FETCH_ERRORS)
             order_data = _fetch_order_status_clob(client, clob_order_id)
+            order_lookup_failed = len(EXTERNAL_FETCH_ERRORS) > fetch_errors_before
             matched_trades = trades_by_order_id.get(clob_order_id, [])
 
-            if order_data is not None:
+            if order_data:
                 parsed = _parse_clob_order_response(
                     order_data, expected_shares=row_shares
                 )
@@ -1713,9 +1768,8 @@ def sync_clob_fills(
                             "Recorded fill for execution_id=%s... shares=%.6f price=%.4f",
                             execution_id[:12], filled_shares, filled_price,
                         )
-                        summary["filled"] += 1
-                    else:
-                        summary["still_open"] += 1
+                        summary["fills_inserted"] += 1
+                    filled_execution_ids.add(execution_id)
                     # NOTE: orders is append-only (BEFORE UPDATE trigger prevents
                     # changing orders.status). The fill record in fills table is
                     # the authoritative source of truth for fill status.
@@ -1725,7 +1779,7 @@ def sync_clob_fills(
                         "Order execution_id=%s... is %s on CLOB (no fill).",
                         execution_id[:12], clob_status,
                     )
-                    summary["cancelled"] += 1
+                    cancelled_execution_ids.add(execution_id)
 
                 else:
                     # LIVE/OPEN orders may still be partially filled.
@@ -1779,15 +1833,14 @@ def sync_clob_fills(
                                 execution_id[:12], clob_status or "UNKNOWN",
                                 filled_shares, filled_price,
                             )
-                            summary["filled"] += 1
-                        else:
-                            summary["still_open"] += 1
+                            summary["fills_inserted"] += 1
+                        filled_execution_ids.add(execution_id)
                     else:
                         log.debug(
                             "Order execution_id=%s... status=%s -- still open.",
                             execution_id[:12], clob_status or "UNKNOWN",
                         )
-                        summary["still_open"] += 1
+                        open_execution_ids.add(execution_id)
 
             elif matched_trades:
                 # Order endpoint returned nothing but we have matching trade records
@@ -1842,16 +1895,26 @@ def sync_clob_fills(
                         "shares=%.6f avg_price=%.4f",
                         execution_id[:12], agg["size_matched"], agg["price"],
                     )
-                    summary["filled"] += 1
-                else:
-                    summary["still_open"] += 1
+                    summary["fills_inserted"] += 1
+                filled_execution_ids.add(execution_id)
+
+            elif (
+                not order_lookup_failed
+                and clob_order_id in confirmed_cancelled_order_ids
+            ):
+                log.info(
+                    "Order execution_id=%s... has an exchange-confirmed "
+                    "canonical cancel lifecycle and no remaining CLOB record.",
+                    execution_id[:12],
+                )
+                cancelled_execution_ids.add(execution_id)
 
             else:
                 log.debug(
                     "No CLOB data for execution_id=%s... -- still open.",
                     execution_id[:12],
                 )
-                summary["still_open"] += 1
+                open_execution_ids.add(execution_id)
 
         # ------------------------------------------------------------------
         # Unauthenticated fallback path
@@ -1965,16 +2028,25 @@ def sync_clob_fills(
                         "shares=%.6f price=%.4f",
                         execution_id[:12], filled_shares, filled_price,
                     )
-                summary["filled"] += inserted_count
-                if inserted_count == 0:
-                    summary["still_open"] += 1
+                summary["fills_inserted"] += inserted_count
+                if inserted_count:
+                    filled_execution_ids.add(execution_id)
+                else:
+                    open_execution_ids.add(execution_id)
             else:
                 log.debug(
                     "No public trade match for execution_id=%s... -- still open.",
                     execution_id[:12],
                 )
-                summary["still_open"] += 1
+                open_execution_ids.add(execution_id)
 
+    # Each checked canonical order has one terminal summary outcome. Fill wins
+    # over cancel for partial-fill lifecycle cases; cancel wins over open.
+    cancelled_execution_ids -= filled_execution_ids
+    open_execution_ids -= filled_execution_ids | cancelled_execution_ids
+    summary["filled"] = len(filled_execution_ids)
+    summary["cancelled"] = len(cancelled_execution_ids)
+    summary["still_open"] = len(open_execution_ids)
     if EXTERNAL_FETCH_ERRORS:
         summary["external_fetch_errors"] = len(EXTERNAL_FETCH_ERRORS)
         summary["data_incomplete"] = True

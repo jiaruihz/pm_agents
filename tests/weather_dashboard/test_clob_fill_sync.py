@@ -1,6 +1,8 @@
 import sqlite3
 from types import SimpleNamespace
 
+import pytest
+
 import weather_dashboard.ingest.clob_fill_sync as clob_fill_sync
 from weather_dashboard.ingest.clob_fill_sync import (
     _cap_reported_fill_to_order,
@@ -8,6 +10,7 @@ from weather_dashboard.ingest.clob_fill_sync import (
     _extract_trade_fill,
     _extract_immediate_place_fill,
     _fallback_fee_details,
+    _confirmed_cancelled_order_ids,
     _index_public_activity_by_tx,
     _index_authenticated_trades_by_order_id,
     _insert_order_fill_top_up,
@@ -395,6 +398,207 @@ def test_sync_required_auth_refuses_public_fallback(monkeypatch):
     assert result["errors"] == 1
     assert result["external_fetch_errors"] == 1
     assert result["filled"] == 0
+
+
+@pytest.mark.parametrize("tombstone", [None, {}])
+def test_confirmed_cancel_lifecycle_is_used_when_clob_returns_tombstone(
+    monkeypatch, tombstone
+):
+    order_id = "0xcancelled"
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE orders (
+          execution_id TEXT PRIMARY KEY,
+          venue TEXT,
+          status TEXT,
+          source_order_id TEXT,
+          cancel_before_order_id TEXT,
+          exchange_response TEXT
+        );
+        CREATE TABLE order_execution_aliases (
+          alias_execution_id TEXT PRIMARY KEY,
+          physical_order_id TEXT,
+          reason TEXT
+        );
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO orders VALUES (
+          'cancel-exec', 'polymarket_clob', 'cancelled', ?, NULL,
+          '{"cancel":{"status":"cancelled","raw_response":{"status":"cancelled","canceled":["0xcancelled"],"not_canceled":{}}}}'
+        )
+        """,
+        (order_id,),
+    )
+    conn.execute(
+        "INSERT INTO order_execution_aliases VALUES "
+        "('cancel-exec', ?, 'physical_order_lifecycle_event')",
+        (order_id,),
+    )
+
+    assert _confirmed_cancelled_order_ids(conn) == {order_id}
+
+    submitted = {
+        "execution_id": "submit-exec",
+        "order_id": order_id,
+        "clob_order_id": order_id,
+        "shares": 5.0,
+        "limit_price": 0.94,
+        "placed_at_utc": "2026-09-03T21:33:44Z",
+        "order_side": "BUY_YES",
+        "exchange_response": '{"maker_only":true}',
+        "condition_id": "condition",
+        "token_id": "token",
+    }
+    monkeypatch.setattr(
+        clob_fill_sync, "_get_submitted_orders", lambda _conn, **_kwargs: [submitted]
+    )
+    monkeypatch.setattr(clob_fill_sync, "_build_clob_client", lambda: object())
+    monkeypatch.setattr(clob_fill_sync, "_fetch_trades_clob", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(clob_fill_sync, "_fetch_activity_public", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        clob_fill_sync, "_fetch_order_status_clob", lambda *_args: tombstone
+    )
+
+    result = sync_clob_fills(
+        conn,
+        dry_run=True,
+        maker_address="maker",
+        require_authenticated=True,
+    )
+
+    assert result["checked"] == 1
+    assert result["cancelled"] == 1
+    assert result["still_open"] == 0
+    assert result["filled"] == 0
+
+
+def test_confirmed_cancel_lifecycle_does_not_mask_order_lookup_failure(monkeypatch):
+    order_id = "0xcancelled"
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE orders (
+          execution_id TEXT PRIMARY KEY,
+          venue TEXT,
+          status TEXT,
+          source_order_id TEXT,
+          cancel_before_order_id TEXT,
+          exchange_response TEXT
+        );
+        CREATE TABLE order_execution_aliases (
+          alias_execution_id TEXT PRIMARY KEY,
+          physical_order_id TEXT,
+          reason TEXT
+        );
+        INSERT INTO orders VALUES (
+          'cancel-exec', 'polymarket_clob', 'cancelled', '0xcancelled', NULL,
+          '{"cancel":{"status":"cancelled","raw_response":{"status":"cancelled","canceled":["0xcancelled"],"not_canceled":{}}}}'
+        );
+        INSERT INTO order_execution_aliases VALUES (
+          'cancel-exec', '0xcancelled', 'physical_order_lifecycle_event'
+        );
+        """
+    )
+    submitted = {
+        "execution_id": "submit-exec",
+        "order_id": order_id,
+        "clob_order_id": order_id,
+        "shares": 5.0,
+        "limit_price": 0.94,
+        "placed_at_utc": "2026-09-03T21:33:44Z",
+        "order_side": "BUY_YES",
+        "exchange_response": '{"maker_only":true}',
+        "condition_id": "condition",
+        "token_id": "token",
+    }
+    monkeypatch.setattr(
+        clob_fill_sync, "_get_submitted_orders", lambda _conn, **_kwargs: [submitted]
+    )
+    monkeypatch.setattr(clob_fill_sync, "_build_clob_client", lambda: object())
+    monkeypatch.setattr(clob_fill_sync, "_fetch_trades_clob", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(clob_fill_sync, "_fetch_activity_public", lambda *_args, **_kwargs: [])
+
+    def fail_lookup(*_args):
+        clob_fill_sync.EXTERNAL_FETCH_ERRORS.append("clob_order_status:timeout")
+        return None
+
+    monkeypatch.setattr(clob_fill_sync, "_fetch_order_status_clob", fail_lookup)
+
+    result = sync_clob_fills(
+        conn,
+        dry_run=True,
+        maker_address="maker",
+        require_authenticated=True,
+    )
+
+    assert result["cancelled"] == 0
+    assert result["still_open"] == 1
+    assert result["external_fetch_errors"] == 1
+    assert result["data_incomplete"] is True
+
+
+def test_authenticated_matched_order_counts_once_when_fill_already_exists(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE orders (
+          execution_id TEXT PRIMARY KEY,
+          venue TEXT,
+          status TEXT,
+          source_order_id TEXT,
+          cancel_before_order_id TEXT,
+          exchange_response TEXT
+        );
+        CREATE TABLE order_execution_aliases (
+          alias_execution_id TEXT PRIMARY KEY,
+          physical_order_id TEXT,
+          reason TEXT
+        );
+        """
+    )
+    submitted = {
+        "execution_id": "submit-exec",
+        "order_id": "0xmatched",
+        "clob_order_id": "0xmatched",
+        "shares": 5.0,
+        "limit_price": 0.50,
+        "placed_at_utc": "2026-09-03T21:33:44Z",
+        "order_side": "BUY_YES",
+        "exchange_response": '{"maker_only":true}',
+        "condition_id": "condition",
+        "token_id": "token",
+    }
+    monkeypatch.setattr(
+        clob_fill_sync, "_get_submitted_orders", lambda _conn, **_kwargs: [submitted]
+    )
+    monkeypatch.setattr(clob_fill_sync, "_build_clob_client", lambda: object())
+    monkeypatch.setattr(clob_fill_sync, "_fetch_trades_clob", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(clob_fill_sync, "_fetch_activity_public", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        clob_fill_sync,
+        "_fetch_order_status_clob",
+        lambda *_args: {"status": "MATCHED", "size_matched": "5", "price": "0.50"},
+    )
+    monkeypatch.setattr(clob_fill_sync, "_insert_order_fill_top_up", lambda *_args, **_kwargs: False)
+
+    result = sync_clob_fills(
+        conn,
+        dry_run=True,
+        maker_address="maker",
+        require_authenticated=True,
+    )
+
+    assert result["checked"] == 1
+    assert result["filled"] == 1
+    assert result["fills_inserted"] == 0
+    assert result["cancelled"] == 0
+    assert result["still_open"] == 0
 
 
 def test_cap_reported_fill_to_order_keeps_recovered_fill_inside_order_cap():
