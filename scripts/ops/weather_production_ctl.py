@@ -907,6 +907,9 @@ def recover_jrs_context(
     actions.append({"action": "jrs_write_probe", **probe})
     if probe["status"] != "healthy":
         raise RuntimeError(f"new canonical tmux host cannot write JRS: {probe['output']}")
+    production_config = str(
+        spec.operational_repo_root / "src/strategies/runtime/production.yaml"
+    )
     for row in restore_rows:
         session = row["session"]
         for index, pane in enumerate(row["panes"]):
@@ -916,6 +919,8 @@ def recover_jrs_context(
                 spec,
                 verb,
                 "-d",
+                "-e",
+                f"WEATHER_PRODUCTION_CONFIG={production_config}",
                 *target_args,
                 "-c",
                 pane["cwd"],
