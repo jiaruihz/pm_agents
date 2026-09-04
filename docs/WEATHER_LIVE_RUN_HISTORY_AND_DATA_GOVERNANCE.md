@@ -1930,6 +1930,34 @@ Primary raw evidence:
 - `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_maker_ledger.jsonl`
 - `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl`
 
+### 30.1 First natural near-Core order and canonical cancel-lineage repair
+
+The first natural near-Core eligible case was LA `2026-09-03`, bracket `76-77`.
+At `2026-09-03T21:33:44Z` it posted 5 YES shares at `0.94` as physical order
+`0x5282ad67f0feadf749b8eff56e24146adf04ad407376837007f2f6011eac3197`.
+No shares matched. A stale-market-state safety cancel was planned at `21:47:59Z`
+and exchange-confirmed at `21:48:09Z`; the confirmed raw response names the same
+physical order in `canceled` and the lifecycle row records zero matched shares.
+
+This case exposed a canonical projection gap: live-order migration skipped every
+lifecycle action without a newly issued order id, including exchange-confirmed
+cancels. From `2026-09-03T21:48:09Z` until the corrected projection at
+`2026-09-04T02:04:05Z`, canonical contained the submitted row but not this cancel
+row. The gap affected lifecycle/open-order interpretation only: this near-Core case
+had `0` fills, `$0` actual fill cost, and `0` fact-trade rows.
+
+Fix `8854e9c7c2296c261eee312e63b89c7ad88c9044` now admits only cancels backed by a
+raw exchange response, appends the cancel as a separate canonical execution for the
+same physical order, and aliases that lifecycle execution to the original execution.
+The production pin commit is `3b80aef8`. The bounded replay materialized 37 previously
+missing confirmed lifecycle rows covering `2026-07-28T10:59:51Z` through
+`2026-09-03T21:48:09Z` (23 TTL cancels, 9 pre-data-update cancels, 3 reprice cancels,
+1 weather-state cancel, and this 1 near-Core stale-market cancel), plus 37 lifecycle
+aliases. Those rows contributed `0` fills, `0` fact trades, and `$0` lifecycle cost;
+therefore no historical PnL or executed-position decision changed. The post-replay
+fill coverage gate passed with zero unresolved aliases and zero DB/cache/fact cost
+delta.
+
 ## 31. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
