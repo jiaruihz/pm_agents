@@ -39,7 +39,7 @@ def test_production_loader_is_the_registry_authority_and_exposes_audit() -> None
     )
     audit = registry.audit()
     assert audit["ok"] is True
-    assert audit["product_count"] == 12
+    assert audit["product_count"] == 13
     market_books = next(row for row in audit["products"] if row["product_id"] == "market_books")
     assert market_books["feature_ready"] is False
     assert "full WS book" in market_books["notes"]
@@ -52,6 +52,15 @@ def test_production_loader_is_the_registry_authority_and_exposes_audit() -> None
     assert registry.cursor_state_path("wcir_decision_bundles") == (
         spec.pm_runtime_root
         / "weather_edge_v1/canonical_refresh/wcir_candidate_materialization_state.json"
+    )
+    assert registry.physical_path("europe_d1_distance2_decision_bundles") == (
+        spec.data_feed_runtime_root
+        / "output/europe_d1_distance2_lineage_adapter_v1/decision_bundles.jsonl"
+    )
+    assert registry.cursor_state_path("europe_d1_distance2_decision_bundles") == (
+        spec.pm_runtime_root
+        / "weather_edge_v1/canonical_refresh/"
+        "europe_d1_distance2_candidate_materialization_state.json"
     )
     assert registry.cursor_state_path("source_events") is None
     assert registry.product("source_events").cursor["state_scope"] == "per_consumer"

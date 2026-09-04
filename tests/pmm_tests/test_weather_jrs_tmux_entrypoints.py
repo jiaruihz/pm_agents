@@ -379,6 +379,7 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert 'weather_export_market_proxy_env "$MARKET_PROXY"' in refresh
     assert "materialize_weather_city_runtime_canonical_v1.py" in refresh
     assert "WCIR_BUNDLES_PATH" in refresh
+    assert "D1_DISTANCE2_BUNDLES_PATH" in refresh
     assert "--expected-db" in refresh
     assert 'DB_PATH="$CANONICAL_DB_PATH"' in refresh
     assert 'DB_PATH="$PROJECT_DIR/runtime/weather.db"' not in refresh
@@ -388,6 +389,7 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "--max-new-bytes 67108864" in refresh
     assert "--max-settlement-updates 5000" in refresh
     assert "wcir_candidate_materialization.json" in refresh
+    assert "europe_d1_distance2_candidate_materialization.json" in refresh
     assert refresh.index("weather_clob_fill_coverage_gate.py") < refresh.index(
         "materialize_weather_city_runtime_canonical_v1.py"
     )

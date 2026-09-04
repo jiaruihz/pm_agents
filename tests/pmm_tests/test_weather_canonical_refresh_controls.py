@@ -237,6 +237,9 @@ def test_launchd_refresh_uses_registry_preflight_and_stage_wrapper() -> None:
     ).read_text(encoding="utf-8")
     assert 'physical_path("wcir_decision_bundles")' in script
     assert 'cursor_state_path("wcir_decision_bundles")' in script
+    assert 'physical_path("europe_d1_distance2_decision_bundles")' in script
+    assert 'cursor_state_path("europe_d1_distance2_decision_bundles")' in script
+    assert "europe_d1_distance2_candidate_materialization.json" in script
     assert "weather_canonical_refresh_preflight.py" in script
     assert "weather_canonical_refresh_stage.py" in script
     assert "migration_allowed" in script

@@ -145,6 +145,27 @@ products:
       recovery_owner: canonical_refresh
       stuck_slo_seconds: 900
     writer_lock: weather_city_probability_runtime_v3
+  - product_id: europe_d1_distance2_decision_bundles
+    owner_instance_id: europe_d1_distance2_lineage_adapter_v1
+    producer_release_id: europe_d1_distance2_lineage_adapter
+    schema_version: europe_d1_distance2_decision_bundle_v1
+    root_key: data_feed_runtime_root
+    relative_path: output/europe_d1_distance2_lineage_adapter_v1/decision_bundles.jsonl
+    data_class: current
+    write_semantics: append_only
+    grain: expression_checkpoint
+    clocks: {decision_ts_utc: decision_time, target_date: target_date}
+    consumers: [canonical_refresh, research]
+    cutover_state: active
+    cursor:
+      kind: jsonl_inode_prefix_v1
+      state_scope: single_consumer
+      state_root_key: pm_runtime_root
+      state_relative_path: weather_edge_v1/canonical_refresh/europe_d1_distance2_candidate_materialization_state.json
+      epoch_semantics: new_epoch_never_reset_in_place
+      recovery_owner: canonical_refresh
+      stuck_slo_seconds: 900
+    writer_lock: europe_d1_distance2_lineage_adapter_v1
   - product_id: historical_strategy_snapshots
     owner_instance_id: weather_data_feed_jrs
     producer_release_id: data_feed

@@ -125,6 +125,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/0ed49db4602ab7410207070dc0e03da6a11d6c57
     expected_repo_sha: 0ed49db4602ab7410207070dc0e03da6a11d6c57
     runtime_bindings: [operational_venv]
+  - release_id: europe_d1_distance2_lineage_adapter
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/1be0ceb2e30dabdc074f881f760ac605884830fa
+    expected_repo_sha: 1be0ceb2e30dabdc074f881f760ac605884830fa
+    runtime_bindings: [operational_venv]
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/29d2045fd9d748f72b5231b462e1734023071743
     expected_repo_sha: 29d2045fd9d748f72b5231b462e1734023071743
@@ -687,6 +691,29 @@ managed_runtimes:
       actual_notional_usd: 0.0
       joint_market_probability_max: 0.1
     dependencies: [weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
+
+  # Deterministic, zero-notional projection of the immutable D-1 basket journal
+  # into shared decision contracts. It owns no strategy decision or venue path.
+  - instance_id: europe_d1_distance2_lineage_adapter_v1
+    tmux_session: europe_d1_distance2_lineage_adapter_v1
+    role: shadow
+    execution_mode: zero_notional_adapter
+    desired_state: running
+    release_id: europe_d1_distance2_lineage_adapter
+    start_script: scripts/ops/start_europe_d1_distance2_lineage_adapter_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_lineage_adapter_v1/latest.json
+    health_format: json
+    max_health_age_sec: 900
+    startup_grace_sec: 240
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_distance2_lineage_adapter_v1
+      execution_mode: zero_notional_adapter
+      orders_submitted: 0
+      actual_notional_usd: 0.0
+      venue_calls: 0
+    dependencies: [europe_d1_distance2_dual_no_shadow_v1, weather_market_books]
     recovery_policy: safe
 
   # Zero-notional/research services still use their original implementation,
