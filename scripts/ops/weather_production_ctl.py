@@ -616,16 +616,28 @@ def _tmux_on_socket(
     # host.  Pinning it here also makes prospective and canonical hosts use the
     # same responsible-process chain.
     tmux_env["SHELL"] = "/bin/bash"
-    return subprocess.run(
-        [str(spec.canonical_tmux_binary), "-L", socket, *args],
-        cwd=ROOT,
-        env=tmux_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    command = [str(spec.canonical_tmux_binary), "-L", socket, *args]
+    try:
+        return subprocess.run(
+            command,
+            cwd=ROOT,
+            env=tmux_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        output = exc.stdout or exc.stderr or ""
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="replace")
+        detail = f"tmux command timed out after {exc.timeout}s"
+        return subprocess.CompletedProcess(
+            command,
+            124,
+            f"{output}\n{detail}".strip(),
+        )
 
 
 def _run_tmux_checked(
@@ -662,6 +674,12 @@ def _run_tmux_checked(
             present = _tmux_on_socket(
                 spec, socket, "has-session", "-t", f"={session_name}"
             )
+            if present.returncode == 124:
+                return subprocess.CompletedProcess(
+                    ["tmux", "-L", socket, session_name],
+                    124,
+                    present.stdout,
+                )
             if present.returncode != 0:
                 break
             time.sleep(0.25)
