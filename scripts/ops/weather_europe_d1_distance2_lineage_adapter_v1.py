@@ -161,6 +161,8 @@ class BookEvidenceIndex:
         }
         if basket.get("book_available_at_utc"):
             required_equal["available_at_utc"] = basket["book_available_at_utc"]
+        if leg.get("book_fetched_at_utc"):
+            required_equal["fetched_at_utc"] = leg["book_fetched_at_utc"]
         mismatches = {
             field: (row.get(field), expected)
             for field, expected in required_equal.items()

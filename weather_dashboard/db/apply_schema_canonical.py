@@ -9,7 +9,7 @@ from weather_dashboard.db.connection import get_conn
 from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 
 def _create_table_sql(schema_text: str, table: str) -> str:
@@ -325,7 +325,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "canonical lineage, signal clocks, fee, execution, runtime registry, replay-case, and decision fact contracts",
+                "canonical market-book event lineage and fail-closed settlement identity contracts",
             ),
         )
     conn.commit()

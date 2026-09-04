@@ -508,7 +508,9 @@ CREATE TABLE IF NOT EXISTS tmax_v2_observation_event_lineage (
 -- recovery must remain auditable without rewriting its historical clock.
 CREATE TABLE IF NOT EXISTS weather_information_events (
     information_event_id TEXT PRIMARY KEY,
-    event_kind TEXT NOT NULL CHECK (event_kind IN ('observation', 'taf', 'forecast_curve')),
+    event_kind TEXT NOT NULL CHECK (
+        event_kind IN ('observation', 'taf', 'forecast_curve', 'market_book_snapshot')
+    ),
     event_role TEXT NOT NULL CHECK (event_role IN ('new_content', 'revision')),
     source TEXT NOT NULL,
     city TEXT NOT NULL,

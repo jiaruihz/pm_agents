@@ -238,6 +238,10 @@ def attach_settlements(
                 FROM settlement_outcomes AS outcome
                 WHERE outcome.condition_id = candidate.condition_id
                   AND outcome.settlement_status = 'settled'
+                  AND (
+                    outcome.final_price >= 0.99
+                    OR outcome.final_price <= 0.01
+                  )
                 ORDER BY outcome.created_at_utc DESC
                 LIMIT 1
               ),
@@ -265,6 +269,21 @@ def attach_settlements(
                     FROM settlement_outcomes AS pending_outcome
                     WHERE pending_outcome.condition_id = pending.condition_id
                       AND pending_outcome.settlement_status = 'settled'
+                      AND (
+                        pending_outcome.final_price >= 0.99
+                        OR pending_outcome.final_price <= 0.01
+                      )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM settlement_outcomes AS zero_outcome
+                    JOIN settlement_outcomes AS one_outcome
+                      ON one_outcome.condition_id = zero_outcome.condition_id
+                    WHERE zero_outcome.condition_id = pending.condition_id
+                      AND zero_outcome.settlement_status = 'settled'
+                      AND one_outcome.settlement_status = 'settled'
+                      AND zero_outcome.final_price <= 0.01
+                      AND one_outcome.final_price >= 0.99
                   )
                 ORDER BY pending.event_date, pending.candidate_id
                 LIMIT ?
@@ -274,6 +293,21 @@ def attach_settlements(
                 FROM settlement_outcomes AS outcome
                 WHERE outcome.condition_id = candidate.condition_id
                   AND outcome.settlement_status = 'settled'
+                  AND (
+                    outcome.final_price >= 0.99
+                    OR outcome.final_price <= 0.01
+                  )
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM settlement_outcomes AS zero_outcome
+                JOIN settlement_outcomes AS one_outcome
+                  ON one_outcome.condition_id = zero_outcome.condition_id
+                WHERE zero_outcome.condition_id = candidate.condition_id
+                  AND zero_outcome.settlement_status = 'settled'
+                  AND one_outcome.settlement_status = 'settled'
+                  AND zero_outcome.final_price <= 0.01
+                  AND one_outcome.final_price >= 0.99
               )
             """,
             (remaining_limit,),

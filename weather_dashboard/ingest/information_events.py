@@ -82,7 +82,8 @@ def ingest_information_events(
     for raw in events:
         event = _canonical_event(raw, ingested_at_utc=ingested_at)
         cursor = conn.execute(
-            f"INSERT OR IGNORE INTO weather_information_events ({columns}) VALUES ({placeholders})",
+            f"INSERT INTO weather_information_events ({columns}) VALUES ({placeholders}) "
+            "ON CONFLICT(information_event_id) DO NOTHING",
             [event[column] for column in _EVENT_COLUMNS],
         )
         if cursor.rowcount:

@@ -211,6 +211,24 @@ def test_adapter_journals_materialize_candidates_and_intents_without_execution(
 
     conn = sqlite3.connect(db)
     try:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM weather_information_events "
+            "WHERE event_kind = 'market_book_snapshot'"
+        ).fetchone()[0] == 2
+        assert conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM fact_signal_candidates AS candidate
+            JOIN weather_information_events AS event
+              ON event.information_event_id = candidate.trigger_event_id
+            JOIN weather_state_checkpoints AS checkpoint
+              ON checkpoint.state_checkpoint_id = candidate.state_checkpoint_id
+            JOIN weather_model_outputs AS output
+              ON output.checkpoint_id = candidate.state_checkpoint_id
+             AND output.trigger_event_id = candidate.trigger_event_id
+             AND output.target_id = candidate.target_id
+            """
+        ).fetchone()[0] == 2
         assert conn.execute("SELECT COUNT(*) FROM weather_trade_intents").fetchone()[0] == 2
         assert {
             table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]

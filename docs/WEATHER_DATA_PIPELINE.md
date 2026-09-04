@@ -649,11 +649,12 @@ id directly.
 | `backfill_weather_pm_history.py` | Gamma events → `cache/pm_history/*.json`（Tmax，默认）或 `--extreme min` → `cache/pm_history_lowest/*.json`（Tmin，bracket 内嵌 condition/market id）。Mac 直连 gamma DNS 污染，需 `--proxy http://127.0.0.1:7890`（或 `WEATHER_PREDICT_PROXY`） |
 | `ingest_weather_lowest_settlements.py` | `pm_history_lowest` → `settlement_outcomes`（source_system=`polymarket_api`、id 带 `|lowest` 后缀，与 Tmax 分命名空间）+ `settlements`；未 closed fail-closed 跳过 |
 
-> **settlement 刷新链 ownership 缺口（2026-08-17 发现）**：`pm_history` 缓存与
-> `pm_history_settlements` ingest 自 8/12 起停更——原 owner 是 N100 daily_pipeline，Mac 侧
-> 无 scheduler。8/12–8/17 已手动补全（Tmax 282 files/3102 outcome rows；Tmin 新链 24 files/241
-> rows）。长期方案应把 backfill+ingest 并入既有 canonical refresh one-shot（需审批），不另建
-> scheduler/owner。
+> **settlement 刷新链 ownership（2026-09-05 收口）**：Mac canonical refresh 已包含 bounded
+> `pm_history_settlements` ingest，不另建 scheduler/owner。D-1 修复确认旧 ingester 忽略 pm_history
+> bracket 内嵌的 exact condition/market identity；8/21–9/3 的 110 个文件、1210 个 brackets 中，
+> 1192 条 exact settlements 被 append，随后为全库 3258 条 pending v2 candidates 补上 label。
+> 影响只在 settlement/candidate label；没有新增或改写 plan/order/fill。embedded identity 优先，
+> legacy signals fallback 若出现多重 identity 会 fail-closed；同一 condition 的 0/1 冲突保持 unresolved。
 
 ### 5.3 Dashboard ingest (in `weather_dashboard/`)
 

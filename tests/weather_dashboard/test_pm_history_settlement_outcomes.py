@@ -268,3 +268,32 @@ def test_signal_lookup_map_filters_target_date_before_scanning(canonical_conn):
     assert lookup == {
         ("Tokyo", "2026-07-15", "23"): ("condition-2", "market-2")
     }
+
+
+def test_signal_lookup_map_rejects_ambiguous_legacy_identity(canonical_conn):
+    base = (
+        "pm_agent_local", "snapshot", "2026-07-15T12:00:00Z", "snapshot.json",
+        "2026-07-15", "Tokyo", "t1_trading", "RJTT", "23", "C", "YES",
+        "gfs", 0.8, "open_meteo_live_gfs", 0.55, 0.25, 0.25,
+    )
+    canonical_conn.executemany(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            ("c" * 64, *base, "condition-a", "market-a", "token-a", 18.0),
+            ("d" * 64, *base, "condition-b", "market-b", "token-b", 18.0),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="conflicting signal identity fallback"):
+        _signal_lookup_map(
+            canonical_conn,
+            start_date="2026-07-15",
+            end_date="2026-07-15",
+        )

@@ -578,6 +578,46 @@ def test_canonical_bridge_attaches_exact_condition_settlement_without_outcome(
         conn.close()
 
 
+def test_canonical_bridge_keeps_conflicting_outcomes_unresolved(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "conflicting-settlement-outcomes.db"
+    bridge = TemporaryCanonicalBridge(physical)
+    bridge.append([])
+    conn = sqlite3.connect(physical)
+    conn.executemany(
+        """
+        INSERT INTO settlement_outcomes (
+          settlement_outcome_id, source_system, city, target_date, bracket,
+          condition_id, final_price, settlement_status, created_at_utc
+        ) VALUES (?, ?, 'Helsinki', '2026-08-01',
+                  '18', 'condition-18', ?, 'settled', ?)
+        """,
+        [
+            ("settlement-zero", "polymarket_api", 0.0, "2026-08-02T00:00:00Z"),
+            ("settlement-one", "pm_history", 1.0, "2026-08-02T00:00:01Z"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    result = bridge.append(
+        [bundle],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+
+    assert result["settlements_attached"] == 0
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute(
+            "SELECT settlement_status, final_yes FROM fact_signal_candidates"
+        ).fetchone() == (None, None)
+    finally:
+        conn.close()
+
+
 def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
     tmp_path: Path,
 ) -> None:

@@ -307,3 +307,35 @@ dormant/negative execution evidence。下一次只用新 settled target dates评
 - 改进 overlay：entry risk 105/105 覆盖；13-threshold multiplicity、paired delta、+1¢ stress 覆盖；exit
   9-threshold multiplicity、105×3 opportunity denominator、coverage blocker、paired delta 与 case path 覆盖；
   clean new-date forward、forecast-model 全分母、真实 exit fill/queue 未覆盖。
+
+## 阶段验收：shadow→盘口→canonical（2026-09-05）
+
+本阶段没有改变 frozen policy，也没有开启资金。immutable strategy release 仍是
+`0ed49db4602ab7410207070dc0e03da6a11d6c57`；新增 lineage adapter release 为
+`6bc75cd4056171487cebd91acb8b4275c95c2a7f`。生产 raw 已验收 50 个 frozen baskets / 5 target dates，
+其中 24 个 selected；100 个 exact book legs 生成 100 个 decision bundles 与 48 个 zero-notional
+TradeIntents。orders/fills/actual notional/venue calls 均为 `0/0/$0/0`。
+
+settlement 根因修复后，8/21–9/3 的 110 个 pm_history 文件、1210 个 brackets 以 bracket 内嵌的 exact
+condition/market identity 为主键重新 ingest，append 1192 条 exact settlements；全库 3258 条 pending v2
+candidate labels 得到补全。旧记录未删未改，影响半径不涉及 plan/order/fill。冲突的 0/1 outcome 和多重 legacy
+signal identity 现在都 fail-closed。
+
+截至验收时，D-1 canonical 有 100 个 expression candidates、48 个 selected legs、57 个 settled labels。
+完整结算且两腿齐全的是 12 个 selected baskets / 3 target dates：成本 `11.901059`、payout `12`、PnL
+`+0.098941`，ROI `+0.8314%`。按日期为 9/1 `+0.9200%`、9/2 `+1.3756%`、9/3 `+0.4295%`；
+只有 3 个已结算日期且未出现 tail hit，不能据此升级 live。成本每腿额外 +0.1¢/+0.5¢/+1.0¢ 后 ROI 为
+`+0.7298%/+0.3256%/-0.1752%`，继续维持 frozen inconclusive / zero-notional shadow。
+
+验收中发现原 canonical schema 的 information-event enum 不接受 `market_book_snapshot`，但 ingest 使用
+`INSERT OR IGNORE` 把 CHECK failure 误报为 duplicate，导致 100 个 candidate 的 trigger event 缺失。
+修复包含 schema v22 additive-preserving migration、仅对主键 duplicate 做幂等忽略、exact fetched-clock 校验，
+以及对 raw journal 的一次性 idempotent replay。部署前/后验收必须分别看到 `event joins=0/100`、
+`checkpoint joins=100/100`、`model-output joins=100/100`，并将 48 个 raw zero-notional TradeIntents append 到
+canonical；plans/orders/fills 仍须为 0。
+
+raw evidence SHA256：decision bundles
+`54b954bfd80a8b48d5e2591dfabf5c3bbf36791e3e25c48a75929d3f08a71fe0`；TradeIntents
+`10b2506a6dcb24bff74dcca7e5713f07a2e823f9e9a501b2fe4c50af2ed6f5bc`。Mac production manifest 在真实
+宿主检查为 warning-only，JRS 与 archive 均 mounted+writable，D-1 strategy/adapter 两个 runtime health 均
+healthy；唯一 warning 是仓库既存的 unregistered persistent worktrees。

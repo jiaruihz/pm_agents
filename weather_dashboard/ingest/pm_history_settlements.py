@@ -134,9 +134,16 @@ def _signal_lookup_map(
         f"FROM signals WHERE {' AND '.join(clauses)}",
         params,
     ):
-        out[(r["city"], r["target_date"], str(r["bracket"]))] = (
-            r["condition_id"], r["market_id"]
-        )
+        key = (r["city"], r["target_date"], str(r["bracket"]))
+        identity = (r["condition_id"], r["market_id"])
+        previous = out.get(key)
+        if previous is not None and previous != identity:
+            raise ValueError(
+                "conflicting signal identity fallback: "
+                f"city={key[0]} target_date={key[1]} bracket={key[2]} "
+                f"identities={previous!r},{identity!r}"
+            )
+        out[key] = identity
     return out
 
 

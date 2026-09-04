@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS weather_information_events (
  detected_at_utc TEXT, first_seen_at_utc TEXT, available_at_utc TEXT, ingested_at_utc TEXT NOT NULL,
  pit_lineage_class TEXT NOT NULL, original_first_seen_unknown INTEGER NOT NULL,
  raw_source_path TEXT, raw_row_hash TEXT, material_state_change INTEGER NOT NULL DEFAULT 1,
- CHECK (event_kind IN ('observation','taf','forecast_curve')),
+ CHECK (event_kind IN ('observation','taf','forecast_curve','market_book_snapshot')),
  CHECK (event_role IN ('new_content','revision')),
  CHECK (pit_lineage_class IN (
    'collector_exact','archive_known_available','late_backfill_first_seen_unknown'
@@ -136,6 +136,111 @@ _EVENT_COLUMNS = {
     "material_state_change": "INTEGER NOT NULL DEFAULT 1",
 }
 
+
+_INFORMATION_EVENT_KIND_V2_MARKER = "market_book_snapshot"
+
+
+def _ensure_information_event_kind_contract(conn: sqlite3.Connection) -> None:
+    """Expand the immutable event header enum without rewriting event rows."""
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' "
+        "AND name='weather_information_events'"
+    ).fetchone()
+    if row is None or _INFORMATION_EVENT_KIND_V2_MARKER in str(row[0]):
+        return
+    replacement = "weather_information_events__event_kind_v2"
+    if _table_exists(conn, replacement):
+        raise RuntimeError(f"stale information-event migration table: {replacement}")
+    old_columns = [
+        str(item[1])
+        for item in conn.execute("PRAGMA table_info(weather_information_events)")
+    ]
+    expected_columns = [
+        "information_event_id", "event_kind", "event_role", "source", "city",
+        "station_id", "provider_item_id", "content_key", "payload_hash",
+        "revision_of_event_id", "source_event_ts_utc", "issued_at_utc",
+        "valid_from_utc", "valid_to_utc", "detected_at_utc", "first_seen_at_utc",
+        "available_at_utc", "ingested_at_utc", "pit_lineage_class",
+        "original_first_seen_unknown", "raw_source_path", "raw_row_hash",
+        "material_state_change",
+    ]
+    if set(old_columns) != set(expected_columns):
+        raise RuntimeError(
+            "weather_information_events columns do not match the migratable contract"
+        )
+
+    foreign_keys_enabled = int(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+    conn.commit()
+    if foreign_keys_enabled:
+        conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            f"""
+            CREATE TABLE {replacement} (
+             information_event_id TEXT PRIMARY KEY,
+             event_kind TEXT NOT NULL CHECK (event_kind IN (
+               'observation','taf','forecast_curve','market_book_snapshot'
+             )),
+             event_role TEXT NOT NULL CHECK (event_role IN ('new_content','revision')),
+             source TEXT NOT NULL, city TEXT NOT NULL, station_id TEXT,
+             provider_item_id TEXT, content_key TEXT NOT NULL, payload_hash TEXT NOT NULL,
+             revision_of_event_id TEXT REFERENCES {replacement}(information_event_id),
+             source_event_ts_utc TEXT, issued_at_utc TEXT, valid_from_utc TEXT,
+             valid_to_utc TEXT, detected_at_utc TEXT, first_seen_at_utc TEXT,
+             available_at_utc TEXT, ingested_at_utc TEXT NOT NULL,
+             pit_lineage_class TEXT NOT NULL CHECK (pit_lineage_class IN (
+               'collector_exact','archive_known_available','late_backfill_first_seen_unknown'
+             )),
+             original_first_seen_unknown INTEGER NOT NULL CHECK (
+               original_first_seen_unknown IN (0,1)
+             ),
+             raw_source_path TEXT, raw_row_hash TEXT,
+             material_state_change INTEGER NOT NULL DEFAULT 1 CHECK (
+               material_state_change IN (0,1)
+             ),
+             CHECK (pit_lineage_class <> 'late_backfill_first_seen_unknown'
+                    OR (first_seen_at_utc IS NULL AND original_first_seen_unknown = 1)),
+             UNIQUE(source, station_id, provider_item_id, content_key, payload_hash)
+            )
+            """
+        )
+        columns = ",".join(expected_columns)
+        conn.execute(
+            f"INSERT INTO {replacement} ({columns}) "
+            f"SELECT {columns} FROM weather_information_events"
+        )
+        before = int(conn.execute(
+            "SELECT COUNT(*) FROM weather_information_events"
+        ).fetchone()[0])
+        after = int(conn.execute(
+            f"SELECT COUNT(*) FROM {replacement}"
+        ).fetchone()[0])
+        if before != after:
+            raise RuntimeError(
+                f"information-event migration row mismatch: before={before} after={after}"
+            )
+        conn.execute("DROP TABLE weather_information_events")
+        conn.execute(
+            f"ALTER TABLE {replacement} RENAME TO weather_information_events"
+        )
+        conn.execute(
+            "CREATE INDEX idx_weather_information_events_city_available "
+            "ON weather_information_events(city, available_at_utc, event_kind)"
+        )
+        conn.execute(
+            "CREATE INDEX idx_weather_information_events_content_key "
+            "ON weather_information_events(content_key, source, first_seen_at_utc)"
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if foreign_keys_enabled:
+            conn.execute("PRAGMA foreign_keys = ON")
+
 _CANDIDATE_V2_COLUMNS = {
     "candidate_grain_version": "TEXT NOT NULL DEFAULT 'v1_legacy_daily'",
     "strategy_key": "TEXT",
@@ -204,6 +309,7 @@ def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str
 
 def apply_first_seen_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(DDL)
+    _ensure_information_event_kind_contract(conn)
     _ensure_columns(conn, "weather_information_events", _EVENT_COLUMNS)
     _ensure_columns(conn, "fact_signal_candidates", _CANDIDATE_V2_COLUMNS)
     _ensure_columns(conn, "weather_observation_events", _OBSERVATION_LINEAGE_COLUMNS)
