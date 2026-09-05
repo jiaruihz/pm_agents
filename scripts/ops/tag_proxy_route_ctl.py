@@ -527,11 +527,14 @@ def maintain(
     group_name: str = DEFAULT_GROUP,
     apply: bool,
     force_evaluate: bool = False,
+    target_regions: tuple[str, ...] = (),
     reason: str,
     slow_seconds: float = 1.5,
     cooldown_seconds: int = 900,
     required_degraded_cycles: int = 2,
 ) -> dict[str, Any]:
+    if target_regions and not force_evaluate:
+        raise ValueError("target_regions requires force_evaluate")
     state_path = state_root / "latest.json"
     lock_path = state_root / "maintain.lock"
     with exclusive_lock(lock_path) as acquired:
@@ -660,9 +663,23 @@ def maintain(
             return {**preview, "status": "cooldown", "cooldown_remaining_sec": cooldown_seconds - elapsed}
 
         evaluation_deadline = time.monotonic() + MAX_SWITCH_EVALUATION_SEC
-        candidates = maintenance_candidate_pool(
-            eligible_nodes(group), current_node=current
+        normalized_target_regions = tuple(
+            dict.fromkeys(
+                str(region).strip().upper()
+                for region in target_regions
+                if str(region).strip()
+            )
         )
+        if normalized_target_regions:
+            candidates = [
+                node
+                for node in eligible_nodes(group)
+                if node != current and node_region(node) in normalized_target_regions
+            ][:MAX_MAINTENANCE_CANDIDATES]
+        else:
+            candidates = maintenance_candidate_pool(
+                eligible_nodes(group), current_node=current
+            )
         benchmark = prioritize_benchmark(
             benchmark_nodes(controller, candidates),
             last_known_good_node=str(state.get("last_known_good_node") or ""),
@@ -672,7 +689,12 @@ def maintain(
             for row in benchmark
             if row["eligible"] and row["node"] != current
         ][:12]
-        decision = {**preview, "status": "switch_required", "benchmark": benchmark}
+        decision = {
+            **preview,
+            "status": "switch_required",
+            "benchmark": benchmark,
+            "target_regions": list(normalized_target_regions),
+        }
         if not selected_rows:
             return {**decision, "status": "no_healthy_candidate"}
         if not apply:
@@ -780,6 +802,8 @@ def maintain(
             "schema_version": SCHEMA_VERSION,
             "ts_utc": utc_now(),
             "reason": reason,
+            "force_evaluate": force_evaluate,
+            "target_regions": list(normalized_target_regions),
             "group": group_name,
             "before_node": current,
             "selected_node": selected,
@@ -893,9 +917,18 @@ def main() -> int:
     maintain_parser = sub.add_parser("maintain")
     maintain_parser.add_argument("--apply", action="store_true")
     maintain_parser.add_argument("--force-evaluate", action="store_true")
+    maintain_parser.add_argument(
+        "--target-region",
+        action="append",
+        choices=sorted(set(FALLBACK_REGION_PRIORITY) - EXCLUDED_FALLBACK_REGIONS),
+        default=[],
+        help="limit a forced, audited route exercise to this eligible region; repeatable",
+    )
     maintain_parser.add_argument("--reason", required=True)
     maintain_parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+    if args.command == "maintain" and args.target_region and not args.force_evaluate:
+        parser.error("--target-region requires --force-evaluate")
 
     controller = TagController(config_path=args.config)
     if args.command == "status":
@@ -936,6 +969,7 @@ def main() -> int:
             group_name=args.group,
             apply=bool(args.apply),
             force_evaluate=bool(args.force_evaluate),
+            target_regions=tuple(args.target_region),
             reason=str(args.reason),
         )
         if args.quiet:

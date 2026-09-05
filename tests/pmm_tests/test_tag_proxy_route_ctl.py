@@ -246,6 +246,152 @@ def test_maintain_switches_and_audits_verified_candidate(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "latest.json").read_text())["failure_streak"] == 0
 
 
+def test_forced_maintenance_can_target_my_for_audited_fallback_drill(
+    tmp_path, monkeypatch
+):
+    selected = {"node": "🇭🇰 香港 01丨1x HK"}
+
+    class Controller:
+        def proxies(self):
+            return {
+                ctl.DEFAULT_GROUP: {
+                    "type": "Selector",
+                    "now": selected["node"],
+                    "all": [
+                        "🇭🇰 香港 01丨1x HK",
+                        "🇭🇰 香港 02丨1x HK",
+                        "🇲🇾 马来西亚家宽 01丨1x MY",
+                        "🇮🇩 印尼-雅加达丨1x ID",
+                        "🇩🇰 丹麦丨1x DK",
+                        "🇳🇴 挪威丨1x NO",
+                        "🇸🇪 瑞典丨1x SE",
+                        "🇫🇮 芬兰丨1x FI",
+                        "🇨🇭 瑞士丨1x CH",
+                        "🇳🇱 荷兰丨1x NL",
+                    ],
+                }
+            }
+
+        def delay(self, node):
+            return 100
+
+        def switch(self, group, node):
+            selected["node"] = node
+
+    monkeypatch.setattr(
+        ctl,
+        "probe_openai",
+        lambda *_args, **_kwargs: [{"ok": True, "total_sec": 0.2}] * 3,
+    )
+    monkeypatch.setattr(ctl.time, "sleep", lambda _: None)
+
+    result = ctl.maintain(
+        Controller(),
+        state_root=tmp_path,
+        apply=True,
+        force_evaluate=True,
+        target_regions=("MY",),
+        reason="fallback drill",
+    )
+
+    assert result["status"] == "switched"
+    assert result["selected_node"] == "🇲🇾 马来西亚家宽 01丨1x MY"
+    assert result["attempted_nodes"] == ["🇲🇾 马来西亚家宽 01丨1x MY"]
+    assert result["target_regions"] == ["MY"]
+    assert json.loads((tmp_path / "live_entry_gate.json").read_text())[
+        "entry_allowed"
+    ] is True
+    audit_path = next(tmp_path.glob("switches-*.jsonl"))
+    audit = json.loads(audit_path.read_text().splitlines()[-1])
+    assert audit["force_evaluate"] is True
+    assert audit["target_regions"] == ["MY"]
+
+    result = ctl.maintain(
+        Controller(),
+        state_root=tmp_path,
+        apply=False,
+        force_evaluate=True,
+        target_regions=("NL",),
+        reason="deep fallback preview",
+    )
+    assert result["selected_node"] == "🇳🇱 荷兰丨1x NL"
+
+
+def test_target_region_requires_force_evaluate_at_function_boundary(tmp_path):
+    with pytest.raises(ValueError, match="requires force_evaluate"):
+        ctl.maintain(
+            object(),
+            state_root=tmp_path,
+            apply=False,
+            target_regions=("MY",),
+            reason="invalid drill",
+        )
+
+
+def test_cli_rejects_target_region_before_controller_initialization(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "tag_proxy_route_ctl.py",
+            "maintain",
+            "--target-region",
+            "MY",
+            "--reason",
+            "invalid drill",
+        ],
+    )
+    monkeypatch.setattr(
+        ctl,
+        "TagController",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("controller must not initialize")
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        ctl.main()
+
+    assert exc.value.code == 2
+
+
+def test_target_region_never_reintroduces_excluded_nodes(tmp_path, monkeypatch):
+    class Controller:
+        def proxies(self):
+            return {
+                ctl.DEFAULT_GROUP: {
+                    "type": "Selector",
+                    "now": "🇭🇰 香港 01丨1x HK",
+                    "all": [
+                        "🇭🇰 香港 01丨1x HK",
+                        "🇸🇬 新加坡 01丨1x SG",
+                        "🇺🇸 美国 01丨1x US",
+                    ],
+                }
+            }
+
+        def delay(self, node):
+            raise AssertionError("excluded nodes must not be benchmarked")
+
+    monkeypatch.setattr(
+        ctl,
+        "probe_openai",
+        lambda *_args, **_kwargs: [{"ok": True, "total_sec": 0.2}] * 3,
+    )
+
+    result = ctl.maintain(
+        Controller(),
+        state_root=tmp_path,
+        apply=False,
+        force_evaluate=True,
+        target_regions=("SG", "US"),
+        reason="excluded-region test",
+    )
+
+    assert result["status"] == "no_healthy_candidate"
+    assert result["benchmark"] == []
+
+
 def test_maintain_accepts_two_of_three_fast_probes_with_double_geoblock(
     tmp_path, monkeypatch
 ):
