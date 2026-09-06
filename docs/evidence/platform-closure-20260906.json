@@ -1,0 +1,338 @@
+{
+  "date": "2026-09-07",
+  "scope": "Offline convergence of accepted native resilience controller with prior platform adapters/ledger/dashboard. No new executor, no production switch.",
+  "branch": "codex/platform-closure-20260906",
+  "base_sha": "1fa07cdcf3ed4410702779589993873bd6f69851",
+  "accepted_native_control_release": "6ac3384d1807dd11e863aeb6556142ee36f28b92",
+  "candidate": {
+    "candidate_db": "/Users/deepsleep/projects/pm_agents-platform-closure/runtime/platform/generations/closure-verified-20260907/platform_control.db",
+    "catalog": {
+      "instances": 44,
+      "conflicts": [],
+      "source_hash": "80b1c8ae80490baeff4e7f3aaecbe31fcc0fb057c96cebd3d9597438c9d27915"
+    },
+    "counts": {
+      "managed_instance": 44,
+      "platform_run": 2,
+      "metric": 137,
+      "incident": 3132,
+      "incident_event": 6263,
+      "incident_impact": 1186,
+      "operation_request": 0,
+      "operation_receipt": 0,
+      "workflow_step": 0,
+      "native_repairs": 1694
+    },
+    "native_import": {
+      "status": "ok",
+      "authority_mode": "projection_only",
+      "journals": [
+        {
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/events.jsonl",
+          "status": "caught_up",
+          "processed": 6263,
+          "inserted": 6263,
+          "offset": 2183757
+        },
+        {
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/repair_actions.jsonl",
+          "status": "caught_up",
+          "processed": 1694,
+          "inserted": 1694,
+          "offset": 3424938
+        }
+      ]
+    },
+    "native_replay": {
+      "status": "ok",
+      "authority_mode": "projection_only",
+      "journals": [
+        {
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/events.jsonl",
+          "status": "caught_up",
+          "processed": 6263,
+          "inserted": 0,
+          "offset": 2183757
+        },
+        {
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/repair_actions.jsonl",
+          "status": "caught_up",
+          "processed": 1694,
+          "inserted": 0,
+          "offset": 3424938
+        }
+      ]
+    },
+    "native_incremental": {
+      "status": "ok",
+      "authority_mode": "projection_only",
+      "journals": [
+        {
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/events.jsonl",
+          "status": "caught_up",
+          "processed": 0,
+          "inserted": 0,
+          "offset": 2183757
+        },
+        {
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/repair_actions.jsonl",
+          "status": "caught_up",
+          "processed": 0,
+          "inserted": 0,
+          "offset": 3424938
+        }
+      ]
+    },
+    "imports": [
+      {
+        "exit_code": 2,
+        "accepted": false,
+        "sources_unchanged": true,
+        "parity": {
+          "foreign_key_findings": 0,
+          "metrics": 137,
+          "runs": 2
+        },
+        "accounting": {
+          "input_sources": 3,
+          "materialized": 2,
+          "unmapped_or_quarantined": 1
+        },
+        "sources": {
+          "/Users/deepsleep/projects/pm_agents/runtime/analysis/live_strategy_daily_coverage_v1/summary.json": "5c4f261ba4350965aa90bac9f1a68b66a2551f6922b8c9d8562a3f5a09a5e6ec",
+          "/Users/deepsleep/projects/pm_agents/runtime/platform/generations/stage12-20260906/catalog.json": "a4726110bec423cf2d223d4f98a11eafc1086d99e6d8c2f84c3a223157d4252f",
+          "/Volumes/jrs/crypto_quant/artifacts/pm_barrier/forward_shadow/runs/20260902T160327.698487Z-d15935edf224/manifest.json": "1fed8382a1dbcde72d38d06e37ccc8f1063c146a65b7cc6c32fd52d68fb97283",
+          "/Volumes/jrs/crypto_quant/artifacts/runs/20260806T171238Z-046b8259/data_manifest.json": "c7cb5f82e321565dabe0bc5ae660c5c6fe955a730a4dab7ed2f68eb4d56e37ec",
+          "/Volumes/jrs/crypto_quant/artifacts/runs/20260806T171238Z-046b8259/metrics.json": "b77b465f0eec26f036e4a52aa8b73442f808900f3a99f82b2ba6eb755b410063",
+          "/Volumes/jrs/crypto_quant/artifacts/runs/20260806T171238Z-046b8259/run.json": "1681eda7520828384aae388972ff88ea30cedba77643d978db94458bfacc80bd"
+        }
+      },
+      {
+        "exit_code": 2,
+        "accepted": false,
+        "sources_unchanged": true,
+        "parity": {
+          "foreign_key_findings": 0,
+          "metrics": 137,
+          "runs": 2
+        },
+        "accounting": {
+          "input_sources": 3,
+          "materialized": 2,
+          "unmapped_or_quarantined": 1
+        },
+        "sources": {
+          "/Users/deepsleep/projects/pm_agents/runtime/analysis/live_strategy_daily_coverage_v1/summary.json": "5c4f261ba4350965aa90bac9f1a68b66a2551f6922b8c9d8562a3f5a09a5e6ec",
+          "/Users/deepsleep/projects/pm_agents/runtime/platform/generations/stage12-20260906/catalog.json": "a4726110bec423cf2d223d4f98a11eafc1086d99e6d8c2f84c3a223157d4252f",
+          "/Volumes/jrs/crypto_quant/artifacts/pm_barrier/forward_shadow/runs/20260902T160327.698487Z-d15935edf224/manifest.json": "1fed8382a1dbcde72d38d06e37ccc8f1063c146a65b7cc6c32fd52d68fb97283",
+          "/Volumes/jrs/crypto_quant/artifacts/runs/20260806T171238Z-046b8259/data_manifest.json": "c7cb5f82e321565dabe0bc5ae660c5c6fe955a730a4dab7ed2f68eb4d56e37ec",
+          "/Volumes/jrs/crypto_quant/artifacts/runs/20260806T171238Z-046b8259/metrics.json": "b77b465f0eec26f036e4a52aa8b73442f808900f3a99f82b2ba6eb755b410063",
+          "/Volumes/jrs/crypto_quant/artifacts/runs/20260806T171238Z-046b8259/run.json": "1681eda7520828384aae388972ff88ea30cedba77643d978db94458bfacc80bd"
+        }
+      }
+    ],
+    "observation": {
+      "at": "2026-09-06T15:59:35.136142Z",
+      "status": "critical",
+      "active_keys": [
+        "crypto.runtime.incomplete"
+      ],
+      "pending_keys": [
+        "crypto.data.collector.btc",
+        "crypto.data.collector.eth"
+      ]
+    },
+    "integrity": "ok",
+    "foreign_key_findings": 0
+  },
+  "delivery": {
+    "native_recovery_owner": "existing production_reliability_supervisor and weather_production_ctl",
+    "db_schema": 2,
+    "new_tables": false,
+    "projection_hook": "after native state and journals durable; DB failure recorded but does not repeat/revert native recovery",
+    "page": "/weather/operations",
+    "mutation_api": false,
+    "production_pointer_changed": false,
+    "production_services_reloaded": false,
+    "actual_orders_fills_or_fund_parameters_changed": false
+  },
+  "tests": {
+    "final": {
+      "passed": 275,
+      "deselected": 1,
+      "failed": 0,
+      "warning": "existing Starlette/httpx TestClient deprecation",
+      "command": "PYTHONPATH=. /Users/deepsleep/projects/pm_agents/.venv/bin/python -m pytest -q tests/platform tests/weather_dashboard/test_platform_control_schema.py tests/weather_dashboard/test_platform_workflow_store.py tests/weather_dashboard/test_platform_history_materializer.py tests/weather_dashboard/test_platform_metric_materializer.py tests/strategy_runtime/test_platform_control_plane_registry.py tests/pmm_tests/test_weather_controller_telemetry.py tests/pmm_tests/test_weather_production_scoped_start.py tests/pmm_tests/test_weather_production_ctl.py tests/pmm_tests/test_weather_production_recovery.py tests/pmm_tests/test_production_reliability_supervisor.py tests/pmm_tests/test_weather_production_release.py -k 'not test_committed_production_spec_declares_current_live_control_plane'"
+    },
+    "expanded_before_deselection": {
+      "passed": 273,
+      "failed": 1
+    },
+    "known_baseline_failure": {
+      "test": "tests/pmm_tests/test_weather_production_ctl.py::test_committed_production_spec_declares_current_live_control_plane",
+      "expected": "zero_notional_shadow",
+      "actual": "zero_notional_action_shadow",
+      "instance": "weather_amsterdam_wcir_frozen_shadow_v2",
+      "independently_reproduced_on_unmodified_cross_resilience_base": true,
+      "production_config_not_changed_to_satisfy_test": true
+    },
+    "native_tests": 14,
+    "actual_candidate_api": {
+      "runs": 2,
+      "metrics": 137,
+      "operation_requests": 0,
+      "incident_detail": true,
+      "repair_detail": true,
+      "post_operations_status": 405,
+      "native_critical_preserved": true
+    },
+    "frontend": {
+      "typescript_and_vite": "passed",
+      "output": "/tmp/platform-closure.Bs0fS3/frontend-build",
+      "browser_scenarios": 9,
+      "api_requests": 12,
+      "mutation_requests": 0,
+      "page_errors": [],
+      "screenshot_root": "/tmp/platform-closure.Bs0fS3",
+      "mobile_visual_inspection": "passed; list local scrolling, timing visible"
+    }
+  },
+  "review": {
+    "prompt": "单轮只读 review，模型 gpt-5.6-luna medium。仅本轮整合增量：platform_reliability_projection、platform_control_db configured resolver、platform API/operation projection、supervisor optional hook、production spec pointer、controller telemetry diff、OperationsPanel native observation、native projection tests。检查误报恢复/丢事件/幂等/DB failure isolation/时间排序/游标/分批/来源归因/UI stale/单一owner。旧platform合同与importer已审阅不重复审计。禁止代码与产物写入、build/test/npm/controller/生产、派生agent及全仓snapshot。输出有行号的可行动findings；root整合补测。",
+    "findings": [
+      {
+        "issue": "Late incident events displayed in arrival order",
+        "fix": "API sorts source occurrence then arrival sequence/event ID; preserves append-only arrival sequence",
+        "regression": "test_late_events_display_source_order_without_reopening"
+      },
+      {
+        "issue": "Evidence list used insertion rowid rather than event time",
+        "fix": "COALESCE occurred/created DESC, record ID DESC"
+      }
+    ],
+    "coordinator_fixes": [
+      "Preserve structured controller timing before native output-tail truncation",
+      "Validate finite nonnegative timings and normalize UTC",
+      "Finish incident event backlog before repair import",
+      "Stable source index prevents re-created repair when incident history arrives late",
+      "Explicit replay can add late catalog impact bindings without duplicate incident events",
+      "Final frozen candidate rebuilt from source; development prototype retained, not selected"
+    ],
+    "readonly": true,
+    "reviewer_cascade": false,
+    "final_related_tests_rerun": true
+  },
+  "telemetry": {
+    "implementation": {
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "rollout": "/Users/deepsleep/.codex/sessions/2026/09/06/rollout-2026-09-06T23-33-28-01a0775a-6569-7842-a231-3076993787d0.jsonl",
+      "usage": {
+        "input_tokens": 1365081,
+        "cached_input_tokens": 1276672,
+        "output_tokens": 10167,
+        "total_tokens": 1375248
+      }
+    },
+    "review": {
+      "model": "gpt-5.6-luna",
+      "effort": "medium",
+      "rollout": "/Users/deepsleep/.codex/sessions/2026/09/06/rollout-2026-09-06T23-49-54-01a07769-72b4-7c80-9efc-65ba72c721b9.jsonl",
+      "usage": {
+        "input_tokens": 1002341,
+        "cached_input_tokens": 926976,
+        "output_tokens": 5025,
+        "total_tokens": 1007366
+      }
+    },
+    "cost_note": "High repeated cached input was observed in final rollout totals; workers had already finished at final audit. They were not reused. This does not prove the requested timely in-flight cost circuit-breaker was satisfied."
+  },
+  "production_observation": {
+    "pre_manifest": "/tmp/platform-closure.Bs0fS3/pre-manifest.json",
+    "post_manifest": {
+      "observed_at_utc": "2026-09-06T16:01:44+00:00",
+      "status": "warning",
+      "tmux_sessions": 43
+    },
+    "api_pid": 70578,
+    "api_started_local": "2026-09-06 21:52:42",
+    "api_loaded_release": "6ac3384d1807dd11e863aeb6556142ee36f28b92",
+    "not_whole_chain_health_proof": true
+  },
+  "retained_not_selected": {
+    "path": "runtime/platform/generations/closure-20260906/platform_control.db",
+    "status": "development prototype; projection payload evolved before freeze, so replay accumulated prototype representations; retained for audit, not a production candidate"
+  },
+  "pending": [
+    "Explicit production activation approval",
+    "Promote verified candidate to operational managed root with SQLite backup/parity, set single optional pointer and update only approved control-plane services through git-first/controller",
+    "Post-switch loaded SHA/API/UI/cursor/untargeted PID verification",
+    "Real release/rollback transaction UI and Phase D production drill not implemented by this read-side convergence",
+    "JRS lock/unlock/reboot permanent-stability matrix not repeated; incident drill remains recovery_improved",
+    "Freqtrade frozen historical artifact retains data/code/version proof gaps; not a fully accepted reproducible run"
+  ],
+  "source_code_sha256": {
+    "configs/weather/strategy_history_epochs_v1.json": "466e13084f236448de6a36c45a3bc9edebe1c35b6e74824d91a48a97e491197b",
+    "docs/WEATHER_QUANT_PLATFORM_ARCHITECTURE.md": "224d552dcfb88522ca33de792b374692dda508d9a7b16e7953d646f2b79cd56c",
+    "frontend/strategy_dashboard/src/components/PlatformOperationsPanel.tsx": "0545f70ab9bd67cacc5e3bf437d48dec73572bde7e6e28ea235a66dcfabea86f",
+    "frontend/strategy_dashboard/src/components/PlatformResultsPanel.tsx": "e719920699feb077af0c22b0921d6f6c1bd61de6f5ba4994088d108debde9386",
+    "frontend/strategy_dashboard/src/pages/weather/WeatherOperationsPage.tsx": "7085cf35bfe6f10a652e099571fadaf5b0b008644f08c563b37a4cd2a71e582d",
+    "scripts/ops/analyze_weather_strategy_daily_coverage.py": "f8261e283ddf3eeb9e2ad58f6fe7c7c52797fefc1ad5a6c3b58d21f98a977980",
+    "scripts/ops/materialize_platform_phase0_catalog.py": "17adab98bdf6e2a5be9db17bd4dc2242becc8cc19dadf982206bc8732cdfbe35",
+    "scripts/ops/platform_import_validate.py": "5db269c29eb7cd02d56c000578ae77b95d24420841e5a5ef099602db2955d4ab",
+    "scripts/ops/platform_operation_import.py": "7e68bc91f883dd1682bc6b893f3b52cbbf44528cd7d93250f804c6959d30cd9e",
+    "scripts/ops/platform_reliability_import.py": "12d1e5f1a7efe9a8e5571326fcb0ae5d47a0c0c927ef01a35ed559b262b69815",
+    "src/platform/adapters/__init__.py": "7056fd0e79fef9fa1eb87b8da2457b9d84154df824e4d7205316b9b700de2c02",
+    "src/platform/adapters/backtests.py": "b5c5f759c8c58024a467017ca1a93d40d341955b1573c85bb6724ee0566a1e67",
+    "src/platform/adapters/crypto_quant.py": "54220b7d0bb6fd64f3c566d482b53c362a883db10102dd2c96f9a5c3b8766131",
+    "src/platform/adapters/weather_production.py": "5eba0fe730665cc2f1766d4f550f60c7bbc61406df9f77c0b3526c94792c865d",
+    "src/platform/contracts/__init__.py": "cf5bb5393fcdcf0c63c2dc1bc7199e90652644cd8105cf0f19b81af1a5e23fb8",
+    "src/platform/contracts/control_plane.py": "6de8b0fa173d3082bc37064daacf416523aa6ff69bbe6e23d00f371b98fb8d50",
+    "src/platform/contracts/core.py": "7e882f6e8d03804b134a0ea342f48fcebfd3bed7ed6f0ffab6e1f3d1b0761e4f",
+    "src/platform/contracts/workflow.py": "f4a1f60c0865f428c34e3421087441630bfc108c2b777377cfbe0eaa68af020c",
+    "src/platform/control_plane/__init__.py": "90cd18bde392b58bf8d5844c5e23d12595365c408d2536a7300ecf6dc6f001d7",
+    "src/platform/control_plane/recovery.py": "03477ba3533412143e17f368e0a1e2db0cc40154b9687f47b85c16679819beb2",
+    "src/platform/control_plane/registry.py": "d4935e17134aa35de462f51a2a649d0340805eebfd8ab72d4fda9dc60459cef4",
+    "src/platform/control_plane/step_execution.py": "f010a38c8bc43d4f38148566655109cb8ba32f1a8d29f1b5cb016698dd7f4066",
+    "src/strategies/runtime/platform_adapter.py": "d0c55b76233ba2a936b6f6d75dab52b1668f2eefc701d241c56add4200d032fb",
+    "tests/platform/browser-operations-smoke.cjs": "f0dc9271f2c9d7c98b28f2c52b9131f924caba567c1d6c2c6debfa064e53505b",
+    "tests/platform/test_backtest_adapters.py": "c441a52b1d10dbd7244973acb5c778377232e01119e0003e72b1aa10b958458d",
+    "tests/platform/test_contracts_core.py": "5f1c0fac52456d15e6cd4a2eee2f82c2b7401059dc447f1f6fa2843bab33264c",
+    "tests/platform/test_crypto_quant_adapter.py": "73ce15704d2e543af870da66b822472f79ddda3030d36e8802120797ccbf8504",
+    "tests/platform/test_incident_evidence_dashboard.py": "2ad0455dd5fae12e2149bd615476340cc0cdfb2d9e4e097c1b4343ae189c5c0a",
+    "tests/platform/test_native_reliability_projection.py": "0c21a8572e6f212f46190f0d31f75473d5d4a1da77ee7e27ab597b0488ff2b62",
+    "tests/platform/test_operation_dashboard.py": "793845caddccda4721b8a7899c17c9308f4cfd6bf81ad5493a2008172b38e65b",
+    "tests/platform/test_operation_dashboard_acceptance.py": "bcb50a977c6e3abb5765382bcab03c9a8105210272758e44d228012318a25ada",
+    "tests/platform/test_phase0_weather_adapter.py": "72fd3d44d2228a0b8de880ec6b34cfb64e4dc833694a6bb453a2f148170a6da1",
+    "tests/platform/test_stage12_acceptance.py": "901717e206f54739798e3d155bd3b9c2f837788b80af92c670844edc4e9fde09",
+    "tests/platform/test_stage12_control_safety.py": "57c504adf0ed7f28ea5afc70861f5ca480d6b2047a5e8e574c6362de891e6c5c",
+    "tests/platform/test_workflow_recovery.py": "f01d3cbf03be072ab02ad5ff89e782f48fe2e0144d01d3abca1917daac077e3f",
+    "tests/pmm_tests/test_weather_controller_telemetry.py": "8f5f75112e4c2f8f901532a59e24b157056df14f32b7dcbfffb88f9746e8641c",
+    "tests/strategy_runtime/test_platform_control_plane_registry.py": "46ab22dae48a9eb90e99ee705e8fcbb703a4efbd28f34755ded56cc39e6a1e74",
+    "tests/weather_dashboard/test_daily_signal_coverage.py": "ae9b10277863cf6c41935c1791766d0a0d46524309e8b65a13341b533f9ae6fe",
+    "tests/weather_dashboard/test_platform_control_schema.py": "e325a31d30f6fd6a532e9fd5332c8f009b8f39155da1867dfd33e73b1c5ef6ce",
+    "tests/weather_dashboard/test_platform_history_materializer.py": "c8cfb511b31696a53ea615a173067a81a7d6083ee5e55a962cd81a9427ad0d40",
+    "tests/weather_dashboard/test_platform_metric_materializer.py": "029985ad8aef10302249fe581047e287a5c8fd6a5d543217fbcdd64941094f1f",
+    "tests/weather_dashboard/test_platform_workflow_store.py": "031bc4a1a63669949607a642543978e8362e0d7fb6e6c83c6b06fff58e619a11",
+    "weather_dashboard/analysis/__init__.py": "dd28196725284eeb5aec8402faf58067a52f9046cdba18c61e03528e17778bfe",
+    "weather_dashboard/analysis/daily_signal_coverage.py": "f7bf25a325b51a462694e84b7511b3225396d214fd3fbc66bd80a5248fdc9873",
+    "weather_dashboard/api/routers/platform.py": "6ceb5e92eca222c417de7fe6e9eaab0c1bc92a9f99ba47d519ffa374324ac64e",
+    "weather_dashboard/db/platform_backtest_materializer.py": "728aeadac01d068281572132851540af361b9125b0820fdbb74dfce9f5b548fd",
+    "weather_dashboard/db/platform_control_db.py": "f6394947c440efa4569294cd099185e8874a7bfe67f2ce3232cfd76b916b1458",
+    "weather_dashboard/db/platform_control_schema.py": "940670c4ebb969e04363a2ee2580f8d1667742eb0c594086020a55505b575229",
+    "weather_dashboard/db/platform_history_materializer.py": "04956b58fa98a3334244adc5728b2a3010b75825de557bf78e7ec0f5a16346a1",
+    "weather_dashboard/db/platform_metric_materializer.py": "734d32e21acd35192501c1125ea020dfa89f2b5069b6a1038a425f94b3432b6c",
+    "weather_dashboard/db/platform_operation_projection.py": "6e799ac1ad7eea22f0fe781169fd1c2c43ea97dc7eb450ce55850b08c8822aac",
+    "weather_dashboard/db/platform_record_materializer.py": "d440cf53752f8714cf3886b96213e93cf8352ff8f57eeef9c9de9bf311821301",
+    "weather_dashboard/db/platform_reliability_projection.py": "a00ab0896e2b0166d77ddb0393b671faa5d74ba3948bddd5e05579e59581fc6d",
+    "weather_dashboard/db/platform_workflow_store.py": "eb170db356db102ee624fd22eede2b4bda5bfd2851ffb3324b9fe72984ca864e",
+    "frontend/strategy_dashboard/src/app/App.tsx": "655611e04b46480bedd4c8a161bd0a60c0aa3e064e4792a66f5e8397de75ba24",
+    "frontend/strategy_dashboard/src/components/PageFrame.tsx": "b1523c413e61f835d8d8409eaf3732b22a25d103560c0a2fbe876c888008653e",
+    "frontend/strategy_dashboard/src/data/weather-http.ts": "a30ff8dc9165712ea6a5dda4de6418f7a5f34fa08d7b57d5bb3a6a9ba849e2a4",
+    "frontend/strategy_dashboard/src/pages/weather/WeatherRunsPage.tsx": "13ef5f3ce56f71021cb903842f5d1f987cab1410422a2c5090d669bb171dc762",
+    "scripts/ops/production_reliability_supervisor.py": "64602586cd3a3fc016a54e141f4c5c38b954ac2bd65c1af6eb82b151aa6dbe81",
+    "scripts/ops/weather_production_ctl.py": "85ffaa08bb816734d91d50f12c83c6c832f6f499453ab51c848823770cfbc3b7",
+    "src/strategies/runtime/production.py": "8f44ad915e977241cbab7b6864c5a94f9c84711be527ad469d5eb9b96395634f",
+    "weather_dashboard/api/app.py": "ede277147ced6725df69628f96e2e8caf1b60d5247bcc2d73d91ccf84af2ac88"
+  }
+}
