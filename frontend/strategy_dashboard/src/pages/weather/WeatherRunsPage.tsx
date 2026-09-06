@@ -7,6 +7,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type { RunSummary } from "../../data/weather-types";
+import { PlatformResultsPanel } from "../../components/PlatformResultsPanel";
 
 const STATE_OPTIONS = ["", "explore", "paper", "live", "retired"];
 const MODE_OPTIONS = ["", "snapshot_replay", "paper", "live"];
@@ -55,6 +56,8 @@ export function WeatherRunsPage() {
   return (
     <PageFrame title="Weather Runs" desc="Browse strategy run registry · 策略运行记录">
       <>
+        <PlatformResultsPanel />
+        <p style={{ marginBottom: 20 }}><Link to="/weather/operations" style={linkStyle}>Operations / 操作与事故（只读 ledger）→</Link></p>
         {/* Filter bar */}
         <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "flex-end" }}>
           <label style={labelStyle}>

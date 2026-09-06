@@ -16,6 +16,7 @@ const WEATHER_NAV = [
   { to: "/weather/configs",    label: "Configs",     sub: "参数版本" },
   { to: "/weather/instances",  label: "Instances",   sub: "部署实例" },
   { to: "/weather/runs",       label: "⛅ Runs",        sub: "运行记录" },
+  { to: "/weather/operations", label: "Operations",     sub: "操作与事故" },
   { to: "/weather/live",       label: "🔴 Live",        sub: "实盘监控" },
   { to: "/weather/orders",     label: "Orders",        sub: "订单明细" },
   { to: "/weather/runtime",    label: "Runtime",       sub: "策略状态" },

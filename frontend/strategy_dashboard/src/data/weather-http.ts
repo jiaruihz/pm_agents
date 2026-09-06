@@ -4,6 +4,15 @@ import type { CapitalEfficiencyReport, CopyTradeSummary, CopyTradeWalletDetail, 
 import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse, OrderBlotterResponse, OrderBlotterDailySummaryResponse } from "./v2-types";
 
 const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
+import type { PlatformRun, PlatformDetail } from "../components/PlatformResultsPanel";
+
+export interface PlatformOperation { operation_id: string; operation_type: string; target_id: string | null; state: string; attempt_count: number; max_attempts: number; updated_at_utc: string; error_code: string | null; incident_state: string | null; }
+export interface PlatformOperationDetail extends PlatformOperation { timeline: unknown[]; instance: { instance_key: string; observed_at_utc: string | null; desired_sha?: string | null; loaded_sha: string | null } | null; }
+export interface PlatformIncident { incident_id: string; root_cause_key: string; failure_domain: string; severity: string; state: string; opened_at_utc: string; last_event_at_utc: string; operation_count: number; impact_count: number; }
+export interface PlatformIncidentDetail extends PlatformIncident { timeline: unknown[]; impacts: unknown[]; operations: unknown[]; native_repairs?: PlatformControllerResult[]; }
+export interface PlatformHealth { status: string; native_reliability: { status: string; observed_at_utc: string; active_incidents: unknown[]; pending_incidents: unknown[] } | null; }
+export interface PlatformControllerResult { record_id: string; controller_operation_id: string | null; target_instance: string | null; command: string | null; apply: boolean | "unknown" | null; status: string | null; source_ref: string | null; source_sha256: string | null; source_observed_at_utc: string | null; duration_sec: number | null; occurred_at_utc: string | null; }
+export interface PlatformControllerResultDetail extends PlatformControllerResult { operation_plan: unknown; operation_postcondition: unknown; scoped_manifest_delta: unknown; actions: unknown; operation_stage_timings: unknown[]; controller_stage_timings: unknown[]; source_output: unknown; }
 
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const usp = new URLSearchParams();
@@ -24,6 +33,16 @@ async function get<T>(path: string, params?: Record<string, string | number | un
 }
 
 export const weatherApi = {
+  getPlatformHealth(): Promise<PlatformHealth> { return get('/platform/health'); },
+  listPlatformRuns(offset = 0): Promise<PlatformRun[]> { return get('/platform/runs', { limit: 25, offset }); },
+  getPlatformRun(id: string): Promise<PlatformDetail> { return get('/platform/runs/' + encodeURIComponent(id)); },
+  listPlatformEvidence(offset = 0): Promise<unknown[]> { return get('/platform/evidence', { limit: 25, offset }); },
+  listPlatformOperations(offset = 0): Promise<PlatformOperation[]> { return get('/platform/operations', { limit: 25, offset }); },
+  getPlatformOperation(id: string): Promise<PlatformOperationDetail> { return get('/platform/operations/' + encodeURIComponent(id)); },
+  listPlatformIncidents(offset = 0): Promise<PlatformIncident[]> { return get('/platform/incidents', { limit: 25, offset }); },
+  getPlatformIncident(id: string): Promise<PlatformIncidentDetail> { return get('/platform/incidents/' + encodeURIComponent(id)); },
+  listPlatformControllerResults(offset = 0): Promise<PlatformControllerResult[]> { return get('/platform/controller-results', { limit: 25, offset }); },
+  getPlatformControllerResult(id: string): Promise<PlatformControllerResultDetail> { return get('/platform/controller-results/' + encodeURIComponent(id)); },
   listRuns(params?: {
     state?: string;
     execution_mode?: string;

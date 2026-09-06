@@ -19,6 +19,7 @@ const InstanceDetailPage = lazy(() => import("../pages/InstanceDetailPage").then
 const StrategiesPage = lazy(() => import("../pages/StrategiesPage").then((m) => ({ default: m.StrategiesPage })));
 const StrategyDetailPage = lazy(() => import("../pages/StrategyDetailPage").then((m) => ({ default: m.StrategyDetailPage })));
 const WeatherRunsPage = lazy(() => import("../pages/weather/WeatherRunsPage").then((m) => ({ default: m.WeatherRunsPage })));
+const WeatherOperationsPage = lazy(() => import("../pages/weather/WeatherOperationsPage").then((m) => ({ default: m.WeatherOperationsPage })));
 const WeatherComparePage = lazy(() => import("../pages/weather/WeatherComparePage").then((m) => ({ default: m.WeatherComparePage })));
 const WeatherHistoryPage = lazy(() => import("../pages/weather/WeatherHistoryPage").then((m) => ({ default: m.WeatherHistoryPage })));
 const WeatherLivePage = lazy(() => import("../pages/weather/WeatherLivePage").then((m) => ({ default: m.WeatherLivePage })));
@@ -63,6 +64,7 @@ export function App(): JSX.Element {
       <Route path="/weather/instances" element={<WeatherStrategyInstancesPage />} />
       <Route path="/weather/instances/:instanceId" element={<WeatherStrategyInstanceDetailPage />} />
       <Route path="/weather/runs" element={<WeatherRunsPage />} />
+      <Route path="/weather/operations" element={<WeatherOperationsPage />} />
       <Route path="/weather/compare" element={<WeatherComparePage />} />
       <Route path="/weather/research" element={<WeatherResearchPage />} />
       <Route path="/weather/history/:runId" element={<WeatherHistoryPage />} />
