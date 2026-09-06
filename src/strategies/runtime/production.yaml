@@ -14,8 +14,8 @@ production_releases:
     expected_repo_sha: 223bca8a40a9f2fe7c025a17d88530d96d0cf01c
     runtime_bindings: [operational_venv, operational_env]
   - release_id: fast_source_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/f048dc31114ddab12d052c4061e1d0d909640d89
-    expected_repo_sha: f048dc31114ddab12d052c4061e1d0d909640d89
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/64e7f85ca131a14771f34d45a6cdc2fea348e509
+    expected_repo_sha: 64e7f85ca131a14771f34d45a6cdc2fea348e509
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
