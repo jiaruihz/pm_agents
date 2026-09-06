@@ -1,7 +1,7 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-09-03 replay artifact verification + sealed candidate projection
+Updated: 2026-09-07 replay protocol migration progress snapshot
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -806,6 +806,56 @@ checkout 与 near-core live flags 漂移。canonical refresh 的 accounting stag
 最终 exit 0，但 preflight 正确返回 `migration_blocked`，因此该轮没有推进 WCIR candidate/replay verifier。
 恢复条件是先由独立 live 维护变更收口上述 release、依赖和 journal ownership，再观察下一轮 preflight
 `status=ready`、WCIR/replay report 时间推进且 `remaining=0`；不得为了让 migration 变绿而绕过 gate。
+
+#### 2026-09-07 protocol / replay migration progress snapshot
+
+本节是 2026-09-07 00:22 CST 的可复核进度截面，不替代运行时 manifest/controller 的实时判断。此前
+阻塞 scheduled canonical refresh 的 journal ownership、release pin 与运行依赖绑定已分别在
+`1ee6de65`、`e2bbeebd`、`8115b455` 落地：live order journal 现在有显式 owner/reader 合同，canonical
+refresh 固定到声明 release，并校验 operational venv、environment、canonical DB、目标路径及 symlink
+边界。三个 commit 均为本截面 HEAD 的祖先；相关范围测试在落地时为 89 passed。
+
+当前协议层已经统一为“所有判断都是 case，错题只是派生视图”：
+
+- `weather_replay_cases_v1` 覆盖全部 176,958 个 candidate case；`weather_replay_mistakes_v1` 从中派生
+  11,564 个 mistake case，不维护第二套不可对齐的错题事实。
+- replay capability 为 `full_decision=10,780`、`model_only=102,733`、
+  `legacy_summary_only=47,487`、`blocked=15,958`。能力等级表示逻辑材料是否齐全，不等价于物理
+  artifact 已通过 hash 验证。
+- artifact verification 已给 176,958 个 case 全量分类：129,471 个
+  `blocked_unverifiable_artifact`，47,487 个 `legacy_summary_only`，当前物理 `ready=0`。因此可以统一检索、
+  切分和回放候选级模型输入，但尚不能声称任意历史 case 都能从带真实 file SHA-256 的 raw artifact
+  完整复现。
+- outcome 分类为 `blocked_candidate=113,783`、`settled_unscored=29,052`、
+  `unselected_model_correct=26,583`、`unselected_model_error=3,921`、
+  `pending_settlement=3,106`、`live_filled_win=226`、`policy_selected_win=126`、
+  `live_filled_loss=88`、`policy_selected_loss=73`。mistake 视图保留 model error、selected loss 和 realized
+  loss 的组合标签，而不是只收集亏损单。
+
+历史迁移与数据集封印保持有效：三组 historical manifest 共索引 17,823 个 immutable sources，约
+7.3 GB adapted output，守恒与 quarantine evidence 已通过；Tmax sealed dataset 仍为 6,713 rows，按
+`target_date` 固定为 `train=5,016`、`validation=1,012`、`test=216`、`frozen_forward=469`，dataset hash
+仍为 `dbd6d05bfd45c5e429b7052057a1752031da2da24fff806a9d749e2aca820320`。这层可直接用于同口径回测、
+validation/test 与 frozen shadow，不随未来代码或样本增长自动改写。
+
+实时链路在该截面仍为 **raw fresh / canonical derivation degraded, fail-closed**：canonical DB physical
+path `/Volumes/jrs/pm_agents/runtime/weather.db` 与仓库 alias 为同一 device/inode，storage audit 为
+`healthy` 且 0 findings；raw decision bundle 已更新到 00:14 CST，market-books semantic health 在 00:22
+为 `ok`。但 `fact_signal_candidates` 的最新 decision timestamp 仅到 2026-09-06 19:00:45 CST，最近一次
+成功 WCIR materialization 到 18:59 CST，落后约 5 小时；该轮 canonical refresh preflight 因动态
+production manifest/data-feed health 未达标而返回 `migration_blocked`。`fact_trades` 独立 accounting
+链已更新到 2026-09-06 22:39:51 CST。这里记录的是可观测状态，不允许用手工绕 gate 或把 raw 新鲜
+误写成 canonical 已追平。
+
+剩余验收按以下顺序收口：
+
+1. 新 producer 对受管 raw artifact 双写真实 file SHA-256 和稳定 locator；历史只对仍有 immutable
+   physical evidence 的范围做 bounded backfill，缺证据的记录继续 blocked，不合成 digest。
+2. 恢复动态 manifest/controller/data-feed semantic health 后，连续观察 canonical refresh preflight
+   `status=ready`，并确认 WCIR materialization 与 replay verifier 的报告时间推进、`remaining=0`。
+3. 重新量化 candidate freshness lag 与 artifact `ready` 覆盖率；只有物理 hash verification 通过的
+   case 才升级为 raw full replay。sealed candidate projection 可继续承担模型回测与 frozen-forward，
+   但两种能力必须分栏报告。
 
 ### 8.3 Just check status
 
