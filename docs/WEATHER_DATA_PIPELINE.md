@@ -875,6 +875,28 @@ Core Carry near-maker 的长期运行合同如下，避免再次把 controller h
   Core runner 拉回另一 `core_carry_live_runtime` SHA。生产验收同时核对 pane cwd/start command、
   summary loaded SHA、连续 rescore journal、near v2 ledger 和 authenticated exchange evidence。
 
+#### 2026-09-07 Core Carry continuous near-maker live boundary
+
+- 生产切换点：near controller 于 2026-09-07 01:06:57 CST 启动，Core runner 于 01:07:50 CST
+  启动，首个完整 healthy summary 为 01:08:17 CST。两者统一加载 immutable release
+  `core_carry_runtime/a9cc1bea44d9dacd0fcef9165446377fc001a6f3`；production pin commit 为
+  `49f96255`，功能与热修复 commits 为 `444b7aef`、`a9cc1bea`。
+- live 参数已验收为原 Core `10 taker + 5 maker` 不变，额外 near `5 maker`；continuous market
+  reprice cadence 为 15 秒，首轮 43 个 market rescore，Core/near controller 均为 live-confirmed，
+  private/authenticated REST/market WS readiness 全部 ready。
+- 此前 v1 near ledger 最后一条为 2026-09-06 16:45:55 CST；到新 v2 首个 healthy summary 的
+  无新增证据窗口为 8 小时 22 分 22 秒。v1 共 97 ledger rows、5 个 submitted projections、
+  0 matched shares；不得把该旧口径与 v2 forward denominator 混算。
+- v2 从上述 healthy boundary 独立累计；初始 report 为 0 eligible、0 submitted、0 fill、0 matched。
+  部署后 authenticated CLOB 查询仍为账户级 21 个 open orders，3 个历史 near order ids 均不在 open
+  set，说明切换本身没有误挂或遗留 near 单。
+- 该次验收同时修复两项复发根因：readiness 必须在耗时 rescore 后重新取当前时钟；confirmed cancel
+  必须投影为 terminal `cancelled`，并兼容识别旧日志中“cancel 已确认但 status 错写 submitted”的记录。
+  修复后历史误复活的 7 个 maker lifecycle plans 归零，executor `live_errors=0`。
+- 部署后 strict manifest 无缺失 session、无 Core/near release mismatch。全局仍有一个与本次切换无关、
+  且部署前已存在的 finding：`com.pm-agents.weather-canonical-refresh` 上次退出码为 75；不能据此把
+  Core/near 本身标成失败，也不能隐去该独立 canonical-refresh 运维项。
+
 ### 8.3 Just check status
 
 ```bash
