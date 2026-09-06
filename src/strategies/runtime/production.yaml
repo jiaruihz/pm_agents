@@ -10,8 +10,8 @@ production_releases:
     expected_repo_sha: 9c3f2c05d4885ea1efa2333575f56519f003e547
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: control_plane
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/37e16e77e1c5494edf2754ba274693d5794e7391
-    expected_repo_sha: 37e16e77e1c5494edf2754ba274693d5794e7391
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/223bca8a40a9f2fe7c025a17d88530d96d0cf01c
+    expected_repo_sha: 223bca8a40a9f2fe7c025a17d88530d96d0cf01c
     runtime_bindings: [operational_venv, operational_env]
   - release_id: fast_source_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/f048dc31114ddab12d052c4061e1d0d909640d89
