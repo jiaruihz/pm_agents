@@ -1981,7 +1981,66 @@ connectivity, but cannot reopen new entries unless that restored route is indepe
 proved tradeable. Cancellation and reconciliation remain available while entry is
 closed.
 
-## 32. Immediate Follow-Up Work
+## 32. 2026-09-05/06 JRS permission-host recurrence and three-live recovery
+
+This is a second documented recurrence of Incident J after the 2026-08-19 event.
+Core Carry last published a successful loop summary at `2026-09-05T06:15:29Z`,
+Tmin tiny-live at `2026-09-05T06:15:33Z`, and the near-Core controller at
+`2026-09-05T06:15:38Z`. Their final errors were macOS external-volume
+`PermissionError: [Errno 1] Operation not permitted` while reading or atomically
+publishing under `/Volumes/jrs`. The reliability supervisor first recorded the
+missing Core runtimes at `06:18:57Z`; it correctly did not auto-start runtimes with
+`recovery_policy=guarded_live`.
+
+The canonical JRS host later recovered its read/write permission without a server
+replacement, but the stopped live children remained absent until an explicitly
+confirmed controller reconcile. At `2026-09-06T04:48:42Z..04:49:08Z`, the controller
+started the near-Core controller, Core Carry, Tmin tiny-live and all missing safe
+dependents in dependency order. Old Cross NO remained healthy and was not restarted;
+`cross_no_v2_metar_v1` remained intentionally paused.
+
+Measured decision and execution impact for the `22h33m` live-runtime gap:
+
+- Core Carry wrote zero live-order rows during the gap. Exact historical decision
+  replay is unavailable because the live decision producer itself was absent, so the
+  gap must not be treated as negative/no-signal evidence. The first fresh post-recovery
+  Wellington `2026-09-06` signal produced the expected two children: the 10-share
+  taker matched at `0.98` (`0xb322e03a...52ec253`) and the 5-share maker posted at
+  `0.97` (`0x75243b81...25b42e8`). This proves one current opportunity was recovered;
+  it is not evidence that all earlier gap opportunities were zero.
+- Tmin's frozen shadow journal contains six candidates with decision timestamps in
+  the gap. All six were `selected=false` and blocked (three missing PIT Tmin ladders,
+  two Fahrenheit-range depth-model blockers, one missing PIT observation), so
+  evidenced missed Tmin submissions are zero.
+- Old Cross NO remained healthy. Its post-recovery health reported 12 observed
+  opportunities and zero execution-eligible rows; outage-attributable Cross orders
+  are zero.
+- Authenticated CLOB open orders changed from 20 before recovery to 21 after recovery;
+  the one-order increase is the confirmed 5-share Core maker above. The Core taker
+  was absent from open orders because the venue response was `matched`.
+
+Post-recovery proof: all three intended live strategies report `live_enabled=true`;
+their process contracts contain both `--live` and `--confirm-live`; near-Core reports
+authenticated private WS, market WS and REST healthy; JRS write probes pass `3/3`;
+the execution route is `HK 03`, Polymarket reports `blocked=false`; and strict
+pre/post manifest comparison reports no missing sessions. Manifest status remains
+`warning` only for pre-existing unregistered release worktrees.
+
+Label:
+
+```text
+run_family = weather_jrs_runtime_host_permission_incident
+run_quality = coverage_gap_external_volume_permission
+recurrence_of = Incident J (2026-07-16), recurrence (2026-08-19)
+core_carry_exclusion_window = 2026-09-05T06:15:29Z..2026-09-06T04:49:08Z
+tmin_live_exclusion_window = 2026-09-05T06:15:33Z..2026-09-06T04:48:48Z
+tmin_selected_candidates_missed = 0
+cross_no_outage_attributable_orders = 0
+recovery = controller reconcile --apply --confirm-live @ 2026-09-06T04:48Z
+fix_level = contained_and_recovered; root_cause_not_eliminated
+```
+
+## 33. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
    - input: local + N100 live JSONL, CLOB fills, Data API positions/closed positions, pm_history
