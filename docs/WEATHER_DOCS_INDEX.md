@@ -10,6 +10,13 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
 
+当前五城模型完善的工作顺序、既有head/实盘家族边界及首轮审计见
+[城市模型§1.0](WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md#10-当前工作顺序与首轮审计2026-09-06)；
+cadence、实际available与预测提前量，以及KNMI ta字段勘误见
+[信息血缘§2.1](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md#21-cadence测量窗口与实际预测提前量2026-09-06)。
+字段/PIT合同修复、Amsterdam逐行影响、韩国同分母ledger及Seoul checkpoint重放已进入工程验收；
+代码修复、封存重放与生产发布各自记录，详见五城入口的本轮evidence seal。
+
 Status 口径：
 
 | Status | 含义 |

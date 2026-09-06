@@ -1,9 +1,9 @@
 # Weather First-Seen Information Event Lineage
 
 Status: current-reference
-Updated: 2026-08-28 U.S. METAR transport benchmark smoke
+Updated: 2026-09-06 delayed-availability/target-horizon clarification and KNMI ta semantic corrigendum
 Source of truth: yes for first-seen event semantics and target data/signal lineage
-Implementation status: data/signal implementation complete and locally replayed; production forward start blocked by JRS write permission
+Implementation status: existing data/signal implementation and sealed replays retained; source/epoch production readiness is dynamic; KNMI ta contract/impact correction implemented and replayed; production publication remains separate under §2.1 and the five-city living doc
 Used by: WEATHER_SYSTEM_CONTRACT.md; WEATHER_ARCHITECTURE_SPINE.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md
 
 ## 0. Decision
@@ -122,6 +122,31 @@ This prevents a request started before the weather event but published
 afterward from masquerading as a fresh post-event quote. An earlier book can be
 retained for market-reaction analysis, but it is not an executable post-event
 cost.
+
+### 2.1 Cadence、测量窗口与实际预测提前量（2026-09-06）
+
+三者分开：文件/报文每5或10分钟更新，字段自身可能是1分钟平均、10分钟极值或瞬时值；
+它们都不证明观测时间一到，本系统就已拿到数据。PIT仍按上节的实际`available_at_utc`放行。
+
+例如10:20的观测在10:25才可用，此时预测10:30的观测，源与目标的观测间隔是10分钟，
+但从decision到目标观测仅剩5分钟；目标可能10:35才发布/被本系统拿到。若10:20的源到10:32
+才可用，预测10:30的尚未发布值属于对已发生观测的估计，不能算提前预测未来物理状态。
+目标已经可用时则不再是未见目标。三种情况按任务目标分别记账，不用固定“+10分钟”混合。
+
+每个head的研究记录应映射已有字段并说明：源观测/测量窗口、first-seen、available、decision、
+目标观测/测量窗口、目标first-seen/available以及预测对象。派生报告分别列
+`decision - source_observed_end`（信息年龄）、`target_observed_end - decision`（物理提前量）和
+`target_available - decision`（事后可计算的发布领先量）。真实目标发布时间只能用于标签/事后诊断；
+模型可使用的预期发布时间必须来自当时已知的时刻表或仅用过去数据拟合的延迟分布。
+历史缺first-seen的数据可以做声明口径的weather development，不能事后补一个固定延迟冒充captured-PIT。
+
+**KNMI字段勘误**：官方参数表将`ta`定义为最近1分钟、1.5米高度平均气温，`t10`才是10分钟平均；
+`tx/tn`是10分钟最高/最低。发布cadence与字段测量窗口不可互换。
+来源：[当前KNMI dataset 1.0文档](https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0)，2026-09-06核对，与实际producer的dataset/version一致。
+该版本允许文件在7天内补充迟到观测；不同字段window可以短于或长于10分钟，`t10`时间戳还对应区间中点，不能套用ta的end-time规则。
+repo producer、adapter、合同生成器及tests已修正；旧v2 seal保留，新的Amsterdam语义解释采用v3 derived identity。
+共享`weather_clock_contract.observation_target_timing`只作标签/影响诊断；missing/NaT/naive PIT时钟在feature builder拒绝，
+context的available时间纳入完整feature最大时间。逐行影响和生产发布边界见五城living doc §1.0。
 
 ## 3. Canonical records and grains
 

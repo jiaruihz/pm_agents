@@ -13,6 +13,33 @@ This document records the early weather live-trading rollout history, known mist
 - [WEATHER_STRATEGY_QUANT_DESIGN.md](WEATHER_STRATEGY_QUANT_DESIGN.md)
 - [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
 
+## 2026-09-06 五城模型训练前置修复与影响窗口
+
+本轮属于研究输入/时钟/导出血缘修正，无重训、无实盘启停。证据根为
+`production.yaml.research_artifact_root/weather_city_intraday_probability/model_audit/run=20260906_prerequisites/`；
+旧seal和raw保留，以下污染标签供后续训练与评测选择输入使用。
+
+| 问题与污染层 | 已重放窗口与影响 | 后续使用口径 |
+|---|---|---|
+| KNMI `ta` 被写作10分钟平均；实际为最后1分钟平均，发布cadence为10分钟 | 9/6固定raw前缀195个唯一event，数值改变0；新source contract v3携带独立measurement interval | 按新adapter重导出语义；不改旧raw和v2封存ID。producer错误文字引入于 `ef9831f3de63e1337b00d44dd9cfa883ab499345`，不据此假定更早研究合同正确 |
+| Amsterdam feature audit用endpoint覆盖路径，污染导出feature lineage | 8/11–8/26的87机会/16日；75 eligible机会/14日中322个feature cell改变。225条评分与原训练输出最大差9.44e-16 | 已修导出；原模型实际训练/评分使用正确路径，不能将75机会标作错误预测。导出问题引入于 `afaddbabb733d76e4b0a0781467f78d0d33bebf4` |
+| Amsterdam B2 portable scorer多注入EPS | 固定75条B2最大单档概率差1.69e-7；修后复现冻结训练分布 | 版本以source hash区分，旧frozen epoch不静默切代码 |
+| Seoul以source arrival join尚未完成的checkpoint | 8/12–9/3共8,801 ladder；旧1,219评分中107条污染，实际受影响target_date为8/12–8/27内14日。107条改选已ready状态并改变posterior，最大差0.0380194；原33个state-entry中4个概率改变，top-class改变0 | 旧primary性能数字带PIT污染标记，不继续作为干净forward累计；新完整ledger44,005类行保留分母。非107笔实盘错单 |
+| HT feature availability、next-target选择 | 两epoch的12 prediction/192 lineage，缺失/未来clock和max差异均0；五城封存941机会中Busan14个target已发生但尚未发布，Seoul1个clock/label不可用 | 缺少完整raw路径的部分仅作clock审计；物理提前量与publication提前量分开，已可用目标不顺延替换 |
+
+逐行文件：`knmi/{feature_lineage_impact,prediction_replay,source_semantics_impact,target_timing_audit}.jsonl`、
+`feature_clocks/row_level_feature_clock_audit.jsonl`、
+`seoul_checkpoint_replay/{row_level_counterfactual,decision_class_counterfactual}.jsonl.gz`。
+韩国旧ledger修复中的中间产物`korea_ledger/`保留为superseded-for-now，当前旧seal诊断用
+`korea_ledger_integrated/`，修正后Seoul用`seoul_checkpoint_replay/ledger/`。Busan旧时钟污染不改写成PIT，
+exact incumbent rule记录缺口仍逐行显式保留；“ledger生成”不等于三方alpha比较完成。
+
+Core Carry旧manifest告警另有检查器归属根因：controller与live runner共享output-dir，检查器借用了后者的
+summary并错误比较两个release。只读restart preview（apply=false）已由此诊断取代；本轮未执行重启。
+检查器修复后本地strict为0 critical，production canonical refresh仍在15:35Z被旧版误报阻断。
+隔离补丁`7a62c537`的32项测试通过，但release工具要求source为当前operational HEAD后继，预演拒绝；
+未绕过合同、未切pin、未执行增量刷新。需要先确定发布合同与生产授权，不将旧告警写作真实loaded-SHA故障。
+
 ## 1. Plain-English Summary
 
 The first weather live rollout is not a clean single run. It includes local `pm_agent` live orders, N100 `pm_agent` live orders after the strategy moved to N100, and multiple code/config revisions over three days.

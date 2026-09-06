@@ -18,6 +18,7 @@
 ## 1. 当前主线与系统主轴
 
 - 当前主线是天气温度策略；README 的旧 PMM/ARB 框架不是活跃主线。
+- 五城预测的当前优先级、model/target 身份与实盘家族边界见 `docs/WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md` §1.0；数据更新 cadence 不代表实际可用时间，时钟例子见 `docs/WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md` §2.1。
 - 研究状态以 `docs/WEATHER_STRATEGY_REGISTRY.md` 和最新 reset/freeze report 为准；生产状态必须动态核对 manifest、进程参数、raw order 与 exchange response，不能从研究标签或旧对话推断。
 - 统一量化血缘：`EventEnvelope → DecisionContext → ModelOutput → SignalCandidate → TradeIntent → plan → order → fill → settlement`。
 - canonical 分析表是 `fact_signal_candidates` 和 `fact_trades`。当前运行/订单事实仍以 Mac raw runtime 与 exchange evidence 为准。

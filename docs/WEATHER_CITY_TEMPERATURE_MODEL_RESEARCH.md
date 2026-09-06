@@ -1,7 +1,7 @@
 # 跨城市细粒度温度模型：统一研究与评测约定
 
 Status: current-source
-Updated: 2026-08-13 Seoul decision-ladder residual v3 backtest
+Updated: 2026-09-06 engineering prerequisites implementation and fixed-input impact replay
 Scope: 城市级日内温度概率模型的方法、评测和知识沉淀；运行边界服从 `WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md`，不规定统一算法或统一特征
 
 ## 1. 核心决定
@@ -23,6 +23,95 @@ Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通�
 城市代码能自然复用就复用；不能复用时可以独立实现，只要最终导出统一结果。不要为了接口整齐扭曲城市自己的数据和物理机制。
 目标模块边界、接口、迁移顺序和新城市接入工作单见
 [WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md)。
+
+### 1.0 当前工作顺序与首轮审计（2026-09-06）
+
+Owner决定：本轮只推进天气，先整理既有数据/训练/决策/执行血缘，再完善Amsterdam、Helsinki、Tokyo、
+Seoul、Busan的既有预测。新卫星/空间天气模块暂不进入本轮；Alpha另开对话处理。目标是可靠的概率、
+真实结算和扣费后盈利证据，不能把“训练完成”或artifact freeze当作这些目标已经达到。
+
+Owner明确当前实盘策略家族边界为规则CrossNO、Core Carry、最低温反向Core Carry。
+这不是三类模型均已confirmed的声明，也不表示每个对应实例此刻都在下单。WCIR城市概率challenger、
+next-print action shadow和Tmin概率challenger分别保留research/zero-notional身份。
+D-1/D-2已有研究与采集资产，但尚无可称为已验证实盘的forecast模型及完整数据/执行证据；
+不能把“没有live-ready证据”误写成“没有任何D-1数据”。
+
+**先按target分清三层**：A为下一次指定source/official观测；B为最终settlement exact bracket；
+C为给定entry/exit时钟的交易结果。A的准确率、B的Brier/logloss/RPS、C的fee-adjusted paired PnL各自验收。
+预测下一routine报文不自动等于预测最终结算；城市、source、station、measurement window和lattice逐一保留。
+
+首轮审计已推进到代码修复、固定输入重放及独立代码review；下方工程验收记录为当前状态。
+本轮没有重训、改变模型参数或改动生产行为；历史重放只覆盖明确列出的输入窗口。
+
+| 城市 | 既有模型与当前证据分层 | 优先检查/改进方向（尚非已证实增量） |
+|---|---|---|
+| Amsterdam | remaining-heat / market-offset与B2/M1/M2 next-print是不同head；v1.1 corrected captured-PIT为75 rows/14 dates，next-print primary排序B2优于M2、M1 | 先纠正ta测量语义，查historical-final与真实available-time训练分布；再比较简单B2、ordinal/GAM在相同物理提前量与source age上的表现，不能拿旧V9 selected trades证明next-print有效 |
+| Helsinki | remaining-heat + bounded market residual与新next-print分开；sealed next-print captured为45 eligible rows/14 dates，challenger点估改善但CI跨0 | 复核forecast/path/calibration的真实依赖和运行parity；分别检验天气head增量、融合后增量、同规则机会执行增量 |
+| Tokyo | pre-cross sharpening、state-entry、overshoot和next-print并存；sealed next-print captured为37 eligible rows/14 dates，CI跨0 | 清楚列出各adapter的target和实际独立模型；优先核对JMA实际到达延迟、距RJTT目标routine时间、market-only sharpening与真正weather增量 |
+| Seoul | 已有离线五类remaining-heat研究；本次deployed config仍是coverage-only；旧评测16 settled state-entry dates不是已通过candidate freeze | 优先nested expanding的market fusion/calibration稳定性与incumbent-rule同分母ledger；保留旧analysis-lock窗口，不用它反向调权后继续称untouched |
+| Busan | confirmation RF + physical prior；clock-v2已经部署，旧strict primary为0；新epoch从修复后累积 | 除时钟外，验证confirmation→final-NO桥接的条件假设；比较直接final head与显式双条件分支，先审小样本/特征维度和校准 |
+
+上述模型指标是对应sealed报告的既有证据，日期范围见下文各节，不是截至9/6的新绩效。
+代码检查确认共享next-print M1的16个`CORE_FEATURES`目前不显式包含source availability lag或距目标routine
+的horizon；这是一项应做单因素A/B的候选缺口，不等于已证明加入后有效。既有expanding folds和只用过去
+OOF做temperature calibration应保留，不能为增加试验量而破坏冻结边界。训练诊断、新challenger开发与旧
+forward自然累积可以分开推进；candidate promotion所需日期不是禁止做development的等待期。
+
+**时钟实测**：只读固定`2026-09-06` physical shard的完整JSONL前缀，按immutable event去重得1,184行。
+source observed→available中位数：Amsterdam 252.213秒（195 events）、Helsinki 119.446秒（50）、
+Tokyo 434.060秒（43）、Seoul 27.457秒（830）、Busan 87.886秒（66）。该窗口含启动回补/revision，
+Amsterdam还包含前一天观测，不能当常态延迟SLA。逐行ID、时钟、prefix字节数/hash见下方artifact。
+名义cadence不能替代提前量；10:20→10:25可用→预测10:30的例子见
+[first-seen合同§2.1](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md#21-cadence测量窗口与实际预测提前量2026-09-06)。
+
+**工程修复与影响重放（2026-09-06）**：
+
+| 修复 | 已验证影响 | 边界 |
+|---|---|---|
+| KNMI `ta` 改为最后1分钟均值，`tx` 保持10分钟最大；producer显式记录dataset/version、cadence及各字段window | 固定9/6 raw前缀195个唯一Amsterdam event，温度数值变化0；新的derived observation ID携带measurement contract及区间，旧ID/封存记录可原样读取 | 数据集为 `10-minute-in-situ-meteorological-observations/1.0`；新合同v3不覆盖旧v2 seal |
+| Amsterdam `build_feature_audit` 不再用endpoint覆盖整条温度路径 | 8/11–8/26、16日87机会/5,887路径行；14日75个可评分机会的322个导出feature值修正，12个缺路径机会保留。225条B2/M1/M2评分重放与原封存预测最大差异9.44e-16 | 原训练/评分使用正确的captured panel；污染的是导出feature lineage，不据此声称75个模型预测错误 |
+| B2便携评分器保留冻结训练分布的精确零概率 | 75条B2输出改变，最大单档概率差1.69e-7；消除原额外EPS clipping，M1/M2参数不变，修后225条预测均复现原训练输出 | 原便携输出保留；概率质量和交易优劣没有因此得到验证 |
+| Amsterdam及公共next-print builder严格解析PIT时钟；context缺失时钟不能放行，最大feature available包括context | 12条Helsinki/Tokyo冻结prediction、192条相应lineage：缺失/未来clock及max差异均0；缺失、NaT、naive、late revision和10:20→10:25等场景已有回归 | 真实记录没有完整路径的部分只作clock审计，不把fixture数值一致说成全raw replay |
+| HT先确定物理next-routine target，再判断它是否已可用 | 已知目标显式返回 `TARGET_ALREADY_AVAILABLE_AT_DECISION`，不继续寻找另一份报文；共享 `observation_target_timing` 区分未来观测、已发生未发布和已知目标 | 实际目标availability只用于事后label audit，不能作为训练feature |
+| 韩国同分母ledger接入既有forward evaluator | Seoul按完整ladder decision×5类，Busan按exact-NO candidate；天气概率、市场概率、规则决策分开；缺证据行保留，exact规则证据可按完整identity连接 | 旧Seoul prediction只存1,219条，完整ladder分母8,801；11,017 source rows是另一grain，不能相减。旧Busan时钟污染不回填洗成PIT |
+
+Seoul真实反事实重放覆盖8/12–9/3：23份checkpoint原始文件SHA、19,951条source checkpoint、
+8,801次完整ladder及冻结模型hash均与旧seal一致。原1,219条评分中107条的collector completion晚于
+market decision，分布于8/12–8/27的14个target_date。修正join为checkpoint ready后，这107条均重选此前
+已完成的天气状态，107个posterior改变，最大单档概率差0.0380194；routine anchor改变0、top-class改变0，
+1,219条评分仍全部可评分，原33个state-entry中4个概率改变。完整ledger保留8,801×5=44,005行，
+其中6,095类行可比较model/market，37,910类行保留缺失/不可评分状态。exact规则证据仍缺，不能称三方比较完成。
+这是research-only模型的预测反事实，不是107笔实盘错单，也没有重训或重算实际fill/PnL。
+
+本轮机器证据根：`production.yaml.research_artifact_root/weather_city_intraday_probability/model_audit/run=20260906_prerequisites/`。
+`knmi/feature_lineage_impact.jsonl`、`prediction_replay.jsonl`、`source_semantics_impact.jsonl`是逐行影响清单；
+`feature_clocks/`、`korea_ledger_integrated/`、`seoul_checkpoint_replay/`分别保留时钟审计、旧seal对照与因果checkpoint重放。
+旧sealed artifacts保持不变。研究代码修复与生产发布分开验收；当前代码不能绕过旧epoch中的source/builder/scorer hash检查。
+
+**生产前置快照更正**：旧manifest将Core Carry controller的共享output-dir指向live runner的
+`latest_summary.json`，造成`b65282a6…`与controller pin`9397845f…`的错误比较；两个实例本来分别绑定不同release。
+该告警不能作为重启live runner的理由；检查器归属修复及复核结果见本轮seal。原快照DB route同inode且healthy，JRS context healthy。
+本次未计算canonical最新PnL，也未重启该进程。WCIR三项检查对应release分别为
+city runtime `51c904bd…`、Amsterdam next-print `97a95fdc…`、Helsinki/Tokyo next-print `5bab0e5d…`。
+这是当次快照，后续操作重新核对，不写成永久故障。
+
+本轮开发仓库合并回归为**199 passed**，两次独立审查分别覆盖模型前置与后发现的manifest归属修复，
+均无实质finding。新manifest实测0 critical，storage audit healthy，固定8/12账户对账CLI smoke的
+fill coverage gate通过；未发布新的收益结论。源码提交`3a8a791c`（模型前置）与`0d6ce41d`（manifest）。
+生产canonical refresh仍用旧release，9/6 15:35Z被旧manifest假告警阻断。
+已从其当前pin `9c3f2c05` 制作仅含检查器及测试的隔离补丁`7a62c537`，隔离测试32 passed。
+**尚未发布**：标准release工具预演拒绝该补丁，因为它不是当前operational HEAD的后继。
+没有绕过此发布合同；`release_preparation.json`和`canonical_refresh_release_preview.json`保留精确patch、
+拒绝原因及未改变production pin的状态。需要先确定隔离补丁发布合同，再授权发布与bounded refresh。
+模型重训、incumbent exact-rule历史证据补齐及新forward累积没有在本轮冒充完成。
+
+首轮证据：`production.yaml.research_artifact_root/weather_city_intraday_probability/model_audit/run=20260906_existing_five_city/`。
+当次deployed city-runtime配置有9个enabled profiles，16项model/spec文件SHA全部匹配；
+这只验证模型身份，不证明模型质量。相关回归89项通过，`research_record.json`校验通过。
+全仓docs checker仍有6项失败：既有未跟踪platform文档引用2项、dated reports/硬编码路径/runner债务4项；
+本次只更新既有文档，没有新增仓库runner或dated report，也未替其他并行任务提交/清理这些文件。
+后续模型工作以本轮工程seal为输入：明确source/target/availability、每城模型及训练/验证分母→
+在既有runner上做最小有判别力的A/B→同机会比较market、incumbent rule、model→新日期确认及执行评估。
 
 ### 1.1 当前五城知识账
 

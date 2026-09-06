@@ -8,6 +8,13 @@ Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入�
 属于量化血缘哪一层**。状态/结论的权威来源是评估层 living docs（`docs/analysis/*.md`），本表汇总它们，
 有冲突以 living doc 为准。
 
+> **2026-09-06 owner scope**：先整理既有血缘并完善Amsterdam/Helsinki/Tokyo/Seoul/Busan预测，
+> 新空间天气模块暂不展开；当前实盘家族边界是规则CrossNO、Core Carry与最低温反向Core Carry。
+> WCIR/next-print/Tmin概率challenger及D-1/D-2研究不因此成为live或confirmed。
+> 工程合同修复、Amsterdam逐行影响、韩国同分母ledger及Seoul checkpoint重放见
+> [五城模型入口§1.0](WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md#10-当前工作顺序与首轮审计2026-09-06)。
+> 本次未重训或发布新的PnL，历史行按原evidence date阅读，进程状态仍从manifest动态核对。
+
 > **2026-08-30 denominator override**：Selected ROI 只保留为描述性结果，不再充当模型增量证据。
 > Core Carry 与 Tmin 已在固定 executable universe 上按“未选择=0”、每 city-date 首次动作、
 > `target_date` paired bootstrap 重算，并与同 rows market proper score 分开报告。两支共同暴露的核心模式是
