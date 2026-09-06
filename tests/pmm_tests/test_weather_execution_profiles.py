@@ -21,6 +21,7 @@ def test_legacy_profile_names_and_behavior_are_preserved_and_json_safe():
         "split_taker_maker_chase_capped_no_fallback_v1": ("explicit_leg_shares", 0, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v1", "maker_chase_until_observation_or_ttl_v1", True, 1.0))),
         "split_taker_maker_edge_capped_no_fallback_v2": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
         "split_taker_maker_edge_capped_no_fallback_v3": ("explicit_leg_shares", 90, (("taker", "current_yes_residual_carry_taker_v1", "taker_now", False, 1.0), ("maker", "current_yes_residual_carry_maker_v2", "maker_staged_chase_until_pre_data_update_or_ttl_v2", True, 1.0))),
+        "near_core_continuous_fixed_rest_maker_v2": ("all_maker", 90, (("maker", "core_carry_near_core_continuous_fixed_rest_maker_v2", "near_core_fixed_rest_safety_cancel_only_v2", True, 1.0),)),
     }
 
     assert tuple(profiles._PROFILES) == tuple(expected)

@@ -857,6 +857,24 @@ production manifest/data-feed health 未达标而返回 `migration_blocked`。`f
    case 才升级为 raw full replay。sealed candidate projection 可继续承担模型回测与 frozen-forward，
    但两种能力必须分栏报告。
 
+Core Carry near-maker 的长期运行合同如下，避免再次把 controller heartbeat 误当经济信号频率：
+
+- 小时 checkpoint 只负责 armed weather/model thesis；Core 主 runner 在每个 15 秒 loop 读取最新
+  canonical weather state 和新的 direct CLOB full book，重新计算 market feature、model probability、
+  10-share fee/depth-adjusted taker EV。
+- 连续重算变为 Core actionable 时，原始 `10 taker + 5 maker` 不变；仅当全部 Core 结构 gate
+  已通过且唯一 blocker 为 `non_positive_taker_ev`、同时 bid+1 tick 仍保留 1c model edge 时，
+  独立追加 `5-share near maker`。
+- near sleeve 使用独立 strategy/config/experiment/client prefix 和 v2 ledger/report；其 fill 不扣减
+  原 Core 的 5-share maker，因此最大自然成交量为 `10+5+5=20 shares`。near 仍 open 而 Core
+  转正时必须先完成 authenticated cancel，再放行 Core；partial fill 保留、只撤 remaining。
+- near WS controller 只拥有 authenticated order update、readiness 和异常 safety cancel，不生成经济
+  信号。其 500ms 字段名必须是 `readiness_publish_interval_ms`；经济重算 owner/cadence 必须显式报告为
+  `current_yes_core_carry_tiny_live_v2 / continuous_market_reprice_15s`。
+- Core runner 与 near controller 必须引用同一 `core_carry_runtime` immutable release；自动恢复不得把
+  Core runner 拉回另一 `core_carry_live_runtime` SHA。生产验收同时核对 pane cwd/start command、
+  summary loaded SHA、连续 rescore journal、near v2 ledger 和 authenticated exchange evidence。
+
 ### 8.3 Just check status
 
 ```bash

@@ -48,6 +48,10 @@ from scripts.ops import weather_current_yes_heat_death_shadow_v1 as weather_stat
 from scripts.ops.weather_core_carry_order_runtime import (  # noqa: E402
     execute_core_carry_plans,
 )
+from scripts.ops.weather_core_carry_near_core_ws_controller import (  # noqa: E402
+    TERMINAL as NEAR_CORE_TERMINAL_ORDER_STATUSES,
+    terminal_safety_cancel_order_ids,
+)
 from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
 from src.platform.market_data.capture_demand import CaptureDemand  # noqa: E402
 from src.strategies.runtime import runtime_state  # noqa: E402
@@ -55,6 +59,7 @@ from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
     allocate_profile_shares,
     build_core_carry_legacy_plan_compatibility,
 )
+from src.strategies.weather_edge_v1.execution import near_core_maker_probe  # noqa: E402
 from src.strategies.weather_edge_v1.execution.profiles import (  # noqa: E402
     execution_config_id_for_profile,
     get_execution_profile,
@@ -72,7 +77,7 @@ STRATEGY_ID = "current_yes_core_carry_v3"
 STRATEGY_INSTANCE = "current_yes_core_carry_tiny_live_v2"
 CONFIG_ID = "current_yes_core_carry_model_v3_split_10_taker_5_maker_edge_cap_v3"
 EXECUTION_PROFILE = "split_taker_maker_edge_capped_no_fallback_v3"
-DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v3"
+DEPLOYMENT_CONTRACT_VERSION = "core_carry_v3_10t5m_plus_continuous_near5_v4"
 MODEL_VERSION = "current_yes_core_carry_model_v3_no_peak_clock"
 FROZEN_TAKER_SHARES = 10.0
 FROZEN_MAKER_SHARES = 5.0
@@ -92,11 +97,13 @@ RETRYABLE_MAKER_POST_FAILURES = {
     "maker_only_price_would_cross",
     "post_only_crosses_book",
 }
+TRANSIENT_ENTRY_BLOCKERS = {"near_core_cancel_must_confirm_before_core_submit"}
 CRITICAL_SOURCE_PATHS = (
     "scripts/ops/weather_current_yes_core_carry_tiny_live_v2.py",
     "scripts/ops/weather_current_yes_core_carry_pre_live_v1.py",
     "scripts/ops/weather_current_yes_heat_death_shadow_v1.py",
     "scripts/ops/weather_core_carry_order_runtime.py",
+    "scripts/ops/weather_core_carry_near_core_ws_controller.py",
     "scripts/ops/weather_polymarket_live_transport.py",
     "weather_data_feed/observation_cache.py",
     "weather_data_feed/physical_features.py",
@@ -105,6 +112,7 @@ CRITICAL_SOURCE_PATHS = (
     "src/strategies/weather_edge_v1/execution/engine.py",
     "src/strategies/weather_edge_v1/execution/profiles.py",
     "src/strategies/weather_edge_v1/execution/lifecycle.py",
+    "src/strategies/weather_edge_v1/execution/near_core_maker_probe.py",
     "src/strategies/weather_edge_v1/execution/venue/polymarket.py",
     "src/strategies/weather_edge_v1/runtime/execution_journal.py",
     "src/strategies/weather_edge_v1/runtime/order_runtime.py",
@@ -218,6 +226,76 @@ def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
             if isinstance(row, dict):
                 yield row
 
+
+DIRECT_BOOK_CLOCK_STATUS = "direct_clob_response_clock_v1"
+
+
+def near_core_book_freshness(
+    row: Mapping[str, Any],
+    *,
+    now: datetime,
+    max_age_sec: float,
+) -> dict[str, Any]:
+    """Fail closed on the direct CLOB quote clock used to build an entry.
+
+    Rows written before the direct response-clock lineage was added carry a
+    paper-snapshot response clock next to a newer direct-fetch BBO.  For those
+    legacy rows the conservative direct-fetch timestamp is the only clock that
+    belongs to the scored bid/ask.
+    """
+
+    lineage_status = str(row.get("current_yes_book_clock_lineage_status") or "")
+    if lineage_status == DIRECT_BOOK_CLOCK_STATUS:
+        clock_value = row.get("current_yes_book_response_received_at_utc")
+        clock_source = "direct_response_received_at_utc"
+    else:
+        clock_value = row.get("current_yes_book_fetched_at_utc")
+        clock_source = "legacy_direct_fetch_clock_utc"
+    clock = parse_utc(clock_value)
+    book_status = str(row.get("current_yes_book_status") or "")
+    age_sec = (
+        (now.astimezone(timezone.utc) - clock).total_seconds()
+        if clock is not None
+        else None
+    )
+    common = {
+        "near_core_book_clock_utc": clock.isoformat() if clock is not None else "",
+        "near_core_book_clock_source": clock_source,
+        "near_core_book_status": book_status,
+        "near_core_book_max_age_sec": float(max_age_sec),
+    }
+    if book_status != "ok":
+        return {
+            **common,
+            "near_core_book_age_sec": (
+                round(age_sec, 6) if age_sec is not None else None
+            ),
+            "near_core_book_fresh": False,
+            "near_core_book_freshness_status": "direct_book_status_not_ok",
+        }
+    if clock is None:
+        return {
+            **common,
+            "near_core_book_age_sec": None,
+            "near_core_book_fresh": False,
+            "near_core_book_freshness_status": "missing_direct_book_clock",
+        }
+    assert age_sec is not None
+    if age_sec < 0.0:
+        status = "direct_book_clock_in_future"
+        fresh = False
+    elif age_sec > float(max_age_sec):
+        status = "stale_direct_book_quote"
+        fresh = False
+    else:
+        status = "fresh_direct_book_quote"
+        fresh = True
+    return {
+        **common,
+        "near_core_book_age_sec": round(age_sec, 6),
+        "near_core_book_fresh": fresh,
+        "near_core_book_freshness_status": status,
+    }
 
 def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -690,7 +768,14 @@ def live_order_id(row: Mapping[str, Any]) -> str:
     response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
     place = response.get("place") if isinstance(response.get("place"), Mapping) else {}
     for payload in (row, place, response):
-        for key in ("order_id", "orderID", "clob_order_id", "id"):
+        for key in (
+            "venue_order_id",
+            "order_id",
+            "orderID",
+            "clob_order_id",
+            "root_order_id",
+            "id",
+        ):
             value = str(payload.get(key) or "").strip()
             if value:
                 return value
@@ -708,42 +793,195 @@ def signal_id(row: Mapping[str, Any]) -> str:
 
 
 def latest_rows_by_checkpoint(path: Path) -> dict[str, dict[str, Any]]:
-    latest: dict[str, dict[str, Any]] = {}
-    for row in iter_jsonl(path):
-        key = str(row.get("checkpoint_key") or "")
-        if key:
-            latest[key] = row
-    return latest
+    index_path = weather_epoch_index_path(path)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(index_path, timeout=30.0) as conn:
+        _prepare_weather_epoch_index(conn)
+        _refresh_weather_epoch_index(path, conn)
+        return {
+            str(checkpoint_key): json.loads(payload_json)
+            for checkpoint_key, payload_json in conn.execute(
+                "SELECT checkpoint_key, payload_json FROM latest_checkpoint_rows"
+            )
+        }
+
+
+WEATHER_EPOCH_INDEX_SCHEMA_VERSION = "weather_epoch_index_v2"
+
+
+def weather_epoch_index_path(source_path: Path) -> Path:
+    if source_path.name == "state_decisions.jsonl":
+        return source_path.with_name("runtime_state_index.sqlite3")
+    return source_path.with_name(f"{source_path.stem}_index.sqlite3")
+
+
+def _weather_epoch_index_metadata(conn: sqlite3.Connection) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in conn.execute("SELECT key, value FROM index_metadata")
+    }
+
+
+def _prepare_weather_epoch_index(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS index_metadata "
+        "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS latest_weather_epochs (
+            city TEXT NOT NULL,
+            target_date TEXT NOT NULL,
+            decision_snapshot_ts_utc TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            PRIMARY KEY (city, target_date)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS latest_checkpoint_rows (
+            checkpoint_key TEXT PRIMARY KEY,
+            decision_snapshot_ts_utc TEXT NOT NULL,
+            payload_json TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _set_weather_epoch_index_metadata(
+    conn: sqlite3.Connection, values: Mapping[str, Any]
+) -> None:
+    conn.executemany(
+        """
+        INSERT INTO index_metadata(key, value) VALUES(?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        ((str(key), str(value)) for key, value in values.items()),
+    )
+
+
+def _refresh_weather_epoch_index(
+    source_path: Path, conn: sqlite3.Connection
+) -> None:
+    try:
+        stat = source_path.stat()
+    except FileNotFoundError:
+        conn.execute("DELETE FROM latest_weather_epochs")
+        conn.execute("DELETE FROM latest_checkpoint_rows")
+        conn.execute("DELETE FROM index_metadata")
+        conn.commit()
+        return
+
+    metadata = _weather_epoch_index_metadata(conn)
+    source_identity = f"{stat.st_dev}:{stat.st_ino}"
+    try:
+        indexed_offset = int(metadata.get("indexed_offset", "0"))
+    except ValueError:
+        indexed_offset = 0
+    reset_required = (
+        metadata.get("schema_version") != WEATHER_EPOCH_INDEX_SCHEMA_VERSION
+        or metadata.get("source_identity") != source_identity
+        or stat.st_size < indexed_offset
+    )
+    if reset_required:
+        conn.execute("DELETE FROM latest_weather_epochs")
+        conn.execute("DELETE FROM latest_checkpoint_rows")
+        conn.execute("DELETE FROM index_metadata")
+        indexed_offset = 0
+
+    complete_offset = indexed_offset
+    with source_path.open("rb") as handle:
+        handle.seek(indexed_offset)
+        while True:
+            raw = handle.readline()
+            if not raw:
+                break
+            if not raw.endswith(b"\n"):
+                break
+            complete_offset = handle.tell()
+            try:
+                row = json.loads(raw)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if not isinstance(row, dict):
+                continue
+            city = str(row.get("city") or "")
+            target_date = str(row.get("target_date") or "")
+            stamp = parse_utc(
+                row.get("decision_snapshot_ts_utc") or row.get("created_at_utc")
+            )
+            if not city or not target_date or stamp is None:
+                continue
+            stamp_text = stamp.isoformat()
+            conn.execute(
+                """
+                INSERT INTO latest_weather_epochs(
+                    city, target_date, decision_snapshot_ts_utc, payload_json
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(city, target_date) DO UPDATE SET
+                    decision_snapshot_ts_utc = excluded.decision_snapshot_ts_utc,
+                    payload_json = excluded.payload_json
+                WHERE excluded.decision_snapshot_ts_utc
+                    > latest_weather_epochs.decision_snapshot_ts_utc
+                """,
+                (
+                    city,
+                    target_date,
+                    stamp_text,
+                    json.dumps(row, ensure_ascii=False, sort_keys=True),
+                ),
+            )
+            checkpoint_key = str(row.get("checkpoint_key") or "")
+            if checkpoint_key:
+                conn.execute(
+                    """
+                    INSERT INTO latest_checkpoint_rows(
+                        checkpoint_key, decision_snapshot_ts_utc, payload_json
+                    ) VALUES (?, ?, ?)
+                    ON CONFLICT(checkpoint_key) DO UPDATE SET
+                        decision_snapshot_ts_utc = excluded.decision_snapshot_ts_utc,
+                        payload_json = excluded.payload_json
+                    WHERE excluded.decision_snapshot_ts_utc
+                        >= latest_checkpoint_rows.decision_snapshot_ts_utc
+                    """,
+                    (
+                        checkpoint_key,
+                        stamp_text,
+                        json.dumps(row, ensure_ascii=False, sort_keys=True),
+                    ),
+                )
+
+    _set_weather_epoch_index_metadata(
+        conn,
+        {
+            "schema_version": WEATHER_EPOCH_INDEX_SCHEMA_VERSION,
+            "source_path": str(source_path.resolve()),
+            "source_identity": source_identity,
+            "indexed_offset": complete_offset,
+        },
+    )
+    conn.commit()
 
 
 def latest_weather_epochs(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
-    latest: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
-    for row in iter_jsonl(path):
-        city = str(row.get("city") or "")
-        target_date = str(row.get("target_date") or "")
-        stamp = parse_utc(row.get("decision_snapshot_ts_utc"))
-        if not city or not target_date or stamp is None:
-            continue
-        key = (city, target_date)
-        if key not in latest or stamp > latest[key][0]:
-            latest[key] = (stamp, row)
-    return {key: row for key, (_stamp, row) in latest.items()}
+    index_path = weather_epoch_index_path(path)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(index_path, timeout=30.0) as conn:
+        _prepare_weather_epoch_index(conn)
+        _refresh_weather_epoch_index(path, conn)
+        return {
+            (str(city), str(target_date)): json.loads(payload_json)
+            for city, target_date, payload_json in conn.execute(
+                "SELECT city, target_date, payload_json FROM latest_weather_epochs"
+            )
+        }
 
 
 def latest_scores_by_city_day(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
-    latest: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
-    for row in iter_jsonl(path):
-        city = str(row.get("city") or "")
-        target_date = str(row.get("target_date") or "")
-        stamp = parse_utc(
-            row.get("decision_snapshot_ts_utc") or row.get("created_at_utc")
-        )
-        if not city or not target_date or stamp is None:
-            continue
-        key = (city, target_date)
-        if key not in latest or stamp > latest[key][0]:
-            latest[key] = (stamp, row)
-    return {key: row for key, (_stamp, row) in latest.items()}
+    return latest_weather_epochs(path)
 
 
 def maker_signal_ids_with_venue_exposure(path: Path) -> set[str]:
@@ -1098,6 +1336,8 @@ def submitted_city_days(paths: Iterable[Path]) -> set[tuple[str, str]]:
         for path in paths
         for row in iter_jsonl(path)
         if str(row.get("status") or "") == "submitted"
+        and str(row.get("strategy_instance") or "")
+        != near_core_maker_probe.STRATEGY_INSTANCE
         and str(row.get("city") or "")
         and str(row.get("target_date") or "")
     }
@@ -1109,6 +1349,7 @@ def attempted_signal_ids(output_dir: Path) -> set[str]:
         for row in iter_jsonl(output_dir / "entry_attempts.jsonl")
         if str(row.get("signal_id") or "")
         and str(row.get("status") or "") == "blocked"
+        and str(row.get("reason") or "") not in TRANSIENT_ENTRY_BLOCKERS
     }
     attempted.update(
         str(row.get("signal_id") or "")
@@ -1125,6 +1366,11 @@ def daily_family_usage(paths: Iterable[Path], now: datetime) -> tuple[int, float
     for path in paths:
         for row in iter_jsonl(path):
             if str(row.get("status") or "") != "submitted":
+                continue
+            if (
+                str(row.get("strategy_instance") or "")
+                == near_core_maker_probe.STRATEGY_INSTANCE
+            ):
                 continue
             created = parse_utc(row.get("created_at_utc"))
             if created is None or created.astimezone(BJ).date() != day:
@@ -1155,7 +1401,11 @@ def entry_plan_cost_reservation(plans: Iterable[Mapping[str, Any]]) -> float:
 def max_live_child_notional_usd(args: argparse.Namespace) -> float:
     """Maximum principal for one child at the binary-market price ceiling."""
 
-    return max(float(args.taker_shares), float(args.maker_shares))
+    return max(
+        float(args.taker_shares),
+        float(args.maker_shares),
+        float(getattr(args, "near_core_maker_shares", 0.0)),
+    )
 
 
 def maker_profile_parameter(name: str) -> float:
@@ -1498,6 +1748,780 @@ def build_entry_plans(
     return plans
 
 
+def continuous_market_rescores(
+    args: argparse.Namespace,
+    output_dir: Path,
+    *,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """Re-score fresh books while the latest hourly Core thesis is armed."""
+
+    scores = latest_scores_by_city_day(output_dir / "pre_live_scores.jsonl")
+    epochs = latest_weather_epochs(output_dir / "state_decisions.jsonl")
+    artifact = load_artifact(args.artifact)
+    rows: list[dict[str, Any]] = []
+    def checkpoint_clock(item: tuple[tuple[str, str], dict[str, Any]]) -> datetime:
+        _city_day, checkpoint = item
+        return parse_utc(
+            checkpoint.get("decision_snapshot_ts_utc")
+            or checkpoint.get("created_at_utc")
+        ) or datetime.min.replace(tzinfo=timezone.utc)
+
+    all_candidates = sorted(scores.items(), key=checkpoint_clock, reverse=True)
+    max_books = max(0, int(args.continuous_market_max_books_per_cycle))
+    candidates = all_candidates[:max_books]
+    skipped = all_candidates[max_books:]
+    append_jsonl(
+        output_dir / "continuous_market_rescore_cycles.jsonl",
+        {
+            "record_type": "current_yes_core_carry_continuous_rescore_cycle",
+            "created_at_utc": now.isoformat(timespec="milliseconds"),
+            "candidate_city_days": len(all_candidates),
+            "selected_city_days": len(candidates),
+            "skipped_city_days": len(skipped),
+            "selection_policy": "newest_hourly_thesis_first",
+            "skipped_city_day_keys": [
+                f"{city}|{target_date}" for (city, target_date), _row in skipped
+            ],
+        },
+    )
+    with market_httpx_client(args.book_proxy, timeout=float(args.book_timeout_sec)) as client:
+        for city_day, checkpoint in candidates:
+            if checkpoint.get("model_probability_hold") is None:
+                continue
+            # The hourly row is the frozen economic thesis. The state stream
+            # may intentionally be sparse, so inherit the entire checkpoint
+            # before overlaying only its latest weather/market identity fields.
+            state = {**checkpoint, **dict(epochs.get(city_day) or {})}
+            checkpoint_token = str(
+                checkpoint.get("current_yes_token_id") or checkpoint.get("token_id") or ""
+            )
+            current_token = str(
+                state.get("current_yes_token_id") or state.get("token_id") or ""
+            )
+            checkpoint_bracket = str(
+                checkpoint.get("current_bracket") or checkpoint.get("bracket") or ""
+            )
+            current_bracket = str(
+                state.get("current_bracket") or state.get("bracket") or ""
+            )
+            if (
+                not checkpoint_token
+                or current_token != checkpoint_token
+                or current_bracket != checkpoint_bracket
+            ):
+                continue
+            freshness_ok, _freshness_reason = signal_runner.observation_freshness_valid(state)
+            if not freshness_ok:
+                continue
+            book = signal_runner.fetch_full_book(client, current_token)
+            book_identity = "direct-clob-" + stable_hash(
+                {
+                    "token_id": current_token,
+                    "fetched_at_utc": book.get("fetched_at_utc"),
+                    "bids": book.get("bids") or [],
+                    "asks": book.get("asks") or [],
+                }
+            )
+            scored_input = {
+                **state,
+                "checkpoint_key": str(checkpoint.get("checkpoint_key") or ""),
+                "checkpoint_eligible": True,
+                "current_yes_bid": book.get("bid"),
+                "current_yes_ask": book.get("ask"),
+                "current_yes_bid_size": book.get("bid_size"),
+                "current_yes_ask_size": book.get("ask_size"),
+                "current_yes_tick_size": book.get("tick_size"),
+                "current_yes_book_status": book.get("status"),
+                "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
+            }
+            result = evaluate_entry(scored_input, book.get("asks") or [], artifact)
+            row = {
+                **scored_input,
+                **result,
+                "record_type": "current_yes_core_carry_continuous_market_rescore",
+                "created_at_utc": now.isoformat(timespec="milliseconds"),
+                "market_rescore_at_utc": now.isoformat(timespec="milliseconds"),
+                "rescore_mode": "continuous_market_reprice",
+                "parent_checkpoint_key": checkpoint.get("checkpoint_key"),
+                "parent_checkpoint_created_at_utc": checkpoint.get("created_at_utc"),
+                "feature_book_snapshot_id": book_identity,
+                "execution_book_snapshot_id": book_identity,
+                "direct_book_asks": book.get("asks") or [],
+                "direct_book_bids": book.get("bids") or [],
+                "zero_notional": True,
+                "no_order_placed": True,
+            }
+            row["market_rescore_id"] = "market-rescore-" + stable_hash(
+                {
+                    "city": city_day[0],
+                    "target_date": city_day[1],
+                    "checkpoint_key": row.get("checkpoint_key"),
+                    "book": book_identity,
+                }
+            )
+            append_jsonl(output_dir / "continuous_market_rescores.jsonl", row)
+            rows.append(row)
+    return rows
+
+
+def near_core_signal_id(row: Mapping[str, Any]) -> str:
+    return "current-yes-core-carry-near-core-" + stable_hash(
+        {
+            "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+            "city": str(row.get("city") or ""),
+            "target_date": str(row.get("target_date") or ""),
+            "checkpoint_key": str(row.get("checkpoint_key") or ""),
+        }
+    )
+
+
+def latest_near_core_candidates(
+    rows: Iterable[Mapping[str, Any]], *, now: datetime, max_age_sec: float
+) -> list[dict[str, Any]]:
+    latest: dict[str, tuple[datetime, dict[str, Any]]] = {}
+    for source in rows:
+        row = dict(source)
+        if not near_core_maker_probe.is_candidate(row):
+            continue
+        clock = parse_utc(
+            row.get("market_rescore_at_utc") or row.get("created_at_utc")
+        )
+        if clock is None or clock > now:
+            continue
+        age = (now - clock).total_seconds()
+        if age < 0 or age > max_age_sec:
+            continue
+        key = str(row.get("checkpoint_key") or "")
+        prior = latest.get(key)
+        if prior is None or clock > prior[0]:
+            latest[key] = (clock, row)
+    # The newest checkpoint owns the one city-day order.  Older simultaneous
+    # checkpoints remain explicit blocked denominator rows.
+    return [
+        item[1]
+        for item in sorted(latest.values(), key=lambda item: item[0], reverse=True)
+    ]
+
+
+def build_near_core_entry_plan(
+    row: Mapping[str, Any],
+    *,
+    live_enabled: bool,
+    now: datetime,
+    order_ttl_min: float,
+) -> dict[str, Any] | None:
+    fields = base_plan_fields(
+        row,
+        child_order_role="maker",
+        shares=near_core_maker_probe.FIXED_SHARES,
+        live_enabled=live_enabled,
+        now=now,
+        order_ttl_min=order_ttl_min,
+    )
+    if (
+        not bool(fields.get("maker_live_eligible"))
+        or (finite(fields.get("limit_price")) or 0.0) <= 0
+    ):
+        return None
+    sid = near_core_signal_id(row)
+    fields.update(
+        {
+            "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+            "config_id": near_core_maker_probe.CONFIG_ID,
+            "execution_profile": near_core_maker_probe.EXECUTION_PROFILE,
+            "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+            "near_core_experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+            "maker_experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+            "decision_mode": "continuous_core_v3_sole_non_positive_taker_ev",
+            "execution_mode": "near_core_continuous_fixed_rest_5_share",
+            "execution_policy": "core_carry_near_core_continuous_fixed_rest_maker_v2",
+            "order_lifecycle_policy": "near_core_fixed_rest_safety_cancel_only_v2",
+            "maker_budget_mode": "additive_near_core_fixed_5_share",
+            "client_order_prefix": near_core_maker_probe.CLIENT_ORDER_PREFIX,
+            "blocker": near_core_maker_probe.SOLE_BLOCKER,
+            "near_core_policy_arm": "CONTINUOUS_MARKET_REPRICE_FIXED_REST",
+            "economic_ws_cancel_enabled": False,
+            "fixed_order_shares": near_core_maker_probe.FIXED_SHARES,
+            "max_order_shares": near_core_maker_probe.FIXED_SHARES,
+        }
+    )
+    plan = {
+        "record_type": "weather_edge_trade_plan",
+        "plan_id": "plan-"
+        + stable_hash(
+            {
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "signal_id": sid,
+                "role": "maker",
+                "checkpoint_key": row.get("checkpoint_key"),
+            }
+        ),
+        "signal_id": sid,
+        "opportunity_id": sid,
+        "created_at_utc": now.isoformat(timespec="seconds"),
+        "status": "accepted",
+        "risk_status": "passed",
+        "risk_reason": "",
+        **fields,
+    }
+    plan["comparison_group_id"] = stable_hash(
+        {
+            "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+            "signal_id": sid,
+            "token_id": plan.get("token_id"),
+        }
+    )
+    compatibility = build_core_carry_legacy_plan_compatibility(legacy_plans=[plan])
+    intent = compatibility.intents[0]
+    plan.update(
+        {
+            "execution_schema_version": intent.execution_schema_version,
+            "resolved_execution_profile": intent.resolved_execution_profile,
+            "execution_config_id": intent.execution_config_id,
+            "plan_dedupe_key": intent.plan_dedupe_key,
+            "live_exposure_key": intent.live_exposure_key,
+        }
+    )
+    return plan
+
+
+def near_core_maker_lifecycle_heads(path: Path) -> list[dict[str, Any]]:
+    heads: dict[str, tuple[datetime, int, dict[str, Any]]] = {}
+    for index, row in enumerate(iter_jsonl(path)):
+        if (
+            str(row.get("strategy_instance") or "")
+            != near_core_maker_probe.STRATEGY_INSTANCE
+            or not bool(row.get("maker_only"))
+        ):
+            continue
+        root = maker_lifecycle_root(row)
+        created = parse_utc(row.get("created_at_utc"))
+        if not root or created is None:
+            continue
+        prior = heads.get(root)
+        if prior is None or (created, index) > (prior[0], prior[1]):
+            heads[root] = (created, index, row)
+    return [item[2] for item in heads.values()]
+
+
+def recover_near_core_journal_terminal_makers(output_dir: Path) -> int:
+    """Recover a terminal near-Core projection after a journal/write crash."""
+
+    live_orders = output_dir / "live_orders.jsonl"
+    states = execution_journal_order_states(output_dir / "execution_journal.jsonl")
+    existing_execution_ids = {
+        str(row.get("execution_id") or "") for row in iter_jsonl(live_orders)
+    }
+    written = 0
+    for head in near_core_maker_lifecycle_heads(live_orders):
+        if str(head.get("status") or "") != "submitted":
+            continue
+        order_id = live_order_id(head)
+        evidence = states.get(order_id)
+        if not order_id or not evidence or evidence["status"] not in {"cancelled", "filled"}:
+            continue
+        execution_id = "near-core-journal-recovery-" + stable_hash(
+            {"order_id": order_id, "terminal_status": evidence["status"]}
+        )
+        if execution_id in existing_execution_ids:
+            continue
+        terminal = {
+            **dict(head),
+            "record_type": "weather_edge_live_order",
+            "created_at_utc": evidence["recorded_at_utc"] or utc_now(),
+            "status": evidence["status"],
+            "child_order_role": "near_core_maker_terminal",
+            "execution_action": "near_core_maker_terminal",
+            "execution_id": execution_id,
+            "plan_id": "plan-" + execution_id,
+            "replacement_of_order_id": order_id,
+            "source_order_id": order_id,
+            "exchange_response": {
+                "quote_status": evidence["status"],
+                "quote_reason": "execution_journal_terminal_recovery",
+                "authoritative_execution_journal": evidence["journal_payload"],
+            },
+        }
+        append_jsonl(live_orders, terminal)
+        existing_execution_ids.add(execution_id)
+        written += 1
+    return written
+
+
+def near_core_daily_usage(output_dir: Path, now: datetime) -> tuple[int, float]:
+    day = now.astimezone(BJ).date()
+    city_days: set[tuple[str, str]] = set()
+    posted = 0.0
+    for row in iter_jsonl(output_dir / "live_orders.jsonl"):
+        if (
+            str(row.get("strategy_instance") or "")
+            != near_core_maker_probe.STRATEGY_INSTANCE
+            or str(row.get("status") or "") != "submitted"
+        ):
+            continue
+        created = parse_utc(row.get("created_at_utc"))
+        if created is None or created.astimezone(BJ).date() != day:
+            continue
+        key = near_core_maker_probe.city_day(row)
+        if all(key):
+            city_days.add(key)
+        posted += finite(row.get("posted_notional")) or finite(row.get("notional")) or 0.0
+    return len(city_days), posted
+
+
+def near_core_entry_plans(
+    args: argparse.Namespace,
+    output_dir: Path,
+    *,
+    now: datetime,
+    core_actionable_city_days: set[tuple[str, str]],
+    market_rescores: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not bool(args.near_core_maker_probe_enabled):
+        return [], []
+    live_rows = list(iter_jsonl(output_dir / "live_orders.jsonl"))
+    existing_family = submitted_city_days(family_live_order_files(output_dir))
+    near_consumed = near_core_maker_probe.consumed_city_days(live_rows)
+    used_city_days, used_cost = near_core_daily_usage(output_dir, now)
+    plans: list[dict[str, Any]] = []
+    ledger: list[dict[str, Any]] = []
+    for row in latest_near_core_candidates(
+        market_rescores,
+        now=now,
+        max_age_sec=float(args.near_core_candidate_max_age_sec),
+    ):
+        key = near_core_maker_probe.city_day(row)
+        book_freshness = near_core_book_freshness(
+            row,
+            now=now,
+            max_age_sec=float(args.near_core_book_max_age_sec),
+        )
+        reason = ""
+        if not bool(book_freshness["near_core_book_fresh"]):
+            reason = str(book_freshness["near_core_book_freshness_status"])
+        elif key in core_actionable_city_days:
+            reason = "existing_core_actionable_priority"
+        elif key in existing_family:
+            reason = "existing_core_family_exposure"
+        elif key in near_consumed:
+            reason = "near_core_city_day_exposure_already_consumed"
+        elif (
+            int(args.near_core_max_city_days_per_bj_day) > 0
+            and used_city_days >= int(args.near_core_max_city_days_per_bj_day)
+        ):
+            reason = "near_core_daily_city_day_cap"
+        plan = None if reason else build_near_core_entry_plan(
+            row,
+            live_enabled=bool(
+                args.live
+                and args.confirm_live
+                and args.confirm_near_core_maker_probe_live
+            ),
+            now=now,
+            order_ttl_min=float(args.near_core_order_ttl_min),
+        )
+        if not reason and plan is None:
+            reason = "near_core_maker_safety_not_eligible"
+        planned_cost = entry_plan_cost_reservation([plan] if plan else [])
+        if (
+            not reason
+            and used_cost + planned_cost > float(args.near_core_max_daily_cost_usd)
+        ):
+            reason = "near_core_daily_cost_cap"
+            plan = None
+            planned_cost = 0.0
+        ledger.append(
+            {
+                "schema_version": near_core_maker_probe.LEDGER_SCHEMA_VERSION,
+                "record_type": "core_carry_near_core_maker_decision",
+                "ledger_id": "near-core-ledger-"
+                + stable_hash(
+                    {
+                        "checkpoint_key": row.get("checkpoint_key"),
+                        "market_rescore_id": row.get("market_rescore_id"),
+                        "status": "blocked" if reason else "planned",
+                        "reason": reason,
+                    }
+                ),
+                "created_at_utc": now.isoformat(timespec="seconds"),
+                "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+                "eligible_checkpoint": True,
+                "city": key[0],
+                "target_date": key[1],
+                "checkpoint_key": row.get("checkpoint_key"),
+                "signal_id": near_core_signal_id(row),
+                "market_rescore_id": row.get("market_rescore_id"),
+                "feature_book_snapshot_id": row.get("feature_book_snapshot_id"),
+                "execution_book_snapshot_id": row.get("execution_book_snapshot_id"),
+                "model_probability_hold": row.get("model_probability_hold"),
+                "model_edge_after_fee_and_depth": row.get(
+                    "model_edge_after_fee_and_depth"
+                ),
+                "current_yes_bid": row.get("current_yes_bid"),
+                "current_yes_ask": row.get("current_yes_ask"),
+                "sole_blocker": near_core_maker_probe.SOLE_BLOCKER,
+                "status": "blocked" if reason else "planned",
+                "reason": reason,
+                "plan_id": plan.get("plan_id") if plan else "",
+                "fixed_shares": near_core_maker_probe.FIXED_SHARES,
+                "client_order_prefix": near_core_maker_probe.CLIENT_ORDER_PREFIX,
+                "policy_arm": "CONTINUOUS_MARKET_REPRICE_FIXED_REST",
+                "economic_ws_cancel_enabled": False,
+                "live_enabled": bool(plan and plan.get("live_enabled")),
+                **book_freshness,
+            }
+        )
+        if plan is not None:
+            plans.append(plan)
+            near_consumed.add(key)
+            used_city_days += 1
+            used_cost += planned_cost
+    return plans, ledger
+
+
+def near_core_lifecycle_plans(
+    args: argparse.Namespace,
+    output_dir: Path,
+    *,
+    now: datetime,
+    core_actionable_city_days: set[tuple[str, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[tuple[str, str]]]:
+    epochs = latest_weather_epochs(output_dir / "state_decisions.jsonl")
+    plans: list[dict[str, Any]] = []
+    decisions: list[dict[str, Any]] = []
+    superseded: set[tuple[str, str]] = set()
+    terminal_order_ids = terminal_safety_cancel_order_ids(
+        output_dir / "near_core_safety_cancels.jsonl"
+    )
+    for row in iter_jsonl(output_dir / "near_core_private_order_updates.jsonl"):
+        for payload in _nested_mappings(row.get("payload")):
+            order_id = str(
+                payload.get("id")
+                or payload.get("order_id")
+                or payload.get("orderID")
+                or ""
+            )
+            status = str(payload.get("status") or payload.get("state") or "").lower()
+            if order_id and status in NEAR_CORE_TERMINAL_ORDER_STATUSES:
+                terminal_order_ids.add(order_id)
+    candidates = [
+        row
+        for row in near_core_maker_lifecycle_heads(output_dir / "live_orders.jsonl")
+        if str(row.get("status") or "") == "submitted"
+        and bool(live_order_id(row))
+        and live_order_id(row) not in terminal_order_ids
+    ]
+    with market_httpx_client(args.book_proxy, timeout=float(args.book_timeout_sec)) as client:
+        for order in candidates:
+            key = near_core_maker_probe.city_day(order)
+            deadline = parse_utc(
+                order.get("maker_lifecycle_deadline_utc") or order.get("expires_at_utc")
+            )
+            source_ref = str(
+                order.get("data_epoch_ref") or order.get("source_report_ts_utc") or ""
+            )
+            latest = epochs.get(key)
+            latest_ref = str((latest or {}).get("source_report_ts_utc") or "")
+            action = ""
+            blocker = "fixed_rest_no_economic_action"
+            if key in core_actionable_city_days:
+                action = "near_core_maker_cancel_core_supersession"
+                blocker = "existing_core_became_actionable"
+                superseded.add(key)
+            elif not bool(args.near_core_maker_probe_enabled):
+                action = "near_core_maker_cancel_feature_disabled"
+                blocker = "near_core_feature_disabled"
+            elif deadline is None or now >= deadline:
+                action = "near_core_maker_cancel_safety_deadline"
+                blocker = "near_core_common_deadline_elapsed"
+            elif not latest_ref or latest_ref != source_ref:
+                action = "near_core_maker_cancel_weather_state"
+                blocker = (
+                    "latest_weather_state_unavailable"
+                    if not latest_ref
+                    else "weather_state_changed_requires_fresh_candidate"
+                )
+            else:
+                quote = weather_state._fetch_token_book(  # noqa: SLF001
+                    client, str(order.get("token_id") or "")
+                )
+                bid = finite(quote.get("bid")) or 0.0
+                ask = finite(quote.get("ask")) or 0.0
+                if (
+                    str(quote.get("book_status") or "") != "ok"
+                    or bid <= 0
+                    or ask <= bid
+                ):
+                    action = "near_core_maker_cancel_stale_market_state"
+                    blocker = "no_fresh_valid_two_sided_book"
+            decision = {
+                "schema_version": near_core_maker_probe.LEDGER_SCHEMA_VERSION,
+                "record_type": "core_carry_near_core_maker_lifecycle_decision",
+                "ledger_id": "near-core-ledger-"
+                + stable_hash(
+                    {
+                        "source_order_id": live_order_id(order),
+                        "action": action,
+                        "latest_ref": latest_ref,
+                    }
+                ),
+                "created_at_utc": now.isoformat(timespec="seconds"),
+                "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+                "eligible_checkpoint": False,
+                "city": key[0],
+                "target_date": key[1],
+                "signal_id": order.get("signal_id"),
+                "source_order_id": live_order_id(order),
+                "status": "cancel_planned" if action else "resting",
+                "action": action,
+                "reason": blocker,
+                "economic_ws_cancel_enabled": False,
+            }
+            decisions.append(decision)
+            if action:
+                plans.append(
+                    build_maker_lifecycle_plan(
+                        order,
+                        action=action,
+                        limit_price=0.0,
+                        cancel_only=True,
+                        cancel_source_order=True,
+                        now=now,
+                        live_enabled=bool(args.live and args.confirm_live),
+                    )
+                )
+    return plans, decisions, superseded
+
+
+def append_near_core_ledger(output_dir: Path, rows: Iterable[Mapping[str, Any]]) -> int:
+    path = output_dir / "near_core_maker_v2_ledger.jsonl"
+    existing = {str(row.get("ledger_id") or "") for row in iter_jsonl(path)}
+    written = 0
+    for source in rows:
+        row = dict(source)
+        ledger_id = str(row.get("ledger_id") or "")
+        if not ledger_id or ledger_id in existing:
+            continue
+        append_jsonl(path, row)
+        existing.add(ledger_id)
+        written += 1
+    return written
+
+
+def _nested_mappings(value: Any) -> Iterable[Mapping[str, Any]]:
+    if isinstance(value, Mapping):
+        yield value
+        for child in value.values():
+            yield from _nested_mappings(child)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from _nested_mappings(child)
+
+
+def _authoritative_near_core_order_events(
+    output_dir: Path,
+    *,
+    orders_by_order_id: Mapping[str, Mapping[str, Any]],
+    orders_by_client_id: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Project private WS and safety-cancel truth onto known near orders."""
+
+    events: list[dict[str, Any]] = []
+
+    def add_state(
+        state: Mapping[str, Any], *, source: str, received_at_utc: Any
+    ) -> None:
+        order_id = str(
+            state.get("order_id")
+            or state.get("orderID")
+            or state.get("orderId")
+            or state.get("id")
+            or ""
+        )
+        client_id = str(
+            state.get("client_order_id")
+            or state.get("clientOrderId")
+            or state.get("clientOrderID")
+            or ""
+        )
+        base = orders_by_order_id.get(order_id) or orders_by_client_id.get(client_id)
+        if base is None:
+            return
+        matched = near_core_maker_probe.matched_shares(
+            {
+                "authoritative_matched_shares": state.get("size_matched")
+                or state.get("sizeMatched")
+                or state.get("matched_shares")
+                or state.get("matchedSize"),
+            }
+        )
+        status = str(
+            state.get("status") or state.get("state") or "authoritative_update"
+        ).lower()
+        event_key = {
+            "source": source,
+            "order_id": order_id or live_order_id(base),
+            "client_order_id": client_id or base.get("client_order_id"),
+            "received_at_utc": received_at_utc,
+            "status": status,
+            "matched_shares": matched,
+        }
+        events.append(
+            {
+                "base_order": dict(base),
+                "source": source,
+                "received_at_utc": received_at_utc,
+                "order_id": event_key["order_id"],
+                "client_order_id": event_key["client_order_id"],
+                "status": status,
+                "matched_shares": matched,
+                "authoritative_order_state": dict(state),
+                "event_hash": stable_hash(event_key),
+            }
+        )
+
+    for event in iter_jsonl(output_dir / "near_core_private_order_updates.jsonl"):
+        received = event.get("received_at_utc") or event.get("created_at_utc")
+        for state in _nested_mappings(event.get("payload")):
+            add_state(state, source="private_user_ws", received_at_utc=received)
+
+    for event in iter_jsonl(output_dir / "near_core_safety_cancels.jsonl"):
+        state = event.get("authoritative_order_state")
+        if isinstance(state, Mapping):
+            enriched = {
+                **dict(state),
+                "order_id": state.get("order_id") or event.get("order_id"),
+            }
+            add_state(
+                enriched,
+                source="safety_cancel_fetch_order",
+                received_at_utc=event.get("created_at_utc"),
+            )
+    return events
+
+
+def sync_near_core_order_ledger(output_dir: Path) -> int:
+    rows: list[dict[str, Any]] = []
+    orders_by_order_id: dict[str, dict[str, Any]] = {}
+    orders_by_client_id: dict[str, dict[str, Any]] = {}
+    for order in iter_jsonl(output_dir / "live_orders.jsonl"):
+        if (
+            str(order.get("strategy_instance") or "")
+            != near_core_maker_probe.STRATEGY_INSTANCE
+        ):
+            continue
+        execution_id = str(order.get("execution_id") or "")
+        if not execution_id:
+            continue
+        order_id = live_order_id(order)
+        client_id = str(order.get("client_order_id") or "")
+        if order_id:
+            orders_by_order_id[order_id] = dict(order)
+        if client_id:
+            orders_by_client_id[client_id] = dict(order)
+        rows.append(
+            {
+                "schema_version": near_core_maker_probe.LEDGER_SCHEMA_VERSION,
+                "record_type": "core_carry_near_core_maker_order_state",
+                "ledger_id": "near-core-order-" + execution_id,
+                "created_at_utc": order.get("created_at_utc"),
+                "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+                "eligible_checkpoint": False,
+                "city": order.get("city"),
+                "target_date": order.get("target_date"),
+                "signal_id": order.get("signal_id"),
+                "plan_id": order.get("plan_id"),
+                "execution_id": execution_id,
+                "client_order_id": order.get("client_order_id"),
+                "order_id": order_id,
+                "status": order.get("status"),
+                "matched_shares": near_core_maker_probe.matched_shares(order),
+                "economic_ws_cancel_enabled": False,
+            }
+        )
+    for event in _authoritative_near_core_order_events(
+        output_dir,
+        orders_by_order_id=orders_by_order_id,
+        orders_by_client_id=orders_by_client_id,
+    ):
+        order = event["base_order"]
+        rows.append(
+            {
+                "schema_version": near_core_maker_probe.LEDGER_SCHEMA_VERSION,
+                "record_type": "core_carry_near_core_maker_authoritative_order_state",
+                "ledger_id": "near-core-authoritative-" + str(event["event_hash"]),
+                "created_at_utc": event.get("received_at_utc"),
+                "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+                "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+                "experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+                "eligible_checkpoint": False,
+                "city": order.get("city"),
+                "target_date": order.get("target_date"),
+                "signal_id": order.get("signal_id"),
+                "plan_id": order.get("plan_id"),
+                "execution_id": order.get("execution_id"),
+                "client_order_id": event.get("client_order_id"),
+                "order_id": event.get("order_id"),
+                "status": event.get("status"),
+                "matched_shares": event.get("matched_shares"),
+                "authoritative_order_state": event.get("authoritative_order_state"),
+                "order_state_source": event.get("source"),
+                "economic_ws_cancel_enabled": False,
+            }
+        )
+    return append_near_core_ledger(output_dir, rows)
+
+
+def write_near_core_runtime_artifacts(
+    args: argparse.Namespace, output_dir: Path
+) -> dict[str, Any]:
+    ledger = list(iter_jsonl(output_dir / "near_core_maker_v2_ledger.jsonl"))
+    manifest = {
+        "schema_version": near_core_maker_probe.MANIFEST_SCHEMA_VERSION,
+        "generated_at_utc": utc_now(),
+        "source_sleeve": near_core_maker_probe.SOURCE_SLEEVE,
+        "strategy_instance": near_core_maker_probe.STRATEGY_INSTANCE,
+        "config_id": near_core_maker_probe.CONFIG_ID,
+        "experiment_id": near_core_maker_probe.EXPERIMENT_ID,
+        "feature_enabled": bool(args.near_core_maker_probe_enabled),
+        "live_authorized": bool(
+            args.live
+            and args.confirm_live
+            and args.confirm_near_core_maker_probe_live
+        ),
+        "fixed_shares": near_core_maker_probe.FIXED_SHARES,
+        "client_order_prefix": near_core_maker_probe.CLIENT_ORDER_PREFIX,
+        "risk_budget": {
+            "max_city_days_per_bj_day": int(args.near_core_max_city_days_per_bj_day),
+            "city_day_count_cap_enabled": int(
+                args.near_core_max_city_days_per_bj_day
+            ) > 0,
+            "max_daily_cost_usd": float(args.near_core_max_daily_cost_usd),
+        },
+        "policy_arm": "CONTINUOUS_MARKET_REPRICE_FIXED_REST",
+        "rescore_interval_sec": float(args.interval_seconds),
+        "additive_to_core_10_plus_5": True,
+        "economic_ws_cancel_enabled": False,
+        "ws_control_readiness_manifest": str(
+            args.near_core_ws_control_manifest or ""
+        ),
+        "ledger_path": str(output_dir / "near_core_maker_v2_ledger.jsonl"),
+        **DEPLOYMENT_METADATA,
+    }
+    report = near_core_maker_probe.report(ledger)
+    gate = near_core_maker_probe.promotion_gate(ledger)
+    write_json(output_dir / "near_core_maker_v2_manifest.json", manifest)
+    write_json(output_dir / "near_core_maker_v2_latest_report.json", report)
+    write_json(output_dir / "near_core_maker_v2_promotion_gate.json", gate)
+    return {"manifest": manifest, "report": report, "promotion_gate": gate}
+
 def execute_plans(args: argparse.Namespace, plans: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
@@ -1507,7 +2531,14 @@ def execute_plans(args: argparse.Namespace, plans: list[dict[str, Any]], output_
         live=bool(args.live),
         market_proxy=args.market_proxy,
         max_child_shares=max_live_child_notional_usd(args),
-        max_batch_cost_usd=float(args.max_daily_cost_usd),
+        max_batch_cost_usd=(
+            float(args.max_daily_cost_usd)
+            + (
+                float(args.near_core_max_daily_cost_usd)
+                if bool(args.near_core_maker_probe_enabled)
+                else 0.0
+            )
+        ),
         code_commit=str(DEPLOYMENT_METADATA["deployed_repo_sha"]),
     )
     return {
@@ -1537,8 +2568,13 @@ def build_maker_lifecycle_plan(
         "created_at_utc": now.isoformat(timespec="seconds"),
         "child_order_role": action,
         "execution_action": action,
-        "execution_policy": "current_yes_residual_carry_maker_v2",
-        "order_lifecycle_policy": "maker_staged_chase_until_pre_data_update_or_ttl_v2",
+        "execution_policy": str(
+            order.get("execution_policy") or "current_yes_residual_carry_maker_v2"
+        ),
+        "order_lifecycle_policy": str(
+            order.get("order_lifecycle_policy")
+            or "maker_staged_chase_until_pre_data_update_or_ttl_v2"
+        ),
         "limit_price": round(limit_price, 6),
         "notional": round(shares * limit_price, 6),
         "order_notional_cap": round(shares * limit_price, 6),
@@ -1719,6 +2755,7 @@ def new_entry_plans(
     output_dir: Path,
     *,
     now: datetime,
+    market_rescores: Iterable[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     scores = latest_rows_by_checkpoint(output_dir / "pre_live_scores.jsonl")
     attempted = attempted_signal_ids(output_dir)
@@ -1727,16 +2764,31 @@ def new_entry_plans(
     used_city_days, used_cost = daily_family_usage(family_paths, now)
     plans: list[dict[str, Any]] = []
     attempts: list[dict[str, Any]] = []
+    current_by_city_day = {
+        (str(row.get("city") or ""), str(row.get("target_date") or "")): dict(row)
+        for row in market_rescores
+        if str(row.get("city") or "") and str(row.get("target_date") or "")
+    }
+    candidates: dict[tuple[str, str], tuple[dict[str, Any], bool]] = {}
     for would in iter_jsonl(output_dir / "would_orders.jsonl"):
         row = scores.get(str(would.get("checkpoint_key") or ""))
         if row is None:
             continue
+        city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if city_day not in current_by_city_day:
+            candidates[city_day] = (dict(row), bool(would.get("family_city_day_conflict")))
+    for city_day, row in current_by_city_day.items():
+        if bool(row.get("eligible")):
+            candidates[city_day] = (row, False)
+        else:
+            candidates.pop(city_day, None)
+    for _city_day_key, (row, source_family_conflict) in sorted(candidates.items()):
         sid = signal_id(row)
         city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
         if sid in attempted:
             continue
         reason = ""
-        if bool(would.get("family_city_day_conflict")) or city_day in family_city_days:
+        if source_family_conflict or city_day in family_city_days:
             reason = "family_city_day_conflict"
         elif used_city_days >= int(args.max_city_days_per_bj_day):
             reason = "daily_city_day_cap"
@@ -1779,6 +2831,10 @@ def new_entry_plans(
                 "city": city_day[0],
                 "target_date": city_day[1],
                 "checkpoint_key": row.get("checkpoint_key"),
+                "trigger_mode": str(row.get("rescore_mode") or "hourly_checkpoint"),
+                "market_rescore_id": row.get("market_rescore_id"),
+                "feature_book_snapshot_id": row.get("feature_book_snapshot_id"),
+                "execution_book_snapshot_id": row.get("execution_book_snapshot_id"),
                 "model_probability_hold": row.get("model_probability_hold"),
                 "token_id": str(
                     row.get("token_id") or row.get("current_yes_token_id") or ""
@@ -1832,15 +2888,54 @@ def configure_signal_runner(output_dir: Path) -> None:
     signal_runner.ARTIFACT_PATH = ARTIFACT_PATH
 
 
-def run_once(args: argparse.Namespace) -> dict[str, Any]:
-    assert_runtime_contract()
+def validate_runtime_arguments(args: argparse.Namespace) -> None:
     if args.live and not args.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
+    if (
+        args.live
+        and args.near_core_maker_probe_enabled
+        and not args.confirm_near_core_maker_probe_live
+    ):
+        raise RuntimeError(
+            "live near-Core maker requires --confirm-near-core-maker-probe-live"
+        )
     if (
         float(args.taker_shares) != FROZEN_TAKER_SHARES
         or float(args.maker_shares) != FROZEN_MAKER_SHARES
     ):
-        raise RuntimeError("frozen tiny-live split requires exactly 10 taker + 5 maker shares")
+        raise RuntimeError("frozen Core split requires exactly 10 taker + 5 maker shares")
+    if float(args.near_core_maker_shares) != near_core_maker_probe.FIXED_SHARES:
+        raise RuntimeError("near-Core maker requires exactly 5 additive shares")
+    if float(args.near_core_candidate_max_age_sec) <= 0:
+        raise RuntimeError("--near-core-candidate-max-age-sec must be positive")
+    if float(args.near_core_book_max_age_sec) <= 0:
+        raise RuntimeError("--near-core-book-max-age-sec must be positive")
+    if int(args.continuous_market_max_books_per_cycle) <= 0:
+        raise RuntimeError("--continuous-market-max-books-per-cycle must be positive")
+    if int(args.near_core_max_city_days_per_bj_day) <= 0:
+        raise RuntimeError("--near-core-max-city-days-per-bj-day must be positive")
+    if float(args.near_core_max_daily_cost_usd) <= 0:
+        raise RuntimeError("--near-core-max-daily-cost-usd must be positive")
+
+
+def near_core_control_failures(
+    args: argparse.Namespace, *, now: datetime
+) -> list[str]:
+    if not bool(args.live and args.near_core_maker_probe_enabled):
+        return []
+    path = Path(str(args.near_core_ws_control_manifest or ""))
+    if not path.is_file():
+        return ["ws_control_manifest_missing"]
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ["ws_control_manifest_unreadable"]
+    return near_core_maker_probe.ws_control_readiness_failures(payload, now=now)
+
+
+def run_once(args: argparse.Namespace) -> dict[str, Any]:
+    assert_runtime_contract()
+    validate_runtime_arguments(args)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     configure_signal_runner(output_dir)
@@ -1851,8 +2946,59 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         output_dir,
         packets=decision_packets["written_packets"],
     )
+    market_rescores = continuous_market_rescores(args, output_dir, now=now)
+    control_failures = near_core_control_failures(args, now=now)
+    runtime_args = argparse.Namespace(**vars(args))
+    if control_failures:
+        runtime_args.near_core_maker_probe_enabled = False
     journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
-    entry_plans, attempts = new_entry_plans(args, output_dir, now=now)
+    near_core_journal_terminal_recoveries = (
+        recover_near_core_journal_terminal_makers(output_dir)
+    )
+    entry_plans, attempts = new_entry_plans(
+        args,
+        output_dir,
+        now=now,
+        market_rescores=market_rescores,
+    )
+    core_actionable_city_days = {
+        near_core_maker_probe.city_day(plan) for plan in entry_plans
+    }
+    near_lifecycle_plans, near_lifecycle_decisions, superseded_city_days = (
+        near_core_lifecycle_plans(
+            runtime_args,
+            output_dir,
+            now=now,
+            core_actionable_city_days=core_actionable_city_days,
+        )
+    )
+    if superseded_city_days:
+        entry_plans = [
+            plan
+            for plan in entry_plans
+            if near_core_maker_probe.city_day(plan) not in superseded_city_days
+        ]
+        for attempt in attempts:
+            if near_core_maker_probe.city_day(attempt) not in superseded_city_days:
+                continue
+            attempt.update(
+                {
+                    "status": "blocked",
+                    "reason": "near_core_cancel_must_confirm_before_core_submit",
+                    "maker_live_action": "defer_until_near_core_cancel_terminal",
+                    "maker_planned_shares": 0.0,
+                }
+            )
+    remaining_core_city_days = {
+        near_core_maker_probe.city_day(plan) for plan in entry_plans
+    }
+    near_entry_plans, near_entry_decisions = near_core_entry_plans(
+        runtime_args,
+        output_dir,
+        now=now,
+        core_actionable_city_days=remaining_core_city_days,
+        market_rescores=market_rescores,
+    )
     post_update_revalidations = collect_post_update_maker_revalidations(
         args,
         output_dir,
@@ -1861,10 +3007,20 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(args, output_dir, now=now)
     for decision in lifecycle_decisions:
         append_jsonl(output_dir / "maker_lifecycle_decisions.jsonl", decision)
-    plans = [*lifecycle_plans, *entry_plans]
+    append_near_core_ledger(
+        output_dir, [*near_lifecycle_decisions, *near_entry_decisions]
+    )
+    plans = [
+        *near_lifecycle_plans,
+        *lifecycle_plans,
+        *entry_plans,
+        *near_entry_plans,
+    ]
     execution = execute_plans(args, plans, output_dir)
     for attempt in attempts:
         append_jsonl(output_dir / "entry_attempts.jsonl", attempt)
+    near_core_order_ledger_rows = sync_near_core_order_ledger(output_dir)
+    near_core_artifacts = write_near_core_runtime_artifacts(runtime_args, output_dir)
     summary = {
         "status": "ok" if execution["exit_code"] == 0 else "executor_error",
         "generated_at_utc": utc_now(),
@@ -1883,8 +3039,36 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "decision_packet_alerts": decision_packets["alerts"],
         "capture_demands_written": capture_demands["written"],
         "capture_demand_alerts": capture_demands["alerts"],
+        "continuous_market_rescores": len(market_rescores),
+        "continuous_market_rescore_interval_sec": float(args.interval_seconds),
+        "continuous_market_core_actionable": sum(
+            1 for row in market_rescores if bool(row.get("eligible"))
+        ),
+        "continuous_market_near_candidates": sum(
+            1 for row in market_rescores if near_core_maker_probe.is_candidate(row)
+        ),
         "entry_attempts": len(attempts),
         "entry_plans": len(entry_plans),
+        "near_core_entry_plans": len(near_entry_plans),
+        "near_core_lifecycle_plans": len(near_lifecycle_plans),
+        "near_core_lifecycle_decisions": len(near_lifecycle_decisions),
+        "near_core_superseded_core_city_days": sorted(
+            f"{city}|{target_date}" for city, target_date in superseded_city_days
+        ),
+        "near_core_order_ledger_rows_written": near_core_order_ledger_rows,
+        "near_core_feature_configured": bool(args.near_core_maker_probe_enabled),
+        "near_core_feature_enabled": bool(runtime_args.near_core_maker_probe_enabled),
+        "near_core_control_failures": control_failures,
+        "near_core_live_authorized": bool(
+            args.live
+            and args.confirm_live
+            and args.confirm_near_core_maker_probe_live
+        ),
+        "near_core_fixed_shares": float(args.near_core_maker_shares),
+        "near_core_additive_to_core_10_plus_5": True,
+        "near_core_manifest_file": str(output_dir / "near_core_maker_v2_manifest.json"),
+        "near_core_report_file": str(output_dir / "near_core_maker_v2_latest_report.json"),
+        "near_core_promotion_gate": near_core_artifacts["promotion_gate"],
         "maker_lifecycle_plans": len(lifecycle_plans),
         "maker_lifecycle_decisions": len(lifecycle_decisions),
         "maker_post_update_revalidations": len(post_update_revalidations),
@@ -1893,6 +3077,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "maker_post_update_zero_notional": True,
         "journal_terminal_recoveries": journal_terminal_recoveries,
+        "near_core_journal_terminal_recoveries": (
+            near_core_journal_terminal_recoveries
+        ),
         "taker_shares": float(args.taker_shares),
         "maker_shares": float(args.maker_shares),
         "maker_refresh_sec": float(args.maker_refresh_sec),
@@ -1909,6 +3096,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "max_city_days_per_bj_day": int(args.max_city_days_per_bj_day),
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
+        "near_core_max_city_days_per_bj_day": int(
+            args.near_core_max_city_days_per_bj_day
+        ),
+        "near_core_max_daily_cost_usd": float(args.near_core_max_daily_cost_usd),
         "execution": execution,
         **DEPLOYMENT_METADATA,
     }
@@ -1934,6 +3125,24 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--order-ttl-min", type=float, default=15.0)
     ap.add_argument("--max-city-days-per-bj-day", type=int, default=10)
     ap.add_argument("--max-daily-cost-usd", type=float, default=100.0)
+    ap.add_argument("--continuous-market-max-books-per-cycle", type=int, default=64)
+    ap.add_argument("--near-core-maker-probe-enabled", action="store_true")
+    ap.add_argument(
+        "--confirm-near-core-maker-probe-live", action="store_true"
+    )
+    ap.add_argument(
+        "--near-core-maker-shares",
+        type=float,
+        default=near_core_maker_probe.FIXED_SHARES,
+    )
+    ap.add_argument("--near-core-order-ttl-min", type=float, default=15.0)
+    ap.add_argument("--near-core-candidate-max-age-sec", type=float, default=30.0)
+    ap.add_argument("--near-core-book-max-age-sec", type=float, default=10.0)
+    ap.add_argument(
+        "--near-core-max-city-days-per-bj-day", type=int, default=10
+    )
+    ap.add_argument("--near-core-max-daily-cost-usd", type=float, default=50.0)
+    ap.add_argument("--near-core-ws-control-manifest", default="")
     ap.add_argument("--executor-timeout-sec", type=float, default=60.0)
     ap.add_argument("--market-proxy", default=None)
     ap.add_argument("--runtime-db", default=str(ROOT / "runtime/weather.db"))

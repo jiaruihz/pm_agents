@@ -43,7 +43,7 @@ def test_runtime_contract_proves_pit_clock_and_clean_deployment() -> None:
     assert runner.DEPLOYMENT_METADATA["critical_source_dirty"] is False
     assert (
         runner.DEPLOYMENT_METADATA["deployment_contract_version"]
-        == "core_carry_v3_shared_order_runtime_10t5m_edge_cap_v3"
+        == "core_carry_v3_10t5m_plus_continuous_near5_v4"
     )
 
 
@@ -126,9 +126,362 @@ def test_live_parser_defaults_match_frozen_ten_plus_five_contract() -> None:
 
     assert args.taker_shares == runner.FROZEN_TAKER_SHARES == 10
     assert args.maker_shares == runner.FROZEN_MAKER_SHARES == 5
+    assert args.near_core_maker_shares == 5
     assert args.summary_filename == "signal_latest_summary.json"
     assert args.summary_history_filename == "signal_summary_history.jsonl"
     assert runner.CONFIG_ID.endswith("split_10_taker_5_maker_edge_cap_v3")
+
+
+def test_continuous_rescore_reuses_hourly_thesis_with_fresh_book(
+    monkeypatch, tmp_path
+) -> None:
+    checkpoint = {
+        **score_row(),
+        "current_yes_token_id": "yes-token",
+        "current_question": "Will Busan be 30 C?",
+        "model_probability_hold": 0.87,
+    }
+    state = {
+        **checkpoint,
+        "obs_status": "ok",
+        "station_gap_state": "within_expected_cadence",
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [checkpoint])
+    runner.write_jsonl(tmp_path / "state_decisions.jsonl", [state])
+    monkeypatch.setattr(
+        runner,
+        "market_httpx_client",
+        lambda *_args, **_kwargs: nullcontext(object()),
+    )
+    monkeypatch.setattr(
+        runner.signal_runner,
+        "observation_freshness_valid",
+        lambda _row: (True, "freshness_lineage_valid"),
+    )
+    monkeypatch.setattr(
+        runner.signal_runner,
+        "fetch_full_book",
+        lambda *_args: {
+            "status": "ok",
+            "fetched_at_utc": "2026-07-24T04:31:00Z",
+            "bid": 0.80,
+            "ask": 0.84,
+            "bid_size": 20,
+            "ask_size": 20,
+            "tick_size": 0.01,
+            "bids": [{"price": 0.80, "size": 20}],
+            "asks": [{"price": 0.84, "size": 20}],
+        },
+    )
+    monkeypatch.setattr(
+        runner,
+        "evaluate_entry",
+        lambda *_args: {
+            "eligible": False,
+            "reasons": ["non_positive_taker_ev"],
+            "model_probability_hold": 0.83,
+            "model_edge_after_fee_and_depth": -0.01,
+        },
+    )
+    args = argparse.Namespace(
+        artifact=str(runner.ARTIFACT_PATH),
+        continuous_market_max_books_per_cycle=20,
+        book_proxy=None,
+        book_timeout_sec=1,
+    )
+    now = datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+
+    rows = runner.continuous_market_rescores(args, tmp_path, now=now)
+
+    assert len(rows) == 1
+    assert rows[0]["rescore_mode"] == "continuous_market_reprice"
+    assert rows[0]["checkpoint_key"] == checkpoint["checkpoint_key"]
+    assert rows[0]["current_yes_ask"] == pytest.approx(0.84)
+    assert rows[0]["reasons"] == ["non_positive_taker_ev"]
+    persisted = list(runner.iter_jsonl(tmp_path / "continuous_market_rescores.jsonl"))
+    assert persisted[0]["market_rescore_id"] == rows[0]["market_rescore_id"]
+
+
+def test_continuous_rescore_inherits_sparse_state_from_frozen_hourly_thesis(
+    monkeypatch, tmp_path
+) -> None:
+    checkpoint = {
+        **score_row(),
+        "current_yes_token_id": "yes-token",
+        "model_probability_hold": 0.87,
+        "model_input_support_status": "ok",
+        "dewpoint_depression_f": 12.5,
+        "wind_speed_kt": 7.0,
+        "snapshot_file": "hourly-snapshot.json",
+    }
+    sparse_state = {
+        "city": "Busan",
+        "target_date": "2026-07-24",
+        "current_yes_token_id": "yes-token",
+        "current_bracket": "30",
+        "decision_snapshot_ts_utc": "2026-07-24T04:31:00Z",
+        "obs_status": "ok",
+        "station_gap_state": "within_expected_cadence",
+    }
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [checkpoint])
+    runner.write_jsonl(tmp_path / "state_decisions.jsonl", [sparse_state])
+    captured: dict = {}
+    monkeypatch.setattr(
+        runner, "market_httpx_client", lambda *_args, **_kwargs: nullcontext(object())
+    )
+    monkeypatch.setattr(
+        runner.signal_runner,
+        "observation_freshness_valid",
+        lambda _row: (True, "freshness_lineage_valid"),
+    )
+    monkeypatch.setattr(
+        runner.signal_runner,
+        "fetch_full_book",
+        lambda *_args: {
+            "status": "ok",
+            "fetched_at_utc": "2026-07-24T04:31:02Z",
+            "bid": 0.80,
+            "ask": 0.84,
+            "bid_size": 20,
+            "ask_size": 20,
+            "tick_size": 0.01,
+            "bids": [{"price": 0.80, "size": 20}],
+            "asks": [{"price": 0.84, "size": 20}],
+        },
+    )
+
+    def fake_evaluate(state, _asks, _artifact):
+        captured.update(state)
+        return {
+            "eligible": False,
+            "reasons": ["non_positive_taker_ev"],
+            "model_probability_hold": state["model_probability_hold"],
+        }
+
+    monkeypatch.setattr(runner, "evaluate_entry", fake_evaluate)
+    args = argparse.Namespace(
+        artifact=str(runner.ARTIFACT_PATH),
+        continuous_market_max_books_per_cycle=20,
+        book_proxy=None,
+        book_timeout_sec=1,
+    )
+
+    rows = runner.continuous_market_rescores(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, 2, tzinfo=timezone.utc),
+    )
+
+    assert len(rows) == 1
+    assert captured["model_probability_hold"] == pytest.approx(0.87)
+    assert captured["artifact_hash"] == "hash"
+    assert captured["source_report_ts_utc"] == "2026-07-24T04:20:00Z"
+    assert captured["model_input_support_status"] == "ok"
+    assert captured["snapshot_file"] == "hourly-snapshot.json"
+
+
+def test_latest_city_day_index_is_incremental_and_ignores_partial_tail(tmp_path) -> None:
+    path = tmp_path / "state_decisions.jsonl"
+    first = {
+        "city": "Busan",
+        "target_date": "2026-07-24",
+        "decision_snapshot_ts_utc": "2026-07-24T04:00:00Z",
+        "marker": "first",
+    }
+    second = {**first, "decision_snapshot_ts_utc": "2026-07-24T04:30:00Z", "marker": "second"}
+    runner.write_jsonl(path, [first])
+    assert runner.latest_weather_epochs(path)[("Busan", "2026-07-24")]["marker"] == "first"
+
+    with path.open("ab") as handle:
+        handle.write(json.dumps(second).encode("utf-8"))
+    assert runner.latest_weather_epochs(path)[("Busan", "2026-07-24")]["marker"] == "first"
+
+    with path.open("ab") as handle:
+        handle.write(b"\n")
+    assert runner.latest_weather_epochs(path)[("Busan", "2026-07-24")]["marker"] == "second"
+
+
+def test_latest_city_day_index_resets_after_source_replacement(tmp_path) -> None:
+    path = tmp_path / "pre_live_scores.jsonl"
+    old = {
+        "city": "Busan",
+        "target_date": "2026-07-24",
+        "created_at_utc": "2026-07-24T04:00:00Z",
+    }
+    new = {
+        "city": "Karachi",
+        "target_date": "2026-07-25",
+        "created_at_utc": "2026-07-25T04:00:00Z",
+    }
+    runner.write_jsonl(path, [old])
+    assert set(runner.latest_scores_by_city_day(path)) == {("Busan", "2026-07-24")}
+    path.unlink()
+    runner.write_jsonl(path, [new])
+    assert set(runner.latest_scores_by_city_day(path)) == {("Karachi", "2026-07-25")}
+
+
+def test_near_five_is_additive_and_does_not_reduce_original_ten_plus_five() -> None:
+    now = datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+    core = runner.build_entry_plans(
+        score_row(),
+        live_enabled=True,
+        now=now,
+        taker_shares=10,
+        maker_shares=5,
+        order_ttl_min=15,
+    )
+    near_row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "rescore_mode": "continuous_market_reprice",
+        "market_rescore_id": "market-rescore-1",
+    }
+    near = runner.build_near_core_entry_plan(
+        near_row,
+        live_enabled=True,
+        now=now,
+        order_ttl_min=15,
+    )
+
+    assert [(plan["child_order_role"], plan["size"]) for plan in core] == [
+        ("taker", 10.0),
+        ("maker", 5.0),
+    ]
+    assert near is not None
+    assert near["size"] == 5.0
+    assert near["strategy_instance"] == runner.near_core_maker_probe.STRATEGY_INSTANCE
+    assert sum(float(plan["size"]) for plan in [*core, near]) == 20.0
+
+
+def test_near_ledger_projects_private_partial_fill_and_cancel_final_state(tmp_path) -> None:
+    order = {
+        **score_row(),
+        "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "execution_id": "exec-near-1",
+        "plan_id": "plan-near-1",
+        "signal_id": "signal-near-1",
+        "client_order_id": "pmc_ccnc_1",
+        "venue_order_id": "venue-near-1",
+        "created_at_utc": "2026-07-24T04:31:00Z",
+        "status": "submitted",
+    }
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [order])
+    runner.write_jsonl(
+        tmp_path / "near_core_private_order_updates.jsonl",
+        [
+            {
+                "received_at_utc": "2026-07-24T04:31:05Z",
+                "payload": {
+                    "event_type": "order",
+                    "order": {
+                        "id": "venue-near-1",
+                        "status": "matched",
+                        "size_matched": "2",
+                    },
+                },
+            }
+        ],
+    )
+    runner.write_jsonl(
+        tmp_path / "near_core_safety_cancels.jsonl",
+        [
+            {
+                "created_at_utc": "2026-07-24T04:31:10Z",
+                "order_id": "venue-near-1",
+                "status": "cancel_confirmed",
+                "authoritative_order_state": {
+                    "status": "cancelled",
+                    "matched_shares": "3",
+                    "remaining_shares": "0",
+                },
+            }
+        ],
+    )
+
+    assert runner.sync_near_core_order_ledger(tmp_path) == 3
+    ledger = list(runner.iter_jsonl(tmp_path / "near_core_maker_v2_ledger.jsonl"))
+    authoritative = [
+        row
+        for row in ledger
+        if row["record_type"]
+        == "core_carry_near_core_maker_authoritative_order_state"
+    ]
+    assert [(row["status"], row["matched_shares"]) for row in authoritative] == [
+        ("matched", 2.0),
+        ("cancelled", 3.0),
+    ]
+    report = runner.near_core_maker_probe.report(ledger)
+    assert report["submitted_orders"] == 1
+    assert report["orders_with_fill"] == 1
+    assert report["matched_shares"] == pytest.approx(3.0)
+
+
+def test_continuous_core_transition_still_builds_original_ten_plus_five(
+    tmp_path,
+) -> None:
+    args = runner.parser().parse_args(["run"])
+    args.live = True
+    args.confirm_live = True
+    row = {
+        **score_row(),
+        "eligible": True,
+        "reasons": [],
+        "rescore_mode": "continuous_market_reprice",
+        "market_rescore_id": "market-rescore-core",
+    }
+
+    plans, attempts = runner.new_entry_plans(
+        args,
+        tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+        market_rescores=[row],
+    )
+
+    assert [(plan["child_order_role"], plan["size"]) for plan in plans] == [
+        ("taker", 10.0),
+        ("maker", 5.0),
+    ]
+    assert attempts[0]["trigger_mode"] == "continuous_market_reprice"
+
+
+def test_continuous_nonpositive_taker_ev_builds_separate_near_five(
+    tmp_path,
+) -> None:
+    args = runner.parser().parse_args(["run"])
+    args.live = True
+    args.confirm_live = True
+    args.near_core_maker_probe_enabled = True
+    args.confirm_near_core_maker_probe_live = True
+    now = datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+    row = {
+        **score_row(),
+        "eligible": False,
+        "reasons": ["non_positive_taker_ev"],
+        "rescore_mode": "continuous_market_reprice",
+        "market_rescore_id": "market-rescore-near",
+        "market_rescore_at_utc": now.isoformat(),
+        "current_yes_book_status": "ok",
+        "current_yes_book_fetched_at_utc": now.isoformat(),
+        "model_edge_after_fee_and_depth": -0.002,
+        "feature_book_snapshot_id": "direct-clob-feature",
+        "execution_book_snapshot_id": "direct-clob-feature",
+    }
+
+    plans, ledger = runner.near_core_entry_plans(
+        args,
+        tmp_path,
+        now=now,
+        core_actionable_city_days=set(),
+        market_rescores=[row],
+    )
+
+    assert len(plans) == 1
+    assert plans[0]["size"] == 5.0
+    assert plans[0]["maker_only"] is True
+    assert plans[0]["execution_profile"] == "near_core_continuous_fixed_rest_maker_v2"
+    assert ledger[0]["status"] == "planned"
+    assert ledger[0]["market_rescore_id"] == "market-rescore-near"
 
 
 def test_market_above_frozen_training_support_is_not_eligible() -> None:

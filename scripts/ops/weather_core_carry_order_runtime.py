@@ -687,10 +687,18 @@ def execute_core_carry_plans(
             live_errors += 1
             continue
         stub = _stub_order_state(plan, source)
-        invalidate = action_name == "core_carry_maker_cancel_new_observation"
+        force_cancel = bool(plan.get("cancel_only"))
+        invalidate = force_cancel or action_name in {
+            "core_carry_maker_cancel_new_observation",
+            "near_core_maker_cancel_core_supersession",
+            "near_core_maker_cancel_feature_disabled",
+            "near_core_maker_cancel_safety_deadline",
+            "near_core_maker_cancel_weather_state",
+            "near_core_maker_cancel_stale_market_state",
+        }
         deadline = (
             datetime.now(timezone.utc).isoformat()
-            if action_name == "core_carry_maker_cancel_ttl"
+            if force_cancel or action_name == "core_carry_maker_cancel_ttl"
             else str(plan.get("maker_lifecycle_deadline_utc") or plan.get("expires_at_utc") or "")
         )
         context = LifecycleContext(

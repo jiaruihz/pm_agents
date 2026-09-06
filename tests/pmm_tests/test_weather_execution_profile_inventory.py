@@ -12,6 +12,7 @@ def test_execution_profile_inventory_is_explicit():
         "split_taker_maker_chase_capped_no_fallback_v1",
         "split_taker_maker_edge_capped_no_fallback_v2",
         "split_taker_maker_edge_capped_no_fallback_v3",
+        "near_core_continuous_fixed_rest_maker_v2",
     )
     assert profiles.execution_profile_names() == (
         "taker_now_v1",
