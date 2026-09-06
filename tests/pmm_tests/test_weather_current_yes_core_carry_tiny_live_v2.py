@@ -1392,6 +1392,89 @@ def test_planned_attempt_without_order_does_not_permanently_consume_signal(
     assert "business-blocked" in attempted
 
 
+@pytest.mark.parametrize(
+    "strategy_instance",
+    [runner.STRATEGY_INSTANCE, runner.near_core_maker_probe.STRATEGY_INSTANCE],
+)
+def test_legacy_confirmed_cancel_projection_is_a_terminal_head(
+    tmp_path, strategy_instance
+) -> None:
+    common = {
+        "strategy_instance": strategy_instance,
+        "maker_only": True,
+        "signal_id": "signal-1",
+        "comparison_group_id": "group-1",
+        "maker_lifecycle_root_created_at_utc": "2026-07-28T04:30:00Z",
+        "root_order_id": "order-1",
+    }
+    runner.write_jsonl(
+        tmp_path / "live_orders.jsonl",
+        [
+            {
+                **common,
+                "created_at_utc": "2026-07-28T04:31:00Z",
+                "status": "submitted",
+                "venue_order_id": "order-1",
+            },
+            {
+                **common,
+                "created_at_utc": "2026-07-28T04:32:00Z",
+                "status": "submitted",
+                "execution_action": "core_carry_maker_cancel_ttl",
+                "exchange_response": {
+                    "cancel": {
+                        "status": "cancelled",
+                        "raw_response": {
+                            "status": "cancelled",
+                            "canceled": ["order-1"],
+                        },
+                    }
+                },
+            },
+        ],
+    )
+
+    selector = (
+        runner.maker_lifecycle_heads
+        if strategy_instance == runner.STRATEGY_INSTANCE
+        else runner.near_core_maker_lifecycle_heads
+    )
+    assert selector(tmp_path / "live_orders.jsonl")[0]["status"] == "cancelled"
+
+
+def test_near_control_uses_a_fresh_post_work_clock_by_default(
+    tmp_path, monkeypatch
+) -> None:
+    manifest = tmp_path / "near-readiness.json"
+    manifest.write_text("{}")
+    args = runner.parser().parse_args(
+        [
+            "run",
+            "--live",
+            "--confirm-live",
+            "--near-core-maker-probe-enabled",
+            "--near-core-ws-control-manifest",
+            str(manifest),
+        ]
+    )
+    observed = {}
+
+    def capture_clock(_payload, *, now):
+        observed["now"] = now
+        return []
+
+    monkeypatch.setattr(
+        runner.near_core_maker_probe,
+        "ws_control_readiness_failures",
+        capture_clock,
+    )
+    before = datetime.now(timezone.utc)
+    assert runner.near_core_control_failures(args) == []
+    after = datetime.now(timezone.utc)
+
+    assert before <= observed["now"] <= after
+
+
 def test_executor_rechecks_full_taker_ladder_and_fee() -> None:
     quote = _current_yes_residual_taker_quote(
         {

@@ -777,7 +777,10 @@ def execute_core_carry_plans(
                     "maker_only": True,
                     "cancel": dict(action.payload),
                 }
-                row = build_live_order_record(dict(plan), response, status="submitted")
+                # A confirmed cancellation is terminal.  Projecting it as
+                # ``submitted`` resurrects the maker head on the next cycle and
+                # causes an endless cancel/error loop for an already-gone order.
+                row = build_live_order_record(dict(plan), response, status="cancelled")
                 row.update(
                     {
                         "execution_schema_version": plan.get("execution_schema_version"),

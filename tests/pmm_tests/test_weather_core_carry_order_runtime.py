@@ -523,3 +523,29 @@ def test_near_core_cancel_is_confirmed_before_core_supersession(
 
     assert result["live_errors"] == 0, result
     assert transport.cancels == [runner.live_order_id(submitted)]
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "live_orders.jsonl").read_text().splitlines()
+    ]
+    assert rows[-1]["status"] == "cancelled"
+    assert runner.near_core_maker_lifecycle_heads(
+        tmp_path / "live_orders.jsonl"
+    )[-1]["status"] == "cancelled"
+
+    repeated = shared.execute_core_carry_plans(
+        plans=[lifecycle_plan],
+        output_dir=tmp_path,
+        live=True,
+        market_proxy=None,
+        max_child_shares=5,
+        max_batch_cost_usd=5,
+        code_commit="test-sha",
+    )
+    repeated_rows = [
+        json.loads(line)
+        for line in (tmp_path / "live_orders.jsonl").read_text().splitlines()
+    ]
+    assert repeated["live_errors"] == 0
+    assert repeated["live_written"] == 0
+    assert transport.cancels == [runner.live_order_id(submitted)]
+    assert repeated_rows == rows

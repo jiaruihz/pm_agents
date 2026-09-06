@@ -1207,6 +1207,30 @@ def maker_lifecycle_root(row: Mapping[str, Any]) -> str:
     return "|".join((signal, comparison, root_created))
 
 
+def normalized_maker_lifecycle_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Honor confirmed cancels written by the legacy projection bug.
+
+    Older runtimes appended an authenticated, confirmed cancel response with
+    ``status=submitted``.  Keep the source journal append-only, but normalize
+    that terminal evidence while selecting the current lifecycle head.
+    """
+
+    normalized = dict(row)
+    if str(row.get("status") or "").lower() != "submitted":
+        return normalized
+    response = (
+        row.get("exchange_response")
+        if isinstance(row.get("exchange_response"), Mapping)
+        else {}
+    )
+    cancel = response.get("cancel") if isinstance(response.get("cancel"), Mapping) else {}
+    raw = cancel.get("raw_response") if isinstance(cancel.get("raw_response"), Mapping) else {}
+    cancel_status = str(cancel.get("status") or raw.get("status") or "").lower()
+    if cancel_status in {"cancelled", "canceled", "expired"}:
+        normalized["status"] = "cancelled" if cancel_status != "expired" else "expired"
+    return normalized
+
+
 def maker_lifecycle_heads(path: Path) -> list[dict[str, Any]]:
     """Return the latest journal row for every maker intent."""
 
@@ -1217,6 +1241,7 @@ def maker_lifecycle_heads(path: Path) -> list[dict[str, Any]]:
             or not bool(row.get("maker_only"))
         ):
             continue
+        row = normalized_maker_lifecycle_row(row)
         root = maker_lifecycle_root(row)
         created = parse_utc(row.get("created_at_utc"))
         if not root or created is None:
@@ -1995,6 +2020,7 @@ def near_core_maker_lifecycle_heads(path: Path) -> list[dict[str, Any]]:
             or not bool(row.get("maker_only"))
         ):
             continue
+        row = normalized_maker_lifecycle_row(row)
         root = maker_lifecycle_root(row)
         created = parse_utc(row.get("created_at_utc"))
         if not root or created is None:
@@ -2919,7 +2945,7 @@ def validate_runtime_arguments(args: argparse.Namespace) -> None:
 
 
 def near_core_control_failures(
-    args: argparse.Namespace, *, now: datetime
+    args: argparse.Namespace, *, now: datetime | None = None
 ) -> list[str]:
     if not bool(args.live and args.near_core_maker_probe_enabled):
         return []
@@ -2930,7 +2956,10 @@ def near_core_control_failures(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return ["ws_control_manifest_unreadable"]
-    return near_core_maker_probe.ws_control_readiness_failures(payload, now=now)
+    return near_core_maker_probe.ws_control_readiness_failures(
+        payload,
+        now=now or datetime.now(timezone.utc),
+    )
 
 
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
@@ -2947,7 +2976,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         packets=decision_packets["written_packets"],
     )
     market_rescores = continuous_market_rescores(args, output_dir, now=now)
-    control_failures = near_core_control_failures(args, now=now)
+    # Continuous rescoring can take longer than the readiness freshness window.
+    # Validate against a clock sampled after that work, not the cycle-start clock.
+    control_failures = near_core_control_failures(args)
     runtime_args = argparse.Namespace(**vars(args))
     if control_failures:
         runtime_args.near_core_maker_probe_enabled = False
