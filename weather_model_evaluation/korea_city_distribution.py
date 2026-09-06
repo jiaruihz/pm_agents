@@ -608,20 +608,33 @@ def join_market_decision_panel(
     an evidence blocker.
     """
 
+    frame = frame.copy()
+    # A source value can arrive before the collector finishes the checkpoint
+    # that carries its model features. Join the completed checkpoint, never
+    # backdate that state to its source's arrival time.
+    frame["checkpoint_ready_at_utc"] = pd.to_datetime(frame["decision_ts_utc"], utc=True)
+    emitted = pd.to_datetime(frame.get("collector_emitted_at_utc", pd.Series(pd.NaT, index=frame.index)), utc=True)
+    frame["checkpoint_ready_at_utc"] = frame["checkpoint_ready_at_utc"].where(
+        emitted.notna() & emitted.le(frame["checkpoint_ready_at_utc"])
+    )
     pieces: list[pd.DataFrame] = []
     tolerance = pd.Timedelta(minutes=max_source_age_minutes)
     for target_date, market_group in snapshots.groupby("target_date", sort=True):
         weather_group = frame[frame["target_date"].eq(str(target_date))].copy()
+        weather_group = weather_group.loc[weather_group["checkpoint_ready_at_utc"].notna()]
         market = market_group.rename(columns={"target_date": "market_target_date"})
         if weather_group.empty:
+            for column in frame.columns:
+                if column not in market:
+                    market[column] = None
             market["market_join_status"] = "missing_recent_amos_state"
             pieces.append(market)
             continue
         joined = pd.merge_asof(
             market.sort_values("market_available_at_utc", kind="stable"),
-            weather_group.sort_values("source_available_at_utc", kind="stable"),
+            weather_group.sort_values("checkpoint_ready_at_utc", kind="stable"),
             left_on="market_available_at_utc",
-            right_on="source_available_at_utc",
+            right_on="checkpoint_ready_at_utc",
             direction="backward",
             tolerance=tolerance,
         )
@@ -658,6 +671,12 @@ def join_market_decision_panel(
     identities: list[str | None] = []
     outcome_counts: list[int] = []
     for _, row in output.iterrows():
+        if finite(row.get("market_source_age_seconds")) is not None and row["market_source_age_seconds"] > max_source_age_minutes * 60:
+            probabilities.append(None)
+            statuses.append("stale_amos_source")
+            identities.append(None)
+            outcome_counts.append(0)
+            continue
         if not isinstance(row.get("outcomes"), list) or finite(row.get("routine_rung")) is None:
             probabilities.append(None)
             statuses.append(str(row.get("market_join_status") or "missing_market_or_state"))

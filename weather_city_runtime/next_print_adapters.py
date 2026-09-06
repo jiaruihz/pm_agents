@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import timedelta
 from typing import Any
 
 from weather_data_feed.information_events import canonical_json_hash
+from weather_clock_contract import parse_utc, utc_text
 
 from .next_print_contracts import (
     CITY_CONTRACTS,
@@ -39,6 +41,14 @@ def adapt_source_observation(city: str, row: Mapping[str, Any]) -> CanonicalSour
     measurement_kind = contract.source_measurement_semantics.get(payload_kind, payload_kind)
     observed_start = _value(row, "observed_start_utc", "valid_from_utc", "interval_start_utc", "observation_time_utc", "source_event_ts_utc")
     observed_end = _value(row, "observed_end_utc", "valid_to_utc", "interval_end_utc", "observation_time_utc", "source_event_ts_utc")
+    measurement_contract_id = None
+    if city == "Amsterdam" and payload_kind in {"ta", "tx", "tn"}:
+        # KNMI's file clock is the interval end. Individual fields have their
+        # own aggregation windows; the ten-minute file cadence is not ta's window.
+        observed_end = utc_text(observed)
+        duration = 60 if payload_kind == "ta" else 600
+        observed_start = utc_text(parse_utc(observed) - timedelta(seconds=duration))
+        measurement_contract_id = contract.contract_id
     runway_rows = _runway_rows(row)
     runway_ids = tuple(sorted(str(item.get("runway") or "") for item in runway_rows if item.get("runway")))
     runway_values = [float(item["temp_c"]) for item in runway_rows if item.get("temp_c") is not None]
@@ -61,6 +71,7 @@ def adapt_source_observation(city: str, row: Mapping[str, Any]) -> CanonicalSour
         native_event_key=native_key,
         payload_kind=payload_kind,
         measurement_kind=measurement_kind,
+        measurement_contract_id=measurement_contract_id,
         native_value=native_value,
         native_unit=str(row.get("native_unit") or contract.native_unit),
         observed_start_utc=str(observed_start),

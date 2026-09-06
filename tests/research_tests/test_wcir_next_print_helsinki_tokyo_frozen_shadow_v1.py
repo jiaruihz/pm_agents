@@ -271,6 +271,18 @@ def test_official_link_uses_efhk_not_fmi_station() -> None:
     assert label["next_print_new_running_max"] is True
 
 
+def test_known_physical_target_is_not_skipped_for_a_later_report() -> None:
+    models = FrozenModels(REVIEW)
+    _, prediction, _ = build_prediction(_event(), _source_path(), models)
+    prediction["raw_source_lineage"]["available_at_utc"] = "2026-08-31T03:22:00Z"
+    later = {**_official(), "source_report_ts_utc": "2026-08-31T03:50:00Z",
+             "first_seen_at_utc": "2026-08-31T03:51:00Z", "information_event_id": "later-print"}
+    label = label_prediction(prediction, [_official(), later])
+    assert label["status"] == "missing"
+    assert label["missing_reason"] == "TARGET_ALREADY_AVAILABLE_AT_DECISION"
+    assert label["future_next_print_label"] is None
+
+
 def test_runtime_is_idempotent_and_stays_zero_notional(tmp_path: Path) -> None:
     events = tmp_path / "events.jsonl"
     fast_root = tmp_path / "fast"

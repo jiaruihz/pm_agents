@@ -87,9 +87,9 @@ V1_INPUT_SHA256 = "b257add0e34703d4b1984c7f2177e694291eb1b1f9a080478a65977d9d4ed
 
 ARTIFACTS = (
     "RESPONSE_TO_GPT_REVIEW_AMSTERDAM_V1_1.md",
-    "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.md",
-    "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.json",
-    "STAGE1_STAGE3_AMSTERDAM_CONTRACT_CORRIGENDUM_V2.md",
+    "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.md",
+    "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.json",
+    "STAGE1_STAGE3_AMSTERDAM_CONTRACT_CORRIGENDUM_V3.md",
     "AMSTERDAM_LABEL_LINEAGE_EXAMPLES.jsonl.gz",
     "GROUND_STATION_DATA_CONTRACT_V1.md",
     "GROUND_STATION_DATA_SCHEMA_V1.json",
@@ -139,6 +139,12 @@ ARTIFACTS = (
     "TEST_COMMANDS_AND_RAW_OUTPUT.txt",
     "EVIDENCE_MANIFEST.json",
     "GPT_PRO_REVIEW_PACKET_AMSTERDAM_V1_1.md",
+)
+
+LEGACY_ARTIFACTS = tuple(
+    name.replace("SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3", "SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2")
+    .replace("AMSTERDAM_CONTRACT_CORRIGENDUM_V3", "AMSTERDAM_CONTRACT_CORRIGENDUM_V2")
+    for name in ARTIFACTS
 )
 
 SHADOW_REQUIRED_FIELDS = {
@@ -193,7 +199,7 @@ def _strict_root_files(path: Path, *, include_manifest: bool) -> dict[str, Path]
             continue
         if name == "EVIDENCE_MANIFEST.json" and not include_manifest:
             continue
-        if name not in ARTIFACTS:
+        if name not in set(ARTIFACTS) | set(LEGACY_ARTIFACTS):
             unexpected.append(name)
             continue
         actual[name] = item
@@ -210,6 +216,8 @@ def ensure_output(path: Path) -> Path:
     if resolved != allowed and allowed not in resolved.parents:
         raise ValueError(f"output must remain under reviews/: {resolved}")
     resolved.mkdir(parents=True, exist_ok=True)
+    if (resolved / "EVIDENCE_MANIFEST.json").exists():
+        raise ValueError("sealed evidence is immutable; choose a new output directory")
     _strict_root_files(resolved, include_manifest=True)
     return resolved
 
@@ -499,7 +507,10 @@ def score_shadow_once(
             "raw_source_lineage": {
                 "source": "knmi",
                 "station_id": event.get("station_id"),
-                "measurement_kind": "preceding_10m_average_ambient_temperature",
+                "measurement_kind": CITY_CONTRACTS["Amsterdam"].source_measurement_semantics["ta"],
+                "measurement_contract_id": CITY_CONTRACTS["Amsterdam"].contract_id,
+                "measurement_window_seconds": 60,
+                "source_cadence_seconds": 600,
                 "target_date": event.get("target_date"),
                 "observation_time_utc": source_observed.isoformat(),
                 "available_at_utc": decision_at.isoformat(),
@@ -824,7 +835,10 @@ def build_feature_audit(
             for value, raw, payload in zip(path["observed_at"], path.get("raw_row_hash"), path.get("payload_hash"))
         ]
         for feature in CORE_FEATURES:
-            if feature not in PATH_FEATURES:
+            # The temperature path is the input to every path feature. Copying
+            # the endpoint onto all rows flattens slope/volatility and makes
+            # the exported feature lineage disagree with the scored panel.
+            if feature not in PATH_FEATURES and feature != "latest_fast_native_value":
                 path[feature] = event.get(feature)
         result = AmsterdamFeatureBuilderV2.build_vintage(
             path,
@@ -890,7 +904,7 @@ def build_feature_audit(
     sample_path = frozen_path.loc[frozen_path["event_id"].astype(str).eq(sample_event)].copy()
     sample_path["source_observation_id"] = [feature_hash({"event": sample_event, "i": index}) for index in range(len(sample_path))]
     for feature in CORE_FEATURES:
-        if feature not in PATH_FEATURES:
+        if feature not in PATH_FEATURES and feature != "latest_fast_native_value":
             sample_path[feature] = sample_event_row.get(feature)
     common = dict(
         source_path=sample_path,
@@ -1529,17 +1543,23 @@ def build_inventory(captured: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def write_static_contracts(output: Path, generated: str) -> None:
+    if (output / "EVIDENCE_MANIFEST.json").exists():
+        raise ValueError("sealed evidence is immutable; choose a new output directory")
     contract = CITY_CONTRACTS["Amsterdam"]
     source_contract = {
-        "schema_version": "amsterdam_source_identity_and_label_contract_v2",
-        "effective_for_forward_epoch": True,
+        "schema_version": "amsterdam_source_identity_and_label_contract_v3",
+        "effective_for_forward_epoch": "new_epoch_only_not_existing_frozen_epochs",
+        "measurement_contract_id": contract.contract_id,
+        "source_cadence_seconds": 600,
+        "measurement_window_seconds": {"ta": 60, "tx": 600, "tn": 600},
+        "provider_documentation": "https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0",
         "fast_source_id": contract.fast_source_id,
         "prediction_target_source_id": contract.prediction_target_source_id,
         "settlement_source_id": contract.settlement_source_id,
         "roles_distinct": True,
         "station_map": {"KNMI_WMO": "0-20000-0-06240", "prediction_target": "EHAM"},
         "knmi_fields": {
-            "ta": "10-minute average ambient temperature",
+            "ta": "final 1-minute mean ambient temperature",
             "tx": "10-minute maximum ambient temperature",
             "tn": "10-minute minimum ambient temperature",
             "tn_status": "UNAVAILABLE_IN_FROZEN_INPUT",
@@ -1556,8 +1576,8 @@ def write_static_contracts(output: Path, generated: str) -> None:
         },
         "evidence": ["repo://weather_city_runtime/next_print_contracts.py", "repo://reviews/wcir_next_print/stage_03/evidence/FROZEN_NEXT_REPORT_EVENTS.jsonl.gz", "repo://reviews/wcir_unified_data_amsterdam_pilot_rev2/SETTLEMENT_RULE_EVIDENCE.json"],
     }
-    write_json(output / "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.json", source_contract)
-    (output / "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.md").write_text(f"""# Amsterdam source identity and label contract v2
+    write_json(output / "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.json", source_contract)
+    (output / "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.md").write_text(f"""# Amsterdam source identity and label contract v3
 
 Generated `{generated}`. These identities are separate and never aliased:
 
@@ -1567,11 +1587,11 @@ Generated `{generated}`. These identities are separate and never aliased:
 | prediction target | `{contract.prediction_target_source_id}` |
 | settlement source | `{contract.settlement_source_id}` |
 
-`ta` is the 10-minute **average** ambient temperature; `tx` is the 10-minute maximum; `tn` is the 10-minute minimum and is `UNAVAILABLE_IN_FROZEN_INPUT`. The label is the next distinct eligible EHAM routine report on a 1°C half-up lattice. SPECI is excluded. A same-value later routine report is a new zero-delta label; a byte-identical duplicate is not. Revisions are append-only. Missing first-seen, station/date mismatch, conflicting payloads for the same report time regardless of arrival order, or ambiguous matching fail closed. Report/observed/first-seen/available clocks remain distinct.
+`ta` is the final **1-minute mean** ambient temperature; `tx` is the 10-minute maximum; `tn` is the 10-minute minimum and is `UNAVAILABLE_IN_FROZEN_INPUT`. The label is the next distinct eligible EHAM routine report on a 1°C half-up lattice. SPECI is excluded. A same-value later routine report is a new zero-delta label; a byte-identical duplicate is not. Revisions are append-only. Missing first-seen, station/date mismatch, conflicting payloads for the same report time regardless of arrival order, or ambiguous matching fail closed. Report/observed/first-seen/available clocks remain distinct.
 """, encoding="utf-8")
-    (output / "STAGE1_STAGE3_AMSTERDAM_CONTRACT_CORRIGENDUM_V2.md").write_text("""# Stage-1 / Stage-3 Amsterdam contract corrigendum v2
+    (output / "STAGE1_STAGE3_AMSTERDAM_CONTRACT_CORRIGENDUM_V3.md").write_text("""# Stage-1 / Stage-3 Amsterdam contract corrigendum v3
 
-Old Stage-1 evidence called the KNMI 10-minute lane the Amsterdam “official source” and described `ta` as point temperature. Stage-3/runtime actually linked KNMI fast observations to the next EHAM routine report, while Polymarket settlement uses the condition-specific designated Wunderground/EHAM daily record. Old artifacts stay byte/hash immutable. This corrigendum changes only future v2 epochs and this v1.1 reconstruction; v1 predictions and manifests are not rewritten. Affected old artifacts are the Stage-1 source contract, v1 feature manifest, v1 captured predictions, and v1 review packet. Their numerical claims remain historical evidence under the old semantics, not current contract authority.
+Old Stage-1 evidence called the KNMI 10-minute lane the Amsterdam “official source” and described `ta` as point temperature. Stage-3/runtime actually linked KNMI fast observations to the next EHAM routine report, while Polymarket settlement uses the condition-specific designated Wunderground/EHAM daily record. Old artifacts stay byte/hash immutable. The v2 corrigendum incorrectly described ta as a 10-minute mean. The v3 correction uses a final 1-minute mean with a 10-minute file cadence, under the provider dataset version 1.0 documentation. It applies to new derived identities and future epochs only; all existing v1/v2 predictions and manifests remain immutable. Affected old artifacts are the Stage-1 source contract, v1 feature manifest, v1 captured predictions, and v1 review packet. Their numerical claims remain historical evidence under the old semantics, not current contract authority.
 """, encoding="utf-8")
     schema = {
         "schema_version": "ground_station_data_schema_v1",
@@ -1778,8 +1798,8 @@ Tier-A primary has `{market_summary['tier_a_entry_1share']}/{market_summary['eve
 """, encoding="utf-8")
     response_rows = [
         ("BF-1", "historical/captured feature parity", "accepted", "single AmsterdamFeatureBuilderV2 + builder-validated captured cadence; incomplete paths fail closed", "AMSTERDAM_FEATURE_PARITY_ROWS.parquet", "tests/research_tests/test_wcir_amsterdam_pilot_v1_1.py::test_05_full_path_vs_sparse_opportunity_path_fails_closed", "CLOSED_WITH_EXPLICIT_PATH_ATTRITION"),
-        ("BF-2", "ta semantics wrong", "accepted", "ta average; tx max; tn unavailable", "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.json", "semantic contract test", "CLOSED"),
-        ("BF-3", "source identities conflated", "accepted", "three explicit identities", "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.md", "identity separation test", "CLOSED"),
+        ("BF-2", "ta semantics wrong", "accepted", "ta 1-minute mean; tx 10-minute max; tn unavailable", "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.json", "semantic contract test", "CLOSED"),
+        ("BF-3", "source identities conflated", "accepted", "three explicit identities", "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.md", "identity separation test", "CLOSED"),
         ("BF-4", "opportunity distribution mismatch", "accepted", "P0/P1/P2 ledgers", "AMSTERDAM_COHORT_LEDGER.parquet", "weighting tests", "CLOSED"),
         ("BF-5", "captured P2 omitted M2", "accepted", "B2/M1/M2 share the same 75 strict-PIT-eligible rows; 12 incomplete paths remain in the raw funnel", "M2_PREDICTIONS_CAPTURED_PIT.parquet", "same denominator and raw/scored funnel tests", "CLOSED_WITH_EXPLICIT_PATH_ATTRITION"),
         ("BF-6", "42/42 versus 0/87", "accepted", "inventory + exact identity + different denominator explanation", "AMSTERDAM_EXECUTABLE_COVERAGE_ROWS.parquet", "exact join/tier tests", "CLOSED"),
@@ -1883,7 +1903,7 @@ def write_shadow_and_freeze(
         "feature_builder_hash": sha256(ROOT / "weather_modeling/amsterdam_feature_builder_v2.py"),
         "frozen_scorer_hash": sha256(ROOT / "weather_modeling/amsterdam_frozen_scorer_v2.py"),
         "model_artifacts": model_freeze,
-        "source_label_contract_hash": sha256(output / "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V2.json"),
+        "source_label_contract_hash": sha256(output / "AMSTERDAM_SOURCE_IDENTITY_AND_LABEL_CONTRACT_V3.json"),
         "feature_parity_audit_hash": sha256(output / "AMSTERDAM_FEATURE_PARITY_AUDIT.json"),
         "opportunity_generator_hash": sha256(ROOT / "scripts/analysis/forecast_quality/wcir_amsterdam_pilot_v1_1.py"),
         "market_identity_resolver_hash": sha256(ROOT / "scripts/analysis/forecast_quality/wcir_amsterdam_pilot_rev2.py"),
@@ -2023,11 +2043,11 @@ def verify_zip(archive_path: Path) -> None:
         names = archive.namelist()
         if len(names) != len(set(names)):
             raise RuntimeError("duplicate zip entry")
-        if set(names) != set(ARTIFACTS):
+        if set(names) not in (set(ARTIFACTS), set(LEGACY_ARTIFACTS)):
             raise RuntimeError("zip whitelist drift")
         manifest = json.loads(archive.read("EVIDENCE_MANIFEST.json"))
         expected = {row["path"]: row for row in manifest["entries"]}
-        if set(expected) != set(ARTIFACTS) - {"EVIDENCE_MANIFEST.json"}:
+        if set(expected) != set(names) - {"EVIDENCE_MANIFEST.json"}:
             raise RuntimeError("zip manifest entry-set drift")
         for name, row in expected.items():
             data = archive.read(name)
@@ -2106,7 +2126,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
 
 ## Direct answers
 
-1. `ta`=10-minute average, `tx`=10-minute max, `tn`=10-minute min but unavailable; fast/target/settlement identities are distinct.
+1. `ta`=final 1-minute mean, `tx`=10-minute max, `tn`=10-minute min but unavailable; fast/target/settlement identities are distinct.
 2. Captured complete paths: {feature_audit['captured_complete_path']}/{feature_audit['captured_raw_opportunities']}; fail-closed incomplete: {feature_audit['captured_fail_closed_incomplete_path']} with `{json.dumps(feature_audit['captured_path_validation_reasons'], sort_keys=True)}`.
 3. v1 sparse-path parity impacted {feature_audit['v1_impacted_unique_rows']}/{feature_audit['captured_raw_opportunities']} rows; per-feature counts are in the audit.
 4. P0/P1 rank M1 then M2 then B2; P2 point-ranks B2 then M2 then M1.

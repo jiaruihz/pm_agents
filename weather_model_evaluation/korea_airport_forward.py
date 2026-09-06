@@ -52,6 +52,7 @@ from .korea_city_exact_no import (
     stable_hash,
     stable_json,
 )
+from .korea_comparison_ledger import write_korea_comparison_ledger
 from .probability import (
     binary_loss_values,
     binary_score,
@@ -1251,12 +1252,13 @@ def evaluate_seoul_forward(
         end_date=config.end_date,
     )
     joined = join_market_decision_panel(
-        labeled, market_snapshots, max_source_age_minutes=5
+        amos, market_snapshots, max_source_age_minutes=5
     )
     scorable = joined[
         joined["market_join_status"].eq("scorable")
         & joined["market_distribution"].notna()
         & joined["checkpoint_id"].notna()
+        & joined["label_index"].notna()
     ].copy()
     if scorable.empty:
         raise RuntimeError("Seoul clean-forward has no same-row scorable market states")
@@ -1274,6 +1276,20 @@ def evaluate_seoul_forward(
     scorable["weather_distribution"] = list(weather)
     scorable["posterior_distribution"] = list(posterior)
     scorable["split"] = "clean_forward"
+    # Keep the full ladder-decision denominator for the comparison
+    # ledger.  The historical score artifact remains scorable-only, but the
+    # ledger input never silently removes a missing market/model/label row.
+    comparison_input = joined.copy()
+    comparison_input["city"] = "Seoul"
+    comparison_input["target_date"] = comparison_input["market_target_date"]
+    comparison_input["weather_distribution"] = None
+    comparison_input["posterior_distribution"] = None
+    comparison_input.loc[scorable.index, "weather_distribution"] = pd.Series(
+        list(weather), index=scorable.index, dtype=object
+    )
+    comparison_input.loc[scorable.index, "posterior_distribution"] = pd.Series(
+        list(posterior), index=scorable.index, dtype=object
+    )
     scorable = attach_next_execution_ladder(
         scorable, market_snapshots, max_lag_minutes=45
     )
@@ -1310,9 +1326,11 @@ def evaluate_seoul_forward(
         seed=config.seed + 52,
     )
     prediction_path = output_dir / "predictions.jsonl.gz"
+    comparison_input_path = output_dir / "comparison_inputs.jsonl.gz"
     basis_path = output_dir / "source_basis_crosses.jsonl.gz"
     prediction_columns = (
         "market_decision_id",
+        "market_available_at_utc",
         "checkpoint_id",
         "city",
         "target_date",
@@ -1342,6 +1360,9 @@ def evaluate_seoul_forward(
         *PHYSICAL_FEATURES,
     )
     _write_jsonl_gz(_frame_records(scorable, prediction_columns), prediction_path)
+    _write_jsonl_gz(
+        _frame_records(comparison_input, prediction_columns), comparison_input_path
+    )
     basis_columns = (
         "city",
         "target_date",
@@ -1447,6 +1468,8 @@ def evaluate_seoul_forward(
         "artifacts": {
             "predictions_path": str(prediction_path),
             "predictions_sha256": sha256_file(prediction_path),
+            "comparison_input_path": str(comparison_input_path),
+            "comparison_input_sha256": sha256_file(comparison_input_path),
             "source_basis_path": str(basis_path),
             "source_basis_sha256": sha256_file(basis_path),
         },
@@ -1939,6 +1962,7 @@ def run_korea_airport_forward(
     decision_bundles_path: Path,
     output_dir: Path,
     code_identity: Mapping[str, Any] | None = None,
+    rule_evidence_path: Path | None = None,
 ) -> dict[str, Any]:
     _prepare_output_dir(output_dir)
     seoul_winner_evidence = None
@@ -2044,6 +2068,7 @@ def run_korea_airport_forward(
             [
                 city_path,
                 Path(city_results["Seoul"]["artifacts"]["predictions_path"]),
+                Path(city_results["Seoul"]["artifacts"]["comparison_input_path"]),
                 Path(city_results["Seoul"]["artifacts"]["source_basis_path"]),
             ]
         )
@@ -2079,6 +2104,25 @@ def run_korea_airport_forward(
                 Path(city_results["Busan"]["artifacts"]["source_basis_path"]),
             ]
         )
+    comparison_ledger = write_korea_comparison_ledger(
+        prediction_paths=[
+            Path(
+                city_result["artifacts"].get(
+                    "comparison_input_path", city_result["artifacts"]["predictions_path"]
+                )
+            )
+            for city_result in city_results.values()
+        ],
+        output_dir=output_dir / "comparison_ledger",
+        rule_evidence_path=rule_evidence_path,
+    )
+    artifact_paths.extend(
+        [
+            Path(comparison_ledger["ledger_path"]),
+            Path(comparison_ledger["input_hashes_path"]),
+            Path(comparison_ledger["summary_path"]),
+        ]
+    )
     observed_at = datetime.now(tz=UTC).isoformat()
     summary = {
         "schema_version": OUTPUT_SCHEMA_VERSION,
@@ -2125,6 +2169,7 @@ def run_korea_airport_forward(
             "runtime_or_live_change": "none",
         },
         "cities": city_results,
+        "comparison_ledger": comparison_ledger,
         "combined_decision": {
             "conclusion": "city_specific_evidence_only_no_pooled_admission",
             "action": (

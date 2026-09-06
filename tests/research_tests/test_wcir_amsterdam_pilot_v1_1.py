@@ -17,7 +17,7 @@ import pytest
 from scripts.analysis.forecast_quality.wcir_amsterdam_pilot_rev2 import _exact_record
 from scripts.analysis.forecast_quality.wcir_unified_amsterdam_pilot import make_historical_panel
 from scripts.analysis.forecast_quality.wcir_amsterdam_pilot_v1_1 import (
-    ARTIFACTS,
+    LEGACY_ARTIFACTS,
     DEFAULT_OUTPUT,
     append_shadow_prediction,
     normalized_weights,
@@ -68,7 +68,7 @@ def _build(frame: pd.DataFrame, availability_class: str = "CAPTURED_PIT_ARCHIVE"
 
 def test_01_ta_tx_tn_semantic_contract() -> None:
     semantics = CITY_CONTRACTS["Amsterdam"].source_measurement_semantics
-    assert semantics["ta"] == "preceding_10m_average_ambient_temperature"
+    assert semantics["ta"] == "preceding_1m_average_ambient_temperature"
     assert semantics["tx"] == "preceding_10m_maximum_ambient_temperature"
     assert semantics["tn"].endswith("UNAVAILABLE_IN_FROZEN_INPUT")
 
@@ -285,7 +285,7 @@ def test_21b_concurrent_shadow_prediction_append_has_one_physical_row(tmp_path: 
 def test_22_package_missing_extra_hash_and_duplicate_fail_closed(tmp_path: Path) -> None:
     destination = tmp_path / "package"
     destination.mkdir()
-    for name in ARTIFACTS:
+    for name in LEGACY_ARTIFACTS:
         shutil.copy2(DEFAULT_OUTPUT / name, destination / name)
     verify(destination)
     (destination / "extra").write_text("extra")
@@ -309,9 +309,9 @@ def test_22_package_missing_extra_hash_and_duplicate_fail_closed(tmp_path: Path)
     duplicate = tmp_path / "duplicate.zip"
     with pytest.warns(UserWarning, match="Duplicate name"):
         with zipfile.ZipFile(duplicate, "w") as archive:
-            for name in ARTIFACTS:
+            for name in LEGACY_ARTIFACTS:
                 archive.write(DEFAULT_OUTPUT / name, arcname=name)
-            archive.writestr(ARTIFACTS[0], b"duplicate")
+            archive.writestr(LEGACY_ARTIFACTS[0], b"duplicate")
     with pytest.raises(RuntimeError, match="duplicate"):
         verify_zip(duplicate)
 
@@ -319,7 +319,7 @@ def test_22_package_missing_extra_hash_and_duplicate_fail_closed(tmp_path: Path)
 def test_23_offline_reproduction_from_extracted_root(tmp_path: Path) -> None:
     extracted_root = tmp_path / "extracted-package-root"
     extracted_root.mkdir()
-    for name in ARTIFACTS:
+    for name in LEGACY_ARTIFACTS:
         shutil.copy2(DEFAULT_OUTPUT / name, extracted_root / name)
     completed = subprocess.run(
         ["sh", str(extracted_root / "REPRODUCE_AMSTERDAM_PILOT_V1_1.sh")],
@@ -361,10 +361,10 @@ def test_25_frozen_portable_scorer_returns_deterministic_normalized_pmfs() -> No
     first = score_frozen_models(manifests, features)
     second = score_frozen_models(manifests, features)
     assert first == second
-    for pmf in first.values():
+    for name, pmf in first.items():
         assert len(pmf) == 21
         assert sum(pmf) == pytest.approx(1.0, abs=1e-12)
-        assert all(value > 0 for value in pmf)
+        assert all(value >= 0 if name == "B2" else value > 0 for value in pmf)
 
 
 def test_26_historical_entrypoint_calls_shared_builder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -404,5 +404,5 @@ def test_26_historical_entrypoint_calls_shared_builder(tmp_path: Path, monkeypat
 
 def test_27_knmi_producer_note_uses_frozen_ta_tx_interval_semantics() -> None:
     source = Path("weather_data_feed/knmi_open_data.py").read_text(encoding="utf-8")
-    assert "ta is the final 1-minute mean" not in source
-    assert "ta is the preceding 10-minute average ambient temperature" in source
+    assert "ta is the final 1-minute mean" in source
+    assert "ta is the preceding 10-minute average ambient temperature" not in source

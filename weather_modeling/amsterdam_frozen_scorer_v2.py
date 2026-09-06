@@ -44,7 +44,10 @@ def score_b2(parameters: Mapping[str, Any], features: Mapping[str, Any]) -> list
         outcome = int(np.clip(predicted_delta + int(residual), support[0], support[-1]))
         index = int(np.searchsorted(support, outcome))
         pmf[index] += (counts.get(int(residual), 0) + alpha) / total
-    return _normalized(pmf).tolist()
+    # The frozen training baseline folds residual mass onto the finite
+    # support and can leave exact zeros after a shift. Clipping here invents
+    # mass absent from the fitted baseline; clip only inside loss functions.
+    return (pmf / pmf.sum()).tolist()
 
 
 def score_m1(parameters: Mapping[str, Any], features: Mapping[str, Any]) -> list[float]:

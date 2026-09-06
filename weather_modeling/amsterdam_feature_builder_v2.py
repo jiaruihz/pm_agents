@@ -16,6 +16,8 @@ from typing import Any, Iterable
 import numpy as np
 import pandas as pd
 
+from weather_clock_contract import parse_utc
+
 
 FEATURE_VERSION = "amsterdam_feature_builder_v2"
 PATH_FEATURES = (
@@ -74,21 +76,55 @@ class AmsterdamFeatureBuilderV2:
     path_features = PATH_FEATURES
 
     @staticmethod
-    def _normalize_path(frame: pd.DataFrame, *, require_available_at: bool) -> pd.DataFrame:
+    def _clock(
+        value: Any,
+        *,
+        field: str,
+        strict_pit: bool,
+        allow_none: bool = False,
+    ) -> pd.Timestamp | None:
+        """Normalize a builder clock without silently making a PIT clock UTC."""
+
+        if strict_pit:
+            parsed = parse_utc(value, field=field, allow_none=allow_none)
+            return None if parsed is None else pd.Timestamp(parsed)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            if allow_none:
+                return None
+            raise ValueError(f"{field} is required")
+        if pd.isna(value):
+            if allow_none:
+                return None
+            raise ValueError(f"{field} is required")
+        parsed = pd.Timestamp(value)
+        if pd.isna(parsed):
+            raise ValueError(f"{field} is required")
+        return parsed.tz_localize("UTC") if parsed.tzinfo is None else parsed.tz_convert("UTC")
+
+    @classmethod
+    def _normalize_path(cls, frame: pd.DataFrame, *, require_available_at: bool) -> pd.DataFrame:
         required = {"observed_at", "latest_fast_native_value"}
         missing = required - set(frame.columns)
         if missing:
             raise ValueError(f"source path missing required columns: {sorted(missing)}")
         result = frame.copy()
-        result["observed_at"] = pd.to_datetime(result["observed_at"], utc=True, errors="coerce")
+        if require_available_at:
+            result["observed_at"] = result["observed_at"].map(
+                lambda value: cls._clock(value, field="source_path.observed_at", strict_pit=True)
+            )
+        else:
+            result["observed_at"] = pd.to_datetime(result["observed_at"], utc=True, errors="coerce")
         result["latest_fast_native_value"] = pd.to_numeric(
             result["latest_fast_native_value"], errors="coerce"
         )
         if "available_at" not in result:
             result["available_at"] = pd.NaT
-        result["available_at"] = pd.to_datetime(result["available_at"], utc=True, errors="coerce")
-        if require_available_at and result["available_at"].isna().any():
-            raise ValueError("captured/shadow source path requires available_at for every row")
+        if require_available_at:
+            result["available_at"] = result["available_at"].map(
+                lambda value: cls._clock(value, field="source_path.available_at", strict_pit=True)
+            )
+        else:
+            result["available_at"] = pd.to_datetime(result["available_at"], utc=True, errors="coerce")
         if result["observed_at"].isna().any() or result["latest_fast_native_value"].isna().any():
             raise ValueError("source path contains invalid observed_at or temperature")
         if "source_observation_id" not in result:
@@ -163,24 +199,18 @@ class AmsterdamFeatureBuilderV2:
         """Build one vintage; future rows are ignored and incomplete PIT paths fail."""
 
         strict_pit = availability_class in {"CAPTURED_PIT_ARCHIVE", "PROSPECTIVE_SHADOW"}
-        cutoff = pd.Timestamp(feature_cutoff_at)
-        decision = pd.Timestamp(decision_ready_at)
-        if cutoff.tzinfo is None:
-            cutoff = cutoff.tz_localize("UTC")
-        else:
-            cutoff = cutoff.tz_convert("UTC")
-        if decision.tzinfo is None:
-            decision = decision.tz_localize("UTC")
-        else:
-            decision = decision.tz_convert("UTC")
+        cutoff = cls._clock(feature_cutoff_at, field="feature_cutoff_at", strict_pit=strict_pit)
+        decision = cls._clock(decision_ready_at, field="decision_ready_at", strict_pit=strict_pit)
+        assert cutoff is not None and decision is not None
         if cutoff > decision:
             raise ValueError("feature_cutoff_at must be <= decision_ready_at")
         normalized = cls._normalize_path(source_path, require_available_at=strict_pit)
-        observed_cutoff = pd.Timestamp(observation_cutoff_at or cutoff)
-        if observed_cutoff.tzinfo is None:
-            observed_cutoff = observed_cutoff.tz_localize("UTC")
-        else:
-            observed_cutoff = observed_cutoff.tz_convert("UTC")
+        observed_cutoff = cls._clock(
+            observation_cutoff_at if strict_pit else observation_cutoff_at or cutoff,
+            field="observation_cutoff_at",
+            strict_pit=strict_pit,
+        )
+        assert observed_cutoff is not None
         eligible = normalized.loc[normalized["observed_at"].le(observed_cutoff)].copy()
         if strict_pit:
             eligible = eligible.loc[eligible["available_at"].le(cutoff)].copy()

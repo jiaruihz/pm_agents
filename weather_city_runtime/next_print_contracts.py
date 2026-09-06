@@ -55,6 +55,20 @@ def _optional_utc(value: Any) -> str | None:
     return None if value in (None, "") else utc_text(str(value))
 
 
+def _source_identity(values: Mapping[str, Any]) -> str:
+    identity = {name: values[name] for name in (
+        "city", "target_date", "source", "native_event_key", "payload_kind", "payload_hash"
+    )}
+    identity["schema_version"] = SOURCE_SCHEMA_VERSION
+    # Legacy records keep their original identity. A corrected interpretation
+    # is a new derived record, never different content under the old key.
+    if values.get("measurement_contract_id"):
+        identity.update({name: values[name] for name in (
+            "measurement_contract_id", "measurement_kind", "observed_start_utc", "observed_end_utc"
+        )})
+    return canonical_json_hash(identity)
+
+
 @dataclass(frozen=True)
 class CanonicalSourceObservation:
     observation_id: str
@@ -85,6 +99,7 @@ class CanonicalSourceObservation:
     raw_ref: Mapping[str, Any]
     exclusion_reason: str | None = None
     schema_version: str = SOURCE_SCHEMA_VERSION
+    measurement_contract_id: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("city", "target_date", "source", "native_event_key", "payload_kind", "measurement_kind", "native_unit", "payload_hash"):
@@ -97,15 +112,7 @@ class CanonicalSourceObservation:
             parse_utc(self.first_seen_at_utc)
         if self.issued_at_utc is not None:
             parse_utc(self.issued_at_utc)
-        expected = canonical_json_hash({
-            "schema_version": SOURCE_SCHEMA_VERSION,
-            "city": self.city,
-            "target_date": self.target_date,
-            "source": self.source,
-            "native_event_key": self.native_event_key,
-            "payload_kind": self.payload_kind,
-            "payload_hash": self.payload_hash,
-        })
+        expected = _source_identity(asdict(self))
         if self.observation_id != expected:
             raise ValueError("observation_id does not match canonical identity")
         if self.pit_lineage_class == "collector_exact" and not self.first_seen_at_utc:
@@ -120,19 +127,14 @@ class CanonicalSourceObservation:
         values["issued_at_utc"] = _optional_utc(values.get("issued_at_utc"))
         values["first_seen_at_utc"] = _optional_utc(values.get("first_seen_at_utc"))
         values["ingested_at_utc"] = utc_text(values["ingested_at_utc"])
-        values["observation_id"] = canonical_json_hash({
-            "schema_version": SOURCE_SCHEMA_VERSION,
-            "city": values["city"],
-            "target_date": values["target_date"],
-            "source": values["source"],
-            "native_event_key": values["native_event_key"],
-            "payload_kind": values["payload_kind"],
-            "payload_hash": values["payload_hash"],
-        })
+        values["observation_id"] = _source_identity(values)
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        if self.measurement_contract_id is None:
+            result.pop("measurement_contract_id")
+        return result
 
 
 @dataclass(frozen=True)
@@ -387,12 +389,12 @@ class CityObservationContract:
 
 CITY_CONTRACTS: dict[str, CityObservationContract] = {
     "Amsterdam": CityObservationContract(
-        city="Amsterdam", contract_id="wcir_amsterdam_next_print_v2",
+        city="Amsterdam", contract_id="wcir_amsterdam_next_print_v3",
         fast_source="knmi_schiphol_10m_observation_notification_archive",
         official_source="eham_next_distinct_eligible_routine_report",
         source_payload_kinds=("ta", "tx", "tn", "revision"),
         source_measurement_semantics={
-            "ta": "preceding_10m_average_ambient_temperature",
+            "ta": "preceding_1m_average_ambient_temperature",
             "tx": "preceding_10m_maximum_ambient_temperature",
             "tn": "preceding_10m_minimum_ambient_temperature_UNAVAILABLE_IN_FROZEN_INPUT",
             "revision": "new_payload_version_preserving_prior",

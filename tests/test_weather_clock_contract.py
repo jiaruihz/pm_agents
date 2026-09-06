@@ -148,3 +148,21 @@ def test_orderbook_capture_clock_reversal_is_not_scorable() -> None:
     )
     assert classified["clock_lineage_status"] == INVALID_COLLECTOR_CLOCK
     assert classified["event_time_pit_scorable"] is False
+@pytest.mark.parametrize("decision,target_available,expected,lead", [
+    ("10:25", "10:35", "FUTURE_OBSERVATION", 300),
+    ("10:32", "10:35", "OBSERVED_BUT_UNPUBLISHED", -120),
+    ("10:36", "10:35", "TARGET_ALREADY_AVAILABLE", -360),
+    ("10:32", None, "OBSERVED_AVAILABILITY_UNKNOWN", -120),
+])
+def test_measurement_lead_is_not_cadence_or_publication_lead(decision, target_available, expected, lead):
+    from weather_clock_contract import observation_target_timing
+    def stamp(clock):
+        return None if clock is None else f"2026-09-06T{clock}:00Z"
+    row = observation_target_timing(
+        source_observed_at=stamp("10:20"), source_available_at=stamp("10:25"),
+        decision_at=stamp(decision), target_observed_at=stamp("10:30"),
+        target_available_at=stamp(target_available),
+    )
+    assert row["target_timing_class"] == expected
+    assert row["physical_lead_seconds"] == lead
+    assert row["source_arrival_lag_seconds"] == 300

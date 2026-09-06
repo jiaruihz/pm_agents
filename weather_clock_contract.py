@@ -120,6 +120,42 @@ ORDERBOOK_CLOCK_ORDER = (
 )
 
 
+def observation_target_timing(
+    *, source_observed_at: Any, source_available_at: Any,
+    decision_at: Any, target_observed_at: Any, target_available_at: Any = None,
+) -> dict[str, Any]:
+    """Describe physical lead separately from arrival lead, for label audits.
+
+    Actual target availability is retrospective evidence, never a model input.
+    A provider's observation cadence is intentionally not an argument.
+    """
+    source = parse_utc(source_observed_at, field="source_observed_at")
+    available = parse_utc(source_available_at, field="source_available_at")
+    decision = parse_utc(decision_at, field="decision_at")
+    target = parse_utc(target_observed_at, field="target_observed_at")
+    published = parse_utc(target_available_at, field="target_available_at", allow_none=True)
+    if source > available or available > decision:
+        raise ValueError("source observation/availability/decision are noncausal")
+    if published is not None and published < target:
+        raise ValueError("target observation cannot be available before it is measured")
+    if published is not None and published <= decision:
+        status = "TARGET_ALREADY_AVAILABLE"
+    elif target > decision:
+        status = "FUTURE_OBSERVATION"
+    elif published is not None:
+        status = "OBSERVED_BUT_UNPUBLISHED"
+    else:
+        status = "OBSERVED_AVAILABILITY_UNKNOWN"
+    return {
+        "target_timing_class": status,
+        "source_arrival_lag_seconds": (available - source).total_seconds(),
+        "source_age_at_decision_seconds": (decision - source).total_seconds(),
+        "physical_lead_seconds": (target - decision).total_seconds(),
+        "publication_lead_seconds": None if published is None else (published - decision).total_seconds(),
+        "target_availability_role": "retrospective_label_audit_only",
+    }
+
+
 def local_wall_time_to_utc(
     value: str | datetime,
     *,

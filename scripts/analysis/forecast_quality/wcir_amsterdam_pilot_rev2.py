@@ -812,13 +812,13 @@ Generated `{generated}`. Research only; no shadow/live authorization.
 
 | Role | Frozen identity | Meaning |
 |---|---|---|
-| `fast_source_id` | `knmi_schiphol_10m` / WIGOS `0-20000-0-06240` | KNMI 10-minute station observation. `ta` is the 1.5m ambient-temperature **10-minute average** for the interval ending at `observed_at`; `tx` is the interval maximum. |
+| `fast_source_id` | `knmi_schiphol_10m` / WIGOS `0-20000-0-06240` | KNMI 10-minute station observation. `ta` is the 1.5m ambient-temperature **final 1-minute mean** for the interval ending at `observed_at`; `tx` is the interval maximum. |
 | `prediction_target_source_id` | `eham_routine_metar` | Next distinct routine EHAM report on its native 1°C lattice. |
 | `settlement_source_id` | `polymarket_market_rules_designated_wunderground_eham_daily_record` | Final market resolution source; exact condition-specific rules remain binding and are not a model label. |
 
 The three roles are not aliases. KNMI is the earlier predictor, EHAM routine METAR is the next-print label, and the market's designated Wunderground/EHAM daily record is settlement truth. Historical-final rows cannot establish first-seen; captured-PIT rows require every feature input's `available_at <= decision_ready_ts`.
 
-KNMI's dataset catalog states that each row covers the preceding ten-minute interval and is published a few minutes later: https://dataplatform.knmi.nl/en/dataset/10-minute-in-situ-meteorological-observations-1-0 . The EDR collection identity is documented at https://developer.dataplatform.knmi.nl/edr-api .
+KNMI publishes files on a ten-minute cadence, a few minutes after the file timestamp. Individual variables have their own measurement intervals: ta is the preceding one-minute mean, tx the preceding ten-minute maximum. Current provider documentation: https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0 . The EDR collection identity is documented at https://developer.dataplatform.knmi.nl/edr-api .
 """, encoding="utf-8")
     write_json(output / "AMSTERDAM_SOURCE_AND_LABEL_CONTRACT_REV2.json", {
         "fast_source_id": "knmi_schiphol_10m", "station_id": "0-20000-0-06240",

@@ -762,7 +762,7 @@ def label_prediction(prediction: Mapping[str, Any], rows: Iterable[Mapping[str, 
             continue
         if report.minute not in contract["routine_minutes"]:
             continue
-        if report <= source_observed or report <= prior_report or available <= decision:
+        if report <= source_observed or report <= prior_report:
             continue
         by_report[report].append((available, row))
     base = {
@@ -782,6 +782,11 @@ def label_prediction(prediction: Mapping[str, Any], rows: Iterable[Mapping[str, 
         return {**base, "label_row_id": _hash({"prediction": pid, "report": report.isoformat(), "reason": reason}), "status": "missing", "missing_reason": reason, "future_next_print_label": None}
     candidates = sorted(by_report[report], key=lambda item: (item[0], str(item[1].get("information_event_id") or "")))
     earliest_available = candidates[0][0]
+    if earliest_available <= decision:
+        # Select the physical target before testing availability. Skipping a
+        # known target would silently search for a different later report.
+        reason = "TARGET_ALREADY_AVAILABLE_AT_DECISION"
+        return {**base, "label_row_id": _hash({"prediction": pid, "report": report.isoformat(), "reason": reason}), "status": "missing", "missing_reason": reason, "future_next_print_label": None}
     earliest = [row for available, row in candidates if available == earliest_available]
     values = {_half_up(float(row["temp_c"])) for row in earliest}
     if len(values) != 1:

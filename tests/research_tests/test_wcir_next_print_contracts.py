@@ -64,7 +64,7 @@ def test_each_city_contract_links_reproducible_next_print(city: str) -> None:
 def test_amsterdam_ta_tx_and_revision_semantics_are_distinct() -> None:
     contract = CITY_CONTRACTS["Amsterdam"]
     assert contract.source_measurement_semantics == {
-        "ta": "preceding_10m_average_ambient_temperature",
+        "ta": "preceding_1m_average_ambient_temperature",
         "tx": "preceding_10m_maximum_ambient_temperature",
         "tn": "preceding_10m_minimum_ambient_temperature_UNAVAILABLE_IN_FROZEN_INPUT",
         "revision": "new_payload_version_preserving_prior",
@@ -77,7 +77,7 @@ def test_amsterdam_ta_tx_and_revision_semantics_are_distinct() -> None:
         "first_seen_at_utc": "2026-08-20T10:00:02Z", "available_at_utc": "2026-08-20T10:00:02Z",
         "payload_kind": "tx", "temp_c": 24.4, "payload_hash": "ams-tx",
     })
-    assert ta.measurement_kind == "preceding_10m_average_ambient_temperature"
+    assert ta.measurement_kind == "preceding_1m_average_ambient_temperature"
     assert tx.measurement_kind == "preceding_10m_maximum_ambient_temperature"
     assert tx.observed_start_utc < tx.observed_end_utc
     assert ta.observation_id != tx.observation_id

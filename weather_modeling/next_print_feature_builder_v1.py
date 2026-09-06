@@ -16,6 +16,8 @@ from typing import Any, Iterable, Mapping
 import numpy as np
 import pandas as pd
 
+from weather_clock_contract import parse_utc
+
 
 FEATURE_VERSION = "wcir_next_print_feature_builder_v1"
 PATH_FEATURES = (
@@ -72,21 +74,55 @@ class NextPrintFeatureBuilderV1:
     path_features = PATH_FEATURES
 
     @staticmethod
-    def _normalize_path(frame: pd.DataFrame, *, require_available_at: bool) -> pd.DataFrame:
+    def _clock(
+        value: Any,
+        *,
+        field: str,
+        strict_pit: bool,
+        allow_none: bool = False,
+    ) -> pd.Timestamp | None:
+        """Normalize a builder clock without silently making a PIT clock UTC."""
+
+        if strict_pit:
+            parsed = parse_utc(value, field=field, allow_none=allow_none)
+            return None if parsed is None else pd.Timestamp(parsed)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            if allow_none:
+                return None
+            raise ValueError(f"{field} is required")
+        if pd.isna(value):
+            if allow_none:
+                return None
+            raise ValueError(f"{field} is required")
+        parsed = pd.Timestamp(value)
+        if pd.isna(parsed):
+            raise ValueError(f"{field} is required")
+        return parsed.tz_localize("UTC") if parsed.tzinfo is None else parsed.tz_convert("UTC")
+
+    @classmethod
+    def _normalize_path(cls, frame: pd.DataFrame, *, require_available_at: bool) -> pd.DataFrame:
         required = {"observed_at", "latest_fast_native_value"}
         missing = required - set(frame.columns)
         if missing:
             raise ValueError(f"source path missing required columns: {sorted(missing)}")
         result = frame.copy()
-        result["observed_at"] = pd.to_datetime(result["observed_at"], utc=True, errors="coerce")
+        if require_available_at:
+            result["observed_at"] = result["observed_at"].map(
+                lambda value: cls._clock(value, field="source_path.observed_at", strict_pit=True)
+            )
+        else:
+            result["observed_at"] = pd.to_datetime(result["observed_at"], utc=True, errors="coerce")
         result["latest_fast_native_value"] = pd.to_numeric(
             result["latest_fast_native_value"], errors="coerce"
         )
         if "available_at" not in result:
             result["available_at"] = pd.NaT
-        result["available_at"] = pd.to_datetime(result["available_at"], utc=True, errors="coerce")
-        if require_available_at and result["available_at"].isna().any():
-            raise ValueError("captured/shadow source path requires available_at for every row")
+        if require_available_at:
+            result["available_at"] = result["available_at"].map(
+                lambda value: cls._clock(value, field="source_path.available_at", strict_pit=True)
+            )
+        else:
+            result["available_at"] = pd.to_datetime(result["available_at"], utc=True, errors="coerce")
         if result["observed_at"].isna().any() or result["latest_fast_native_value"].isna().any():
             raise ValueError("source path contains invalid observed_at or temperature")
         if "source_observation_id" not in result:
@@ -157,18 +193,17 @@ class NextPrintFeatureBuilderV1:
         feature_context: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> FeatureBuildResult:
         strict_pit = availability_class in {"CAPTURED_PIT_ARCHIVE", "PROSPECTIVE_SHADOW"}
-        cutoff = pd.Timestamp(feature_cutoff_at)
-        decision = pd.Timestamp(decision_ready_at)
-        cutoff = cutoff.tz_localize("UTC") if cutoff.tzinfo is None else cutoff.tz_convert("UTC")
-        decision = decision.tz_localize("UTC") if decision.tzinfo is None else decision.tz_convert("UTC")
+        cutoff = cls._clock(feature_cutoff_at, field="feature_cutoff_at", strict_pit=strict_pit)
+        decision = cls._clock(decision_ready_at, field="decision_ready_at", strict_pit=strict_pit)
+        assert cutoff is not None and decision is not None
         if cutoff > decision:
             raise ValueError("feature_cutoff_at must be <= decision_ready_at")
-        observed_cutoff = pd.Timestamp(observation_cutoff_at or cutoff)
-        observed_cutoff = (
-            observed_cutoff.tz_localize("UTC")
-            if observed_cutoff.tzinfo is None
-            else observed_cutoff.tz_convert("UTC")
+        observed_cutoff = cls._clock(
+            observation_cutoff_at if strict_pit else observation_cutoff_at or cutoff,
+            field="observation_cutoff_at",
+            strict_pit=strict_pit,
         )
+        assert observed_cutoff is not None
         normalized = cls._normalize_path(source_path, require_available_at=strict_pit)
         eligible = normalized.loc[normalized["observed_at"].le(observed_cutoff)].copy()
         if strict_pit:
@@ -238,15 +273,17 @@ class NextPrintFeatureBuilderV1:
             vector[name] = value
             path_dependent = name in cls.path_features
             if context_row is not None:
-                context_available = pd.Timestamp(context_row.get("available_at"))
-                context_available = (
-                    context_available.tz_localize("UTC")
-                    if context_available.tzinfo is None
-                    else context_available.tz_convert("UTC")
+                context_available = cls._clock(
+                    context_row.get("available_at"),
+                    field=f"feature_context.{name}.available_at",
+                    strict_pit=strict_pit,
+                    allow_none=not strict_pit,
                 )
                 if strict_pit and context_available > cutoff:
                     raise AssertionError(f"{name} feature context is available after feature cutoff")
-                feature_available_at = context_available.isoformat()
+                feature_available_at = (
+                    None if context_available is None else context_available.isoformat()
+                )
                 context_ids = [str(value) for value in context_row.get("source_observation_ids", current_id)]
             else:
                 feature_available_at = max_available if path_dependent else (
@@ -270,6 +307,15 @@ class NextPrintFeatureBuilderV1:
                     ),
                 }
             )
+        result_max_available = max(
+            (
+                pd.Timestamp(value)
+                for value in (row["feature_available_at"] for row in lineage_rows)
+                if value is not None
+            ),
+            default=None,
+        )
+        max_available = None if result_max_available is None else result_max_available.isoformat()
         if strict_pit and max_available is not None and pd.Timestamp(max_available) > cutoff:
             raise AssertionError("max(feature_available_at) exceeds feature_cutoff_at")
         return FeatureBuildResult(

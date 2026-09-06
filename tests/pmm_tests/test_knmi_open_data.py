@@ -54,6 +54,11 @@ def test_parse_knmi_netcdf_extracts_schiphol_ta_tx(tmp_path: Path) -> None:
     assert rows[0]["temp_c"] == 20.6
     assert rows[0]["max_temp_c_past_10m"] == 20.9
     assert rows[0]["knmi_first_seen_at_utc"] == "2026-07-27T15:34:00+00:00"
+    assert rows[0]["measurement_interval_start_utc"] == "2026-07-27T15:29:00+00:00"
+    assert rows[0]["source_cadence_seconds"] == 600
+    assert rows[0]["knmi_field_intervals"]["ta"]["seconds"] == 60
+    assert rows[0]["knmi_field_intervals"]["tx"]["seconds"] == 600
+    assert rows[0]["knmi_dataset_version"] == "1.0"
 
 
 def test_adaptive_poll_delay_targets_release_window() -> None:

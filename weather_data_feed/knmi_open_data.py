@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from weather_data_feed.high_frequency_observation_sources import (
@@ -106,7 +106,7 @@ def parse_knmi_netcdf(
             source_kind="official_airport_station",
             source_note=(
                 "KNMI Schiphol station 240 10-minute AWS/synoptic file; "
-                "ta is the preceding 10-minute average ambient temperature and "
+                "ta is the final 1-minute mean ambient temperature and "
                 "tx is the preceding 10-minute maximum ambient temperature; "
                 "research enrichment, not METAR or WU settlement truth"
             ),
@@ -115,6 +115,15 @@ def parse_knmi_netcdf(
                 "knmi_station_code": str(_scalar(dataset.variables["station"][station_index])),
                 "max_temp_c_past_10m": round(tx, 3) if tx is not None else None,
                 "measurement_interval_end_utc": obs_dt.isoformat(),
+                "measurement_interval_start_utc": (obs_dt - timedelta(minutes=1)).isoformat(),
+                "measurement_kind": "preceding_1m_average_ambient_temperature",
+                "source_cadence_seconds": 600,
+                "knmi_field_intervals": {
+                    "ta": {"seconds": 60, "end_utc": obs_dt.isoformat(), "aggregation": "mean"},
+                    "tx": {"seconds": 600, "end_utc": obs_dt.isoformat(), "aggregation": "maximum"},
+                },
+                "knmi_dataset": KNMI_DATASET,
+                "knmi_dataset_version": KNMI_VERSION,
                 "knmi_filename": file_meta.get("filename"),
                 "knmi_file_created_at_utc": file_meta.get("created"),
                 "knmi_file_last_modified_at_utc": file_meta.get("lastModified"),
