@@ -29,6 +29,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.runtime.production import (  # noqa: E402
+    WeatherManagedRuntimeSpec,
     WeatherProductionSpec,
     health_contract_mismatches,
     load_production_spec,
@@ -555,28 +556,162 @@ def inspect_runtime_health_contracts(
     return rows
 
 
+def runtime_summary_from_path(summary_path: Path) -> dict[str, Any]:
+    """Return the compact loaded-SHA evidence from one explicit JSON path."""
+
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        "path": str(summary_path),
+        "generated_at_utc": payload.get("generated_at_utc"),
+        "status": payload.get("status"),
+        "live_enabled": payload.get("live_enabled"),
+        "deployed_repo_sha": payload.get("deployed_repo_sha"),
+        "source_checkout_root": payload.get("source_checkout_root"),
+        "critical_source_dirty": payload.get("critical_source_dirty"),
+    }
+
+
 def runtime_summary(tokens: Sequence[str]) -> dict[str, Any]:
+    """Read legacy output-dir evidence only when no managed owner is known."""
+
     output_values = option_values(tokens, OUTPUT_OPTIONS)
     for value in output_values:
         summary_path = Path(value) / "latest_summary.json"
-        if not summary_path.exists():
-            continue
-        try:
-            payload = json.loads(summary_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        return {
-            "path": str(summary_path),
-            "generated_at_utc": payload.get("generated_at_utc"),
-            "status": payload.get("status"),
-            "live_enabled": payload.get("live_enabled"),
-            "deployed_repo_sha": payload.get("deployed_repo_sha"),
-            "source_checkout_root": payload.get("source_checkout_root"),
-            "critical_source_dirty": payload.get("critical_source_dirty"),
-        }
+        summary = runtime_summary_from_path(summary_path)
+        if summary:
+            return summary
     return {}
+
+
+def managed_runtime_pid_sessions(
+    spec: WeatherProductionSpec,
+    tmux_rows: Sequence[Mapping[str, Any]],
+) -> dict[int, tuple[WeatherManagedRuntimeSpec, ...]]:
+    """Map observed canonical-tmux process PIDs to their managed runtimes.
+
+    ``inspect_tmux`` records both pane executables and their descendants.  A
+    PID is useful ownership evidence only if it maps to one registered managed
+    session; a duplicate mapping remains visible as ambiguous to the caller.
+    """
+
+    runtimes_by_session: dict[str, list[WeatherManagedRuntimeSpec]] = {}
+    for runtime in spec.managed_runtimes:
+        runtimes_by_session.setdefault(runtime.tmux_session, []).append(runtime)
+    owners: dict[int, list[WeatherManagedRuntimeSpec]] = {}
+    for row in tmux_rows:
+        runtimes = runtimes_by_session.get(str(row.get("session") or ""), [])
+        if not runtimes:
+            continue
+        pane_pids = [
+            pane.get("pane_pid")
+            for pane in row.get("panes", [])
+            if isinstance(pane, Mapping)
+        ]
+        raw_pids = [*row.get("process_pids", []), *pane_pids]
+        for raw_pid in raw_pids:
+            try:
+                pid = int(raw_pid)
+            except (TypeError, ValueError):
+                continue
+            owners.setdefault(pid, []).extend(runtimes)
+    return {
+        pid: tuple({runtime.instance_id: runtime for runtime in runtimes}.values())
+        for pid, runtimes in owners.items()
+    }
+
+
+def managed_runtime_candidates_for_output(
+    spec: WeatherProductionSpec, tokens: Sequence[str]
+) -> list[WeatherManagedRuntimeSpec]:
+    """Return registered runtimes whose file-health directory is an output dir."""
+
+    output_dirs = {Path(value).resolve(strict=False) for value in option_values(tokens, OUTPUT_OPTIONS)}
+    candidates: list[WeatherManagedRuntimeSpec] = []
+    for runtime in spec.managed_runtimes:
+        if runtime.health_path is None:
+            continue
+        if runtime.health_path.parent.resolve(strict=False) in output_dirs:
+            candidates.append(runtime)
+    return candidates
+
+
+def runtime_evidence_for_process(
+    *,
+    pid: int,
+    tokens: Sequence[str],
+    checkout: Path | None,
+    pid_owners: Mapping[int, Sequence[WeatherManagedRuntimeSpec]],
+    releases_by_id: Mapping[str, Any],
+    spec: WeatherProductionSpec,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Select SHA evidence without letting shared output directories cross-own.
+
+    A registered runtime needs exact canonical-tmux PID ownership and a
+    checkout that agrees with its pinned release before its own health path is
+    read.  Unknown ownership is recorded, and an output directory associated
+    with any registered runtime never falls back to a neighbour's
+    ``latest_summary.json``.  Processes with no registered owner retain the
+    legacy output-dir behavior.
+    """
+
+    owners = list(pid_owners.get(pid, ()))
+    if len(owners) > 1:
+        return {}, {
+            "status": "ambiguous",
+            "instance_ids": sorted(runtime.instance_id for runtime in owners),
+            "reason": "pid_matches_multiple_managed_tmux_sessions",
+        }
+    if len(owners) == 1:
+        runtime = owners[0]
+        release = releases_by_id.get(runtime.release_id or "")
+        detail: dict[str, Any] = {
+            "instance_id": runtime.instance_id,
+            "tmux_session": runtime.tmux_session,
+            "release_id": runtime.release_id,
+        }
+        if release is None:
+            detail.update(status="unknown", reason="managed_runtime_release_not_registered")
+            return {}, detail
+        if checkout is None:
+            detail.update(status="unknown", reason="process_checkout_unavailable")
+            return {}, detail
+        expected_checkout = release.checkout_root.resolve()
+        observed_checkout = checkout.resolve()
+        if observed_checkout != expected_checkout:
+            detail.update(
+                status="checkout_mismatch",
+                reason="managed_tmux_pid_checkout_differs_from_pinned_release",
+                expected_checkout=str(expected_checkout),
+                observed_checkout=str(observed_checkout),
+            )
+            return {}, detail
+        if runtime.health_path is None:
+            detail.update(status="unknown", reason="managed_runtime_has_no_file_health_path")
+            return {}, detail
+        summary = runtime_summary_from_path(runtime.health_path)
+        detail.update(
+            status="resolved" if summary else "unreadable",
+            health_path=str(runtime.health_path),
+            evidence_source="managed_runtime_health_path",
+        )
+        return summary, detail
+
+    output_candidates = managed_runtime_candidates_for_output(spec, tokens)
+    if output_candidates:
+        return {}, {
+            "status": "unknown",
+            "instance_ids": sorted(runtime.instance_id for runtime in output_candidates),
+            "reason": "output_dir_belongs_to_registered_runtime_without_exact_pid_owner",
+        }
+    return runtime_summary(tokens), {
+        "status": "legacy",
+        "reason": "no_registered_runtime_output_owner",
+    }
 
 
 def checkout_for_process(
@@ -641,9 +776,10 @@ def inspect_tmux(
         if len(parts) != 4 or not parts[1].isdigit():
             continue
         pane_pid = int(parts[1])
+        observed_pids = [pane_pid, *descendants(processes, pane_pid)]
         child_rows = [
             process_by_pid[pid]
-            for pid in descendants(processes, pane_pid)
+            for pid in observed_pids
             if pid in process_by_pid and weather_process(process_by_pid[pid])
         ]
         session = sessions.setdefault(
@@ -818,6 +954,7 @@ def build_manifest(
         git_metadata(root, git_cache)
 
     releases_by_root: dict[Path, list[Any]] = {}
+    releases_by_id = {release.release_id: release for release in spec.releases}
     operational_common_dir = git_metadata(
         spec.operational_repo_root.resolve(), git_cache
     ).get("git_common_dir")
@@ -974,13 +1111,21 @@ def build_manifest(
             )
         )
 
+    pid_owners = managed_runtime_pid_sessions(spec, tmux_rows)
     for raw in processes:
         if not weather_process(raw):
             continue
         tokens = command_tokens(str(raw["command"]))
         checkout = checkout_for_process(raw, root_cache=root_cache)
         checkout_meta = git_metadata(checkout, git_cache) if checkout else None
-        summary = runtime_summary(tokens)
+        summary, ownership = runtime_evidence_for_process(
+            pid=int(raw["pid"]),
+            tokens=tokens,
+            checkout=checkout,
+            pid_owners=pid_owners,
+            releases_by_id=releases_by_id,
+            spec=spec,
+        )
         row = {
             "pid": raw["pid"],
             "ppid": raw["ppid"],
@@ -991,6 +1136,7 @@ def build_manifest(
             "declared_db_paths": option_values(tokens, DB_OPTIONS),
             "open_db_paths": list(db_consumers.get(int(raw["pid"]), {}).get("paths", [])),
             "runtime_summary": summary,
+            "runtime_evidence_ownership": ownership,
         }
         observed_processes.append(row)
         mode = row["execution_mode"]

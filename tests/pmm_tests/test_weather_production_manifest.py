@@ -57,7 +57,10 @@ def test_committed_production_spec_owns_jrs_canonical_db():
         / control_plane_release.expected_repo_sha
     )
     assert len(control_plane_release.expected_repo_sha) == 40
-    assert control_plane_release.runtime_bindings == ("operational_venv",)
+    assert control_plane_release.runtime_bindings == (
+        "operational_venv",
+        "operational_env",
+    )
     assert spec.release("core_carry_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/"
         "9397845f44b57ed5bb28d06cc37b98b1c963cb36"
@@ -69,7 +72,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     assert spec.release("fast_source_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/"
-        "f048dc31114ddab12d052c4061e1d0d909640d89"
+        "559d285ca9f111915ea4a80d2535bc40bb6c5722"
     )
     assert spec.release("fast_source_runtime").runtime_bindings == (
         "operational_venv",
@@ -83,7 +86,7 @@ def test_committed_production_spec_owns_jrs_canonical_db():
     )
     assert spec.release("city_probability_runtime").checkout_root == Path(
         "/Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/"
-        "f42eeb89f6001ce560ba69a5c8c4a9b3f6448f5c"
+        "51c904bdfd220c83b097044cffa6b48ed2398f3b"
     )
     assert spec.release("city_probability_runtime").runtime_bindings == (
         "operational_venv",
@@ -392,6 +395,316 @@ def test_process_parser_and_execution_mode_are_present_state_based():
         manifest.classify_execution_mode("python weather_shadow.py")
         == "zero_notional_shadow"
     )
+
+
+def test_inspect_tmux_includes_weather_pane_executable_in_process_pids(
+    tmp_path, monkeypatch
+):
+    spec = production_spec(tmp_path)
+    spec.canonical_tmux_binary.write_text("", encoding="utf-8")
+    pane_pid = 101
+    processes = [
+        {
+            "pid": pane_pid,
+            "ppid": 1,
+            "started": "Sun Sep  6 21:52:42 2026",
+            "command": "python weather_controller.py --live --confirm-live",
+        }
+    ]
+
+    def fake_run_command(args, **_kwargs):
+        if "list-panes" in args:
+            return __import__("subprocess").CompletedProcess(
+                args,
+                0,
+                "weather_controller\t101\t/repo\tpython weather_controller.py\n",
+                "",
+            )
+        return __import__("subprocess").CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(manifest, "run_command", fake_run_command)
+
+    rows = manifest.inspect_tmux(spec, processes)
+
+    assert rows[0]["process_pids"] == [pane_pid]
+
+
+def test_runtime_evidence_uses_tmux_owned_health_not_shared_output_summary(tmp_path):
+    shared_output = tmp_path / "shared"
+    shared_output.mkdir()
+    controller_health = shared_output / "controller_readiness.json"
+    controller_sha = "a" * 40
+    live_sha = "b" * 40
+    controller_health.write_text(
+        '{"status":"ready","deployed_repo_sha":"' + controller_sha + '"}',
+        encoding="utf-8",
+    )
+    (shared_output / "latest_summary.json").write_text(
+        '{"status":"ok","deployed_repo_sha":"' + live_sha + '"}',
+        encoding="utf-8",
+    )
+    controller_checkout = tmp_path / "releases/controller" / controller_sha
+    live_checkout = tmp_path / "releases/live" / live_sha
+    controller = WeatherManagedRuntimeSpec(
+        instance_id="controller",
+        tmux_session="weather_controller",
+        role="execution_control",
+        execution_mode="live",
+        release_id="controller",
+        health_path=controller_health,
+    )
+    live = WeatherManagedRuntimeSpec(
+        instance_id="live_runner",
+        tmux_session="weather_live_runner",
+        role="strategy",
+        execution_mode="live",
+        release_id="live",
+        health_path=shared_output / "latest_summary.json",
+    )
+    spec = WeatherProductionSpec(
+        **{**production_spec(tmp_path).__dict__, "managed_runtimes": (controller, live)}
+    )
+    releases_by_id = {
+        "controller": WeatherProductionReleaseSpec(
+            release_id="controller",
+            checkout_root=controller_checkout,
+            expected_repo_sha=controller_sha,
+        ),
+        "live": WeatherProductionReleaseSpec(
+            release_id="live",
+            checkout_root=live_checkout,
+            expected_repo_sha=live_sha,
+        ),
+    }
+    tokens = ["python", "weather_controller.py", "--output-dir", str(shared_output)]
+
+    summary, ownership = manifest.runtime_evidence_for_process(
+        pid=101,
+        tokens=tokens,
+        checkout=controller_checkout,
+        pid_owners={101: (controller,)},
+        releases_by_id=releases_by_id,
+        spec=spec,
+    )
+
+    assert ownership["status"] == "resolved"
+    assert ownership["instance_id"] == "controller"
+    assert summary["path"] == str(controller_health)
+    assert summary["deployed_repo_sha"] == controller_sha
+
+    controller_health.unlink()
+    missing_summary, missing_ownership = manifest.runtime_evidence_for_process(
+        pid=101,
+        tokens=tokens,
+        checkout=controller_checkout,
+        pid_owners={101: (controller,)},
+        releases_by_id=releases_by_id,
+        spec=spec,
+    )
+
+    assert missing_summary == {}
+    assert missing_ownership == {
+        "instance_id": "controller",
+        "tmux_session": "weather_controller",
+        "release_id": "controller",
+        "status": "unreadable",
+        "health_path": str(controller_health),
+        "evidence_source": "managed_runtime_health_path",
+    }
+
+
+def test_runtime_evidence_keeps_legacy_only_when_no_registered_output_owner(tmp_path):
+    shared_output = tmp_path / "shared"
+    shared_output.mkdir()
+    (shared_output / "latest_summary.json").write_text(
+        '{"status":"ok","deployed_repo_sha":"live"}', encoding="utf-8"
+    )
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="registered",
+        tmux_session="weather_registered",
+        role="strategy",
+        execution_mode="live",
+        health_path=shared_output / "registered_health.json",
+    )
+    spec = WeatherProductionSpec(
+        **{**production_spec(tmp_path).__dict__, "managed_runtimes": (runtime,)}
+    )
+    shared_tokens = ["python", "weather_legacy.py", "--output-dir", str(shared_output)]
+
+    blocked_summary, blocked_ownership = manifest.runtime_evidence_for_process(
+        pid=77,
+        tokens=shared_tokens,
+        checkout=None,
+        pid_owners={},
+        releases_by_id={},
+        spec=spec,
+    )
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    (legacy_dir / "latest_summary.json").write_text(
+        '{"status":"ok","deployed_repo_sha":"legacy"}', encoding="utf-8"
+    )
+    legacy_summary, legacy_ownership = manifest.runtime_evidence_for_process(
+        pid=78,
+        tokens=["python", "weather_legacy.py", "--output-dir", str(legacy_dir)],
+        checkout=None,
+        pid_owners={},
+        releases_by_id={},
+        spec=spec,
+    )
+
+    assert blocked_summary == {}
+    assert blocked_ownership["status"] == "unknown"
+    assert blocked_ownership["instance_ids"] == ["registered"]
+    assert legacy_summary["deployed_repo_sha"] == "legacy"
+    assert legacy_ownership["status"] == "legacy"
+
+    ambiguous_runtime = WeatherManagedRuntimeSpec(
+        instance_id="also_registered",
+        tmux_session="weather_also_registered",
+        role="strategy",
+        execution_mode="shadow",
+    )
+    ambiguous_summary, ambiguous_ownership = manifest.runtime_evidence_for_process(
+        pid=79,
+        tokens=shared_tokens,
+        checkout=None,
+        pid_owners={79: (runtime, ambiguous_runtime)},
+        releases_by_id={},
+        spec=spec,
+    )
+
+    assert ambiguous_summary == {}
+    assert ambiguous_ownership["status"] == "ambiguous"
+
+
+def test_manifest_detects_real_sha_mismatch_from_tmux_owned_health(tmp_path, monkeypatch):
+    shared_output = tmp_path / "shared"
+    shared_output.mkdir()
+    controller_sha = "a" * 40
+    live_sha = "b" * 40
+    controller_health = shared_output / "controller_readiness.json"
+    controller_health.write_text(
+        '{"status":"ready","deployed_repo_sha":"' + controller_sha + '"}',
+        encoding="utf-8",
+    )
+    (shared_output / "latest_summary.json").write_text(
+        '{"status":"ok","deployed_repo_sha":"' + live_sha + '"}',
+        encoding="utf-8",
+    )
+    controller_checkout = tmp_path / "releases/controller" / controller_sha
+    live_checkout = tmp_path / "releases/live" / live_sha
+    controller = WeatherManagedRuntimeSpec(
+        instance_id="controller",
+        tmux_session="weather_controller",
+        role="execution_control",
+        execution_mode="live",
+        release_id="controller",
+        health_path=controller_health,
+    )
+    live = WeatherManagedRuntimeSpec(
+        instance_id="live_runner",
+        tmux_session="weather_live_runner",
+        role="strategy",
+        execution_mode="live",
+        release_id="live",
+        health_path=shared_output / "latest_summary.json",
+    )
+    releases = (
+        WeatherProductionReleaseSpec(
+            release_id="controller",
+            checkout_root=controller_checkout,
+            expected_repo_sha=controller_sha,
+        ),
+        WeatherProductionReleaseSpec(
+            release_id="live",
+            checkout_root=live_checkout,
+            expected_repo_sha=live_sha,
+        ),
+    )
+    spec = WeatherProductionSpec(
+        **{
+            **production_spec(tmp_path).__dict__,
+            "managed_runtimes": (controller, live),
+            "releases": releases,
+        }
+    )
+    process_rows = [
+        {
+            "pid": 101,
+            "ppid": 1,
+            "started": "Sun Sep  6 21:52:42 2026",
+            "command": f"python weather_controller.py --output-dir {shared_output} --live --confirm-live",
+        },
+        {
+            "pid": 102,
+            "ppid": 1,
+            "started": "Sun Sep  6 21:52:42 2026",
+            "command": f"python weather_runner.py --output-dir {shared_output} --live --confirm-live",
+        },
+    ]
+    checkouts = {101: controller_checkout, 102: live_checkout}
+    monkeypatch.setattr(manifest, "load_instance_specs", lambda: [])
+    monkeypatch.setattr(manifest, "inspect_persistent_worktrees", lambda _spec: [])
+    monkeypatch.setattr(
+        manifest, "inspect_release_runtime_bindings", lambda _spec, _release: []
+    )
+    monkeypatch.setattr(
+        manifest,
+        "checkout_for_process",
+        lambda row, **_kwargs: checkouts[int(row["pid"])],
+    )
+
+    def fake_git_metadata(root, cache):
+        root = Path(root)
+        expected = next(
+            (release.expected_repo_sha for release in releases if root == release.checkout_root),
+            "c" * 40,
+        )
+        payload = {
+            "root": str(root),
+            "head": expected,
+            "branch": "HEAD",
+            "dirty_tracked": False,
+            "git_common_dir": str(tmp_path / ".git"),
+        }
+        cache[str(root)] = payload
+        return payload
+
+    monkeypatch.setattr(manifest, "git_metadata", fake_git_metadata)
+    tmux_rows = [
+        {"session": "weather_controller", "panes": [{"pane_pid": 101}], "process_pids": []},
+        {"session": "weather_live_runner", "panes": [{"pane_pid": 102}], "process_pids": []},
+    ]
+    kwargs = {
+        "spec": spec,
+        "processes": process_rows,
+        "tmux_rows": tmux_rows,
+        "launchctl_rows": [],
+        "db_route": {"status": "healthy"},
+        "db_consumers": {},
+    }
+
+    healthy_payload = manifest.build_manifest(**kwargs)
+    assert not [
+        item for item in healthy_payload["findings"] if item["kind"] == "process_release_sha_mismatch"
+    ]
+    observed = {row["pid"]: row for row in healthy_payload["processes"]}
+    assert observed[101]["runtime_summary"]["path"] == str(controller_health)
+    assert observed[102]["runtime_summary"]["path"] == str(shared_output / "latest_summary.json")
+
+    controller_health.write_text(
+        '{"status":"ready","deployed_repo_sha":"' + live_sha + '"}',
+        encoding="utf-8",
+    )
+    mismatch_payload = manifest.build_manifest(**kwargs)
+    mismatch = next(
+        item
+        for item in mismatch_payload["findings"]
+        if item["kind"] == "process_release_sha_mismatch"
+    )
+    assert mismatch["detail"]["pid"] == 101
+    assert mismatch["detail"]["deployed_repo_sha"] == live_sha
 
 
 def test_lsof_parser_keeps_physical_db_consumers():
