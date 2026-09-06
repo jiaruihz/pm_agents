@@ -1,10 +1,15 @@
 version: weather_production_v1
 host_role: mac_current_production
 operational_repo_root: /Users/deepsleep/projects/pm_agents
+platform_control_db_path: /Users/deepsleep/projects/pm_agents/runtime/platform/generations/production-20260907/platform_control.db
 production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # Immutable release identities. Runtime entries reference these IDs instead of
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
+  - release_id: platform_control_plane
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/platform_control_plane/9764201544bc19a3393de6e66c7ac76f0d80de49
+    expected_repo_sha: 9764201544bc19a3393de6e66c7ac76f0d80de49
+    runtime_bindings: [operational_venv, operational_env]
   - release_id: canonical_refresh
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/canonical_refresh/9c3f2c05d4885ea1efa2333575f56519f003e547
     expected_repo_sha: 9c3f2c05d4885ea1efa2333575f56519f003e547
@@ -203,7 +208,7 @@ managed_runtimes:
     tmux_session: weather_dashboard_api
     role: dashboard_api
     execution_mode: read_only_api
-    release_id: control_plane
+    release_id: platform_control_plane
     start_script: scripts/ops/start_weather_dashboard_api_jrs_tmux.sh
     health_url: http://127.0.0.1:8000/health
     health_format: http_json
