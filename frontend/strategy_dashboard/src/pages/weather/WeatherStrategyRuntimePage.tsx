@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
+import { RuntimeMonitoringPanel } from "../../components/RuntimeMonitoringPanel";
 import { weatherApi } from "../../data/weather-http";
 import type { StrategyRuntimeDetail, StrategyRuntimeOverview, StrategyRuntimeRow, StrategyShadowQueueRow } from "../../data/weather-types";
 
@@ -223,6 +224,7 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
   return (
     <PageFrame title="Strategy Runtime" desc="live · shadow · telemetry · target-date status">
       <>
+        <RuntimeMonitoringPanel />
         <section style={toolbarStyle}>
           <div>
             <div style={{ fontSize: 12, color: "var(--muted)" }}>Target date</div>
