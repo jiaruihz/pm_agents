@@ -33,6 +33,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1810,36 +1811,49 @@ def continuous_market_rescores(
             ],
         },
     )
+    selected_states: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for city_day, checkpoint in candidates:
+        if checkpoint.get("model_probability_hold") is None:
+            continue
+        # The hourly row is the frozen economic thesis. The state stream
+        # may intentionally be sparse, so inherit the entire checkpoint
+        # before overlaying only its latest weather/market identity fields.
+        state = {**checkpoint, **dict(epochs.get(city_day) or {})}
+        checkpoint_token = str(
+            checkpoint.get("current_yes_token_id") or checkpoint.get("token_id") or ""
+        )
+        current_token = str(
+            state.get("current_yes_token_id") or state.get("token_id") or ""
+        )
+        checkpoint_bracket = str(
+            checkpoint.get("current_bracket") or checkpoint.get("bracket") or ""
+        )
+        current_bracket = str(
+            state.get("current_bracket") or state.get("bracket") or ""
+        )
+        if (
+            not checkpoint_token
+            or current_token != checkpoint_token
+            or current_bracket != checkpoint_bracket
+        ):
+            continue
+        freshness_ok, _freshness_reason = signal_runner.observation_freshness_valid(state)
+        if not freshness_ok:
+            continue
+        selected_states.append((checkpoint, state))
+    # A serial 64-city batch ages early quotes before entry can inspect them.
+    # Keep the same denominator/order/request budget, but bound transport
+    # concurrency so freshness is measured on useful response-time evidence.
+    def fetch_selected(item: tuple[dict[str, Any], dict[str, Any]]) -> dict[str, Any]:
+        _checkpoint, state = item
+        token = str(state.get("current_yes_token_id") or state.get("token_id") or "")
+        return signal_runner.fetch_full_book(client, token)
+
     with market_httpx_client(args.book_proxy, timeout=float(args.book_timeout_sec)) as client:
-        for city_day, checkpoint in candidates:
-            if checkpoint.get("model_probability_hold") is None:
-                continue
-            # The hourly row is the frozen economic thesis. The state stream
-            # may intentionally be sparse, so inherit the entire checkpoint
-            # before overlaying only its latest weather/market identity fields.
-            state = {**checkpoint, **dict(epochs.get(city_day) or {})}
-            checkpoint_token = str(
-                checkpoint.get("current_yes_token_id") or checkpoint.get("token_id") or ""
-            )
-            current_token = str(
-                state.get("current_yes_token_id") or state.get("token_id") or ""
-            )
-            checkpoint_bracket = str(
-                checkpoint.get("current_bracket") or checkpoint.get("bracket") or ""
-            )
-            current_bracket = str(
-                state.get("current_bracket") or state.get("bracket") or ""
-            )
-            if (
-                not checkpoint_token
-                or current_token != checkpoint_token
-                or current_bracket != checkpoint_bracket
-            ):
-                continue
-            freshness_ok, _freshness_reason = signal_runner.observation_freshness_valid(state)
-            if not freshness_ok:
-                continue
-            book = signal_runner.fetch_full_book(client, current_token)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            books = list(pool.map(fetch_selected, selected_states))
+        for (checkpoint, state), book in zip(selected_states, books):
+            current_token = str(state.get("current_yes_token_id") or state.get("token_id") or "")
             book_identity = "direct-clob-" + stable_hash(
                 {
                     "token_id": current_token,
@@ -1881,8 +1895,8 @@ def continuous_market_rescores(
             }
             row["market_rescore_id"] = "market-rescore-" + stable_hash(
                 {
-                    "city": city_day[0],
-                    "target_date": city_day[1],
+                    "city": row["city"],
+                    "target_date": row["target_date"],
                     "checkpoint_key": row.get("checkpoint_key"),
                     "book": book_identity,
                 }
@@ -2978,6 +2992,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         output_dir,
         packets=decision_packets["written_packets"],
     )
+    journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
+    near_core_journal_terminal_recoveries = (
+        recover_near_core_journal_terminal_makers(output_dir)
+    )
     market_rescores = continuous_market_rescores(args, output_dir, now=now)
     # All decision clocks below are sampled after their preceding I/O.
     # Cycle-start time is provenance only, never quote age or a new order TTL.
@@ -2987,10 +3005,6 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     runtime_args = argparse.Namespace(**vars(args))
     if control_failures:
         runtime_args.near_core_maker_probe_enabled = False
-    journal_terminal_recoveries = recover_journal_terminal_makers(output_dir)
-    near_core_journal_terminal_recoveries = (
-        recover_near_core_journal_terminal_makers(output_dir)
-    )
     entry_plans, attempts = new_entry_plans(
         args,
         output_dir,

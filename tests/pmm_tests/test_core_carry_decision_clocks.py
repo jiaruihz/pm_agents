@@ -127,3 +127,45 @@ def test_run_once_resamples_after_each_io_stage(monkeypatch, tmp_path):
     with pytest.raises(ReachedExecution):
         runner.run_once(args)
     assert seen == [BASE + timedelta(seconds=s) for s in [6, 10, 14, 18, 22]]
+
+
+def test_book_batch_has_bounded_concurrency_and_stable_candidate_order(monkeypatch, tmp_path):
+    import threading
+
+    gate = threading.Barrier(4)
+    lock = threading.Lock()
+    counts = {"active": 0, "peak": 0, "requests": 0}
+    checkpoints = {(f"City{i}", "2026-09-07"): {
+        "city": f"City{i}", "target_date": "2026-09-07",
+        "checkpoint_key": f"City{i}|2026-09-07|14", "current_yes_token_id": f"token{i}",
+        "current_bracket": "27", "model_probability_hold": .85,
+        "decision_snapshot_ts_utc": BASE.isoformat(),
+    } for i in range(8)}
+    monkeypatch.setattr(runner, "latest_scores_by_city_day", lambda path: checkpoints)
+    monkeypatch.setattr(runner, "latest_weather_epochs", lambda path: {})
+    monkeypatch.setattr(producer, "observation_freshness_valid", lambda row: (True, "ok"))
+    monkeypatch.setattr(runner, "market_httpx_client", lambda *a, **kw: nullcontext(None))
+    monkeypatch.setattr(runner, "evaluate_entry", lambda *a: {"eligible": False})
+
+    def fetch(client, token):
+        with lock:
+            counts["active"] += 1
+            counts["requests"] += 1
+            counts["peak"] = max(counts["peak"], counts["active"])
+        gate.wait(timeout=3)
+        with lock:
+            counts["active"] -= 1
+        return {"status": "ok", "fetched_at_utc": BASE.isoformat(),
+                "bid": int(token[5:]) / 10, "asks": [], "bids": []}
+
+    monkeypatch.setattr(producer, "fetch_full_book", fetch)
+    args = runner.parser().parse_args(["run", "--continuous-market-max-books-per-cycle", "8"])
+    rows = runner.continuous_market_rescores(args, tmp_path, now=BASE)
+    assert counts == {"active": 0, "peak": 4, "requests": 8}
+    assert [row["city"] for row in rows] == [f"City{i}" for i in range(8)]
+    assert [row["current_yes_bid"] for row in rows] == [i / 10 for i in range(8)]
+    for row in rows:
+        assert row["market_rescore_id"] == "market-rescore-" + runner.stable_hash({
+            "city": row["city"], "target_date": row["target_date"],
+            "checkpoint_key": row["checkpoint_key"], "book": row["execution_book_snapshot_id"],
+        })
