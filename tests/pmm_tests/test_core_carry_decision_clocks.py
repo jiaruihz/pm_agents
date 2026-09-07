@@ -169,3 +169,34 @@ def test_book_batch_has_bounded_concurrency_and_stable_candidate_order(monkeypat
             "city": row["city"], "target_date": row["target_date"],
             "checkpoint_key": row["checkpoint_key"], "book": row["execution_book_snapshot_id"],
         })
+
+
+@pytest.mark.parametrize("bid,ask,tick,cap,expected", [(.745,.86,.001,.841,.802),(.80,.84,.01,.9,.82),(.8,.84,.01,.805,.80),(.83,.84,.01,.9,.83),(.85,.84,.01,.9,0)])
+def test_near_midpoint_is_tick_rounded_post_only_and_capped(bid,ask,tick,cap,expected):
+    assert runner.near_core_maker_probe.midpoint_entry_price(best_bid=bid,best_ask=ask,tick_size=tick,price_cap=cap)==expected
+
+
+@pytest.mark.parametrize("status", ["submitted", "unknown", "rejected", "cancelled"])
+def test_immediate_handoff_waits_for_exact_cancel_and_rescores(monkeypatch,tmp_path,status):
+    plan={"execution_action":"near_core_maker_cancel_core_supersession","source_order_id":"old","city":"Manila","target_date":"2026-09-07"}
+    monkeypatch.setattr(runner,"execution_journal_order_states",lambda p:{"old":{"status":status}})
+    monkeypatch.setattr(runner,"recover_near_core_journal_terminal_makers",lambda p:0)
+    calls=[]
+    def rescore(*a,**kw):
+        assert kw["city_days"]=={("Manila","2026-09-07")}
+        calls.append("fresh_score");return [{"fresh":True}]
+    monkeypatch.setattr(runner,"continuous_market_rescores",rescore)
+    def entry(*a,**kw):
+        assert kw["market_rescores"]==[{"fresh":True}]
+        calls.append("dedup_and_budget");return [{"city":"Manila","target_date":"2026-09-07"}],[]
+    monkeypatch.setattr(runner,"new_entry_plans",entry)
+    monkeypatch.setattr(runner,"execute_plans",lambda *a:(calls.append("submit") or {"exit_code":0}))
+    result=runner.immediate_core_handoff(runner.parser().parse_args(["run"]),tmp_path,cancel_plans=[plan])
+    assert calls==(["fresh_score","dedup_and_budget","submit"] if status=="cancelled" else [])
+    assert result["entry_plans"]==(1 if status=="cancelled" else 0)
+
+
+def test_immediate_handoff_all_roots_must_be_terminal(monkeypatch,tmp_path):
+    monkeypatch.setattr(runner,"execution_journal_order_states",lambda p:{"a":{"status":"cancelled"}})
+    plans=[{"execution_action":"near_core_maker_cancel_core_supersession","source_order_id":oid,"city":"Manila","target_date":"2026-09-07"} for oid in ["a","b"]]
+    assert runner.immediate_core_handoff(None,tmp_path,cancel_plans=plans)["target_city_days"]==[]

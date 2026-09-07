@@ -1779,6 +1779,7 @@ def continuous_market_rescores(
     output_dir: Path,
     *,
     now: datetime,
+    city_days: set[tuple[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Re-score fresh books while the latest hourly Core thesis is armed."""
 
@@ -1793,7 +1794,10 @@ def continuous_market_rescores(
             or checkpoint.get("created_at_utc")
         ) or datetime.min.replace(tzinfo=timezone.utc)
 
-    all_candidates = sorted(scores.items(), key=checkpoint_clock, reverse=True)
+    all_candidates = sorted(
+        ((key, value) for key, value in scores.items() if city_days is None or key in city_days),
+        key=checkpoint_clock, reverse=True,
+    )
     max_books = max(0, int(args.continuous_market_max_books_per_cycle))
     candidates = all_candidates[:max_books]
     skipped = all_candidates[max_books:]
@@ -1965,6 +1969,17 @@ def build_near_core_entry_plan(
         or (finite(fields.get("limit_price")) or 0.0) <= 0
     ):
         return None
+    fields["limit_price"] = near_core_maker_probe.midpoint_entry_price(
+        best_bid=finite(row.get("current_yes_bid")) or 0.0,
+        best_ask=finite(row.get("current_yes_ask")) or 0.0,
+        tick_size=finite(row.get("current_yes_tick_size")) or 0.001,
+        price_cap=fields["maker_price_cap"],
+    )
+    if fields["limit_price"] <= 0:
+        return None
+    fields["notional"] = round(fields["limit_price"] * near_core_maker_probe.FIXED_SHARES, 6)
+    fields["quote_mode"] = near_core_maker_probe.MID_QUOTE_POLICY
+    fields["maker_quote_policy"] = near_core_maker_probe.MID_QUOTE_POLICY
     sid = near_core_signal_id(row)
     fields.update(
         {
@@ -2565,6 +2580,38 @@ def write_near_core_runtime_artifacts(
     write_json(output_dir / "near_core_maker_v2_promotion_gate.json", gate)
     return {"manifest": manifest, "report": report, "promotion_gate": gate}
 
+def immediate_core_handoff(args, output_dir: Path, *, cancel_plans: list[dict[str, Any]]) -> dict[str, Any]:
+    """Continue only journal-confirmed near cancellations, with a new score and dedupe.
+
+    A rejected/uncertain cancel cannot authorize a submit. This is a bounded
+    second phase in the same cycle; crashes retain the ordinary journal recovery.
+    """
+    if not any(p.get("execution_action") == "near_core_maker_cancel_core_supersession" for p in cancel_plans):
+        return {"target_city_days": [], "entry_plans": 0, "execution": None}
+    states = execution_journal_order_states(output_dir / "execution_journal.jsonl")
+    sources: dict[tuple[str, str], set[str]] = {}
+    for plan in cancel_plans:
+        if plan.get("execution_action") == "near_core_maker_cancel_core_supersession":
+            sources.setdefault(near_core_maker_probe.city_day(plan), set()).add(str(plan.get("source_order_id") or ""))
+    targets = {key for key, ids in sources.items() if all(
+        oid and states.get(oid, {}).get("status") == "cancelled" for oid in ids
+    )}
+    result = {"target_city_days": sorted(targets), "entry_plans": 0, "execution": None}
+    if not targets:
+        return result
+    recover_near_core_journal_terminal_makers(output_dir)
+    scores = continuous_market_rescores(args, output_dir, now=datetime.now(timezone.utc), city_days=targets)
+    plans, attempts = new_entry_plans(args, output_dir, now=datetime.now(timezone.utc), market_rescores=scores)
+    plans = [p for p in plans if near_core_maker_probe.city_day(p) in targets]
+    attempts = [a for a in attempts if near_core_maker_probe.city_day(a) in targets]
+    execution = execute_plans(args, plans, output_dir)
+    for attempt in attempts:
+        append_jsonl(output_dir / "entry_attempts.jsonl", {**attempt, "handoff_mode": "cancel_ack_immediate_fresh_rescore_v1"})
+    result.update(entry_plans=len(plans), execution=execution)
+    append_jsonl(output_dir / "near_core_handoffs.jsonl", {"created_at_utc": utc_now(), **result})
+    return result
+
+
 def execute_plans(args: argparse.Namespace, plans: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
@@ -3071,10 +3118,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     execution = execute_plans(args, plans, output_dir)
     for attempt in attempts:
         append_jsonl(output_dir / "entry_attempts.jsonl", attempt)
+    handoff = immediate_core_handoff(args, output_dir, cancel_plans=near_lifecycle_plans)
     near_core_order_ledger_rows = sync_near_core_order_ledger(output_dir)
     near_core_artifacts = write_near_core_runtime_artifacts(runtime_args, output_dir)
     summary = {
-        "status": "ok" if execution["exit_code"] == 0 else "executor_error",
+        "status": "ok" if execution["exit_code"] == 0 and not (handoff.get("execution") or {}).get("exit_code") else "executor_error",
+        "immediate_core_handoff": handoff,
+        "near_core_quote_policy": near_core_maker_probe.MID_QUOTE_POLICY,
         "generated_at_utc": utc_now(),
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,

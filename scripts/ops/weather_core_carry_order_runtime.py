@@ -166,6 +166,9 @@ class CoreCarryRuntimeRisk:
         return {"allowed": allowed, "reason": "core_carry_child_cap"}
 
 
+from src.strategies.weather_edge_v1.execution import near_core_maker_probe
+
+
 class CoreCarryRequestBuilder:
     def __init__(self, plans: Sequence[Mapping[str, Any]]) -> None:
         self.plans = {
@@ -194,9 +197,14 @@ class CoreCarryRequestBuilder:
                 Decimal(str(plan.get("maker_price_cap") or "0")),
                 intent.model_token_probability or Decimal("0"),
             )
+            price_function = maker_resting_price
+            if plan.get("maker_quote_policy") == near_core_maker_probe.MID_QUOTE_POLICY:
+                if plan.get("strategy_instance") != near_core_maker_probe.STRATEGY_INSTANCE:
+                    raise ValueError("near midpoint policy requires near-Core sleeve")
+                price_function = near_core_maker_probe.midpoint_entry_price
             price = Decimal(
                 str(
-                    maker_resting_price(
+                    price_function(
                         best_bid=float(book.bids[0].price),
                         best_ask=float(book.asks[0].price),
                         tick_size=float(book.tick_size),

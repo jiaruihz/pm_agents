@@ -8,6 +8,7 @@ selection, sleeve identity, exposure accounting, and reporting deterministic.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_FLOOR
 from typing import Any, Iterable, Mapping
 
 
@@ -243,3 +244,15 @@ def report(ledger_rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "status_counts": dict(sorted(by_status.items())),
         "pnl_pooling_with_existing_core": False,
     }
+
+
+MID_QUOTE_POLICY = "near_core_midpoint_initial_fixed_rest_v1"
+
+def midpoint_entry_price(*, best_bid: float, best_ask: float, tick_size: float, price_cap: float) -> float:
+    """Initial post-only mid quote; round down and preserve the frozen edge cap."""
+    bid, ask, tick, cap = map(lambda v: Decimal(str(v)), (best_bid, best_ask, tick_size, price_cap))
+    if not all(v.is_finite() for v in (bid, ask, tick, cap)) or not (0 < bid < ask < 1 and tick > 0 and cap > 0):
+        return 0.0
+    target = min((bid + ask) / 2, cap, ask - tick)
+    price = (target / tick).to_integral_value(rounding=ROUND_FLOOR) * tick
+    return float(price) if 0 < price < ask else 0.0

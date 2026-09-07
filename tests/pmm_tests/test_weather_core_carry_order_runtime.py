@@ -549,3 +549,16 @@ def test_near_core_cancel_is_confirmed_before_core_supersession(
     assert repeated["live_written"] == 0
     assert transport.cancels == [runner.live_order_id(submitted)]
     assert repeated_rows == rows
+
+
+def test_near_midpoint_is_used_at_actual_fresh_submit(tmp_path,monkeypatch):
+    plan=runner.build_near_core_entry_plan(_score(),live_enabled=True,now=datetime(2026,7,28,4,31,tzinfo=timezone.utc),order_ttl_min=15)
+    assert plan is not None
+    transport=FakeTransport()
+    monkeypatch.setattr(shared,"build_live_transport",lambda **kw:(transport,{"mode":"test"}))
+    result=shared.execute_core_carry_plans(plans=[plan],output_dir=tmp_path,live=True,market_proxy=None,max_child_shares=5,max_batch_cost_usd=100,code_commit="test")
+    assert result["live_errors"]==0
+    assert len(transport.posts)==1
+    payload,_,post_only=transport.posts[0]
+    assert post_only is True
+    assert float(payload["price"])==.82
