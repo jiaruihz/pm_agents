@@ -1858,15 +1858,17 @@ def continuous_market_rescores(
                 "current_yes_ask_size": book.get("ask_size"),
                 "current_yes_tick_size": book.get("tick_size"),
                 "current_yes_book_status": book.get("status"),
-                "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
+                **signal_runner.direct_book_clock_fields(book),
             }
             result = evaluate_entry(scored_input, book.get("asks") or [], artifact)
+            scored_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
             row = {
                 **scored_input,
                 **result,
                 "record_type": "current_yes_core_carry_continuous_market_rescore",
-                "created_at_utc": now.isoformat(timespec="milliseconds"),
-                "market_rescore_at_utc": now.isoformat(timespec="milliseconds"),
+                "created_at_utc": scored_at,
+                "market_rescore_at_utc": scored_at,
+                "cycle_started_at_utc": now.isoformat(timespec="microseconds"),
                 "rescore_mode": "continuous_market_reprice",
                 "parent_checkpoint_key": checkpoint.get("checkpoint_key"),
                 "parent_checkpoint_created_at_utc": checkpoint.get("created_at_utc"),
@@ -2197,6 +2199,7 @@ def near_core_entry_plans(
                 "policy_arm": "CONTINUOUS_MARKET_REPRICE_FIXED_REST",
                 "economic_ws_cancel_enabled": False,
                 "live_enabled": bool(plan and plan.get("live_enabled")),
+                "live_authorized": bool(args.live and args.confirm_live and args.confirm_near_core_maker_probe_live),
                 **book_freshness,
             }
         )
@@ -2976,6 +2979,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         packets=decision_packets["written_packets"],
     )
     market_rescores = continuous_market_rescores(args, output_dir, now=now)
+    # All decision clocks below are sampled after their preceding I/O.
+    # Cycle-start time is provenance only, never quote age or a new order TTL.
     # Continuous rescoring can take longer than the readiness freshness window.
     # Validate against a clock sampled after that work, not the cycle-start clock.
     control_failures = near_core_control_failures(args)
@@ -2989,7 +2994,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     entry_plans, attempts = new_entry_plans(
         args,
         output_dir,
-        now=now,
+        now=datetime.now(timezone.utc),
         market_rescores=market_rescores,
     )
     core_actionable_city_days = {
@@ -2999,7 +3004,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         near_core_lifecycle_plans(
             runtime_args,
             output_dir,
-            now=now,
+            now=datetime.now(timezone.utc),
             core_actionable_city_days=core_actionable_city_days,
         )
     )
@@ -3026,16 +3031,18 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     near_entry_plans, near_entry_decisions = near_core_entry_plans(
         runtime_args,
         output_dir,
-        now=now,
+        now=datetime.now(timezone.utc),
         core_actionable_city_days=remaining_core_city_days,
         market_rescores=market_rescores,
     )
     post_update_revalidations = collect_post_update_maker_revalidations(
         args,
         output_dir,
-        now=now,
+        now=datetime.now(timezone.utc),
     )
-    lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(args, output_dir, now=now)
+    lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(
+        args, output_dir, now=datetime.now(timezone.utc)
+    )
     for decision in lifecycle_decisions:
         append_jsonl(output_dir / "maker_lifecycle_decisions.jsonl", decision)
     append_near_core_ledger(

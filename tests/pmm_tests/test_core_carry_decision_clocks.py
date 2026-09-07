@@ -1,0 +1,129 @@
+from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
+
+import httpx
+import pytest
+
+from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as producer
+from scripts.ops import weather_current_yes_core_carry_tiny_live_v2 as runner
+
+
+BASE = datetime(2026, 9, 7, 6, 40, 24, tzinfo=timezone.utc)
+
+
+class Clock(datetime):
+    current = BASE
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls.current
+
+
+def test_rest_clock_tracks_response_not_request_or_inherited_paper(monkeypatch):
+    Clock.current = BASE
+    monkeypatch.setattr(producer, "datetime", Clock)
+
+    def handle(request):
+        Clock.current = BASE + timedelta(seconds=5, microseconds=123456)
+        return httpx.Response(200, json={
+            "bids": [{"price": "0.745", "size": "20"}],
+            "asks": [{"price": "0.86", "size": "20"}], "tick_size": "0.001",
+        })
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        book = producer.fetch_full_book(client, "token")
+    row = {"current_yes_book_response_received_at_utc": "2020-01-01T00:00:00Z",
+           **producer.direct_book_clock_fields(book), "current_yes_book_status": "ok"}
+    assert book["request_started_at_utc"] == BASE.isoformat(timespec="microseconds")
+    assert row["current_yes_book_response_received_at_utc"] == Clock.current.isoformat(timespec="microseconds")
+    result = runner.near_core_book_freshness(row, now=Clock.current + timedelta(seconds=1), max_age_sec=10)
+    assert result["near_core_book_age_sec"] == 1
+    assert result["near_core_book_fresh"] is True
+    assert result["near_core_book_clock_source"] == "direct_response_received_at_utc"
+
+
+@pytest.mark.parametrize("offset,status", [(-1, "direct_book_clock_in_future"), (11, "stale_direct_book_quote"), (10, "fresh_direct_book_quote")])
+def test_real_future_and_stale_books_remain_rejected(offset, status):
+    row = {"current_yes_book_status": "ok", "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+           "current_yes_book_response_received_at_utc": BASE.isoformat()}
+    result = runner.near_core_book_freshness(row, now=BASE + timedelta(seconds=offset), max_age_sec=10)
+    assert result["near_core_book_freshness_status"] == status
+
+
+def test_replaced_legacy_quote_does_not_inherit_response_clock():
+    row = {"current_yes_book_response_received_at_utc": "2020-01-01T00:00:00Z",
+           "current_yes_book_clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS,
+           **producer.direct_book_clock_fields({"fetched_at_utc": BASE.isoformat()})}
+    assert row["current_yes_book_response_received_at_utc"] is None
+    assert row["current_yes_book_clock_lineage_status"] == "legacy_direct_fetch_clock_utc"
+
+
+def test_rescore_completion_clock_and_direct_clock_lineage(monkeypatch, tmp_path):
+    Clock.current = BASE
+    monkeypatch.setattr(runner, "datetime", Clock)
+    checkpoint = {"city": "Manila", "target_date": "2026-09-07", "checkpoint_key": "Manila|2026-09-07|14",
+                  "model_probability_hold": .85, "current_yes_token_id": "token", "current_bracket": "27",
+                  "decision_snapshot_ts_utc": BASE.isoformat(),
+                  "current_yes_book_response_received_at_utc": "2020-01-01T00:00:00Z"}
+    runner.write_jsonl(tmp_path / "pre_live_scores.jsonl", [checkpoint])
+    monkeypatch.setattr(runner, "market_httpx_client", lambda *a, **kw: nullcontext(None))
+    monkeypatch.setattr(producer, "observation_freshness_valid", lambda row: (True, "ok"))
+
+    def fetch(*args):
+        Clock.current = BASE + timedelta(seconds=5)
+        return {"status": "ok", "fetched_at_utc": BASE.isoformat(),
+                "request_started_at_utc": BASE.isoformat(), "response_received_at_utc": Clock.current.isoformat(),
+                "clock_lineage_status": runner.DIRECT_BOOK_CLOCK_STATUS, "bids": [], "asks": []}
+
+    monkeypatch.setattr(producer, "fetch_full_book", fetch)
+    monkeypatch.setattr(runner, "evaluate_entry", lambda *a: {"reasons": ["non_positive_taker_ev"]})
+    args = runner.parser().parse_args(["run"])
+    rows = runner.continuous_market_rescores(args, tmp_path, now=BASE)
+    assert runner.parse_utc(rows[0]["created_at_utc"]) == Clock.current
+    assert runner.parse_utc(rows[0]["cycle_started_at_utc"]) == BASE
+    assert rows[0]["current_yes_book_clock_lineage_status"] == runner.DIRECT_BOOK_CLOCK_STATUS
+    assert runner.parse_utc(rows[0]["current_yes_book_response_received_at_utc"]) == Clock.current
+
+
+def test_run_once_resamples_after_each_io_stage(monkeypatch, tmp_path):
+    Clock.current = BASE
+    monkeypatch.setattr(runner, "datetime", Clock)
+    monkeypatch.setattr(runner, "assert_runtime_contract", lambda: None)
+    monkeypatch.setattr(producer, "run_once", lambda args: {})
+    monkeypatch.setattr(runner, "write_new_decision_packets", lambda *a: {"written_packets": []})
+    monkeypatch.setattr(runner, "write_capture_demands", lambda *a, **kw: {})
+    monkeypatch.setattr(runner, "near_core_control_failures", lambda args: [])
+    for name in ["recover_journal_terminal_makers", "recover_near_core_journal_terminal_makers"]:
+        monkeypatch.setattr(runner, name, lambda *a: 0)
+
+    def rescore(*a, **kw):
+        Clock.current += timedelta(seconds=6)
+        return []
+
+    monkeypatch.setattr(runner, "continuous_market_rescores", rescore)
+    seen = []
+
+    def stage(*a, **kw):
+        assert kw["now"] == Clock.current
+        seen.append(kw["now"])
+        Clock.current += timedelta(seconds=4)
+        return [], []
+
+    monkeypatch.setattr(runner, "new_entry_plans", stage)
+    monkeypatch.setattr(runner, "near_core_lifecycle_plans", lambda *a, **kw: (*stage(*a, **kw), set()))
+    monkeypatch.setattr(runner, "near_core_entry_plans", stage)
+    monkeypatch.setattr(runner, "collect_post_update_maker_revalidations", lambda *a, **kw: stage(*a, **kw)[0])
+    monkeypatch.setattr(runner, "maker_lifecycle_plans", stage)
+    monkeypatch.setattr(runner, "append_near_core_ledger", lambda *a: None)
+
+    class ReachedExecution(Exception):
+        pass
+
+    def stop(*args):
+        raise ReachedExecution
+
+    monkeypatch.setattr(runner, "execute_plans", stop)
+    args = runner.parser().parse_args(["run", "--output-dir", str(tmp_path)])
+    with pytest.raises(ReachedExecution):
+        runner.run_once(args)
+    assert seen == [BASE + timedelta(seconds=s) for s in [6, 10, 14, 18, 22]]

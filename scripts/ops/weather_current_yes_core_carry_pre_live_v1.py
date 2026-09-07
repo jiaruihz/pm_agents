@@ -125,11 +125,13 @@ def fetch_full_book(
     client: httpx.Client,
     token_id: str,
 ) -> dict[str, Any]:
-    fetched_at = base.utc_now()
+    fetched_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    response_received_at = None
     if not token_id:
         return {"status": "missing_token", "fetched_at_utc": fetched_at, "bids": [], "asks": []}
     try:
         response = client.get(CLOB_BOOK_API, params={"token_id": token_id})
+        response_received_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, Mapping):
@@ -140,6 +142,10 @@ def fetch_full_book(
         return {
             "status": "ok",
             "fetched_at_utc": fetched_at,
+            "request_started_at_utc": fetched_at,
+            "response_received_at_utc": response_received_at,
+            "parsed_at_utc": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+            "clock_lineage_status": "direct_clob_response_clock_v1",
             "bids": bids,
             "asks": asks,
             "tick_size": base.finite(payload.get("tick_size")),
@@ -149,9 +155,24 @@ def fetch_full_book(
         return {
             "status": f"fetch_error:{type(exc).__name__}",
             "fetched_at_utc": fetched_at,
+            "request_started_at_utc": fetched_at,
+            "response_received_at_utc": response_received_at,
             "bids": [],
             "asks": [],
         }
+
+
+def direct_book_clock_fields(book: Mapping[str, Any]) -> dict[str, Any]:
+    """Replace inherited paper clocks whenever the quote is replaced by REST."""
+    return {
+        "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
+        "current_yes_book_request_started_at_utc": book.get("request_started_at_utc"),
+        "current_yes_book_response_received_at_utc": book.get("response_received_at_utc"),
+        "current_yes_book_parsed_at_utc": book.get("parsed_at_utc"),
+        "current_yes_book_exchange_ts_utc": None,
+        "current_yes_book_clock_lineage_status": book.get("clock_lineage_status") or "legacy_direct_fetch_clock_utc",
+        "current_yes_book_event_time_pit_scorable": bool(book.get("response_received_at_utc")),
+    }
 
 
 def read_snapshot_decisions(path: Path, snapshot_file: str) -> list[dict[str, Any]]:
@@ -278,7 +299,7 @@ def score_snapshot(args: argparse.Namespace, collector_summary: Mapping[str, Any
                 "current_yes_ask_size": book.get("ask_size"),
                 "current_yes_tick_size": book.get("tick_size"),
                 "current_yes_book_status": book.get("status"),
-                "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
+                **direct_book_clock_fields(book),
                 "checkpoint_hour_local": hour,
                 "checkpoint_minute_local": minute,
                 "checkpoint_key": key,
