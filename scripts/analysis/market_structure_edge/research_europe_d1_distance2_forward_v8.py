@@ -703,13 +703,12 @@ def _block_samples(
         cost = sum(float(row["cost"]) for row in sampled)
         roi_samples.append(sum(float(row["pnl"]) for row in sampled) / cost)
         market_rows = [
-            row for row in sampled if row.get("joint_market_probability") is not None
+            row for row in sampled if row.get("market_expected_payout") is not None
         ]
         if market_rows:
             market_overestimate_samples.append(
                 sum(
-                    float(row["joint_market_probability"])
-                    - float(row["joint_tail_hit"])
+                    float(row["payout"]) - float(row["market_expected_payout"])
                     for row in market_rows
                 )
                 / len(market_rows)
@@ -753,7 +752,6 @@ def _summarize_rows(
         row
         for row in rows
         if row.get("market_expected_payout") is not None
-        and row.get("joint_market_probability") is not None
     ]
     market_expected_payout = sum(
         float(row["market_expected_payout"]) for row in market_rows
@@ -769,7 +767,7 @@ def _summarize_rows(
         and all(leg.get("no_ask_size") is not None for leg in row.get("legs") or [])
     )
     price_stress_roi = {
-        label: (pnl - len(rows) * cents / 100.0) / cost
+        label: (pnl - len(rows) * cents / 100.0) / (cost + len(rows) * cents / 100.0)
         for label, cents in (
             ("plus_0_1_cent", 0.1),
             ("plus_0_5_cent", 0.5),
@@ -799,7 +797,7 @@ def _summarize_rows(
         ),
         "market_probability_overestimate": (
             sum(
-                float(row["joint_market_probability"]) - float(row["joint_tail_hit"])
+                float(row["payout"]) - float(row["market_expected_payout"])
                 for row in market_rows
             )
             / len(market_rows)
@@ -810,6 +808,7 @@ def _summarize_rows(
             _quantile(overestimate_samples, 0.025),
             _quantile(overestimate_samples, 0.975),
         ],
+        "market_residual_definition": "mean(actual_payout - market_expected_payout); allocation-weighted loss units",
         "execution_price_stress_roi": price_stress_roi,
         "minimum_leg_depth": {
             "evidence_candidates": len(minimum_leg_depths),
@@ -2078,7 +2077,7 @@ def _point_policy_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "pnl": pnl,
         "roi": pnl / cost if cost else None,
         "plus_1_0_cent_roi": (
-            (pnl - 0.01 * len(rows)) / cost if cost else None
+            (pnl - 0.01 * len(rows)) / (cost + 0.01 * len(rows)) if cost else None
         ),
         "joint_tail_hits": sum(int(row["joint_tail_hit"]) for row in rows),
     }
@@ -2107,7 +2106,7 @@ def _paired_policy_comparison(
         pnl = sum(float(row["pnl"]) for row in rows)
         if cost <= 0.0:
             raise ValueError("paired policy has zero sampled cost")
-        return pnl, pnl / cost, (pnl - 0.01 * len(rows)) / cost
+        return pnl, pnl / cost, (pnl - 0.01 * len(rows)) / (cost + 0.01 * len(rows))
 
     base_pnl, base_roi, base_stress = metrics(baseline)
     challenger_pnl, challenger_roi, challenger_stress = metrics(challenger)
@@ -2496,6 +2495,28 @@ def risk_overlay(args: argparse.Namespace) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    from weather_model_evaluation.d1_global_readiness import run as readiness_run
+    readiness_parser = subparsers.add_parser("global-readiness")
+    readiness_parser.add_argument("--input-manifest", type=Path, required=True)
+    readiness_parser.add_argument("--output-dir", type=Path, required=True)
+    readiness_parser.set_defaults(func=readiness_run)
+
+    from weather_model_evaluation.d1_global_readiness import run_score as global_score_run
+    global_score_parser = subparsers.add_parser("global-score")
+    global_score_parser.add_argument("--census", type=Path, required=True)
+    global_score_parser.add_argument("--labels", type=Path, required=True)
+    global_score_parser.add_argument("--output-dir", type=Path, required=True)
+    global_score_parser.add_argument("--draws", type=int, default=20000)
+    global_score_parser.set_defaults(func=global_score_run)
+
+    from weather_model_evaluation.d1_shadow_ab import run as shadow_ab_run
+    shadow_ab_parser = subparsers.add_parser("shadow-ab")
+    shadow_ab_parser.add_argument("--snapshot", type=Path, required=True)
+    shadow_ab_parser.add_argument("--historical-score", type=Path, required=True)
+    shadow_ab_parser.add_argument("--output-dir", type=Path, required=True)
+    shadow_ab_parser.add_argument("--draws", type=int, default=20000)
+    shadow_ab_parser.set_defaults(func=shadow_ab_run)
 
     freeze_parser = subparsers.add_parser("freeze")
     freeze_parser.add_argument("--checkpoints", type=Path, required=True)
