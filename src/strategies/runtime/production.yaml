@@ -135,6 +135,9 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/0ed49db4602ab7410207070dc0e03da6a11d6c57
     expected_repo_sha: 0ed49db4602ab7410207070dc0e03da6a11d6c57
     runtime_bindings: [operational_venv]
+  - release_id: europe_d1_model_filter_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_model_filter_shadow/641e82ab7bd21681661a3c3b6de0f30fa10af596
+    expected_repo_sha: 641e82ab7bd21681661a3c3b6de0f30fa10af596
   - release_id: europe_d1_distance2_lineage_adapter
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/6bc75cd4056171487cebd91acb8b4275c95c2a7f
     expected_repo_sha: 6bc75cd4056171487cebd91acb8b4275c95c2a7f
@@ -723,6 +726,31 @@ managed_runtimes:
       orders_submitted: 0
       actual_notional_usd: 0.0
       venue_calls: 0
+    dependencies: [europe_d1_distance2_dual_no_shadow_v1, weather_market_books]
+    recovery_policy: safe
+
+  # Owner-authorized fixed M/F50 comparison; no venue path. Original V1 stays running.
+  - instance_id: europe_d1_model_filter_shadow
+    tmux_session: europe_d1_model_filter_shadow
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: europe_d1_model_filter_shadow
+    start_script: scripts/ops/start_europe_d1_model_filter_shadow.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_model_filter_shadow/latest.json
+    health_format: json
+    max_health_age_sec: 300
+    startup_grace_sec: 300
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_model_filter_shadow
+      execution_mode: zero_notional_shadow
+      orders_submitted: 0
+      actual_fills: 0
+      actual_notional_usd: 0.0
+      order_submission_enabled: false
+      venue_calls: 0
+      static_requested_shares_per_leg: 5
     dependencies: [europe_d1_distance2_dual_no_shadow_v1, weather_market_books]
     recovery_policy: safe
 
