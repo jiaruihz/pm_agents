@@ -141,7 +141,9 @@ class LivePolymarketTransport:
         metadata_by_order_id: Mapping[str, Mapping[str, Any]] | None = None,
         client_version: str = "py_clob_client_v2",
         entry_guard: Any = live_entry_region_guard,
+        terminal_order_lookup: Any = None,
     ) -> None:
+        self.terminal_order_lookup = terminal_order_lookup
         self.client = client
         self.order_args_cls = order_args_cls
         self.order_payload_cls = order_payload_cls
@@ -356,17 +358,27 @@ class LivePolymarketTransport:
         )
         if not resolved_order_id:
             return None
-        try:
-            raw = _mapping(self.client.get_order(resolved_order_id))
-        except Exception:
-            return None
-        if not raw:
-            return None
         metadata = dict(
             self.metadata_by_order_id.get(resolved_order_id)
             or self.metadata_by_client_id.get(str(client_order_id))
             or {}
         )
+        provenance = "polymarket_authenticated_order_lookup_v1"
+        raw = _mapping(self.terminal_order_lookup(resolved_order_id, metadata)) if self.terminal_order_lookup else {}
+        if raw:
+            provenance = "polymarket_private_ws_terminal_order_v1"
+        else:
+            try:
+                raw = _mapping(self.client.get_order(resolved_order_id))
+            except Exception:
+                raw = {}
+            if not raw and self.terminal_order_lookup:
+                # The cancellation event can arrive while REST is in flight.
+                raw = _mapping(self.terminal_order_lookup(resolved_order_id, metadata))
+                if raw:
+                    provenance = "polymarket_private_ws_terminal_order_v1"
+        if not raw:
+            return None
         requested = Decimal(
             str(raw.get("original_size") or metadata.get("shares") or "0")
         )
@@ -399,6 +411,7 @@ class LivePolymarketTransport:
             "order_lifecycle_policy": metadata.get("order_lifecycle_policy"),
             "reprice_count": int(metadata.get("reprice_count") or 0),
             "data_epoch_ref": metadata.get("data_epoch_ref"),
+            "order_state_provenance": provenance,
             "authoritative_state_version": (
                 f"{raw_status}:{raw.get('size_matched')}:{raw.get('price')}"
             ),
@@ -427,6 +440,7 @@ def build_live_transport(
     *,
     market_proxy: str | None,
     metadata_by_order_id: Mapping[str, Mapping[str, Any]] | None = None,
+    terminal_order_lookup: Any = None,
 ) -> tuple[LivePolymarketTransport, dict[str, Any]]:
     proxy = configure_market_proxy_env(resolve_live_market_proxy(market_proxy))
     from py_clob_client_v2.client import ClobClient
@@ -480,6 +494,7 @@ def build_live_transport(
             order_type_cls=OrderType,
             execution_proxy=str(proxy.get("proxy") or ""),
             metadata_by_order_id=metadata_by_order_id,
+            terminal_order_lookup=terminal_order_lookup,
         ),
         proxy,
     )

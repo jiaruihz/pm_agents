@@ -1,4 +1,5 @@
 import json
+import pytest
 from datetime import datetime, timezone
 
 from scripts.ops import weather_core_carry_order_runtime as shared
@@ -562,3 +563,43 @@ def test_near_midpoint_is_used_at_actual_fresh_submit(tmp_path,monkeypatch):
     payload,_,post_only=transport.posts[0]
     assert post_only is True
     assert float(payload["price"])==.82
+
+
+def test_private_terminal_requires_exact_token_quantity_and_terminal(tmp_path):
+    path=tmp_path/'private.jsonl'
+    meta={'token_id':'token','shares':'5','side':'BUY'}
+    raw={'event_type':'order','id':'order','asset_id':'token','side':'BUY','status':'CANCELED','original_size':'5','size_matched':'2'}
+    for changes in [{'asset_id':'wrong'},{'size_matched':None},{'original_size':'6'},{'size_matched':'6'},{'status':'LIVE'}]:
+        path.write_text(json.dumps({'payload':{**raw,**changes}})+'\n')
+        assert shared.private_terminal_order_lookup(path,'order',meta) is None
+    path.write_text(json.dumps({'payload':raw})+'\n')
+    assert shared.private_terminal_order_lookup(path,'order',meta)['size_matched']=='2'
+
+
+@pytest.mark.parametrize("final_matched", [0, 1, 5])
+def test_replacement_can_rest_below_best_bid_and_respects_partial_minimum(tmp_path,monkeypatch,final_matched):
+    from datetime import timedelta
+    from dataclasses import replace
+    now=datetime.now(timezone.utc)
+    plan=runner.build_entry_plans(_score(),live_enabled=True,now=datetime(2026,7,28,4,31,tzinfo=timezone.utc),taker_shares=5,maker_shares=5,order_ttl_min=15)[1]
+    plan.update(maker_price_cap=.83,expires_at_utc=(now+timedelta(minutes=10)).isoformat(),maker_lifecycle_deadline_utc=(now+timedelta(minutes=10)).isoformat())
+    transport=FakeTransport()
+    monkeypatch.setattr(shared,'build_live_transport',lambda **kw:(transport,{'mode':'test'}))
+    kw=dict(output_dir=tmp_path,live=True,market_proxy=None,max_child_shares=5,max_batch_cost_usd=100,code_commit='test')
+    shared.execute_core_carry_plans(plans=[plan],**kw)
+    source=json.loads((tmp_path/'live_orders.jsonl').read_text().splitlines()[-1])
+    action=runner.build_maker_lifecycle_plan(source,action='core_carry_maker_reprice',limit_price=.83,cancel_only=False,cancel_source_order=True,now=now,live_enabled=True,reprice_stage='midpoint')
+    state=replace(shared._stub_order_state(action,source),authoritative_state_version='LIVE:0:.81',order_state_provenance='test')
+    def lookup(*a,**k):
+        return replace(state,status='cancelled',cancel_confirmed=True,matched_shares=str(final_matched),remaining_shares=str(5-final_matched),authoritative_state_version=f'CANCELED:{final_matched}:.81') if transport.cancels else state
+    monkeypatch.setattr(shared.PolymarketVenueAdapter,'fetch_order_state',lookup)
+    transport.fetch_market_book=lambda token: {'status':'ok','fetched_at_utc':now.isoformat(),'sequence':'book-new','bids':[{'price':'.85','size':'20'}],'asks':[{'price':'.86','size':'20'}]}
+    result=shared.execute_core_carry_plans(plans=[action],**kw)
+    expected_posts = 2 if final_matched == 0 else 1
+    assert len(transport.posts)==expected_posts
+    if final_matched == 0:
+        assert result['live_errors']==0
+        assert float(transport.posts[-1][0]['price'])==.83
+    # Replaying the same action cannot create a third replacement.
+    shared.execute_core_carry_plans(plans=[action],**kw)
+    assert len(transport.posts)==expected_posts

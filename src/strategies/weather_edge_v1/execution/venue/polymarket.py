@@ -566,7 +566,7 @@ class PolymarketVenueAdapter:
             lifecycle_owner=raw.get("lifecycle_owner"),
             cancel_confirmed=normalized in {"cancelled", "expired"},
             raw_venue_status=raw_status,
-            order_state_provenance="polymarket_authenticated_order_lookup_v1",
+            order_state_provenance=str(raw.get("order_state_provenance") or "polymarket_authenticated_order_lookup_v1"),
         )
 
     def reconcile_unknown(self, *, kind: str, identity_key: str) -> Mapping[str, Any] | None:

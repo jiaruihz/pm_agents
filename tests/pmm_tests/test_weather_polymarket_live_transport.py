@@ -201,3 +201,22 @@ def test_live_transport_defaults_to_named_stable_route(monkeypatch):
     assert live_transport.resolve_live_market_proxy("http://127.0.0.1:9999") == (
         "http://127.0.0.1:9999"
     )
+
+
+def test_private_terminal_quantity_survives_empty_rest():
+    transport = _transport()
+    transport.client.order = None
+    transport.metadata_by_order_id['venue-1'] = {'shares':'5','token_id':'token-1'}
+    transport.terminal_order_lookup = lambda oid, meta: {'id':oid,'status':'CANCELED','original_size':'5','size_matched':'2','asset_id':'token-1','side':'BUY','price':'.79'}
+    state = transport.fetch_order('venue-1','client-1')
+    assert state['status'] == 'CANCELED'
+    assert state['matched_shares'] == '2'
+    assert state['remaining_shares'] == '3'
+    assert state['order_state_provenance'] == 'polymarket_private_ws_terminal_order_v1'
+
+
+def test_empty_rest_and_no_terminal_evidence_remains_unknown():
+    transport = _transport()
+    transport.client.order = None
+    transport.terminal_order_lookup = lambda oid, meta: None
+    assert transport.fetch_order('venue-1','client-1') is None

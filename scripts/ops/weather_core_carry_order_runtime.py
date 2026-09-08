@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
@@ -124,6 +124,36 @@ def _metadata_from_live_orders(path: Path) -> dict[str, dict[str, Any]]:
     return result
 
 
+def private_terminal_order_lookup(path: Path, order_id: str, metadata: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Use exact terminal quantity from the existing authenticated user stream.
+
+    A cancel ack alone, missing quantity, or unrelated token never proves remaining
+    shares. Terminal events dominate a lagging REST LIVE projection.
+    """
+    latest = None
+    for event in read_jsonl(path):
+        raw = event.get("payload")
+        if not isinstance(raw, Mapping) or str(raw.get("id") or "") != order_id:
+            continue
+        if str(raw.get("status") or "").upper() not in {"CANCELED", "CANCELLED", "EXPIRED", "FILLED"}:
+            continue
+        if raw.get("event_type") != "order" or str(raw.get("asset_id") or "") != str(metadata.get("token_id") or ""):
+            continue
+        if raw.get("side") != (metadata.get("side") or "BUY"):
+            continue
+        try:
+            original = Decimal(str(raw["original_size"]))
+            matched = Decimal(str(raw["size_matched"]))
+            expected = Decimal(str(metadata["shares"]))
+        except (KeyError, ValueError, ArithmeticError):
+            continue
+        if not all(v.is_finite() for v in (original,matched,expected)) or original != expected or not 0 <= matched <= original:
+            continue
+        if latest is None or Decimal(str(raw["size_matched"])) >= Decimal(str(latest["size_matched"])):
+            latest = dict(raw)
+    return latest
+
+
 class CoreCarryRuntimeRisk:
     def __init__(self, *, max_child_shares: float, max_batch_cost_usd: float) -> None:
         self.max_child_shares = Decimal(str(max_child_shares))
@@ -212,6 +242,11 @@ class CoreCarryRequestBuilder:
                     )
                 )
             )
+            if _replacement is not None:
+                # A valid resting replacement may sit below the current top bid.
+                # Preserve the lifecycle target instead of re-running initial bid join.
+                target = min(Decimal(str(plan["limit_price"])), cap, book.asks[0].price - book.tick_size)
+                price = (target / book.tick_size).to_integral_value(rounding=ROUND_FLOOR) * book.tick_size
             if price <= 0:
                 raise ValueError("no fresh non-crossing maker price")
             post_only = True
@@ -579,6 +614,9 @@ def execute_core_carry_plans(
     transport, proxy = build_live_transport(
         market_proxy=market_proxy,
         metadata_by_order_id=metadata,
+        terminal_order_lookup=lambda oid, meta: private_terminal_order_lookup(
+            output_dir / "near_core_private_order_updates.jsonl", oid, meta
+        ),
     )
     request_builder = CoreCarryRequestBuilder(plans)
     venue = PolymarketVenueAdapter(
@@ -764,6 +802,14 @@ def execute_core_carry_plans(
         )
         action_count += len(result.actions)
         for action in result.actions:
+            append_jsonl_dedup(
+                output_dir / "lifecycle_results.jsonl",
+                [{"execution_id": stable_hash({"plan": plan["plan_id"], "status": action.status, "reason": action.reason}),
+                  "plan_id": plan["plan_id"], "source_order_id": source_id,
+                  "status": action.status, "reason": action.reason, "action": action.action,
+                  "recorded_at_utc": datetime.now(timezone.utc).isoformat()}],
+                key_field="execution_id",
+            )
             if action.payload is None:
                 if _missing_payload_is_error(action):
                     live_errors += 1
