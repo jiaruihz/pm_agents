@@ -6,6 +6,10 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # Immutable release identities. Runtime entries reference these IDs instead of
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
+  - release_id: weather_entry_gate
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_entry_gate/9a000c95d1cd409adbf3ff425b322e3622c2f95a
+    expected_repo_sha: 9a000c95d1cd409adbf3ff425b322e3622c2f95a
+    runtime_bindings: [operational_venv]
   - release_id: platform_control_plane
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/platform_control_plane/5f35c1868f4516e82c107d423e6dacc3979f2edc
     expected_repo_sha: 5f35c1868f4516e82c107d423e6dacc3979f2edc
