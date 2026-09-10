@@ -39,8 +39,8 @@ production_releases:
     expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/3cc2155969482d72d97fc462e3f3f57e3f587d7e
-    expected_repo_sha: 3cc2155969482d72d97fc462e3f3f57e3f587d7e
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/3b987e714c10cfd599c6cbbf87db87ac1c07f96c
+    expected_repo_sha: 3b987e714c10cfd599c6cbbf87db87ac1c07f96c
     runtime_bindings: [operational_venv]
   - release_id: amsterdam_wcir_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/97a95fdc8baa5ed8a5ae89a5686adbbbde35d9e8
@@ -622,6 +622,8 @@ managed_runtimes:
     dependencies: [weather_data_feed_jrs, weather_live_cross_observations, weather_knmi_open_data_jrs]
     recovery_policy: guarded_live
 
+  # METAR.ws 快源试验（已归档 / 暂不启用）— owner confirmed 2026-09-09.
+  # Historical identity retained for orders/logs; this is not the active Cross-NO V1.
   - instance_id: cross_no_v2_metar_v1
     uses_market_proxy: true
     tmux_session: weather_cross_no_v2_metar_v1
