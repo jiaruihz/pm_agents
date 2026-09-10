@@ -25,6 +25,7 @@ re-armed.
 from __future__ import annotations
 
 import argparse
+from zoneinfo import ZoneInfo
 import hashlib
 import json
 import math
@@ -2878,7 +2879,14 @@ def new_entry_plans(
         if sid in attempted:
             continue
         reason = ""
-        if source_family_conflict or city_day in family_city_days:
+        zone = signal_runner.CITY_TIMEZONE.get(city_day[0])
+        if not zone:
+            reason = "entry_city_timezone_unavailable"
+        elif city_day[1] != now.astimezone(ZoneInfo(zone)).date().isoformat():
+            # Historical would-orders are evidence, not a queue of live orders.
+            # Never revive a prior (or future) local trading day after restart.
+            reason = "entry_target_date_not_current_local_day"
+        elif source_family_conflict or city_day in family_city_days:
             reason = "family_city_day_conflict"
         elif used_city_days >= int(args.max_city_days_per_bj_day):
             reason = "daily_city_day_cap"

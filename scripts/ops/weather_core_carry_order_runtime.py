@@ -135,7 +135,8 @@ def private_terminal_order_lookup(path: Path, order_id: str, metadata: Mapping[s
         raw = event.get("payload")
         if not isinstance(raw, Mapping) or str(raw.get("id") or "") != order_id:
             continue
-        if str(raw.get("status") or "").upper() not in {"CANCELED", "CANCELLED", "EXPIRED", "FILLED"}:
+        status = str(raw.get("status") or "").upper()
+        if status not in {"CANCELED", "CANCELLED", "EXPIRED", "FILLED", "MATCHED"}:
             continue
         if raw.get("event_type") != "order" or str(raw.get("asset_id") or "") != str(metadata.get("token_id") or ""):
             continue
@@ -148,6 +149,8 @@ def private_terminal_order_lookup(path: Path, order_id: str, metadata: Mapping[s
         except (KeyError, ValueError, ArithmeticError):
             continue
         if not all(v.is_finite() for v in (original,matched,expected)) or original != expected or not 0 <= matched <= original:
+            continue
+        if status == "MATCHED" and (original <= 0 or matched != original):
             continue
         if latest is None or Decimal(str(raw["size_matched"])) >= Decimal(str(latest["size_matched"])):
             latest = dict(raw)

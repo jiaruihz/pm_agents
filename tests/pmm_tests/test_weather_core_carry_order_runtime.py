@@ -565,6 +565,18 @@ def test_near_midpoint_is_used_at_actual_fresh_submit(tmp_path,monkeypatch):
     assert float(payload["price"])==.82
 
 
+@pytest.mark.parametrize("matched,expected", [("5", True), ("2", False), ("6", False), ("NaN", False)])
+def test_private_matched_terminal_requires_full_exact_quantity(tmp_path, matched, expected):
+    path = tmp_path / "private.jsonl"
+    raw = {"event_type": "order", "id": "order", "asset_id": "token", "side": "BUY",
+           "status": "MATCHED", "original_size": "5", "size_matched": matched}
+    path.write_text(json.dumps({"payload": raw}) + "\n")
+    result = shared.private_terminal_order_lookup(path, "order", {"token_id": "token", "shares": "5", "side": "BUY"})
+    assert bool(result) is expected
+    if expected:
+        assert result == raw
+
+
 def test_private_terminal_requires_exact_token_quantity_and_terminal(tmp_path):
     path=tmp_path/'private.jsonl'
     meta={'token_id':'token','shares':'5','side':'BUY'}

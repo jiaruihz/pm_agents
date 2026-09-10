@@ -417,6 +417,30 @@ def test_near_ledger_projects_private_partial_fill_and_cancel_final_state(tmp_pa
     assert report["matched_shares"] == pytest.approx(3.0)
 
 
+@pytest.mark.parametrize("target_date", ["2026-07-23", "2026-07-25"])
+def test_historical_would_orders_cannot_revive_other_local_days(tmp_path, target_date):
+    row = {**score_row(), "target_date": target_date}
+    runner.append_jsonl(tmp_path / "pre_live_scores.jsonl", row)
+    runner.append_jsonl(tmp_path / "would_orders.jsonl", row)
+    plans, attempts = runner.new_entry_plans(
+        runner.parser().parse_args(["run"]), tmp_path,
+        now=datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc),
+    )
+    assert plans == []
+    assert attempts[0]["reason"] == "entry_target_date_not_current_local_day"
+
+
+def test_entry_date_uses_city_day_not_utc_day(tmp_path):
+    row = {**score_row(), "eligible": True}
+    plans, attempts = runner.new_entry_plans(
+        runner.parser().parse_args(["run"]), tmp_path,
+        now=datetime(2026, 7, 23, 23, 31, tzinfo=timezone.utc),
+        market_rescores=[row],
+    )
+    assert plans
+    assert attempts[0]["reason"] != "entry_target_date_not_current_local_day"
+
+
 def test_continuous_core_transition_still_builds_original_ten_plus_five(
     tmp_path,
 ) -> None:
