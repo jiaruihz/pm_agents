@@ -13,6 +13,38 @@ def test_proxy_url_validation():
         ctl.validate_proxy_url("http://127.0.0.1")
 
 
+@pytest.mark.parametrize("reject", [False, True])
+def test_overlay_hot_reload_preserves_unrelated_and_rolls_back(tmp_path, monkeypatch, reject):
+    import yaml
+    from types import SimpleNamespace
+    runtime = tmp_path / "clash-verge.yaml"
+    before = b'listeners:\n- {name: pm-stable-in, port: 7896, proxy: PM-STABLE}\nsecret: keep\n'
+    runtime.write_bytes(before)
+    merge = tmp_path / 'merge.yaml'
+    merge.write_bytes(b'{}\n')
+    policy = {'listeners': [{'name': 'pm-stable-in', 'port': 7896, 'rule': 'pm-public-weather-direct'}],
+              'sub-rules': {'pm-public-weather-direct': ['DOMAIN-SUFFIX,open-meteo.com,DIRECT', 'MATCH,PM-STABLE']}}
+    monkeypatch.setattr(ctl, 'load_production_spec', lambda: SimpleNamespace(market_proxy_gateway_config_root=tmp_path))
+    monkeypatch.setattr(ctl, 'gateway_overlay_files', lambda: ({}, [(merge, yaml.safe_dump(policy).encode())]))
+    monkeypatch.setattr(ctl.subprocess, 'run', lambda *a, **k: SimpleNamespace(returncode=0))
+    calls = []
+    def reload(*a, **k):
+        calls.append(k)
+        if reject and len(calls) == 1:
+            raise RuntimeError('reload failed')
+    monkeypatch.setattr(ctl, 'controller_json', reload)
+    if reject:
+        with pytest.raises(RuntimeError, match='reload failed'):
+            ctl.apply_gateway_overlay()
+        assert runtime.read_bytes() == before
+        assert merge.read_bytes() == b'{}\n'
+        assert len(calls) == 2
+    else:
+        assert ctl.apply_gateway_overlay()['hot_reloaded']
+        assert yaml.safe_load(runtime.read_text())['secret'] == 'keep'
+        assert len(calls) == 1
+
+
 def test_shared_proxy_resolves_named_default_route_not_legacy_endpoint_state(tmp_path, monkeypatch):
     state = tmp_path / "market_proxy.json"
     state.write_text('{"proxy_url":"http://127.0.0.1:17897"}\n', encoding="utf-8")
@@ -171,6 +203,15 @@ def test_gateway_overlay_targets_active_allblue_enhancements(tmp_path, monkeypat
     assert "TAG-LOCAL" in by_name["proxy-id.yaml"]
     assert "PM-STABLE" in by_name["group-id.yaml"]
     assert "Allblue 加速器" in by_name["group-id.yaml"]
+    merge = __import__("yaml").safe_load(by_name["merge-id.yaml"])
+    listener = next(x for x in merge["listeners"] if x["name"] == "pm-stable-in")
+    assert "proxy" not in listener
+    assert listener["rule"] == "pm-public-weather-direct"
+    assert merge["sub-rules"][listener["rule"]] == [
+        "DOMAIN-SUFFIX,open-meteo.com,DIRECT",
+        "DOMAIN-SUFFIX,aviationweather.gov,DIRECT",
+        "MATCH,PM-STABLE",
+    ]
 
 
 def test_gateway_overlay_apply_requires_network_confirmation(monkeypatch):

@@ -117,10 +117,15 @@ def gateway_overlay_files() -> tuple[dict[str, Any], list[tuple[Path, bytes]]]:
             "type": "mixed",
             "listen": "127.0.0.1",
             "port": urlparse(stable_route.proxy_url).port,
-            "proxy": stable_route.clash_group,
+            "rule": "pm-public-weather-direct",
         }
     )
     merge["listeners"] = listeners
+    merge.setdefault("sub-rules", {})["pm-public-weather-direct"] = [
+        "DOMAIN-SUFFIX,open-meteo.com,DIRECT",
+        "DOMAIN-SUFFIX,aviationweather.gov,DIRECT",
+        f"MATCH,{stable_route.clash_group}",
+    ]
 
     proxies = payloads["proxies"]
     proxy_prepend = [
@@ -220,13 +225,59 @@ def apply_gateway_overlay() -> dict[str, Any]:
     if root is None:
         raise RuntimeError("market proxy gateway config root is not configured")
     plan, outputs = gateway_overlay_files()
-    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    # Persist the enhancement and hot-load the same narrow listener policy.
+    # Other runtime configuration (including credentials) stays opaque to logs.
+    runtime_path = root / "clash-verge.yaml"
+    runtime_before = runtime_path.read_bytes()
+    runtime = yaml.safe_load(runtime_before)
+    merge = yaml.safe_load(outputs[0][1])
+    listener = next(x for x in merge["listeners"] if x.get("name") == "pm-stable-in")
+    existing = [x for x in runtime.get("listeners", []) if x.get("name") == "pm-stable-in"]
+    if len(existing) != 1 or existing[0].get("port") != listener["port"]:
+        raise RuntimeError("runtime stable listener identity mismatch")
+    runtime["listeners"] = [listener if x.get("name") == "pm-stable-in" else x
+                            for x in runtime["listeners"]]
+    runtime.setdefault("sub-rules", {})["pm-public-weather-direct"] = merge["sub-rules"]["pm-public-weather-direct"]
+    rendered = yaml.safe_dump(runtime, allow_unicode=True, sort_keys=False).encode()
+    fd, candidate = tempfile.mkstemp(prefix=".weather-direct-", suffix=".yaml", dir=root)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(rendered)
+        checked = subprocess.run(
+            ["/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo", "-t", "-d", str(root), "-f", candidate],
+            capture_output=True, timeout=30,
+        )
+        if checked.returncode:
+            raise RuntimeError("Mihomo candidate configuration validation failed")
+    finally:
+        Path(candidate).unlink(missing_ok=True)
+    outputs.append((runtime_path, rendered))
+    plan.setdefault("files", []).append({
+        "path": str(runtime_path), "before_sha256": sha256_bytes(runtime_before),
+        "after_sha256": sha256_bytes(rendered), "changed": runtime_before != rendered,
+    })
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + f"-{time.time_ns()}"
     backup_root = root / "pm_agents_backups" / stamp
-    for path, value in outputs:
-        relative = path.relative_to(root)
-        atomic_write_bytes(backup_root / relative, path.read_bytes())
-        atomic_write_bytes(path, value)
-    return {**plan, "applied": True, "backup_root": str(backup_root)}
+    originals = [(path, path.read_bytes()) for path, _ in outputs]
+    for path, value in originals:
+        atomic_write_bytes(backup_root / path.relative_to(root), value)
+    try:
+        for path, value in outputs:
+            atomic_write_bytes(path, value)
+        controller_json("/configs?force=true", method="PUT", body={"path": str(runtime_path)})
+    except Exception as original_error:
+        try:
+            for path, value in originals:
+                atomic_write_bytes(path, value)
+            controller_json("/configs?force=true", method="PUT", body={"path": str(runtime_path)})
+        except Exception as rollback_error:
+            raise RuntimeError(
+                f"apply failed ({type(original_error).__name__}); rollback failed "
+                f"({type(rollback_error).__name__}); runtime state UNVERIFIED; backup={backup_root}"
+            ) from original_error
+        raise
+    return {**plan, "applied": True, "hot_reloaded": True,
+            "post_route_probe_required": True, "backup_root": str(backup_root)}
 
 
 def controller_json(
