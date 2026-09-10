@@ -43,8 +43,8 @@ production_releases:
     expected_repo_sha: 3b987e714c10cfd599c6cbbf87db87ac1c07f96c
     runtime_bindings: [operational_venv]
   - release_id: amsterdam_wcir_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/17aeeb1f984450872d750ac319bf6c194fdde39f
-    expected_repo_sha: 17aeeb1f984450872d750ac319bf6c194fdde39f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/0de931385ba335b1d9abf75c0beb777efab3a518
+    expected_repo_sha: 0de931385ba335b1d9abf75c0beb777efab3a518
     runtime_bindings: [operational_venv]
   - release_id: wcir_next_print_frozen
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/5bab0e5d13a42d8f4a7da792171876f5dad2d1bf
