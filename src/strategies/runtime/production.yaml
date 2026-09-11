@@ -7,8 +7,8 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
   - release_id: core_carry_independent_forward
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/cd5e87ca22d2d1c3230cd045bc9d1444b1c84184
-    expected_repo_sha: cd5e87ca22d2d1c3230cd045bc9d1444b1c84184
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/c6a3de0cc5225e8dee436e32a68b649007cbf22a
+    expected_repo_sha: c6a3de0cc5225e8dee436e32a68b649007cbf22a
     runtime_bindings: [operational_venv]
   - release_id: weather_entry_gate
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_entry_gate/9a000c95d1cd409adbf3ff425b322e3622c2f95a
@@ -215,13 +215,13 @@ managed_runtimes:
     execution_mode: zero_notional_research
     release_id: core_carry_independent_forward
     start_script: scripts/ops/start_weather_core_carry_independent_forward.sh
-    health_path: /Volumes/jrs/pm_agents/runtime/research/core_carry_independent_forward_20260911_v1/latest.json
+    health_path: /Volumes/jrs/pm_agents/runtime/research/core_carry_independent_forward_20260911_v2/latest.json
     health_format: json
     max_health_age_sec: 180
     startup_grace_sec: 120
     accepted_health_statuses: [ok]
     expected_health_fields:
-      epoch_id: core_carry_independent_forward_20260911_v1
+      epoch_id: core_carry_independent_forward_20260911_v2
       actual_notional: 0.0
       orders: 0
       orders_allowed: false
