@@ -50,3 +50,41 @@ fill coverage gate 本轮 PASS，缓存/DB/fact 数量一致且无 unknown fee l
 - 刷新失败：`runtime/weather_edge_v1/canonical_refresh/tmux.log`。
 
 本次没有修改代码、资金参数或生产状态，因此代码修复后历史污染重放不适用。已量化当天实际订单和 cap 阻断范围；收益问题的剩余限制为 canonical refresh critical 及未完成最新 settlement 对齐。
+
+## 2026-09-12 用户纠正后的本地额度变更（未部署）
+
+用户指出应按成交占用10个名额，非提交即永久占用。代码 commit `3c15f62b` 已实现 `filled_city_days_plus_pending_reservations_v1`：
+
+- 当日已有权威累计成交增量的 city-day 占用1个名额，部分成交也占1个。
+- 未终局订单预留名额及未成交余量的成本；挂单跨北京时间午夜仍预留。
+- 权威 canceled/cancelled/expired/rejected 且显式 cumulative matched 数量有效时释放未成交余量；普通 cancel 请求/本地 cancelled 行不自行证明零成交。
+- 当日金额占用为当日确认的新增成交数量乘提交价格，加未终局余量按提交价格预留。使用提交价格是保守预算，不是 canonical 实际成交成本或 PnL。
+- 同一物理订单去重，累计量单调；迟到零值/重复回执不抹除成交。无 matched 数量不推成零；非法数量/身份/时钟显式失败。
+- 日预算时钟明确定义为权威增量首次接收日，不冒充 canonical 经济成交时钟。延迟回执在发现日占用，是保守资金控制；历史报表时钟合同未改。
+- 同一 city-day 已提交后的禁止重试规则保留，释放的是全局日名额给其他 city-day；同批新计划立即预留，避免批次超额。
+- `post_order_dispatch_unknown` 继续预留，明确拒单不占用。9月9日 CapeTown/Madrid 两个无venue id的未知结果仍需独立核清，代码不将它们擅自当拒单释放。
+
+### 影响回放
+
+机器证据：`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_budget_policy_v1/quota_replay.json`。包含44条提交/未知提交、105条权威状态输入、逐条被旧daily cap拦截的候选与新预算。截止2026-09-11T16:03:00Z。
+
+| 北京日期 | 旧cap拦截的重复评分 | 新预算不再命中此cap | distinct city-day |
+|---|---:|---:|---:|
+| 9/7 | 119 | 119 | 5 |
+| 9/8 | 1216 | 1216 | 15 |
+| 9/10 | 1475 | 1475 | 17 |
+| 9/11 | 1980 | 1980 | 20 |
+
+合计4790条记录、57个city-day。这是沿**已观测订单轨迹**重放预算门，不是依次模拟新订单后仍全部可下，也没有绕过下游安全资格判断。不能把它们称为漏失成交或漏失利润。新增成交/收益反事实无法由现存quota ledger单独确定，本轮未估计。
+
+9/11日末旧预算10个submitted city-day，新预算为1个已成交加2个历史dispatch-unknown预留，共3个，成本预算$12.925（NYC确认$4 + 未知提交预留$8.925）。零成交已终局订单释放；历史raw、标签、canonical事实改写0，实际生产orders/fills改动0。
+
+### 验证与审阅状态
+
+- 提交后相关测试 **135 passed**：Core runner、near WS controller、OrderRuntime、decision clocks。py_compile与scoped diff whitespace检查通过。第一次未提交测试有1项“源码必须已提交”合同失败，提交后完整复跑已消除，未屏蔽该检查。
+- 单次独立只读review范围为本次3个代码/测试文件，角色 `luna_verifier`；rollout证实 `gpt-5.6-luna / medium`。review检查了quota、partial/cancel、跨日、unknown dispatch和matchedSize；其间保留的matchedSize检查促使主agent补齐submit-response同名字段及集成测试。
+- reviewer输入用量持续增长，按协作合同中止，**没有最终审阅结论，不能标review通过或完整独立交付**；未再派reviewer、未恢复该worker。最终telemetry：input525359、cached483328、output3264、total528623 tokens（cached包含在input内）。主agent完成整合与全部相关测试复跑；这不替代独立review完成态。
+- review prompt边界：只读3文件diff；不改代码、不派生、不全仓扫描；验证权威成交/撤单释放、幂等、跨日、unknown dispatch、同批预留及测试缺口。worker任务名 `/root/near_budget_review`，rollout id `01a09140-28da-7412-8bbc-60f30b441480`。
+- 刷新后的pre-deploy manifest为warning（仅未注册persistent worktrees），DB route healthy；先前canonical-refresh告警已恢复。没有执行部署、重启、pause、参数切换；生产仍是旧SHA `fb84766be96b419a44380ea19ce5953087570dba`。
+
+部署边界仍按 weather-strategy-deploy 的“真正启停live、重启生产、远端checkout或改变资金行为前必须有用户对该动作的明确授权”，且独立审阅未完成；本地提交不等于生产生效、审阅通过或owner接受。
