@@ -109,6 +109,10 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_live_runtime/b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
     expected_repo_sha: b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
     runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: core_carry_budget_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/56ef007e64a4ee1b122b8fbbdc9273f03d668e0d
+    expected_repo_sha: 56ef007e64a4ee1b122b8fbbdc9273f03d668e0d
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
     expected_repo_sha: b2b26fd96e8086a2a444e83c66fd4d55ac904705
@@ -503,7 +507,7 @@ managed_runtimes:
     tmux_session: weather_current_yes_core_carry_tiny_live_v2
     role: strategy
     execution_mode: live
-    release_id: core_carry_runtime
+    release_id: core_carry_budget_runtime
     start_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     restart_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
     health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json
