@@ -2151,6 +2151,28 @@ def near_core_budget_snapshot(output_dir: Path, now: datetime) -> dict[str, Any]
             "received_at_utc": event["received_at_utc"], "status": event["status"],
             "matched_shares": next((state[k] for k in ("size_matched", "sizeMatched", "matched_shares", "matchedSize") if k in state), None),
         })
+    # Journal side-effect outcomes precede live-order projection writes. Use a
+    # quantified outcome even if a crash prevented the projection/private update;
+    # an unquantified cancel acknowledgement must still retain its reservation.
+    for order_id, evidence in execution_journal_order_states(
+        output_dir / "execution_journal.jsonl"
+    ).items():
+        if order_id not in by_order:
+            continue
+        payload = evidence["journal_payload"]
+        raw = payload.get("raw_response") or {}
+        authoritative = payload.get("authoritative_order_state") or raw.get("authoritative_order_state") or {}
+        quantity = next((
+            source[field]
+            for source in (authoritative, raw, payload)
+            for field in ("size_matched", "sizeMatched", "matched_shares", "matchedSize")
+            if field in source and source[field] is not None
+        ), None)
+        states.append({
+            "budget_order_id": by_order[order_id]["budget_order_id"],
+            "received_at_utc": evidence["recorded_at_utc"],
+            "status": evidence["status"], "matched_shares": quantity,
+        })
     return near_core_maker_probe.daily_budget(orders, states, now=now)
 
 

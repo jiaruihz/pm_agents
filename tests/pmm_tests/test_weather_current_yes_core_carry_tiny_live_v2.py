@@ -1902,3 +1902,35 @@ def test_near_budget_normalizes_matched_size_from_submission_evidence(tmp_path):
     assert runner.near_core_daily_usage(
         tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
     ) == (1, 1.6)
+
+
+@pytest.mark.parametrize("quantity,expected", [(0, (0, 0.0)), (2, (1, 1.6)), (None, (1, 4.0))])
+def test_near_budget_journal_cancel_survives_projection_crash(tmp_path, quantity, expected):
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [{
+        **budget_order(), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "status": "submitted", "venue_order_id": "order-1", "execution_id": "exec-1",
+    }])
+    runner.write_jsonl(tmp_path / "execution_journal.jsonl", [{
+        "event_type": "outcome", "recorded_at_utc": "2026-07-24T04:31:00Z",
+        "payload": {"kind": "cancel", "status": "cancelled", "raw_response": {
+            "canceled": ["order-1"], "size_matched": quantity,
+        }},
+    }])
+    assert runner.near_core_daily_usage(
+        tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+    ) == expected
+
+
+def test_near_budget_journal_filled_survives_projection_crash(tmp_path):
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [{
+        **budget_order(), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "status": "submitted", "venue_order_id": "order-1", "execution_id": "exec-1",
+    }])
+    runner.write_jsonl(tmp_path / "execution_journal.jsonl", [{
+        "event_type": "outcome", "recorded_at_utc": "2026-07-24T04:31:00Z",
+        "payload": {"kind": "submit", "status": "filled", "venue_order_id": "order-1",
+                    "matched_shares": 5},
+    }])
+    budget = runner.near_core_budget_snapshot(tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc))
+    assert budget["filled_city_days"] == 1
+    assert budget["reserved_city_days"] == 0
