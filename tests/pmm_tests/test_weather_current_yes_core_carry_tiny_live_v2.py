@@ -1746,3 +1746,159 @@ def test_full_ladder_capture_demand_fails_closed_above_token_budget(tmp_path) ->
     assert result["written"] == 0
     assert result["alerts"][0]["reason"] == "capture_demand_full_ladder_token_budget_exceeded"
     assert not (tmp_path / "capture_demands.jsonl").exists()
+
+
+def budget_order(**overrides):
+    return {
+        "budget_order_id": "order-1", "city": "Busan", "target_date": "2026-07-24",
+        "created_at_utc": "2026-07-24T04:30:00Z", "size": 5.0, "posted_price": 0.8,
+        **overrides,
+    }
+
+
+def budget_state(status="canceled", quantity=0, **overrides):
+    return {
+        "budget_order_id": "order-1", "received_at_utc": "2026-07-24T04:31:00Z",
+        "status": status, "matched_shares": quantity, **overrides,
+    }
+
+
+@pytest.mark.parametrize("states,count,cost", [
+    ([], 1, 4.0),
+    ([budget_state()], 0, 0.0),
+    ([budget_state(quantity=2)], 1, 1.6),
+    ([budget_state("live", 2)], 1, 4.0),
+    ([budget_state("matched", 5)], 1, 4.0),
+    ([budget_state(quantity=None)], 1, 4.0),
+    ([budget_state("cancel_requested", 0)], 1, 4.0),
+])
+def test_near_budget_requires_quantified_terminal_state(states, count, cost):
+    result = runner.near_core_maker_probe.daily_budget(
+        [budget_order()], states, now=datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+    )
+    assert result["used_city_days"] == count
+    assert result["used_cost_usd"] == pytest.approx(cost)
+
+
+def test_near_budget_duplicates_stale_and_late_fill_are_monotone():
+    states = [
+        budget_state(quantity=2),
+        budget_state(quantity=2),
+        budget_state("live", 0, received_at_utc="2026-07-24T04:32:00Z"),
+        budget_state("matched", 3, received_at_utc="2026-07-24T04:33:00Z"),
+    ]
+    result = runner.near_core_maker_probe.daily_budget(
+        [budget_order(), budget_order()], reversed(states),
+        now=datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+    )
+    assert result["used_city_days"] == 1
+    assert result["used_cost_usd"] == pytest.approx(2.4)
+    assert result["orders"][0]["reserved_shares"] == 0
+
+
+def test_near_budget_midnight_carries_open_reservation_and_books_new_increment():
+    order = budget_order(created_at_utc="2026-07-23T15:50:00Z")
+    states = [budget_state("live", 2, received_at_utc="2026-07-23T15:59:00Z")]
+    now = datetime(2026, 7, 23, 16, 5, tzinfo=timezone.utc)
+    result = runner.near_core_maker_probe.daily_budget([order], states, now=now)
+    assert result["budget_date_bj"] == "2026-07-24"
+    assert result["used_city_days"] == 1
+    assert result["used_cost_usd"] == pytest.approx(2.4)
+    states.append(budget_state(quantity=3, received_at_utc="2026-07-23T16:01:00Z"))
+    result = runner.near_core_maker_probe.daily_budget([order], states, now=now)
+    assert result["filled_city_days"] == 1
+    assert result["used_cost_usd"] == pytest.approx(0.8)
+
+
+def test_near_budget_future_cancel_does_not_release_replay_reservation():
+    result = runner.near_core_maker_probe.daily_budget(
+        [budget_order()], [budget_state()],
+        now=datetime(2026, 7, 24, 4, 30, 30, tzinfo=timezone.utc),
+    )
+    assert result["used_city_days"] == 1
+
+
+@pytest.mark.parametrize("quantity", [-1, 6, float("nan"), float("inf")])
+def test_near_budget_invalid_quantity_fails_explicitly(quantity):
+    with pytest.raises(ValueError, match="matched quantity"):
+        runner.near_core_maker_probe.daily_budget(
+            [budget_order()], [budget_state(quantity=quantity)],
+            now=datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+        )
+
+
+def test_near_budget_runner_reads_private_state_without_reporting_sync(tmp_path):
+    row = {
+        **budget_order(), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "status": "submitted", "venue_order_id": "order-1", "execution_id": "exec-1",
+    }
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [row, row, {
+        **row, "status": "cancelled", "created_at_utc": "2026-07-24T04:31:00Z",
+    }])
+    now = datetime(2026, 7, 24, 5, tzinfo=timezone.utc)
+    assert runner.near_core_daily_usage(tmp_path, now) == (1, 4.0)
+    runner.write_jsonl(tmp_path / "near_core_private_order_updates.jsonl", [{
+        "received_at_utc": "2026-07-24T04:32:00Z",
+        "payload": {"id": "order-1", "status": "CANCELED", "size_matched": "0"},
+    }])
+    assert runner.near_core_daily_usage(tmp_path, now) == (0, 0.0)
+    assert not (tmp_path / "near_core_maker_v2_ledger.jsonl").exists()
+
+
+def test_near_budget_unknown_dispatch_reserves_but_known_reject_does_not(tmp_path):
+    base = {
+        **budget_order(), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "status": "error", "execution_id": "unknown", "posted_price": 0,
+        "limit_price": 0.8,
+    }
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [
+        {**base, "exchange_response": {"quote_reason": "post_order_dispatch_unknown"}},
+        {**base, "execution_id": "reject", "exchange_response": {"quote_reason": "post_only_rejected"}},
+    ])
+    assert runner.near_core_daily_usage(tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc)) == (1, 4.0)
+
+
+def test_near_entry_releases_canceled_other_city_but_reserves_same_batch(tmp_path):
+    old = {
+        **budget_order(city="Tokyo"), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "venue_order_id": "order-1", "execution_id": "exec-1", "status": "submitted",
+    }
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [old])
+    runner.write_jsonl(tmp_path / "near_core_private_order_updates.jsonl", [{
+        "received_at_utc": "2026-07-24T04:30:30Z",
+        "payload": {"id": "order-1", "status": "CANCELED", "size_matched": "0"},
+    }])
+    args = runner.parser().parse_args(["run"])
+    args.live = args.confirm_live = args.near_core_maker_probe_enabled = True
+    args.confirm_near_core_maker_probe_live = True
+    args.near_core_max_city_days_per_bj_day = 1
+    args.near_core_max_daily_cost_usd = 5
+    now = datetime(2026, 7, 24, 4, 31, tzinfo=timezone.utc)
+    candidates = [{
+        **score_row(), "city": city, "checkpoint_key": f"{city}|2026-07-24|13",
+        "eligible": False, "reasons": ["non_positive_taker_ev"],
+        "rescore_mode": "continuous_market_reprice", "market_rescore_id": city,
+        "market_rescore_at_utc": now.isoformat(), "current_yes_book_status": "ok",
+        "current_yes_book_fetched_at_utc": now.isoformat(),
+    } for city in ["Busan", "Seoul", "Tokyo"]]
+    plans, ledger = runner.near_core_entry_plans(
+        args, tmp_path, now=now, core_actionable_city_days=set(), market_rescores=candidates,
+    )
+    assert len(plans) == 1
+    reasons = {x["city"]: x["reason"] for x in ledger}
+    assert reasons["Tokyo"] == "near_core_city_day_exposure_already_consumed"
+    assert "near_core_daily_city_day_cap" in reasons.values()
+    assert plans[0]["city"] in {"Busan", "Seoul"}
+
+
+def test_near_budget_normalizes_matched_size_from_submission_evidence(tmp_path):
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [{
+        **budget_order(), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "status": "submitted", "venue_order_id": "order-1", "execution_id": "exec-1",
+        "exchange_response": {"authoritative_order_state": {
+            "status": "CANCELED", "matchedSize": 2,
+        }},
+    }])
+    assert runner.near_core_daily_usage(
+        tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+    ) == (1, 1.6)

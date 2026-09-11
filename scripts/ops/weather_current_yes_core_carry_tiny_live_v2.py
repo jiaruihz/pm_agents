@@ -2107,25 +2107,56 @@ def recover_near_core_journal_terminal_makers(output_dir: Path) -> int:
     return written
 
 
-def near_core_daily_usage(output_dir: Path, now: datetime) -> tuple[int, float]:
-    day = now.astimezone(BJ).date()
-    city_days: set[tuple[str, str]] = set()
-    posted = 0.0
+def near_core_budget_snapshot(output_dir: Path, now: datetime) -> dict[str, Any]:
+    orders: list[dict[str, Any]] = []
+    by_order: dict[str, Mapping[str, Any]] = {}
+    by_client: dict[str, Mapping[str, Any]] = {}
+    states: list[dict[str, Any]] = []
     for row in iter_jsonl(output_dir / "live_orders.jsonl"):
-        if (
-            str(row.get("strategy_instance") or "")
-            != near_core_maker_probe.STRATEGY_INSTANCE
-            or str(row.get("status") or "") != "submitted"
-        ):
+        if str(row.get("strategy_instance") or "") != near_core_maker_probe.STRATEGY_INSTANCE:
             continue
-        created = parse_utc(row.get("created_at_utc"))
-        if created is None or created.astimezone(BJ).date() != day:
+        response = row.get("exchange_response") or {}
+        unknown_dispatch = response.get("quote_reason") == "post_order_dispatch_unknown"
+        if row.get("status") != "submitted" and not unknown_dispatch:
             continue
-        key = near_core_maker_probe.city_day(row)
-        if all(key):
-            city_days.add(key)
-        posted += finite(row.get("posted_notional")) or finite(row.get("notional")) or 0.0
-    return len(city_days), posted
+        order_id = live_order_id(row)
+        identity = order_id or str(row.get("execution_id") or "")
+        if not identity:
+            raise ValueError("near budget submission missing order/execution identity")
+        order = {
+            **row, "budget_order_id": identity,
+            "posted_price": finite(row.get("posted_price")) or finite(row.get("limit_price")),
+        }
+        orders.append(order)
+        if order_id:
+            by_order[order_id] = order
+        client_id = str(row.get("client_order_id") or response.get("client_order_id") or "")
+        if client_id:
+            by_client[client_id] = order
+        state = response.get("authoritative_order_state")
+        if isinstance(state, Mapping):
+            states.append({
+                "budget_order_id": identity, "received_at_utc": row["created_at_utc"],
+                "status": state.get("status"),
+                "matched_shares": next((state[k] for k in ("size_matched", "sizeMatched", "matched_shares", "matchedSize") if k in state), None),
+            })
+    # Read fresh authenticated evidence directly. The reporting ledger is synced
+    # later in the cycle and must not delay release or hide newly received fills.
+    for event in _authoritative_near_core_order_events(
+        output_dir, orders_by_order_id=by_order, orders_by_client_id=by_client,
+    ):
+        state = event["authoritative_order_state"]
+        states.append({
+            "budget_order_id": event["base_order"]["budget_order_id"],
+            "received_at_utc": event["received_at_utc"], "status": event["status"],
+            "matched_shares": next((state[k] for k in ("size_matched", "sizeMatched", "matched_shares", "matchedSize") if k in state), None),
+        })
+    return near_core_maker_probe.daily_budget(orders, states, now=now)
+
+
+def near_core_daily_usage(output_dir: Path, now: datetime) -> tuple[int, float]:
+    budget = near_core_budget_snapshot(output_dir, now)
+    return budget["used_city_days"], budget["used_cost_usd"]
 
 
 def near_core_entry_plans(
@@ -2141,7 +2172,13 @@ def near_core_entry_plans(
     live_rows = list(iter_jsonl(output_dir / "live_orders.jsonl"))
     existing_family = submitted_city_days(family_live_order_files(output_dir))
     near_consumed = near_core_maker_probe.consumed_city_days(live_rows)
-    used_city_days, used_cost = near_core_daily_usage(output_dir, now)
+    budget = near_core_budget_snapshot(output_dir, now)
+    near_consumed.update(
+        (order["city"], order["target_date"])
+        for order in budget["orders"]
+        if order["reserved_shares"] > 0 or order["matched_shares"] > 0
+    )
+    used_city_days, used_cost = budget["used_city_days"], budget["used_cost_usd"]
     plans: list[dict[str, Any]] = []
     ledger: list[dict[str, Any]] = []
     for row in latest_near_core_candidates(
@@ -2227,6 +2264,9 @@ def near_core_entry_plans(
                 "fixed_shares": near_core_maker_probe.FIXED_SHARES,
                 "client_order_prefix": near_core_maker_probe.CLIENT_ORDER_PREFIX,
                 "policy_arm": "CONTINUOUS_MARKET_REPRICE_FIXED_REST",
+                "budget_policy": near_core_maker_probe.BUDGET_POLICY,
+                "budget_used_city_days_before_plan": used_city_days,
+                "budget_used_cost_usd_before_plan": used_cost,
                 "economic_ws_cancel_enabled": False,
                 "live_enabled": bool(plan and plan.get("live_enabled")),
                 "live_authorized": bool(args.live and args.confirm_live and args.confirm_near_core_maker_probe_live),
@@ -2563,6 +2603,7 @@ def write_near_core_runtime_artifacts(
                 args.near_core_max_city_days_per_bj_day
             ) > 0,
             "max_daily_cost_usd": float(args.near_core_max_daily_cost_usd),
+            "budget_policy": near_core_maker_probe.BUDGET_POLICY,
         },
         "policy_arm": "CONTINUOUS_MARKET_REPRICE_FIXED_REST",
         "rescore_interval_sec": float(args.interval_seconds),
@@ -3210,6 +3251,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             args.near_core_max_city_days_per_bj_day
         ),
         "near_core_max_daily_cost_usd": float(args.near_core_max_daily_cost_usd),
+        "near_core_budget_policy": near_core_maker_probe.BUDGET_POLICY,
         "execution": execution,
         **DEPLOYMENT_METADATA,
     }

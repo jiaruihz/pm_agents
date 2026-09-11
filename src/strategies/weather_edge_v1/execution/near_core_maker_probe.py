@@ -7,7 +7,8 @@ selection, sleeve identity, exposure accounting, and reporting deterministic.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import math
 from decimal import Decimal, ROUND_FLOOR
 from typing import Any, Iterable, Mapping
 
@@ -23,6 +24,97 @@ SOLE_BLOCKER = "non_positive_taker_ev"
 LEDGER_SCHEMA_VERSION = "core_carry_near_core_maker_ledger_v2"
 MANIFEST_SCHEMA_VERSION = "core_carry_near_core_maker_manifest_v2"
 WS_CONTROL_READINESS_SCHEMA_VERSION = "core_carry_near_core_ws_control_readiness_v1"
+BUDGET_POLICY = "filled_city_days_plus_pending_reservations_v1"
+
+
+def daily_budget(
+    orders: Iterable[Mapping[str, Any]],
+    states: Iterable[Mapping[str, Any]],
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    """Account append-only order evidence without treating cancels as fills.
+
+    The budget day is the Beijing day on which an authoritative cumulative fill
+    increase was first received (not the canonical economic fill timestamp).
+    Pending orders reserve capacity across midnight. A terminal status releases
+    the remainder only when its explicit cumulative matched quantity is valid.
+    Each physical order must have one stable ``budget_order_id``; duplicates do
+    not add cost. A submitted order without final evidence remains reserved.
+    """
+    bj = timezone(timedelta(hours=8))
+    day = now.astimezone(bj).date()
+
+    def clock(value: Any) -> datetime:
+        result = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if result.tzinfo is None:
+            raise ValueError("near budget evidence requires timezone-aware clock")
+        return result
+
+    by_id: dict[str, Mapping[str, Any]] = {}
+    for order in orders:
+        if clock(order["created_at_utc"]) > now:
+            continue
+        key = str(order["budget_order_id"])
+        if key in by_id:
+            for field in ("city", "target_date", "size", "posted_price"):
+                if order[field] != by_id[key][field]:
+                    raise ValueError(f"conflicting near budget order {key}: {field}")
+        else:
+            by_id[key] = order
+    events: dict[str, list[Mapping[str, Any]]] = {}
+    for state in states:
+        if clock(state["received_at_utc"]) <= now:
+            events.setdefault(str(state["budget_order_id"]), []).append(state)
+    filled_days: set[tuple[str, str]] = set()
+    reserved_days: set[tuple[str, str]] = set()
+    details = []
+    for identity, order in by_id.items():
+        quantity, price = float(order["size"]), float(order["posted_price"])
+        if not (math.isfinite(quantity) and 0 < quantity <= FIXED_SHARES
+                and math.isfinite(price) and 0 < price <= 1):
+            raise ValueError(f"invalid near budget size/price for {identity}")
+        key = city_day(order)
+        if not all(key):
+            raise ValueError(f"missing near budget city-day for {identity}")
+        matched = today_qty = 0.0
+        terminal = False
+        for state in sorted(events.get(identity, []), key=lambda x: clock(x["received_at_utc"])):
+            try:
+                cumulative = float(state["matched_shares"])
+            except (KeyError, TypeError, ValueError):
+                continue  # Missing quantity is not an authoritative zero.
+            if not math.isfinite(cumulative) or not 0 <= cumulative <= quantity:
+                raise ValueError(f"invalid near budget matched quantity for {identity}")
+            increase = max(0.0, cumulative - matched)
+            if clock(state["received_at_utc"]).astimezone(bj).date() == day:
+                today_qty += increase
+            matched = max(matched, cumulative)
+            # Cumulative fill evidence and terminality are monotone: delayed
+            # LIVE/zero events must not erase a fill or resurrect a canceled order.
+            terminal |= str(state.get("status", "")).lower() in {
+                "canceled", "cancelled", "expired", "rejected",
+            } and cumulative >= matched
+            terminal |= matched >= quantity
+        remaining = 0.0 if terminal else quantity - matched
+        if today_qty > 0:
+            filled_days.add(key)
+        if remaining > 0:
+            reserved_days.add(key)
+        details.append({
+            "budget_order_id": identity, "city": key[0], "target_date": key[1],
+            "matched_shares": matched, "recognized_today_shares": today_qty,
+            "reserved_shares": remaining, "terminal": terminal,
+            "recognized_cost_usd": round(today_qty * price, 8),
+            "reserved_cost_usd": round(remaining * price, 8),
+        })
+    return {
+        "policy": BUDGET_POLICY, "budget_date_bj": day.isoformat(),
+        "used_city_days": len(filled_days | reserved_days),
+        "filled_city_days": len(filled_days), "reserved_city_days": len(reserved_days),
+        "used_cost_usd": round(sum(x["recognized_cost_usd"] + x["reserved_cost_usd"] for x in details), 8),
+        "orders": details,
+    }
 
 
 def city_day(row: Mapping[str, Any]) -> tuple[str, str]:
