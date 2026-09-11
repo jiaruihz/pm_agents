@@ -68,6 +68,7 @@ skill 是默认方法入口。只有 skill 明确要求或当前任务确实触�
 
 ## 6. 按需文档入口
 
+- Core Carry 研究：先读 `docs/analysis/CORE_CARRY_RESEARCH_CONTEXT.md` 的当前结论、实验台账和证据边界，再按需追溯原报告。
 - 文档权威性与完整索引：`docs/WEATHER_DOCS_INDEX.md`
 - 策略当前状态：`docs/WEATHER_STRATEGY_REGISTRY.md`
 - 生产接手：`docs/WEATHER_STRATEGY_ENTRYPOINT.md`
