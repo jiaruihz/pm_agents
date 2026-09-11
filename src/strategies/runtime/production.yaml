@@ -6,6 +6,10 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # Immutable release identities. Runtime entries reference these IDs instead of
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
+  - release_id: core_carry_labels_and_reports
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_labels_and_reports/5552790c1f54aff6488c99194a4421a4c687c58b
+    expected_repo_sha: 5552790c1f54aff6488c99194a4421a4c687c58b
+    runtime_bindings: [operational_venv]
   - release_id: core_carry_independent_forward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/c6a3de0cc5225e8dee436e32a68b649007cbf22a
     expected_repo_sha: c6a3de0cc5225e8dee436e32a68b649007cbf22a
@@ -213,6 +217,25 @@ allowed_unmanaged_sessions:
   - weather_canonical_refresh  # bounded one-shot, allowed to finish naturally
 
 managed_runtimes:
+  - instance_id: weather_core_carry_labels_and_reports
+    tmux_session: weather_core_carry_labels_and_reports
+    role: shadow
+    execution_mode: zero_notional_research
+    release_id: core_carry_labels_and_reports
+    start_script: scripts/ops/start_weather_core_carry_labels_and_reports.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/core_carry_labels_and_reports_20260912_v1/latest.json
+    health_format: json
+    max_health_age_sec: 1800
+    startup_grace_sec: 600
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      worker_id: core_carry_official_labels_and_reports_v1_20260912
+      collector_epoch_id: core_carry_independent_forward_20260911_v2
+      actual_notional: 0.0
+      orders: 0
+      orders_allowed: false
+    dependencies: [weather_jrs_context_keeper, weather_core_carry_independent_forward]
+    recovery_policy: safe
   - instance_id: weather_core_carry_independent_forward
     tmux_session: weather_core_carry_independent_forward
     role: shadow
