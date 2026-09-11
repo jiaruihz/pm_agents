@@ -2154,13 +2154,24 @@ def near_core_budget_snapshot(output_dir: Path, now: datetime) -> dict[str, Any]
     # Journal side-effect outcomes precede live-order projection writes. Use a
     # quantified outcome even if a crash prevented the projection/private update;
     # an unquantified cancel acknowledgement must still retain its reservation.
-    for order_id, evidence in execution_journal_order_states(
-        output_dir / "execution_journal.jsonl"
-    ).items():
+    for event in iter_jsonl(output_dir / "execution_journal.jsonl"):
+        if event.get("event_type") != "outcome":
+            continue
+        payload = event.get("payload") or {}
+        raw = payload.get("raw_response") or {}
+        kind, status = payload.get("kind"), str(payload.get("status") or "").lower()
+        if kind in {"cancel", "cancel_before_replacement"} and status in {"cancelled", "canceled", "expired", "reconciled"}:
+            ids = raw.get("canceled") or raw.get("cancelled") or []
+            # A shared quantity cannot be assigned to multiple canceled orders.
+            if not isinstance(ids, list) or len(ids) != 1:
+                continue
+            order_id, status = str(ids[0]), "cancelled"
+        elif kind == "submit" and status in {"submitted", "accepted", "filled", "reconciled"}:
+            order_id = str(payload.get("venue_order_id") or raw.get("orderID") or raw.get("order_id") or raw.get("id") or "")
+        else:
+            continue
         if order_id not in by_order:
             continue
-        payload = evidence["journal_payload"]
-        raw = payload.get("raw_response") or {}
         authoritative = payload.get("authoritative_order_state") or raw.get("authoritative_order_state") or {}
         quantity = next((
             source[field]
@@ -2170,8 +2181,8 @@ def near_core_budget_snapshot(output_dir: Path, now: datetime) -> dict[str, Any]
         ), None)
         states.append({
             "budget_order_id": by_order[order_id]["budget_order_id"],
-            "received_at_utc": evidence["recorded_at_utc"],
-            "status": evidence["status"], "matched_shares": quantity,
+            "received_at_utc": event["recorded_at_utc"],
+            "status": status, "matched_shares": quantity,
         })
     return near_core_maker_probe.daily_budget(orders, states, now=now)
 

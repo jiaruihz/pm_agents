@@ -1934,3 +1934,12 @@ def test_near_budget_journal_filled_survives_projection_crash(tmp_path):
     budget = runner.near_core_budget_snapshot(tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc))
     assert budget["filled_city_days"] == 1
     assert budget["reserved_city_days"] == 0
+    runner.append_jsonl(tmp_path / "execution_journal.jsonl", {
+        "event_type": "outcome", "recorded_at_utc": "2026-07-24T04:32:00Z",
+        "payload": {"kind": "cancel", "status": "cancelled", "raw_response": {
+            "canceled": ["order-1"], "size_matched": 0,
+        }},
+    })
+    budget = runner.near_core_budget_snapshot(tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc))
+    assert budget["filled_city_days"] == 1
+    assert budget["used_cost_usd"] == 4.0
