@@ -6,6 +6,10 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # Immutable release identities. Runtime entries reference these IDs instead of
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
+  - release_id: core_carry_independent_forward
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/cd5e87ca22d2d1c3230cd045bc9d1444b1c84184
+    expected_repo_sha: cd5e87ca22d2d1c3230cd045bc9d1444b1c84184
+    runtime_bindings: [operational_venv]
   - release_id: weather_entry_gate
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_entry_gate/9a000c95d1cd409adbf3ff425b322e3622c2f95a
     expected_repo_sha: 9a000c95d1cd409adbf3ff425b322e3622c2f95a
@@ -205,6 +209,24 @@ allowed_unmanaged_sessions:
   - weather_canonical_refresh  # bounded one-shot, allowed to finish naturally
 
 managed_runtimes:
+  - instance_id: weather_core_carry_independent_forward
+    tmux_session: weather_core_carry_independent_forward
+    role: shadow
+    execution_mode: zero_notional_research
+    release_id: core_carry_independent_forward
+    start_script: scripts/ops/start_weather_core_carry_independent_forward.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/core_carry_independent_forward_20260911_v1/latest.json
+    health_format: json
+    max_health_age_sec: 180
+    startup_grace_sec: 120
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      epoch_id: core_carry_independent_forward_20260911_v1
+      actual_notional: 0.0
+      orders: 0
+      orders_allowed: false
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
   - instance_id: weather_jrs_context_keeper
     tmux_session: weather_jrs_context_keeper
     role: infrastructure
