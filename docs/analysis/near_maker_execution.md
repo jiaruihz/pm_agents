@@ -1,5 +1,7 @@
 # Near maker 执行诊断
 
+最新状态：2026-09-12 00:30 北京时间，用户明确授权后已部署成交+预留日额度版本 `56ef007e64a4ee1b122b8fbbdc9273f03d668e0d`。下文“未部署”是此前时间点记录，当前验收见末节。
+
 观察截止：2026-09-12 00:03 北京时间（2026-09-11 16:03 UTC）。用户“今天”按刚结束的北京时间 9 月 11 日解释。只读诊断，无生产修改。
 
 ## 结论与分母
@@ -88,3 +90,28 @@ fill coverage gate 本轮 PASS，缓存/DB/fact 数量一致且无 unknown fee l
 - 刷新后的pre-deploy manifest为warning（仅未注册persistent worktrees），DB route healthy；先前canonical-refresh告警已恢复。没有执行部署、重启、pause、参数切换；生产仍是旧SHA `fb84766be96b419a44380ea19ce5953087570dba`。
 
 部署边界仍按 weather-strategy-deploy 的“真正启停live、重启生产、远端checkout或改变资金行为前必须有用户对该动作的明确授权”，且独立审阅未完成；本地提交不等于生产生效、审阅通过或owner接受。
+
+## 2026-09-12 00:30 北京时间：明确授权后已部署
+
+用户本轮明确要求“帮我部署”。本次发布从原生产 `fb84766be96b419a44380ea19ce5953087570dba` 隔离 cherry-pick 本次预算修复与审阅修复，未把开发分支其他改动带入生产。最终release `56ef007e64a4ee1b122b8fbbdc9273f03d668e0d`，production pin commit `734ec8ea`。release_id=`core_carry_budget_runtime` 只供Core runner引用；原near WS controller保持原release/PID。
+
+### 独立审阅收口与用量说明
+
+上次仅依据累计输入增长判为异常并中止的处理过于机械；525359输入中483328为cached，不能仅凭累计量认定失控。本次部署前使用新的单轮、只读定向review收口，未恢复旧worker。提示词限制为本次diff和必要上下文，不执行测试/不全仓扫描，最终交付具体findings。角色/rollout证实 `gpt-5.6-luna / medium`，任务 `/root/near_budget_deploy_review`，rollout `01a0914a-08b2-73b0-a394-2efcb3f3c008`。最终input400490、cached365568、output3051、total403541（cached是input子集）；任务已完成。
+
+review提出1个阻断finding：budget reader未消费仅写入execution journal而尚未完成live-order projection的权威成交/撤单证据，会残留预留。主agent接入逐条journal outcome的明确累计matched数量，保留所有历史增量和PIT接收时钟；不使用last-only state覆盖旧成交。只含cancel成功列表、无数量的证据仍不能证明零成交；多个取消order共用的未归属数量也不分摊。补零成交取消、partial取消、filled、缺数量、迟到zero不抹除fill测试。其余定向检查无阻断finding。未做第二层review或自称owner accepted。
+
+最终生产基线上的139项相关测试通过（Core runner、near controller、OrderRuntime、decision clocks）。测试在隔离worktree中运行；首次因缺`.venv`未启动，添加指向已有operational venv的绑定后完整通过。对既有4790条quota replay重跑journal修复差异，逐条证据见同artifact目录`journal_review_delta.json`；不重写raw或canonical事实。
+
+### 实际切换与验收
+
+- controller执行登记的 `restart --instance current_yes_core_carry_tiny_live_v2 --apply --confirm-live`；action=`restarted`、wrapper returncode=0。
+- PID `27695 → 14023`；loaded checkout/SHA和最新summary一致为 `56ef007e…`；live_enabled=true、budget_policy=`filled_city_days_plus_pending_reservations_v1`、execution.live_errors=0、near_core_control_failures=[]。
+- near WS controller PID=26415保持，readiness=ready；DB route healthy；pre/post常驻session 43→43、missing_sessions=[]。
+- 新版本已追加3条带预算policy的实际决策：London，预算占用2个city-day/$8.925（两笔历史dispatch_unknown），未因daily cap阻断，而是maker安全资格不满足。采集截止00:31:44北京，重启后live_orders新增0；没有为了验收强制下单，不宣称已经观察到新版本真实成交。
+- Dashboard `/api/live/summary` HTTP200。Controller命令整体exit2来自其他runtime健康告警：此前已有fast_source_prev_no_trial stale及其WCIR下游；paired_bid_mm另有stale。本次target重启与manifest同集合核验通过，不能把全局状态称全绿，也未顺手重启其他策略。
+- 部署证据：`runtime/analysis_snapshots/near_maker_check/deploy_{pre_manifest,storage,restart,post_manifest,runtime_evidence,api_summary}.json`及pre/post health文本。静态storage仅既有schema warning，post manifest仅未注册worktree warning。
+
+回滚：将该实例release_id恢复`core_carry_runtime`（原full SHA `fb84766be96b419a44380ea19ce5953087570dba`），提交production pin后由同一controller精确restart；保留两套release与全部raw。未执行回滚。
+
+worktree交付inventory：`.worktrees/near-maker-budget-deploy`，branch=`codex/near-maker-filled-budget-deploy`、HEAD=`56ef007e…`，tracked/untracked clean，ignored为venv与pytest/pycache；无生产引用，保留为后续cleanup candidate。新release路径 `/Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/56ef007e64a4ee1b122b8fbbdc9273f03d668e0d` 已被production引用及PID使用，禁止清理。没有移除worktree或prune。

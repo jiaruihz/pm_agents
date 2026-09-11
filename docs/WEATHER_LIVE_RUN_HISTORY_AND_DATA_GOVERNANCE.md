@@ -2097,3 +2097,8 @@ fix_level = contained_and_recovered; root_cause_not_eliminated
 ### 2026-09-12 near maker 日额度本地变更（未部署）
 
 用户纠正提交即占满10个名额的口径。本地commit `3c15f62b` 改为当日权威成交增量city-day加未终局预留，权威零成交终局释放，金额按确认成交加剩余预留；同city-day提交后禁止重试保持。沿9/7–9/11实际订单轨迹重放，4790条旧cap阻断记录/57个city-day不再命中该cap，非新增成交或利润估计；9/11为1980条/20个city-day，日末新预算1已成交+2个dispatch-unknown预留。raw/标签/canonical改写0，生产orders/fills变更0。相关135测试通过；单轮独立review因输入用量增长中止，未形成最终结论，不标审阅通过。未部署、未改变资金行为。完整口径、逐条机器证据和review telemetry见[near maker执行记录](analysis/near_maker_execution.md)。
+
+
+### 2026-09-12 00:30 北京 near maker 成交额度部署完成
+
+用户明确授权部署；以原生产基线隔离发布 `56ef007e64a4ee1b122b8fbbdc9273f03d668e0d`，仅Core runner切至core_carry_budget_runtime，near controller保持。完成新单轮独立只读review并修复journal-only权威终态预算遗漏，139测试通过；4790条既有quota replay在review修复前后预算差异0。PID27695→14023，loaded SHA/summary一致、live=true、执行错误0，43常驻会话无丢失、DB healthy、API200。新policy已写入实际London决策，当前2个历史unknown预留/$8.925；验收窗口无新订单，未强制交易。旧review把累计cached输入增长机械判异常的问题已澄清；新review完成，完整telemetry/证据/回滚/worktree inventory见[near maker执行记录](analysis/near_maker_execution.md)。其他fast-source及WCIR既有健康告警未作为本次部署范围处理。
