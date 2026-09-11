@@ -1,6 +1,6 @@
 # Core Carry 研究主上下文
 
-本文件是后续 Core Carry 任务的优先入口，详细数字回溯前三阶段及下表原报告。状态：Phase4 独立零金额采集已于2026-09-11T15:26:36.214342Z启动，单一转折编码/覆盖/协议已封存但未拟合；A/B/C/D 冻结，未批准生产替换。生产真实状态仍须读当前 manifest，不用本文替代进程证据。
+本文件是后续 Core Carry 任务的优先入口，详细数字回溯前三阶段及下表原报告。状态：Phase5 独立官方标签/日报于2026-09-11T16:49:10Z启动；原Phase4采集器及模型不变，转折仅抽样协议修订为v2、仍未拟合；A/B/C/D 冻结，未批准生产替换。生产真实状态仍须读当前 manifest，不用本文替代进程证据。
 
 ## 策略、模型与信息边界
 
@@ -54,3 +54,14 @@ A=同次原市场midpoint；B=冻结v3；C=market-logit-only校准；D=同规格
 下一步按[Phase4主报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260911_phase4/brief/CORE_CARRY_PHASE4_REVIEW.md)及已封存协议执行：先3个完整日工程验收，A/B/C/D 30终局日/60日覆盖审阅；转折分支用固定日期split及独立失败/转折事件信息量门，未达门不训练。只有owner可批准production promotion，代码跑通、采集更多、略准、模拟更好、真实盈利和接受是不同状态。
 
 证据入口：Phase1 `run=20260910_training_forward_review/brief`；Phase2 `run=20260911_phase2/brief`；Phase3 `run=20260911_phase3/verified`；本轮 `run=20260911_phase4`，均在 `production://research_artifact_root/core_carry/`。另命名的Phase3独立审阅和旧Phase4提示词未在可定位附件/仓库中找到；本轮以用户完整整合请求为准，未把未读文件当证据。
+
+
+## Phase5：自动终局接入与抽样一致性（2026-09-12交付，READY_FOR_REVIEW）
+
+官方label/report worker已单独注册并启动，源码 `5552790c1f54aff6488c99194a4421a4c687c58b`，main registration `ed8d0e3a`；原collector `c6a3de0c…`、v2 epoch和15:26:36实际起点不变。首轮16:49:14Z：10个官方identity pending、0terminal；11实际尝试/10评分/9城市日/40模型概率/5共同carry，完整新日0，B锁后真实样例0。UTC时间不同的后续累积不能套用此快照。概率、隐含期望、理论fee quote收益及真实成交收益分开，unknown不充0。原始预测不写入label。
+
+无label/收益输入的旧窗口核查确认：v1文字最早city/date/exact-token样本没有event子键，270个曾实际可见事件只保留113、丢157；不是已运行拟合器删数据。一次修订为原13:30—17:30固定landmark的第一实际尝试，再筛合法序列；旧数据1078合法样本/193可见事件、carry72/73（旧40）。新协议 `configs/weather/core_carry_transition_protocol_v2.json`；v1保留。全记录可用1959/6438，carry384/1447、B资格23/95、旧逐日D新增3/8，不能把全域信息量外推可交易域。
+
+v2只澄清抽样、主指标全赔率母体/固定carry次级行动域、入场前信息和完整日期。原3h/3report/60min、单次fit、数值信息门、开发09-13..10-22、训练label cutoff10-23 00:00UTC、test10-23..11-11不变；A/B/C/D不重置。入场后新METAR不得倒算成避免原买入。完整采集处置日不要求每slot转折可用；研究合法样本和按cutoff可得官方labels仍需单列。下一节点3完整日工程/30完整终局日/60日历覆盖；未达信息门不训练、无promotion。
+
+[Phase5主报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/brief/CORE_CARRY_PHASE5_REVIEW.md)、[增量数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/delivery)、[handoff](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/brief/HANDOFF.md)。40相关tests通过；单轮review两个P2已修复。没有新模型效力结论，未把READY_FOR_REVIEW写成owner接受。
