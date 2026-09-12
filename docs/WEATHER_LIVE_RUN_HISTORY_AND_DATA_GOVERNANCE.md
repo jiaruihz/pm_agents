@@ -2102,3 +2102,10 @@ fix_level = contained_and_recovered; root_cause_not_eliminated
 ### 2026-09-12 00:30 北京 near maker 成交额度部署完成
 
 用户明确授权部署；以原生产基线隔离发布 `56ef007e64a4ee1b122b8fbbdc9273f03d668e0d`，仅Core runner切至core_carry_budget_runtime，near controller保持。完成新单轮独立只读review并修复journal-only权威终态预算遗漏，139测试通过；4790条既有quota replay在review修复前后预算差异0。PID27695→14023，loaded SHA/summary一致、live=true、执行错误0，43常驻会话无丢失、DB healthy、API200。新policy已写入实际London决策，当前2个历史unknown预留/$8.925；验收窗口无新订单，未强制交易。旧review把累计cached输入增长机械判异常的问题已澄清；新review完成，完整telemetry/证据/回滚/worktree inventory见[near maker执行记录](analysis/near_maker_execution.md)。其他fast-source及WCIR既有健康告警未作为本次部署范围处理。
+
+
+### Near maker 本地未发送拒单误归 unknown（2026-09-13 修复）
+
+2026-09-09 CapeTown/Madrid两次entry guard在真实post_order前拒绝，却被旧adapter记成post_order_dispatch_unknown。9/12启用成交加pending预算后形成2个假city-day/$8.925内部预留；不是实际交易所冻结余额。两个市场已resolved，但对应尝试无venue id、无canonical成交，不伪造结算。按精确journal旧拒单证据自动推导rejected/zero-fill终态，现代typed pre-dispatch拒单直接分类，真实未知/已知venue保留。raw与fact均未改写。
+
+污染窗口为9/12预算上线至9/13 00:41采样，1455条决策预算数字受影响；沿实际订单轨迹逐行重放，额度阻断漏单0、错误下单0、成交/标签污染0，不推断反事实利润。明细：`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_budget_policy_v1/pre_dispatch_refusal_impact.json`。生产release `72c8dabb31efa39d34b91d8f4610791b79c80e91` 已由controller上线，167相关测试通过，单轮独立只读review完成。00:42预算释放两笔假预留，保留真实挂单。00:48原调度canonical刷新exit0，fill gate通过；历史settlement ingest通过，无需手动补虚假事实。完整审阅、部署与复跑证据见 [near maker执行记录](analysis/near_maker_execution.md)。

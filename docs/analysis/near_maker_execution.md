@@ -1,6 +1,6 @@
 # Near maker 执行诊断
 
-最新状态：2026-09-12 00:30 北京时间，用户明确授权后已部署成交+预留日额度版本 `56ef007e64a4ee1b122b8fbbdc9273f03d668e0d`。下文“未部署”是此前时间点记录，当前验收见末节。
+最新状态：2026-09-13 00:42 北京时间，已部署本地拒单分类与历史额度纠正版本 `72c8dabb31efa39d34b91d8f4610791b79c80e91`。此前“未部署”及两笔历史未知预留是旧快照，当前验收见末节。
 
 观察截止：2026-09-12 00:03 北京时间（2026-09-11 16:03 UTC）。用户“今天”按刚结束的北京时间 9 月 11 日解释。只读诊断，无生产修改。
 
@@ -115,3 +115,22 @@ review提出1个阻断finding：budget reader未消费仅写入execution journal
 回滚：将该实例release_id恢复`core_carry_runtime`（原full SHA `fb84766be96b419a44380ea19ce5953087570dba`），提交production pin后由同一controller精确restart；保留两套release与全部raw。未执行回滚。
 
 worktree交付inventory：`.worktrees/near-maker-budget-deploy`，branch=`codex/near-maker-filled-budget-deploy`、HEAD=`56ef007e…`，tracked/untracked clean，ignored为venv与pytest/pycache；无生产引用，保留为后续cleanup candidate。新release路径 `/Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/56ef007e64a4ee1b122b8fbbdc9273f03d668e0d` 已被production引用及PID使用，禁止清理。没有移除worktree或prune。
+
+
+## 2026-09-13 00:42：本地拒单误归 unknown 的根因修复已部署
+
+用户指出历史市场已结算却仍预留，说明状态链没有闭合。本次精确追踪确认：CapeTown execution `383cb18eec3ee7887a46b5f4245916a08d8252a8bdfd689549d7c910f2978821` 与 Madrid execution `baad2543db29d1b6fc513625879a8d86e87add01272d0efaa972eeb8d9fc7a2b` 均在2026-09-09的journal记录 `LiveEntryRegionBlocked: live_entry_region_blocked:polymarket_geoblock_unverified`。transport的entry guard在client.post_order调用前拒绝，adapter却统一归为post_order_dispatch_unknown。无venue id，canonical orders/fact_trades对应行均为0；canonical不把非交易所调用的生命周期尝试伪装成真实订单。Gamma精确market 4322064、4321894均closed=true/acceptingOrders=false/umaResolutionStatus=resolved。市场已结算属实，但这两笔的直接根因是未发送的本地拒单被错误归为未知，不能靠补一条虚假成交/结算来修。
+
+修复：transport只在entry_guard.__enter__抛出LiveEntryRegionBlocked时转换为OrderNotDispatched；adapter记rejected/entry_blocked_before_dispatch/pre_dispatch。实际client.post_order调用内的异常仍unknown，地理/入场限制不改变。现代unknown带typed_pre_dispatch_classification，禁止再套历史兼容解释。near预算每轮从原始journal精确匹配client_order_id、历史错误前缀及dispatch字段，只对无venue identity的旧未知claim追加派生拒绝/0成交终态；不改raw。真实超时、已知venue、未来时钟证据均不被释放。此修复不是“已结算就猜零成交”，未搭建第二个同步任务。
+
+历史影响：预算修复原上线（9/12 00:30北京）至本次00:41采样，共1455条新policy决策预算受到2个假名额/$8.925的影响；逐行重放中daily_city_day_cap/daily_cost_cap阻断均0，未发现由假预留导致的额度漏单；错误实际下单0，成交/标签/raw/canonical改写0。市场结果、精确journal与逐行清单保存在 `runtime/analysis_snapshots/near_maker_check/unknown_market_status.json` 和 `/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_budget_policy_v1/pre_dispatch_refusal_impact.json`。这只量化预算影响，不估计不存在的反事实成交利润。
+
+只读独立review `/root/near_local_refusal_review`完成，无阻断finding。范围为3个源码及3个测试文件的本次diff，检查异常发生边界、错误关联、PIT及资金安全，未改代码。模型/rollout证明gpt-5.6-luna medium，rollout `01a0967a-fce4-7e50-965d-7b326cbe1ea9`；input197472/cached152320/output2183/total199655。低优先建议在adapter层断言post_calls为空未采纳：adapter必须调用注入transport才能收到拒绝；真实client未被调用已有transport测试明确断言。另补现代unknown不被历史兼容路径错误释放的回归测试。
+
+生产基线隔离发布SHA `72c8dabb31efa39d34b91d8f4610791b79c80e91`，source commit `7cafaf2e`，pin commit `72fd1b74`。167相关测试提交后通过（runner、transport、venue adapter、entry region gate、near WS、OrderRuntime、decision clocks）。沿既有明确部署授权收口此前额度实现缺口，通过controller精确restart；wrapper return0/action restarted，target PID36839，summary SHA一致、status ok/live_enabled=true。原会话同集合missing=[]，DB route healthy，Dashboard API200。00:42:53预算已不再含两笔假预留；仍有真实BuenosAires target_date9/12订单 `0x66600b944f56dea3156bc7132ffb898fc6de23c4499262c3267b7dc047ca29f6`，5 shares/$4.865预留。没有手动取消或清零真实挂单。
+
+新版本仍保持原region guard，未改变代理/地域/入场授权。其他已独立pin的生产release没有被本次共享源码变更静默升级。post检查另有canonical-refresh last_exit75告警，目标重启第一轮中间summary曾临时触发health_live_not_enabled，完整周期后summary已live=true；不把全局health称为全绿，未通过跳过guard修复其他链路。
+
+证据 `runtime/analysis_snapshots/near_maker_check/refusal_{pre_manifest,restart,post_manifest,runtime_evidence}.json`。回滚保留上版56ef007e，通过production pin提交与同controller精确restart执行。隔离worktree `.worktrees/near-maker-budget-deploy` 已到72c8dabb，tracked clean，ignored venv/cache；新release路径被production引用，旧release与worktree都保留，未删除或prune。文档全局检查仍受既有链接/数量上限问题阻断，不影响本次167项代码测试。
+
+00:48北京后续验收：原调度自动完成下一轮canonical refresh，last_exit_status=0。authenticated fill sync检查68单，errors=0/external_fetch_errors=0/data_incomplete=false；build_fact_trades与fill coverage gate通过，1701个canonical fill与live_real事实逐项覆盖，gate_pass=true。登记的历史settlement ingest扫描333文件/3663档位，通过、无新增更正。此前75不再是当前退出状态；没有另起刷新、全量rebuild或手动改结算。仍不将这一轮通过表述为所有天气源/候选迁移全绿（preflight的migration_only blocker独立存在）。证据为`runtime/analysis_snapshots/near_maker_check/refusal_followup_refresh.json`。
