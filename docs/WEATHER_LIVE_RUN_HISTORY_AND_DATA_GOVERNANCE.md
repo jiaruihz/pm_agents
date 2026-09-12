@@ -2109,3 +2109,8 @@ fix_level = contained_and_recovered; root_cause_not_eliminated
 2026-09-09 CapeTown/Madrid两次entry guard在真实post_order前拒绝，却被旧adapter记成post_order_dispatch_unknown。9/12启用成交加pending预算后形成2个假city-day/$8.925内部预留；不是实际交易所冻结余额。两个市场已resolved，但对应尝试无venue id、无canonical成交，不伪造结算。按精确journal旧拒单证据自动推导rejected/zero-fill终态，现代typed pre-dispatch拒单直接分类，真实未知/已知venue保留。raw与fact均未改写。
 
 污染窗口为9/12预算上线至9/13 00:41采样，1455条决策预算数字受影响；沿实际订单轨迹逐行重放，额度阻断漏单0、错误下单0、成交/标签污染0，不推断反事实利润。明细：`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_budget_policy_v1/pre_dispatch_refusal_impact.json`。生产release `72c8dabb31efa39d34b91d8f4610791b79c80e91` 已由controller上线，167相关测试通过，单轮独立只读review完成。00:42预算释放两笔假预留，保留真实挂单。00:48原调度canonical刷新exit0，fill gate通过；历史settlement ingest通过，无需手动补虚假事实。完整审阅、部署与复跑证据见 [near maker执行记录](analysis/near_maker_execution.md)。
+
+
+### Near maker 实际成交结算源缺失（2026-09-13补齐）
+
+本轮53个v2 posted订单对应9个actual fill，9/8–9/12的9个精确city/date均缺pm_history文件，导致9笔在fact_trades仍missing_bracket，已确认市场全部closed/binary。既有Gamma backfill补齐9文件；标准ingest补88档，Wellington单日既有bounded ingester补11档；标准refresh随后9/9目标fill settled。目标成本$38.15、7W/2L、fee-adjusted PnL -$3.15，旧未结算标签失效；order/fill未改写。自动refresh成功不代表源缓存完整，且UTC yesterday日期窗会暂时排除已closed的东区当天市场；本轮只完成bounded补数，不能称永久自动修复。证据与明细见[near maker绩效](analysis/near_maker_execution.md)及artifact_store/near_maker_performance/latest.json。

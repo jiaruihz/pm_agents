@@ -310,3 +310,6 @@ NO ask 变贵，并使 3 个原可执行机会失去资格，因此只作 persis
 > 见 `WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md §1.1`。**当前没有任何"已确认稳定盈利"的 live alpha**：
 > 在跑的 current YES（fade_confirmed + peak_forming_micro）与 metar-cross 是 **tiny-live 前向取证**（$5–$10 微仓），
 > 不是已证实策略；评估按执行质量/滑点，别按早期 PnL。旧 mid_price_core 已因亏损停用。
+
+
+2026-09-13 near maker实际绩效更新：连续v2截至9/13 01:09北京，53posted/9filled/44零成交取消，成交率16.98%；9笔全部结算、7W/2L、成本$38.15、费用$0、净PnL -$3.15、ROI -8.26%，5个target_date，block95%CI[-40.30%,+23.20%]。旧v1另3posted/0fill。补齐9个缺失结算源文件后由canonical确认，旧“未齐结算/不可报收益”数字由本快照替代；自动源采集缺口尚未永久修复。无同分母alpha baseline，forward NA，inconclusive，不改live。见[near maker绩效](analysis/near_maker_execution.md)。

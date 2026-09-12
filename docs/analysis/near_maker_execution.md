@@ -134,3 +134,14 @@ worktree交付inventory：`.worktrees/near-maker-budget-deploy`，branch=`codex/
 证据 `runtime/analysis_snapshots/near_maker_check/refusal_{pre_manifest,restart,post_manifest,runtime_evidence}.json`。回滚保留上版56ef007e，通过production pin提交与同controller精确restart执行。隔离worktree `.worktrees/near-maker-budget-deploy` 已到72c8dabb，tracked clean，ignored venv/cache；新release路径被production引用，旧release与worktree都保留，未删除或prune。文档全局检查仍受既有链接/数量上限问题阻断，不影响本次167项代码测试。
 
 00:48北京后续验收：原调度自动完成下一轮canonical refresh，last_exit_status=0。authenticated fill sync检查68单，errors=0/external_fetch_errors=0/data_incomplete=false；build_fact_trades与fill coverage gate通过，1701个canonical fill与live_real事实逐项覆盖，gate_pass=true。登记的历史settlement ingest扫描333文件/3663档位，通过、无新增更正。此前75不再是当前退出状态；没有另起刷新、全量rebuild或手动改结算。仍不将这一轮通过表述为所有天气源/候选迁移全绿（preflight的migration_only blocker独立存在）。证据为`runtime/analysis_snapshots/near_maker_check/refusal_followup_refresh.json`。
+
+
+## 2026-09-13 01:09：实际成交绩效（替代前述收益未齐快照）
+
+连续v2 posted订单窗口9/7 08:17UTC至9/12 16:32UTC，ledger覆盖至9/12 17:02UTC。53个真实venue订单，9个全额成交/45shares、44零成交取消；成交率16.98%。另2个本地拒单不入posted分母。旧v1另有3posted/0fill及1error，不混入v2；合并posted56、fill9。累计ledger17301行/158city-day，含重复状态与评分，不能当17301次独立触发；完整机会层PIT与模型基准本轮未评测。
+
+9笔canonical live_real现均settled，5个独立target_date（9/8–9/12），YES成本$38.15、maker费用$0、7W/2L、fee-adjusted PnL -$3.15、ROI -8.2569%。逐笔：Manila +0.80、Atlanta +0.55、Chicago +0.30、PanamaCity +0.80、SaoPaulo -4.70、NYC +1.00、Singapore +0.65、BuenosAires +1.20、Wellington -3.75。当前scope未结算0；未成交不计利润。target-date block bootstrap 20000次、seed20260913，ROI95%CI[-40.30%,+23.20%]，仅描述5日小样本；无same-denominator maker/taker或market概率基准，forward NA，结论inconclusive，不改live、不支持扩量。
+
+本轮发现并补齐9个缺失Gamma pm_history源文件（精确成交city/date），先前refresh exit0仅证明已有缓存导入，不证明目标settlement coverage。标准刷新为前8个日期追加88个bracket结算；Wellington已closed但受UTC yesterday窗口排除，使用既有bounded settlement ingester按单城单日追加11个bracket，随后由标准canonical refresh物化9个目标fill。最终refresh exit0、fill gate PASS，9/9已结算。源采集自动覆盖与UTC窗口仍是机制缺口；本轮补数不等于永久自动修复。无全量rebuild、无order/fill改写。
+
+可复核机器快照含全部posted/raw记录、9个完整fact、canonical identity与gate：`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_performance/latest.json`。DB physical device16777244/inode54444；manifest warning、db_route healthy。补数与阶段证据为`runtime/analysis_snapshots/near_maker_check/performance_*`。
