@@ -28,6 +28,10 @@ class VenueAdapterError(ValueError):
     """An injected transport payload was incomplete or incompatible with the CLOB contract."""
 
 
+class OrderNotDispatched(RuntimeError):
+    """The transport refused entry before invoking the exchange submit call."""
+
+
 class PolymarketTransport(Protocol):
     def fetch_capabilities(self) -> VenueCapabilities | Mapping[str, Any]: ...
     def fetch_fee_schedule(self) -> FeeSchedule | Mapping[str, Any]: ...
@@ -466,8 +470,10 @@ class PolymarketVenueAdapter:
             return {"status": "rejected", "reason": "create_order_failed_before_dispatch", "client_order_id": client_order_id, "error": f"{type(exc).__name__}: {exc}", "dispatch_stage": "create_order"}
         try:
             response = self.transport.post_order(signed_order, order_type=request.order_type, post_only=request.post_only)
+        except OrderNotDispatched as exc:
+            return {"status": "rejected", "reason": "entry_blocked_before_dispatch", "client_order_id": client_order_id, "expected_venue_order_id": expected_venue_order_id, "error": f"{type(exc).__name__}: {exc}", "dispatch_stage": "pre_dispatch"}
         except Exception as exc:
-            return {"status": "unknown", "reason": "post_order_dispatch_unknown", "client_order_id": client_order_id, "expected_venue_order_id": expected_venue_order_id, "error": f"{type(exc).__name__}: {exc}", "dispatch_stage": "post_order"}
+            return {"status": "unknown", "reason": "post_order_dispatch_unknown", "client_order_id": client_order_id, "expected_venue_order_id": expected_venue_order_id, "error": f"{type(exc).__name__}: {exc}", "dispatch_stage": "post_order", "typed_pre_dispatch_classification": True}
         status = _normalized_submit_status(response)
         return {
             "status": status,

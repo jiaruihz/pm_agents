@@ -1943,3 +1943,35 @@ def test_near_budget_journal_filled_survives_projection_crash(tmp_path):
     budget = runner.near_core_budget_snapshot(tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc))
     assert budget["filled_city_days"] == 1
     assert budget["used_cost_usd"] == 4.0
+
+
+@pytest.mark.parametrize("error,venue_id,expected", [
+    ("LiveEntryRegionBlocked: live_entry_region_blocked:polymarket_geoblock_unverified", "", 0),
+    ("TimeoutError: unknown exchange handoff", "", 1),
+    ("LiveEntryRegionBlocked: live_entry_region_blocked:polymarket_geoblock_unverified", "venue-1", 1),
+])
+def test_near_budget_reconciles_only_proven_local_refusal(tmp_path, error, venue_id, expected):
+    runner.write_jsonl(tmp_path / "live_orders.jsonl", [{
+        **budget_order(), "strategy_instance": runner.near_core_maker_probe.STRATEGY_INSTANCE,
+        "status": "error", "execution_id": "unknown-1", "venue_order_id": venue_id,
+        "exchange_response": {"quote_reason": "post_order_dispatch_unknown", "client_order_id": "client-1"},
+    }])
+    runner.write_jsonl(tmp_path / "execution_journal.jsonl", [{
+        "event_type": "outcome", "recorded_at_utc": "2026-07-24T04:31:00Z",
+        "payload": {"kind": "submit", "status": "unknown", "client_order_id": "client-1",
+                    "reason": "post_order_dispatch_unknown", "dispatch_stage": "post_order", "error": error},
+    }])
+    assert runner.near_core_daily_usage(
+        tmp_path, datetime(2026, 7, 24, 4, 30, 30, tzinfo=timezone.utc),
+    ) == (1, 4.0)
+    assert runner.near_core_daily_usage(
+        tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+    ) == (expected, expected * 4.0)
+    # Modern adapter already distinguished the local refusal. Its remaining
+    # unknown exceptions must never be reinterpreted by the legacy projection.
+    journal = list(runner.iter_jsonl(tmp_path / "execution_journal.jsonl"))
+    journal[0]["payload"]["typed_pre_dispatch_classification"] = True
+    runner.write_jsonl(tmp_path / "execution_journal.jsonl", journal)
+    assert runner.near_core_daily_usage(
+        tmp_path, datetime(2026, 7, 24, 5, tzinfo=timezone.utc),
+    ) == (1, 4.0)

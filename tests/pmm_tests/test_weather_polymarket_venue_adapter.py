@@ -319,3 +319,20 @@ def test_authoritative_order_mapping_keeps_raw_trade_like_status_unsafe_for_repl
     assert state.raw_venue_status == "MATCHED"
     assert state.order_state_provenance == "polymarket_authenticated_order_lookup_v1"
     assert state.matched_shares == Decimal("3") and state.remaining_shares == Decimal("2")
+
+
+def test_local_pre_dispatch_refusal_is_rejected_not_unknown():
+    from src.strategies.weather_edge_v1.execution.venue.polymarket import OrderNotDispatched
+
+    transport = FakeTransport()
+    adapter = PolymarketVenueAdapter(
+        transport=transport,
+        order_request_builder=lambda intent, child, book, capabilities, fees, replacement: _request(post_only=True, epoch=book.book_epoch_ref),
+    )
+    capabilities, fees, book = _snapshots(adapter)
+    intent = _intent()
+    transport.post_response = OrderNotDispatched("local entry refused")
+    result = adapter.place(intent=intent, child=_child(intent, maker_only=True), market_book=book, capabilities=capabilities, fee_schedule=fees)
+    assert result["status"] == "rejected"
+    assert result["reason"] == "entry_blocked_before_dispatch"
+    assert result["dispatch_stage"] == "pre_dispatch"

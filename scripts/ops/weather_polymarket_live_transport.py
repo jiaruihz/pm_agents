@@ -8,12 +8,14 @@ quote, sizing, lifecycle and risk decisions remain outside the transport.
 from __future__ import annotations
 
 import os
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping
 
 from scripts.ops.weather_market_proxy import production_market_proxy_url
-from scripts.ops.weather_live_entry_region_gate import live_entry_region_guard
+from scripts.ops.weather_live_entry_region_gate import LiveEntryRegionBlocked, live_entry_region_guard
+from src.strategies.weather_edge_v1.execution.venue.polymarket import OrderNotDispatched
 
 
 PROXY_ENV_KEYS = (
@@ -308,7 +310,11 @@ class LivePolymarketTransport:
     ) -> Mapping[str, Any]:
         client_order_id = str(signed_order.get("client_order_id") or "")
         metadata = dict(self.metadata_by_client_id.get(client_order_id, {}))
-        with self.entry_guard(self.execution_proxy):
+        with ExitStack() as stack:
+            try:
+                stack.enter_context(self.entry_guard(self.execution_proxy))
+            except LiveEntryRegionBlocked as exc:
+                raise OrderNotDispatched(f"{type(exc).__name__}: {exc}") from exc
             try:
                 raw = self.client.post_order(
                     signed_order["signed_order"],

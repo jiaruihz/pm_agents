@@ -220,3 +220,40 @@ def test_empty_rest_and_no_terminal_evidence_remains_unknown():
     transport.client.order = None
     transport.terminal_order_lookup = lambda oid, meta: None
     assert transport.fetch_order('venue-1','client-1') is None
+
+
+def test_local_entry_refusal_is_typed_and_never_calls_exchange():
+    import pytest
+    from scripts.ops.weather_live_entry_region_gate import LiveEntryRegionBlocked
+    from src.strategies.weather_edge_v1.execution.venue.polymarket import OrderNotDispatched
+
+    transport = _transport()
+    calls = []
+    transport.client.post_order = lambda *a, **kw: calls.append(kw)
+
+    @contextmanager
+    def refuse(_proxy):
+        raise LiveEntryRegionBlocked("polymarket_geoblock_unverified")
+        yield
+
+    transport.entry_guard = refuse
+    with pytest.raises(OrderNotDispatched):
+        transport.post_order({"signed_order": {}, "client_order_id": "c"}, order_type="GTC", post_only=True)
+    assert calls == []
+    assert transport.unknown_submit_by_identity == {}
+
+
+def test_exception_after_exchange_invocation_is_not_reclassified_as_local():
+    import pytest
+    from scripts.ops.weather_live_entry_region_gate import LiveEntryRegionBlocked
+
+    transport = _transport()
+    transport.metadata_by_client_id["c"] = {"identity_key": "claim"}
+
+    def fail(*a, **kw):
+        raise LiveEntryRegionBlocked("raised_inside_exchange_call")
+
+    transport.client.post_order = fail
+    with pytest.raises(LiveEntryRegionBlocked):
+        transport.post_order({"signed_order": {}, "client_order_id": "c"}, order_type="GTC", post_only=True)
+    assert "claim" in transport.unknown_submit_by_identity

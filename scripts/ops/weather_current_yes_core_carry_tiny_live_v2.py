@@ -2160,6 +2160,31 @@ def near_core_budget_snapshot(output_dir: Path, now: datetime) -> dict[str, Any]
         payload = event.get("payload") or {}
         raw = payload.get("raw_response") or {}
         kind, status = payload.get("kind"), str(payload.get("status") or "").lower()
+        # Older adapters mislabeled the typed local region-gate refusal as an
+        # ambiguous POST. The journal preserves proof that the guard raised
+        # before client.post_order; resolve only the exact unknown client claim,
+        # never a real venue order or an untyped/network timeout.
+        local_refusal = (
+            kind == "submit" and status == "unknown"
+            and payload.get("reason") == "post_order_dispatch_unknown"
+            and payload.get("dispatch_stage") == "post_order"
+            and not payload.get("typed_pre_dispatch_classification")
+            and str(payload.get("error") or "").startswith(
+                "LiveEntryRegionBlocked: live_entry_region_blocked:"
+            )
+        ) or (
+            kind == "submit" and status == "rejected"
+            and payload.get("reason") == "entry_blocked_before_dispatch"
+            and payload.get("dispatch_stage") == "pre_dispatch"
+        )
+        refused_order = by_client.get(str(payload.get("client_order_id") or ""))
+        if local_refusal and refused_order is not None and not live_order_id(refused_order):
+            states.append({
+                "budget_order_id": refused_order["budget_order_id"],
+                "received_at_utc": event["recorded_at_utc"],
+                "status": "rejected", "matched_shares": 0,
+            })
+            continue
         if kind in {"cancel", "cancel_before_replacement"} and status in {"cancelled", "canceled", "expired", "reconciled"}:
             ids = raw.get("canceled") or raw.get("cancelled") or []
             # A shared quantity cannot be assigned to multiple canceled orders.
