@@ -313,3 +313,6 @@ NO ask 变贵，并使 3 个原可执行机会失去资格，因此只作 persis
 
 
 2026-09-13 near maker实际绩效更新：连续v2截至9/13 01:09北京，53posted/9filled/44零成交取消，成交率16.98%；9笔全部结算、7W/2L、成本$38.15、费用$0、净PnL -$3.15、ROI -8.26%，5个target_date，block95%CI[-40.30%,+23.20%]。旧v1另3posted/0fill。补齐9个缺失结算源文件后由canonical确认，旧“未齐结算/不可报收益”数字由本快照替代；自动源采集缺口尚未永久修复。无同分母alpha baseline，forward NA，inconclusive，不改live。见[near maker绩效](analysis/near_maker_execution.md)。
+
+
+2026-09-14 01:16 near maker绩效更新（替代9/13当前数字）：v2 63posted/13filled（20.63%），13全结算、10W/3L、成本$55.10、净PnL-$5.10、ROI-9.26%；6target_dates block95%CI[-26.62%,+21.58%]。新增4fill净亏$1.95。48明确未成交撤单，2终态未明，另6提交error不入posted分母。结算源缺口本批补齐但自动采集尚未永久修复；新增4个交易所余额不足拒单仍误归unknown。inconclusive、不改live。见[near maker更新](analysis/near_maker_execution.md)。

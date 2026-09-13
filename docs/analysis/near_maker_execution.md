@@ -145,3 +145,12 @@ worktree交付inventory：`.worktrees/near-maker-budget-deploy`，branch=`codex/
 本轮发现并补齐9个缺失Gamma pm_history源文件（精确成交city/date），先前refresh exit0仅证明已有缓存导入，不证明目标settlement coverage。标准刷新为前8个日期追加88个bracket结算；Wellington已closed但受UTC yesterday窗口排除，使用既有bounded settlement ingester按单城单日追加11个bracket，随后由标准canonical refresh物化9个目标fill。最终refresh exit0、fill gate PASS，9/9已结算。源采集自动覆盖与UTC窗口仍是机制缺口；本轮补数不等于永久自动修复。无全量rebuild、无order/fill改写。
 
 可复核机器快照含全部posted/raw记录、9个完整fact、canonical identity与gate：`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_performance/latest.json`。DB physical device16777244/inode54444；manifest warning、db_route healthy。补数与阶段证据为`runtime/analysis_snapshots/near_maker_check/performance_*`。
+
+
+## 2026-09-14 01:16 北京时间：绩效更新
+
+截至本轮raw快照（最后order event为9/13 06:08UTC，ledger至9/13 16:07UTC），连续v2累计63真实posted、13filled/65shares、48明确零成交撤单、2笔终态未明（Manila/Singapore target9/13）；另6个无venue提交error不混入posted分母。旧v1另3posted/0fill。相对9/13版新增10posted/4filled，累计成交率20.63%。13笔均canonical settled，10W/3L，成本$55.10、maker fees$0、fee-adjusted PnL -$5.10、ROI -9.26%。新增NYC9/12 +1.05、Chicago9/12 +0.95、Seattle9/12 -4.55、Shanghai9/13 +0.60，新增净额-$1.95。
+
+6个独立target_date；20000次target-date block bootstrap、seed20260914，ROI95%CI[-26.62%,+21.58%]。同分母market/执行baseline未评估、forward NA，仍inconclusive，不改live。以本节替代上一节当前数字，历史快照保留。机器证据`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_performance/update_20260914.json`含13个完整fact、raw订单及DB/build identity。最终fill gate PASS。
+
+本轮再补4个缺失的Gamma结算文件：NYC/Chicago/Seattle9/12由标准refresh ingest，Shanghai9/13超UTC yesterday范围用已有bounded单城单日settlement ingester，随后标准refresh把4/4新增fill物化为settled。自动源采集缺口仍未永久修复。本轮刷新accounting/fact/gate通过，但WCIR candidate materialization曾超30秒事务预算，不能把全局refresh称为全绿。4次新增提交error为交易所400余额不足（Atlanta/Busan/Taipei/Chongqing），却仍归post_order_dispatch_unknown，连同2个未明订单占6city-day/$26.75内部预留；未据此手动清零或变更生产。本次仅更新绩效与补齐所需数据。
