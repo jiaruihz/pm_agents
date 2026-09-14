@@ -126,8 +126,8 @@ production_releases:
     expected_repo_sha: 7a9a461b5b0df07a7d0e21bd5c7561b18cdba37a
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: scheduled_informed_maker
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
-    expected_repo_sha: 09fce3c1130a5630d2ee45ec956ba288e9e8d3b3
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/7c2bee320486645f763a1275c52e6690a3c68231
+    expected_repo_sha: 7c2bee320486645f763a1275c52e6690a3c68231
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: weather_first_selective_maker_v2_1
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/9b01bcc5ef8fd4ab204510697355f21e05476deb
@@ -611,7 +611,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
     recovery_policy: safe
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_first_selective_maker_v2_1_shadow
     tmux_session: weather_first_selective_maker_v2_1_shadow
     role: shadow
