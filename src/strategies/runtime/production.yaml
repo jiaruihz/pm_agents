@@ -75,8 +75,8 @@ production_releases:
     expected_repo_sha: 48e009d84a33ef9b5ea70407ef690b2be67f41d3
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: city_probability_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/51c904bdfd220c83b097044cffa6b48ed2398f3b
-    expected_repo_sha: 51c904bdfd220c83b097044cffa6b48ed2398f3b
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/d8f6d3822e4afd655c1c224e0f5a52daa8ddcf81
+    expected_repo_sha: d8f6d3822e4afd655c1c224e0f5a52daa8ddcf81
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: fast_observation
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_observation/331f309ebeea14fd6b61727584a8cf19b40dc6a0
@@ -522,7 +522,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs, weather_knmi_first_seen_ladder_v1, weather_korea_first_seen_state_v1]
     recovery_policy: safe
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_knmi_first_seen_ladder_v1
     uses_market_proxy: true
     tmux_session: weather_knmi_first_seen_ladder_v1
