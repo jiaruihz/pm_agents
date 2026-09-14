@@ -43,8 +43,8 @@ production_releases:
     expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: forecast_collector
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_collector/7192012002e7fbfca05ff4c6597550cf8c6d61b8
-    expected_repo_sha: 7192012002e7fbfca05ff4c6597550cf8c6d61b8
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_collector/24586b186853b626c4fb34dcb82ab6a596ae67ec
+    expected_repo_sha: 24586b186853b626c4fb34dcb82ab6a596ae67ec
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/3b987e714c10cfd599c6cbbf87db87ac1c07f96c
@@ -301,6 +301,7 @@ managed_runtimes:
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
     launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
       WEATHER_DATA_FEED_FORECAST_PROXY: http://127.0.0.1:7896
 
   - instance_id: polymarket_weather_proposal_reward_shadow_v1
