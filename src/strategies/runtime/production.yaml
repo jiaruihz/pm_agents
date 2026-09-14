@@ -134,8 +134,8 @@ production_releases:
     expected_repo_sha: 9b01bcc5ef8fd4ab204510697355f21e05476deb
     runtime_bindings: [operational_venv]
   - release_id: weather_mm_w3_event_fenced_paired_bid
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/d8aca6e1a64c9d4d50ef6d85c1d735d32f722722
-    expected_repo_sha: d8aca6e1a64c9d4d50ef6d85c1d735d32f722722
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/0eaa2568959011e0aa4e928768879e2d90ade352
+    expected_repo_sha: 0eaa2568959011e0aa4e928768879e2d90ade352
     runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
