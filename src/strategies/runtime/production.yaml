@@ -144,8 +144,8 @@ production_releases:
     runtime_binding_sources:
       operational_env: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi
   - release_id: market_tail
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_tail/b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
-    expected_repo_sha: b3e0a05e047ac76b8aeb9526e8560af6364e7dbe
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_tail/08c5315ac1f16bd4c0c6b42d3259f5e3390a359a
+    expected_repo_sha: 08c5315ac1f16bd4c0c6b42d3259f5e3390a359a
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: europe_d1_distance2_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/0ed49db4602ab7410207070dc0e03da6a11d6c57
@@ -1048,6 +1048,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_market_books]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_tokyo_current_break_active_ladder_shadow_v1
     uses_market_proxy: true
     tmux_session: weather_tokyo_current_break_active_ladder_shadow_v1
