@@ -83,8 +83,8 @@ production_releases:
     expected_repo_sha: 331f309ebeea14fd6b61727584a8cf19b40dc6a0
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: tmin_cross_prev_no_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_cross_prev_no_shadow/d3a439356f8346dded3af051df3216b44af9406e
-    expected_repo_sha: d3a439356f8346dded3af051df3216b44af9406e
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_cross_prev_no_shadow/ffc1bb72e360bbd203c8ba0750014af40bac5718
+    expected_repo_sha: ffc1bb72e360bbd203c8ba0750014af40bac5718
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: tmin_no_further_cooling
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
@@ -979,6 +979,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_source_event_ladder_repricing_shadow]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_tmin_no_further_cooling_shadow_v1
     tmux_session: weather_tmin_no_further_cooling_shadow_v1
     role: shadow
