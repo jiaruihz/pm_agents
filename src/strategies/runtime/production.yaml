@@ -31,8 +31,8 @@ production_releases:
     expected_repo_sha: 6ac3384d1807dd11e863aeb6556142ee36f28b92
     runtime_bindings: [operational_venv, operational_env]
   - release_id: fast_source_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/559d285ca9f111915ea4a80d2535bc40bb6c5722
-    expected_repo_sha: 559d285ca9f111915ea4a80d2535bc40bb6c5722
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/bb38eb1b7185a2b6624c941ec74389b96dcd2bd5
+    expected_repo_sha: bb38eb1b7185a2b6624c941ec74389b96dcd2bd5
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
@@ -114,8 +114,8 @@ production_releases:
     expected_repo_sha: b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_budget_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/72c8dabb31efa39d34b91d8f4610791b79c80e91
-    expected_repo_sha: 72c8dabb31efa39d34b91d8f4610791b79c80e91
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/e642e7dc22d809c9f746085b293d378c3dbdf1d1
+    expected_repo_sha: e642e7dc22d809c9f746085b293d378c3dbdf1d1
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/b2b26fd96e8086a2a444e83c66fd4d55ac904705
@@ -370,7 +370,6 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
   - instance_id: weather_amsterdam_wcir_frozen_shadow_v2
-    desired_state: paused
     tmux_session: weather_amsterdam_wcir_frozen_shadow_v2
     role: shadow
     execution_mode: zero_notional_action_shadow
