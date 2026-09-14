@@ -267,7 +267,8 @@ scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 - `suspended=true / retry_safe=false`：普通 restart 会重新载入持久化挂起。只有精确拒单/成交/撤单证据完成对账后，才可使用既有 reconciliation acknowledgement；不清空 journal/dedupe，不放行其他 ambiguous key。不能把“HTTP400”统一认作未成交；按已验证的具体响应分类。
 - REST `get_order=null`：并列检查 authenticated private WS 的 exact order/token/side/original/matched。Core 的 `INVALID + CANCELLATION` 有数量证据时按既有修复合同投影终态，缺失/不一致继续阻断；不得伪造 REST 状态。
 - 已终态且 token 下架：验收应覆盖“有终态证据、REST order=null、book=404”的完整收尾链，先落终态，不能依赖盘口仍存在。检查落盘后下一周期不再重复 lifecycle action。
-- acknowledgement 存在竞态：仍运行的 suspended heartbeat 会把 ack 覆盖回 suspended。优先使用实际 release 已登记的 stop→ack→start 合同；没有受支持的精确 stop/恢复事务时，不手拼 kill、不把 ack→restart 当成原子操作。2026-09-14 最终在 heartbeat 后完成 ack/restart 是有后验验证的恢复，不是消除竞态；仍缺原子 reconcile/resume 合同。
+- 旧版 acknowledgement 存在心跳覆盖竞态。2026-09-14 已在 Cross NO `3a636aa2`、Tmin live `6d47f5c5` 修复：同一 instance 的 failure/recovery/heartbeat/ack writer 使用内盘稳定 `.state.lock` 串行读改写，heartbeat 保留有效 ack；旧进程保持暂停，由 controller restart 后的新进程读取确认。锁文件不得删除或轮转。其他 release 不能仅凭同名文件推定已修复。ack 仍必须有交易所/日志对账依据；该修复不等于自动对账或原子停止整个业务进程。
+- 已有 continuity 状态损坏、非对象、身份不符或不可读时保持暂停；首次启动文件不存在才允许按无历史事故启动。禁止通过删除状态文件解锁。修复读取条件后仍须对账确认，再走 controller restart；回归必须覆盖跨进程锁、旧心跳、后续新事故和损坏状态。
 
 最终验收逐个目标列出：loaded SHA、实际参数/caps、至少两个新的完整业务周期、连续 health=healthy、live_errors、continuity 与原始 order/fill/open-order 变化。启动 wrapper 写出的启动标记不算业务周期。已生成新 PID 但状态仍旧/错误时继续定位，不交付“恢复完成”。若范围外仍有告警，分开写明，不把全局 critical 误称全绿。
 
