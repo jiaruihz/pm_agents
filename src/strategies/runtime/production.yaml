@@ -370,6 +370,7 @@ managed_runtimes:
       WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
 
   - instance_id: weather_amsterdam_wcir_frozen_shadow_v2
+    desired_state: paused
     tmux_session: weather_amsterdam_wcir_frozen_shadow_v2
     role: shadow
     execution_mode: zero_notional_action_shadow
