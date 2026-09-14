@@ -134,8 +134,8 @@ production_releases:
     expected_repo_sha: 6690b445e0737da6220c1c665cc8d1f9b40b59e0
     runtime_bindings: [operational_venv]
   - release_id: weather_mm_w3_event_fenced_paired_bid
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/783e83f57e5721fb8594c0ac00708db9b987fdeb
-    expected_repo_sha: 783e83f57e5721fb8594c0ac00708db9b987fdeb
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/d8aca6e1a64c9d4d50ef6d85c1d735d32f722722
+    expected_repo_sha: d8aca6e1a64c9d4d50ef6d85c1d735d32f722722
     runtime_bindings: [operational_venv]
   - release_id: knmi
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
@@ -656,7 +656,8 @@ managed_runtimes:
       formal_forward_start_utc: "2026-09-06T00:00:00Z"
     dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
     recovery_policy: safe
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: fast_source_prev_no_trial_v1
     uses_market_proxy: true
     tmux_session: weather_fast_source_prev_no_trial
