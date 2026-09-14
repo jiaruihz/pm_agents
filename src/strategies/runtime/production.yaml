@@ -55,8 +55,8 @@ production_releases:
     expected_repo_sha: d037b779b5333dfa5bdbde70471ebb40f680bc70
     runtime_bindings: [operational_venv]
   - release_id: wcir_next_print_frozen
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/5bab0e5d13a42d8f4a7da792171876f5dad2d1bf
-    expected_repo_sha: 5bab0e5d13a42d8f4a7da792171876f5dad2d1bf
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/03f7b796c2b889f5947f4801b8b4e830e77fe5b8
+    expected_repo_sha: 03f7b796c2b889f5947f4801b8b4e830e77fe5b8
     runtime_bindings: [operational_venv]
   - release_id: dispute_repricing
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
@@ -424,7 +424,8 @@ managed_runtimes:
       actual_notional: 0.0
     dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, fast_source_prev_no_trial_v1]
     recovery_policy: safe
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: polymarket_dispute_repricing_zero_notional_v1
     uses_market_proxy: true
     tmux_session: polymarket_dispute_repricing_zero_notional_v1
