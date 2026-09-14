@@ -7,8 +7,8 @@ production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
 # repeating mutable checkout paths. A release SHA update is an explicit deploy.
 production_releases:
   - release_id: core_carry_labels_and_reports
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_labels_and_reports/5552790c1f54aff6488c99194a4421a4c687c58b
-    expected_repo_sha: 5552790c1f54aff6488c99194a4421a4c687c58b
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_labels_and_reports/a05c3bda64b0724cc56b0e363f642ceb45815774
+    expected_repo_sha: a05c3bda64b0724cc56b0e363f642ceb45815774
     runtime_bindings: [operational_venv]
   - release_id: core_carry_independent_forward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/ca2d532c3a4c04d7865f3c753238ef8f04b38174
@@ -236,6 +236,8 @@ managed_runtimes:
       orders_allowed: false
     dependencies: [weather_jrs_context_keeper, weather_core_carry_independent_forward]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_core_carry_independent_forward
     tmux_session: weather_core_carry_independent_forward
     role: shadow
