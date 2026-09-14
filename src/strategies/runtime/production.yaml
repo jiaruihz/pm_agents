@@ -91,8 +91,8 @@ production_releases:
     expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: tmin_no_further_cooling_tiny_live
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling_tiny_live/6d47f5c5b306776e6248723ac02fad3130b21e65
-    expected_repo_sha: 6d47f5c5b306776e6248723ac02fad3130b21e65
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling_tiny_live/db0b36058b4d5d68e774e070679a16336e79d5ad
+    expected_repo_sha: db0b36058b4d5d68e774e070679a16336e79d5ad
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: tmin_v2_2_probability_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/cff79f0f6d580af7e70fd350cd239fa68f159ba6
@@ -1040,6 +1040,8 @@ managed_runtimes:
     live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmin_no_further_cooling_tiny_live_v1/live_orders.jsonl
     dependencies: [weather_tmin_no_further_cooling_shadow_v1, weather_market_books, weather_jrs_context_keeper]
     recovery_policy: guarded_live
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_tmin_v2_2_probability_shadow_v1
     uses_market_proxy: true
     tmux_session: weather_tmin_v2_2_probability_shadow_v1
