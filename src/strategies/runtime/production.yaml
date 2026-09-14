@@ -122,8 +122,8 @@ production_releases:
     expected_repo_sha: 1e1fd3cabeca86005226c45969ad214085f6922c
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_market_state_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/7a9a461b5b0df07a7d0e21bd5c7561b18cdba37a
-    expected_repo_sha: 7a9a461b5b0df07a7d0e21bd5c7561b18cdba37a
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/fd3f87defac9c36c34b18306ddf66bbac24e6e4a
+    expected_repo_sha: fd3f87defac9c36c34b18306ddf66bbac24e6e4a
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: scheduled_informed_maker
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/7c2bee320486645f763a1275c52e6690a3c68231
