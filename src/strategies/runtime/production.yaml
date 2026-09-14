@@ -47,8 +47,8 @@ production_releases:
     expected_repo_sha: 24586b186853b626c4fb34dcb82ab6a596ae67ec
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: market_books
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/3b987e714c10cfd599c6cbbf87db87ac1c07f96c
-    expected_repo_sha: 3b987e714c10cfd599c6cbbf87db87ac1c07f96c
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/89c9a5241dbc6a10aacbf0544a7a0ad9b36674a4
+    expected_repo_sha: 89c9a5241dbc6a10aacbf0544a7a0ad9b36674a4
     runtime_bindings: [operational_venv]
   - release_id: amsterdam_wcir_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/d037b779b5333dfa5bdbde70471ebb40f680bc70
@@ -362,6 +362,7 @@ managed_runtimes:
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
     launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
       WEATHER_MARKET_BOOKS_WS_CITIES: "Amsterdam Tokyo Helsinki Busan"
       WEATHER_MARKET_BOOKS_WS_ACTIVE_BRACKETS: "2"
       WEATHER_MARKET_BOOKS_WS_RESEARCH_BRACKETS: "3"
