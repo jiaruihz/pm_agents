@@ -1,6 +1,22 @@
 # Core Carry 研究主上下文
 
-本文件是后续 Core Carry 任务的优先入口，详细数字回溯前三阶段及下表原报告。状态：Phase5 独立官方标签/日报于2026-09-11T16:49:10Z启动；原Phase4采集器及模型不变，转折仅抽样协议修订为v2、仍未拟合；A/B/C/D 冻结，未批准生产替换。生产真实状态仍须读当前 manifest，不用本文替代进程证据。
+## 2026-09-15 当前推进：扩大离线模型研究（READY_FOR_REVIEW）
+
+用户明确授权从策略出发点继续研究，原“只做单一转折/本轮不拟合”的文字是对应Phase4/5历史范围，不再限制单独的当前开发分支；原冻结A/B/C/D与transition协议仍保留，不部署替换。
+
+已固定8表达×3日期窗、完成24组拟合：原4061行 + 近期训练优于只用近期；测试08-28—09-13共2436checkpoint/608城市日/41城/17日。混合四特征E全价Brier .082471 vs B .082885，三个窗口均小幅改善；carry .046365 vs B .046708、market .046295。路径/云雨/城市线性表达没有稳定增量，非线性carry平均改善不稳定且最新窗较差；保留开发证据，不声称新数据无用或整体feature域失效。
+
+六近期失败及28成功的同token先前checkpoint已关联，1.2—52.2min缺口明确；SP09-11过去3h升12.6°F的风险可被路径表达压低，但SF成功对照同样有升温/边界风险，Seattle09-12在回落阴天状态仍失败。新分数不是actual-entry counterfactual。全评估692失败checkpoint及同城成功匹配另存，固定高概率降档同时报告成功代价。
+
+审计收尾发现：秒精度score与微秒book直接比较，导致旧Phase2 FINAL资格排除474有标签行；时间区间相容但first-seen未知。若只修该项FINAL池6298→6772；原历史dailyfold新增0（label时钟未到），原模型/forward分数不改。当前研究同类缺陷修正恢复548评估行，旧attempt原样保留，无真实订单影响。其余S/连续adapter/forward合法标题缺口仍限定相关证据，不再代替建模工作。
+
+下一项优先研究应更直接估计剩余升温分布/结束升温状态，并以旧scalar overshoot作对照；本轮尚未拟合该新目标。继续独立forward，未开始新自动化/未扩大collector/未修改生产或交易参数。6tests通过，单轮独立review P1/P2修复并复跑；worker实际模型/usage metadata unavailable。
+
+[本轮报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_model_development/RESEARCH_REVIEW.md) · [精简附件](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_model_development/brief) · [研究记录](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_model_development/research_record.json)。
+
+## 原Phase4/5阶段说明（保留历史范围）
+
+本文件是后续 Core Carry 任务的优先入口，详细数字回溯前三阶段及下表原报告。当时状态：Phase5 独立官方标签/日报于2026-09-11T16:49:10Z启动；原Phase4采集器及模型不变，转折仅抽样协议修订为v2、仍未拟合；A/B/C/D 冻结，未批准生产替换。生产真实状态仍须读当前 manifest，不用本文替代进程证据。
 
 ## 策略、模型与信息边界
 
@@ -65,3 +81,40 @@ A=同次原市场midpoint；B=冻结v3；C=market-logit-only校准；D=同规格
 v2只澄清抽样、主指标全赔率母体/固定carry次级行动域、入场前信息和完整日期。原3h/3report/60min、单次fit、数值信息门、开发09-13..10-22、训练label cutoff10-23 00:00UTC、test10-23..11-11不变；A/B/C/D不重置。入场后新METAR不得倒算成避免原买入。完整采集处置日不要求每slot转折可用；研究合法样本和按cutoff可得官方labels仍需单列。下一节点3完整日工程/30完整终局日/60日历覆盖；未达信息门不训练、无promotion。
 
 [Phase5主报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/brief/CORE_CARRY_PHASE5_REVIEW.md)、[增量数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/delivery)、[handoff](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/brief/HANDOFF.md)。40相关tests通过；单轮review两个P2已修复。没有新模型效力结论，未把READY_FOR_REVIEW写成owner接受。
+
+补充实测（2026-09-11T23:46Z，非原封包快照）：用户要求复盘09-11圣保罗/旧金山跨档及新模型是否避开。相同live评分输入下B/D两案均正quote EV，C均非正；D概率92.27%/88.15%，不是避亏证据。实际forward圣保罗对应半点mid不在carry域，旧金山4槽位因合法标题`be between …°F`被当前正则误拒，没有评分，不能计为成功跳过。全epoch该错误35槽位/8城，逐条原文已导出；collector未修订/重启，历史unknown未改写，需版本化修订及独立重放后才能评价影响。两案还确认live评分mid与提交盘口mid不同，固定B按后者机械重算后两taker不再正EV；宽盘口mid可靠性及全窗影响尚未验证，不作生产修复或maker故障结论。冻结转折编码两案均因同档报文不足而NA。详见[个案及forward补充](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/case_review_20260911_sp_sf/CASE_REVIEW.md)，原始预测、原Phase5包与模型全部保留；两案从此标为已用于诊断。
+
+同案进一步盘口/成交补证：276个事故token报价采样点和4个authenticated trade事件已保留在上述报告目录。圣保罗触发时买一87分50股、次档45分；旧金山买一81分10.18股、次档63分，后者入场报价优势仅0.33965美分/股。高概率跳变由市场输入驱动，不能当成独立天气确认或确定操纵。旧金山名义10股taker实际为交易所MAKER，在21:44:11/12UTC各成交5股；另5股maker为21:52:19UTC，更新先前只到canonical/终态发现时钟的精度。市场21:58:58已无bid、ask1分，早于source fetched22:01:22和sidecar22:01:33；对手信息来源仍未知。该补证是机制诊断，不是模型总体失效、序列必有增益或已完成全窗执行反事实的证明。
+
+
+## 报文窗口与盘口质量系统研究（2026-09-12，READY_FOR_REVIEW）
+
+按目标日07-25..09-11封存231 fill/226订单/164城市日/45日期；官方标签补齐226单，21失败单来自12城市日，canonical净PnL仍仅覆盖176单，不能作为全体PnL。提交点差>10美分9单4负5胜；任一固定宽差/断层/15股深度诊断16单5负11胜。44单可严格恢复评分时深度，缺失不作正常。223单原模型复算及订单使用概率一致，未发现调用错模型。
+
+300秒相比90秒额外标记5笔历史提交，均胜；涉及4个首次入场城市日，另1个后续子单。SF09-11最后5股为窗口前挂单、窗口内认证成交，需单独验证撤单确认。SP09-11已过当时预计报文时间，90/300均覆盖。两种阈值和>10美分仅诊断，未批准ban或推广。优先下一假设是提交时同一盘口重算market输入及计划数量含费成本，次为固定90/300新单和存量单完整生命周期；均须独立验证。
+
+[系统报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_execution_quality/CORE_CARRY_EXECUTION_QUALITY_REVIEW.md)、[完整失败与差盘口成功对照](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_execution_quality/delivery/CASEBOOK.md)。已有Phase5/A/B/C/D/转折状态保持；本历史窗口已用于development，不是clean OOS，无重训/生产/订单变更。
+
+
+## 时钟与完整尝试分母补审（2026-09-13，READY_FOR_REVIEW）
+
+追加纠正上节证据用途，原包/原评级保留：34笔score−book>60秒均为旧collector钟与新REST的元数据引用混用，不能认定实际旧book；archive12降为上下文，严格评分深度44→32，差盘口union16→13（5负8胜）。12笔score→order>60秒中9笔在请求前下界仍>60秒；4笔match早1秒与ack后recorded时间相容，非已证泄漏。
+
+共同cutoff2026-09-12T14:56:22.964848Z：442提交/207城市日、全候选attempt订单1826城市日、17个eligible但无submit；226有fill、216无canonical fill，其中110终态unknown。原extra300五笔均胜；原4仍为全442中的最早recorded submit，但Chicago实际请求窗口未知。另3城市日有更早未成交提交，2个同秒并列，不能按ID打破真实先后。
+
+S与同覆盖W90/W300仅注册；δ=.25美元/目标日、真实配对sd未知、有限pilot/固定样本公式/停止与未来未见holdout见[冻结方案](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260913_clock_lifecycle_audit/portable/reports/MINIMAL_EXPERIMENT_SPEC.md)。未启动新试验/采集，无生产/模型/参数变更。27相关测试通过，单轮review四P2修复；reviewer实际模型/用量metadata缺口仍记录，不自认完整验收。[补审主入口](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260913_clock_lifecycle_audit/portable/START_HERE.md)。收件r01、交付r02：`pm-agents-core-carry-execution-quality-20260913-r01/r02`，归档总入口 `~/Documents/GPT-Pro-Reviews/README.md`；reviewer未提供输入SHA及其所述CSV/code附件，关联仅内容核对。
+
+
+## S离线适配与观测缺口（2026-09-14，READY_FOR_REVIEW）
+
+冻结442提交/207城市日的S工程适配已完成：436有原score、434可按submit top重算p、356有prepared journal数量/限价/类型；95个提交关联评分梯度（含未成交），成交子集仍32。最终execution全梯度及原子weather/budget/full-path闭合均不足，完整历史S评价0、UNKNOWN442。7笔p<ask诊断复算一致，不能当实际负EV或可保证拦截亏单。
+
+代码扩展已有core_carry_execution_protocol，复用56ef exact P0纯函数及原near filled+pending预算；core新入场、near sole non-positive taker EV与maker replacement分别处理。PASS_CONTRACT_ONLY依赖可信规范化packet/producer attestations，不等于完整执行器适配或真实forward。52相关测试及独立目录重放通过，review4个误PASS边界修复；实际reviewer模型/用量元数据仍缺。未启动新采集/forward/生产，无重训或参数调整。
+
+[主报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260914_s_offline/reports/CORE_CARRY_S_OFFLINE_REVIEW.md)和[最小接入清单](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260914_s_offline/reports/OBSERVATION_GAPS_AND_INTEGRATION.md)明确下一项为已有book/prepare、report epoch、原资格/预算、journal lifecycle四处追加观测，复用请求；真实接入需另行授权并核对当时loaded SHA。S/W、A/B/C/D和转折协议不覆盖，3个未见完整日尚未开表。
+
+## 近期 A/B/C/D 配对监测（2026-09-15，READY_FOR_REVIEW）
+
+追加原版实际成交复盘（标签截止09-15 00:42北京时间）：09-08—13按合约/城市日去重34信号28胜6负，82.35%，原始提交p均值89.03%；4/6日有失败，09-11—13连续。core17/20、near11/14；整个九月core35/38仍92.11%，不能把合并分支与近期集中失利概括成全月模型崩坏。0.90—0.97九信号6胜3负是条件校准疑点；仅六日期，bootstrap实际−预测CI跨0，inconclusive/no-live-change。135fill的研究标签补46、余1pending；2条canonical概率与raw提交不一致仅导出，原数据不改。完整continuous机会分母未物化，878近期checkpoint不代替34成交。以[原版准确率报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_original_recent_performance/ORIGINAL_CORE_CARRY_RECENT_ACCURACY_REVIEW.md)作为当前实际成交正确率入口；下段独立forward比较是不同分母，继续保留。
+
+用户要求比较近几天新旧模型；截至09-14T16:14:22Z，独立forward246评分中163有官方标签，55城市日/28城/4目标日，83pending。全标签日期/城市日等权Brier B=.077220、D=.080755；唯一完整采集处置/评分终局日09-13的108条为B=.048904、D=.048986，暂无D改善证据，不能认定长期无效。C完整日优于B但逊于market，跨日不稳定。D资格6 vs B2，仅1条D-only已胜，其他pending且完整经济全NA；零资金forward不能当成交收益。旧金山15槽位标题解析失败、无分数，不算避亏。样本已用于本次监测，不能整体标作未见盲测；无拟合/参数/生产变更，S与转折协议不变。[报告与精简数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_recent_forward_compare/RECENT_FORWARD_MODEL_COMPARISON.md)；[handoff](/Users/deepsleep/projects/pm_agents/tasks/WCIR/handoffs/WCIR-RECENT-FORWARD-COMPARE-01.md)。

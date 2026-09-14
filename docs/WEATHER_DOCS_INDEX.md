@@ -747,3 +747,6 @@ manifest/历史报告指针。需要重放历史研究时，用
 - 2026-08-05 内容审计发现的 live-period exact duplicate 已于 2026-08-06 收口：保留
   `archive/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.{md,json}`，删除
   `...after-fill-fix.{md,json}` 别名；producer 默认输出也已统一到保留路径，没有删除独立业务结论。
+
+
+Core Carry 2026-09-15离线扩大研究：24预设拟合/2436共同checkpoint/17日期，旧+近期四特征小幅改善，未证明新信息域无用；474旧FINAL训练资格受秒精度比较影响，原forward保留。READY_FOR_REVIEW、无生产变更。见[研究主上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)与[原报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_model_development/RESEARCH_REVIEW.md)。

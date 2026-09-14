@@ -316,3 +316,6 @@ NO ask 变贵，并使 3 个原可执行机会失去资格，因此只作 persis
 
 
 2026-09-14 01:16 near maker绩效更新（替代9/13当前数字）：v2 63posted/13filled（20.63%），13全结算、10W/3L、成本$55.10、净PnL-$5.10、ROI-9.26%；6target_dates block95%CI[-26.62%,+21.58%]。新增4fill净亏$1.95。48明确未成交撤单，2终态未明，另6提交error不入posted分母。结算源缺口本批补齐但自动采集尚未永久修复；新增4个交易所余额不足拒单仍误归unknown。inconclusive、不改live。见[near maker更新](analysis/near_maker_execution.md)。
+
+
+Core Carry 2026-09-15离线扩大研究：24预设拟合/2436共同checkpoint/17日期，旧+近期四特征小幅改善，未证明新信息域无用；474旧FINAL训练资格受秒精度比较影响，原forward保留。READY_FOR_REVIEW、无生产变更。见[研究主上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)与[原报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_model_development/RESEARCH_REVIEW.md)。
