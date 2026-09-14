@@ -159,8 +159,8 @@ production_releases:
     expected_repo_sha: 327d183d4f0f6d2a9c962b1abbe415bfa7b4bf09
     runtime_bindings: [operational_venv]
   - release_id: proposal_reward
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/29d2045fd9d748f72b5231b462e1734023071743
-    expected_repo_sha: 29d2045fd9d748f72b5231b462e1734023071743
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/d0236cf22a280c86c4168e9d97076897080c58dc
+    expected_repo_sha: d0236cf22a280c86c4168e9d97076897080c58dc
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: paired_bid_mm
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/paired_bid_mm/a977ad07dc348a7b45b86f1c0050b8afcede1db5
@@ -316,7 +316,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: paired_bid_mm_shadow_v1
     uses_market_proxy: true
     tmux_session: paired_bid_mm_shadow_v1
