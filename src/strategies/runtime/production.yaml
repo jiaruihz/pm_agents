@@ -95,8 +95,8 @@ production_releases:
     expected_repo_sha: 6d47f5c5b306776e6248723ac02fad3130b21e65
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: tmin_v2_2_probability_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/b7397b1cc41b3424939727b433f5853c12303f42
-    expected_repo_sha: b7397b1cc41b3424939727b433f5853c12303f42
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/cff79f0f6d580af7e70fd350cd239fa68f159ba6
+    expected_repo_sha: cff79f0f6d580af7e70fd350cd239fa68f159ba6
   - release_id: strategy_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/c88ee75419660a586af3e70b34a1e71d698caa88
     expected_repo_sha: c88ee75419660a586af3e70b34a1e71d698caa88
@@ -1043,6 +1043,8 @@ managed_runtimes:
       safety.exchange_calls: 0
     dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: market_implied_tail_residual_shadow_v1
     tmux_session: market_implied_tail_residual_shadow_v1
     role: shadow
