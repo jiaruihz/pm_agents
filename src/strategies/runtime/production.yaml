@@ -11,8 +11,8 @@ production_releases:
     expected_repo_sha: 5552790c1f54aff6488c99194a4421a4c687c58b
     runtime_bindings: [operational_venv]
   - release_id: core_carry_independent_forward
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/c6a3de0cc5225e8dee436e32a68b649007cbf22a
-    expected_repo_sha: c6a3de0cc5225e8dee436e32a68b649007cbf22a
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/ca2d532c3a4c04d7865f3c753238ef8f04b38174
+    expected_repo_sha: ca2d532c3a4c04d7865f3c753238ef8f04b38174
     runtime_bindings: [operational_venv]
   - release_id: weather_entry_gate
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_entry_gate/9a000c95d1cd409adbf3ff425b322e3622c2f95a
@@ -254,6 +254,8 @@ managed_runtimes:
       orders_allowed: false
     dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_jrs_context_keeper
     tmux_session: weather_jrs_context_keeper
     role: infrastructure
