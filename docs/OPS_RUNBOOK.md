@@ -258,6 +258,30 @@ scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 
 成功验收至少包括：JRS prospective/current probe、所有 desired-running session、每个新启 runtime 的 post-start health、paused session 未被恢复、无 extra persistent session，以及 live order/fill/open-order evidence。authenticated open-order 不可用时必须记为 `unknown`，不能推断为零。Manifest strict 的 critical exit code 是 `1`，controller health/plan 的 critical exit code 是 `2`；wrapper 只对各自正确的 documented code 放行，其他错误会停止恢复。
 
+### 4.1 恢复必须收口到业务循环（2026-09-14 复盘）
+
+“恢复所有脚本”包含进程存在但业务挂起/报错的目标。先记录 `sysctl kern.boottime`，再区分整机 reboot、WindowServer 重建、单进程退出；不按用户口语推定整机已重启。复用一次 manifest/health snapshot，将目标分成 missing、present-unhealthy、healthy、desired-paused。`reconcile` 只覆盖 missing，不能作为全部恢复的完成证据。
+
+对 present-unhealthy，先按最窄 instance/order key 读原始错误、continuity、execution journal 和私有订单流，再选恢复动作。必须检查实际 pinned checkout 的实现与 CLI，不能用开发仓库同名旧文件推断生产行为。
+
+- `suspended=true / retry_safe=false`：普通 restart 会重新载入持久化挂起。只有精确拒单/成交/撤单证据完成对账后，才可使用既有 reconciliation acknowledgement；不清空 journal/dedupe，不放行其他 ambiguous key。不能把“HTTP400”统一认作未成交；按已验证的具体响应分类。
+- REST `get_order=null`：并列检查 authenticated private WS 的 exact order/token/side/original/matched。Core 的 `INVALID + CANCELLATION` 有数量证据时按既有修复合同投影终态，缺失/不一致继续阻断；不得伪造 REST 状态。
+- 已终态且 token 下架：验收应覆盖“有终态证据、REST order=null、book=404”的完整收尾链，先落终态，不能依赖盘口仍存在。检查落盘后下一周期不再重复 lifecycle action。
+- acknowledgement 存在竞态：仍运行的 suspended heartbeat 会把 ack 覆盖回 suspended。优先使用实际 release 已登记的 stop→ack→start 合同；没有受支持的精确 stop/恢复事务时，不手拼 kill、不把 ack→restart 当成原子操作。2026-09-14 最终在 heartbeat 后完成 ack/restart 是有后验验证的恢复，不是消除竞态；仍缺原子 reconcile/resume 合同。
+
+最终验收逐个目标列出：loaded SHA、实际参数/caps、至少两个新的完整业务周期、连续 health=healthy、live_errors、continuity 与原始 order/fill/open-order 变化。启动 wrapper 写出的启动标记不算业务周期。已生成新 PID 但状态仍旧/错误时继续定位，不交付“恢复完成”。若范围外仍有告警，分开写明，不把全局 critical 误称全绿。
+
+发布只纳入本次 owned diff；production.yaml 在写入前重读，按精确 release block 更新并逐项核对 diff，保留其他任务同期的 paused/参数变更。源码基于各自 pinned release 时先识别发布工具的 ancestry 前提，不临时混入开发 HEAD。独立 review 后若生产验证又暴露新路径，补对应回归并重新运行全部相关测试；review 覆盖范围与后续修复分别记录。
+
+### 4.2 故障排查不得放大主机内存压力
+
+2026-09-10/14 两次 watchdog 窗口均出现 Codex `rg` 进程占用约 5.6/8.4 GiB，并能在巡检记录对应到宽范围 runtime 搜索。生产主机只有 16 GiB；避免把诊断本身变成高峰负载。
+
+- 不对 `/Volumes/jrs/pm_agents/runtime`、整个 data-feed root 或单策略的全部历史 JSON/JSONL 做无界内容搜索；`rg ... | tail`、输出 token 截断都不限制扫描工作量。
+- 先由 manifest 的 health/order 路径定位文件，再看文件大小和目标时间/实例/order；日志优先读取有界尾部，历史 JSONL 用逐行解析并按日期/key 筛选，结果只输出摘要。巨长单行 JSON 不使用上下文宽搜。
+- 源码仍优先 `rg`，明确文件/目录范围；诊断报告仅解析所需 JSON 键，不输出整份 stackshot、所有 jetsam victim 或完整 manifest。独立读取可并发，内存重型扫描/回放在此主机串行。
+- 先记录 memory pressure、compressor、swap 与内置盘空闲空间，再决定是否进行额外大数据分析。不得通过加大输出上限、加重试或并发搜索修复慢查询。
+
 ## 5. 常用入口
 
 - desired state：`src/strategies/runtime/production.yaml`

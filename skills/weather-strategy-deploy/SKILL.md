@@ -113,6 +113,12 @@ PRECHANGE_MANIFEST="$PRECHANGE_DIR/manifest.json"
 
 后置比较会把任何改动前存在、改动后消失的 canonical JRS session 判为 `critical`。若本次明确授权就是停某实例，只能逐个传 `--allow-missing-session SESSION`；不得用宽泛通配或跳过后置检查。后置检查失败时部署不算完成，先恢复被误伤实例，再重新验证 process、raw runtime 和 exchange/order state。
 
+## 恢复完成与诊断资源边界
+
+重启恢复先按 `docs/OPS_RUNBOOK.md` §4.1/4.2：区分 missing 与 present-unhealthy；后者必须检查 pinned release 的 continuity、精确 journal 与 authenticated private order evidence。不要用普通 restart 解除持久化 reconciliation suspension，不把 REST null 当订单终态；ack 可能被仍运行的 heartbeat 覆盖，须按已登记事务恢复并后验验证。至少两个新完整业务周期且目标 health healthy 后才算完成，wrapper 启动标记不算。
+
+生产 runtime 历史搜索必须先定具体文件/日期/key。禁止无界递归扫描整个 runtime 或全部 JSONL 再接 `tail`；输出截断不限制内存。优先有界日志尾部/逐行解析，避免诊断与研究重型任务并发；来源为 2026-09-10/14 内存耗尽/watchdog 事故证据。
+
 ## Git-first
 
 1. 在本机源码修改。
