@@ -98,8 +98,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/cff79f0f6d580af7e70fd350cd239fa68f159ba6
     expected_repo_sha: cff79f0f6d580af7e70fd350cd239fa68f159ba6
   - release_id: strategy_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/c88ee75419660a586af3e70b34a1e71d698caa88
-    expected_repo_sha: c88ee75419660a586af3e70b34a1e71d698caa88
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/ee624d966e40ea745f24d0e1ad2f8a9902ba9ea0
+    expected_repo_sha: ee624d966e40ea745f24d0e1ad2f8a9902ba9ea0
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: helsinki_ladder
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/f64728197135caf78b11491395bf23220b3fc872
@@ -842,6 +842,8 @@ managed_runtimes:
     max_health_age_sec: 1200
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: low_price_yes_lottery_shadow_v1
     uses_market_proxy: true
     tmux_session: low_price_yes_lottery_shadow_v1
@@ -853,6 +855,8 @@ managed_runtimes:
     max_health_age_sec: 1200
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: metar_reversal_false_fade_reheat_shadow_v1
     tmux_session: metar_reversal_false_fade_reheat_shadow_v1
     role: shadow
@@ -864,6 +868,8 @@ managed_runtimes:
     max_health_age_sec: 600
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: regime_routed_no_shadow_v1
     tmux_session: regime_routed_no_shadow_v1
     role: shadow
@@ -874,6 +880,8 @@ managed_runtimes:
     max_health_age_sec: 180
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
     tmux_session: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
     role: shadow
@@ -897,6 +905,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_fast_source_stale_book
     uses_market_proxy: true
     tmux_session: weather_fast_source_stale_book
