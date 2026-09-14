@@ -106,8 +106,8 @@ production_releases:
     expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: core_carry_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/fb84766be96b419a44380ea19ce5953087570dba
-    expected_repo_sha: fb84766be96b419a44380ea19ce5953087570dba
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/5b7e6ced2b2ed8ec4ed38feb9bd9301e63823709
+    expected_repo_sha: 5b7e6ced2b2ed8ec4ed38feb9bd9301e63823709
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_live_runtime
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_live_runtime/b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
@@ -578,7 +578,8 @@ managed_runtimes:
         min_missed_heartbeats: 3
         consumer_max_age_arg: --market-health-max-age-sec
     recovery_policy: guarded_live
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: current_yes_core_carry_event_rescore_shadow_v1
     uses_market_proxy: true
     tmux_session: weather_current_yes_core_carry_event_rescore_shadow_v1
