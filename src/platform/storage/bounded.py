@@ -131,6 +131,39 @@ class DiskSet(MutableSet[str]):
         self._rows.close()
 
 
+class DiskTupleSet(MutableSet):
+    """Exact tuples of optional string identities without a growing Python set."""
+    def __init__(self, values=()):
+        self._keys = DiskSet(self._key(value) for value in values)
+
+    @staticmethod
+    def _key(value):
+        if not isinstance(value, tuple) or any(not isinstance(x, (str, type(None))) for x in value):
+            raise TypeError("DiskTupleSet requires tuples of optional string identities")
+        return json.dumps(value, ensure_ascii=True, separators=(',', ':'), allow_nan=False)
+
+    def __contains__(self, value):
+        try:
+            return self._key(value) in self._keys
+        except (TypeError, ValueError):
+            return False
+
+    def __iter__(self):
+        return (tuple(json.loads(key)) for key in self._keys)
+
+    def __len__(self):
+        return len(self._keys)
+
+    def add(self, value):
+        self._keys.add(self._key(value))
+
+    def discard(self, value):
+        self._keys.discard(self._key(value))
+
+    def close(self):
+        self._keys.close()
+
+
 class DiskRows:
     """Reiterable local Python rows spooled to disk, optionally grouped for bounded joins."""
 
@@ -170,7 +203,7 @@ class DiskRows:
             yield self._decode(row[0])
 
     def __len__(self):
-        return int(self._db.execute("SELECT count(*) FROM rows").fetchone()[0])
+        return int(self._db.execute("SELECT coalesce(max(seq),0) FROM rows").fetchone()[0])
 
     def __getitem__(self, index):
         if isinstance(index, slice):
@@ -285,7 +318,7 @@ def canonical_json_hash(value):
     return digest.hexdigest()
 
 
-def read_json_state(path, *, array_fields=(), map_fields=()):
+def read_json_state(path, *, array_fields=(), map_fields=(), disk_object=False):
     """Read a JSON object while spooling selected historical arrays.
 
     Wire shape is unchanged. Only one array element plus a 64 KiB input chunk
@@ -335,7 +368,7 @@ def read_json_state(path, *, array_fields=(), map_fields=()):
                 buffer = buffer[end:]
                 return item
         expect('{')
-        result = {}
+        result = DiskMap() if disk_object else {}
         whitespace()
         if buffer.startswith('}'):
             buffer = buffer[1:]

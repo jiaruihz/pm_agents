@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PREFIXES = ('weather_city_runtime/', 'weather_data_feed/', 'weather_data_feed_service/', 'src/platform/', 'src/strategies/', 'scripts/ops/weather_', 'scripts/ops/market_implied_')
+PREFIXES = ('weather_city_runtime/', 'weather_data_feed/', 'weather_data_feed_service/', 'weather_model_evaluation/', 'src/platform/', 'src/strategies/', 'scripts/ops/weather_', 'scripts/ops/market_implied_')
 
 
 def hazards(source: str) -> set[tuple[str, str]]:

@@ -179,3 +179,16 @@ def test_streamed_state_number_crosses_chunk_boundary(tmp_path):
         path.write_text(raw)
         parsed = read_json_state(path, array_fields=('ids',))
         assert list(parsed['ids']) == json.loads(raw)['ids']
+
+
+def test_disk_tuple_set_and_top_level_map(tmp_path):
+    from src.platform.storage.bounded import DiskTupleSet, read_json_state
+    rows = [("a", None), ("a", "None"), ("a", None)]
+    exact = DiskTupleSet(rows)
+    assert set(exact) == set(rows)
+    assert len(exact & DiskTupleSet([("a", None)])) == 1
+    path = tmp_path / "cache.json"
+    path.write_text('{"first":{"tokens":["a"]},"last":{"tokens":["b"]}}')
+    cache = read_json_state(path, disk_object=True)
+    assert cache["first"] == {"tokens": ["a"]}
+    assert list(cache) == ["first", "last"]
