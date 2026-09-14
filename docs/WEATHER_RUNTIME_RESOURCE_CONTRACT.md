@@ -8,6 +8,7 @@
 - 历史 ID、去重、immutable row、订单终态和日期键必须有精确磁盘索引。不能通过清空旧 ID、截断历史或近似集合降低内存；不能因此改变重复下单保护。
 - 状态文件也属于历史输入：完整历史数组/映射必须流式读取、流式原子写出。磁盘映射读取的是独立值；修改嵌套对象后必须显式写回，覆盖 early return 和异常分支。
 - 业务输入的边界必须来自真实合同（配置城市/市场数、预测 horizon、事件截止、capture budget），不能为了压内存临时发明截断窗口。没有边界的历史计算使用索引/外部排序；长期报表不得把所有原始载荷重搬进 daemon 堆内存。
+- 关联历史表应一次建立磁盘分组/索引后查询，禁止每条业务记录重新扫描另一份历史（O(N×M)）。检查完整调用链：上游使用磁盘容器，下游重新按 epoch 收集为 dict/list 或 sorted，仍会产生历史规模相关峰值。
 - 空闲轮询不得重复解码全部历史。追加投影需覆盖 inode 更换、截断、重复行、半行写入与旧数据修改；append-only/immutable 的失败语义必须保留。
 - 更换容器必须保持值语义：快照保持只读；JSON/hash 输入保留原生形状；物理重复行不能误折叠为同 checkpoint 的最新行；每个生产版本已有的标签修订、调度和订单生命周期必须保留。不能直接把开发 HEAD 的整个文件覆盖到不同的 pinned release。
 - SQLite 页缓存、临时排序、打开连接、线程/任务队列也必须有边界。`DiskMap`/`DiskRows` 是可重建的本地临时投影，不是资金或 raw 的正本。其 pickle 仅允许同进程自己写入的临时数据库，禁止读取外部 pickle。生产临时排序/索引须核对实际落盘位置和空间；通过 controller 的 `launch_environment` 配置 `SQLITE_TMPDIR`，并在同一权限上下文验证，不能默认占用系统盘。缓存淘汰只能丢可恢复的副本，不能丢去重身份或业务状态。
@@ -20,7 +21,7 @@
 2. 至少 1×/10×历史规模和重复轮询测试，记录 RSS/heap、CPU/耗时、磁盘/FD。解释增长项及真实上界；线程队列和临时文件不能随周期累积。
 3. 冻结输入下比较输出行数、关键身份、信号/订单/去重/终态；重复投递、进程重建、历史首个 ID 仍被识别。统计数值变化必须说明；决策变化必须逐条反事实量化。
 4. 从各自生产 pinned release 应用 scoped diff，禁止借修复升级模型/策略或混入开发 HEAD。按原 owner/controller 发布，核验两个完整业务周期、raw 和资金连续性；上线前通过并不等于上线验收完成。
-5. 独立只读 review、相关测试、资源回归检查，以及可追溯的发布/回滚 SHA。
+5. 独立只读 review、相关测试、资源回归检查，以及可追溯的发布/回滚 SHA。独立脚本须以实际 CLI、清理 PYTHONPATH 和外部 cwd 启动验证；pytest 能 import 不代表生产命令能启动。
 
 `python scripts/ops/check_weather_runtime_resources.py --base <reviewed-base>` 阻止新增的典型整历史物化写法；`tests/test_platform_bounded_storage.py` 验证精确历史集合、流式状态和 10×增长。这是必要回归门槛，不能替代调用链审查、整进程测量或证明所有内存风险已消除。
 
@@ -29,3 +30,5 @@
 Amsterdam 源物化曾在过滤城市前载入约 2.3 GiB、17 天的多城数据；进程测得峰值约 11.1 GiB，16 GiB 主机出现明显 swap。另有全历史预测/markout、denominator、盘口重建和状态 ID 集合的相同放大模式。仅停止或重启会暂时释放内存，不能算根因修复。
 
 原始停机、基线/修复回放、语义比较及本次项目级审计证据：`~/Documents/Weather-Memory-Repair/2026-09-14/` 与 `~/Documents/Weather-Memory-Repair/project-wide/`。这些是修复证据位置；具体完成/发布状态以报告和 production manifest 为准，不在规则中写成已接受或永久解决。
+
+部署验收补充发现：Amsterdam 的逐预测全历史 ledger join 仍会放大 CPU；Core 的共享重建器又将磁盘帧装入大列表；canonical CLI 的新增 import 早于 ROOT 初始化。分别增加单次磁盘关联、磁盘分组/排序和真实 CLI 回归。历史回放未完成时还要识别自动恢复器是否重复重启同一任务；明确的维护窗口内可临时禁止该实例自动修复，但不得把陈旧健康状态改写为成功，完成后必须恢复原 recovery policy 并验收。详情见 `~/Documents/Weather-Memory-Repair/deployment/`，不据此声称生产全部完成。
