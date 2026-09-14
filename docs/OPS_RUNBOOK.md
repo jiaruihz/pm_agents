@@ -283,6 +283,10 @@ scripts/ops/after_reboot.sh --recover-jrs-context --apply --confirm-live
 - 源码仍优先 `rg`，明确文件/目录范围；诊断报告仅解析所需 JSON 键，不输出整份 stackshot、所有 jetsam victim 或完整 manifest。独立读取可并发，内存重型扫描/回放在此主机串行。
 - 先记录 memory pressure、compressor、swap 与内置盘空闲空间，再决定是否进行额外大数据分析。不得通过加大输出上限、加重试或并发搜索修复慢查询。
 
+### 4.3 常驻历史增长修复
+
+遵守 `WEATHER_RUNTIME_RESOURCE_CONTRACT.md`。按入口与 pinned release 追踪历史读取、状态恢复、去重、盘口重建及 health/report 调用链；低占用实例同样检查长期增长。资源补丁发布前必须有增长与语义证据，发布后独立核验整进程 RSS/CPU、两个业务周期及资金连续性。不得以临时重启、单阶段 RSS 降低或新增熔断阈值代替根因修复。
+
 ## 5. 常用入口
 
 - desired state：`src/strategies/runtime/production.yaml`

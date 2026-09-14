@@ -42,6 +42,8 @@ jobs:
             BASE_SHA="$(git rev-parse HEAD^)"
           fi
           pre-commit run --from-ref "$BASE_SHA" --to-ref "$GITHUB_SHA" --show-diff-on-failure
+          python scripts/ops/check_weather_runtime_resources.py --base "$BASE_SHA"
+          python -m pytest tests/test_platform_bounded_storage.py tests/test_weather_runtime_resource_gate.py -q
       - name: Validate project governance
         run: |
           python scripts/ops/verify_repo.py --profile maintained

@@ -119,6 +119,8 @@ PRECHANGE_MANIFEST="$PRECHANGE_DIR/manifest.json"
 
 生产 runtime 历史搜索必须先定具体文件/日期/key。禁止无界递归扫描整个 runtime 或全部 JSONL 再接 `tail`；输出截断不限制内存。优先有界日志尾部/逐行解析，避免诊断与研究重型任务并发；来源为 2026-09-10/14 内存耗尽/watchdog 事故证据。
 
+新增/修复常驻历史路径还必须通过 `docs/WEATHER_RUNTIME_RESOURCE_CONTRACT.md`：1×/10×增长、空闲轮询、状态重建/去重和冻结输入语义比较，并运行资源回归门槛。按各自 pinned release 应用补丁；未验证整进程与业务连续性不得宣称资源事故已解决。
+
 ## Git-first
 
 1. 在本机源码修改。
