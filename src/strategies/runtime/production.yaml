@@ -63,8 +63,8 @@ production_releases:
     expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: forecast_capture
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_capture/761a16d80f130b780fe65827ede4ca303548bd40
-    expected_repo_sha: 761a16d80f130b780fe65827ede4ca303548bd40
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_capture/a260a1f9e6a0c67a38757e6d92b780c0a87b117f
+    expected_repo_sha: a260a1f9e6a0c67a38757e6d92b780c0a87b117f
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: wcir
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4
@@ -492,6 +492,7 @@ managed_runtimes:
     recovery_policy: safe
     # Explicitly disabled until the one-city collector deploy is confirmed.
     launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
       WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_CITIES: ""
       WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_TTL_MIN: "120"
       WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_MAX_RUN_AGE_HOURS: "24"
