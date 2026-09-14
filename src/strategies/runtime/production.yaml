@@ -114,8 +114,8 @@ production_releases:
     expected_repo_sha: b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_budget_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/734452da1e9f71b47addcaec73076a0a8fb5f03a
-    expected_repo_sha: 734452da1e9f71b47addcaec73076a0a8fb5f03a
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/ebe025710d7384252cd54e2689d4a1ea24e151b7
+    expected_repo_sha: ebe025710d7384252cd54e2689d4a1ea24e151b7
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: core_carry_event_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/1e1fd3cabeca86005226c45969ad214085f6922c
@@ -553,7 +553,8 @@ managed_runtimes:
     live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
     dependencies: [weather_data_feed_jrs, current_yes_core_carry_near_core_ws_controller]
     recovery_policy: guarded_live
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: current_yes_core_carry_near_core_ws_controller
     uses_market_proxy: true
     tmux_session: weather_core_carry_near_core_ws_controller
