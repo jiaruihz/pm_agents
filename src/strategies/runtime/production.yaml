@@ -400,7 +400,7 @@ managed_runtimes:
       notional: 0
       forward_epoch_id: wcir_amsterdam_score_only_v2_bb04a8acbeafd66b
     dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, weather_knmi_open_data_jrs]
-    recovery_policy: manual  # temporary resource-repair maintenance; restore safe after backfill
+    recovery_policy: safe
     launch_environment:
       SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1
