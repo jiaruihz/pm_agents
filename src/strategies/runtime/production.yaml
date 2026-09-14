@@ -23,8 +23,8 @@ production_releases:
     expected_repo_sha: 6dde6c4e359fe0d852f1c225d6fd13aa22d09a7b
     runtime_bindings: [operational_venv, operational_env]
   - release_id: canonical_refresh
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/canonical_refresh/5efa8a78f766c0baa7f46a551da471a9b1ef7ad7
-    expected_repo_sha: 5efa8a78f766c0baa7f46a551da471a9b1ef7ad7
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/canonical_refresh/e7be22fa9455cdf92e4e1e1093fae5240079fd09
+    expected_repo_sha: e7be22fa9455cdf92e4e1e1093fae5240079fd09
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: control_plane
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/6ac3384d1807dd11e863aeb6556142ee36f28b92
