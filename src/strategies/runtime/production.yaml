@@ -31,8 +31,8 @@ production_releases:
     expected_repo_sha: 6ac3384d1807dd11e863aeb6556142ee36f28b92
     runtime_bindings: [operational_venv, operational_env]
   - release_id: fast_source_runtime
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/3a636aa27e1bd8f2c94253c28989f37d7befdb40
-    expected_repo_sha: 3a636aa27e1bd8f2c94253c28989f37d7befdb40
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/242f7d9924ef82ab0fc8195b958d73e68b3c3fcf
+    expected_repo_sha: 242f7d9924ef82ab0fc8195b958d73e68b3c3fcf
     runtime_bindings: [operational_venv, canonical_db, operational_env]
   - release_id: cross_no_v2_metar
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
@@ -693,6 +693,8 @@ managed_runtimes:
 
   # METAR.ws 快源试验（已归档 / 暂不启用）— owner confirmed 2026-09-09.
   # Historical identity retained for orders/logs; this is not the active Cross-NO V1.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: cross_no_v2_metar_v1
     uses_market_proxy: true
     tmux_session: weather_cross_no_v2_metar_v1
