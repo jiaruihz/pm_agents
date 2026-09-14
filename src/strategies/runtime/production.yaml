@@ -155,8 +155,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_model_filter_shadow/641e82ab7bd21681661a3c3b6de0f30fa10af596
     expected_repo_sha: 641e82ab7bd21681661a3c3b6de0f30fa10af596
   - release_id: europe_d1_distance2_lineage_adapter
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/6bc75cd4056171487cebd91acb8b4275c95c2a7f
-    expected_repo_sha: 6bc75cd4056171487cebd91acb8b4275c95c2a7f
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/327d183d4f0f6d2a9c962b1abbe415bfa7b4bf09
+    expected_repo_sha: 327d183d4f0f6d2a9c962b1abbe415bfa7b4bf09
     runtime_bindings: [operational_venv]
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/29d2045fd9d748f72b5231b462e1734023071743
@@ -797,6 +797,8 @@ managed_runtimes:
     recovery_policy: safe
 
   # Owner-authorized fixed M/F50 comparison; no venue path. Original V1 stays running.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: europe_d1_model_filter_shadow
     tmux_session: europe_d1_model_filter_shadow
     role: shadow
