@@ -19,8 +19,8 @@ production_releases:
     expected_repo_sha: 9a000c95d1cd409adbf3ff425b322e3622c2f95a
     runtime_bindings: [operational_venv]
   - release_id: platform_control_plane
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/platform_control_plane/5f35c1868f4516e82c107d423e6dacc3979f2edc
-    expected_repo_sha: 5f35c1868f4516e82c107d423e6dacc3979f2edc
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/platform_control_plane/6dde6c4e359fe0d852f1c225d6fd13aa22d09a7b
+    expected_repo_sha: 6dde6c4e359fe0d852f1c225d6fd13aa22d09a7b
     runtime_bindings: [operational_venv, operational_env]
   - release_id: canonical_refresh
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/canonical_refresh/5efa8a78f766c0baa7f46a551da471a9b1ef7ad7
@@ -275,7 +275,8 @@ managed_runtimes:
     accepted_health_statuses: [ok]
     dependencies: [weather_jrs_context_keeper]
     recovery_policy: safe
-
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: weather_data_feed_jrs
     tmux_session: weather_data_feed_jrs
     role: data_feed
