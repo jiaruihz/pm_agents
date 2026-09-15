@@ -54,3 +54,11 @@ Status: ACTIVE。授权补充离线实际成交终局损益复算、逐笔价格
 - 本轮8tests通过；集成验证共同ID/未选0/pendingNA/双ref自CI0/成本费用守恒；一轮独立review两P2修复，初稿attempt保留，0新fit。worker模型/usage unavailable；原repo docs gate既有缺口不自称通过。
 - 剩余：完整原策略预算/触发/maker反事实仍不可识别；情景缺陷、观测不足与概率允许失败尚不能逐笔定性。候选升级尚未成立。
 - Artifact：/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_trade_benchmark/TRADE_BENCHMARK_REVIEW.md；brief含逐笔与policy变更CSV。原run封存未改。
+
+## 多候选训练与严格时间边界预算回测（2026-09-15）
+
+用户授权第1+2步已执行，状态 READY_FOR_REVIEW，非 owner ACCEPTED。10候选×4时间窗；最终32基础fit＋4校准，旧36fit保留；7,455最终混合训练行中3,394近期行按真实标签已知时间及feature record上界准入。13tests及未来扰动集成检查通过；独立review3P2修复，生产/canonical影响0。原4061历史输入的receipt PIT仍未证实，不伪称全数据严格PIT。
+
+前段13个完整已知UTC决策日选中 N_pooled_hgb_small：验证+$27.1297 vsB+$8.4098；后段09-11—13共同$50/UTC日预算N15票+$8.4293 vsB4票+$3.0370。N单票成本ROI5.95%低于B8.22%，但分配资本收益较高。$100诊断N+$2.4764低于B；删除同秒歧义报价N负；旧金山主回测因预算耗尽漏掉，不能声称识别危险。N/O在已恢复两事故源评分仍正edge。保留N优先、O比较，未达到生产替换依据，未切换forward。
+
+证据：/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_pit_candidates/CANDIDATE_BACKTEST_REVIEW.md。输入2436captured checkpoints/17目标日，773可执行carry报价；不是连续全策略maker反事实。精简brief含全部候选概率/预算交易与失败成功原始评分。两事故exact token/snapshot/p/clock匹配补全了此前actual-entry输入缺口的一部分；37源score→38唯一订单记录关联，67未恢复保留。

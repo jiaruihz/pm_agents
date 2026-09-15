@@ -524,11 +524,18 @@ def economic_benchmark(source, development, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', required=True, type=Path)
+    parser.add_argument('--source', type=Path)
+    parser.add_argument('--pit-candidates', action='store_true', help='Run frozen multi-candidate label-time-safe budget benchmark')
     parser.add_argument('--phase2', type=Path)
     parser.add_argument('--economic-development', type=Path, help='Evaluate existing frozen predictions; never fit')
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
+    if args.pit_candidates:
+        from core_carry_candidate_backtest import run
+        run(args.output)
+        return
+    if args.source is None:
+        parser.error('--source is required outside --pit-candidates')
     if args.economic_development:
         economic_benchmark(args.source, args.economic_development, args.output)
         return

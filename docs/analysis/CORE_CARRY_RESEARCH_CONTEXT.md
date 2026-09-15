@@ -128,3 +128,11 @@ S与同覆盖W90/W300仅注册；δ=.25美元/目标日、真实配对sd未知�
 追加原版实际成交复盘（标签截止09-15 00:42北京时间）：09-08—13按合约/城市日去重34信号28胜6负，82.35%，原始提交p均值89.03%；4/6日有失败，09-11—13连续。core17/20、near11/14；整个九月core35/38仍92.11%，不能把合并分支与近期集中失利概括成全月模型崩坏。0.90—0.97九信号6胜3负是条件校准疑点；仅六日期，bootstrap实际−预测CI跨0，inconclusive/no-live-change。135fill的研究标签补46、余1pending；2条canonical概率与raw提交不一致仅导出，原数据不改。完整continuous机会分母未物化，878近期checkpoint不代替34成交。以[原版准确率报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_original_recent_performance/ORIGINAL_CORE_CARRY_RECENT_ACCURACY_REVIEW.md)作为当前实际成交正确率入口；下段独立forward比较是不同分母，继续保留。
 
 用户要求比较近几天新旧模型；截至09-14T16:14:22Z，独立forward246评分中163有官方标签，55城市日/28城/4目标日，83pending。全标签日期/城市日等权Brier B=.077220、D=.080755；唯一完整采集处置/评分终局日09-13的108条为B=.048904、D=.048986，暂无D改善证据，不能认定长期无效。C完整日优于B但逊于market，跨日不稳定。D资格6 vs B2，仅1条D-only已胜，其他pending且完整经济全NA；零资金forward不能当成交收益。旧金山15槽位标题解析失败、无分数，不算避亏。样本已用于本次监测，不能整体标作未见盲测；无拟合/参数/生产变更，S与转折协议不变。[报告与精简数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_recent_forward_compare/RECENT_FORWARD_MODEL_COMPARISON.md)；[handoff](/Users/deepsleep/projects/pm_agents/tasks/WCIR/handoffs/WCIR-RECENT-FORWARD-COMPARE-01.md)。
+
+## 多候选训练与严格时间边界预算回测（2026-09-15）
+
+用户授权第1+2步已执行，状态 READY_FOR_REVIEW，非 owner ACCEPTED。10候选×4时间窗；最终32基础fit＋4校准，旧36fit保留；7,455最终混合训练行中3,394近期行按真实标签已知时间及feature record上界准入。13tests及未来扰动集成检查通过；独立review3P2修复，生产/canonical影响0。原4061历史输入的receipt PIT仍未证实，不伪称全数据严格PIT。
+
+前段13个完整已知UTC决策日选中 N_pooled_hgb_small：验证+$27.1297 vsB+$8.4098；后段09-11—13共同$50/UTC日预算N15票+$8.4293 vsB4票+$3.0370。N单票成本ROI5.95%低于B8.22%，但分配资本收益较高。$100诊断N+$2.4764低于B；删除同秒歧义报价N负；旧金山主回测因预算耗尽漏掉，不能声称识别危险。N/O在已恢复两事故源评分仍正edge。保留N优先、O比较，未达到生产替换依据，未切换forward。
+
+证据：/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_pit_candidates/CANDIDATE_BACKTEST_REVIEW.md。输入2436captured checkpoints/17目标日，773可执行carry报价；不是连续全策略maker反事实。精简brief含全部候选概率/预算交易与失败成功原始评分。两事故exact token/snapshot/p/clock匹配补全了此前actual-entry输入缺口的一部分；37源score→38唯一订单记录关联，67未恢复保留。
