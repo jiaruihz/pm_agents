@@ -753,3 +753,5 @@ Core Carry 2026-09-15离线扩大研究：24预设拟合/2436共同checkpoint/17
 
 
 Core Carry交易基准补充（2026-09-15）：真实101合约终局研究复算−$12.50、最近34合约−$12.31；固定483同报价机会B+$12.89、E+$8.67，收紧概率改善即升级的表述。研究非wallet/canonical新realized，无生产变化。[报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_trade_benchmark/TRADE_BENCHMARK_REVIEW.md)及[当前研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)。
+
+Core Carry算法/价格域扩展至2026-09-14：沿用[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)；18候选、8时间窗、49日期，报告与精简数据位于run=20260915_extended_candidates。READY_FOR_REVIEW，无promotion。

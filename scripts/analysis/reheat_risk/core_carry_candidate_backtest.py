@@ -7,6 +7,8 @@ from pathlib import Path
 import gzip
 import hashlib
 import json
+import warnings
+from datetime import datetime, timezone
 
 import joblib
 import numpy as np
@@ -18,6 +20,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, SplineTransformer
+from sklearn.neural_network import MLPClassifier
 
 from core_carry_model_development import BASE, PATH, KEY, utc, sha, dump, city_day_weights, claim_output_dir, score_time_upper
 
@@ -62,9 +65,14 @@ def fit_candidate(train, name, plan):
     if name == 'M_pooled_spline':
         prep.append(SplineTransformer(**plan['spline']))
     prep.append(StandardScaler())
-    if '_hgb' in name:
+    variant = plan.get('algorithm_variants', {}).get(name, {})
+    if variant.get('kind') == 'mlp':
+        model = MLPClassifier(**plan['mlp'], hidden_layer_sizes=tuple(variant['hidden_layer_sizes']), alpha=variant['alpha'])
+    elif '_hgb' in name:
         size = (15, 30) if name == 'O_pooled_hgb_medium' else (7, 40)
-        model = HistGradientBoostingClassifier(**plan['hgb'], max_leaf_nodes=size[0], min_samples_leaf=size[1])
+        params = dict(plan['hgb'], max_leaf_nodes=size[0], min_samples_leaf=size[1])
+        params.update({k:v for k,v in variant.items() if k != 'kind'})
+        model = HistGradientBoostingClassifier(**params)
     else:
         model = LogisticRegression(**plan['logistic'])
     pipeline = make_pipeline(*prep, model)
@@ -96,6 +104,21 @@ def recover_known_labels(x, previous):
 
 
 def load(plan, output):
+    if plan.get('input_type') == 'prepared_extended':
+        inputs = Path(plan['prepared_inputs'])
+        manifest = json.loads((inputs/'INPUT_MANIFEST.json').read_text())
+        for row in manifest['files']:
+            assert sha(Path(row['path'])) == row['sha256'], row['path']
+        x = pd.read_parquet(inputs/'prepared_candidates.parquet')
+        x['quote_ready'] = x.quote_evidence_ready & x.A_market.between(*plan['market_domain'])
+        h = pd.read_parquet(Path(plan['phase2'])/'training_pool.parquet')
+        assert sha(Path(plan['phase2'])/'training_pool.parquet') in (Path(plan['phase2'])/'DELIVERY_MANIFEST.json').read_text()
+        h = h[h.sample_pool.eq('original_training')].copy()
+        h['checkpoint_key'], h['training_ready'], h['created_at_utc'] = h.training_record_id, True, None
+        x.to_parquet(output/'input_candidates.parquet', index=False)
+        dump(output/'INPUT_MANIFEST.json', dict(manifest, plan_sha256=sha(output/'PLAN.json'),
+            original_training_pool_sha256=sha(Path(plan['phase2'])/'training_pool.parquet')))
+        return x, h
     source, development, phase2 = (Path(plan[k]) for k in ['source', 'development', 'phase2'])
     identities = []
     for root, sealname, names in [
@@ -154,7 +177,8 @@ def train_predictions(x, historical, plan, output):
     for start, end in plan['folds']:
         recent = available_training(x, start)
         old = available_training(historical, start)
-        test = x[x.scored & x.recorded_clock_ok & x.target_date.between(start, end)].copy()
+        eval_ready = x['evaluation_ready'] if 'evaluation_ready' in x else (x.scored & x.recorded_clock_ok)
+        test = x[eval_ready & x.target_date.between(start, end)].copy()
         assert utc(test.created_at_utc).ge(pd.Timestamp(start, tz='UTC')).all()
         test['fold'] = start
         for name in plan['models']:
@@ -174,7 +198,16 @@ def train_predictions(x, historical, plan, output):
             if fallback:
                 test[name] = test.A_market
                 continue
-            m, cols = fit_candidate(train, name, plan)
+            with warnings.catch_warnings(record=True) as observed_warnings:
+                warnings.simplefilter('always')
+                m, cols = fit_candidate(train, name, plan)
+            row['fit_warnings'] = [str(w.message) for w in observed_warnings]
+            row['fit_completed_at_utc'] = datetime.now(timezone.utc).isoformat()
+            row['historical_cutoff_utc'] = start+'T00:00:00Z'
+            row['feature_columns'] = cols
+            estimator = m.steps[-1][1] if hasattr(m, 'steps') else m
+            row['estimator_class'] = type(estimator).__name__
+            row['estimator_parameters'] = str(estimator.get_params(deep=False)) if hasattr(estimator, 'get_params') else 'market_offset_L2=10'
             file = models/f'{start}_{name}.joblib'
             joblib.dump({'model': m, 'columns': cols}, file)
             test[name] = m.predict_proba(test[cols])[:, 1]
@@ -268,7 +301,8 @@ def summarize(ledger, start, end, period, budget):
         equity = np.r_[0., daily.to_numpy().cumsum()]
         rows.append(dict(period=period, model=name, rows=len(g), dates=g.target_date.nunique(),
             budget_days=len(daily), tickets=len(s), wins=int(s.label.eq(1).sum()), losses=int(s.label.eq(0).sum()),
-            pending=int(s.label.isna().sum()), win_rate=s.label.mean(), principal=s.principal.sum(), fees=s.fee.sum(),
+            pending=int(s.label.isna().sum()), win_rate=s.label.mean(), settled_tickets=int(s.label.notna().sum()),
+            settled_pnl=s.loc[s.label.notna(),'net_pnl'].sum(), principal=s.principal.sum(), fees=s.fee.sum(),
             cost=cost, net_pnl=net, roi=net/cost if cost else np.nan,
             return_on_daily_allocated_capital=net/(budget*len(daily)) if len(daily) else np.nan,
             utilization=cost/(budget*len(daily)) if len(daily) else np.nan,
@@ -298,20 +332,25 @@ def select_candidate(ledger, p, plan):
     return (rank.iloc[0].model if len(rank) else None), ranking, days
 
 
-def metrics(p, names, output):
+def metrics(p, names, output, market_domain=(.8,.9895)):
     rows, bands = [], []
     for period, d in [('validation', p[p.target_date.le('2026-09-09')]), ('heldout', p[p.target_date.ge('2026-09-11')])]:
-        for scope, s in [('all', d), ('carry', d[d.A_market.between(.8, .9895)])]:
+        for scope, s in [('all', d), ('carry', d[d.A_market.between(*market_domain)])]:
+            scored_rows, pending_rows = len(s), int(s.label.isna().sum())
             s = s[s.label.notna()]
+            if s.empty:
+                continue
             w = city_day_weights(s)
             for name in names:
                 v = s[name].clip(1e-8, 1-1e-8)
-                rows.append(dict(period=period, scope=scope, model=name, rows=len(s), citydays=len(s[['city','target_date']].drop_duplicates()),
+                rows.append(dict(period=period, scope=scope, model=name, rows=len(s), scored_rows=scored_rows,pending_rows=pending_rows,
+                    market_domain_min=market_domain[0],market_domain_max=market_domain[1],citydays=len(s[['city','target_date']].drop_duplicates()),
                     dates=s.target_date.nunique(), brier=np.average((v-s.label)**2, weights=w),
                     logloss=np.average(-(s.label*np.log(v)+(1-s.label)*np.log1p(-v)), weights=w)))
                 for lo, hi in [(.9, .94), (.94, .97), (.97, 1.0000001)]:
                     b = s[v.ge(lo) & v.lt(hi)]
                     bands.append(dict(period=period, scope=scope, model=name, band=f'{lo}-{hi}', rows=len(b),
+                        market_domain_min=market_domain[0],market_domain_max=market_domain[1],band_mean_weighting='checkpoint_unweighted',
                         dates=b.target_date.nunique(), citydays=len(b[['city','target_date']].drop_duplicates()),
                         predicted=b[name].mean(), actual=b.label.mean()))
     pd.DataFrame(rows).to_parquet(output/'probability_metrics.parquet', index=False)
@@ -320,11 +359,19 @@ def metrics(p, names, output):
 
 def run(output):
     plan = json.loads((output/'PLAN.json').read_text())
-    claim_output_dir(output)
+    if plan.get('input_type') == 'prepared_extended':
+        allowed = {'PLAN.json','inputs','checks','code','research_record.json'}
+        existing = [p.name for p in output.iterdir() if p.name not in allowed and not p.name.startswith('attempt_')]
+        if existing:
+            raise FileExistsError(f'Preserve existing generated outputs first: {existing}')
+        with (output/'RUN_STARTED.json').open('x') as f:
+            json.dump({'started_at_utc':datetime.now(timezone.utc).isoformat()},f)
+    else:
+        claim_output_dir(output)
     x, h = load(plan, output)
     p = train_predictions(x, h, plan, output)
     names = ['A_market', 'B_original'] + plan['models'] + list(plan['calibrated'])
-    metrics(p, names, output)
+    metrics(p, names, output, plan['market_domain'])
     policies = names + ['buy_all_market_carry', 'cash']
     ledger = replay(p, policies, plan['daily_budget_usd'])
     ledger.to_parquet(output/'budget_policy_ledger.parquet', index=False)
@@ -336,6 +383,10 @@ def run(output):
     summaries = []
     periods = [('validation', plan['folds'][0][0], plan['validation_end']), ('heldout', plan['test_start'], plan['test_end']),
                ('all', plan['folds'][0][0], plan['test_end'])]
+    if plan.get('input_type') == 'prepared_extended':
+        periods += [('July28_31','2026-07-28','2026-07-31'),('August','2026-08-01','2026-08-31'),
+                    ('September01_10','2026-09-01','2026-09-10'),('September11_13','2026-09-11','2026-09-13'),
+                    ('September14','2026-09-14','2026-09-14')]
     for period, start, end in periods:
         summaries.append(summarize(ledger, start, end, period, plan['daily_budget_usd']))
     summary = pd.concat(summaries, ignore_index=True)
@@ -362,14 +413,18 @@ def run(output):
     intervals = []
     for period, start, end in periods:
         z = ledger[ledger.target_date.between(start,end)].groupby(['budget_day','model']).net_pnl.agg(lambda v: v.sum(min_count=len(v))).unstack()
-        assert z.notna().all().all(), 'Cannot bootstrap unresolved trading outcomes'
         for ref in ['B_original','A_market','buy_all_market_carry']:
             for name in policies:
-                delta = (z[name]-z[ref]).to_numpy()
+                complete = z[name].notna() & z[ref].notna()
+                delta = (z.loc[complete,name]-z.loc[complete,ref]).to_numpy()
                 rng = np.random.default_rng(20260915)
-                samples = delta[rng.integers(0,len(delta),(2000,len(delta)))].mean(axis=1)
-                low, high = np.quantile(samples,[.025,.975])
-                intervals.append(dict(period=period, model=name, reference=ref, days=len(delta), daily_pnl_delta=delta.mean(), ci_low=low, ci_high=high))
+                if len(delta):
+                    samples = delta[rng.integers(0,len(delta),(2000,len(delta)))].mean(axis=1)
+                    low, high = np.quantile(samples,[.025,.975])
+                else:
+                    low, high = np.nan, np.nan
+                intervals.append(dict(period=period, model=name, reference=ref, days=len(delta),
+                    excluded_pending_days=int((~complete).sum()),daily_pnl_delta=delta.mean() if len(delta) else np.nan, ci_low=low, ci_high=high))
     pd.DataFrame(intervals).to_parquet(output/'paired_daily_intervals.parquet', index=False)
     dump(output/'VALIDATION.json', {'no_target_date_overlap': True, 'label_receipt_before_all_fits': True,
         'calibration_from_earlier_fold_predictions_only': True, 'preprocessors_fit_training_only': True,
@@ -379,7 +434,44 @@ def run(output):
         'input_rows':len(x), 'prediction_rows':len(p), 'selected_candidate':selected,
         'original_training_receipt_PIT': 'unproven; pooled candidates inherit historical-valid-time source limitation',
         'code_sha256':sha(Path(__file__))})
+    if plan.get('input_type') == 'prepared_extended':
+        extended_comparisons(p, policies, periods, plan, output)
     print(summary[summary.period.eq('heldout')].to_string(index=False), flush=True)
+
+
+def extended_comparisons(p, policies, periods, plan, output):
+    """Fixed factorial diagnostics: price cap and budget, same probabilities."""
+    rows, actions = [], []
+    for ceiling in [.9895, 1.0]:
+        q = p.copy()
+        q['quote_ready'] = q.quote_evidence_ready & q.A_market.between(.8, ceiling)
+        for budget in [50.,100.,10000.]:
+            ledger = replay(q,policies,budget)
+            ledger['price_ceiling'], ledger['daily_budget'] = ceiling,budget
+            actions.append(ledger)
+            for period,start,end in periods:
+                s = summarize(ledger,start,end,period,budget)
+                s['price_ceiling'], s['daily_budget'] = ceiling,budget
+                rows.append(s)
+    pd.concat(rows,ignore_index=True).to_parquet(output/'price_budget_comparison.parquet',index=False)
+    full = pd.concat(actions,ignore_index=True)
+    full.to_parquet(output/'price_budget_ledger.parquet',index=False)
+    selected = full[full.selected]
+    selected.groupby(['price_ceiling','daily_budget','model','city'],as_index=False).agg(
+        tickets=('selected','size'),wins=('label',lambda v:int(v.eq(1).sum())),pending=('label',lambda v:int(v.isna().sum())),
+        cost=('deployed_cost','sum'),net_pnl=('net_pnl',lambda v:v.sum(min_count=len(v)))).to_parquet(output/'city_trade_summary.parquet',index=False)
+    full.groupby(['price_ceiling','daily_budget','model','target_date'],as_index=False).agg(
+        tickets=('selected','sum'),cost=('deployed_cost','sum'),net_pnl=('net_pnl',lambda v:v.sum(min_count=len(v)))).to_parquet(output/'target_date_trade_summary.parquet',index=False)
+    probability = []
+    bands = []
+    for ceiling in [.9895,1.0]:
+        folder = output/f'probability_domain_{ceiling}'
+        folder.mkdir(exist_ok=True)
+        metrics(p,[n for n in policies if n not in ['cash','buy_all_market_carry']],folder,(.8,ceiling))
+        probability.append(pd.read_parquet(folder/'probability_metrics.parquet'))
+        bands.append(pd.read_parquet(folder/'calibration_bands.parquet'))
+    pd.concat(probability,ignore_index=True).to_parquet(output/'probability_domain_comparison.parquet',index=False)
+    pd.concat(bands,ignore_index=True).to_parquet(output/'calibration_domain_comparison.parquet',index=False)
 
 
 def diagnostics(output, closure_root):

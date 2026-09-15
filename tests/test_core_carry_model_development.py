@@ -150,11 +150,56 @@ def test_pending_selected_outcome_never_becomes_zero_daily_risk():
     row = pit.summarize(a,'2026-09-11','2026-09-12','test',10.).iloc[0]
     assert row.pending == 1
     assert np.isnan(row.net_pnl) and np.isnan(row.max_drawdown_daily)
-    # Another known win on the same day still cannot resolve that day's result.
     x.loc[2,'label'] = 1.
     a = pit.replay(x,['B_original'],20.)
     row = pit.summarize(a,'2026-09-11','2026-09-12','test',20.).iloc[0]
     assert np.isnan(row.net_pnl) and np.isnan(row.max_drawdown_daily)
+
+
+def test_algorithm_grid_uses_declared_tree_and_network_parameters():
+    rng = np.random.default_rng(15)
+    train = pd.DataFrame(rng.normal(size=(100,4)),columns=dev.BASE)
+    train['city'] = [f'c{i}' for i in range(100)]
+    train['target_date'] = '2026-08-01'
+    train['label'] = (train.market_logit + train.wind_speed_kt*.5 > 0).astype(int)
+    plan = {'hgb':{'max_iter':10,'learning_rate':.05,'l2_regularization':10.,'early_stopping':False,'random_state':1},
+            'mlp':{'activation':'tanh','solver':'lbfgs','max_iter':500,'early_stopping':False,'random_state':1},
+            'algorithm_variants':{'V_hgb_3leaf_strong':{'kind':'hgb','max_leaf_nodes':3,'min_samples_leaf':10,'l2_regularization':30.},
+                'NN8_alpha10':{'kind':'mlp','hidden_layer_sizes':[8],'alpha':10.}}}
+    tree,_=pit.fit_candidate(train,'V_hgb_3leaf_strong',plan)
+    net,cols=pit.fit_candidate(train,'NN8_alpha10',plan)
+    assert tree.steps[-1][1].max_leaf_nodes == 3 and tree.steps[-1][1].l2_regularization == 30.
+    assert net.steps[-1][1].hidden_layer_sizes == (8,) and net.steps[-1][1].alpha == 10.
+    assert not net.steps[-1][1].early_stopping and net.steps[-1][1].solver == 'lbfgs'
+    saved_medians=net.steps[0][1].statistics_.copy()
+    future=train.copy();future.loc[:,cols]=1e6
+    assert np.isfinite(net.predict_proba(future[cols])).all()
+    assert np.array_equal(net.steps[0][1].statistics_,saved_medians)
+
+
+def test_removing_market_ceiling_keeps_cost_budget_and_pending_rules():
+    q=replay_fixture().iloc[:2].copy()
+    q['A_market']=.995;q['B_original']=.999;q['cost']=9.98;q['principal']=9.97;q['fee']=.01
+    q['quote_ready']=q.A_market.between(.8,.9895)
+    capped=pit.replay(q,['B_original'],10.)
+    assert not capped.selected.any()
+    q['quote_ready']=q.A_market.between(.8,1.)
+    uncapped=pit.replay(q,['B_original'],10.)
+    assert uncapped.selected.tolist()==[True,False]
+    assert uncapped.reason.iloc[1]=='already_entered_cityday'
+    assert np.isclose(uncapped.budget_after.iloc[0],.02)
+
+
+def test_probability_denominator_follows_configured_price_ceiling(tmp_path):
+    q=replay_fixture().iloc[:2].copy()
+    q['A_market']=[.97,.995]
+    pit.metrics(q,['B_original'],tmp_path,(.8,.9895))
+    old=pd.read_parquet(tmp_path/'probability_metrics.parquet').query('scope=="carry"').iloc[0]
+    pit.metrics(q,['B_original'],tmp_path,(.8,1.))
+    new=pd.read_parquet(tmp_path/'probability_metrics.parquet').query('scope=="carry"').iloc[0]
+    assert old.rows==1 and new.rows==2
+    assert new.market_domain_max==1.
+    assert new.pending_rows==0
 
 
 def test_earlier_label_receipt_requires_exact_identity_and_value():

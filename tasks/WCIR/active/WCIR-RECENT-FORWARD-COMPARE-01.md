@@ -68,3 +68,18 @@ Status: ACTIVE。用户明确批准第1+2步：多个离线候选、同条件预
 证据：/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_pit_candidates/CANDIDATE_BACKTEST_REVIEW.md。输入2436captured checkpoints/17目标日，773可执行carry报价；不是连续全策略maker反事实。精简brief含全部候选概率/预算交易与失败成功原始评分。两事故exact token/snapshot/p/clock匹配补全了此前actual-entry输入缺口的一部分；37源score→38唯一订单记录关联，67未恢复保留。
 
 本轮精简审阅包登记：`pm-agents-core-carry-pit-candidates-20260915-r01`；总入口 `/Users/deepsleep/Documents/GPT-Pro-Reviews/README.md`，状态 prepared，未发送；artifact 内 review_packet/manifest.json 关联输入哈希、prompt、代码和未解决边界。
+
+## 当前追加：算法/参数对照、取消价格域上限、扩展历史至9/14
+
+Status ACTIVE；base ac878bb0f4e51fe18296415606d2a1319f2b953a。用户授权离线去除market_p≤.9895上限并保留对照，扩大历史和9/14标签；解释原版Logistic与非线性，并进行有限HGB参数/小MLP对照。沿用owned runner/helper/tests/task/context，artifact run=20260915_extended_candidates（输入capture、标签补全、拟合、评估、报告）。仅raw/canonical只读快照和公开官方标签查询，不写canonical、不改live/forward。用完整既有可恢复窗口07-28..09-14；标签和feature cutoff不变，不在训练内回测05—07原始训练集。
+
+
+## 算法与价格域扩展至09-14（2026-09-15，READY_FOR_REVIEW）
+
+本次用户要求已执行：18候选（含6组混合HGB复杂度/正则配置、4小MLP配置、线性/样条/市场残差/近期/校准比较）、8时间窗、134实际fit；离线去掉market_p≤.9895上限，保留.9895与50/100/10000预算完整对照，未改生产或forward。输入07-28—09-14共6809评分/41城/49日期；09-14为165评分111终局54pending，不能写成全日已结算。
+
+前段29完整已知UTC日选W（7叶/L2=30），不是上轮N（7叶/L2=10）；最终训练8720行=4061旧+4659近期。$50/日无上限全窗口B+$5.9806，V+$66.2639，NN8alpha1+$63.3136，W已终局+$91.0539另1pending、最终范围+$81.5301..+$91.5301。最近09-11—14 B−$5.9320、V+$8.3144、NN8+$5.7109，W范围−$5.6748..+$4.3252；提高预算V可转负、W时钟敏感，不能升级生产。概率基准前段市场仍强；上限取消并不普遍改善。开普敦09-14失败checkpoint多候选因概率不足不买，成都09-13 N因扩展训练p上移买入失败，不能只展示成功避亏。
+
+状态：离线研究交付READY_FOR_REVIEW，非ownerACCEPTED；W为冻结规则主候选，V/NN8/O保留比较，N保留降为对照（不是disproven）。134fit有1个NN16→8/alpha1优化上限warning。16tests及封存输入/3058标签身份/未来扰动/预算费用/PIT成员检查PASS；唯一只读code review2P2（概率域、rawresponse seal）已修复，无重fit/选票变化；reviewer模型/usage不可得。原4061历史receipt-PIT仍未证实，本批历史研究者已见，不是cleanOOS。全部原run/模型/日志保留。
+
+[报告与精简数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_extended_candidates/EXTENDED_MODEL_AND_BACKTEST_REVIEW.md)，对应research:weather:core_carry:20260915_extended_candidates；PLAN、REPRODUCE、训练成员、cap_and_training_ticket_changes、全预算ledger、DELIVERY_SEAL可追溯。本次不新增外部reviewer请求或发送行为。详细handoff与本次交付seal相连。
