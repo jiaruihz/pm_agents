@@ -316,3 +316,6 @@ NO ask 变贵，并使 3 个原可执行机会失去资格，因此只作 persis
 
 
 2026-09-14 01:16 near maker绩效更新（替代9/13当前数字）：v2 63posted/13filled（20.63%），13全结算、10W/3L、成本$55.10、净PnL-$5.10、ROI-9.26%；6target_dates block95%CI[-26.62%,+21.58%]。新增4fill净亏$1.95。48明确未成交撤单，2终态未明，另6提交error不入posted分母。结算源缺口本批补齐但自动采集尚未永久修复；新增4个交易所余额不足拒单仍误归unknown。inconclusive、不改live。见[near maker更新](analysis/near_maker_execution.md)。
+
+
+2026-09-15 near maker external-review更新：固定90posted/17filled（18.89%），16settled/13W3L、成本$67.55、净PnL-$2.55（ROI-3.78%），另1未结算$4.50。80全事件final标签：filled13W3L、unfilled60W4L；潜在选择效应受混杂及小样本限制，book entry22/90、30s markout5/17，不构成新alpha/撤单规则。prepared review_id=pm-agents-near-maker-20260915-r01；总库GPT-Pro-Reviews已登记，未发送。维持inconclusive，不改live，详见[near maker执行研究](analysis/near_maker_execution.md)。

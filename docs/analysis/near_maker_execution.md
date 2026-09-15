@@ -154,3 +154,16 @@ worktree交付inventory：`.worktrees/near-maker-budget-deploy`，branch=`codex/
 6个独立target_date；20000次target-date block bootstrap、seed20260914，ROI95%CI[-26.62%,+21.58%]。同分母market/执行baseline未评估、forward NA，仍inconclusive，不改live。以本节替代上一节当前数字，历史快照保留。机器证据`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_performance/update_20260914.json`含13个完整fact、raw订单及DB/build identity。最终fill gate PASS。
 
 本轮再补4个缺失的Gamma结算文件：NYC/Chicago/Seattle9/12由标准refresh ingest，Shanghai9/13超UTC yesterday范围用已有bounded单城单日settlement ingester，随后标准refresh把4/4新增fill物化为settled。自动源采集缺口仍未永久修复。本轮刷新accounting/fact/gate通过，但WCIR candidate materialization曾超30秒事务预算，不能把全局refresh称为全绿。4次新增提交error为交易所400余额不足（Atlanta/Busan/Taipei/Chongqing），却仍归post_order_dispatch_unknown，连同2个未明订单占6city-day/$26.75内部预留；未据此手动清零或变更生产。本次仅更新绩效与补齐所需数据。
+
+
+## 2026-09-15 晚间：GPT Pro盘口/执行研究包已准备
+
+本轮固定21:59北京读取的连续v2 cohort，90unique posted（9/7 08:17UTC至9/15 12:41UTC），17actual fills、73明确未成交取消，成交率18.89%；旧v1另3posted/0fill。17笔中16canonical settled，13W/3L、成本$67.55、fees$0、净PnL-$2.55、ROI-3.78%；Chongqing9/15另$4.50成本未结算。较9/14版新增27posted/4filled，其中3settled合计+$2.55，亏损缩小但仍inconclusive。7target_date block95%CI[-21.59%,+21.21%]。
+
+补齐整个posted分母的90份fresh Gamma源，80closed/binary/单winner标签、10未终局；成交组13W/3L，未成交有标签组60W/4L。失败合约成交3/7，成功合约成交13/73，价格/模型/城市/日期混杂尚未控制，不作逆向选择因果结论。90分以上33个已结算posted有31W/2L，3个已结算filled含1W/2L；只是小样本诊断线索。
+
+同token pre-anchor<=10s公共重建book覆盖entry22/90、fill5/17、+30s5/17、+120s2/17、+300s2/17。Seattle负markout最终败与NYC负markout最终胜成对呈现，禁止以短期下跌直接造止损/撤单规则。没有新拟合/部署/collector，常驻资源变更不适用。3个新增历史成交标签经现有链补入canonical，最终refresh exit0与fill gate PASS。
+
+外部review_id=`pm-agents-near-maker-20260915-r01`，本机包为`reviews/near_maker/pm-agents-near-maker-20260915-r01/outbound/REVIEW_PACKET.zip`，报告与PROMPT同目录；ZIP SHA256=`065ab55b99cae5c156055200b12cac35493fd8fb5913e4db0270c8978f9c2193`。总库入口`~/Documents/GPT-Pro-Reviews/README.md`，状态prepared_not_sent，外部意见未收到。机器证据与研究记录在`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_performance/pro_review_20260915/`，record validator通过，包内summarize.py复算一致，ZIP member hashes通过，已去除账户owner/钱包/余额。
+
+单轮只读review无P1/P2；模型gpt-5.6-luna/medium，rollout01a0a562-ce18-7d52-bbb3-80b3929b9414，input554181/cached507136/output5686/total559867。审阅覆盖提取/汇总与初始90行证据，后到canonical16settled/1unsettled由主agent独立SQL/公式/gate校验；不伪称review覆盖了后到事实。历史日报与本轮current conclusion分开保留。

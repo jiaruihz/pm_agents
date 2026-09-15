@@ -747,3 +747,6 @@ manifest/历史报告指针。需要重放历史研究时，用
 - 2026-08-05 内容审计发现的 live-period exact duplicate 已于 2026-08-06 收口：保留
   `archive/analysis/2026-06/2026-06-07-live-strategy-period-slice-after-history-rebuild.{md,json}`，删除
   `...after-fill-fix.{md,json}` 别名；producer 默认输出也已统一到保留路径，没有删除独立业务结论。
+
+
+Near maker盘口与条件成交诊断（2026-09-15）：90posted固定分母、17actual fills、稀疏markout及GPT Pro审阅包索引统一保留在[near maker执行研究](analysis/near_maker_execution.md)，review_id=pm-agents-near-maker-20260915-r01；旧快照保留。

@@ -2114,3 +2114,8 @@ fix_level = contained_and_recovered; root_cause_not_eliminated
 ### Near maker 实际成交结算源缺失（2026-09-13补齐）
 
 本轮53个v2 posted订单对应9个actual fill，9/8–9/12的9个精确city/date均缺pm_history文件，导致9笔在fact_trades仍missing_bracket，已确认市场全部closed/binary。既有Gamma backfill补齐9文件；标准ingest补88档，Wellington单日既有bounded ingester补11档；标准refresh随后9/9目标fill settled。目标成本$38.15、7W/2L、fee-adjusted PnL -$3.15，旧未结算标签失效；order/fill未改写。自动refresh成功不代表源缓存完整，且UTC yesterday日期窗会暂时排除已closed的东区当天市场；本轮只完成bounded补数，不能称永久自动修复。证据与明细见[near maker绩效](analysis/near_maker_execution.md)及artifact_store/near_maker_performance/latest.json。
+
+
+### Near maker GPT Pro报告结算覆盖补齐（2026-09-15）
+
+从仅成交slice扩展到90个真实v2 posted的固定研究分母，93个city/date回源任务包括另列旧v1的3个；near v2包内90份源全部按market/token身份匹配，80已终局、10未终局。新增Houston9/13、Miami9/14、Chicago9/14的成交结算进入canonical，3笔合计+$2.55；Chongqing9/15源尚未closed，保持未结算。当前16settled净PnL-$2.55，未改order/fill，未把80个posted标签当actual fills。全部明细及源hash在artifact_store/near_maker_performance/pro_review_20260915。补数不代表自动源采集永久修复；本次无生产行为变更。外部review_id=pm-agents-near-maker-20260915-r01，见既有near maker living doc。
