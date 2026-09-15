@@ -15,5 +15,7 @@ Scope clarification: docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md adds o
 Result: O tested weights sealed, statistical conclusion inconclusive, future protocol prepared_not_running. 20 tests pass, whole test artifact parity after review correction.
 
 ## 2026-09-15 owner follow-up: detailed review and Notes
-Status for follow-up: ACTIVE
+Status for follow-up: READY_FOR_REVIEW
 User requests full textual report and GPT Pro prompt in Apple Notes, plus detailed entry times/prices/probabilities/expected success/daily tickets/dedup/training-validation/parameter and overfitting/replacement analysis. Authorized read-only inference and post-selection diagnostics, no new fits, no production changes. Extend artifact scope to run=20260915_holdout_detailed_review; extend existing runner/associated tests for reusable audit of frozen results. Preserve prior sealed run and model. New external-review round r03, archive before delivery; sending to GPT Pro is left to user.
+
+Follow-up completed: AppleNotes single note title Core Carry 完整报告与 GPT Pro 审阅提示词｜2026-09-15 r03;78,813characters exactAX bodymatch, archivedprompt/report sameSHA. Packet61hashcheckedmembers,6.1MB. Fivebatcharchiveobjects verified; wholehistoricalarchiveverify45s timeout recorded. No message sent toGPTPro.
