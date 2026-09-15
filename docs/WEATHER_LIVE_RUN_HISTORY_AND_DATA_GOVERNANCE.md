@@ -1,5 +1,10 @@
 # Weather Live Run History and Data Governance
 
+## 2026-09-15 Core Carry就绪研究：pending receipt不得释放风险（仅离线初稿）
+
+污染窗口仅新run=20260915_live_readiness/attempt_01的研究portfolio proxy：54个pending checkpoint已有poll receipt，O选票4条/$18.35、W1条/$4.75会被错误作为terminal receipt释放。修复为label∈{0,1}才允许receipt-proxy release；合成边界峰值4.5→9，实际封存共同risk峰值变化0（pending在末段，未改变早先峰值），B/O原选票和PnL变化0。tick=None/PLAN不控制参数两P2一并修复，本批有效输入结果变化0。错误下单0、漏单0、旧artifact/训练label污染0，全部生产只读。原attempt保留；逐票清单与共同表重放在[review修复证据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_live_readiness/REVIEW_AND_FIXES.md)。22官方市场新增终局证据单独FRESH追加，54标签更新不改任何原预测/预算/selection。
+
+
 Status: current-reference
 Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: no

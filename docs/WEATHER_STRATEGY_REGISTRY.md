@@ -1,5 +1,7 @@
 # Weather 策略总账（我们到底试过哪些 · 灵感/规则 · 是否可行 · 血缘归属）
 
+Core Carry 2026-09-15五股就绪：O冻结身份/同池W/5股回放已核验，测试模拟+$4.9188但日期与时钟敏感；B/O账户风险隔离和完整执行日志未接入，**NOT_READY / no-live-change**。见[研究主上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)及其5股就绪报告；原生产接受状态与30/60效力协议不变。
+
 Status: `current-reference`
 Updated: 2026-08-30 selected-ROI/model-increment denominator repair
 Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入口
