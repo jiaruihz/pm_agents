@@ -35,3 +35,11 @@ Amsterdam 源物化曾在过滤城市前载入约 2.3 GiB、17 天的多城数�
 原始停机、基线/修复回放、语义比较及本次项目级审计证据：`~/Documents/Weather-Memory-Repair/2026-09-14/` 与 `~/Documents/Weather-Memory-Repair/project-wide/`。这些是修复证据位置；具体完成/发布状态以报告和 production manifest 为准，不在规则中写成已接受或永久解决。
 
 部署验收补充发现：Amsterdam 的逐预测全历史 ledger join 仍会放大 CPU；Core 的共享重建器又将磁盘帧装入大列表；canonical CLI 的新增 import 早于 ROOT 初始化。分别增加单次磁盘关联、磁盘分组/排序和真实 CLI 回归。历史回放未完成时还要识别自动恢复器是否重复重启同一任务；明确的维护窗口内可临时禁止该实例自动修复，但不得把陈旧健康状态改写为成功，完成后必须恢复原 recovery policy 并验收。详情见 `~/Documents/Weather-Memory-Repair/deployment/`，不据此声称生产全部完成。
+
+## 复查补充：辅助调用链与缓存验收
+
+2026-09-15 复查仍发现 Europe adapter 的历史盘口堆缓存、Europe shadow 的预测版本列表，以及 Core pre-live 的全日志筛选和状态 ID 集合。先前入口修复与短窗口 health 正常不足以覆盖辅助模块；验收必须列出实际调用链、每个历史容器和每轮解码范围。证据：`~/Documents/Weather-Memory-Repair/performance-followup/`；后续修复与发布状态见 `~/Documents/Weather-Memory-Repair/followup-optimization/`。
+
+- 缓存复用必须验证源路径、device/inode、size、mtime/ctime，覆盖同大小修改、替换、截断、半行、文件暂时缺失后恢复。对 append-only 日志不能仅凭变大就认定旧前缀未变；应保留可校验的完整性证据。增量解码与完整性校验的 I/O 成本分别报告。
+- 缓存只保存可重建投影，历史唯一 ID 不得因重启或淘汰丢失；固定 owner 的输入槽位不能演化为无限路径注册表。未变化输入复用结果后，仍须测试历史证据被修改时的失败语义。
+- 上线检查须同时记录冷启动、两个新业务周期、物理内存生命周期峰值和 CPU 窗口；RSS 会受到压缩/换页影响。磁盘投影的占用和系统盘可用空间必须单独报告，不能将堆内存下降等同于总资源成本消失。
