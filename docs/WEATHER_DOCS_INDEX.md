@@ -1,5 +1,7 @@
 # Weather Docs Index
 
+Core Carry时钟补审：1043测试raw完整三钟支持因果顺序；旧strict按时间精度删546条，负PnL不得当作已清除未来数据的表现。主O+$4.9188不变，7日6日盈利；9/14目标日9票+$2.5761。详见[Core研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)最新校正。
+
 Core Carry 2026-09-15五股就绪：O冻结身份/同池W/5股回放已核验，测试模拟+$4.9188但日期与时钟敏感；B/O账户风险隔离和完整执行日志未接入，**NOT_READY / no-live-change**。见[研究主上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)及其5股就绪报告；原生产接受状态与30/60效力协议不变。
 
 Status: current-source

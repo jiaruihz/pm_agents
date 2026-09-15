@@ -49,6 +49,9 @@ def replay(p, models=('B', 'O', 'W', 'market', 'buy_all_market_carry', 'cash'), 
 
     Separate subsequent snapshots cannot prove replenishment in a counterfactual;
     joint output is still an available-book instantaneous execution diagnostic.
+    ``strict`` retains the legacy same-second metadata-exclusion stress. It is
+    not a lookahead detector: raw request/response/parse clocks and the producer
+    call sequence must be audited before interpreting excluded rows as invalid.
     """
     q = p.copy()
     q['budget_date'] = utc(q.created_at_utc).dt.tz_convert(timezone).dt.strftime('%Y-%m-%d')

@@ -15,3 +15,7 @@ Write scope: existing family runner plus core_carry_readiness helper, tests/test
 Handoff: tasks/WEATHER/handoffs/WEATHER-CORE-CARRY-READINESS-01.md
 
 研究已完成；live gate NOT_READY。详见handoff。owner尚未接受或授权下一步。
+
+## 用户追问后的时钟/日期补审
+
+Write scope追加同run/clock_data_audit及本研究入口解释校正，生产只读。恢复1043测试raw的完整request/response/parsed链，全部区间相容；旧strict删546条导致重选票，不能再以旧−2.4194推断去异常后模型亏损。主O38票+$4.9188不变；9/14目标日9赢+$2.5761，之前仍+$2.3427；依赖9/14的是相对B领先。48票独立算术/去重/预算通过，producer clock现有tests通过。当前解释以clock_data_audit/CLOCK_AND_DATE_CORRECTION.md为准；原sealed表保留，P0 NOT_READY不变。

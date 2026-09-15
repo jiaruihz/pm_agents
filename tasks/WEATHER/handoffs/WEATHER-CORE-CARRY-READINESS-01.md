@@ -23,3 +23,7 @@ Artifact: /Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=
 owner确定旧maker/near资金占用方案后，在未启用adapter补strategy namespace/global原子预留/partial和restart reconciliation/全slot日志/独立kill并验收，再重新判gate。无新模型菜单需求。
 
 Docs audit：before/after均7项既有失败（历史链接和研究债务），本次新增0，未扩大修复范围。research_record validator PASS。
+
+## 用户追问后的时钟/日期补审
+
+Write scope追加同run/clock_data_audit及本研究入口解释校正，生产只读。恢复1043测试raw的完整request/response/parsed链，全部区间相容；旧strict删546条导致重选票，不能再以旧−2.4194推断去异常后模型亏损。主O38票+$4.9188不变；9/14目标日9赢+$2.5761，之前仍+$2.3427；依赖9/14的是相对B领先。48票独立算术/去重/预算通过，producer clock现有tests通过。当前解释以clock_data_audit/CLOCK_AND_DATE_CORRECTION.md为准；原sealed表保留，P0 NOT_READY不变。
