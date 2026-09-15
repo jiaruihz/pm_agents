@@ -754,3 +754,177 @@ def run_frozen_holdout(output):
         actual_fill_count=0,production_writes=0))
     print(ranking[['model','tickets','net_pnl']].to_string(index=False),flush=True)
     print(summary[['model','tickets','wins','losses','pending','cost','net_pnl','roi']].to_string(index=False),flush=True)
+
+
+def entry_audit_summary(frame):
+    """Equal-size ticket expectations are forecasts, never observed accuracy."""
+    selected = frame[frame.selected]
+    known = selected[selected.label.notna()]
+    probability_known = selected.probability.notna().all()
+    cost = selected.deployed_cost.sum()
+    full_pnl = selected.net_pnl.sum(min_count=len(selected)) if len(selected) else 0.
+    return dict(tickets=len(selected),wins=int(known.label.eq(1).sum()),losses=int(known.label.eq(0).sum()),
+        pending=len(selected)-len(known),observed_win_rate=known.label.mean(),
+        expected_win_rate=selected.probability.mean() if probability_known and len(selected) else np.nan,
+        expected_wins=selected.probability.sum() if probability_known else np.nan,
+        market_expected_wins=selected.A_market.sum(),mean_market_p=selected.A_market.mean(),
+        mean_original_B_p=selected.B_original.mean(),mean_breakeven_p=(selected.deployed_cost/selected.quoted_qty).mean(),
+        expected_pnl=(selected.quoted_qty*selected.probability-selected.deployed_cost).sum() if probability_known else np.nan,
+        market_expected_pnl=(selected.quoted_qty*selected.A_market-selected.deployed_cost).sum(),
+        principal=selected.principal.sum(),fee=selected.fee.sum(),cost=cost,net_pnl=full_pnl,
+        settled_pnl=known.net_pnl.sum(),roi=full_pnl/cost if cost else np.nan,
+        duplicate_citydate=int(selected.duplicated(['city','target_date']).sum()),
+        duplicate_token=int(selected.duplicated('token_id').sum()),
+        duplicate_checkpoint=int(selected.checkpoint_key.duplicated().sum()))
+
+
+def claim_audit_output(output):
+    """Atomically claim a new report directory before any expensive inference."""
+    output.mkdir(parents=True, exist_ok=True)
+    if any(output.iterdir()):
+        raise FileExistsError('Use an empty audit output directory')
+    with (output/'RUN_STARTED.json').open('x') as handle:
+        json.dump({'started_at_utc':datetime.now(timezone.utc).isoformat()},handle)
+
+
+def audit_frozen_holdout(source, output):
+    """Post-selection disclosure. Does not fit, relabel, change selection or source."""
+    import sys
+    sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
+    from weather_data_feed.city_calendar import CITY_TIMEZONE
+    claim_audit_output(output)
+    seal=json.loads((source/'DELIVERY_SEAL.json').read_text())
+    expected={r['path']:r['sha256'] for r in seal['files']}
+    inputs=[]
+    def verified(relative):
+        path=source/relative
+        if sha(path)!=expected[relative]:
+            raise ValueError(f'Source seal mismatch: {relative}')
+        inputs.append(dict(path=str(path),sha256=expected[relative]))
+        return path
+    plan=json.loads(verified('PLAN.json').read_text())
+    lock=json.loads(verified('SELECTION_LOCK.json').read_text())
+    winner=lock['candidate']
+    x=pd.read_parquet(verified('input_candidates.parquet'))
+    hpath=Path(plan['phase2'])/'training_pool.parquet'
+    source_input=json.loads(verified('INPUT_MANIFEST.json').read_text())
+    if sha(hpath)!=source_input['original_training_pool_sha256']:
+        raise ValueError('Original training pool changed')
+    inputs.append(dict(path=str(hpath),sha256=sha(hpath)))
+    h=pd.read_parquet(hpath);h=h[h.sample_pool.eq('original_training')].copy()
+    h['checkpoint_key']=h.training_record_id
+    original_path=Path(plan['source'])/'inputs/B_original_v3.json'
+    original=json.loads(original_path.read_text())
+    if sha(original_path) not in (Path(plan['source'])/'INPUT_MANIFEST.json').read_text():
+        raise ValueError('B original source seal mismatch')
+    inputs.append(dict(path=str(original_path),sha256=sha(original_path)))
+    training_metrics=[];support=[];scored_training=[];entries=[];summaries=[];daily=[];funnel=[];bins=[]
+    for stage in ['validation','test']:
+        pred=pd.read_parquet(verified(f'{stage}/predictions.parquet'))
+        ledger=pd.read_parquet(verified(f'{stage}/ledger.parquet'))
+        members=pd.read_parquet(verified(f'{stage}/training_memberships.parquet'))
+        fits=pd.read_parquet(verified(f'{stage}/fits.parquet'))
+        features=['current_yes_bid','current_yes_ask','current_yes_bid_size','current_yes_ask_size','current_yes_book_fetched_at_utc',
+            'decision_snapshot_ts_utc','source_report_ts_utc','fetched_at_utc','decision_hour_local','clock_status','condition_id','eligible']+BASE
+        features=list(dict.fromkeys(features))
+        selected=ledger[ledger.selected].merge(pred[['checkpoint_key']+features],on='checkpoint_key',validate='many_to_one')
+        selected['stage']=stage
+        selected['entry_utc']=utc(selected.created_at_utc).astype(str)
+        selected['entry_beijing']=utc(selected.created_at_utc).dt.tz_convert('Asia/Shanghai').astype(str)
+        selected['timezone']=selected.city.map(CITY_TIMEZONE)
+        if selected.timezone.isna().any(): raise ValueError('Unknown city timezone; do not guess local entry')
+        selected['entry_local']=[pd.Timestamp(t).tz_convert(z).isoformat() for t,z in zip(selected.created_at_utc,selected.timezone)]
+        selected['vwap']=selected.principal/selected.quoted_qty
+        selected['breakeven_p']=selected.deployed_cost/selected.quoted_qty
+        selected['decimal_payout_odds_after_fee']=selected.quoted_qty/selected.deployed_cost
+        selected['edge_vs_cost']=selected.probability-selected.breakeven_p
+        selected['expected_pnl']=selected.quoted_qty*selected.probability-selected.deployed_cost
+        selected['market_expected_pnl']=selected.quoted_qty*selected.A_market-selected.deployed_cost
+        selected['book_age_recorded_seconds']=(utc(selected.created_at_utc)-utc(selected.current_yes_book_fetched_at_utc)).dt.total_seconds()
+        selected['weather_age_recorded_seconds']=(utc(selected.created_at_utc)-utc(selected.source_report_ts_utc)).dt.total_seconds()
+        entries.append(selected)
+        periods=[(stage,ledger)]
+        if stage=='validation': periods.append(('selection_complete_days',ledger[ledger.budget_day.isin(lock['selection_days'])]))
+        for period,period_ledger in periods:
+            for model,g in period_ledger.groupby('model'):
+                summaries.append(dict(period=period,model=model,**entry_audit_summary(g)))
+        for axis in ['target_date','budget_day']:
+            for (model,date),g in ledger.groupby(['model',axis]):
+                row=entry_audit_summary(g)
+                if axis=='budget_day' and row['cost']>plan['daily_budget_usd']+1e-8:
+                    raise ValueError('UTC daily budget exceeded')
+                daily.append(dict(stage=stage,axis=axis,model=model,date=date,**row))
+        for (model,reason),g in ledger.groupby(['model','reason']):
+            funnel.append(dict(stage=stage,model=model,reason=reason,rows=len(g),citydays=len(g[['city','target_date']].drop_duplicates())))
+        for scope,q in [('all',pred),('carry',pred[pred.A_market.between(*plan['market_domain'])])]:
+            for model in ['A_market','B_original']+fits.model.tolist():
+                for lo,hi in [(0.,.8),(.8,.9),(.9,.95),(.95,.98),(.98,1.00000001)]:
+                    s=q[q[model].ge(lo)&q[model].lt(hi)]
+                    known=s[s.label.notna()]
+                    if len(known):
+                        w=city_day_weights(known)
+                        bins.append(dict(stage=stage,scope=scope,model=model,band=f'{lo}-{min(hi,1.)}',rows=len(s),known=len(known),
+                            dates=known.target_date.nunique(),citydays=len(known[['city','target_date']].drop_duplicates()),
+                            predicted=np.average(known[model],weights=w),observed=np.average(known.label,weights=w)))
+        for fit in fits.itertuples():
+            member=members[members.model.eq(fit.model)]
+            pool=pd.concat([h,x[x.training_ready]],ignore_index=True)
+            if pool.checkpoint_key.duplicated().any():raise ValueError('Ambiguous training key')
+            train=member[['checkpoint_key']].merge(pool,on='checkpoint_key',how='left',validate='one_to_one')
+            assert len(train)==fit.training_rows and train.label.notna().all()
+            artifact=verified(f'{stage}/models/{fit.fold}_{fit.model}.joblib')
+            obj=joblib.load(artifact)
+            p=obj['model'].predict_proba(train[obj['columns']])[:,1]
+            values=train[BASE].to_numpy(float)
+            values=np.where(np.isnan(values),original['numeric_medians'],values)
+            train['A_market']=expit(train.market_logit)
+            train['B_original']=expit(((values-original['numeric_means'])/original['numeric_scales'])@original['coef']+original['intercept'])
+            train[fit.model]=p
+            m=holdout_metrics(train,['A_market','B_original',fit.model],stage+'_training_resubstitution',plan)
+            m['fitted_candidate']=fit.model;training_metrics.append(m)
+            for pool_name,g in train.groupby('sample_pool'):
+                support.append(dict(stage=stage,model=fit.model,pool=pool_name,rows=len(g),cities=g.city.nunique(),dates=g.target_date.nunique(),
+                    citydays=len(g[['city','target_date']].drop_duplicates()),start=g.target_date.min(),end=g.target_date.max(),
+                    weighted_label_mean=np.average(g.label,weights=city_day_weights(g))))
+            keep=train[['checkpoint_key','city','target_date','label','sample_pool']+BASE+['A_market','B_original',fit.model]].copy()
+            keep=keep.rename(columns={fit.model:'fitted_probability'});keep['stage']=stage;keep['model']=fit.model
+            scored_training.append(keep)
+    pd.concat(training_metrics).to_parquet(output/'training_metrics.parquet',index=False)
+    pd.concat(scored_training).to_parquet(output/'training_scores.parquet',index=False)
+    pd.DataFrame(support).to_parquet(output/'training_support.parquet',index=False)
+    pd.concat(entries).to_parquet(output/'entry_details.parquet',index=False)
+    pd.DataFrame(summaries).to_parquet(output/'expectations_and_returns.parquet',index=False)
+    pd.DataFrame(daily).to_parquet(output/'daily_entries.parquet',index=False)
+    pd.DataFrame(funnel).to_parquet(output/'decision_funnel.parquet',index=False)
+    pd.DataFrame(bins).to_parquet(output/'probability_calibration.parquet',index=False)
+    # Post-selection diagnostic: does one validation day determine the winner?
+    val_ledger=pd.read_parquet(source/'validation/ledger.parquet')
+    leave_one=[]
+    for day in lock['selection_days']:
+        subset=val_ledger[val_ledger.budget_day.isin([d for d in lock['selection_days'] if d!=day])]
+        rank=summarize(subset,plan['validation_start'],plan['validation_end'],'diagnostic',plan['daily_budget_usd'])
+        rank=rank[rank.model.isin(plan['models'])&rank.tickets.ge(10)&rank.pending.eq(0)].sort_values(['net_pnl','model'],ascending=[False,True])
+        leave_one.append(dict(excluded_day=day,winner=rank.iloc[0].model if len(rank) else None,
+            original_winner_rank=int(np.flatnonzero(rank.model.eq(winner))[0])+1 if rank.model.eq(winner).any() else None))
+    pd.DataFrame(leave_one).to_parquet(output/'validation_leave_one_day.parquet',index=False)
+    test_ledger=pd.read_parquet(source/'test/ledger.parquet')
+    contribution=test_ledger.groupby(['target_date','model']).net_pnl.agg(lambda v:v.sum(min_count=len(v))).unstack()
+    contribution=contribution[[winner,'B_original']]
+    contribution['delta_vs_B']=contribution[winner]-contribution.B_original
+    contribution['delta_excluding_this_date']=contribution.delta_vs_B.sum()-contribution.delta_vs_B
+    contribution.reset_index().to_parquet(output/'test_date_contribution.parquet',index=False)
+    selected=pd.concat(entries)
+    duplicates=[]
+    for (stage,model),g in selected.groupby(['stage','model']):
+        duplicates.append(dict(stage=stage,model=model,selected=len(g),citydate_duplicate=int(g.duplicated(['city','target_date']).sum()),
+            token_duplicate=int(g.token_id.duplicated().sum()),checkpoint_duplicate=int(g.checkpoint_key.duplicated().sum())))
+    pd.DataFrame(duplicates).to_parquet(output/'deduplication.parquet',index=False)
+    dump(output/'AUDIT_MANIFEST.json',dict(source=str(source),source_seal_sha256=sha(source/'DELIVERY_SEAL.json'),
+        input_files=inputs,code_sha256=sha(Path(__file__)),fitted_models=0,selection_changed=False,
+        purpose='Post-selection disclosure only; not a new model search or fresh forward',
+        training_scores='in-sample resubstitution, never independent accuracy',source_labels='unchanged sealed cutoff',
+        consumed_source_members_verified=True,
+        consumed_source_member_count=len({i['path'] for i in inputs if Path(i['path']).is_relative_to(source)}),
+        source_seal_member_count=len(expected),external_input_count=2,
+        all_source_members_verified=False,observed_at_utc=datetime.now(timezone.utc).isoformat()))
+    print(pd.DataFrame(summaries).query('period=="test"')[['model','tickets','expected_win_rate','observed_win_rate','mean_market_p','mean_breakeven_p','expected_pnl','net_pnl']].to_string(index=False))

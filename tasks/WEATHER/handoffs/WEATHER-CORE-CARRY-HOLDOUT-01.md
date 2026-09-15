@@ -24,3 +24,6 @@ Report: HOLDOUT_REVIEW.md
 
 ## Remaining decision boundary
 Production upgrade not authorized or proposed on these seven days. Future independent O collection requires actual integration and recorded prediction start; current protocol alone is not forward evidence. Current offline task delivered; do not silently deploy or self-accept.
+
+## Owner follow-up r03 detailed review
+0fits; audit-only runner and24tests; expected/observed probabilities/PnL, all48O/B test tickets, both daily clocks, duplicate checks, trainresubstitution/validation/test, selection-label-delay and single-date sensitivity delivered. Full14day validationW>O; O-B excludingSep14 negative. CannotreplaceB/overfitunresolved; fixedO remains unchanged. Artifact run=20260915_holdout_detailed_review; reviewr03 prepared_not_sent, AppleNotes fulltext/prompt export andarchive tracked in artifact receipts. Single review2P2fixed,11audit tables parity.

@@ -363,3 +363,46 @@ def test_holdout_orchestration_lock_refit_and_nondefault_budget(tmp_path, monkey
     with pytest.raises(FileExistsError):
         pit.run_frozen_holdout(root)
     assert dev.sha(root/'FROZEN_CANDIDATE.json') == before and len(calls)==2
+
+
+def test_entry_audit_separates_expected_observed_and_market_accuracy():
+    x = replay_fixture().iloc[[0,4]].copy()
+    x['B_original'] = [.95,.96]
+    x['label'] = [1.,0.]
+    ledger=pit.replay(x,['B_original'],50.)
+    summary=pit.entry_audit_summary(ledger)
+    assert summary['tickets']==2 and summary['observed_win_rate']==.5
+    assert np.isclose(summary['expected_win_rate'],.955)
+    assert np.isclose(summary['expected_wins'],1.91)
+    assert np.isclose(summary['expected_pnl'],1.1)
+    assert np.isclose(summary['mean_market_p'],.85)
+    assert np.isclose(summary['mean_breakeven_p'],.9)
+    assert np.isclose(summary['net_pnl'],-8.)
+    assert summary['duplicate_citydate']==0
+
+
+def test_entry_audit_pending_never_converts_to_realized_success():
+    x=replay_fixture().iloc[[0,4]].copy()
+    x['B_original']=.95;x['label']=[1.,np.nan]
+    ledger=pit.replay(x,['B_original','buy_all_market_carry'],50.)
+    result=pit.entry_audit_summary(ledger[ledger.model.eq('B_original')])
+    assert result['pending']==1 and np.isnan(result['net_pnl'])
+    assert result['observed_win_rate']==1. and np.isclose(result['expected_wins'],1.9)
+    allbuy=pit.entry_audit_summary(ledger[ledger.model.eq('buy_all_market_carry')])
+    assert np.isnan(allbuy['expected_wins']) and np.isnan(allbuy['expected_pnl'])
+    assert allbuy['market_expected_wins']==1.7
+
+
+def test_audit_claim_creates_missing_directory_and_rejects_second_writer(tmp_path):
+    output=tmp_path/'new'/'audit'
+    pit.claim_audit_output(output)
+    before=(output/'RUN_STARTED.json').read_bytes()
+    with pytest.raises(FileExistsError):pit.claim_audit_output(output)
+    assert (output/'RUN_STARTED.json').read_bytes()==before
+
+
+def test_audit_claim_preserves_unrelated_existing_output(tmp_path):
+    (tmp_path/'report.md').write_text('keep this evidence')
+    with pytest.raises(FileExistsError):pit.claim_audit_output(tmp_path)
+    assert (tmp_path/'report.md').read_text()=='keep this evidence'
+    assert not (tmp_path/'RUN_STARTED.json').exists()

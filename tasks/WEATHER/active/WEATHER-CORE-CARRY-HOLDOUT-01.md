@@ -13,3 +13,7 @@ Handoff: tasks/WEATHER/handoffs/WEATHER-CORE-CARRY-HOLDOUT-01.md
 
 Scope clarification: docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md adds only this task review correction and quantified impact, as required by global data-governance rule.
 Result: O tested weights sealed, statistical conclusion inconclusive, future protocol prepared_not_running. 20 tests pass, whole test artifact parity after review correction.
+
+## 2026-09-15 owner follow-up: detailed review and Notes
+Status for follow-up: ACTIVE
+User requests full textual report and GPT Pro prompt in Apple Notes, plus detailed entry times/prices/probabilities/expected success/daily tickets/dedup/training-validation/parameter and overfitting/replacement analysis. Authorized read-only inference and post-selection diagnostics, no new fits, no production changes. Extend artifact scope to run=20260915_holdout_detailed_review; extend existing runner/associated tests for reusable audit of frozen results. Preserve prior sealed run and model. New external-review round r03, archive before delivery; sending to GPT Pro is left to user.

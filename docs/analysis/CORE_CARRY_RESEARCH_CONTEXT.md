@@ -1,5 +1,11 @@
 # Core Carry 研究主上下文
 
+## 2026-09-15 详细审阅补充r03：不能把O封存当作可替换（READY_FOR_REVIEW）
+
+用户要求完整文字报告/逐票经济/训练验证/过拟合/替换证据，并写入Apple Notes。本轮0fit、0重选；O35票预测胜率96.176%、market93.24%、含费保本94.996%，预期+$4.129859 vs 模拟+$7.513933；每天5票，无citydate/token/checkpoint重复。测试相对B优势+$8.914433，但剔除9/14变−$2.198049；完整14日验证W+$24.561169高于O+$16.060582，O三张验证亏损全在未进入正式6日排名的日期。标签延迟/完整日选择可能改变风险样本，不能据6日O第一称最优/非过拟合。
+
+结论保持inconclusive，O是已固定待审对象，尚不支持唯一首选或替换B。原artifact/selection/oldreports不改。全部O/B48张测试票含UTC/北京/当地时点、bid/ask/VWAP/fee/赔率/market/model p/预期与实际PnL/预算/clock；训练回代与验证/测试并列。24tests；review2P2修复，11审计表复跑全等。[r03全文](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_holdout_detailed_review/FULL_TEXT_REPORT.md)；review_id=pm-agents-core-carry-holdout-20260915-r03，外审总库~/Documents/GPT-Pro-Reviews/README.md，prepared_not_sent。
+
 ## 2026-09-15 单次时间留出：O研究权重封存（READY_FOR_REVIEW）
 
 本轮按用户要求将拟合、验证选型、最终留出隔离：8/25前训练5个既有候选，8/25—9/7验证，仅6个完整已知UTC日选出O（15叶HGB/L2=10）；9/8截点重训唯一赢家6157行，固定权重测试9/8—14，不根据测试改赢家、不再吸收测试labels。

@@ -527,10 +527,15 @@ def main():
     parser.add_argument('--source', type=Path)
     parser.add_argument('--pit-candidates', action='store_true', help='Run frozen multi-candidate label-time-safe budget benchmark')
     parser.add_argument('--frozen-holdout', action='store_true', help='Select on validation, refit winner once, lock weights throughout test')
+    parser.add_argument('--audit-holdout', type=Path, help='Describe sealed holdout entries and train/validation behavior; no fitting')
     parser.add_argument('--phase2', type=Path)
     parser.add_argument('--economic-development', type=Path, help='Evaluate existing frozen predictions; never fit')
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
+    if args.audit_holdout:
+        from core_carry_candidate_backtest import audit_frozen_holdout
+        audit_frozen_holdout(args.audit_holdout, args.output)
+        return
     if args.frozen_holdout:
         from core_carry_candidate_backtest import run_frozen_holdout
         run_frozen_holdout(args.output)

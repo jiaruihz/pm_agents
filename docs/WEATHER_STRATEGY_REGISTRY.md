@@ -330,3 +330,5 @@ Core Carry扩展候选研究（2026-09-15，READY_FOR_REVIEW，未promotion）�
 Core Carry完整实验外审r02：22策略同报价基座已核验；09-11—14树/MLP是09-15回溯测试而非真实forward，真实FINAL C/D另列。沿用[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)与run=20260915_experiment_review，prepared_not_sent、无生产变更。
 
 Core Carry单次留出：验证6完整UTC日选O、9/8—14固定权重35票+$7.5139 vs B−$1.4005；CI跨0、strict/friction待定，inconclusive/研究权重封存/真实O forward未启动。20tests；[报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_frozen_holdout/HOLDOUT_REVIEW.md)，当前入口[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)，无production promotion。
+
+Core Carry r03详细审计：O胜率/赔率/入场/每日去重和训练验证全部补齐；完整验证W高于O，测试O相对B去掉9/14变−$2.1980。不能排除过拟合或替换B，原O选型/权重不变。[全文](..//Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_holdout_detailed_review/FULL_TEXT_REPORT.md)；当前权威入口[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)。
