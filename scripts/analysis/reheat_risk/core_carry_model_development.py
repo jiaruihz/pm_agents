@@ -344,12 +344,196 @@ def case_context(source, x, plan, output):
     pd.DataFrame(controls).to_parquet(output / 'matched_success_controls.parquet', index=False)
 
 
+def verify_source_seal(source, relative):
+    seal = json.loads((source / 'DELIVERY_SEAL.json').read_text())
+    assert sha(source / relative) == seal['files'][relative]['sha256'], relative
+
+
+def merge_contract_projection(original, totals):
+    merged = original.merge(totals, on=KEY, how='outer', validate='one_to_one', indicator=True)
+    assert merged['_merge'].eq('both').all(), 'contract identity set mismatch'
+    assert len(merged) == len(original) == len(totals)
+    assert (merged.label.eq(merged.projection_label) |
+            (merged.label.isna() & merged.projection_label.isna())).all(), 'contract label mismatch'
+    assert np.allclose(merged.principal, merged.canonical_cost_usd)
+    assert np.allclose(merged.fees, merged.canonical_fees_usd)
+    return merged.drop(columns='_merge')
+
+
+def economic_benchmark(source, development, output):
+    """Actual-fill research reconstruction and a separately fixed quote benchmark.
+
+    No new fit, canonical mutation, wallet claim or simulated maker fill. The
+    quote comparison is deliberately one shared decision per city-day, not a
+    replay of the original policy whose missing post-lock tail is unknown.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from scripts.etl.build_weather_fact_trades import _compute_pnl
+
+    plan = json.loads((output / 'PLAN.json').read_text())
+    claim_output_dir(output)
+    inp = source / 'inputs'
+    manifest = json.loads((source / 'INPUT_MANIFEST.json').read_text())
+    for name in ['canonical_fills.parquet', 'official_labels.parquet', 'raw_pre_live_scores.jsonl.gz']:
+        assert sha(inp / name) == manifest['files'][name]['sha256']
+    development_seal = json.loads((development / 'DELIVERY_SEAL.json').read_text())
+    assert sha(development / 'predictions.parquet') == development_seal['files']['predictions.parquet']['sha256']
+    for relative in ['INPUT_MANIFEST.json', 'fill_coverage_gate.json', 'analysis/traded_contract_signals.parquet']:
+        verify_source_seal(source, relative)
+    gate = json.loads((source / 'fill_coverage_gate.json').read_text())
+    assert gate['gate_pass'] is True
+    facts = pd.read_parquet(inp / 'canonical_fills.parquet')
+    labels = pd.read_parquet(inp / 'official_labels.parquet')
+    facts = facts.merge(labels[KEY + ['label', 'label_status', 'label_received_at_utc', 'raw_sha256']],
+                        on=KEY, how='left', validate='many_to_one')
+    assert facts.fill_id.is_unique and len(facts) == 135
+    assert facts.trade_class.eq('live_real').all()
+    assert facts.side.eq('BUY_YES').all()
+    assert np.allclose(facts.fill_price * facts.fill_qty, facts.cost_usd, atol=1e-8)
+    assert facts.fees_usd.notna().all() and facts.label_status.notna().all()
+    facts['research_terminal_pnl_usd'] = [
+        _compute_pnl(row.side, row.fill_price, row.label if pd.notna(row.label) else None,
+                     row.fill_qty, row.fees_usd) for row in facts.itertuples()]
+    settled = facts[facts.pnl_usd_at_fill.notna()]
+    assert np.allclose(settled.pnl_usd_at_fill, settled.research_terminal_pnl_usd, atol=1e-8)
+    facts['research_projection_status'] = np.where(facts.label.isna(), 'pending',
+        np.where(facts.pnl_usd_at_fill.notna(), 'canonical_parity', 'official_label_reconstructed_not_canonical_realized'))
+    facts.to_parquet(output / 'actual_fill_research_projection.parquet', index=False)
+    original = pd.read_parquet(source / 'analysis/traded_contract_signals.parquet')
+    totals = facts.groupby(KEY, as_index=False).agg(
+        principal=('cost_usd', 'sum'), fees=('fees_usd', 'sum'), quantity=('fill_qty', 'sum'),
+        research_terminal_pnl_usd=('research_terminal_pnl_usd', lambda s: s.sum(min_count=len(s))),
+        canonical_pnl_usd=('pnl_usd_at_fill', lambda s: s.sum(min_count=len(s))),
+        canonical_missing_fill_labels=('final_yes', lambda s: int(s.isna().sum())),
+        projection_label=('label', 'first'),
+        fill_ids=('fill_id', lambda s: '|'.join(s)), fee_classes=('fee_evidence_class', lambda s: '|'.join(sorted(set(s)))))
+    trades = merge_contract_projection(original, totals)
+    assert np.allclose([trades.principal.sum(), trades.fees.sum(), trades.quantity.sum()],
+                       [facts.cost_usd.sum(), facts.fees_usd.sum(), facts.fill_qty.sum()])
+    trades['all_in_cost_per_share'] = (trades.principal + trades.fees) / trades.quantity
+    trades['submitted_mid_proxy'] = (trades.raw_best_bid + trades.raw_best_ask)/2
+    trades['original_model_implied_pnl_at_first_entry_probability'] = trades.p * trades.quantity - trades.principal - trades.fees
+    trades['submitted_mid_implied_pnl_proxy'] = trades.submitted_mid_proxy * trades.quantity - trades.principal - trades.fees
+    trades['actual_entry_market_input_status'] = 'not_recovered_submit_mid_is_distinct_proxy'
+    trades.to_parquet(output / 'actual_contract_detail.parquet', index=False)
+    actual_summary = []
+    periods = [('Aug18_31', '2026-08-18', '2026-08-31'), ('Sep01_13', '2026-09-01', '2026-09-13'),
+               ('Sep08_13', '2026-09-08', '2026-09-13'), ('ALL_complete', '2026-08-18', '2026-09-13')]
+    for period, start, end in periods:
+        data = trades[trades.target_date.between(start, end)]
+        for sleeve, g in [('ALL', data), *data.groupby('sleeve')]:
+            assert g.label.notna().all()
+            cost = g.principal.sum() + g.fees.sum()
+            pnl = g.research_terminal_pnl_usd.sum()
+            actual_summary.append(dict(period=period, sleeve=sleeve, signals=len(g), dates=g.target_date.nunique(),
+                wins=int(g.label.eq(1).sum()), losses=int(g.label.eq(0).sum()), win_rate=g.label.mean(),
+                principal=g.principal.sum(), fees=g.fees.sum(), research_pnl=pnl, roi_on_all_in_cost=pnl/cost,
+                winning_pnl=g.loc[g.label.eq(1), 'research_terminal_pnl_usd'].sum(),
+                losing_pnl=g.loc[g.label.eq(0), 'research_terminal_pnl_usd'].sum(),
+                winning_principal=g.loc[g.label.eq(1), 'principal'].sum(), winning_fees=g.loc[g.label.eq(1), 'fees'].sum(),
+                losing_principal=g.loc[g.label.eq(0), 'principal'].sum(), losing_fees=g.loc[g.label.eq(0), 'fees'].sum(),
+                original_model_mean_p=g.p.mean(), cost_weighted_break_even=cost/g.quantity.sum(),
+                share_weighted_win_rate=np.average(g.label, weights=g.quantity),
+                original_model_implied_pnl=g.original_model_implied_pnl_at_first_entry_probability.sum(),
+                submitted_mid_implied_pnl_proxy=g.submitted_mid_implied_pnl_proxy.sum(),
+                canonical_missing_fills=int(g.canonical_missing_fill_labels.sum())))
+    pd.DataFrame(actual_summary).to_parquet(output / 'actual_period_summary.parquet', index=False)
+    trades.groupby('target_date', as_index=False).agg(signals=('label', 'size'), wins=('label', lambda x: int(x.eq(1).sum())),
+        losses=('label', lambda x: int(x.eq(0).sum())), principal=('principal', 'sum'), fees=('fees', 'sum'),
+        research_pnl=('research_terminal_pnl_usd', lambda s: s.sum(min_count=len(s)))).to_parquet(output / 'actual_daily_summary.parquet', index=False)
+
+    # Quotes are matched to the exact frozen raw line, not merely city/date.
+    quotes = []
+    with gzip.open(inp / 'raw_pre_live_scores.jsonl.gz', 'rb') as handle:
+        for line in handle:
+            raw = json.loads(line)
+            ladder = raw.get('taker_ladder') or {}
+            quotes.append(dict(source_line_sha256=hashlib.sha256(line).hexdigest(),
+                               quoted_qty=ladder.get('quantity'), executable=ladder.get('executable'),
+                               quoted_total_cost=ladder.get('effective_cost'), quoted_principal=ladder.get('principal'),
+                               quoted_fee=ladder.get('fee'), quoted_max_ask=ladder.get('max_ask_price'),
+                               quoted_available_shares=ladder.get('available_shares')))
+    prediction = pd.read_parquet(development / 'predictions.parquet')
+    q = prediction.merge(pd.DataFrame(quotes), on='source_line_sha256', how='left', validate='one_to_one')
+    q['common_quote_eligible'] = (q.A_market.between(.8, .9895) & q.executable.eq(True)
+        & q.quoted_qty.eq(plan['quantity']) & q.quoted_total_cost.notna() & q.quoted_fee.notna()
+        & q.current_yes_bid.ge(0) & q.current_yes_bid.le(q.current_yes_ask))
+    eligible = q[q.common_quote_eligible].sort_values(['created_at_utc', 'checkpoint_key']).copy()
+    q['chosen_common_decision'] = q.checkpoint_key.isin(eligible.drop_duplicates(['city', 'target_date']).checkpoint_key)
+    q.to_parquet(output / 'quote_evidence_funnel.parquet', index=False)
+    first = q[q.chosen_common_decision].copy()
+    assert not first.duplicated(['city', 'target_date']).any()
+    assert np.allclose(first.quoted_total_cost, first.quoted_principal + first.quoted_fee)
+    first['quoted_cost_per_share'] = first.quoted_total_cost / first.quoted_qty
+    first['buy_one_ticket_net'] = first.quoted_qty * first.label - first.quoted_total_cost
+    names = plan['models'] + ['buy_all_market_carry', 'cash']
+    rows = []
+    for name in names:
+        selected = (first[name] > first.quoted_cost_per_share) if name in plan['models'] else pd.Series(name == 'buy_all_market_carry', index=first.index)
+        g = first.copy()
+        g['policy'] = name
+        g['selected'] = selected
+        g['policy_probability'] = g[name] if name in plan['models'] else np.nan
+        g['net_quote_pnl'] = np.where(selected, g.buy_one_ticket_net, 0.0)
+        g['deployed_cost'] = np.where(selected, g.quoted_total_cost, 0.0)
+        rows.append(g)
+    ledger = pd.concat(rows, ignore_index=True)
+    ledger.to_parquet(output / 'same_opportunity_policy_ledger.parquet', index=False)
+    summaries, intervals = [], []
+    reference = ledger[ledger.policy.eq('B_original')].set_index('checkpoint_key')
+    for period, data in [('ALL', ledger), *ledger.groupby('fold')]:
+        for name, g in data.groupby('policy'):
+            selected = g[g.selected]
+            cost = g.deployed_cost.sum()
+            b = reference.loc[g.checkpoint_key]
+            add = g.selected.to_numpy() & ~b.selected.to_numpy()
+            remove = ~g.selected.to_numpy() & b.selected.to_numpy()
+            summaries.append(dict(period=period, policy=name, common_opportunities=len(g), dates=g.target_date.nunique(),
+                selected=len(selected), wins=int(selected.label.eq(1).sum()), losses=int(selected.label.eq(0).sum()),
+                win_rate=selected.label.mean(), principal=selected.quoted_principal.sum(), fees=selected.quoted_fee.sum(),
+                winning_principal=selected.loc[selected.label.eq(1), 'quoted_principal'].sum(),
+                winning_fees=selected.loc[selected.label.eq(1), 'quoted_fee'].sum(),
+                losing_principal=selected.loc[selected.label.eq(0), 'quoted_principal'].sum(),
+                losing_fees=selected.loc[selected.label.eq(0), 'quoted_fee'].sum(),
+                net_quote_pnl=g.net_quote_pnl.sum(), roi_on_all_in_cost=g.net_quote_pnl.sum()/cost if cost else np.nan,
+                quoted_pnl_delta_vs_B=g.net_quote_pnl.sum()-b.net_quote_pnl.sum(),
+                added_wins=int((add & g.label.eq(1)).sum()), added_losses=int((add & g.label.eq(0)).sum()),
+                removed_wins=int((remove & g.label.eq(1)).sum()), removed_losses=int((remove & g.label.eq(0)).sum())))
+            for ref_name in ['B_original', 'buy_all_market_carry']:
+                ref = ledger[ledger.policy.eq(ref_name)].set_index('checkpoint_key').loc[g.checkpoint_key]
+                daily = g.assign(delta=g.net_quote_pnl.to_numpy()-ref.net_quote_pnl.to_numpy()).groupby('target_date').agg(delta=('delta','sum'), n=('delta','size'))
+                arr = daily.to_numpy()
+                rng = np.random.default_rng(20260915)
+                resampled = arr[rng.integers(0, len(arr), (2000, len(arr)))].sum(axis=1)
+                ci = np.quantile(resampled[:, 0]/resampled[:, 1], [.025, .975])
+                intervals.append(dict(period=period, policy=name, reference=ref_name, metric='paired_quote_PnL_per_common_cityday',
+                    delta=daily.delta.sum()/daily.n.sum(), ci_low=ci[0], ci_high=ci[1], dates=len(daily)))
+    pd.DataFrame(summaries).to_parquet(output / 'quote_policy_summary.parquet', index=False)
+    pd.DataFrame(intervals).to_parquet(output / 'quote_paired_intervals.parquet', index=False)
+    dump(output / 'VALIDATION.json', dict(actual_fills=len(facts), original_settled_parity=len(settled),
+        reconstructed_fill_labels=int(facts.research_projection_status.eq('official_label_reconstructed_not_canonical_realized').sum()),
+        pending_fills=int(facts.label.isna().sum()), quote_prediction_rows=len(q), quoted_executable_carry_rows=len(eligible),
+        common_cityday_opportunities=len(first), original_gate_pass=True, new_fits=0,
+        source_manifest_sha256=sha(source/'INPUT_MANIFEST.json'), development_seal_sha256=sha(development/'DELIVERY_SEAL.json'),
+        builder_path=str(Path(__file__).resolve().parents[3]/'scripts/etl/build_weather_fact_trades.py'),
+        builder_sha256=sha(Path(__file__).resolve().parents[3]/'scripts/etl/build_weather_fact_trades.py'),
+        source_code_sha256=sha(Path(__file__))))
+    print(pd.DataFrame(actual_summary).query('sleeve=="ALL"').to_string(index=False), flush=True)
+    print(pd.DataFrame(summaries).query('period=="ALL"').to_string(index=False), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', required=True, type=Path)
-    parser.add_argument('--phase2', required=True, type=Path)
+    parser.add_argument('--phase2', type=Path)
+    parser.add_argument('--economic-development', type=Path, help='Evaluate existing frozen predictions; never fit')
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
+    if args.economic_development:
+        economic_benchmark(args.source, args.economic_development, args.output)
+        return
+    if args.phase2 is None:
+        parser.error('--phase2 is required for model development')
     plan = json.loads((args.output / 'PLAN.json').read_text())
     claim_output_dir(args.output)
     x, historical = load_inputs(args.source, args.phase2, args.output)

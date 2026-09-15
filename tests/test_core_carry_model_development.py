@@ -5,6 +5,7 @@ import importlib.util
 import numpy as np
 import pandas as pd
 import pytest
+import json
 
 FILE = Path(__file__).resolve().parents[1] / 'scripts/analysis/reheat_risk/core_carry_model_development.py'
 SPEC = importlib.util.spec_from_file_location('development', FILE)
@@ -91,3 +92,28 @@ def test_imputer_and_city_encoding_fit_only_on_training_data():
     assert np.array_equal(before, imputer.statistics_) and np.all(before == 2)
     assert np.isfinite(p).all()
     assert np.allclose(dev.city_day_weights(train), [.5] * 4)
+
+
+def test_contract_projection_rejects_missing_identity_and_conflicting_labels():
+    original = pd.DataFrame([dict(city='a', target_date='2026-09-01', condition_id='c', token_id='t',
+                                 label=1., canonical_cost_usd=9., canonical_fees_usd=.01)])
+    totals = pd.DataFrame([dict(city='a', target_date='2026-09-01', condition_id='c', token_id='t',
+                               projection_label=1., principal=9., fees=.01)])
+    assert len(dev.merge_contract_projection(original, totals)) == 1
+    with pytest.raises(AssertionError, match='identity'):
+        dev.merge_contract_projection(original.iloc[:0], totals)
+    wrong = totals.assign(projection_label=0.)
+    with pytest.raises(AssertionError, match='label'):
+        dev.merge_contract_projection(original, wrong)
+    pending = dev.merge_contract_projection(original.assign(label=np.nan), totals.assign(projection_label=np.nan))
+    assert pending.label.isna().all()
+
+
+def test_changed_input_hash_is_rejected(tmp_path):
+    p = tmp_path / 'input.json'
+    p.write_text('original')
+    (tmp_path/'DELIVERY_SEAL.json').write_text(json.dumps({'files': {'input.json': {'sha256': dev.sha(p)}}}))
+    dev.verify_source_seal(tmp_path, 'input.json')
+    p.write_text('modified')
+    with pytest.raises(AssertionError):
+        dev.verify_source_seal(tmp_path, 'input.json')

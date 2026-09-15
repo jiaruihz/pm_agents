@@ -1,5 +1,15 @@
 # Core Carry 研究主上下文
 
+## 2026-09-15 交易基准补充（当前研究结论，READY_FOR_REVIEW）
+
+用户指出概率小数点不是策略验收，本轮已补交易账：沿用封存135fact_trades，官方标签补全46、88原PnL parity、1pending，使用同一canonical builder公式生成独立research_terminal_pnl列，不改原canonical或声称钱包到账。08-18—09-13共101合约91胜10负，终局研究净损益−$12.49665、含费ROI−1.2719%；09-08—13共34合约28胜6负，−$12.31266/−4.7851%（core−$8.21266、near−$4.10）。
+
+2436开发预测→785carry→773可执行10股报价→483共同首次城市日机会：原B43票41胜2负、+$12.888604/3.2456%；混合E50票47胜3负、+$8.665204/1.8783%。E新增7胜1负、少1原赢家，差−$4.2234，说明上一轮“新数据有价值”只能指概率开发指标，不支持交易升级。四特征非线性I221票+$39.503314、但累计投入5.26倍且最近窗−$9.349601；路径天气J最近窗−$28.835709。全买市场carry483票93.17%正确仍−$43.119386。所有增量日期CI跨0。
+
+该比较是固定同报价单次机会benchmark，未模拟完整原策略后续触发/预算/maker；不能拿B最近7/7替代实盘34笔。没有已确认可盈利的情景修复，也没有证明稀疏METAR导致个案不可预测，更不能逐笔判定纯运气。每个候选今后必须同时交市场基准、投入/费用/净收益、胜率、新增取消胜负明细及日期稳定性；概率分数保留为诊断。
+
+[交易基准主报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_trade_benchmark/TRADE_BENCHMARK_REVIEW.md) · [102合约逐笔CSV](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_trade_benchmark/brief/actual_contract_detail.csv)。8tests与集成验证通过，单轮review两P2修复后经济分析完整复跑，0新fit、0生产改动，原封包保留。
+
 ## 2026-09-15 当前推进：扩大离线模型研究（READY_FOR_REVIEW）
 
 用户明确授权从策略出发点继续研究，原“只做单一转折/本轮不拟合”的文字是对应Phase4/5历史范围，不再限制单独的当前开发分支；原冻结A/B/C/D与transition协议仍保留，不部署替换。

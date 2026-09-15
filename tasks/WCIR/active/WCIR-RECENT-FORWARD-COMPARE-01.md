@@ -39,3 +39,18 @@
 - Limits: exposed development、截断checkpoint、actual-entry输入非完整、season未验证；worker metadata不可得。下一分布/序列目标尚未拟合，不自动开启下一阶段。
 
 文档检查：当前worktree7项既有失败（3runtime路径与4历史规模门），未调整ceiling；本次targeted tests和research record通过，详见artifact checks/verification.txt。
+
+
+## 用户追加：以市场与交易收益为benchmark（2026-09-15）
+
+Status: ACTIVE。授权补充离线实际成交终局损益复算、逐笔价格/费用/胜负/模型与市场对照，并以同一报价/数量/机会评估已拟合模型；不再训练，不修改生产/原canonical/原预测。Write scope延续owned runner/tests/task/context，加 artifact `/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_trade_benchmark`。真实fill只以已封存fact_trades为起点、调用既有builder盈亏公式；官方标签补全单列research_terminal_reconstruction，原canonical列和缺口保留，禁止声称钱包现金到账。新模型报价benchmark固定一次机会，不冒称全策略live反事实。
+
+
+### 交易benchmark补充交付
+
+- Status READY_FOR_REVIEW，非ownerACCEPTED。当前用户要求补市场与交易验收，已在隔离owned runner增加economic模式，未重训/改生产。
+- Claim/evidence：真实101合约91胜10负、研究终局−$12.49665；最近34合约−$12.31266；fact_trades135行和官方标签，用既有builder公式，88parity/46补算/1pending，原canonical列保留。每合约及fill明细附出。
+- 同报价483机会/17日期/41城：B+$12.888604，E+$8.665204，差−$4.2234；E新增7赢1亏少1原赢家。I+$39.503314但累计投入5.26倍、最近窗负、CI跨0；全买高概率−$43.119386。不是完整策略/实际fill反事实。
+- 本轮8tests通过；集成验证共同ID/未选0/pendingNA/双ref自CI0/成本费用守恒；一轮独立review两P2修复，初稿attempt保留，0新fit。worker模型/usage unavailable；原repo docs gate既有缺口不自称通过。
+- 剩余：完整原策略预算/触发/maker反事实仍不可识别；情景缺陷、观测不足与概率允许失败尚不能逐笔定性。候选升级尚未成立。
+- Artifact：/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_trade_benchmark/TRADE_BENCHMARK_REVIEW.md；brief含逐笔与policy变更CSV。原run封存未改。
