@@ -328,3 +328,5 @@ Core Carry 候选研究追加（未promotion）：10候选的时间隔离预算�
 Core Carry扩展候选研究（2026-09-15，READY_FOR_REVIEW，未promotion）：18候选/134fit/49日期至09-14，W为前段规则选出，V与NN8有经济候选价值；N扩展训练后优势减弱。取消价格上限非普遍收益改善，预算和时钟敏感；09-14余54评分无终局。见[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)及run=20260915_extended_candidates；原forward/生产保持。
 
 Core Carry完整实验外审r02：22策略同报价基座已核验；09-11—14树/MLP是09-15回溯测试而非真实forward，真实FINAL C/D另列。沿用[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)与run=20260915_experiment_review，prepared_not_sent、无生产变更。
+
+Core Carry单次留出：验证6完整UTC日选O、9/8—14固定权重35票+$7.5139 vs B−$1.4005；CI跨0、strict/friction待定，inconclusive/研究权重封存/真实O forward未启动。20tests；[报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_frozen_holdout/HOLDOUT_REVIEW.md)，当前入口[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)，无production promotion。

@@ -757,3 +757,5 @@ Core Carry交易基准补充（2026-09-15）：真实101合约终局研究复算
 Core Carry算法/价格域扩展至2026-09-14：沿用[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)；18候选、8时间窗、49日期，报告与精简数据位于run=20260915_extended_candidates。READY_FOR_REVIEW，无promotion。
 
 Core Carry完整实验外审r02：22策略同报价基座已核验；09-11—14树/MLP是09-15回溯测试而非真实forward，真实FINAL C/D另列。沿用[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)与run=20260915_experiment_review，prepared_not_sent、无生产变更。
+
+Core Carry单次留出：验证6完整UTC日选O、9/8—14固定权重35票+$7.5139 vs B−$1.4005；CI跨0、strict/friction待定，inconclusive/研究权重封存/真实O forward未启动。20tests；[报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_frozen_holdout/HOLDOUT_REVIEW.md)，当前入口[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)，无production promotion。

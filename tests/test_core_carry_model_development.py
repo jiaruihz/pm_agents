@@ -265,3 +265,101 @@ def test_changed_input_hash_is_rejected(tmp_path):
     p.write_text('modified')
     with pytest.raises(AssertionError):
         dev.verify_source_seal(tmp_path, 'input.json')
+
+
+def test_holdout_stages_isolate_future_features_and_labels():
+    x = replay_fixture()
+    x['target_date'] = ['2026-08-24','2026-08-25','2026-09-07','2026-09-08','2026-09-14']
+    x['created_at_utc'] = x.target_date + 'T12:00:00Z'
+    old = x.iloc[:0].copy()
+    plan = dict(validation_start='2026-08-25',validation_end='2026-09-07',
+        test_start='2026-09-08',test_end='2026-09-14',selection_cutoff='2026-09-08T00:00:00Z')
+    a, _ = pit.holdout_stage_inputs(x,old,plan)
+    changed = x.copy()
+    changed.loc[3:, ['A_market','label','cost']] = [1e8,999,-1e8]
+    b, _ = pit.holdout_stage_inputs(changed,old,plan)
+    pd.testing.assert_frame_equal(a,b)
+    assert a.checkpoint_key.tolist() == ['0','1','2']
+    changed.loc[2,'created_at_utc'] = '2026-09-08T01:00:00Z'
+    c,_ = pit.holdout_stage_inputs(changed,old,plan)
+    assert c.checkpoint_key.tolist() == ['0','1']
+    with pytest.raises(ValueError,match='disjoint'):
+        pit.holdout_stage_inputs(x,old,dict(plan,test_start='2026-09-07'))
+
+
+def test_full_period_bootstrap_keeps_pending_unknown():
+    x = replay_fixture()
+    x.loc[1,'label'] = np.nan
+    ledger = pit.replay(x,['B_original','A_market','cash','buy_all_market_carry'],10.)
+    ci = pit.holdout_intervals(ledger,'B_original','test')
+    assert ci.ci_low.isna().all() and ci.daily_pnl_delta.isna().all()
+    assert ci.pending_dates.eq(1).all()
+    x['label'] = 1.
+    ledger = pit.replay(x,['B_original','A_market','cash','buy_all_market_carry'],10.)
+    ci = pit.holdout_intervals(ledger,'B_original','test')
+    assert ci.ci_low.notna().all()
+    assert set(ci.block_size_target_dates) == {1,3}
+
+
+def test_holdout_selection_rejects_partial_first_utc_day():
+    q = replay_fixture()
+    q['target_date'] = ['2026-08-24','2026-08-25','2026-08-25','2026-08-26','2026-08-26']
+    q['budget_day'] = ['2026-08-25']*3+['2026-08-26']*2
+    q['known_at_utc'] = '2026-08-27T00:00:00Z'
+    val = q[q.target_date.ge('2026-08-25')].copy()
+    plan = dict(validation_end='2026-09-07',selection_cutoff='2026-09-08T00:00:00Z',
+        folds=[['2026-08-25','2026-09-07']],daily_budget_usd=50.,models=['B_original'],calibrated={})
+    ledger = pit.replay(val,['B_original'],50.)
+    _,_,days,excluded = pit.holdout_selection(val,ledger,q,plan)
+    assert days == ['2026-08-26'] and excluded == ['2026-08-25']
+    q.loc[0,'quote_ready'] = False
+    _,_,days,excluded = pit.holdout_selection(val,ledger,q,plan)
+    assert days == ['2026-08-25','2026-08-26'] and excluded == []
+
+
+def test_holdout_orchestration_lock_refit_and_nondefault_budget(tmp_path, monkeypatch):
+    original = pd.DataFrame({c: np.zeros(100) for c in dev.BASE})
+    original['label'] = [0.]*10+[1.]*90
+    original['city'] = [f'old{i}' for i in range(100)]
+    original['target_date'] = '2026-08-01'
+    original['checkpoint_key'] = original.city
+    original['known_at_utc'] = '2026-08-02T00:00:00Z'
+    original['created_at_utc'] = None
+    original['sample_pool'] = 'original_training'
+    original['training_ready'] = True
+    frame = pd.concat([replay_fixture().iloc[[0]]]*28,ignore_index=True)
+    frame['target_date'] = [f'2026-08-{25+i//5:02d}' for i in range(20)]+['2026-09-08']*8
+    frame['created_at_utc'] = frame.target_date + 'T12:00:00Z'
+    frame['budget_day'] = frame.target_date
+    frame['city'] = [f'c{i}' for i in range(len(frame))]
+    frame['checkpoint_key'] = frame.city
+    frame['known_at_utc'] = '2026-09-01T00:00:00Z'
+    frame['sample_pool'] = 'recent_captured'
+    frame['training_ready'] = frame['evaluation_ready'] = frame['scored'] = True
+    frame['label'] = 1.
+    frame['cost'],frame['principal'],frame['fee'] = 8.1,8.,.1
+    for c in dev.BASE: frame[c] = 0.
+    plan = dict(validation_start='2026-08-25',validation_end='2026-09-07',test_start='2026-09-08',test_end='2026-09-14',
+        selection_cutoff='2026-09-08T00:00:00Z',folds=[['2026-08-25','2026-09-07']],models=['L_pooled_linear'],calibrated={},
+        daily_budget_usd=100.,market_domain=[.8,1.],min_recent_citydays=30,
+        logistic=dict(C=.1,max_iter=3000,random_state=1),selection='maximum known complete day validation pnl')
+    root = tmp_path/'run';root.mkdir();dev.dump(root/'PLAN.json',plan)
+    monkeypatch.setattr(pit,'load',lambda p,o:(frame.copy(),original.copy()))
+    fit_original = pit.fit_candidate
+    calls = []
+    def observed_fit(train,name,config):
+        calls.append(train.copy())
+        assert (root/'SELECTION_LOCK.json').exists() == (len(calls)==2)
+        assert train.target_date.max() < ('2026-08-25' if len(calls)==1 else '2026-09-08')
+        return fit_original(train,name,config)
+    monkeypatch.setattr(pit,'fit_candidate',observed_fit)
+    pit.run_frozen_holdout(root)
+    assert len(calls)==2
+    summary = pd.read_parquet(root/'sensitivity_summary.parquet')
+    base = summary[(summary.period=='base')&(summary.model=='L_pooled_linear')].iloc[0]
+    assert base.cost > 50 and base.cost <= 100
+    assert np.isclose(base.utilization,base.cost/100)
+    before = dev.sha(root/'FROZEN_CANDIDATE.json')
+    with pytest.raises(FileExistsError):
+        pit.run_frozen_holdout(root)
+    assert dev.sha(root/'FROZEN_CANDIDATE.json') == before and len(calls)==2

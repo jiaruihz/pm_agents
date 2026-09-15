@@ -582,3 +582,175 @@ def diagnostics(output, closure_root):
         'closure':str(closure),'closure_sha256':sha(closure),'orders_sha256':sha(raw_orders),'labels_sha256':sha(labels_file),
         'saved_score_rows':len(scores),'scope_limit':'S closure selected by submissions, ends Sep11; Sep12-13 unavailable here',
         'unmatched_orders_retained':True,'scoring_quotes_not_submission_execution_quotes':True})
+
+
+def holdout_stage_inputs(x, historical, plan):
+    """Materialize development without any held-out rows, even their features.
+
+    The source remains researcher-exposed historical data. This boundary proves
+    programmatic isolation, not an unexposed research process.
+    """
+    start, end, test_start, test_end = [plan[k] for k in
+        ['validation_start', 'validation_end', 'test_start', 'test_end']]
+    if not start <= end < test_start <= test_end:
+        raise ValueError('Expected ordered, disjoint validation and test dates')
+    if pd.Timestamp(plan['selection_cutoff']) != pd.Timestamp(test_start, tz='UTC'):
+        raise ValueError('Selection cutoff must equal the test start')
+    # No previous target-day late-arriving row crosses the selection clock.
+    development = x[x.target_date.lt(test_start)
+                    & score_time_upper(x.created_at_utc).le(pd.Timestamp(test_start, tz='UTC'))].copy()
+    old = historical[historical.target_date.lt(start)].copy()
+    eligible = development[development.get('training_ready', True) | development.get('evaluation_ready', True)] if 'training_ready' in development else development
+    if eligible.checkpoint_key.duplicated().any() or old.checkpoint_key.duplicated().any():
+        raise ValueError('Duplicate training identity')
+    if set(development.checkpoint_key) & set(old.checkpoint_key):
+        raise ValueError('Original and recent training identity overlap')
+    return development, old
+
+
+def holdout_metrics(predictions, names, period, plan):
+    records = []
+    for scope, frame in [('all', predictions), ('carry', predictions[predictions.A_market.between(*plan['market_domain'])])]:
+        scored, pending = len(frame), int(frame.label.isna().sum())
+        frame = frame[frame.label.notna()]
+        if frame.empty:
+            continue
+        weights = city_day_weights(frame)
+        for name in names:
+            p = frame[name].clip(1e-8, 1-1e-8)
+            records.append(dict(period=period, scope=scope, model=name, scored_rows=scored, pending_rows=pending,
+                rows=len(frame), dates=frame.target_date.nunique(), citydays=len(frame[['city','target_date']].drop_duplicates()),
+                brier=np.average((p-frame.label)**2, weights=weights),
+                logloss=np.average(-(frame.label*np.log(p)+(1-frame.label)*np.log1p(-p)), weights=weights)))
+    return pd.DataFrame(records)
+
+
+def holdout_selection(predictions, ledger, development, plan):
+    """Require whole UTC days from the unsliced opportunity universe.
+
+    Western cities from the previous target date may share the first UTC
+    validation day. Missing their rows cannot be treated as an empty opportunity.
+    """
+    quoted = development[development.quote_ready]
+    scored_keys = set(predictions.checkpoint_key)
+    complete = quoted.assign(in_validation=quoted.checkpoint_key.isin(scored_keys)).groupby('budget_day').in_validation.all()
+    complete_days = complete[complete].index
+    safe = predictions[predictions.budget_day.isin(complete_days)]
+    winner, ranking, days = select_candidate(ledger, safe, plan)
+    return winner, ranking, days, complete[~complete].index.tolist()
+
+
+def holdout_intervals(ledger, winner, period, seed=20260915):
+    """Diagnostic paired target-date cluster CI; no significance-based selection.
+
+    Policy cash is shared on UTC dates, so neighboring target dates are not
+    independent. Also report a 3-day circular block bootstrap for that sensitivity.
+    Pending outcomes make the full-period interval unavailable, never zero.
+    """
+    daily = ledger.groupby(['target_date','model']).net_pnl.agg(lambda v:v.sum(min_count=len(v))).unstack()
+    records = []
+    for reference in ['cash','B_original','A_market','buy_all_market_carry']:
+        delta = (daily[winner]-daily[reference]).to_numpy()
+        for block_size in [1,3]:
+            low = high = mean = np.nan
+            if len(delta) and np.isfinite(delta).all():
+                rng = np.random.default_rng(seed)
+                starts = rng.integers(0,len(delta),(10000,int(np.ceil(len(delta)/block_size))))
+                indices = ((starts[:,:,None]+np.arange(block_size)) % len(delta)).reshape(10000,-1)[:,:len(delta)]
+                low,high = np.quantile(delta[indices].mean(axis=1),[.025,.975])
+                mean = delta.mean()
+            records.append(dict(period=period, model=winner, reference=reference, dates=len(delta),
+                pending_dates=int((~np.isfinite(delta)).sum()), block_size_target_dates=block_size,
+                daily_pnl_delta=mean, ci_low=low, ci_high=high,
+                interpretation='diagnostic; historical researcher exposure and model search not corrected'))
+    return pd.DataFrame(records)
+
+
+def run_frozen_holdout(output):
+    """One selection, one winner refit, no automatic replacement after test."""
+    plan = json.loads((output/'PLAN.json').read_text())
+    if plan['calibrated'] or not plan['models']:
+        raise ValueError('This protocol requires a nonempty uncalibrated shortlist')
+    allowed = {'PLAN.json','research_record.json','checks','code'}
+    if any(p.name not in allowed and not (p.is_dir() and p.name.startswith('attempt_')) for p in output.iterdir()):
+        raise FileExistsError('Preserve generated evidence; use a new output directory')
+    with (output/'RUN_STARTED.json').open('x') as f:
+        json.dump({'started_at_utc':datetime.now(timezone.utc).isoformat()},f)
+    x, historical = load(plan,output)
+    dev, old = holdout_stage_inputs(x,historical,plan)
+    validation_plan = dict(plan, folds=[[plan['validation_start'],plan['validation_end']]])
+    validation_root = output/'validation'
+    validation_root.mkdir()
+    val = train_predictions(dev,old,validation_plan,validation_root)
+    names = ['A_market','B_original']+plan['models']
+    policies = names+['buy_all_market_carry','cash']
+    val_ledger = replay(val,policies,plan['daily_budget_usd'])
+    val_ledger.to_parquet(validation_root/'ledger.parquet',index=False)
+    winner, ranking, days, incomplete_days = holdout_selection(val,val_ledger,dev,validation_plan)
+    ranking.to_parquet(validation_root/'selection_ranking.parquet',index=False)
+    # Commit selection on disk before fitting/scoring a single test row.
+    selection = dict(candidate=winner, selection_days=days, rule=plan['selection'],
+        plan_sha256=sha(output/'PLAN.json'), test_rows_used=0,
+        excluded_incomplete_utc_days=incomplete_days,
+        locked_at_utc=datetime.now(timezone.utc).isoformat(), researcher_exposed=True)
+    dump(output/'SELECTION_LOCK.json',selection)
+    if winner is None:
+        dump(output/'RESULT.json',dict(disposition='no_candidate_met_validation_information_requirement'))
+        return
+    test_root = output/'test'
+    test_root.mkdir()
+    test_plan = dict(plan,models=[winner],folds=[[plan['test_start'],plan['test_end']]])
+    # train_predictions only admits labels and features available at test_start.
+    # The complete week is scored by exactly one saved model, with no refresh.
+    test = train_predictions(x,old,test_plan,test_root)
+    assert json.loads((output/'SELECTION_LOCK.json').read_text()) == selection
+    test_names = ['A_market','B_original',winner]
+    test_policies = test_names+['buy_all_market_carry','cash']
+    ledger = replay(test,test_policies,plan['daily_budget_usd'])
+    ledger.to_parquet(test_root/'ledger.parquet',index=False)
+    summary = summarize(ledger,plan['test_start'],plan['test_end'],'test',plan['daily_budget_usd'])
+    summary.to_parquet(test_root/'summary.parquet',index=False)
+    pd.concat([holdout_metrics(val,names,'validation',plan),holdout_metrics(test,test_names,'test',plan)]).to_parquet(output/'probability_metrics.parquet',index=False)
+    holdout_intervals(ledger,winner,'test').to_parquet(output/'paired_intervals.parquet',index=False)
+    ledger.groupby(['model','target_date'],as_index=False).agg(tickets=('selected','sum'),
+        net_pnl=('net_pnl',lambda v:v.sum(min_count=len(v))),cost=('deployed_cost','sum')).to_parquet(test_root/'daily.parquet',index=False)
+    sensitivity = []
+    primary_budget = plan['daily_budget_usd']
+    for label,budget,friction,strict in [('base',primary_budget,0.,False),('strict_clock',primary_budget,0.,True),
+            ('plus_1cent',primary_budget,.01,False),('budget100',100.,0.,False)]:
+        alt = ledger if label=='base' else replay(test,test_policies,budget,friction,strict)
+        s = summarize(alt,plan['test_start'],plan['test_end'],label,budget)
+        sensitivity.append(s)
+        if label!='base':
+            alt.to_parquet(test_root/f'ledger_{label}.parquet',index=False)
+    sensitivity = pd.concat(sensitivity,ignore_index=True)
+    sensitivity.to_parquet(output/'sensitivity_summary.parquet',index=False)
+    b = ledger[ledger.model.eq('B_original')][['checkpoint_key','selected','net_pnl']].rename(columns={'selected':'B_selected','net_pnl':'B_pnl'})
+    changed = ledger[ledger.model.eq(winner)].merge(b,on='checkpoint_key',validate='one_to_one')
+    changed = changed[changed.selected.ne(changed.B_selected)].copy()
+    changed['delta_vs_B'] = changed.net_pnl-changed.B_pnl
+    changed.to_parquet(test_root/'changed_tickets.parquet',index=False)
+    coverage = x.groupby('target_date').agg(raw_rows=('checkpoint_key','size'),scored=('scored','sum'),
+        evaluation_ready=('evaluation_ready','sum'),quote_ready=('quote_ready','sum'),labeled=('label','count'))
+    coverage.to_parquet(output/'coverage.parquet')
+    member = pd.read_parquet(test_root/'training_memberships.parquet')
+    assert not set(member.target_date) & set(test.target_date)
+    artifact = test_root/'models'/f'{plan["test_start"]}_{winner}.joblib'
+    fits = pd.read_parquet(test_root/'fits.parquet')
+    # Freeze the exact tested weights, never an untested refit with test labels.
+    result = dict(candidate=winner, artifact=str(artifact),artifact_sha256=sha(artifact),
+        training_cutoff=plan['test_start'],test_start=plan['test_start'],test_end=plan['test_end'],
+        fit_completed_at_utc=fits.iloc[0].fit_completed_at_utc,
+        selection_lock_sha256=sha(output/'SELECTION_LOCK.json'),
+        test_fits=len(fits), no_refit_after_test=True, clean_forward_dates=0,
+        disposition='research_weights_sealed_pending_evidence_review',production_promotion=False)
+    dump(output/'FROZEN_CANDIDATE.json',result)
+    dump(output/'VALIDATION.json',dict(development_max_date=dev.target_date.max(),
+        test_training_max_date=member.target_date.max(),test_rows=len(test),
+        test_dates=test.target_date.nunique(),test_pending=int(test.label.isna().sum()),
+        no_target_date_overlap=True,one_test_fit=len(fits)==1, selection_before_test_fit=True,
+        no_clean_historical_OOS_claim=True, original_receipt_PIT_unproven=True,
+        input_scope='sealed capture through 2026-09-14; not a live data refresh',
+        actual_fill_count=0,production_writes=0))
+    print(ranking[['model','tickets','net_pnl']].to_string(index=False),flush=True)
+    print(summary[['model','tickets','wins','losses','pending','cost','net_pnl','roi']].to_string(index=False),flush=True)

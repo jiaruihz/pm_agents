@@ -526,10 +526,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path)
     parser.add_argument('--pit-candidates', action='store_true', help='Run frozen multi-candidate label-time-safe budget benchmark')
+    parser.add_argument('--frozen-holdout', action='store_true', help='Select on validation, refit winner once, lock weights throughout test')
     parser.add_argument('--phase2', type=Path)
     parser.add_argument('--economic-development', type=Path, help='Evaluate existing frozen predictions; never fit')
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
+    if args.frozen_holdout:
+        from core_carry_candidate_backtest import run_frozen_holdout
+        run_frozen_holdout(args.output)
+        return
     if args.pit_candidates:
         from core_carry_candidate_backtest import run
         run(args.output)

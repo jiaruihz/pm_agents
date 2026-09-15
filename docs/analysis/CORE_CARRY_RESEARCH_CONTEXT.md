@@ -1,5 +1,15 @@
 # Core Carry 研究主上下文
 
+## 2026-09-15 单次时间留出：O研究权重封存（READY_FOR_REVIEW）
+
+本轮按用户要求将拟合、验证选型、最终留出隔离：8/25前训练5个既有候选，8/25—9/7验证，仅6个完整已知UTC日选出O（15叶HGB/L2=10）；9/8截点重训唯一赢家6157行，固定权重测试9/8—14，不根据测试改赢家、不再吸收测试labels。
+
+7日1043评分，主O35票34胜1负、投入$332.4861、模拟含费净收益+$7.5139/ROI2.2599%；同$50/UTC预算B13票12胜1负、投入$121.4005、−$1.4005。日均差+$1.2735的日期CI[−$2.5094,+$5.3856]跨0；O额外使用2.74倍实际投入，非同投入盈利比较。严格时钟净收益范围−$4.6693..+$5.3307、+1美分摩擦范围−$1.6694..+$18.3306，待定使稳健性仍未确认；carry Brier好于市场而全域更差。结论inconclusive，仅固定下一研究验证对象；尚无已证明可升级生产的版本。
+
+整个历史已被研究者看过，真实O forward0日期；准备的独立协议最早9/16完整目标日起、实际接入后计日，至少30完整终局日/60日历覆盖检查，未部署/未改原C/D。封存的是实测权重SHA `5a54e8aaff31ba475431d7bc9fe5e47bd1c790198ea0bcc1e0df356f0eb9f75c`，不是重训后未测的新权重。
+
+单轮review修正完整UTC选模日边界与配置预算：去掉8/25不完整日、32条跨模型选模模拟票，O仍首位；完整复跑确认1043预测、模型SHA、test账及训练成员全等，实盘影响0。20tests通过；全库docs7项既有失败保持不变；reviewer实际model/effort/usage unavailable。原attempt保留。[完整留出报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_frozen_holdout/HOLDOUT_REVIEW.md) · [冻结信息](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_frozen_holdout/FROZEN_CANDIDATE.json)。
+
 ## 2026-09-15 交易基准补充（当前研究结论，READY_FOR_REVIEW）
 
 用户指出概率小数点不是策略验收，本轮已补交易账：沿用封存135fact_trades，官方标签补全46、88原PnL parity、1pending，使用同一canonical builder公式生成独立research_terminal_pnl列，不改原canonical或声称钱包到账。08-18—09-13共101合约91胜10负，终局研究净损益−$12.49665、含费ROI−1.2719%；09-08—13共34合约28胜6负，−$12.31266/−4.7851%（core−$8.21266、near−$4.10）。

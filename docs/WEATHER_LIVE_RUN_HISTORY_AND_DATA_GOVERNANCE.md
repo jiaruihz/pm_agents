@@ -2114,3 +2114,9 @@ fix_level = contained_and_recovered; root_cause_not_eliminated
 ### Near maker 实际成交结算源缺失（2026-09-13补齐）
 
 本轮53个v2 posted订单对应9个actual fill，9/8–9/12的9个精确city/date均缺pm_history文件，导致9笔在fact_trades仍missing_bracket，已确认市场全部closed/binary。既有Gamma backfill补齐9文件；标准ingest补88档，Wellington单日既有bounded ingester补11档；标准refresh随后9/9目标fill settled。目标成本$38.15、7W/2L、fee-adjusted PnL -$3.15，旧未结算标签失效；order/fill未改写。自动refresh成功不代表源缓存完整，且UTC yesterday日期窗会暂时排除已closed的东区当天市场；本轮只完成bounded补数，不能称永久自动修复。证据与明细见[near maker绩效](analysis/near_maker_execution.md)及artifact_store/near_maker_performance/latest.json。
+
+## 2026-09-15 Core Carry 留出选模UTC日边界修正（仅本轮研究）
+
+污染窗口仅 `run=20260915_frozen_holdout/attempt_02_partial_utc_validation_day` 的选模账：按target_date截8/25验证窗后漏掉8/25 UTC的两条8/24美国城市quote（SanFrancisco、Seattle）；完整日误计7，应为6。修后排除8/25，移除32条跨模型选模模拟交易（B4/L5/NN8 5/O5/V3/W5/全买5），O验证收益23.472905→18.998289、候选排序与赢家不变。原始标签/训练数据改写0；最终重放模型SHA、1043测试预测、test账/训练成员/summary精确一致，测试选票改变0、错误真实下单0、漏真实下单0。敏感性配置预算硬编码50改为plan值，本轮plan50金额影响0。
+
+首轮另有raw-grain唯一性检查在拟合前拒绝1739重复尝试，eligible训练重复0，实际fit0、模型和订单影响0；改检查eligible身份，未删除raw。20相关tests通过。逐条遗漏quote、被排除模拟票、排名前后及parity证据在[本轮报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_frozen_holdout/HOLDOUT_REVIEW.md)及其checks目录；两个旧attempt完整保留，不覆盖旧实验标签或生产事实。
