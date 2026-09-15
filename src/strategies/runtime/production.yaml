@@ -148,8 +148,8 @@ production_releases:
     expected_repo_sha: 08c5315ac1f16bd4c0c6b42d3259f5e3390a359a
     runtime_bindings: [operational_venv, canonical_db]
   - release_id: europe_d1_distance2_shadow
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/0ed49db4602ab7410207070dc0e03da6a11d6c57
-    expected_repo_sha: 0ed49db4602ab7410207070dc0e03da6a11d6c57
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/03bec0e084c51ec43e41ae977eaf1225a1b5e68e
+    expected_repo_sha: 03bec0e084c51ec43e41ae977eaf1225a1b5e68e
     runtime_bindings: [operational_venv]
   - release_id: europe_d1_model_filter_shadow
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_model_filter_shadow/641e82ab7bd21681661a3c3b6de0f30fa10af596
@@ -785,6 +785,8 @@ managed_runtimes:
 
   # Deterministic, zero-notional projection of the immutable D-1 basket journal
   # into shared decision contracts. It owns no strategy decision or venue path.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
   - instance_id: europe_d1_distance2_lineage_adapter_v1
     tmux_session: europe_d1_distance2_lineage_adapter_v1
     role: shadow
