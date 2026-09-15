@@ -1,5 +1,21 @@
 # Core Carry 研究主上下文
 
+## 2026-09-15时钟与日期口径补审（替代对strict负PnL的解释）
+
+用户追问后，从原raw恢复request/response/parsed三钟：测试1043/1043条为direct response lineage且顺序与评分整秒区间一致，0倒序/0越区间。旧strict因微秒book与整秒score比较排除546条，并非已证坏数据；O移除18赢+$4.7213，再新增11票净−$2.6169（含Chengdu09-13−$4.7619），才产生旧−$2.4194。该数字仅保留为metadata exclusion sensitivity，撤回将其当“去掉异常/未来数据后O亏损”的负向证据。主选票和收益不变，48票独立raw算术复核、去重和BJ预算均通过；原始producer时钟18项测试通过。
+
+O并非只在9/14盈利：7目标日6日正，9/14为9票9赢+$2.5761，去掉该日仍+$2.3427；但同期B+$3.7795，故相对B−$1.4368。9/14B唯一CapeTown票−$4.5225，当天O−B+$7.0986推动全期优势。target-date9/14跨BJ9/14和9/15预算；BJ自然日9/14单独是O5票5赢+$1.1434，不能混日期口径。NOT_READY仍由未接入的多策略执行/账户risk/logging/kill闭环决定，历史采样截断和缺深档限制保留。
+
+[本次校正与逐票结果](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_live_readiness/clock_data_audit/CLOCK_AND_DATE_CORRECTION.md)；CHECKS、CLOCK_CHAIN和旧filter逐票差异在同目录，原封包不覆盖。
+
+## 2026-09-15 O五股就绪研究（READY_FOR_REVIEW；live NOT_READY）
+
+冻结O与同6157成员W核验通过，0fit。复算3013历史评分的5股盘口，验证/测试共同可行动域36个深档缺口显式保留；当前生产实为10taker+5maker及near5、预算按BJ日。主规则每策略25美元/BJ日，补22个官方condition的54条pending标签后，测试O38票37胜1负模拟+$4.9188 vs B10票−$0.743；严格时钟O−$2.4194，去掉9/14则O−B=−$1.4368，单额外5股loss使O整体−$0.0812。7日期配对CI跨0，概率验证较差/测试较好，inconclusive，不改选W。
+
+B/O独立order/fill/state、全账户跨日风险预留、partial/restart/reconcile、O/W完整slot日志及独立kill未接入，live gate NOT_READY。联合未解本金receipt proxy94.835美元高于同机会B10 taker45.270，非实际钱包敞口或批准风险上限；方案不能仅靠单笔减半。14日期只提议执行checkpoint，原30/60效力协议保留。157相关tests和23机器表独立重放一致；单轮review三P2修复，model/usage telemetry不可得如实标注。无生产/collector/资金变更、无新真实订单，未自我接受。
+
+[摘要](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_live_readiness/00_LIVE_READINESS_SUMMARY.md) · [提示词评估](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_live_readiness/PROMPT_ASSESSMENT.md) · [readiness gate](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_live_readiness/LIVE_TRIAL_READINESS.md)。
+
 ## 2026-09-15 详细审阅补充r03：不能把O封存当作可替换（READY_FOR_REVIEW）
 
 用户要求完整文字报告/逐票经济/训练验证/过拟合/替换证据，并写入Apple Notes。本轮0fit、0重选；O35票预测胜率96.176%、market93.24%、含费保本94.996%，预期+$4.129859 vs 模拟+$7.513933；每天5票，无citydate/token/checkpoint重复。测试相对B优势+$8.914433，但剔除9/14变−$2.198049；完整14日验证W+$24.561169高于O+$16.060582，O三张验证亏损全在未进入正式6日排名的日期。标签延迟/完整日选择可能改变风险样本，不能据6日O第一称最优/非过拟合。
