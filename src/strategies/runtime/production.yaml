@@ -155,8 +155,8 @@ production_releases:
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_model_filter_shadow/641e82ab7bd21681661a3c3b6de0f30fa10af596
     expected_repo_sha: 641e82ab7bd21681661a3c3b6de0f30fa10af596
   - release_id: europe_d1_distance2_lineage_adapter
-    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/327d183d4f0f6d2a9c962b1abbe415bfa7b4bf09
-    expected_repo_sha: 327d183d4f0f6d2a9c962b1abbe415bfa7b4bf09
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/de9de4f4134dee772ed8847a3a69682c55eddd20
+    expected_repo_sha: de9de4f4134dee772ed8847a3a69682c55eddd20
     runtime_bindings: [operational_venv]
   - release_id: proposal_reward
     checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/d0236cf22a280c86c4168e9d97076897080c58dc
