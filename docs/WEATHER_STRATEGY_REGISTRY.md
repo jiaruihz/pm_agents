@@ -326,3 +326,5 @@ Core Carry交易基准补充（2026-09-15）：真实101合约终局研究复算
 Core Carry 候选研究追加（未promotion）：10候选的时间隔离预算回测已完成，N小HGB优先/O保留；后段收益受预算和记录覆盖影响，不能称事故已解决或部署赢家。入口见 `docs/analysis/CORE_CARRY_RESEARCH_CONTEXT.md` 的多候选预算回测段及 run=20260915_pit_candidates。
 
 Core Carry扩展候选研究（2026-09-15，READY_FOR_REVIEW，未promotion）：18候选/134fit/49日期至09-14，W为前段规则选出，V与NN8有经济候选价值；N扩展训练后优势减弱。取消价格上限非普遍收益改善，预算和时钟敏感；09-14余54评分无终局。见[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)及run=20260915_extended_candidates；原forward/生产保持。
+
+Core Carry完整实验外审r02：22策略同报价基座已核验；09-11—14树/MLP是09-15回溯测试而非真实forward，真实FINAL C/D另列。沿用[研究上下文](analysis/CORE_CARRY_RESEARCH_CONTEXT.md)与run=20260915_experiment_review，prepared_not_sent、无生产变更。

@@ -83,3 +83,16 @@ Status ACTIVE；base ac878bb0f4e51fe18296415606d2a1319f2b953a。用户授权离�
 状态：离线研究交付READY_FOR_REVIEW，非ownerACCEPTED；W为冻结规则主候选，V/NN8/O保留比较，N保留降为对照（不是disproven）。134fit有1个NN16→8/alpha1优化上限warning。16tests及封存输入/3058标签身份/未来扰动/预算费用/PIT成员检查PASS；唯一只读code review2P2（概率域、rawresponse seal）已修复，无重fit/选票变化；reviewer模型/usage不可得。原4061历史receipt-PIT仍未证实，本批历史研究者已见，不是cleanOOS。全部原run/模型/日志保留。
 
 [报告与精简数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_extended_candidates/EXTENDED_MODEL_AND_BACKTEST_REVIEW.md)，对应research:weather:core_carry:20260915_extended_candidates；PLAN、REPRODUCE、训练成员、cap_and_training_ticket_changes、全预算ledger、DELIVERY_SEAL可追溯。本次不新增外部reviewer请求或发送行为。详细handoff与本次交付seal相连。
+
+## 当前追加：完整实验报告与GPT Pro审阅包
+
+Status ACTIVE；base1cc4773e1d838f8bc712cd7ecd102c7c8fb94e9c。用户要求确认新旧taker同分母、辨别09-11—14是否真实forward，并提供全部模型选型/训练实验给GPT Pro。只复用封存输入进行账本与来源核验、汇总旧实验、导出精简可携带证据及外审归档；不新增拟合、搜参、数据刷新、生产/forward变更或上传。Write scope沿用task/handoff/living/registry/docs index，新增artifact run=20260915_experiment_review及其review_packet；原sealed run只读保留。验收：统一报价数量费用时钟逐模型核验、实际拟合与历史cutoff分开、完整实验ID/候选/参数/负结果/时间切分、可读报告+附件+独立提示词、包内SHA和归档验证；owner未accept。
+
+
+## GPT Pro完整实验审阅包（2026-09-15，READY_FOR_REVIEW）
+
+用户追加执行同基座与forward分类核对已完成：22策略逐一共享6809候选/3468条10股报价，原始market/B概率与quantity/principal/fee/cost逐条一致。B同样是报价模拟，不能与原策略真实成交混比；统一policy未照搬production eligible，B选中141票中17原eligible=false。7月398条5股报价没有放大成10股，排除在共同交易分母。
+
+明确修正读法：最新树/MLP在09-15实际拟合，W最终fit完成04:13:34.727193UTC、历史cutoff09-11；09-11—14是回溯时间留出，不是真实forward，方案在已看事故后制定。真正当时记录的FINAL C/D独立forward是另一套Logistic，采样/费用/预算也不同。所有旧产物保留；本次0fit/0调参/0生产写入，仅核验、报告、组包。
+
+完整版本台账/各算法参数/8fold训练时间与样本/18候选含负结果/执行与未来函数缺口见[完整实验报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260915_experiment_review/CORE_CARRY_MODEL_SELECTION_TRAINING_EXPERIMENT_REPORT.md)。review_id `pm-agents-core-carry-pit-candidates-20260915-r02`，关联r01输入包SHA f7be896adbd3a25d83bc64580ecb72861cea8f7e0ba799aba9fc15cadff65082（精确SHA以manifest为准）；本轮review_packet/manifest提供准确前序SHA、上传包与prompt身份。总库 `~/Documents/GPT-Pro-Reviews/README.md`，prepared_not_sent，用户自行发送，非ownerACCEPTED。
