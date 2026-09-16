@@ -167,3 +167,10 @@ worktree交付inventory：`.worktrees/near-maker-budget-deploy`，branch=`codex/
 外部review_id=`pm-agents-near-maker-20260915-r01`，本机包为`reviews/near_maker/pm-agents-near-maker-20260915-r01/outbound/REVIEW_PACKET.zip`，报告与PROMPT同目录；ZIP SHA256=`065ab55b99cae5c156055200b12cac35493fd8fb5913e4db0270c8978f9c2193`。总库入口`~/Documents/GPT-Pro-Reviews/README.md`，状态prepared_not_sent，外部意见未收到。机器证据与研究记录在`/Volumes/jrs-archive/pm_agents/research/artifact_store/near_maker_performance/pro_review_20260915/`，record validator通过，包内summarize.py复算一致，ZIP member hashes通过，已去除账户owner/钱包/余额。
 
 单轮只读review无P1/P2；模型gpt-5.6-luna/medium，rollout01a0a562-ce18-7d52-bbb3-80b3929b9414，input554181/cached507136/output5686/total559867。审阅覆盖提取/汇总与初始90行证据，后到canonical16settled/1unsettled由主agent独立SQL/公式/gate校验；不伪称review覆盖了后到事实。历史日报与本轮current conclusion分开保留。
+
+
+### Core Maker Risk V1（core-maker-risk-v1-20260916）
+
+已实际完成冻结输入、PIT表、两组固定L2逻辑回归、历史时间前推和有限回放；最终168项测试通过，独立单轮只读review已处理。评估仅09-14/15两日期15机会，M1−M0 logloss +0.001556，95%日期块CI[-0.000855,+0.003163]，无支持盘口增量的证据。验证9根单低于冻结阈值识别门槛10；B2及同预算M0阈值未知，评估无新告警。near分母538、评估147，B1差可判120机会合计0、27未知；不称盈利或实盘认证。**停止本轮V1撤单表达，代码保留dormant，不否定整个盘口方向。** 未启动shadow/生产采集、无交易接口调用或配置变更。
+
+产物：`/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=core-maker-risk-v1-20260916/delivery`（REPORT、manifest、FIT_LEDGER、RUN_RECEIPT、FORWARD_PLAN、REVIEW_PACKET_LITE.zip）。审阅轮`pm-agents-core-maker-risk-20260916-r01`，总库`~/Documents/GPT-Pro-Reviews/README.md`；prepared_not_sent，owner acceptance待定。轻包可跑合成契约测试/真实预测指标复算；真实重训须冻结artifact大表。

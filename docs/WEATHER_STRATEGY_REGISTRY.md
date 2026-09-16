@@ -319,3 +319,10 @@ NO ask 变贵，并使 3 个原可执行机会失去资格，因此只作 persis
 
 
 2026-09-15 near maker external-review更新：固定90posted/17filled（18.89%），16settled/13W3L、成本$67.55、净PnL-$2.55（ROI-3.78%），另1未结算$4.50。80全事件final标签：filled13W3L、unfilled60W4L；潜在选择效应受混杂及小样本限制，book entry22/90、30s markout5/17，不构成新alpha/撤单规则。prepared review_id=pm-agents-near-maker-20260915-r01；总库GPT-Pro-Reviews已登记，未发送。维持inconclusive，不改live，详见[near maker执行研究](analysis/near_maker_execution.md)。
+
+
+### Core Maker Risk V1（core-maker-risk-v1-20260916）
+
+已实际完成冻结输入、PIT表、两组固定L2逻辑回归、历史时间前推和有限回放；最终168项测试通过，独立单轮只读review已处理。评估仅09-14/15两日期15机会，M1−M0 logloss +0.001556，95%日期块CI[-0.000855,+0.003163]，无支持盘口增量的证据。验证9根单低于冻结阈值识别门槛10；B2及同预算M0阈值未知，评估无新告警。near分母538、评估147，B1差可判120机会合计0、27未知；不称盈利或实盘认证。**停止本轮V1撤单表达，代码保留dormant，不否定整个盘口方向。** 未启动shadow/生产采集、无交易接口调用或配置变更。
+
+产物：`/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=core-maker-risk-v1-20260916/delivery`（REPORT、manifest、FIT_LEDGER、RUN_RECEIPT、FORWARD_PLAN、REVIEW_PACKET_LITE.zip）。审阅轮`pm-agents-core-maker-risk-20260916-r01`，总库`~/Documents/GPT-Pro-Reviews/README.md`；prepared_not_sent，owner acceptance待定。轻包可跑合成契约测试/真实预测指标复算；真实重训须冻结artifact大表。

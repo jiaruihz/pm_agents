@@ -750,3 +750,10 @@ manifest/历史报告指针。需要重放历史研究时，用
 
 
 Near maker盘口与条件成交诊断（2026-09-15）：90posted固定分母、17actual fills、稀疏markout及GPT Pro审阅包索引统一保留在[near maker执行研究](analysis/near_maker_execution.md)，review_id=pm-agents-near-maker-20260915-r01；旧快照保留。
+
+
+### Core Maker Risk V1（core-maker-risk-v1-20260916）
+
+已实际完成冻结输入、PIT表、两组固定L2逻辑回归、历史时间前推和有限回放；最终168项测试通过，独立单轮只读review已处理。评估仅09-14/15两日期15机会，M1−M0 logloss +0.001556，95%日期块CI[-0.000855,+0.003163]，无支持盘口增量的证据。验证9根单低于冻结阈值识别门槛10；B2及同预算M0阈值未知，评估无新告警。near分母538、评估147，B1差可判120机会合计0、27未知；不称盈利或实盘认证。**停止本轮V1撤单表达，代码保留dormant，不否定整个盘口方向。** 未启动shadow/生产采集、无交易接口调用或配置变更。
+
+产物：`/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=core-maker-risk-v1-20260916/delivery`（REPORT、manifest、FIT_LEDGER、RUN_RECEIPT、FORWARD_PLAN、REVIEW_PACKET_LITE.zip）。审阅轮`pm-agents-core-maker-risk-20260916-r01`，总库`~/Documents/GPT-Pro-Reviews/README.md`；prepared_not_sent，owner acceptance待定。轻包可跑合成契约测试/真实预测指标复算；真实重训须冻结artifact大表。

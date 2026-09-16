@@ -2119,3 +2119,12 @@ fix_level = contained_and_recovered; root_cause_not_eliminated
 ### Near maker GPT Pro报告结算覆盖补齐（2026-09-15）
 
 从仅成交slice扩展到90个真实v2 posted的固定研究分母，93个city/date回源任务包括另列旧v1的3个；near v2包内90份源全部按market/token身份匹配，80已终局、10未终局。新增Houston9/13、Miami9/14、Chicago9/14的成交结算进入canonical，3笔合计+$2.55；Chongqing9/15源尚未closed，保持未结算。当前16settled净PnL-$2.55，未改order/fill，未把80个posted标签当actual fills。全部明细及源hash在artifact_store/near_maker_performance/pro_review_20260915。补数不代表自动源采集永久修复；本次无生产行为变更。外部review_id=pm-agents-near-maker-20260915-r01，见既有near maker living doc。
+
+
+### Core Maker Risk V1（core-maker-risk-v1-20260916）
+
+已实际完成冻结输入、PIT表、两组固定L2逻辑回归、历史时间前推和有限回放；最终168项测试通过，独立单轮只读review已处理。评估仅09-14/15两日期15机会，M1−M0 logloss +0.001556，95%日期块CI[-0.000855,+0.003163]，无支持盘口增量的证据。验证9根单低于冻结阈值识别门槛10；B2及同预算M0阈值未知，评估无新告警。near分母538、评估147，B1差可判120机会合计0、27未知；不称盈利或实盘认证。**停止本轮V1撤单表达，代码保留dormant，不否定整个盘口方向。** 未启动shadow/生产采集、无交易接口调用或配置变更。
+
+产物：`/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=core-maker-risk-v1-20260916/delivery`（REPORT、manifest、FIT_LEDGER、RUN_RECEIPT、FORWARD_PLAN、REVIEW_PACKET_LITE.zip）。审阅轮`pm-agents-core-maker-risk-20260916-r01`，总库`~/Documents/GPT-Pro-Reviews/README.md`；prepared_not_sent，owner acceptance待定。轻包可跑合成契约测试/真实预测指标复算；真实重训须冻结artifact大表。
+
+本轮新增研究适配器修复：09-07至15共1264行30秒标签由未知恢复（1118负/146正），原因是瞬态best_quote_parity_pending不应永久推进gap generation；91单模型SHA由精确plan/rescore链补齐。逐行证据`evidence/adapter_label_repairs.jsonl`和`MODEL_IDENTITY_REPAIRS.json`。污染仅存在本轮开发表，生产配置/数据/订单影响0；未重建canonical，不删除失败attempt。审阅时钟强化前后最终标签变化0。

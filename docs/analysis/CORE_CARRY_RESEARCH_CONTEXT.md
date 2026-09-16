@@ -65,3 +65,10 @@ A=同次原市场midpoint；B=冻结v3；C=market-logit-only校准；D=同规格
 v2只澄清抽样、主指标全赔率母体/固定carry次级行动域、入场前信息和完整日期。原3h/3report/60min、单次fit、数值信息门、开发09-13..10-22、训练label cutoff10-23 00:00UTC、test10-23..11-11不变；A/B/C/D不重置。入场后新METAR不得倒算成避免原买入。完整采集处置日不要求每slot转折可用；研究合法样本和按cutoff可得官方labels仍需单列。下一节点3完整日工程/30完整终局日/60日历覆盖；未达信息门不训练、无promotion。
 
 [Phase5主报告](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/brief/CORE_CARRY_PHASE5_REVIEW.md)、[增量数据](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/delivery)、[handoff](/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=20260912_phase5/brief/HANDOFF.md)。40相关tests通过；单轮review两个P2已修复。没有新模型效力结论，未把READY_FOR_REVIEW写成owner接受。
+
+
+### Core Maker Risk V1（core-maker-risk-v1-20260916）
+
+已实际完成冻结输入、PIT表、两组固定L2逻辑回归、历史时间前推和有限回放；最终168项测试通过，独立单轮只读review已处理。评估仅09-14/15两日期15机会，M1−M0 logloss +0.001556，95%日期块CI[-0.000855,+0.003163]，无支持盘口增量的证据。验证9根单低于冻结阈值识别门槛10；B2及同预算M0阈值未知，评估无新告警。near分母538、评估147，B1差可判120机会合计0、27未知；不称盈利或实盘认证。**停止本轮V1撤单表达，代码保留dormant，不否定整个盘口方向。** 未启动shadow/生产采集、无交易接口调用或配置变更。
+
+产物：`/Volumes/jrs-archive/pm_agents/research/artifact_store/core_carry/run=core-maker-risk-v1-20260916/delivery`（REPORT、manifest、FIT_LEDGER、RUN_RECEIPT、FORWARD_PLAN、REVIEW_PACKET_LITE.zip）。审阅轮`pm-agents-core-maker-risk-20260916-r01`，总库`~/Documents/GPT-Pro-Reviews/README.md`；prepared_not_sent，owner acceptance待定。轻包可跑合成契约测试/真实预测指标复算；真实重训须冻结artifact大表。
